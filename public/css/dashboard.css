@@ -35626,28 +35626,42 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * The Assigned To cell when the names come from the client rather than the
- * application.
+ * Somebody already on the file, in the assign menu.
  *
- * Nobody is on the file; these are the people looking after the client it
- * belongs to. Drawn identically to an officer they made assigning look broken
- * — a client manager who is also an officer already had their name here, so
- * putting them on the application changed nothing visible. Faded, with one
- * word after them, so the name going solid is what assigning looks like.
+ * Not a button: they are already there, and a click that appears to work and
+ * changes nothing is exactly what made this feel broken. The row states the
+ * fact and carries an × to take it off them.
  */
-.tma-dash__cip-assigned--via-client .tma-people__face,
-.tma-dash__cip-assigned--via-client .tma-people__names {
-  opacity: 0.55;
+.tma-portal-context-menu__item--on {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-12);
+  cursor: default;
 }
 
-.tma-dash__cip-via {
+.tma-portal-context-menu__off {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   margin-left: var(--space-4);
-  padding: 1px var(--space-6);
-  border-radius: 999px;
-  background: var(--color-hover);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  line-height: 14px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.45;
 }
+
+.tma-portal-context-menu__off:hover {
+  background: var(--color-hover);
+  opacity: 1;
+}
+
+.tma-portal-context-menu__off:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+

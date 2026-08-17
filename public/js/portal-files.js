@@ -2026,10 +2026,10 @@
     /* Mirrors ReviewStatus::tone so a review badge and an approval badge are
        the same four colours meaning the same four things. */
     function reviewTone(status) {
-      if (status === 'approved') return 'success';
-      if (status === 'rejected') return 'danger';
-      if (status === 'changes_requested') return 'danger';
-      if (status === 'pending_review' || status === 'under_review' || status === 'awaiting_approval') return 'pending';
+      if (status === 'ready_for_submission' || status === 'approved') return 'success';
+      if (status === 'update_required' || status === 'rejected' || status === 'changes_requested') return 'danger';
+      if (status === 'application_review' || status === 'pending_review' || status === 'under_review' || status === 'awaiting_approval') return 'pending';
+      if (status === 'pending_upload') return 'neutral';
 
       return 'neutral';
     }
@@ -4941,14 +4941,13 @@
    * and the row menu both call it.
    */
 
-  /* The states, in the order the process runs. */
+  /* The states, in the order the process runs — the same four-status
+     workflow the CIP checklist draws, minus Pending upload (a row here is
+     already a file). */
   var REVIEW_STATES = [
-    { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
-    { id: 'under_review', label: 'Under review', icon: 'Eye' },
-    { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
-    { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
-    { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
-    { id: 'rejected', label: 'Rejected', icon: 'X' },
+    { id: 'application_review', label: 'Application review', icon: 'Eye' },
+    { id: 'update_required', label: 'Update required', icon: 'ArrowUUpLeft' },
+    { id: 'ready_for_submission', label: 'Ready for submission', icon: 'CheckCircle' },
   ];
 
   /* Only a document actually in a review, and only for a reader who may move
@@ -4960,10 +4959,10 @@
   /**
    * Move a document to a review state.
    *
-   * A rejection asks for a reason before it goes, because the server refuses
-   * one without it — and finding that out through an error message after the
-   * click would be the interface hiding a rule it could have just asked about.
-   * Every other move goes straight through.
+   * Sending it back asks for a reason before it goes, because the server
+   * refuses one without it — and finding that out through an error message
+   * after the click would be the interface hiding a rule it could have just
+   * asked about. Every other move goes straight through.
    */
   function setItemReviewStatus(item, status, onDone) {
     var send = function (note) {
@@ -4977,23 +4976,23 @@
           item.review = (res && res.file && res.file.review) || item.review;
           item.status = (res && res.file && res.file.status) || item.status;
           if (onDone) onDone(res);
-          ui().toast('Review updated.');
+          ui().toast('Status updated.');
         })
         .catch(function (err) {
-          ui().toast((err && err.message) || 'Could not update the review.', false);
+          ui().toast((err && err.message) || 'Could not update the status.', false);
         });
     };
 
-    if (status !== 'rejected') return send('');
+    if (status !== 'update_required' && status !== 'rejected') return send('');
 
     confirmModal({
-      title: 'Reject this document',
-      message: 'The uploader will see why it was rejected.',
+      title: 'Request an update',
+      message: 'The uploader will see why this needs changing.',
       prompt: { label: 'Reason', placeholder: 'e.g. Expired — please send a current copy' },
-      confirmLabel: 'Reject',
+      confirmLabel: 'Request update',
       onConfirm: function (note) {
         if (!String(note || '').trim()) {
-          ui().toast('Say why the document is being rejected.', false);
+          ui().toast('Say what needs changing.', false);
 
           return;
         }
@@ -5012,16 +5011,34 @@
    */
   function reviewSubmenu(item, onDone) {
     var current = (item.review || {}).status;
+    var next = (item.review && item.review.next) || null;
+    var states = reviewStatesFor(item);
 
-    return REVIEW_STATES.map(function (s) {
+    return states.map(function (s) {
       var isCurrent = s.id === current;
+      var allowed = !next || next.indexOf(s.id) !== -1;
 
       return {
         label: s.label,
         icon: s.icon,
         note: isCurrent ? '✓' : '',
-        fn: isCurrent ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
+        disabled: !isCurrent && !allowed,
+        fn: (isCurrent || !allowed) ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
       };
+    });
+  }
+
+  /* The server's list when it sent one, so a CIP slot and an ordinary client
+     file cannot disagree with the picker about which statuses exist. */
+  function reviewStatesFor(item) {
+    var all = (item.review && item.review.all) || [];
+    if (!all.length) return REVIEW_STATES;
+
+    return all.map(function (id) {
+      for (var i = 0; i < REVIEW_STATES.length; i++) {
+        if (REVIEW_STATES[i].id === id) return REVIEW_STATES[i];
+      }
+      return { id: id, label: id.replace(/_/g, ' '), icon: 'Circle' };
     });
   }
 

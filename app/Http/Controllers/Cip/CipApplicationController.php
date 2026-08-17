@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * CIP applications: what the intake wizard needs, and filing one.
@@ -502,50 +503,29 @@ class CipApplicationController extends Controller
     private function assignees($application): array
     {
         /*
-         * Everyone who holds it, not just the cached one.
+         * Everyone who holds THIS APPLICATION, and nobody else.
          *
-         * `assigned_officer_id` caches the REVIEWING officer, so a file a
+         * `assigned_officer_id` caches only the reviewing officer, so a file a
          * compliance officer had also been put on showed one name while two
-         * people were working it. The column is "Assigned To" and the cell
-         * already draws a set of faces; naming one of two is the table
-         * choosing whose work counts.
-         */
-        $live = $application->assignments
-            ->filter(fn ($a) => $a->user !== null)
-            ->map(fn ($a) => [
-                'name' => $a->user->name,
-                'email' => $a->user->email,
-                'avatar' => $a->user->photoUrl(),
-                'role' => Assignments::roleLabel($a->role),
-                // Somebody is on the application itself.
-                'via' => 'application',
-            ])
-            ->values()
-            ->all();
-
-        if ($live !== []) {
-            return $live;
-        }
-
-        /*
-         * Nobody is on the file, so the client's own people stand in — and
-         * they are marked as standing in.
+         * people worked it — the column is "Assigned To" and the cell draws a
+         * set of faces, so naming one of two is the table choosing whose work
+         * counts.
          *
-         * Drawn identically to an officer, this made assigning look broken: a
-         * client manager who is also an officer already had their name in the
-         * cell, so putting them on the application changed nothing anybody
-         * could see, and the reader concluded the button did not work. The
-         * mark is what lets the table say "this client has somebody" without
-         * claiming the application does.
+         * It used to fall back to the people looking after the client when
+         * nobody was on the application. That made assigning look broken: a
+         * client manager who is also an officer already had their name here,
+         * so putting them on the file changed nothing visible. Who looks after
+         * a client is a fact about the client and belongs on the client.
          */
-        return collect($application->client?->assignments ?? [])
+        return $application->assignments
             ->filter(fn ($a) => $a->user !== null)
             ->map(fn ($a) => [
                 'name' => $a->user->name,
+                'first' => Str::of($a->user->name)->trim()->explode(' ')->first(),
                 'email' => $a->user->email,
                 'avatar' => $a->user->photoUrl(),
-                'role' => $a->roleLabel(),
-                'via' => 'client',
+                'userId' => $a->user_id,
+                'roles' => [Assignments::roleLabel($a->role)],
             ])
             ->values()
             ->all();

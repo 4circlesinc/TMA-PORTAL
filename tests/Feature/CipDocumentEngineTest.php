@@ -7,6 +7,7 @@ use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -15,6 +16,7 @@ use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -90,6 +92,32 @@ class CipDocumentEngineTest extends TestCase
         $document->forceFill(['status' => $status])->save();
 
         return $document;
+    }
+
+    public function test_moving_a_slot_keeps_the_library_file_in_step(): void
+    {
+        [$document, $client] = $this->slot();
+
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Birth certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/birth.pdf',
+            'owner_id' => $client->id,
+            'uploaded_by' => $client->id,
+        ]);
+        $document->forceFill(['file_id' => $file->id])->save();
+
+        DocumentEngine::apply($document, DocumentStatus::APPLICATION_REVIEW, $client);
+
+        $this->assertSame(
+            DocumentStatus::APPLICATION_REVIEW,
+            $file->fresh()->review_status,
+            'The File Library reads files.review_status, so the slot and the file must agree.',
+        );
     }
 
     public function test_an_upload_moves_the_slot_into_review(): void

@@ -56,14 +56,13 @@ class ReviewActivityObserver
         }
 
         $to = match ($workflow->status) {
-            Status::APPROVED, Status::SIGNED, Status::ACKNOWLEDGED, Status::COMPLETED => ReviewStatus::APPROVED,
-            Status::DECLINED => ReviewStatus::REJECTED,
-            Status::CHANGES_REQUESTED => ReviewStatus::CHANGES_REQUESTED,
+            Status::APPROVED, Status::SIGNED, Status::ACKNOWLEDGED, Status::COMPLETED => ReviewStatus::READY_FOR_SUBMISSION,
+            Status::DECLINED, Status::CHANGES_REQUESTED => ReviewStatus::UPDATE_REQUIRED,
             // Cancelled or expired leaves the document where any request left
             // it rather than inventing an outcome nobody reached.
             Status::CANCELLED, Status::EXPIRED => null,
             // Everything else is a request in flight.
-            default => ReviewStatus::AWAITING_APPROVAL,
+            default => ReviewStatus::APPLICATION_REVIEW,
         };
 
         if ($to !== null) {

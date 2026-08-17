@@ -109,10 +109,21 @@
      * names is a paragraph in a table cell; five faces is a glance, and the
      * card names them on hover. Default 'all' keeps CBI as it was.
      */
+    /*
+     * One person gets their whole name; several get first names.
+     *
+     * A single assignee is the answer to "who has this", and half an answer
+     * is worse than the extra word. Two or more is a list, and a list of full
+     * names is a paragraph in a table cell — the first names identify them
+     * among colleagues, and the card names them properly on hover.
+     */
     var showNames = o.names === 'single' ? total === 1 : o.names !== 'none';
-    var names = showNames
-      ? list.map(function (p) { return p.first || p.name; }).join(', ')
-      : '';
+    var names = '';
+    if (showNames) {
+      names = list.length === 1
+        ? (list[0].name || list[0].first || '')
+        : list.map(function (p) { return p.first || p.name; }).join(', ');
+    }
 
     return '<span class="tma-people" data-tma-people="' + esc(JSON.stringify(list)) + '">' +
       (art ? '<span class="tma-people__faces">' + art + '</span>' : '') +

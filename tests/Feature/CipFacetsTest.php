@@ -287,7 +287,7 @@ class CipFacetsTest extends TestCase
         $this->assertSame(0, $otherFirm['total']);
     }
 
-    public function test_a_client_manager_counts_as_holding_the_application(): void
+    public function test_a_client_manager_does_not_count_as_holding_the_application(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $manager = $this->user(Role::ADMINISTRATOR, 'mo@example.com');
@@ -308,50 +308,17 @@ class CipFacetsTest extends TestCase
         ]);
 
         /*
-         * §8's column falls back to the client's staff when no officer is on
-         * the application, so the menu must fall back with it. Counting only
-         * the CIP assignments reported this row as unassigned while the cell
-         * beside the number plainly named somebody — which is the one thing a
-         * facet must never do.
+         * Looking after the client is not holding the application, and the
+         * menu counts what the column shows. When the two disagreed the table
+         * read "Unassigned 1" beside a cell naming somebody, and assigning
+         * that same person changed nothing visible.
          */
         $body = $this->listing($admin);
-        $counts = $this->facet($body, 'assignees');
 
-        $this->assertSame(1, $counts[(string) $manager->id] ?? 0, 'the client manager holds it');
-        $this->assertSame(0, $counts[Facets::UNASSIGNED] ?? 0, 'and it is therefore not unassigned');
-
-        // The row agrees: what the table draws is what the count counted.
-        $this->assertNotEmpty($body['applications'][0]['assignedTo'], 'the column names somebody');
-
-        // And ticking their name opens exactly the row the count promised.
-        $this->assertSame(1, $this->listing($admin, ['assignee' => (string) $manager->id])['total']);
-        $this->assertSame(0, $this->listing($admin, ['assignee' => Facets::UNASSIGNED])['total']);
-    }
-
-    public function test_an_officer_on_the_application_wins_over_the_clients_staff(): void
-    {
-        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
-        $manager = $this->user(Role::ADMINISTRATOR, 'mo@example.com');
-        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
-        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
-
-        $client = Client::create(['uid' => 'c1', 'name' => 'C One', 'data' => [], 'created_by' => $admin->id]);
-        $application = $this->application($provider, $admin);
-        $application->forceFill(['client_id' => $client->id])->save();
-
-        ClientAssignment::create([
-            'client_id' => $client->id, 'user_id' => $manager->id,
-            'status' => ClientAssignment::STATUS_ACTIVE, 'assigned_by' => $admin->id,
-        ]);
-        Assignments::assign($application->refresh(), $rita, $admin);
-
-        // The fallback is a fallback: once an officer is on the file the
-        // column stops naming the client's staff, so the count must too, or
-        // the manager's row would open onto a table that never mentions them.
-        $counts = $this->facet($this->listing($admin), 'assignees');
-
-        $this->assertSame(1, $counts[(string) $rita->id] ?? 0);
-        $this->assertSame(0, $counts[(string) $manager->id] ?? 0);
+        $this->assertSame([], $body['applications'][0]['assignedTo'], 'the column names nobody');
+        $this->assertSame(1, $this->facet($body, 'assignees')[Facets::UNASSIGNED] ?? 0);
+        $this->assertSame(0, $this->facet($body, 'assignees')[(string) $manager->id] ?? 0);
+        $this->assertSame(1, $this->listing($admin, ['assignee' => Facets::UNASSIGNED])['total']);
     }
 
     public function test_the_facets_do_not_cost_a_query_per_officer(): void

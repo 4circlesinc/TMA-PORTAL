@@ -2703,29 +2703,25 @@
         var live = (json && json.assignments) || [];
 
         /*
-         * Who holds it now, each with their face.
+         * One list of people, not two.
          *
-         * The menu is a list of people and the portal draws people with their
-         * picture everywhere else — the cell this opens from is a row of
-         * faces. Names alone made it the one place a colleague was a line of
-         * text, and on a firm with two similar names that is the line you
-         * misread.
+         * It used to be "End Rita" rows above a separate list of everybody
+         * else, which made the same colleague read as two different things
+         * depending on whether they held the file. It is a list of who could
+         * be on this: the ones who already are come first, ticked, with an ×
+         * to take it off them — and clicking the row itself does nothing,
+         * because they are already there and a click that appears to work and
+         * changes nothing is what made this feel broken.
          */
         var items = live.map(function (a) {
           return {
-            label: 'End ' + (a.name || a.email || 'this assignment'),
+            label: a.name || a.email || 'Somebody',
             meta: a.roleLabel || '',
             face: personFace(a),
-            danger: true,
-            fn: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
+            on: true,
+            remove: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
           };
         });
-
-        if (items.length && free.length) items.push({ sep: true });
-
-        if (!free.length && !items.length) {
-          items.push({ label: 'No officers to assign', static: true });
-        }
 
         free.forEach(function (o) {
           items.push({
@@ -2735,6 +2731,10 @@
             fn: function () { changeAssignment(applicationId, 'POST', o.id); },
           });
         });
+
+        if (!items.length) {
+          items.push({ label: 'No officers to assign', static: true });
+        }
 
         window.TMAFileActions.menu(box.left, box.bottom + 4, { id: applicationId, type: 'file' }, null);
         // The menu component draws from the list it is given, so hand it ours
@@ -2759,6 +2759,27 @@
       if (it.static) {
         return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
           '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
+      }
+
+      /*
+       * Somebody already on the file is not a thing to click — they are a
+       * thing to take off. The row is inert and carries an × of its own, so
+       * the only click that does nothing is the one that would have changed
+       * nothing anyway.
+       */
+      if (it.on) {
+        return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--person' +
+          ' tma-portal-context-menu__item--on">' +
+          (it.face
+            ? '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">'
+            : '') +
+          '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
+          (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
+          '<button type="button" class="tma-portal-context-menu__off" data-cip-menu-off="' + i + '"' +
+          ' title="Take this off ' + esc(it.label) + '"' +
+          ' aria-label="Take this off ' + esc(it.label) + '">' +
+          '<img src="' + ICONS.Close12 + '" width="8" height="8" alt=""></button>' +
+          '</div>';
       }
 
       return '<button type="button" role="menuitem" data-cip-menu="' + i + '"' +
@@ -2802,6 +2823,15 @@
     }
 
     menu.onclick = function (e) {
+      var off = e.target.closest('[data-cip-menu-off]');
+      if (off) {
+        var take = items[parseInt(off.getAttribute('data-cip-menu-off'), 10)];
+        menu.remove();
+        if (take && take.remove) take.remove();
+
+        return;
+      }
+
       var btn = e.target.closest('[data-cip-menu]');
       if (!btn) return;
       var picked = items[parseInt(btn.getAttribute('data-cip-menu'), 10)];
@@ -2853,18 +2883,11 @@
      * Assignment happens in the table (§8).
      *
      * The brief puts it here rather than only on the detail page, and it is
-     * the transition that starts a review — so leaving it to the profile meant
-     * an application nobody had opened could sit at New indefinitely. The cell
-     * stays a set of faces; the button beside it is what opens the picker.
-     */
-    /*
-     * The control is an icon, not a glyph.
-     *
-     * It used to print a bare "⌄" or "+" as text inside a bordered circle,
-     * which put a font's idea of a chevron next to a table drawn entirely in
-     * the portal's icon set — a different weight, a different size, and off
-     * its own centre line. The two states are the two questions: a caret to
-     * change who holds a file, a plus to give it to somebody.
+     * the transition that starts a review — so leaving it to the profile
+     * meant an application nobody had opened could sit at New indefinitely.
+     * The cell is the shared people cell the CBI table draws: faces side by
+     * side, one full name or several first names beside them. The button is
+     * what opens the picker.
      */
     var held = list.length > 0;
     var label = held ? 'Change who holds this' : 'Assign an officer';
@@ -2876,24 +2899,9 @@
         '</button>'
       : '';
 
-    /*
-     * Nobody is on the application, and these are the client's people.
-     *
-     * Marked, because drawn as officers they made assigning look broken: a
-     * client manager who is also an officer already had their name in this
-     * cell, so putting them on the file changed nothing visible and the
-     * reader concluded the control did not work. Muted with one word after
-     * them, so the table can say this client has somebody without claiming
-     * the application does — and so the name going solid is what assigning
-     * looks like.
-     */
-    var viaClient = list.length > 0 && list.every(function (p) { return p.via === 'client'; });
-
     if (window.TMAPersonCard && window.TMAPersonCard.faces) {
-      return '<span class="tma-dash__cip-assigned' + (viaClient ? ' tma-dash__cip-assigned--via-client' : '') + '">' +
-        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) +
-        (viaClient ? '<span class="tma-dash__cip-via" title="Nobody is on this application yet">client</span>' : '') +
-        picker + '</span>';
+      return '<span class="tma-dash__cip-assigned">' +
+        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) + picker + '</span>';
     }
 
     return '<span class="tma-portal-table__muted">' +
@@ -5231,8 +5239,8 @@
    * A client document's review state, beside its name.
    *
    * Reuses the portal's status badge rather than a chip of this page's own, so
-   * "Pending review" here and in the File Library are recognisably the same
-   * fact about the same file.
+   * "Application review" here, on the person-tab checklists, and in the File
+   * Library are recognisably the same fact about the same file.
    */
   function clientStatusChip(f) {
     var s = f && f.status;

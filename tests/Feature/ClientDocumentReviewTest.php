@@ -4,12 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\ClientAssignment;
+use App\Models\FileComment;
 use App\Models\FileItem;
+use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\ClientDocuments;
 use App\Support\Files\ReviewStatus;
+use App\Support\Files\Workflow\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -58,7 +62,7 @@ class ClientDocumentReviewTest extends TestCase
     private function clientFolder(Client $client, User $owner): Folder
     {
         return Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => $client->name,
             'folder_type' => Folder::TYPE_CLIENT,
             'client_id' => $client->id,
@@ -72,7 +76,7 @@ class ClientDocumentReviewTest extends TestCase
         ClientDocuments::forget();
 
         return FileItem::create(array_merge([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Passport.pdf',
             'extension' => 'pdf',
             'mime_type' => 'application/pdf',
@@ -101,7 +105,7 @@ class ClientDocumentReviewTest extends TestCase
         $root = $this->clientFolder($client, $staff);
 
         $sub = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Citizenship Applications',
             'parent_id' => $root->id,
             'owner_id' => $staff->id,
@@ -109,7 +113,7 @@ class ClientDocumentReviewTest extends TestCase
         ]);
 
         $deep = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Supporting evidence',
             'parent_id' => $sub->id,
             'owner_id' => $staff->id,
@@ -126,7 +130,7 @@ class ClientDocumentReviewTest extends TestCase
         $staff = $this->staff();
 
         $plain = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Marketing',
             'owner_id' => $staff->id,
             'created_by' => $staff->id,
@@ -146,7 +150,7 @@ class ClientDocumentReviewTest extends TestCase
         $folder = $this->clientFolder($client, $staff);
 
         $plain = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Scratch',
             'owner_id' => $staff->id,
             'created_by' => $staff->id,
@@ -172,22 +176,17 @@ class ClientDocumentReviewTest extends TestCase
         $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
         $this->actingAs($staff)
-            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::UNDER_REVIEW])
+            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::READY_FOR_SUBMISSION, 'note' => 'All present.'])
             ->assertOk()
-            ->assertJsonPath('status.label', 'Under review');
-
-        $this->actingAs($staff)
-            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::APPROVED, 'note' => 'All present.'])
-            ->assertOk()
-            ->assertJsonPath('status.label', 'Approved');
+            ->assertJsonPath('status.label', 'Ready for submission');
 
         $file->refresh();
-        $this->assertSame(ReviewStatus::APPROVED, $file->review_status);
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $file->review_status);
         $this->assertSame($staff->id, $file->reviewed_by);
         $this->assertNotNull($file->reviewed_at);
     }
 
-    public function test_a_rejection_must_say_why(): void
+    public function test_an_update_must_say_why(): void
     {
         $staff = $this->staff();
         $client = $this->client($staff);
@@ -195,12 +194,12 @@ class ClientDocumentReviewTest extends TestCase
         $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
         $this->actingAs($staff)
-            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::REJECTED])
+            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::UPDATE_REQUIRED])
             ->assertStatus(422);
 
         $this->actingAs($staff)
             ->patchJson("/portal/files/files/{$file->uuid}/review", [
-                'status' => ReviewStatus::REJECTED,
+                'status' => ReviewStatus::UPDATE_REQUIRED,
                 'note' => 'Expired — please send a current copy.',
             ])
             ->assertOk();
@@ -218,7 +217,7 @@ class ClientDocumentReviewTest extends TestCase
         $clientUser = $this->staff('Client');
 
         $this->actingAs($clientUser)
-            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::APPROVED])
+            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::READY_FOR_SUBMISSION])
             ->assertForbidden();
     }
 
@@ -232,23 +231,23 @@ class ClientDocumentReviewTest extends TestCase
         $this->actingAs($staff)
             ->getJson('/portal/files/?section=all&folder='.$folder->uuid)
             ->assertOk()
-            ->assertJsonPath('files.0.status.label', 'Pending review')
-            ->assertJsonPath('files.0.review.status', ReviewStatus::PENDING);
+            ->assertJsonPath('files.0.status.label', 'Application review')
+            ->assertJsonPath('files.0.review.status', ReviewStatus::APPLICATION_REVIEW);
     }
 
     /* ── automatic transitions ────────────────────────────────────── */
 
-    public function test_a_comment_starts_the_review(): void
+    public function test_a_comment_does_not_rename_application_review(): void
     {
         $staff = $this->staff();
         $client = $this->client($staff);
         $folder = $this->clientFolder($client, $staff);
         $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
-        $this->assertSame(ReviewStatus::PENDING, $file->fresh()->review_status);
+        $this->assertSame(ReviewStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
 
-        $c = \App\Models\FileComment::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $c = FileComment::create([
+            'uuid' => (string) Str::uuid(),
             'file_id' => $file->id,
             'author_id' => $staff->id,
             'body' => 'Checking the dates on page 2.',
@@ -256,9 +255,9 @@ class ClientDocumentReviewTest extends TestCase
         $c->forceFill(['root_id' => $c->id])->save();
 
         $this->assertSame(
-            ReviewStatus::UNDER_REVIEW,
+            ReviewStatus::APPLICATION_REVIEW,
             $file->fresh()->review_status,
-            'Somebody discussing the document means somebody is looking at it.'
+            'Application review already means somebody is looking at it.',
         );
     }
 
@@ -269,24 +268,24 @@ class ClientDocumentReviewTest extends TestCase
         $folder = $this->clientFolder($client, $staff);
         $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
-        $wf = \App\Models\FileWorkflow::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $wf = FileWorkflow::create([
+            'uuid' => (string) Str::uuid(),
             'file_id' => $file->id,
             'type' => 'approval',
-            'status' => \App\Support\Files\Workflow\Status::AWAITING_APPROVAL,
+            'status' => Status::AWAITING_APPROVAL,
             'created_by' => $staff->id,
             'require_all' => true,
             'ordered' => false,
             'lock_file' => false,
         ]);
 
-        $this->assertSame(ReviewStatus::AWAITING_APPROVAL, $file->fresh()->review_status);
+        $this->assertSame(ReviewStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
 
-        $wf->forceFill(['status' => \App\Support\Files\Workflow\Status::CHANGES_REQUESTED])->save();
-        $this->assertSame(ReviewStatus::CHANGES_REQUESTED, $file->fresh()->review_status);
+        $wf->forceFill(['status' => Status::CHANGES_REQUESTED])->save();
+        $this->assertSame(ReviewStatus::UPDATE_REQUIRED, $file->fresh()->review_status);
 
-        $wf->forceFill(['status' => \App\Support\Files\Workflow\Status::APPROVED])->save();
-        $this->assertSame(ReviewStatus::APPROVED, $file->fresh()->review_status);
+        $wf->forceFill(['status' => Status::APPROVED])->save();
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $file->fresh()->review_status);
     }
 
     public function test_activity_never_overrules_a_person(): void
@@ -298,11 +297,11 @@ class ClientDocumentReviewTest extends TestCase
 
         // A reviewer settles it by hand.
         $this->actingAs($staff)
-            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::APPROVED])
+            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::READY_FOR_SUBMISSION])
             ->assertOk();
 
-        $c = \App\Models\FileComment::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $c = FileComment::create([
+            'uuid' => (string) Str::uuid(),
             'file_id' => $file->id,
             'author_id' => $staff->id,
             'body' => 'Nice one.',
@@ -310,7 +309,7 @@ class ClientDocumentReviewTest extends TestCase
         $c->forceFill(['root_id' => $c->id])->save();
 
         $this->assertSame(
-            ReviewStatus::APPROVED,
+            ReviewStatus::READY_FOR_SUBMISSION,
             $file->fresh()->review_status,
             'A remark about finished work is not a reason to reopen it.'
         );
@@ -321,7 +320,7 @@ class ClientDocumentReviewTest extends TestCase
         $staff = $this->staff();
 
         $plain = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Marketing',
             'owner_id' => $staff->id,
             'created_by' => $staff->id,
@@ -329,8 +328,8 @@ class ClientDocumentReviewTest extends TestCase
 
         $file = $this->file(['folder_id' => $plain->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
-        $c = \App\Models\FileComment::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $c = FileComment::create([
+            'uuid' => (string) Str::uuid(),
             'file_id' => $file->id,
             'author_id' => $staff->id,
             'body' => 'Looks good.',

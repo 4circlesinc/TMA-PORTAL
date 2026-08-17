@@ -2,6 +2,7 @@
 
 namespace App\Support\Files;
 
+use App\Models\CipDocument;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\FileWorkflow;
@@ -10,6 +11,9 @@ use App\Models\FolderColourPreference;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\DocumentEngine;
+use App\Support\Cip\DocumentStatus;
 use App\Support\Files\Workflow\Status;
 
 /**
@@ -36,6 +40,16 @@ class Presenter
 
     /** file_id => ['status','label','tone'] for the file's live review state. */
     private array $statusFile = [];
+
+    /**
+     * file_id => the CIP slot this file answers, primed with the listing.
+     *
+     * @var array<int, CipDocument>
+     */
+    private array $cipFile = [];
+
+    /** Whether {@see self::prime()} has loaded $cipFile for this page of files. */
+    private bool $cipPrimed = false;
 
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
@@ -89,6 +103,8 @@ class Presenter
 
         $this->sharedFile = $this->sharedWithMap('file', $fileIds);
         $this->statusFile = $this->statusMap($fileIds);
+        $this->cipFile = $this->cipMap($fileIds);
+        $this->cipPrimed = true;
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
     }
@@ -137,30 +153,19 @@ class Presenter
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
             /*
-             * One badge, from whichever of the two systems applies.
+             * One badge, from whichever of the three systems applies.
              *
-             * A client document's own review state wins: it is set the moment
-             * the file lands, it is what the client's Documents tab is about,
-             * and a file showing "Pending review" beside "Awaiting approval"
-             * would be two statuses for one document with no way to tell which
-             * governs. The approval-workflow badge still shows for everything
-             * else, and both remain visible in full inside the viewer.
+             * A CIP slot's own status wins: it is the document-status workflow
+             * the checklist, the Documents tab and the File Library all have
+             * to agree on, and a file showing "Application review" beside
+             * "Pending review" would be two answers for one document. A
+             * client document that is not a slot still uses that same
+             * vocabulary on files.review_status. The approval-workflow badge
+             * still shows for everything else, and both remain visible in
+             * full inside the viewer.
              */
-            'status' => ReviewStatus::badge($file->review_status)
-                ?? ($this->statusFile[$file->id] ?? null),
-            'review' => [
-                'status' => $file->review_status,
-                'label' => ReviewStatus::label($file->review_status),
-                'note' => $file->review_note,
-                'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
-                'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
-                // What this viewer may move it to from here.
-                'canReview' => $perms['review'],
-                // Every state, so the picker can list them all — the current
-                // one included, marked rather than missing.
-                'all' => ReviewStatus::ALL,
-                'next' => ReviewStatus::next($file->review_status),
-            ],
+            'status' => $this->fileBadge($file),
+            'review' => $this->reviewPayload($file, $perms),
             'permissions' => $perms,
             'downloadUrl' => route('files.download', $file->uuid),
             'previewUrl' => FileType::isPreviewable($ext)
@@ -665,7 +670,7 @@ class Presenter
                 ->where('status', User::STATUS_APPROVED)
                 // Administrator before Employee, then by name — a stable order,
                 // so a face does not move between one row and the next.
-                ->orderByRaw("case when account_type = ? then 0 else 1 end", [Role::ADMINISTRATOR])
+                ->orderByRaw('case when account_type = ? then 0 else 1 end', [Role::ADMINISTRATOR])
                 ->orderBy('name')
                 ->limit(self::PEOPLE_PREVIEW)
                 ->get()
@@ -674,6 +679,97 @@ class Presenter
         }
 
         return $this->staffPeople;
+    }
+
+    /**
+     * The CIP slots these files answer, keyed by file id.
+     *
+     * @param  int[]  $fileIds
+     * @return array<int, CipDocument>
+     */
+    private function cipMap(array $fileIds): array
+    {
+        if (! $fileIds) {
+            return [];
+        }
+
+        return CipDocument::query()
+            ->whereIn('file_id', $fileIds)
+            ->get()
+            ->keyBy('file_id')
+            ->all();
+    }
+
+    private function cipSlot(FileItem $file): ?CipDocument
+    {
+        if ($this->cipPrimed) {
+            return $this->cipFile[$file->id] ?? null;
+        }
+
+        return $file->cipDocument;
+    }
+
+    /** @return array{status:string,label:string,tone:string}|null */
+    private function fileBadge(FileItem $file): ?array
+    {
+        $slot = $this->cipSlot($file);
+
+        if ($slot) {
+            return DocumentStatus::badge($slot->status ?? DocumentStatus::PENDING_UPLOAD);
+        }
+
+        return ReviewStatus::badge($file->review_status)
+            ?? ($this->statusFile[$file->id] ?? null);
+    }
+
+    /**
+     * The picker the File Library and the viewer hang off this file.
+     *
+     * CIP slots travel {@see DocumentEngine}'s edges and need `cip.review` to
+     * move; every other client document is the library's any-to-any set.
+     * Putting the slot's status in this block — not files.review_status — is
+     * what keeps the chip on the row and the chip in the panel the same fact.
+     *
+     * @param  array<string, bool>  $perms
+     * @return array<string, mixed>
+     */
+    private function reviewPayload(FileItem $file, array $perms): array
+    {
+        $slot = $this->cipSlot($file);
+
+        if ($slot) {
+            $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+            // Re-upload is what puts a slot back into application review.
+            // Offering that status in the picker would let a reviewer skip
+            // the new version the revision loop is for.
+            $next = array_values(array_filter(
+                DocumentEngine::next($slot),
+                fn (string $to) => $to !== DocumentStatus::APPLICATION_REVIEW
+                    && $to !== DocumentStatus::PENDING_UPLOAD,
+            ));
+
+            return [
+                'status' => $status,
+                'label' => DocumentStatus::label($status),
+                'note' => $file->review_note,
+                'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
+                'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
+                'canReview' => $perms['review'] && CipAccess::can($this->viewer, 'cip.review'),
+                'all' => ReviewStatus::ALL,
+                'next' => $next,
+            ];
+        }
+
+        return [
+            'status' => ReviewStatus::normalize($file->review_status) ?? $file->review_status,
+            'label' => ReviewStatus::label($file->review_status),
+            'note' => $file->review_note,
+            'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
+            'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
+            'canReview' => $perms['review'],
+            'all' => ReviewStatus::ALL,
+            'next' => ReviewStatus::next($file->review_status),
+        ];
     }
 
     /**

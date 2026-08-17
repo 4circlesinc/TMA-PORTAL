@@ -55,11 +55,21 @@ class DocumentEngine
         DocumentStatus::READY_FOR_SUBMISSION => 'cip.review',
     ];
 
+    /**
+     * The statuses this slot may move to from where it is.
+     *
+     * @return list<string>
+     */
+    public static function next(CipDocument $document): array
+    {
+        return self::TRANSITIONS[$document->status ?? DocumentStatus::PENDING_UPLOAD] ?? [];
+    }
+
     /** Is this edge in the cycle at all, whoever is asking? */
     public static function canTransition(CipDocument $document, string $to): bool
     {
         return DocumentStatus::isValid($to)
-            && in_array($to, self::TRANSITIONS[$document->status] ?? [], true);
+            && in_array($to, self::next($document), true);
     }
 
     /**
@@ -132,6 +142,15 @@ class DocumentEngine
         return DB::transaction(function () use ($document, $to, $actor, $meta) {
             $from = $document->status;
             $document->forceFill(['status' => $to, 'status_changed_at' => now()])->save();
+
+            // The File Library and the Documents tab read files.review_status.
+            // A slot that has a file must show the same chip there as it does
+            // on the checklist, or a reviewer walking between the two would
+            // see two answers for one document.
+            if ($document->file_id) {
+                $document->loadMissing('file');
+                $document->file?->forceFill(['review_status' => $to])->save();
+            }
 
             $application = $document->loadMissing('application')->application;
 

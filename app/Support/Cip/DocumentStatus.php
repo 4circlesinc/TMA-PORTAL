@@ -69,4 +69,18 @@ class DocumentStatus
     {
         return self::TONES[$status] ?? 'neutral';
     }
+
+    /** @return array{status:string,label:string,tone:string}|null */
+    public static function badge(?string $status): ?array
+    {
+        if ($status === null || ! self::isValid($status)) {
+            return null;
+        }
+
+        return [
+            'status' => $status,
+            'label' => self::label($status),
+            'tone' => self::tone($status),
+        ];
+    }
 }

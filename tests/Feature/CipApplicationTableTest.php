@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\CipApplication;
 use App\Models\CipPerson;
-use App\Models\ClientAssignment;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\User;
 use App\Support\Cip\Applications;
@@ -66,8 +66,12 @@ class CipApplicationTableTest extends TestCase
         ]);
 
         $person(CipPerson::ROLE_MAIN_APPLICANT, 'Chen');
-        if ($sponsor) $person(CipPerson::ROLE_SPONSOR, 'Li');
-        for ($i = 1; $i <= $dependents; $i++) $person(CipPerson::ROLE_DEPENDENT, 'Kid'.$i, $i);
+        if ($sponsor) {
+            $person(CipPerson::ROLE_SPONSOR, 'Li');
+        }
+        for ($i = 1; $i <= $dependents; $i++) {
+            $person(CipPerson::ROLE_DEPENDENT, 'Kid'.$i, $i);
+        }
 
         return $application->refresh();
     }
@@ -95,7 +99,7 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('Draft', $row['statusLabel']);
     }
 
-    public function test_the_assigned_column_names_the_staff_on_the_client(): void
+    public function test_the_assigned_column_names_only_the_officers_on_the_application(): void
     {
         $staff = $this->staff();
         $application = $this->application($staff, $this->provider($staff), 1, false);
@@ -111,8 +115,17 @@ class CipApplicationTableTest extends TestCase
 
         $row = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications.0');
 
-        $this->assertCount(1, $row['assignedTo']);
-        $this->assertSame('Omar Reviewer', $row['assignedTo'][0]['name']);
+        /*
+         * Empty, though this client has staff on it.
+         *
+         * The column used to fall back to the people looking after the client
+         * when nobody was on the application, and that made assigning look
+         * broken: a client manager who is also an officer already had their
+         * name in the cell, so putting them on the file changed nothing
+         * anybody could see. Who looks after a client is a fact about the
+         * client; this column answers who holds the application.
+         */
+        $this->assertSame([], $row['assignedTo']);
     }
 
     public function test_an_assignment_that_has_ended_is_not_shown_as_assigned(): void
@@ -163,7 +176,9 @@ class CipApplicationTableTest extends TestCase
     {
         $staff = $this->staff();
         $provider = $this->provider($staff);
-        foreach (range(1, 5) as $i) $this->application($staff, $provider, 3, true);
+        foreach (range(1, 5) as $i) {
+            $this->application($staff, $provider, 3, true);
+        }
 
         $this->actingAs($staff);
         DB::enableQueryLog();
@@ -224,7 +239,9 @@ class CipApplicationTableTest extends TestCase
     {
         $staff = $this->staff();
         $provider = $this->provider($staff);
-        foreach (range(1, 3) as $i) $this->application($staff, $provider, 0, false);
+        foreach (range(1, 3) as $i) {
+            $this->application($staff, $provider, 0, false);
+        }
 
         $body = $this->actingAs($staff)
             ->getJson('/portal/cip/applications?perPage=2')

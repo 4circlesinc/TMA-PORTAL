@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -60,5 +61,16 @@ class FileItem extends Model
     public function deletedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'deleted_by');
+    }
+
+    /**
+     * The CIP checklist slot this file answers, when it is one.
+     *
+     * Most library files are not slots. The ones that are must show the
+     * slot's status in the File Library, not a second review vocabulary.
+     */
+    public function cipDocument(): HasOne
+    {
+        return $this->hasOne(CipDocument::class, 'file_id');
     }
 }

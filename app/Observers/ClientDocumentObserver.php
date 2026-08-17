@@ -32,7 +32,7 @@ class ClientDocumentObserver
         }
 
         if (ClientDocuments::isClientFolder($file->folder_id)) {
-            $file->review_status = ReviewStatus::PENDING;
+            $file->review_status = ReviewStatus::APPLICATION_REVIEW;
         }
     }
 
@@ -52,13 +52,13 @@ class ClientDocumentObserver
         $nowClient = ClientDocuments::isClientFolder($file->folder_id);
 
         if ($nowClient && $file->review_status === null) {
-            $file->review_status = ReviewStatus::PENDING;
+            $file->review_status = ReviewStatus::APPLICATION_REVIEW;
 
             return;
         }
 
-        // Leaving: clear the review rather than leave "Pending review" hanging
-        // on a file that is no longer in anybody's queue.
+        // Leaving: clear the review rather than leave "Application review"
+        // hanging on a file that is no longer in anybody's queue.
         if (! $nowClient && ! $file->isDirty('review_status')) {
             $file->review_status = null;
             $file->review_note = null;
