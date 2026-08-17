@@ -37,8 +37,33 @@ class ApplicationScope
             return $query->whereRaw('1 = 0');
         }
 
-        if (Role::isAdmin($user) || CipAccess::isOfficer($user)) {
+        if (Role::isAdmin($user)) {
             return $query;
+        }
+
+        /*
+         * An officer sees the files they hold, not the book.
+         *
+         * §10 is the reason: the administrator assigns, and the assignment is
+         * what starts the review — so a file nobody has been given is the
+         * administrator's to see and nobody else's. An officer reading the
+         * whole table would be reading applications that are not yet, and may
+         * never be, their work.
+         *
+         * "Holds" is either assignment record — the client's list, which is
+         * what the Assigned tab and §8's column read, or the application's own
+         * workflow row; the picker writes both together, but a file must not
+         * vanish from its officer because one half was written by an older
+         * path. Files the officer filed themselves stay visible too: losing
+         * sight of your own submission because nobody has assigned it back to
+         * you would make creating one feel like posting it into a void.
+         */
+        if (CipAccess::isOfficer($user)) {
+            return $query->where(function (Builder $q) use ($user) {
+                $q->whereHas('assignments', fn ($a) => $a->live()->where('user_id', $user->id))
+                    ->orWhereHas('client.assignments', fn ($a) => $a->live()->where('user_id', $user->id))
+                    ->orWhere('cip_applications.created_by', $user->id);
+            });
         }
 
         if (Role::isStaff($user)) {

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
@@ -103,6 +104,23 @@ class CipBucketTest extends TestCase
             'status' => $status,
             'assigned_officer_id' => $officer?->id,
         ])->save();
+
+        /*
+         * The cache column alone is not an assignment any more: an officer
+         * sees only the files they hold, and holding is a live row. A fixture
+         * that wrote only the cache would be seeding files its officer cannot
+         * see.
+         */
+        if ($officer !== null) {
+            CipApplicationAssignment::create([
+                'application_id' => $application->id,
+                'user_id' => $officer->id,
+                'role' => 'reviewing_officer',
+                'status' => CipApplicationAssignment::STATUS_ACTIVE,
+                'assigned_by' => $creator->id,
+                'starts_at' => now(),
+            ]);
+        }
 
         return $application;
     }

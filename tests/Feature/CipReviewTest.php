@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -98,9 +99,33 @@ class CipReviewTest extends TestCase
         return $slot;
     }
 
-    private function officer(): User
+    /**
+     * The reviewing officer, on the file.
+     *
+     * On it explicitly, because holding the file is what seeing it means now:
+     * officers read only the applications they have been given (§10 — the
+     * administrator assigns, and an unassigned file is the administrator's).
+     * These tests are about the review verbs, and a reviewer exercises them
+     * on a file that is theirs.
+     */
+    private function officer(?CipApplication $holds = null): User
     {
-        return $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $officer = User::firstWhere('email', 'rita@example.com')
+            ?? $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+
+        if ($holds !== null) {
+            CipApplicationAssignment::firstOrCreate([
+                'application_id' => $holds->id,
+                'user_id' => $officer->id,
+                'status' => CipApplicationAssignment::STATUS_ACTIVE,
+            ], [
+                'role' => 'reviewing_officer',
+                'assigned_by' => $officer->id,
+                'starts_at' => now(),
+            ]);
+        }
+
+        return $officer;
     }
 
     /** A contact at the firm that filed the application. */
@@ -123,7 +148,7 @@ class CipReviewTest extends TestCase
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
         $this->slot($application, 'birth_certificate', 'Birth certificate');
 
-        $body = $this->actingAs($this->officer())
+        $body = $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()->json();
 
@@ -145,7 +170,7 @@ class CipReviewTest extends TestCase
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
         $birth = $this->slot($application, 'birth_certificate', 'Birth certificate');
 
-        $officer = $this->officer();
+        $officer = $this->officer($application);
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')->assertOk();
@@ -171,7 +196,7 @@ class CipReviewTest extends TestCase
         // Asked for, never demanded — and nobody has uploaded it.
         $this->slot($application, 'translation', 'Certified translation', false, DocumentStatus::PENDING_UPLOAD);
 
-        $body = $this->actingAs($this->officer())
+        $body = $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()->json();
 
@@ -190,7 +215,7 @@ class CipReviewTest extends TestCase
         $application = $this->application($staff, Status::ASSESSMENT_FEEDBACK);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
-        $officer = $this->officer();
+        $officer = $this->officer($application);
 
         $body = $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes', [
@@ -217,7 +242,7 @@ class CipReviewTest extends TestCase
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
-        $this->actingAs($this->officer())
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes', [
                 'comment' => 'Page two is missing.',
             ])->assertOk();
@@ -240,7 +265,7 @@ class CipReviewTest extends TestCase
         $application = $this->application($staff, Status::ASSESSMENT_FEEDBACK);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
-        $officer = $this->officer();
+        $officer = $this->officer($application);
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes')
@@ -267,7 +292,7 @@ class CipReviewTest extends TestCase
 
         // Nothing is approved before it has been read. The cycle has no edge
         // for it, and the officer is told so in a sentence rather than a 500.
-        $this->actingAs($this->officer())
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertStatus(422);
 
@@ -280,7 +305,7 @@ class CipReviewTest extends TestCase
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
-        $officer = $this->officer();
+        $officer = $this->officer($application);
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')->assertOk();
@@ -352,7 +377,7 @@ class CipReviewTest extends TestCase
         Review::settle($application->fresh());
         $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
 
-        $this->actingAs($this->officer())
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()
             ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);

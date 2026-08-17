@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
-use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Applications;
-use App\Support\Cip\CipAccess;
+use App\Support\Cip\ApplicationScope;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -96,20 +96,42 @@ class CipApplicationScopeTest extends TestCase
         );
     }
 
-    public function test_officers_and_admins_see_everything_and_plain_employees_see_nothing(): void
+    public function test_an_officer_sees_only_the_files_they_hold(): void
     {
         $staff = $this->user(Role::EMPLOYEE);
         [$galaxy] = $this->providerWithContact('GAL');
-        Applications::create($galaxy, $staff);
+        $held = Applications::create($galaxy, $staff);
+        Applications::create($galaxy, $staff); // unassigned — the administrator's to see
 
         $admin = $this->user(Role::ADMINISTRATOR);
-        $this->assertCount(1, ApplicationScope::query($admin)->get());
+        $this->assertCount(2, ApplicationScope::query($admin)->get(), 'the administrator reads the book');
 
+        /*
+         * §10: the administrator assigns, so a file nobody has been given is
+         * the administrator's and nobody else's. An officer reading the whole
+         * table would be reading applications that are not yet, and may never
+         * be, their work — which is what this pins after the scope was opened
+         * that wide by mistake.
+         */
         $officer = $this->user(Role::REVIEWING_OFFICER);
-        $this->assertCount(1, ApplicationScope::query($officer)->get());
+        $this->assertCount(0, ApplicationScope::query($officer)->get(), 'nothing until something is theirs');
 
-        // An employee with no officer grant sees nothing — widening that is a
-        // deliberate decision, not a default.
+        CipApplicationAssignment::create([
+            'application_id' => $held->id,
+            'user_id' => $officer->id,
+            'role' => 'reviewing_officer',
+            'status' => CipApplicationAssignment::STATUS_ACTIVE,
+            'assigned_by' => $officer->id,
+            'starts_at' => now(),
+        ]);
+
+        $this->assertSame(
+            [$held->id],
+            ApplicationScope::query($officer)->pluck('id')->all(),
+            'the held file, and only it',
+        );
+
+        // A parked Employee reaches no portal route and no slice either.
         $this->assertCount(0, ApplicationScope::query($staff)->get());
     }
 

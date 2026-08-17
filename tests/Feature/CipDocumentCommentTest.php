@@ -6,11 +6,11 @@ use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
-use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Assignments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -159,11 +159,23 @@ class CipDocumentCommentTest extends TestCase
         $other = $this->user('Reviewing Officer', 'rita@example.com', 'Rita Officer');
         $slot = $this->slot($staff);
 
+        // On the file, because an officer now sees only what they hold — the
+        // commenting under test presumes a reviewer who can open the document.
+        Assignments::assign($slot->application()->first(), $other, $staff);
+
         $comment = $this->actingAs($other)
             ->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', ['body' => 'Needs a clearer scan.'])
             ->assertCreated()->json();
 
-        $reviewer = $this->user('Reviewing Officer', 'sam@example.com', 'Sam Bystander');
+        /*
+         * On the file too — the refusal under test is about AUTHORSHIP, and a
+         * bystander who could not even see the document would get the scope's
+         * 404 before the author gate ever answered. As the compliance officer,
+         * because a file holds one reviewing officer at a time and taking that
+         * role would take the file off the author.
+         */
+        $reviewer = $this->user('Compliance Officer', 'sam@example.com', 'Sam Bystander');
+        Assignments::assign($slot->application()->first(), $reviewer, $staff, 'compliance_officer');
         $this->actingAs($reviewer)
             ->patchJson('/portal/cip/documents/'.$slot->uuid.'/comments/'.$comment['id'], ['body' => 'Fine actually'])
             ->assertForbidden();

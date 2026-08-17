@@ -11,6 +11,7 @@ use App\Models\Client;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
@@ -203,10 +204,14 @@ class CipTransitionTest extends TestCase
         $reviewer = $this->user(Role::REVIEWING_OFFICER);
 
         $application = $this->at($this->application($admin), Status::PENDING_REVIEW);
+        Assignments::assign($application->fresh(), $reviewer, $admin);
+        $application = $application->fresh();
         $events = CipEvent::count();
 
-        // A Reviewing Officer may see this application and assess its
-        // documents; moving it through compliance is somebody else's work.
+        // On the file, so the refusal under test is the CAPABILITY's and not
+        // the scope's 404: a Reviewing Officer may hold this application and
+        // assess its documents; moving it through compliance is somebody
+        // else's work.
         $this->actingAs($reviewer)
             ->postJson($this->statusUrl($application), ['status' => Status::BACKGROUND_CHECK])
             ->assertForbidden();
@@ -313,6 +318,9 @@ class CipTransitionTest extends TestCase
         $reviewer = $this->user(Role::REVIEWING_OFFICER);
 
         $application = $this->at($this->application($admin), Status::REVIEW_APPLICATION);
+        // Their file — an officer reads only what they hold.
+        Assignments::assign($application->fresh(), $reviewer, $admin);
+        $application = $application->fresh();
 
         $next = $this->actingAs($reviewer)
             ->postJson($this->statusUrl($application), ['status' => Status::ASSESSMENT_FEEDBACK])
@@ -437,6 +445,10 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $reviewer = $this->user(Role::REVIEWING_OFFICER);
         $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
+        // Holding it is what makes this a 403 about the verb rather than the
+        // scope's 404 about the file.
+        Assignments::assign($application->fresh(), $reviewer, $admin);
+        $application = $application->fresh();
 
         $this->actingAs($reviewer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [

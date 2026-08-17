@@ -220,16 +220,25 @@ class CipAssignmentTest extends TestCase
         $sam = $this->user(Role::REVIEWING_OFFICER, 'sam@example.com', 'Sam Reviewer');
         $application = $this->application($admin);
 
-        // §10 keeps assignment with the administrator: an officer reaches
-        // every application, so this is a 403 and not a 404.
-        $this->assign($rita, $application, $sam)->assertForbidden();
+        // §10 keeps assignment with the administrator. An officer HOLDING the
+        // file still may not hand it on — they can see it, so the refusal is
+        // a 403 about the verb, not a 404 about the file.
+        Assignments::assign($application, $rita, $admin);
+        $this->assign($rita, $application->fresh(), $sam)->assertForbidden();
+
+        // An officer the file was never given cannot even see it: the same
+        // ask from them is a 404, because being refused the right to staff an
+        // application would otherwise tell them it exists.
+        $dana = $this->user(Role::REVIEWING_OFFICER, 'dana@example.com', 'Dana Review');
+        $this->assign($dana, $application->fresh(), $sam)->assertNotFound();
 
         // A stranger is not told the application is there at all.
         $stranger = $this->user(Role::CLIENT, 'nobody@example.com', 'Nobody');
         $this->assign($stranger, $application, $sam)->assertNotFound();
 
-        $this->assertSame(0, CipApplicationAssignment::count());
-        $this->assertSame(Status::NEW, $application->fresh()->status);
+        // Rita's own row is the only one: none of the refused asks stuck.
+        $this->assertSame(1, CipApplicationAssignment::count());
+        $this->assertSame($rita->id, CipApplicationAssignment::first()->user_id);
     }
 
     public function test_the_assignable_list_leaves_out_whoever_is_already_on_it(): void
@@ -301,6 +310,7 @@ class CipAssignmentTest extends TestCase
         $this->assertSame([$rita->id], array_column($body['assignments'], 'userId'));
         $this->assertSame([$colin->id], array_column($body['assignable'], 'id'));
     }
+
     public function test_assigning_emails_the_officer_in_the_compliance_format(): void
     {
         Mail::fake();
@@ -366,5 +376,4 @@ class CipAssignmentTest extends TestCase
          */
         Mail::assertSentCount(1);
     }
-
 }
