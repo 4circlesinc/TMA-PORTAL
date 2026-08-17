@@ -517,6 +517,8 @@ class CipApplicationController extends Controller
                 'email' => $a->user->email,
                 'avatar' => $a->user->photoUrl(),
                 'role' => Assignments::roleLabel($a->role),
+                // Somebody is on the application itself.
+                'via' => 'application',
             ])
             ->values()
             ->all();
@@ -525,6 +527,17 @@ class CipApplicationController extends Controller
             return $live;
         }
 
+        /*
+         * Nobody is on the file, so the client's own people stand in — and
+         * they are marked as standing in.
+         *
+         * Drawn identically to an officer, this made assigning look broken: a
+         * client manager who is also an officer already had their name in the
+         * cell, so putting them on the application changed nothing anybody
+         * could see, and the reader concluded the button did not work. The
+         * mark is what lets the table say "this client has somebody" without
+         * claiming the application does.
+         */
         return collect($application->client?->assignments ?? [])
             ->filter(fn ($a) => $a->user !== null)
             ->map(fn ($a) => [
@@ -532,6 +545,7 @@ class CipApplicationController extends Controller
                 'email' => $a->user->email,
                 'avatar' => $a->user->photoUrl(),
                 'role' => $a->roleLabel(),
+                'via' => 'client',
             ])
             ->values()
             ->all();

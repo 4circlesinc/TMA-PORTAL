@@ -2876,9 +2876,24 @@
         '</button>'
       : '';
 
+    /*
+     * Nobody is on the application, and these are the client's people.
+     *
+     * Marked, because drawn as officers they made assigning look broken: a
+     * client manager who is also an officer already had their name in this
+     * cell, so putting them on the file changed nothing visible and the
+     * reader concluded the control did not work. Muted with one word after
+     * them, so the table can say this client has somebody without claiming
+     * the application does — and so the name going solid is what assigning
+     * looks like.
+     */
+    var viaClient = list.length > 0 && list.every(function (p) { return p.via === 'client'; });
+
     if (window.TMAPersonCard && window.TMAPersonCard.faces) {
-      return '<span class="tma-dash__cip-assigned">' +
-        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) + picker + '</span>';
+      return '<span class="tma-dash__cip-assigned' + (viaClient ? ' tma-dash__cip-assigned--via-client' : '') + '">' +
+        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) +
+        (viaClient ? '<span class="tma-dash__cip-via" title="Nobody is on this application yet">client</span>' : '') +
+        picker + '</span>';
     }
 
     return '<span class="tma-portal-table__muted">' +
