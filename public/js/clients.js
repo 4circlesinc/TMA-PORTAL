@@ -2662,6 +2662,36 @@
    * a question about one application, and asking it for every row of fifty to
    * fill a menu nobody may open would be fifty round trips for nothing.
    */
+  /*
+   * One person's face for a menu row: their photo, else their initials.
+   *
+   * The portal's one avatar rule, borrowed rather than restated — a real
+   * upload or a provider's picture, and otherwise initials on a colour drawn
+   * from the same seed the faces in the cell use, so the same person is the
+   * same colour in both. Never a stock silhouette.
+   */
+  function personFace(person) {
+    if (!person) return '';
+    var src = person.avatar || person.photo;
+    if (src) return src;
+    var cu = window.TMACurrentUser;
+
+    return cu && cu.initialsFor
+      ? cu.initialsFor(person.name || person.email || '', person.email || person.name || '')
+      : '';
+  }
+
+  /* What an officer would hold this file as, from the account type the server
+     sent — the same derivation the assignment endpoint makes when a request
+     names no role. */
+  function officerRoleLabel(officer) {
+    var role = officer && officer.role;
+    if (role === 'compliance_officer') return 'Compliance officer';
+    if (role === 'reviewing_officer') return 'Reviewing officer';
+
+    return officer && officer.accountType ? String(officer.accountType) : '';
+  }
+
   function openAssignMenu(button, applicationId) {
     if (!window.TMAFileActions || !window.TMAFileActions.menu) return;
 
@@ -2672,10 +2702,20 @@
         var free = (json && json.assignable) || [];
         var live = (json && json.assignments) || [];
 
+        /*
+         * Who holds it now, each with their face.
+         *
+         * The menu is a list of people and the portal draws people with their
+         * picture everywhere else — the cell this opens from is a row of
+         * faces. Names alone made it the one place a colleague was a line of
+         * text, and on a firm with two similar names that is the line you
+         * misread.
+         */
         var items = live.map(function (a) {
           return {
             label: 'End ' + (a.name || a.email || 'this assignment'),
-            icon: 'X',
+            meta: a.roleLabel || '',
+            face: personFace(a),
             danger: true,
             fn: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
           };
@@ -2690,7 +2730,8 @@
         free.forEach(function (o) {
           items.push({
             label: o.name || o.email,
-            icon: 'UserPlus',
+            meta: officerRoleLabel(o),
+            face: personFace(o),
             fn: function () { changeAssignment(applicationId, 'POST', o.id); },
           });
         });
@@ -2721,8 +2762,15 @@
       }
 
       return '<button type="button" role="menuitem" data-cip-menu="' + i + '"' +
-        ' class="tma-portal-context-menu__item' + (it.danger ? ' tma-portal-context-menu__item--danger' : '') + '">' +
-        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></button>';
+        ' class="tma-portal-context-menu__item' +
+        (it.face ? ' tma-portal-context-menu__item--person' : '') +
+        (it.danger ? ' tma-portal-context-menu__item--danger' : '') + '">' +
+        (it.face
+          ? '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">'
+          : '') +
+        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
+        (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
+        '</button>';
     }).join('');
 
     menu.onclick = function (e) {
@@ -2781,11 +2829,23 @@
      * an application nobody had opened could sit at New indefinitely. The cell
      * stays a set of faces; the button beside it is what opens the picker.
      */
+    /*
+     * The control is an icon, not a glyph.
+     *
+     * It used to print a bare "⌄" or "+" as text inside a bordered circle,
+     * which put a font's idea of a chevron next to a table drawn entirely in
+     * the portal's icon set — a different weight, a different size, and off
+     * its own centre line. The two states are the two questions: a caret to
+     * change who holds a file, a plus to give it to somebody.
+     */
+    var held = list.length > 0;
+    var label = held ? 'Change who holds this' : 'Assign an officer';
     var picker = row && canAssignApplications()
-      ? '<button type="button" class="tma-dash__cip-assign" data-cip-assign="' + esc(row.id) + '"' +
-        ' title="' + (list.length ? 'Change who holds this' : 'Assign an officer') + '"' +
-        ' aria-label="' + (list.length ? 'Change who holds this' : 'Assign an officer') + '">' +
-        (list.length ? '⌄' : '+') + '</button>'
+      ? '<button type="button" class="tma-dash__cip-assign' + (held ? '' : ' tma-dash__cip-assign--add') + '"' +
+        ' data-cip-assign="' + esc(row.id) + '"' +
+        ' title="' + label + '" aria-label="' + label + '" aria-haspopup="menu">' +
+        '<img src="' + (held ? ICONS.CaretDown : ICONS.Plus) + '" alt="" width="12" height="12">' +
+        '</button>'
       : '';
 
     if (window.TMAPersonCard && window.TMAPersonCard.faces) {

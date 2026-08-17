@@ -35268,24 +35268,88 @@ span.tma-dash__messages-profile-avatar {
    picker. Quiet until the row is hovered, like the checklist's verbs. */
 .tma-dash__cip-assigned { display: inline-flex; align-items: center; gap: var(--space-4); }
 
+/*
+ * The control beside the faces: a caret to change who holds a file, a plus to
+ * give it to somebody.
+ *
+ * It used to be a text glyph in a bordered circle, which put a font's chevron
+ * beside a table drawn in the portal's icon set — wrong weight, wrong size,
+ * off its own centre line. Now it is the icon at the size the toolbar draws
+ * its own, in a square hit area the row reveals on hover.
+ */
 .tma-dash__cip-assign {
-  width: 20px;
-  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 50%;
-  background: var(--color-white);
-  color: var(--color-text-secondary);
-  font: 400 var(--text-size-12) / 1 var(--font-family);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--duration-fast, 120ms) ease;
+  transition: opacity var(--duration-fast, 120ms) ease, background var(--duration-fast, 120ms) ease;
 }
 
+/*
+ * Hidden until the row is under the pointer — one caret per row would be
+ * twelve controls competing with the data. The unassigned rows are the
+ * exception: a plus is the only invitation to staff a file nobody has picked
+ * up, and a reader scanning for those should not have to hover each one to
+ * find out it is actionable.
+ */
 .tma-cip-table tbody tr:hover .tma-dash__cip-assign,
+.tma-dash__cip-assign--add,
 .tma-dash__cip-assign:focus-visible { opacity: 1; }
 
 .tma-dash__cip-assign:hover { background: var(--color-hover); }
+
+.tma-dash__cip-assign:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.tma-dash__cip-assign img {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+.tma-dash__cip-assign:hover img { opacity: 0.9; }
+
+/*
+ * The menu it opens is a list of PEOPLE.
+ *
+ * Everywhere else in the portal a colleague arrives with their face, and the
+ * cell this menu opens from is a row of faces — so a menu of bare names made
+ * this the one place a person was a line of text, which on a firm with two
+ * similar names is the line you misread.
+ */
+.tma-portal-context-menu__item--person {
+  align-items: center;
+  gap: var(--space-8);
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+
+.tma-portal-context-menu__face {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* The job, after the name and never instead of it: two officers can hold the
+   same file in different roles, and that is the only thing telling the two
+   rows apart. */
+.tma-portal-context-menu__meta {
+  margin-left: auto;
+  padding-left: var(--space-12);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
 
 /*
  * §9's buckets as one card on the portal home.
