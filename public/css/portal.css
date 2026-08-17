@@ -718,9 +718,9 @@
 /*
  * ...except a person's own fields, which run one to a row.
  *
- * A person's card is the narrow half of its pairing — the width went to their
- * documents — and one generous column is how the paper form these answers
- * copy is filled in: each answer under the last, nothing competing beside it.
+ * Main applicant and sponsor only: their card sits beside documents, and
+ * one generous column is how those answers are filled in. Dependents keep
+ * the ordinary multi-column grid above.
  * The controls wear the kit's larger dress to match: 16px type, taller
  * padding, and the textarea's 480px cap instead of the input's 360px, so the
  * one column reads as the point rather than as two columns' worth of loss.

@@ -18831,14 +18831,13 @@ button.tma-cip-status-chip:focus-visible {
 /*
  * The intake form's first row: a person, and their documents beside them.
  *
- * One third and two thirds, the person on the narrow side. Their fields
- * run one to a row now, so the person's card wants one generous column and
- * no more — the width earns its keep on the documents side, where two drop
- * targets to a row only work if each of the pair is still a full-size
- * target.
+ * A near-even split, fields a shade wider. Documents still sit beside the
+ * person and still hold two drop targets to a row; they do not need two
+ * thirds of the page to do that, and the one-column fields were starved
+ * when they did.
  */
 .tma-dash__clients-cards--intake {
-  grid-template-columns: minmax(240px, 1fr) minmax(0, 2.2fr);
+  grid-template-columns: minmax(280px, 1.15fr) minmax(0, 1fr);
   gap: var(--space-16);
 }
 

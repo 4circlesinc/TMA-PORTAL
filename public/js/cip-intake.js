@@ -469,9 +469,9 @@
     var countries = countryOptions();
     var region = regionFor(state.draft[prefix + 'countryOfResidence']);
 
-    // One to a row: a person's card is the narrow half now — the width went
-    // to their documents — and a single generous column is filled in the way
-    // the paper form is read, one answer under the last.
+    // One to a row for the main applicant and the sponsor, who sit beside
+    // their documents. Dependents keep the ordinary multi-column grid —
+    // they have no documents card stealing the width.
     return '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
@@ -583,9 +583,7 @@
       ' aria-label="Remove ' + esc(title) + '">' +
       '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
       '</div>' +
-      // A dependent's four answers wear the person column too — the same
-      // fields at two sizes in one form would read as two different asks.
-      '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
+      '<div class="tma-portal-form-grid">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
@@ -596,12 +594,13 @@
       '</div></div>';
   }
 
-  /* The whole ask on one page, in the government form's order. */
+  /* The whole ask on one page. Investment first — it is whose file this is
+     and what they are filing for — then the people on it. */
   function formBody() {
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
+      investmentCard() +
       applicantCard() +
       documentsCard('') +
-      investmentCard() +
       sponsorCard() +
       dependentsCard() +
       '</div>';
