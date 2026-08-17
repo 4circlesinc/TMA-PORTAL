@@ -2739,7 +2739,7 @@
         window.TMAFileActions.menu(box.left, box.bottom + 4, { id: applicationId, type: 'file' }, null);
         // The menu component draws from the list it is given, so hand it ours
         // rather than the file actions it would build for a file.
-        replaceMenuItems(items);
+        replaceMenuItems(items, box);
       })
       .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
   }
@@ -2750,7 +2750,7 @@
    * is opened and its contents replaced — the chrome, the placement and the
    * dismissal are the portal's, and only the lines are ours.
    */
-  function replaceMenuItems(items) {
+  function replaceMenuItems(items, anchor) {
     var menu = document.querySelector('.tma-portal-context-menu:not(.tma-portal-context-menu--sub)');
     if (!menu) return;
 
@@ -2772,6 +2772,34 @@
         (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
         '</button>';
     }).join('');
+
+    /*
+     * Placed again, now that it holds our rows.
+     *
+     * The component measures and clamps itself as it opens, which is before
+     * this runs — and a row of ours is a face, a name and a job where a file
+     * action is an icon and a word. The menu therefore grew after it had
+     * decided where to sit, and on the Assigned To column, which is the last
+     * one in the table, the extra width ran off the right of the window.
+     *
+     * Right-aligned to the button rather than left when there is not room:
+     * the control is near the edge precisely when this happens, and a menu
+     * that opens leftwards from it stays attached to what was pressed instead
+     * of jumping to the window's margin.
+     */
+    if (anchor) {
+      requestAnimationFrame(function () {
+        var w = menu.offsetWidth;
+        var h = menu.offsetHeight;
+        var left = anchor.left;
+        if (left + w > window.innerWidth - 8) left = anchor.right - w;
+        menu.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
+
+        var top = anchor.bottom + 4;
+        if (top + h > window.innerHeight - 8) top = Math.max(8, anchor.top - h - 4);
+        menu.style.top = Math.round(top) + 'px';
+      });
+    }
 
     menu.onclick = function (e) {
       var btn = e.target.closest('[data-cip-menu]');

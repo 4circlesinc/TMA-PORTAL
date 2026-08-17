@@ -3,9 +3,9 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\CompanyMember;
-use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,10 +45,18 @@ class ApplicationScope
             return $query->whereRaw('1 = 0');
         }
 
-        // External accounts: the provider-firm slice, plus their own record.
+        /*
+         * External accounts: the provider-firm slice, plus their own record.
+         *
+         * Both columns are qualified. This scope is the base of every CIP
+         * listing and a caller is free to join whatever it needs onto it —
+         * client_assignments carries a client_id of its own, and an
+         * unqualified one here made the whole query ambiguous the moment
+         * somebody did.
+         */
         return $query->where(function (Builder $q) use ($user) {
             $q->whereIn(
-                'provider_id',
+                'cip_applications.provider_id',
                 CipProvider::query()
                     ->select('id')
                     ->whereIn(
@@ -59,7 +67,7 @@ class ApplicationScope
                             ->where('user_id', $user->id)
                     )
             )->orWhereIn(
-                'client_id',
+                'cip_applications.client_id',
                 Client::query()->select('id')->where('user_id', $user->id)
             );
         });

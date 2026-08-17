@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
+use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
@@ -72,6 +73,17 @@ class Facets
      * firm's files: the roster is not theirs, and a menu naming every officer
      * would tell them how the firm is staffed.
      *
+     * WHO COUNTS AS HOLDING IT
+     *
+     * The same two sources §8's Assigned To column draws, in the same order:
+     * the officers on the application, and — only where there are none — the
+     * staff assigned to the client it belongs to. The column falls back that
+     * way because a file nobody has been put on is still somebody's client,
+     * and the count has to fall back with it. Counting only the CIP
+     * assignments reported an application as unassigned while the row beside
+     * the number plainly named somebody, which is the one thing a facet must
+     * never do.
+     *
      * The unassigned row leads, because "what has nobody picked up" is the
      * question an administrator opens this menu to ask, and it is the one
      * answer that is not a person.
@@ -91,6 +103,42 @@ class Facets
             ->selectRaw('cip_application_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
             ->groupBy('cip_application_assignments.user_id')
             ->pluck('total', 'user_id');
+
+        /*
+         * And the client's staff, for the applications no officer is on.
+         *
+         * `whereDoesntHave` is the fallback written as a query: these are
+         * exactly the rows whose Assigned To cell shows the client's people
+         * because the application's own list was empty. Without it a client
+         * manager would be missing from the menu while their name sat in the
+         * column.
+         */
+        /*
+         * Joined through the client rather than reading the scope twice.
+         *
+         * The scope for a provider contact already constrains client_id, so
+         * every column below is qualified: an unqualified `client_id` is
+         * ambiguous the moment `clients` is in the query, and SQLite says so
+         * rather than guessing.
+         */
+        $viaClient = ApplicationScope::query($reader)
+            ->whereDoesntHave('assignments', fn ($a) => $a->live())
+            ->join('clients', 'clients.id', '=', 'cip_applications.client_id')
+            ->join('client_assignments', function ($join) {
+                $join->on('client_assignments.client_id', '=', 'clients.id')
+                    ->where('client_assignments.status', ClientAssignment::STATUS_ACTIVE)
+                    ->where(fn ($q) => $q->whereNull('client_assignments.starts_at')
+                        ->orWhere('client_assignments.starts_at', '<=', now()))
+                    ->where(fn ($q) => $q->whereNull('client_assignments.ends_at')
+                        ->orWhere('client_assignments.ends_at', '>', now()));
+            })
+            ->selectRaw('client_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
+            ->groupBy('client_assignments.user_id')
+            ->pluck('total', 'user_id');
+
+        foreach ($viaClient as $userId => $total) {
+            $held[$userId] = ($held[$userId] ?? 0) + $total;
+        }
 
         /*
          * The names, in one more query rather than joined into the count and
@@ -232,15 +280,24 @@ class Facets
         return $query->where(function (Builder $q) use ($wantsUnassigned, $ids) {
             if ($ids !== []) {
                 $q->orWhereHas('assignments', fn ($a) => $a->live()->whereIn('user_id', $ids));
+
+                // And through the client, for the applications no officer is
+                // on — the same fallback the count and the column make, or
+                // ticking a name would open a shorter list than it promised.
+                $q->orWhere(fn (Builder $viaClient) => $viaClient
+                    ->whereDoesntHave('assignments', fn ($a) => $a->live())
+                    ->whereHas('client.assignments', fn ($a) => $a->live()->whereIn('user_id', $ids)));
             }
 
             if ($wantsUnassigned) {
-                // Nobody holds it *now*. An assignment that has ended is not a
-                // lighter shade of assigned — the officer has stopped working
-                // on it — so a file whose only assignment ran out belongs in
-                // this answer, and whereDoesntHave over the live() window is
-                // what puts it there.
-                $q->orWhereDoesntHave('assignments', fn ($a) => $a->live());
+                /*
+                 * Nobody holds it *now*, by either route. An assignment that
+                 * has ended is not a lighter shade of assigned — the officer
+                 * has stopped working on it — so a file whose only assignment
+                 * ran out belongs in this answer, and the live() window is
+                 * what puts it there.
+                 */
+                $q->orWhere(fn (Builder $nobody) => self::whereNobodyHolds($nobody));
             }
         });
     }
@@ -279,11 +336,23 @@ class Facets
         });
     }
 
-    /** How many of this reader's applications nobody currently holds. */
+    /**
+     * How many of this reader's applications nobody currently holds.
+     *
+     * Neither source: no officer on the application, and nobody on its client
+     * either. The same two the column reads, so a row counted here is a row
+     * whose Assigned To cell really does say "Unassigned".
+     */
     private static function countUnassigned(User $reader): int
     {
-        return ApplicationScope::query($reader)
+        return self::whereNobodyHolds(ApplicationScope::query($reader))->count();
+    }
+
+    /** The applications with neither an officer nor a client manager on them. */
+    private static function whereNobodyHolds(Builder $query): Builder
+    {
+        return $query
             ->whereDoesntHave('assignments', fn ($a) => $a->live())
-            ->count();
+            ->whereDoesntHave('client.assignments', fn ($a) => $a->live());
     }
 }
