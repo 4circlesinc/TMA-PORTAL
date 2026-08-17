@@ -97,6 +97,26 @@ class Tree
     public static function client(CipApplication $application, ?User $actor = null): Client
     {
         if ($application->client) {
+            /*
+             * True the referral up while we are here.
+             *
+             * The hub's Company column and the provider tab's client count
+             * both read referred_by_company_id, and a client attached to an
+             * application some way other than this method — imported, made by
+             * hand, linked before the referral was written — drifts: Galaxy
+             * Partners showed three applications and zero clients. The filing
+             * firm is the referrer, so a client an application names is
+             * brought in step rather than left contradicting the table.
+             */
+            $firm = $application->provider?->company_id;
+
+            if ($firm && $application->client->referred_by_company_id !== $firm) {
+                $application->client->forceFill([
+                    'referred_by_company_id' => $firm,
+                    'referral_type' => Client::REFERRAL_COMPANY,
+                ])->save();
+            }
+
             return $application->client;
         }
 
