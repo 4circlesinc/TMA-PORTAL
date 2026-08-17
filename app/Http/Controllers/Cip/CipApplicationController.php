@@ -100,7 +100,11 @@ class CipApplicationController extends Controller
             'requirements' => [
                 'principal' => Intake::documentFields(ApplicantType::PRINCIPAL_APPLICANT),
                 'sponsor' => Intake::documentFields(ApplicantType::SPONSOR),
+                'spouse' => Intake::documentFields(ApplicantType::SPOUSE),
+                'dependent_under_16' => Intake::documentFields(ApplicantType::DEPENDENT_UNDER_16),
+                'dependent_16_over' => Intake::documentFields(ApplicantType::DEPENDENT_16_OVER),
             ],
+            'dependentAgeCutoff' => ApplicantType::cutoff(),
         ]);
     }
 

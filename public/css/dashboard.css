@@ -18894,6 +18894,10 @@ button.tma-cip-status-chip:focus-visible {
   margin-top: calc(var(--text-lh-14) + var(--space-8));
 }
 
+.tma-dash__clients-cards--intake > .tma-dash__clients-intake-add {
+  grid-column: 1 / -1;
+}
+
 /*
  * The new application form scrolls with the page.
  *

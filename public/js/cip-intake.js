@@ -57,12 +57,41 @@
         ];
   }
 
+  function requirementSections() {
+    return ['principal', 'sponsor', 'spouse', 'dependent_under_16', 'dependent_16_over'];
+  }
+
+  /* Which checklist a dependent owes, from the same facts the server uses. */
+  function dependentSection(index) {
+    var prefix = 'dependents.' + index + '.';
+    if (state.draft[prefix + 'relationship'] === 'spouse') return 'spouse';
+    var cutoff = (state.options && state.options.dependentAgeCutoff) || 16;
+    var dob = state.draft[prefix + 'dateOfBirth'];
+    if (!dob) return 'dependent_16_over';
+    var birth = new Date(dob + 'T00:00:00');
+    var now = new Date();
+    var age = now.getFullYear() - birth.getFullYear();
+    var m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
+
+    return age < cutoff ? 'dependent_under_16' : 'dependent_16_over';
+  }
+
+  function sectionForPath(path) {
+    if (path.indexOf('sponsor.') === 0) return 'sponsor';
+    var match = path.match(/^dependents\.(\d+)\./);
+    if (match) return dependentSection(Number(match[1]));
+
+    return 'principal';
+  }
+
   /* Every list field either section carries, for the checks that need the
      full vocabulary rather than one section's. */
   function allDocFields() {
     var names = {};
-    docFields('principal').forEach(function (d) { names[d.field] = true; });
-    docFields('sponsor').forEach(function (d) { names[d.field] = true; });
+    requirementSections().forEach(function (section) {
+      docFields(section).forEach(function (d) { names[d.field] = true; });
+    });
 
     return names;
   }
@@ -133,9 +162,8 @@
      the built-in map. The last segment names the field. */
   function labelFor(path) {
     var tail = path.split('.').pop();
-    var section = path.indexOf('sponsor.') === 0 ? 'sponsor' : 'principal';
     var fromTemplate = null;
-    docFields(section).forEach(function (d) { if (d.field === tail) fromTemplate = d.label; });
+    docFields(sectionForPath(path)).forEach(function (d) { if (d.field === tail) fromTemplate = d.label; });
 
     return fromTemplate || LABELS[tail] || tail;
   }
@@ -469,9 +497,8 @@
     var countries = countryOptions();
     var region = regionFor(state.draft[prefix + 'countryOfResidence']);
 
-    // One to a row for the main applicant and the sponsor, who sit beside
-    // their documents. Dependents keep the ordinary multi-column grid —
-    // they have no documents card stealing the width.
+    // Two to a row: the card sits beside a single column of drop targets,
+    // and a pair of fields fills the width without crowding them.
     return '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
@@ -495,12 +522,10 @@
   }
 
   /* The uploads beside the person they belong to, one drop target per
-     template the settings ask of that person. Two to a row: the card is the
-     wide half of the pairing now, so a pair of targets are both still
-     full-size — back when this card was a third of the row, two side by side
-     would have been two small drop targets, which is why it was one column. */
-  function documentsCard(prefix) {
-    var fields = docFields(prefix === 'sponsor.' ? 'sponsor' : 'principal');
+     template the settings ask of that person. One to a row: two columns of
+     targets fought the fields for width. */
+  function documentsCard(prefix, section) {
+    var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'));
     if (!fields.length) return '';
 
     return card('Documents',
@@ -547,10 +572,11 @@
     return titledCard('Sponsor',
       photoField('sponsor.passportPhoto') + personFields('sponsor.'),
       { modifier: 'tma-portal-section--person' }) +
-      documentsCard('sponsor.');
+      documentsCard('sponsor.', 'sponsor');
   }
 
-  /* §5: one block per dependent, each with the number the form will carry. */
+  /* §5: one person per dependent, with the same photo and documents the
+     settings ask of their type — spouse, under the cutoff, or over it. */
   function dependentsCard() {
     var numbers = ordinals();
     var rows = '';
@@ -560,13 +586,19 @@
     }
 
     var add = state.dependents < MAX_DEPENDENTS
-      ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>' +
-        'Add dependent</button>'
+      ? '<div class="tma-dash__clients-intake-add"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>' +
+        'Add dependent</button></div>'
       : '';
 
-    return titledCard('Dependents',
-      (rows || '<p class="tma-portal-note tma-portal-note--empty">No dependents on this application.</p>') +
-      '<div class="tma-portal-form-actions">' + add + '</div>');
+    if (!state.dependents) {
+      return titledCard('Dependents',
+        '<p class="tma-portal-note tma-portal-note--empty">No dependents on this application.</p>' +
+        '<div class="tma-portal-form-actions">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>Add dependent</button>' +
+        '</div>');
+    }
+
+    return rows + add;
   }
 
   function dependentRow(i, ordinal) {
@@ -576,14 +608,17 @@
       ? 'Spouse'
       : (ordinal ? 'Qualified Dependent ' + ordinal : 'Dependent');
 
-    return '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
+    return '<section class="tma-portal-section tma-portal-section--person">' +
+      '<h3 class="tma-portal-section__title tma-portal-repeat__title">' + esc(title) + '</h3>' +
+      '<div class="tma-portal-section__card">' +
+      '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
       '<div class="tma-portal-repeat__head">' +
-      '<span class="tma-portal-repeat__title">' + esc(title) + '</span>' +
       '<button type="button" class="tma-portal-repeat__remove" data-cip-dependent-remove="' + i + '"' +
       ' aria-label="Remove ' + esc(title) + '">' +
       '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
       '</div>' +
-      '<div class="tma-portal-form-grid">' +
+      photoField(prefix + 'passportPhoto') +
+      '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
@@ -591,7 +626,8 @@
         { value: 'spouse', label: 'Spouse' },
         { value: 'qualified_dependent', label: 'Qualified dependent' },
       ], 'Select') +
-      '</div></div>';
+      '</div></div></div></section>' +
+      documentsCard(prefix, dependentSection(i));
   }
 
   /* The whole ask on one page. Investment first — it is whose file this is
@@ -848,21 +884,45 @@
    * dependent's answers would belong to somebody else.
    */
   function removeDependent(index) {
-    var fields = ['firstName', 'lastName', 'dateOfBirth', 'relationship'];
+    var fields = ['id', 'firstName', 'lastName', 'dateOfBirth', 'relationship'];
 
     for (var i = index; i < state.dependents - 1; i++) {
       fields.forEach(function (f) {
         state.draft['dependents.' + i + '.' + f] = state.draft['dependents.' + (i + 1) + '.' + f];
         delete state.errors['dependents.' + i + '.' + f];
       });
+      clearDependentAssets(i);
+      moveDependentAssets(i + 1, i);
     }
 
     fields.forEach(function (f) {
       delete state.draft['dependents.' + (state.dependents - 1) + '.' + f];
       delete state.errors['dependents.' + (state.dependents - 1) + '.' + f];
     });
+    clearDependentAssets(state.dependents - 1);
 
     state.dependents -= 1;
+  }
+
+  function moveDependentAssets(from, to) {
+    var re = new RegExp('^dependents\\.' + from + '\\.');
+    var prefix = 'dependents.' + to + '.';
+    [state.files, state.documents, state.previews, state.filed].forEach(function (bag) {
+      Object.keys(bag).forEach(function (path) {
+        if (!re.test(path)) return;
+        bag[path.replace(re, prefix)] = bag[path];
+        delete bag[path];
+      });
+    });
+  }
+
+  function clearDependentAssets(index) {
+    var re = new RegExp('^dependents\\.' + index + '\\.');
+    [state.files, state.documents, state.previews, state.filed, state.errors].forEach(function (bag) {
+      Object.keys(bag).forEach(function (path) {
+        if (re.test(path)) delete bag[path];
+      });
+    });
   }
 
   /* Attribute selectors have to survive the dots in a field path. */
@@ -949,6 +1009,7 @@
 
     Object.keys(state.files).forEach(function (path) {
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       var file = state.files[path];
       out.push({ name: bracketed(path), file: file, filename: file.name });
     });
@@ -956,6 +1017,7 @@
     // A requirement's scans go up as a list, in the order they were added.
     Object.keys(state.documents).forEach(function (path) {
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       state.documents[path].forEach(function (file) {
         out.push({ name: bracketed(path) + '[]', file: file, filename: file.name });
       });
@@ -1215,7 +1277,7 @@
       PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
       if (person.photo) state.previews[prefix + 'passportPhoto'] = person.photo;
       state.filed[prefix + 'passportPhoto'] = !!person.photo;
-      docFields(prefix === 'sponsor.' ? 'sponsor' : 'principal').forEach(function (doc) {
+      docFields(sectionForPath(prefix || 'x')).forEach(function (doc) {
         var slot = (person.documents || []).filter(function (d) {
           return d.type === doc.key;
         })[0];
@@ -1240,6 +1302,7 @@
       state.draft[p + 'lastName'] = d.lastName || '';
       state.draft[p + 'dateOfBirth'] = d.dateOfBirth || '';
       state.draft[p + 'relationship'] = d.relationship || 'qualified_dependent';
+      into(p, d);
     });
     state.dependents = (app.dependents || []).length;
   }

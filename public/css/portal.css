@@ -716,22 +716,13 @@
 }
 
 /*
- * ...except a person's own fields, which run one to a row.
+ * A person's own fields, two to a row.
  *
- * Main applicant and sponsor only: their card sits beside documents, and
- * one generous column is how those answers are filled in. Dependents keep
- * the ordinary multi-column grid above.
- * The controls wear the kit's larger dress to match: 16px type, taller
- * padding, and the textarea's 480px cap instead of the input's 360px, so the
- * one column reads as the point rather than as two columns' worth of loss.
- * Vertical padding only — the select's caret clearance on the right is
- * load-bearing and stays the kit's.
- *
- * After the base grid's breakpoints on purpose: one column at every width is
- * the design, and an equal-specificity rule inside a media query would
- * otherwise put these back to two between the breaks.
+ * Main applicant, sponsor and each dependent sit beside a single column of
+ * drop targets, so two fields across fills the card without crowding the
+ * documents. One column below 700px, same break as the rest of the kit.
  */
-.tma-portal-form-grid--person { grid-template-columns: minmax(0, 1fr); }
+.tma-portal-form-grid--person { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .tma-portal-form-grid--person .tma-portal-input,
 .tma-portal-form-grid--person .tma-portal-select {
@@ -742,6 +733,10 @@
   padding-bottom: var(--space-14, 14px);
   font-size: var(--text-size-16);
   line-height: var(--text-lh-16);
+}
+
+@media (max-width: 700px) {
+  .tma-portal-form-grid--person { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Same size as dashboard.css — the photo IS the document, not an avatar. */
@@ -765,24 +760,16 @@
  * filename, and rendering its first page would be a viewer, not a control.
  */
 /*
- * The drop boxes fill the card they are in, two to a row.
+ * The drop boxes fill the card they are in, one to a row.
  *
- * Two columns because the documents card is the wide half of its pairing:
- * each target in a pair is still a full-size target, which is the whole
- * reason the card got the width. An odd last requirement takes the row alone
- * rather than leaving a hole beside it.
- *
- * The rows take a bigger floor than a zone's own 104px, not the card's whole
- * height. The card stands as tall as the person beside it, and that person
- * is now a passport photo over a single column of fields — matching them
- * row-for-row would stretch two drop targets into billboards. Grand targets,
- * then quiet space below, reads as a finished card; targets taller than the
- * screen do not.
+ * A single column because two targets beside each other fought the fields
+ * for width and neither won. One full-width drop per requirement is the
+ * same control the rest of the portal uses for a scan.
  */
 .tma-portal-drops {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(180px, auto);
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(140px, auto);
   align-content: start;
   gap: var(--space-16);
   flex: 1 1 auto;
@@ -939,7 +926,7 @@
 .tma-portal-repeat__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-8);
 }
 

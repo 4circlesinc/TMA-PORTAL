@@ -87,6 +87,23 @@ class Intake
             ->values();
     }
 
+    /**
+     * Every upload field name the wizard might send, across applicant types.
+     *
+     * A dependant's type is not known until their date of birth and
+     * relationship are, so the validator accepts the union rather than
+     * guessing which list they will land on.
+     *
+     * @return Collection<int, string>
+     */
+    private static function allDocumentFieldNames(): Collection
+    {
+        return collect(ApplicantType::ALL)
+            ->flatMap(fn (string $type) => self::documentFields($type)->pluck('field'))
+            ->unique()
+            ->values();
+    }
+
     /** Is the photo still asked of this applicant type, and demanded? */
     private static function photoTemplate(string $applicantType): ?CipDocumentRequirement
     {
@@ -202,6 +219,43 @@ class Intake
                 $request->files->set($field, [$value]);
             }
         }
+
+        self::wrapNestedDocumentLists($request, 'sponsor', self::documentFields(ApplicantType::SPONSOR)->pluck('field')->all());
+
+        $dependents = $request->files->get('dependents');
+        if (is_array($dependents)) {
+            $fields = self::allDocumentFieldNames()->all();
+            foreach ($dependents as $index => $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                foreach ($fields as $field) {
+                    if (isset($row[$field]) && $row[$field] instanceof UploadedFile) {
+                        $dependents[$index][$field] = [$row[$field]];
+                    }
+                }
+            }
+            $request->files->set('dependents', $dependents);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $fields
+     */
+    private static function wrapNestedDocumentLists(Request $request, string $bag, array $fields): void
+    {
+        $nested = $request->files->get($bag);
+        if (! is_array($nested)) {
+            return;
+        }
+
+        foreach ($fields as $field) {
+            if (isset($nested[$field]) && $nested[$field] instanceof UploadedFile) {
+                $nested[$field] = [$nested[$field]];
+            }
+        }
+
+        $request->files->set($bag, $nested);
     }
 
     private static function investmentRules(): array
@@ -253,10 +307,10 @@ class Intake
         return $rules;
     }
 
-    /** §5: each dependent is a name, a date of birth and a relationship. */
+    /** §5: each dependent is a name, a date of birth, a relationship — and the same uploads the settings ask of their type. */
     private static function dependentRules(): array
     {
-        return [
+        $rules = [
             'dependents' => ['nullable', 'array', 'max:20'],
             // The uuid of a dependant already on the application, so an edit
             // changes that person rather than replacing the family.
@@ -267,7 +321,19 @@ class Intake
             'dependents.*.relationship' => ['required', Rule::in([
                 CipPerson::RELATIONSHIP_SPOUSE, CipPerson::RELATIONSHIP_QUALIFIED,
             ])],
+            // Offered, never demanded at filing — the same courtesy the
+            // sponsor's scans get. The boxes are on the form so the files
+            // can travel with the person; the checklist holds the door if
+            // they are skipped.
+            'dependents.*.passportPhoto' => ['nullable', 'file', self::photoRule()],
         ];
+
+        foreach (self::allDocumentFieldNames() as $field) {
+            $rules['dependents.*.'.$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules['dependents.*.'.$field.'.*'] = self::documentRule();
+        }
+
+        return $rules;
     }
 
     /** The 2×2 rule, as a validator closure over {@see PassportPhoto}. */
@@ -340,8 +406,9 @@ class Intake
                 self::writePerson($application, CipPerson::ROLE_SPONSOR, $data['sponsor'] ?? []);
             }
 
+            $dependentUuids = [];
             foreach ($data['dependents'] ?? [] as $dependent) {
-                self::writePerson($application, CipPerson::ROLE_DEPENDENT, $dependent);
+                $dependentUuids[] = self::writePerson($application, CipPerson::ROLE_DEPENDENT, $dependent)->uuid;
             }
 
             // Ordinals before folders: a dependent's folder is named after
@@ -358,12 +425,7 @@ class Intake
                 DocumentSlots::open($person);
             }
 
-            self::fileUploads(
-                $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT),
-                $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR),
-                $data,
-                $creator,
-            );
+            self::fileUploads($application, $data, $creator, $dependentUuids);
 
             return $application->fresh();
         });
@@ -409,8 +471,11 @@ class Intake
                 ? self::applyPerson($main, $data)
                 : $main = self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
 
-            $sponsor = self::syncSponsor($application, $data);
-            self::syncDependents($application, $data['dependents'] ?? []);
+            self::syncSponsor($application, $data);
+            $dependentUuids = array_map(
+                fn (CipPerson $person) => $person->uuid,
+                self::syncDependents($application, $data['dependents'] ?? []),
+            );
 
             Dependents::renumber($application);
 
@@ -424,12 +489,7 @@ class Intake
                 DocumentSlots::open($person);
             }
 
-            self::fileUploads(
-                $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT),
-                $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR),
-                $data,
-                $actor,
-            );
+            self::fileUploads($application, $data, $actor, $dependentUuids);
 
             return $application->fresh();
         });
@@ -473,10 +533,12 @@ class Intake
      * The dependants after an edit, matched by uuid.
      *
      * @param  array<int, array<string, mixed>>  $rows
+     * @return list<CipPerson> in the order the form sent them
      */
-    private static function syncDependents(CipApplication $application, array $rows): void
+    private static function syncDependents(CipApplication $application, array $rows): array
     {
         $kept = [];
+        $ordered = [];
 
         foreach ($rows as $row) {
             $person = ! empty($row['id'])
@@ -490,6 +552,7 @@ class Intake
                 $person = self::writePerson($application, CipPerson::ROLE_DEPENDENT, $row);
             }
 
+            $ordered[] = $person;
             $kept[] = $person->id;
         }
 
@@ -499,6 +562,8 @@ class Intake
             ->where('role', CipPerson::ROLE_DEPENDENT)
             ->reject(fn (CipPerson $p) => in_array($p->id, $kept, true))
             ->each(fn (CipPerson $p) => $p->delete());
+
+        return $ordered;
     }
 
     /**
@@ -568,15 +633,32 @@ class Intake
      * The photo answers two things at once — a document slot, because §2
      * requires it, and the person's likeness, because that is the profile
      * picture every list draws. One upload, recorded in both places.
+     *
+     * @param  list<string>  $dependentUuids  dependents in the order the form sent them
      */
-    private static function fileUploads(CipPerson $main, ?CipPerson $sponsor, array $data, User $creator): void
+    private static function fileUploads(CipApplication $application, array $data, User $creator, array $dependentUuids = []): void
     {
-        self::filePhoto($main, $data['passportPhoto'] ?? null, $creator);
-        self::fileDocuments($main, $data, $creator);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        if ($main) {
+            self::filePhoto($main, $data['passportPhoto'] ?? null, $creator);
+            self::fileDocuments($main, $data, $creator);
+        }
 
+        $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
         if ($sponsor) {
             self::filePhoto($sponsor, $data['sponsor']['passportPhoto'] ?? null, $creator);
             self::fileDocuments($sponsor, $data['sponsor'] ?? [], $creator);
+        }
+
+        $rows = array_values($data['dependents'] ?? []);
+        foreach ($dependentUuids as $index => $uuid) {
+            $person = $application->people->firstWhere('uuid', $uuid);
+            $row = $rows[$index] ?? [];
+            if (! $person) {
+                continue;
+            }
+            self::filePhoto($person, $row['passportPhoto'] ?? null, $creator);
+            self::fileDocuments($person, $row, $creator);
         }
     }
 

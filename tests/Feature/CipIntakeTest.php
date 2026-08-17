@@ -545,6 +545,48 @@ class CipIntakeTest extends TestCase
         $this->assertSame(5, $body['familySize']);
     }
 
+    public function test_a_dependents_uploads_are_filed_into_their_own_folder(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'dependents' => [
+                [
+                    'firstName' => 'Lina',
+                    'lastName' => 'Smith',
+                    'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    'passportPhoto' => $this->photo(),
+                    'passportBioPage' => $this->scan('lina-bio.pdf'),
+                    'birthCertificate' => $this->scan('lina-birth.pdf'),
+                ],
+            ],
+        ]))->assertCreated()->json('application');
+
+        $lina = collect($body['dependents'])->firstWhere('name', 'Lina Smith');
+        $this->assertNotNull($lina);
+        $this->assertNotEmpty($lina['photo'], 'the passport photo is their face');
+        $this->assertContains(
+            'Passport bio page',
+            collect($lina['documents'])->where('uploaded', true)->pluck('label')->all(),
+        );
+
+        $person = CipPerson::query()->where('uuid', $lina['id'])->first();
+        $this->assertNotNull($person->folder_id);
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+        $this->assertNotNull($slot?->file_id);
+        $file = FileItem::find($slot->file_id);
+        $parent = $file->folder_id === $person->folder_id
+            ? true
+            : Folder::query()->where('id', $file->folder_id)->where('parent_id', $person->folder_id)->exists();
+        $this->assertTrue($parent, 'the bio page landed under the dependent, not the main applicant');
+    }
+
     /**
      * §5's worked example, run verbatim.
      *
