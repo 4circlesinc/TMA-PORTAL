@@ -136,6 +136,7 @@
     // File Library folder it opens onto.
     { id: 'folders', label: 'Documents' },
     { id: 'assigned', label: 'Assigned' },
+    { id: 'messages', label: 'Messages' },
     // Can this client sign in, and what have they done since. Before an
     // account exists this is where the invitation lives.
     { id: 'access', label: 'Portal access' },
@@ -370,6 +371,15 @@
     },
     access: function (uid) {
       return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/access');
+    },
+    conversations: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/conversations');
+    },
+    openConversation: function (uid, withWhom) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/conversations', {
+        method: 'POST',
+        json: { with: withWhom },
+      });
     },
   };
 
@@ -3622,13 +3632,63 @@
           '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>'
         : '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
           '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>') +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
-      '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
+      '<div class="tma-dash__clients-message-wrap" data-clients-message-wrap>' +
+      '<button type="button" class="tma-dash__clients-message-btn" data-clients-message aria-haspopup="menu" aria-expanded="' +
+      (state && state.messageMenuOpen ? 'true' : 'false') + '">' +
+      '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span>' +
+      '<img class="tma-dash__clients-message-caret" src="' + ICONS.CaretDown + '" alt="" width="12" height="12" aria-hidden="true">' +
+      '</button>' +
+      '<div class="tma-dash__menu tma-dash__clients-message-menu" data-clients-message-menu' +
+      (state && state.messageMenuOpen ? '' : ' hidden') +
+      ' role="menu" aria-label="Message">' +
+      renderMessageChooser(c, state) +
+      '</div></div>' +
       // Last in the row: it is the one action that leaves the page, so it
       // reads as the way out rather than another thing to do here.
       cbiToolbarBtn(c) +
       '</div></div>'
     );
+  }
+
+  /*
+   * Who the Message button can reach from this applicant.
+   *
+   * The provider thread is the usual destination — staff talk to the firm
+   * about the file. Messaging the person themselves is offered only when
+   * they have a portal login.
+   */
+  function renderMessageChooser(c, state) {
+    var opts = (state && state.conversationOptions) || null;
+    if (!opts) {
+      return '<div class="tma-dash__menu-item tma-dash__menu-item--muted" role="menuitem" aria-disabled="true">Loading…</div>';
+    }
+
+    var items = [];
+    var provider = opts.provider || {};
+    var person = opts.person || {};
+    var providerLabel = provider.companyName
+      ? 'Message ' + provider.companyName + ' about ' + (c.name || 'this applicant')
+      : 'Message the service provider about ' + (c.name || 'this applicant');
+    items.push(messageChooserItem('provider', providerLabel, provider.available, provider.reason));
+
+    if (person.available) {
+      items.push(messageChooserItem('person', 'Message ' + (person.name || c.name) + ' privately', true, ''));
+    }
+
+    return items.join('');
+  }
+
+  function messageChooserItem(kind, label, available, reason) {
+    if (!available) {
+      return '<div class="tma-dash__menu-item tma-dash__menu-item--muted" role="menuitem" aria-disabled="true">' +
+        '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span>' +
+        (reason ? '<span class="tma-dash__clients-message-choice-meta">' + esc(reason) + '</span>' : '') +
+        '</div>';
+    }
+
+    return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-clients-message-with="' +
+      esc(kind) + '">' +
+      '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span></button>';
   }
 
   /*
@@ -4769,6 +4829,10 @@
       return (state.assignments || []).length;
     }
     if (tabId === 'folders') return documentCountFor(clientFolderUuid(state.selectedId));
+    if (tabId === 'messages') {
+      if (state.conversationsLoading && !state.conversations) return null;
+      return ((state.conversations || []).length) + ((state.recordings || []).length);
+    }
     // How many people are on the application, so the tab says how big the
     // family is before it is opened.
     if (tabId === 'dependents') {
@@ -6539,6 +6603,97 @@
     );
   }
 
+  function conversationKindLabel(row) {
+    if (row && row.subject === 'provider') return (row.subtitle || 'Service provider');
+    if (row && row.subject === 'person') return 'Private';
+    return row && row.subtitle ? row.subtitle : 'Conversation';
+  }
+
+  function recordingDurationLabel(ms) {
+    var n = parseInt(ms, 10) || 0;
+    if (n <= 0) return '';
+    var secs = Math.round(n / 1000);
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return m + 'm' + (s < 10 ? '0' : '') + s + 's';
+  }
+
+  function recordingWhenLabel(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  }
+
+  function renderClientMessagesPanel(state, hidden) {
+    var loading = !!state.conversationsLoading && !state.conversations;
+    var threads = state.conversations || [];
+    var recordings = state.recordings || [];
+    var opts = state.conversationOptions || {};
+    var canMessage = (opts.provider && opts.provider.available) || (opts.person && opts.person.available);
+
+    var threadsBody;
+    if (loading) {
+      threadsBody = '<div class="tma-dash__clients-assigned-empty">Loading conversations…</div>';
+    } else if (!threads.length) {
+      threadsBody = '<div class="tma-dash__clients-assigned-empty">' +
+        (canMessage
+          ? 'No conversations on this file yet. Use Message to start one with the service provider.'
+          : 'No conversations on this file yet.') +
+        '</div>';
+    } else {
+      threadsBody = '<div class="tma-dash__clients-assigned-list">' + threads.map(function (row) {
+        var meta = [conversationKindLabel(row)];
+        if (row.preview) meta.push(row.preview);
+        return '<button type="button" class="tma-dash__clients-assigned tma-dash__clients-thread" data-clients-open-thread="' +
+          esc(row.id) + '">' +
+          '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' +
+          '<img src="' + ICONS.ChatTeardropDots + '" alt="" width="16" height="16"></span>' +
+          '<span class="tma-dash__clients-assigned-main">' +
+          '<span class="tma-dash__clients-assigned-title">' + esc(row.name || 'Conversation') + '</span>' +
+          '<span class="tma-dash__clients-assigned-meta">' + esc(meta.filter(Boolean).join(' · ')) + '</span>' +
+          '</span></button>';
+      }).join('') + '</div>';
+    }
+
+    var recordingsBody;
+    if (loading) {
+      recordingsBody = '';
+    } else if (!recordings.length) {
+      recordingsBody = '<div class="tma-dash__clients-assigned-empty">No call recordings on this file yet. Calls with the service provider are recorded automatically.</div>';
+    } else {
+      recordingsBody = '<div class="tma-dash__clients-assigned-list">' + recordings.map(function (r) {
+        var kind = r.media === 'video' ? 'Video' : 'Voice';
+        var meta = [kind, recordingWhenLabel(r.startedAt), recordingDurationLabel(r.durationMs)].filter(Boolean);
+        return '<button type="button" class="tma-dash__clients-assigned tma-dash__clients-thread" data-clients-open-recording="' +
+          esc(r.id) + '">' +
+          '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' +
+          '<img src="' + ICONS.Phone + '" alt="" width="16" height="16"></span>' +
+          '<span class="tma-dash__clients-assigned-main">' +
+          '<span class="tma-dash__clients-assigned-title">' + esc(kind + ' call') + '</span>' +
+          '<span class="tma-dash__clients-assigned-meta">' + esc(meta.join(' · ')) + '</span>' +
+          '</span></button>';
+      }).join('') + '</div>';
+    }
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="messages" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' +
+      '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Conversations</span></div>' +
+      threadsBody + '</div>' +
+      '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Call recordings</span></div>' +
+      recordingsBody + '</div>' +
+      '</div>'
+    );
+  }
+
   function renderProfile(state, opts) {
     opts = opts || {};
 
@@ -6645,6 +6800,7 @@
       (app ? renderActivityPanel(state, activeTab !== 'activity') : '') +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
       renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
+      renderClientMessagesPanel(state, activeTab !== 'messages') +
       renderAccessPanel(state, c, activeTab !== 'access') +
       '</div></div>'
     );
@@ -8853,23 +9009,26 @@
 
     var messageBtn = unwiredClientsChrome(root, '[data-clients-message]');
     if (messageBtn) {
-      messageBtn.addEventListener('click', function () {
-        var userId = clientUserId(state.selectedId);
-        if (!userId) {
-          clientsToast('This client doesn’t have a portal login to message yet', 'negative');
-          return;
-        }
-        if (window.TMADashboard && window.TMADashboard.navigate) {
-          window.TMADashboard.navigate({
-            navId: 'so-messages',
-            view: 'messages',
-            title: 'Messages',
-            crumb: 'Messages',
-            openDirectUserId: userId,
-          });
-        }
+      messageBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.messageMenuOpen = !state.messageMenuOpen;
+        if (state.messageMenuOpen) ensureConversationsLoaded(state, render, { quiet: true });
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
       });
     }
+
+    unwiredAllClientsChrome(root, '[data-clients-message-with]').forEach(function (item) {
+      item.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeClientMessageMenu(root);
+        openApplicantConversation(state, render, item.getAttribute('data-clients-message-with'));
+      });
+    });
+
+    wireClientMessageMenuCloser();
 
     unwiredAllClientsChrome(root, '[data-clients-open-folder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -9252,8 +9411,49 @@
         if (state.profileTab === 'activity' && state.selectedId) {
           ensureTimeline(state, render);
         }
+        if (state.profileTab === 'messages' && state.selectedId) {
+          ensureConversationsLoaded(state, render);
+        }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-open-thread]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var id = btn.getAttribute('data-clients-open-thread');
+        var rows = state.conversations || [];
+        var row = null;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].id === id) { row = rows[i]; break; }
+        }
+        // Join (or reuse) through the same endpoint as the Message button so
+        // an officer who has not yet been added to the case thread still
+        // lands inside it rather than on a 404 in Messages.
+        if (row && (row.subject === 'provider' || row.subject === 'person')) {
+          openApplicantConversation(state, render, row.subject);
+          return;
+        }
+        if (!id || !window.TMADashboard || !window.TMADashboard.navigate) return;
+        window.TMADashboard.navigate({
+          navId: 'so-messages',
+          view: 'messages',
+          title: 'Messages',
+          crumb: 'Messages',
+          openConversationId: id,
+        });
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-open-recording]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var id = btn.getAttribute('data-clients-open-recording');
+        var rows = state.recordings || [];
+        var rec = null;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].id === id) { rec = rows[i]; break; }
+        }
+        openClientRecording(rec);
       });
     });
 
@@ -9551,6 +9751,129 @@
     });
   }
 
+  function closeClientMessageMenu(root) {
+    if (clientsMountState) clientsMountState.messageMenuOpen = false;
+    var scope = root || document;
+    scope.querySelectorAll('[data-clients-message-menu]').forEach(function (menu) {
+      menu.hidden = true;
+    });
+    scope.querySelectorAll('[data-clients-message]').forEach(function (btn) {
+      btn.setAttribute('aria-expanded', 'false');
+    });
+    var head = typeof clientsDetailHeadRoot === 'function' ? clientsDetailHeadRoot() : null;
+    if (head && head !== scope) {
+      head.querySelectorAll('[data-clients-message-menu]').forEach(function (menu) {
+        menu.hidden = true;
+      });
+      head.querySelectorAll('[data-clients-message]').forEach(function (btn) {
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+  }
+
+  var clientMessageMenuWired = false;
+  function wireClientMessageMenuCloser() {
+    if (clientMessageMenuWired) return;
+    clientMessageMenuWired = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-clients-message-wrap]')) return;
+      closeClientMessageMenu(document);
+    });
+  }
+
+  function ensureConversationsLoaded(state, render, opts) {
+    if (!state.selectedId) return;
+    if (state.conversationsLoadedFor === state.selectedId) return;
+    state.conversationsLoading = true;
+    state.conversationsLoadedFor = state.selectedId;
+    if (opts && opts.quiet) { /* no redraw yet */ }
+    else if (usesPagedClientsFlow(state)) render();
+    else render({ detailOnly: true });
+
+    ClientsAPI.conversations(state.selectedId).then(function (data) {
+      if (state.conversationsLoadedFor !== state.selectedId) return;
+      state.conversations = (data && data.conversations) || [];
+      state.conversationOptions = (data && data.options) || null;
+      state.recordings = (data && data.recordings) || [];
+      state.conversationsLoading = false;
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    }).catch(function () {
+      if (state.conversationsLoadedFor !== state.selectedId) return;
+      state.conversations = [];
+      state.conversationOptions = state.conversationOptions || {
+        provider: { available: false, reason: 'Could not load messaging options.' },
+        person: { available: false },
+      };
+      state.recordings = [];
+      state.conversationsLoading = false;
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    });
+  }
+
+  function openApplicantConversation(state, render, withWhom) {
+    if (!state.selectedId || !withWhom) return;
+    ClientsAPI.openConversation(state.selectedId, withWhom).then(function (data) {
+      var conversation = data && data.conversation;
+      state.conversationsLoadedFor = null;
+      ensureConversationsLoaded(state, render, { quiet: true });
+      if (!conversation || !window.TMADashboard || !window.TMADashboard.navigate) {
+        clientsToast('Conversation could not be opened', 'negative');
+        return;
+      }
+      window.TMADashboard.navigate({
+        navId: 'so-messages',
+        view: 'messages',
+        title: 'Messages',
+        crumb: 'Messages',
+        openConversationId: conversation.id,
+      });
+    }).catch(function (err) {
+      var msg = (err && err.data && err.data.message) || (err && err.message) || 'Conversation could not be opened';
+      if (err && err.data && err.data.errors && err.data.errors.with) {
+        msg = err.data.errors.with[0] || msg;
+      }
+      clientsToast(msg, 'negative');
+    });
+  }
+
+  function openClientRecording(recording) {
+    if (!recording) return;
+    var ui = window.TMAPortalUI;
+    var root = window.__TMA_SITE_ROOT || '';
+    var mediaUrl = root + '/portal/call-recordings/' + encodeURIComponent(recording.id) + '/media';
+    var player = '';
+    if (recording.status === 'ready') {
+      player = recording.media === 'video'
+        ? '<video class="call-recordings__player" src="' + esc(mediaUrl) + '" controls preload="metadata"></video>'
+        : '<audio class="call-recordings__player" src="' + esc(mediaUrl) + '" controls preload="metadata"></audio>';
+    } else {
+      player = '<div class="tma-portal-status">' +
+        (recording.status === 'recording'
+          ? 'This call is still being recorded.'
+          : 'No playable recording was captured for this call.') +
+        '</div>';
+    }
+
+    if (ui && ui.openModal) {
+      ui.openModal({
+        title: (recording.media === 'video' ? 'Video' : 'Voice') + ' call',
+        body: '<div class="call-recordings__detail">' + player + '</div>',
+      });
+      return;
+    }
+
+    if (window.TMADashboard && window.TMADashboard.navigate) {
+      window.TMADashboard.navigate({
+        navId: 'call-recordings',
+        view: 'call-recordings',
+        title: 'Call recordings',
+        crumb: 'Call recordings',
+      });
+    }
+  }
+
   var clientsMountRoot = null;
 
   /* The mounted view's state, for the module-level folder wiring — it runs
@@ -9594,6 +9917,12 @@
       access: null,
       accessLoading: false,
       accessLoadedFor: null,
+      conversations: null,
+      conversationOptions: null,
+      recordings: null,
+      conversationsLoading: false,
+      conversationsLoadedFor: null,
+      messageMenuOpen: false,
       companyMembers: [],
       companyStaff: [],
       companyStaffAssignable: [],
@@ -9675,6 +10004,11 @@
         state.accessLoadedFor = null;
         state.access = null;
         state.invitation = null;
+        state.conversationsLoadedFor = null;
+        state.conversations = null;
+        state.conversationOptions = null;
+        state.recordings = null;
+        state.messageMenuOpen = false;
         state.applicationFreshFor = null;
       }
 
@@ -9691,6 +10025,7 @@
         ensureApplicationLoaded(state, render);
         ensureAccessLoaded(state, render);
         ensureAssignmentsLoaded(state, render, { quiet: true });
+        ensureConversationsLoaded(state, render, { quiet: true });
       }
 
       if (state.screen === 'company' && state.companyId) {

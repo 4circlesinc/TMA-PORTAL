@@ -118,13 +118,20 @@ class MessagingSearch
     {
         $matches = Conversation::query()
             ->whereIn('id', $ids)
-            ->with(['activeParticipants.user', 'messages' => fn ($q) => $q->latest('id')->limit(1)])
+            ->with([
+                'activeParticipants.user',
+                'client:id,uid,name',
+                'company:id,uid,name',
+                'messages' => fn ($q) => $q->latest('id')->limit(1),
+            ])
             ->where(function ($q) use ($term, $user) {
                 self::like($q, 'name', $term);
                 $q->orWhereHas('activeParticipants.user', function ($u) use ($term, $user) {
                     $u->where('users.id', '!=', $user->id);
                     self::like($u, 'users.name', $term);
                 });
+                $q->orWhereHas('client', fn ($c) => self::like($c, 'clients.name', $term));
+                $q->orWhereHas('company', fn ($c) => self::like($c, 'companies.name', $term));
             })
             ->orderByDesc('last_message_at')
             ->limit(self::PER_GROUP)
@@ -229,11 +236,7 @@ class MessagingSearch
 
     private static function conversationLabel(Conversation $conversation, User $user): string
     {
-        if ($conversation->isGroup()) {
-            return $conversation->name ?: 'Group';
-        }
-
-        return $conversation->counterpartFor($user)?->name ?? 'Unknown';
+        return MessagingPresenter::title($conversation, $user);
     }
 
     /**

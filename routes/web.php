@@ -24,6 +24,7 @@ use App\Http\Controllers\Cip\CipTransitionController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
+use App\Http\Controllers\ClientConversationController;
 use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
@@ -675,6 +676,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/{uid}/invite', [ClientInviteController::class, 'status'])->name('invite.status');
         // The Portal access tab: invitation, or the account's logins and activity.
         Route::get('/{uid}/access', [ClientInviteController::class, 'access'])->name('access');
+        Route::get('/{uid}/conversations', [ClientConversationController::class, 'index'])->name('conversations.index');
+        Route::post('/{uid}/conversations', [ClientConversationController::class, 'store'])->name('conversations.store');
     });
 
     /*

@@ -13,7 +13,8 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'uuid', 'type', 'name', 'description', 'photo_disk', 'photo_path',
-    'created_by', 'last_message_at', 'is_default', 'auto_join', 'disabled_at',
+    'created_by', 'client_id', 'company_id', 'cip_application_id', 'subject',
+    'last_message_at', 'is_default', 'auto_join', 'disabled_at',
 ])]
 class Conversation extends Model
 {
@@ -22,6 +23,12 @@ class Conversation extends Model
     public const TYPE_DIRECT = 'direct';
 
     public const TYPE_GROUP = 'group';
+
+    /** A group with the service provider about this applicant. */
+    public const SUBJECT_PROVIDER = 'provider';
+
+    /** A private DM with the applicant themselves. */
+    public const SUBJECT_PERSON = 'person';
 
     protected function casts(): array
     {
@@ -60,6 +67,27 @@ class Conversation extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function cipApplication(): BelongsTo
+    {
+        return $this->belongsTo(CipApplication::class);
+    }
+
+    /** The shared case thread with the service provider about this applicant. */
+    public function isProviderCase(): bool
+    {
+        return $this->subject === self::SUBJECT_PROVIDER;
     }
 
     public function isGroup(): bool

@@ -139,6 +139,34 @@ class CallRecordingTest extends TestCase
             ->assertJsonPath('recording', null);
     }
 
+    public function test_a_provider_case_group_call_is_recorded_against_the_applicant(): void
+    {
+        $staff = $this->user('staff@example.com');
+        $provider = $this->user('provider@example.com', 'Client');
+        $client = Client::create([
+            'uid' => 'ahmed',
+            'name' => 'Ahmed Hassan',
+            'data' => [],
+        ]);
+        $c = $this->conversation([$staff, $provider], 'group');
+        $c->forceFill([
+            'client_id' => $client->id,
+            'subject' => Conversation::SUBJECT_PROVIDER,
+            'name' => $client->name,
+        ])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/messaging/conversations/'.$c->uuid.'/recordings')
+            ->assertCreated();
+
+        $this->assertDatabaseHas('call_recordings', [
+            'conversation_id' => $c->id,
+            'client_id' => $client->id,
+            'client_name' => 'Ahmed Hassan',
+            'recorded_by' => $staff->id,
+        ]);
+    }
+
     /**
      * Never resumed, always a fresh row: a new MediaRecorder is a new WebM
      * stream with its own init segment, so "continuing" an earlier row could

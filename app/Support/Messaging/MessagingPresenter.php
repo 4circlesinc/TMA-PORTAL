@@ -35,6 +35,10 @@ class MessagingPresenter
     public static function title(Conversation $conversation, User $viewer): string
     {
         if ($conversation->isGroup()) {
+            if ($conversation->isProviderCase() && $conversation->client?->name) {
+                return $conversation->client->name;
+            }
+
             return $conversation->name ?: 'Group';
         }
 
@@ -43,6 +47,43 @@ class MessagingPresenter
             ->map(fn (ConversationParticipant $p) => $p->user)
             ->filter()
             ->first()?->name ?? 'Unknown';
+    }
+
+    /**
+     * Who this thread is about, under the name: the service provider on a
+     * case chat, or "Private" on a DM with the applicant.
+     */
+    public static function subtitle(Conversation $conversation, User $viewer): ?string
+    {
+        if ($conversation->subject === Conversation::SUBJECT_PROVIDER) {
+            return $conversation->company?->name ?: 'Service provider';
+        }
+
+        if ($conversation->subject === Conversation::SUBJECT_PERSON) {
+            return 'Private';
+        }
+
+        return null;
+    }
+
+    /**
+     * The applicant this conversation is filed against, when there is one.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function about(Conversation $conversation): ?array
+    {
+        $client = $conversation->client;
+        if (! $client) {
+            return null;
+        }
+
+        return [
+            'kind' => $conversation->subject,
+            'clientUid' => $client->uid,
+            'clientName' => $client->name,
+            'companyName' => $conversation->company?->name,
+        ];
     }
 
     /**
@@ -71,6 +112,9 @@ class MessagingPresenter
             'id' => $conversation->uuid,
             'type' => $conversation->type,
             'name' => self::title($conversation, $viewer),
+            'subtitle' => self::subtitle($conversation, $viewer),
+            'subject' => $conversation->subject,
+            'about' => self::about($conversation),
             'photo' => $conversation->isGroup()
                 ? self::groupPhotoUrl($conversation)
                 : $counterpart?->avatar_url,
@@ -444,6 +488,8 @@ class MessagingPresenter
 
         return match ($event['event'] ?? '') {
             'group_created' => $actor.' created the group',
+            'case_opened' => $actor.' opened a conversation about '.($event['clientName'] ?? 'this applicant')
+                .' with '.($event['companyName'] ?? 'the service provider'),
             'member_added' => $actor.' added '.$subject,
             'member_removed' => $actor.' removed '.$subject,
             'member_left' => $actor.' left',

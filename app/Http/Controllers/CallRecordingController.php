@@ -20,10 +20,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Client-call recording: capture and the recordings area.
  *
- * Calls between a staff member and a client are recorded for the client's
- * file; ordinary staff-to-staff calls never are. The capture endpoints keep
- * that rule HERE, not in the browser: start() is a question every caller may
- * ask, and only the staff side of a direct staff↔client call gets a
+ * Calls between a staff member and a client — or with a service provider
+ * about an applicant — are recorded for the client's file; ordinary
+ * staff-to-staff calls never are. The capture endpoints keep that rule
+ * HERE, not in the browser: start() is a question every caller may ask,
+ * and only the staff side of a call that belongs on a client file gets a
  * recording id back — so no client records anyone, and no browser can be
  * talked into recording a colleague.
  *
@@ -68,7 +69,7 @@ class CallRecordingController extends Controller
     /**
      * Arrange a recording for a connected call, if this call is one that
      * records. Answering `recording: null` is not an error — it is the
-     * ordinary answer for every call that is not staff↔client.
+     * ordinary answer for every call that is not on a client file.
      */
     public function start(Request $request, string $uuid): JsonResponse
     {
@@ -83,25 +84,46 @@ class CallRecordingController extends Controller
             'media' => ['nullable', 'string', 'in:audio,video'],
         ]);
 
-        // The rule, in one place: a staff member, in a direct conversation,
-        // talking to a client account.
-        $counterpart = $conversation->isGroup() ? null : $conversation->counterpartFor($user);
+        // The rule, in one place: a staff member talking to a client, or
+        // talking to the service provider about an applicant. A tagged
+        // conversation carries the applicant on `client_id`, so a call with
+        // a provider contact is filed on that applicant rather than on the
+        // contact's own row. Ordinary staff-to-staff calls still never record.
+        $conversation->loadMissing(['client:id,uid,name,user_id', 'activeParticipants.user']);
 
-        if (! Role::isStaff($user) || ! $counterpart || ! Role::isClient($counterpart)) {
+        $counterpart = $conversation->isGroup() ? null : $conversation->counterpartFor($user);
+        $aboutApplicant = $conversation->client_id !== null;
+        $talkingToClient = $counterpart !== null && Role::isClient($counterpart);
+
+        if (! Role::isStaff($user) || (! $aboutApplicant && ! $talkingToClient)) {
             return response()->json(['recording' => null]);
         }
+
+        $clientId = $conversation->client_id
+            ?: ($counterpart ? Client::query()->where('user_id', $counterpart->id)->value('id') : null);
+        $clientName = $conversation->client?->name
+            ?: ($counterpart?->name ?? 'Client');
+
+        $participants = $conversation->activeParticipants
+            ->map(fn ($p) => $p->user)
+            ->filter()
+            ->map(fn (User $u) => $this->participant($u))
+            ->values()
+            ->all();
 
         $recording = CallRecording::create([
             'uuid' => (string) Str::uuid(),
             'conversation_id' => $conversation->id,
-            'client_id' => Client::query()->where('user_id', $counterpart->id)->value('id'),
-            'client_user_id' => $counterpart->id,
+            'client_id' => $clientId,
+            'client_user_id' => $conversation->client?->user_id ?? $counterpart?->id,
             'recorded_by' => $user->id,
-            'participants' => [
-                $this->participant($user),
-                $this->participant($counterpart),
-            ],
-            'client_name' => $counterpart->name,
+            'participants' => $participants !== []
+                ? $participants
+                : array_values(array_filter([
+                    $this->participant($user),
+                    $counterpart ? $this->participant($counterpart) : null,
+                ])),
+            'client_name' => $clientName,
             'media' => $data['media'] ?? 'audio',
             'status' => CallRecording::STATUS_RECORDING,
             'started_at' => now(),

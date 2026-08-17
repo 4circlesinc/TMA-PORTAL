@@ -71,6 +71,8 @@ class MessagingController extends Controller
                 // presence comes along so PresenceService does not fetch it one
                 // subject at a time while presenting the list.
                 'activeParticipants.user.presence',
+                'client:id,uid,name',
+                'company:id,uid,name',
                 // Only the newest message is needed for the list preview.
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
             ])
@@ -442,6 +444,7 @@ class MessagingController extends Controller
         $conversation = $this->conversationFor($request, $uuid);
         $participant = $conversation->participantFor($user);
         $counterpart = $conversation->counterpartFor($user);
+        $conversation->loadMissing(['client:id,uid,name', 'company:id,uid,name']);
 
         $attachments = MessageAttachment::query()
             ->where('conversation_id', $conversation->id)
@@ -502,7 +505,7 @@ class MessagingController extends Controller
                 // Only a direct conversation has someone to block.
                 'block' => ! $conversation->isGroup() && $counterpart !== null,
                 'openClientRecord' => Role::can($user, 'clients.view')
-                    && ! $conversation->isGroup(),
+                    && $conversation->client_id !== null,
             ],
         ]);
     }

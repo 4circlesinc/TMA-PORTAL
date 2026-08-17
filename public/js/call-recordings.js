@@ -163,7 +163,7 @@
       '<div class="tma-portal-page call-recordings">' +
       '<header class="tma-portal-head"><div>' +
       '<h1 class="tma-portal-head__title">Call Recordings</h1>' +
-      '<p class="tma-portal-subtitle">Recorded calls with clients.</p>' +
+      '<p class="tma-portal-subtitle">Recorded calls with clients and with service providers about an applicant.</p>' +
       '</div></header>' +
       '<div class="tma-dash__toolbar">' +
       '<div class="tma-dash__toolbar-actions">' +
@@ -229,7 +229,7 @@
     if (!rows.length) {
       host.innerHTML = ui().emptyState({
         title: 'No recordings yet',
-        subtitle: 'Calls with clients are recorded automatically and appear here.',
+        subtitle: 'Calls with clients and with service providers about an applicant are recorded automatically and appear here.',
       });
       renderChips(root);
       return;

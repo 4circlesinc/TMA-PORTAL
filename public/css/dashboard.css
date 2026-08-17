@@ -15644,6 +15644,21 @@
   height: 12px;
 }
 
+.tma-dash__messages-row-about {
+  flex-shrink: 1;
+  min-width: 0;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-dash__messages-row-about::before {
+  content: "·";
+  margin: 0 var(--space-4);
+  color: var(--color-text-tertiary, #98a2b3);
+}
+
 .tma-dash__messages-row-preview {
   font-size: var(--text-size-12);
   line-height: 16px;
@@ -19381,6 +19396,73 @@ a.tma-dash__clients-edit-btn--accent:visited {
   width: 16px;
   height: 16px;
   filter: brightness(0) invert(1);
+}
+
+.tma-dash__clients-message-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tma-dash__clients-message-caret {
+  width: 12px !important;
+  height: 12px !important;
+  opacity: 0.85;
+}
+
+.tma-dash__clients-message-menu {
+  position: absolute;
+  top: calc(100% + var(--space-4));
+  right: 0;
+  z-index: 20;
+  min-width: 280px;
+  max-width: min(360px, 90vw);
+  padding: var(--space-4);
+}
+
+.tma-dash__clients-message-menu .tma-dash__menu-item {
+  white-space: normal;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.tma-dash__clients-message-choice-label {
+  display: block;
+}
+
+.tma-dash__clients-message-choice-meta {
+  display: block;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.tma-dash__menu-item--muted {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.tma-dash__menu-item--muted:hover {
+  background: transparent;
+}
+
+.tma-dash__clients-thread {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__clients-thread:hover {
+  background: var(--color-hover);
 }
 
 .tma-dash__clients-schedule {

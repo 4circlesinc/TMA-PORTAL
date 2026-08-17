@@ -946,6 +946,7 @@
 
       return (
         (row.name || '').toLowerCase().indexOf(term) !== -1 ||
+        (row.subtitle || '').toLowerCase().indexOf(term) !== -1 ||
         (row.preview || '').toLowerCase().indexOf(term) !== -1
       );
     });
@@ -960,6 +961,9 @@
       '<span class="tma-dash__messages-row-text">' +
       '<span class="tma-dash__messages-row-name">' +
       esc(item.name) +
+      (item.subtitle
+        ? '<span class="tma-dash__messages-row-about">' + esc(item.subtitle) + '</span>'
+        : '') +
       (pinned
         ? '<img class="tma-dash__messages-row-pin" src="' + ICONS.StarFilled + '" alt="" width="12" height="12" aria-hidden="true">'
         : '') +
@@ -2748,6 +2752,9 @@
 
     switch (event.event) {
       case 'group_created': return actor + ' created the group';
+      case 'case_opened':
+        return actor + ' opened a conversation about ' + (event.clientName || 'this applicant') +
+          ' with ' + (event.companyName || 'the service provider');
       case 'member_added': return actor + ' added ' + subject;
       case 'member_removed': return actor + ' removed ' + subject;
       case 'member_left': return actor + ' left';
@@ -8379,9 +8386,16 @@
     if (openClient) {
       openClient.addEventListener('click', function () {
         var row = findThread(state.selectedId);
-        // The separate, optional action — never what clicking a name does.
-        if (row && row.counterpartId && window.TMADashboard && window.TMADashboard.navigate) {
-          window.TMADashboard.navigate({ navId: 'clients', view: 'clients', title: row.name });
+        var uid = row && row.about && row.about.clientUid;
+        if (uid && window.TMADashboard && window.TMADashboard.navigate) {
+          window.TMADashboard.navigate({
+            navId: 'clients',
+            view: 'clients',
+            title: row.about.clientName || row.name || 'Client',
+            crumb: 'CIP Applications',
+            clientsScreen: 'detail',
+            contactId: uid,
+          });
         } else {
           showMessagesToast(root, 'No client record is linked to this conversation');
         }
