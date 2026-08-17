@@ -150,17 +150,90 @@ class FolderTree
     /** Recursive [fileCount, folderCount, totalSize] for a folder's contents. */
     public static function aggregate(Folder $folder): array
     {
-        $folderIds = self::descendantIds($folder);
-        $allIds = array_merge([$folder->id], $folderIds);
+        return self::aggregateMany([$folder])[$folder->id]
+            ?? ['fileCount' => 0, 'folderCount' => 0, 'size' => 0];
+    }
 
-        $fileCount = FileItem::whereIn('folder_id', $allIds)->count();
-        $size = (int) FileItem::whereIn('folder_id', $allIds)->sum('size');
+    /**
+     * Recursive counts for many folders in a few queries, not one walk each.
+     *
+     * A listing of twenty subfolders used to run twenty descendant walks plus
+     * a COUNT and a SUM per folder — that is what made opening a client's
+     * Documents tab stall against Cloud Postgres. One BFS of the combined
+     * subtree and one grouped file query replace that.
+     *
+     * @param  Folder[]  $folders
+     * @return array<int, array{fileCount: int, folderCount: int, size: int}>
+     */
+    public static function aggregateMany(array $folders): array
+    {
+        if ($folders === []) {
+            return [];
+        }
 
-        return [
-            'fileCount' => $fileCount,
-            'folderCount' => count($folderIds),
-            'size' => $size,
-        ];
+        $rootIds = [];
+        foreach ($folders as $folder) {
+            $rootIds[$folder->id] = true;
+        }
+        $rootIds = array_keys($rootIds);
+
+        $childrenByParent = [];
+        $queue = $rootIds;
+        $seen = array_fill_keys($rootIds, true);
+
+        while ($queue) {
+            $childRows = Folder::query()
+                ->whereIn('parent_id', $queue)
+                ->get(['id', 'parent_id']);
+            $queue = [];
+            foreach ($childRows as $row) {
+                if (isset($seen[$row->id])) {
+                    continue;
+                }
+                $seen[$row->id] = true;
+                $childrenByParent[$row->parent_id][] = $row->id;
+                $queue[] = $row->id;
+            }
+        }
+
+        $fileStats = FileItem::query()
+            ->whereIn('folder_id', array_keys($seen))
+            ->selectRaw('folder_id, count(*) as file_count, coalesce(sum(size), 0) as total_size')
+            ->groupBy('folder_id')
+            ->get()
+            ->keyBy('folder_id');
+
+        $out = [];
+        foreach ($rootIds as $id) {
+            $descendants = [];
+            $walk = $childrenByParent[$id] ?? [];
+            while ($walk) {
+                $childId = array_shift($walk);
+                $descendants[] = $childId;
+                foreach ($childrenByParent[$childId] ?? [] as $grandchild) {
+                    $walk[] = $grandchild;
+                }
+            }
+
+            $fileCount = 0;
+            $size = 0;
+            foreach (array_merge([$id], $descendants) as $folderId) {
+                $row = $fileStats->get($folderId);
+                if (! $row) {
+                    continue;
+                }
+                $fileCount += (int) $row->file_count;
+                $size += (int) $row->total_size;
+            }
+
+            $out[$id] = [
+                'fileCount' => $fileCount,
+                'folderCount' => count($descendants),
+                'size' => $size,
+            ];
+        }
+
+        return $out;
     }
 
     /** All descendant folder ids (not including the folder itself). */

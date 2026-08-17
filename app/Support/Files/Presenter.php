@@ -54,8 +54,25 @@ class Presenter
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
 
-    /** id => Folder, all non-trashed folders, lazily loaded once for path-building. */
-    private ?array $folderIndex = null;
+    /**
+     * id => Folder, ancestors of the primed listing.
+     *
+     * Used to be every folder in the library. Opening a client's Documents
+     * tab then loaded the whole tree into PHP before it could draw twenty
+     * rows — the path and audience walks only ever need the ancestors of
+     * what is on the page.
+     *
+     * @var array<int, Folder>
+     */
+    private array $folderIndex = [];
+
+    /**
+     * folder id => recursive counts, primed with the listing so each row
+     * does not walk its subtree on its own.
+     *
+     * @var array<int, array{fileCount: int, folderCount: int, size: int}>
+     */
+    private array $folderStats = [];
 
     /**
      * The firm-wide default grant, resolved once. `false` means "not looked up
@@ -107,6 +124,8 @@ class Presenter
         $this->cipPrimed = true;
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
+        $this->primeFolderIndex($files, $folders);
+        $this->folderStats = FolderTree::aggregateMany($folders);
     }
 
     public function file(FileItem $file): array
@@ -183,7 +202,9 @@ class Presenter
         $assignees = array_column($sharedWith, 'name');
         $folderAudience = $this->audienceFor($folder);
 
-        $stats = $withStats ? FolderTree::aggregate($folder) : ['fileCount' => null, 'folderCount' => null, 'size' => null];
+        $stats = $withStats
+            ? ($this->folderStats[$folder->id] ?? FolderTree::aggregate($folder))
+            : ['fileCount' => null, 'folderCount' => null, 'size' => null];
 
         return [
             'id' => $folder->uuid,
@@ -230,7 +251,6 @@ class Presenter
             return [];
         }
 
-        $index = $this->folderIndex();
         $trail = [];
         $seen = [];
         $node = $folder;
@@ -238,7 +258,7 @@ class Presenter
         while ($node && ! isset($seen[$node->id])) {
             $seen[$node->id] = true;
             array_unshift($trail, ['id' => $node->uuid, 'name' => $node->name]);
-            $node = $node->parent_id ? ($index[$node->parent_id] ?? null) : null;
+            $node = $this->parentOf($node);
         }
 
         return $trail;
@@ -266,7 +286,6 @@ class Presenter
             return null;
         }
 
-        $index = $this->folderIndex();
         $seen = [];
         $node = $folder;
         $top = $folder;
@@ -292,7 +311,7 @@ class Presenter
                 ];
             }
 
-            $node = $node->parent_id ? ($index[$node->parent_id] ?? null) : null;
+            $node = $this->parentOf($node);
         }
 
         // A personal drive is nobody else's, whatever the firm-wide default
@@ -347,17 +366,73 @@ class Presenter
         return $this->orgDefault;
     }
 
-    private function folderIndex(): array
+    /**
+     * Ancestors of the files and folders on this page, not the whole library.
+     *
+     * @param  FileItem[]  $files
+     * @param  Folder[]  $folders
+     */
+    private function primeFolderIndex(array $files, array $folders): void
     {
-        if ($this->folderIndex === null) {
-            $this->folderIndex = Folder::query()
-                // folder_type/audience come along for audienceFor(), which
-                // walks this same chain to work out who a file is shared with.
-                ->select('id', 'uuid', 'name', 'parent_id', 'folder_type', 'audience', 'audience_role')
-                ->get()->keyBy('id')->all();
+        $need = [];
+
+        foreach ($folders as $folder) {
+            $this->folderIndex[$folder->id] = $folder;
+            if ($folder->parent_id) {
+                $need[$folder->parent_id] = true;
+            }
         }
 
-        return $this->folderIndex;
+        foreach ($files as $file) {
+            if ($file->relationLoaded('folder') && $file->folder) {
+                $this->folderIndex[$file->folder->id] = $file->folder;
+                if ($file->folder->parent_id) {
+                    $need[$file->folder->parent_id] = true;
+                }
+            } elseif ($file->folder_id) {
+                $need[$file->folder_id] = true;
+            }
+        }
+
+        $this->loadAncestors(array_keys($need));
+    }
+
+    private function parentOf(Folder $folder): ?Folder
+    {
+        if (! $folder->parent_id) {
+            return null;
+        }
+
+        if (! isset($this->folderIndex[$folder->parent_id])) {
+            $this->loadAncestors([$folder->parent_id]);
+        }
+
+        return $this->folderIndex[$folder->parent_id] ?? null;
+    }
+
+    /** @param  list<int>  $ids */
+    private function loadAncestors(array $ids): void
+    {
+        $queue = [];
+        foreach ($ids as $id) {
+            if ($id && ! isset($this->folderIndex[$id])) {
+                $queue[] = $id;
+            }
+        }
+
+        while ($queue) {
+            $rows = Folder::query()
+                ->select('id', 'uuid', 'name', 'parent_id', 'folder_type', 'audience', 'audience_role')
+                ->whereIn('id', $queue)
+                ->get();
+            $queue = [];
+            foreach ($rows as $row) {
+                $this->folderIndex[$row->id] = $row;
+                if ($row->parent_id && ! isset($this->folderIndex[$row->parent_id])) {
+                    $queue[] = $row->parent_id;
+                }
+            }
+        }
     }
 
     /**

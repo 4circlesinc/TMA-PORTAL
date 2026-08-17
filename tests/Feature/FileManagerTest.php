@@ -7,6 +7,8 @@ use App\Models\Folder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FileManagerTest extends TestCase
@@ -337,12 +339,12 @@ class FileManagerTest extends TestCase
     {
         $me = $this->approvedUser(['account_type' => 'Administrator']);
 
-        $folder = \App\Models\Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
             'name' => 'Citizenship Applications',
             'owner_id' => $me->id,
             'created_by' => $me->id,
-            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'folder_type' => Folder::TYPE_ORGANIZATION,
             'audience' => 'all_staff',
             'audience_role' => 'editor',
         ]);
@@ -366,12 +368,12 @@ class FileManagerTest extends TestCase
         // A user-typed root is somebody's own space; FileAccess stops there
         // before even the administrator short-circuit, so nothing firm-wide
         // reaches inside it and the column must not claim otherwise.
-        $drive = \App\Models\Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+        $drive = Folder::create([
+            'uuid' => (string) Str::uuid(),
             'name' => 'OneDrive',
             'owner_id' => $me->id,
             'created_by' => $me->id,
-            'folder_type' => \App\Models\Folder::TYPE_USER,
+            'folder_type' => Folder::TYPE_USER,
         ]);
 
         $row = collect($this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('folders'))
@@ -397,5 +399,77 @@ class FileManagerTest extends TestCase
 
         $this->assertContains('Owen Owner', $named);
         $this->assertNotContains('Never Visible', $named);
+    }
+
+    public function test_browsing_a_folder_returns_nested_counts_in_a_bounded_number_of_queries(): void
+    {
+        $user = $this->approvedUser();
+        $parent = $this->folder($user, 'Client documents');
+        $passports = $this->folder($user, 'Passports', $parent);
+        $photos = $this->folder($user, 'Photos', $parent);
+        $bio = $this->folder($user, 'Bio pages', $passports);
+
+        $this->fileIn($user, $parent, 'cover.pdf', 100);
+        $this->fileIn($user, $passports, 'scan.pdf', 200);
+        $this->fileIn($user, $bio, 'page.jpg', 50);
+        $this->fileIn($user, $photos, 'face.jpg', 75);
+
+        // Extra siblings so a per-row descendant walk would show up as a
+        // query count that grows with the listing, which is what made the
+        // application's Documents tab stall on every folder open.
+        for ($i = 0; $i < 12; $i++) {
+            $extra = $this->folder($user, 'Slot '.$i, $parent);
+            $this->fileIn($user, $extra, 'doc-'.$i.'.pdf', 10);
+        }
+
+        $aggregateQueries = 0;
+        DB::listen(function ($q) use (&$aggregateQueries) {
+            $sql = strtolower($q->sql);
+            if (str_contains($sql, 'file_count') || str_contains($sql, 'total_size')) {
+                $aggregateQueries++;
+            }
+        });
+
+        $browse = $this->actingAs($user)
+            ->getJson('/portal/files/?folder='.$parent->uuid.'&perPage=0')
+            ->assertOk();
+
+        $byName = collect($browse->json('folders'))->keyBy('name');
+
+        $this->assertSame(2, $byName['Passports']['fileCount']);
+        $this->assertSame(1, $byName['Passports']['folderCount']);
+        $this->assertSame(1, $byName['Photos']['fileCount']);
+        $this->assertSame(0, $byName['Photos']['folderCount']);
+        $this->assertSame(1, $browse->json('counts.files'));
+
+        // One grouped file query for every child, not a COUNT+SUM per row.
+        $this->assertSame(1, $aggregateQueries);
+    }
+
+    private function folder(User $user, string $name, ?Folder $parent = null): Folder
+    {
+        return Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $name,
+            'parent_id' => $parent?->id,
+            'owner_id' => $user->id,
+            'created_by' => $user->id,
+        ]);
+    }
+
+    private function fileIn(User $user, Folder $folder, string $name, int $size): FileItem
+    {
+        return FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folder->id,
+            'name' => $name,
+            'extension' => pathinfo($name, PATHINFO_EXTENSION),
+            'mime_type' => 'application/octet-stream',
+            'size' => $size,
+            'disk' => 'local',
+            'storage_path' => 'tests/'.$name,
+            'owner_id' => $user->id,
+            'uploaded_by' => $user->id,
+        ]);
     }
 }

@@ -990,6 +990,7 @@
    */
   var cbiFolderNav = null;
   var cbiFolderFiles = [];
+  var cbiFolderFolders = [];
 
   function renderDocumentsTab(d) {
     var folderUuid = d.data && d.data.folderUuid;
@@ -1031,6 +1032,8 @@
             '<img src="' + PH_ICON + 'Plus.svg" alt=""><span>New folder</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-cbi-folder-upload>' +
             '<img src="' + PH_ICON + 'ArrowLineUp.svg" alt=""><span>Upload</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-cbi-folder-request>' +
+            '<img src="' + PH_ICON + 'DownloadSimple.svg" alt=""><span>Request files</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-cbi-open-library>' +
             '<img src="' + PH_ICON + 'FolderNotch.svg" alt=""><span>Open in File Library</span></button>' +
           '<input type="file" multiple hidden data-cbi-folder-fileinput>' +
@@ -1038,8 +1041,11 @@
       '</div>' +
       '<div class="tma-dash__clients-folders" data-cbi-folder-drop' +
         ' data-folder-uuid="' + esc(folderUuid) + '"' +
-        ' data-root-uuid="' + esc(folderUuid) + '">' +
-        '<div class="tma-dash__clients-assigned-empty" data-cbi-folder-list>Loading…</div>' +
+        ' data-root-uuid="' + esc(folderUuid) + '"' +
+        (clientUid ? ' data-client-uid="' + esc(clientUid) + '"' : '') + '>' +
+        '<div data-cbi-folder-canvas data-morph-skip>' +
+          '<div class="tma-dash__clients-assigned-empty" data-cbi-folder-list>Loading…</div>' +
+        '</div>' +
       '</div>',
       '');
   }
@@ -1070,24 +1076,32 @@
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  function cbiFolderCanvas(root) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    if (!wrap) return null;
+    return wrap.querySelector('[data-cbi-folder-canvas]') || wrap;
+  }
+
   function renderCbiFolderList(root, res) {
     var wrap = root.querySelector('[data-cbi-folder-drop]');
-    if (!wrap) return;
+    var canvas = cbiFolderCanvas(root);
+    if (!wrap || !canvas) return;
     var folders = (res && res.folders) || [];
     var files = (res && res.files) || [];
     cbiFolderFiles = files;
+    cbiFolderFolders = folders;
 
     if (!folders.length && !files.length) {
       var ui = window.TMAPortalUI;
-      wrap.innerHTML = '<div data-cbi-folder-list>' +
+      canvas.innerHTML = '<div data-cbi-folder-list>' +
         (ui && ui.emptyState
           ? ui.emptyState({
               illustration: 'Illustration03',
               title: 'No files yet',
-              subtitle: 'They appear here after a sync copies Smartsheet attachments into this folder.',
+              subtitle: 'Use “Upload”, “New folder”, or drag files here.',
             })
           : '<div class="tma-dash__clients-assigned-empty">' +
-            'No files yet. They appear here after a sync copies Smartsheet attachments into this folder.</div>') +
+            'No files yet. Use “Upload”, “New folder”, or drag files here.</div>') +
         '</div>';
       return;
     }
@@ -1099,10 +1113,10 @@
       var folderIcon = window.TMAFolderIcons
         ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
         : '<img src="' + PH_ICON + 'FolderNotch.svg" alt="">';
-      html += '<button type="button" class="tma-dash__clients-folder" data-cbi-subfolder="' + esc(f.id) +
+      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-cbi-row data-cbi-subfolder="' + esc(f.id) +
         '" data-cbi-subfolder-name="' + esc(f.name) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
-        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-cbi-rename-name>' + esc(f.name) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(cbiFolderMetaLabel(f)) + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
         '</button>';
@@ -1116,14 +1130,14 @@
       var meta = [f.sizeLabel, f.uploadedAt ? fmtShortDate(f.uploadedAt) : null, who]
         .filter(Boolean).join(' · ');
 
-      html += '<button type="button" class="tma-dash__clients-folder" data-cbi-file="' + esc(f.id) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-cbi-row data-cbi-file="' + esc(f.id) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main">' +
-          '<span class="tma-dash__clients-folder-name">' + esc(f.name) + cbiStatusChip(f) + '</span>' +
+          '<span class="tma-dash__clients-folder-name" data-cbi-rename-name>' + esc(f.name) + cbiStatusChip(f) + '</span>' +
           (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
         '</span></button>';
     });
-    wrap.innerHTML = html;
+    canvas.innerHTML = html;
   }
 
   function setDocumentsTabCount(count) {
@@ -1161,20 +1175,53 @@
     }).join('');
   }
 
-  function loadCbiFolder(root) {
+  function cbiFolderCacheKey(uuid) {
+    return 'files:folder:' + uuid;
+  }
+
+  function invalidateCbiFolder(uuid) {
+    if (window.TMAStore && uuid) window.TMAStore.invalidate(cbiFolderCacheKey(uuid));
+  }
+
+  function cbiFolderRow(id) {
+    return (cbiFolderFiles || []).concat(cbiFolderFolders || [])
+      .filter(function (r) { return r.id === id; })[0];
+  }
+
+  function loadCbiFolder(root, opts) {
     var wrap = root.querySelector('[data-cbi-folder-drop]');
     var net = filesNet();
     if (!wrap || !net) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    net.fetchJSON(net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0'))
-      .then(function (res) {
-        renderCbiFolderList(root, res);
-        captureCbiDocCount(root, res);
-      })
-      .catch(function () {
-        var list = wrap.querySelector('[data-cbi-folder-list]') || wrap;
-        list.textContent = 'Could not load this folder.';
-      });
+    var url = net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0');
+
+    if (opts && opts.changed) invalidateCbiFolder(uuid);
+
+    var renamed = false;
+    var paint = function (res) {
+      if (wrap.getAttribute('data-folder-uuid') !== uuid) return;
+      renderCbiFolderList(root, res);
+      captureCbiDocCount(root, res);
+      if (opts && opts.renameId && !renamed && cbiFolderRow(opts.renameId)) {
+        renamed = true;
+        startCbiFolderRename(root, opts.renameId);
+      }
+    };
+
+    var fail = function () {
+      var canvas = cbiFolderCanvas(root) || wrap;
+      var list = canvas.querySelector('[data-cbi-folder-list]') || canvas;
+      list.textContent = 'Could not load this folder.';
+    };
+
+    if (!window.TMAStore) {
+      net.fetchJSON(url).then(paint).catch(fail);
+      return;
+    }
+
+    window.TMAStore
+      .swr(cbiFolderCacheKey(uuid), function () { return net.fetchJSON(url); }, paint)
+      .catch(fail);
   }
 
   function showCbiFolderCurrent(root) {
@@ -1192,24 +1239,156 @@
     toast(fileList.length > 1 ? fileList.length + ' files uploading…' : 'Uploading…');
   }
 
+  function hasCbiOsFiles(e) {
+    return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1;
+  }
+
+  function createCbiUntitledFolder(root) {
+    var drop = root.querySelector('[data-cbi-folder-drop]');
+    var current = drop && drop.getAttribute('data-folder-uuid');
+    var net = filesNet();
+    if (!current || !net) return;
+    net.fetchJSON(net.url('/folders'), {
+      method: 'POST',
+      json: { name: 'Untitled folder', parent: current, auto: true },
+    }).then(function (folder) {
+      loadCbiFolder(root, { changed: true, renameId: folder && folder.id });
+    }).catch(function (err) {
+      toast((err && err.message) || 'Could not create the folder', false);
+    });
+  }
+
+  function startCbiFolderRename(root, id) {
+    var row = cbiFolderRow(id);
+    var net = filesNet();
+    if (!row || !net) return;
+    var btn = root.querySelector('[data-cbi-subfolder="' + id + '"], [data-cbi-file="' + id + '"]');
+    var nameEl = btn && btn.querySelector('[data-cbi-rename-name]');
+    if (!nameEl) return;
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tma-portal-rename-input';
+    input.value = row.name;
+    input.setAttribute('maxlength', '255');
+    input.setAttribute('aria-label', 'Rename ' + row.name);
+    nameEl.replaceWith(input);
+    input.focus({ preventScroll: true });
+    input.select();
+
+    var settled = false;
+    function finish() { loadCbiFolder(root, { changed: true }); }
+    function commit() {
+      if (settled) return;
+      settled = true;
+      var next = input.value.trim();
+      if (!next || next === row.name) { finish(); return; }
+      var url = (row.type === 'folder' ? '/folders/' : '/files/') + row.id;
+      net.fetchJSON(net.url(url), { method: 'PATCH', json: { name: next } })
+        .then(finish)
+        .catch(function (err) {
+          toast((err && err.message) || 'Could not rename', false);
+          finish();
+        });
+    }
+    function cancel() {
+      if (settled) return;
+      settled = true;
+      finish();
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+      e.stopPropagation();
+    });
+    input.addEventListener('click', function (e) { e.stopPropagation(); });
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    input.addEventListener('blur', commit);
+  }
+
+  function moveCbiFolderItems(root, items, targetId) {
+    var net = filesNet();
+    if (!items || !items.length || !targetId || !net) return;
+    var payload = items.filter(function (it) { return it.id && it.id !== targetId; })
+      .map(function (it) { return { id: it.id, type: it.type }; });
+    if (!payload.length) return;
+    net.fetchJSON(net.url('/bulk'), {
+      method: 'POST',
+      json: { action: 'move', items: payload, target: targetId },
+    }).then(function () {
+      toast(payload.length === 1 ? 'Moved' : payload.length + ' items moved');
+      loadCbiFolder(root, { changed: true });
+    }).catch(function (err) {
+      toast((err && err.message) || 'Could not move', false);
+    });
+  }
+
+  function openCbiFolderInLibrary(root, rootUuid) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    var dest = (wrap && wrap.getAttribute('data-folder-uuid')) || rootUuid;
+    if (!dest) return;
+    if (window.TMADashboard && window.TMADashboard.navigate) {
+      var here = cbiFolderNav && cbiFolderNav.path[cbiFolderNav.path.length - 1];
+      window.TMADashboard.navigate({
+        navId: 'folders-all',
+        view: 'folders',
+        title: here && here.name ? here.name : 'Client documents',
+        crumb: 'File Library / ' + (here && here.name ? here.name : 'Client'),
+        folderId: dest,
+      });
+      return;
+    }
+    location.href = (window.__TMA_SITE_ROOT || '') + '/files?folder=' + encodeURIComponent(dest);
+  }
+
+  function requestCbiFiles(root) {
+    if (!window.TMAFileRequests) {
+      toast('Request Files isn’t available right now', false);
+      return;
+    }
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    var here = cbiFolderNav
+      ? cbiFolderNav.path[cbiFolderNav.path.length - 1]
+      : { uuid: wrap && wrap.getAttribute('data-folder-uuid'), name: 'Client documents' };
+    var clientId = wrap && wrap.getAttribute('data-client-uid');
+    window.TMAFileRequests.open({
+      folderId: here.uuid,
+      folderName: here.name,
+      clientId: clientId || null,
+      title: 'Please upload your documents',
+      onCreated: function () { loadCbiFolder(root, { changed: true }); },
+    });
+  }
+
+  function cbiFolderPanelHasContents(wrap) {
+    var canvas = wrap.querySelector('[data-cbi-folder-canvas]') || wrap;
+    if (canvas.querySelector('[data-cbi-subfolder], [data-cbi-file]')) return true;
+    var empty = canvas.querySelector('[data-cbi-folder-list]');
+    return !!(empty && empty.textContent && empty.textContent !== 'Loading…');
+  }
+
   function wireCbiFolderPanel(root) {
     var wrap = root.querySelector('[data-cbi-folder-drop]');
     if (!wrap) return;
     var rootUuid = wrap.getAttribute('data-root-uuid');
 
-    if (!cbiFolderNav || cbiFolderNav.rootUuid !== rootUuid) {
+    var switchedClient = !cbiFolderNav || cbiFolderNav.rootUuid !== rootUuid;
+    if (switchedClient) {
       cbiFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client documents' }] };
     }
     wrap.setAttribute('data-folder-uuid', cbiFolderNav.path[cbiFolderNav.path.length - 1].uuid);
     renderCbiFolderCrumbs(root);
-    loadCbiFolder(root);
+    if (switchedClient || !cbiFolderPanelHasContents(wrap)) loadCbiFolder(root);
 
     if (root._cbiFolderWired) return;
     root._cbiFolderWired = true;
 
     root.addEventListener('click', function (e) {
+      if (e.target.closest('.tma-portal-rename-input')) return;
+
       var sub = e.target.closest('[data-cbi-subfolder]');
       if (sub && root.contains(sub)) {
+        if (sub._suppressClick) { e.preventDefault(); sub._suppressClick = false; return; }
         e.preventDefault();
         if (!cbiFolderNav) return;
         cbiFolderNav.path.push({
@@ -1222,8 +1401,9 @@
 
       var fileBtn = e.target.closest('[data-cbi-file]');
       if (fileBtn && root.contains(fileBtn)) {
+        if (fileBtn._suppressClick) { e.preventDefault(); fileBtn._suppressClick = false; return; }
         e.preventDefault();
-        openCbiFile(fileBtn.getAttribute('data-cbi-file'), function () { loadCbiFolder(root); });
+        openCbiFile(fileBtn.getAttribute('data-cbi-file'), function () { loadCbiFolder(root, { changed: true }); });
         return;
       }
 
@@ -1240,14 +1420,7 @@
 
       if (e.target.closest('[data-cbi-folder-new]')) {
         e.preventDefault();
-        var name = window.prompt('New folder name');
-        var net = filesNet();
-        var drop = root.querySelector('[data-cbi-folder-drop]');
-        var current = drop && drop.getAttribute('data-folder-uuid');
-        if (!name || !name.trim() || !net || !current) return;
-        net.fetchJSON(net.url('/folders'), { method: 'POST', json: { name: name.trim(), parent: current } })
-          .then(function () { toast('Folder created'); loadCbiFolder(root); })
-          .catch(function (err) { toast((err && err.message) || 'Could not create the folder', false); });
+        createCbiUntitledFolder(root);
         return;
       }
 
@@ -1258,11 +1431,15 @@
         return;
       }
 
+      if (e.target.closest('[data-cbi-folder-request]')) {
+        e.preventDefault();
+        requestCbiFiles(root);
+        return;
+      }
+
       if (e.target.closest('[data-cbi-open-library]')) {
         e.preventDefault();
-        var wrap = root.querySelector('[data-cbi-folder-drop]');
-        var dest = (wrap && wrap.getAttribute('data-folder-uuid')) || rootUuid;
-        location.href = (window.__TMA_SITE_ROOT || '') + '/files?folder=' + encodeURIComponent(dest);
+        openCbiFolderInLibrary(root, rootUuid);
       }
     });
 
@@ -1274,6 +1451,85 @@
       input.value = '';
     });
 
+    var draggingItems = null;
+
+    function clearDropHighlight() {
+      var drop = root.querySelector('[data-cbi-folder-drop]');
+      if (!drop) return;
+      drop.classList.remove('is-drop-into');
+      drop.querySelectorAll('.is-drop-into').forEach(function (n) { n.classList.remove('is-drop-into'); });
+    }
+
+    function currentDrop() {
+      var drop = root.querySelector('[data-cbi-folder-drop]');
+      return drop;
+    }
+
+    root.addEventListener('dragstart', function (e) {
+      var drop = currentDrop();
+      var row = e.target.closest('[data-cbi-row]');
+      if (!drop || !row || !drop.contains(row)) return;
+      var id = row.getAttribute('data-cbi-subfolder') || row.getAttribute('data-cbi-file');
+      var it = cbiFolderRow(id);
+      if (!it) return;
+      draggingItems = [{ id: it.id, type: it.type || (row.hasAttribute('data-cbi-subfolder') ? 'folder' : 'file') }];
+      try { e.dataTransfer.setData('text/plain', it.name || 'item'); } catch (err) {}
+      try { e.dataTransfer.setData('application/x-tma-move', '1'); } catch (err) {}
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('is-dragging');
+    });
+
+    root.addEventListener('dragover', function (e) {
+      var drop = currentDrop();
+      if (!drop || !drop.contains(e.target)) return;
+      var folderRow = e.target.closest('[data-cbi-subfolder]');
+      if (hasCbiOsFiles(e)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        clearDropHighlight();
+        (folderRow && drop.contains(folderRow) ? folderRow : drop).classList.add('is-drop-into');
+        return;
+      }
+      if (!draggingItems || !folderRow || !drop.contains(folderRow)) return;
+      if (draggingItems.some(function (d) { return d.id === folderRow.getAttribute('data-cbi-subfolder'); })) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      clearDropHighlight();
+      folderRow.classList.add('is-drop-into');
+    });
+
+    root.addEventListener('drop', function (e) {
+      var drop = currentDrop();
+      if (!drop || !drop.contains(e.target)) return;
+      var folderRow = e.target.closest('[data-cbi-subfolder]');
+      var dest = folderRow && drop.contains(folderRow)
+        ? folderRow.getAttribute('data-cbi-subfolder')
+        : drop.getAttribute('data-folder-uuid');
+      clearDropHighlight();
+      if (hasCbiOsFiles(e) && e.dataTransfer.files && e.dataTransfer.files.length) {
+        e.preventDefault();
+        uploadToCbiFolder(e.dataTransfer.files, dest);
+        draggingItems = null;
+        return;
+      }
+      if (!draggingItems || !folderRow || !drop.contains(folderRow)) return;
+      e.preventDefault();
+      var moving = draggingItems;
+      draggingItems = null;
+      moveCbiFolderItems(root, moving, dest);
+    });
+
+    root.addEventListener('dragend', function () {
+      clearDropHighlight();
+      var drop = currentDrop();
+      var row = drop && drop.querySelector('.is-dragging');
+      if (row) {
+        row.classList.remove('is-dragging');
+        row._suppressClick = true;
+      }
+      draggingItems = null;
+    });
+
     if (!document._cbiUploadRefresh) {
       document._cbiUploadRefresh = true;
       document.addEventListener('tma:upload-complete', function (e) {
@@ -1282,7 +1538,7 @@
         if (!drop) return;
         var done = e.detail && e.detail.folderId;
         if (!done || done === drop.getAttribute('data-folder-uuid')) {
-          loadCbiFolder(state.el);
+          loadCbiFolder(state.el, { changed: true });
         }
       });
     }

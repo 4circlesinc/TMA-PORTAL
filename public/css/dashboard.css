@@ -18209,6 +18209,20 @@ button.tma-cip-status-chip:focus-visible {
   box-shadow: inset 0 0 0 2px var(--color-indigo);
 }
 
+.tma-dash__clients-folder.is-drop-into {
+  background: var(--color-hover);
+  box-shadow: inset 0 0 0 2px var(--color-indigo);
+}
+
+.tma-dash__clients-folder.is-dragging {
+  opacity: 0.45;
+}
+
+.tma-dash__clients-folder .tma-portal-rename-input {
+  min-width: 0;
+  width: 100%;
+}
+
 .tma-dash__clients-folder {
   display: flex;
   align-items: center;

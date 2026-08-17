@@ -5517,7 +5517,7 @@
           // same folder the panel is currently showing.
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-request>' +
           '<img src="images/icons/phosphor/DownloadSimple.svg" alt=""><span>Request files</span></button>' +
-          '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-folder>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-library>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
           '<input type="file" multiple hidden data-clients-folder-fileinput>' +
           '</div>'
@@ -5525,8 +5525,9 @@
       '</div>' +
       (uuid
         ? '<div class="tma-dash__clients-folders" data-clients-folder-drop data-folder-uuid="' + esc(uuid) + '" data-root-uuid="' + esc(uuid) + '">' +
+          '<div data-clients-folder-canvas data-morph-skip>' +
           '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>Loading…</div>' +
-          '</div>'
+          '</div></div>'
         : '<div class="tma-dash__clients-folders">' +
           '<div class="tma-dash__clients-assigned-empty">This client’s folder isn’t ready yet.</div></div>') +
       '</div>'
@@ -5590,9 +5591,16 @@
 
   var clientFolderFolders = [];
 
+  function clientFolderCanvas(root) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap) return null;
+    return wrap.querySelector('[data-clients-folder-canvas]') || wrap;
+  }
+
   function renderClientFolderList(root, res) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
-    if (!wrap) return;
+    var canvas = clientFolderCanvas(root);
+    if (!wrap || !canvas) return;
     var folders = (res && res.folders) || [];
     var files = (res && res.files) || [];
     clientFolderFiles = files;
@@ -5601,7 +5609,7 @@
       // Same illustrated empty state as File Library folders — plain grey copy
       // read as a broken list rather than an intentional empty folder.
       var ui = window.TMAPortalUI;
-      wrap.innerHTML = '<div data-clients-folder-list>' +
+      canvas.innerHTML = '<div data-clients-folder-list>' +
         (ui && ui.emptyState
           ? ui.emptyState({
               illustration: 'Illustration03',
@@ -5620,9 +5628,9 @@
       var folderIcon = window.TMAFolderIcons
         ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
         : '<img src="' + (window.TMAFolderColours ? window.TMAFolderColours.iconSrc(folderBase, f.colour) : ICONS[folderBase]) + '" alt="">';
-      html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
-        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
         '</button>';
@@ -5650,14 +5658,14 @@
         who,
       ].filter(Boolean).join(' · ');
 
-      html += '<button type="button" class="tma-dash__clients-folder" data-clients-file="' + esc(f.id) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main">' +
-          '<span class="tma-dash__clients-folder-name">' + esc(f.name) + clientStatusChip(f) + '</span>' +
+          '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) + clientStatusChip(f) + '</span>' +
           (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
         '</span></button>';
     });
-    wrap.innerHTML = html;
+    canvas.innerHTML = html;
   }
 
   /* One tab's count chip, patched in place.
@@ -5770,7 +5778,8 @@
 
   function bindClientFolderRows(root) {
     root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (e) {
+        if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
         if (!clientFolderNav) return;
         clientFolderNav.path.push({
           uuid: btn.getAttribute('data-clients-subfolder'),
@@ -5786,7 +5795,8 @@
       btn.addEventListener('contextmenu', function (e) {
         openClientFolderMenu(root, e, btn.getAttribute('data-clients-file'));
       });
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (e) {
+        if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
         var fu = btn.getAttribute('data-clients-file');
         if (!fu) return;
 
@@ -5882,18 +5892,30 @@
     };
 
     var fail = function () {
-      var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
+      var canvas = clientFolderCanvas(root) || wrap;
+      var list = canvas.querySelector('[data-clients-folder-list]') || canvas;
       list.textContent = 'Could not load this folder.';
     };
 
+    var renamed = false;
+    var afterPaint = function () {
+      if (!opts || !opts.renameId || renamed) return;
+      if (!clientFolderRow(opts.renameId)) return;
+      renamed = true;
+      startClientFolderRename(root, opts.renameId);
+    };
+
     if (!window.TMAStore) {
-      filesNet().fetchJSON(url).then(paint).catch(fail);
+      filesNet().fetchJSON(url).then(function (res) { paint(res); afterPaint(); }).catch(fail);
 
       return;
     }
 
     window.TMAStore
-      .swr(folderCacheKey(uuid), function () { return filesNet().fetchJSON(url); }, paint)
+      .swr(folderCacheKey(uuid), function () { return filesNet().fetchJSON(url); }, function (res) {
+        paint(res);
+        afterPaint();
+      })
       .catch(fail);
   }
 
@@ -5911,6 +5933,118 @@
     if (!files || !files.length || !window.TMAUpload) return;
     window.TMAUpload.add(files, { folderId: uuid });
     clientsToast(files.length > 1 ? files.length + ' files uploading…' : 'Uploading…', 'neutral');
+  }
+
+  function hasOsFiles(e) {
+    return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1;
+  }
+
+  /*
+   * Same instant "Untitled folder" as the File Library: create it, paint it,
+   * and drop the reader into inline rename. window.prompt was a second, worse
+   * version of the same action, and on a morphing profile it stacked until
+   * the button looked broken.
+   */
+  function createClientUntitledFolder(root) {
+    var uuid = clientFolderCurrentUuid(root);
+    if (!uuid || !filesNet()) return;
+    filesNet().fetchJSON(filesNet().url('/folders'), {
+      method: 'POST',
+      json: { name: 'Untitled folder', parent: uuid, auto: true },
+    }).then(function (folder) {
+      loadClientFolder(root, { changed: true, renameId: folder && folder.id });
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Could not create the folder', 'negative');
+    });
+  }
+
+  function startClientFolderRename(root, id) {
+    var row = clientFolderRow(id);
+    if (!row || !filesNet()) return;
+    var btn = root.querySelector('[data-clients-subfolder="' + id + '"], [data-clients-file="' + id + '"]');
+    var nameEl = btn && btn.querySelector('[data-clients-rename-name]');
+    if (!nameEl) return;
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tma-portal-rename-input';
+    input.value = row.name;
+    input.setAttribute('maxlength', '255');
+    input.setAttribute('aria-label', 'Rename ' + row.name);
+    nameEl.replaceWith(input);
+    input.focus({ preventScroll: true });
+    input.select();
+
+    var settled = false;
+    function finish() {
+      loadClientFolder(root, { changed: true });
+    }
+    function commit() {
+      if (settled) return;
+      settled = true;
+      var next = input.value.trim();
+      if (!next || next === row.name) { finish(); return; }
+      var url = (row.type === 'folder' ? '/folders/' : '/files/') + row.id;
+      filesNet().fetchJSON(filesNet().url(url), { method: 'PATCH', json: { name: next } })
+        .then(finish)
+        .catch(function (err) {
+          clientsToast((err && err.message) || 'Could not rename', 'negative');
+          finish();
+        });
+    }
+    function cancel() {
+      if (settled) return;
+      settled = true;
+      finish();
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+      e.stopPropagation();
+    });
+    input.addEventListener('click', function (e) { e.stopPropagation(); });
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    input.addEventListener('blur', commit);
+  }
+
+  function moveClientFolderItems(root, items, targetId) {
+    if (!items || !items.length || !targetId || !filesNet()) return;
+    var payload = items.filter(function (it) { return it.id && it.id !== targetId; })
+      .map(function (it) { return { id: it.id, type: it.type }; });
+    if (!payload.length) return;
+    filesNet().fetchJSON(filesNet().url('/bulk'), {
+      method: 'POST',
+      json: { action: 'move', items: payload, target: targetId },
+    }).then(function () {
+      clientsToast(payload.length === 1 ? 'Moved' : payload.length + ' items moved', 'positive');
+      loadClientFolder(root, { changed: true });
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Could not move', 'negative');
+    });
+  }
+
+  function openCurrentFolderInLibrary(root) {
+    var dest = clientFolderCurrentUuid(root);
+    if (!dest) return;
+    if (window.TMADashboard && window.TMADashboard.navigate) {
+      var here = clientFolderNav && clientFolderNav.path[clientFolderNav.path.length - 1];
+      window.TMADashboard.navigate({
+        navId: 'folders-all',
+        view: 'folders',
+        title: here && here.name ? here.name : 'Client folder',
+        crumb: 'File Library / ' + (here && here.name ? here.name : 'Client'),
+        folderId: dest,
+      });
+      return;
+    }
+    location.href = (window.__TMA_SITE_ROOT || '') + '/files?folder=' + encodeURIComponent(dest);
+  }
+
+  function clientFolderPanelHasContents(wrap) {
+    var canvas = wrap.querySelector('[data-clients-folder-canvas]') || wrap;
+    if (canvas.querySelector('[data-clients-subfolder], [data-clients-file]')) return true;
+    var empty = canvas.querySelector('[data-clients-folder-list]');
+    return !!(empty && empty.textContent && empty.textContent !== 'Loading…');
   }
 
   // One document-level listener refreshes the open folder panel when an upload
@@ -5937,7 +6071,8 @@
 
     // Start a fresh drill path when opening a different client's folder; keep it
     // (so a switch to Client info and back stays put) for the same client.
-    if (!clientFolderNav || clientFolderNav.rootUuid !== rootUuid) {
+    var switchedClient = !clientFolderNav || clientFolderNav.rootUuid !== rootUuid;
+    if (switchedClient) {
       clientFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client documents' }] };
 
       /*
@@ -5954,30 +6089,25 @@
     wrap.setAttribute('data-folder-uuid', clientFolderNav.path[clientFolderNav.path.length - 1].uuid);
     renderFolderCrumbs(root);
 
-    // New folder / uploads always target the folder currently in view.
     var current = function () { return clientFolderCurrentUuid(root); };
 
     bindClientFolderUploadRefresh();
-    loadClientFolder(root);
+    if (switchedClient || !clientFolderPanelHasContents(wrap)) loadClientFolder(root);
 
-    var newBtn = root.querySelector('[data-clients-folder-new]');
-    if (newBtn) {
-      newBtn.addEventListener('click', function () {
-        var name = window.prompt('New folder name');
-        if (!name || !name.trim() || !filesNet()) return;
-        filesNet().fetchJSON(filesNet().url('/folders'), { method: 'POST', json: { name: name.trim(), parent: current() } })
-          .then(function () { clientsToast('Folder created', 'positive'); loadClientFolder(root, { changed: true }); })
-          .catch(function (err) { clientsToast((err && err.message) || 'Could not create the folder', 'negative'); });
-      });
-    }
+    MORPH.unwired(root, '[data-clients-folder-new]').forEach(function (btn) {
+      btn.addEventListener('click', function () { createClientUntitledFolder(root); });
+    });
 
-    var uploadBtn = root.querySelector('[data-clients-folder-upload]');
     var fileInput = root.querySelector('[data-clients-folder-fileinput]');
-    if (uploadBtn && fileInput) {
-      uploadBtn.addEventListener('click', function () { fileInput.click(); });
-      fileInput.addEventListener('change', function () {
-        uploadToClientFolder(fileInput.files, current());
-        fileInput.value = '';
+    MORPH.unwired(root, '[data-clients-folder-upload]').forEach(function (btn) {
+      btn.addEventListener('click', function () { if (fileInput) fileInput.click(); });
+    });
+    if (fileInput) {
+      MORPH.unwired(root, '[data-clients-folder-fileinput]').forEach(function (input) {
+        input.addEventListener('change', function () {
+          uploadToClientFolder(input.files, current());
+          input.value = '';
+        });
       });
     }
 
@@ -5990,8 +6120,7 @@
      * everything else, and the client is tagged on the request so the
      * documents are attributed even when the destination is a plain folder.
      */
-    var requestBtn = root.querySelector('[data-clients-folder-request]');
-    if (requestBtn) {
+    MORPH.unwired(root, '[data-clients-folder-request]').forEach(function (requestBtn) {
       requestBtn.addEventListener('click', function () {
         if (!window.TMAFileRequests) {
           clientsToast('Request Files isn’t available right now', 'negative');
@@ -6014,11 +6143,14 @@
           onCreated: function () { loadClientFolder(root, { changed: true }); },
         });
       });
-    }
+    });
+
+    MORPH.unwired(root, '[data-clients-open-library]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openCurrentFolderInLibrary(root); });
+    });
 
     // Breadcrumb: jump back up to any ancestor (delegated, survives repaints).
-    var crumbHost = root.querySelector('[data-clients-folder-crumbs]');
-    if (crumbHost) {
+    MORPH.unwired(root, '[data-clients-folder-crumbs]').forEach(function (crumbHost) {
       crumbHost.addEventListener('click', function (e) {
         var crumb = e.target.closest('[data-clients-crumb]');
         if (!crumb || !clientFolderNav) return;
@@ -6026,28 +6158,83 @@
         clientFolderNav.path = clientFolderNav.path.slice(0, idx + 1);
         showClientFolderCurrent(root);
       });
+    });
+
+    if (wrap._clientFolderDropWired) return;
+    wrap._clientFolderDropWired = true;
+
+    var draggingItems = null;
+
+    function clearDropHighlight() {
+      wrap.classList.remove('is-drop-into');
+      wrap.querySelectorAll('.is-drop-into').forEach(function (n) { n.classList.remove('is-drop-into'); });
     }
 
-    // Drag-and-drop upload straight onto the panel (into the current folder).
-    var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
-    ['dragenter', 'dragover'].forEach(function (ev) {
-      wrap.addEventListener(ev, function (e) {
-        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
-        stop(e);
+    wrap.addEventListener('dragstart', function (e) {
+      var row = e.target.closest('[data-clients-row]');
+      if (!row || !wrap.contains(row)) return;
+      var id = row.getAttribute('data-clients-subfolder') || row.getAttribute('data-clients-file');
+      var it = clientFolderRow(id);
+      if (!it) return;
+      draggingItems = [{ id: it.id, type: it.type || (row.hasAttribute('data-clients-subfolder') ? 'folder' : 'file') }];
+      try { e.dataTransfer.setData('text/plain', it.name || 'item'); } catch (err) {}
+      try { e.dataTransfer.setData('application/x-tma-move', '1'); } catch (err) {}
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('is-dragging');
+    });
+
+    wrap.addEventListener('dragover', function (e) {
+      var folderRow = e.target.closest('[data-clients-subfolder]');
+      if (hasOsFiles(e)) {
+        e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
-        wrap.classList.add('is-drop-into');
-      });
+        clearDropHighlight();
+        (folderRow && wrap.contains(folderRow) ? folderRow : wrap).classList.add('is-drop-into');
+        return;
+      }
+      if (!draggingItems || !folderRow || !wrap.contains(folderRow)) return;
+      if (draggingItems.some(function (d) { return d.id === folderRow.getAttribute('data-clients-subfolder'); })) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      clearDropHighlight();
+      folderRow.classList.add('is-drop-into');
     });
-    ['dragleave', 'dragend'].forEach(function (ev) {
-      wrap.addEventListener(ev, function (e) {
-        if (e.target === wrap) wrap.classList.remove('is-drop-into');
-      });
+
+    wrap.addEventListener('dragleave', function (e) {
+      var into = e.target.closest('.is-drop-into');
+      if (into && !into.contains(e.relatedTarget)) into.classList.remove('is-drop-into');
     });
+
     wrap.addEventListener('drop', function (e) {
-      if (!e.dataTransfer) return;
-      stop(e);
-      wrap.classList.remove('is-drop-into');
-      uploadToClientFolder(e.dataTransfer.files, current());
+      var folderRow = e.target.closest('[data-clients-subfolder]');
+      var dest = folderRow && wrap.contains(folderRow)
+        ? folderRow.getAttribute('data-clients-subfolder')
+        : current();
+      clearDropHighlight();
+      if (hasOsFiles(e) && e.dataTransfer.files && e.dataTransfer.files.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadToClientFolder(e.dataTransfer.files, dest);
+        draggingItems = null;
+        return;
+      }
+      if (!draggingItems || !folderRow || !wrap.contains(folderRow)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var moving = draggingItems;
+      draggingItems = null;
+      moveClientFolderItems(root, moving, dest);
+    });
+
+    wrap.addEventListener('dragend', function () {
+      clearDropHighlight();
+      var row = wrap.querySelector('.is-dragging');
+      if (row) {
+        row.classList.remove('is-dragging');
+        row._suppressClick = true;
+      }
+      draggingItems = null;
     });
   }
 
