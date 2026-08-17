@@ -1,15 +1,20 @@
 # CIP Portal — Phased Development Plan
 
-> **Status, 17 August 2026.** Phases 1, 2 and 3 are built. Phase 6 is in
-> progress and is the bottleneck — the reviewer verbs, the officer assignment,
-> the route to Ready to submit and the document comment threads are all built
-> and all unreachable until it lands. Phase 4 has its table and its search but
-> not its dashboards; phase 7 has its number switch and nothing else.
+> **Status, 17 August 2026.** Phases 1, 2, 3, 4 and 6 are built: an
+> application can be created, documented, found, assigned, reviewed and driven
+> to Ready to submit, and a colleague's write now reaches every screen without
+> a reload. Phase 7 has its number switch and nothing else.
+>
+> Two pieces of phase 3 are deliberately deferred and are the next work: the
+> admin form for the requirement templates (they are seeded, not editable in
+> the portal), and the comment thread on a document — the endpoints exist and
+> a reviewer's "request changes" note is stored, but there is nowhere to read
+> it, so the reason for a send-back is currently invisible to the provider.
 >
 > Two things wait on the firm: the official document standards per applicant
-> type (question 9 — no longer blocking, since the list is editable in the
-> portal), and a running queue worker, without which phase 5 will appear to
-> work and deliver nothing.
+> type (question 9 — no longer blocking, since the list will be editable in
+> the portal), and a running queue worker, without which phase 5 will appear
+> to work and deliver nothing.
 >
 > Live checklist: https://claude.ai/code/artifact/c67a908c-0650-469f-a01e-3ccc4f8a2c40
 
