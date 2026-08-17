@@ -116,6 +116,15 @@ class CipApplicationScopeTest extends TestCase
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $this->assertCount(0, ApplicationScope::query($officer)->get(), 'nothing until something is theirs');
 
+        /*
+         * Not even their own filing. The creator exception was tried and
+         * taken out on the firm's instruction: an officer who files hands the
+         * application to the administrator like any provider does, and it
+         * comes back into view the moment it is assigned to them.
+         */
+        $filed = Applications::create($galaxy, $officer);
+        $this->assertCount(0, ApplicationScope::query($officer)->get(), 'filing grants no sight');
+
         CipApplicationAssignment::create([
             'application_id' => $held->id,
             'user_id' => $officer->id,

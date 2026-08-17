@@ -157,7 +157,7 @@ class CipIntakeTest extends TestCase
 
     public function test_a_complete_application_is_filed_as_a_numbered_draft(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff,
@@ -188,7 +188,7 @@ class CipIntakeTest extends TestCase
 
     public function test_the_region_is_derived_from_the_country_never_asked(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider, [
@@ -203,7 +203,7 @@ class CipIntakeTest extends TestCase
 
     public function test_every_mandatory_field_is_refused_when_missing(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         // §2: "All fields are required."
@@ -226,7 +226,7 @@ class CipIntakeTest extends TestCase
 
     public function test_other_investment_type_must_say_what_it_is(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         // §3: choosing Other reveals a required "Specify Investment Type".
@@ -251,7 +251,7 @@ class CipIntakeTest extends TestCase
 
     public function test_gender_and_country_come_from_the_offered_lists(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff,
@@ -343,7 +343,7 @@ class CipIntakeTest extends TestCase
     public function test_the_passport_photo_becomes_the_applicants_profile_picture(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff,
@@ -371,7 +371,7 @@ class CipIntakeTest extends TestCase
     public function test_a_photo_that_is_not_two_by_two_is_refused(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         // Square but too small to print at two inches.
@@ -402,7 +402,7 @@ class CipIntakeTest extends TestCase
     public function test_the_filed_photo_is_reachable_only_through_the_application(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff,
@@ -424,7 +424,7 @@ class CipIntakeTest extends TestCase
     public function test_saying_yes_to_sponsored_files_the_sponsor_in_the_same_save(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider, array_merge(
@@ -458,7 +458,7 @@ class CipIntakeTest extends TestCase
     public function test_a_sponsors_scans_are_offered_but_never_demanded(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider, array_merge(
@@ -493,7 +493,7 @@ class CipIntakeTest extends TestCase
 
     public function test_a_sponsored_application_will_not_file_without_the_sponsor(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, ['sponsored' => '1']))
@@ -511,7 +511,7 @@ class CipIntakeTest extends TestCase
     public function test_qualified_dependents_are_numbered_from_the_youngest(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider, [
@@ -556,7 +556,7 @@ class CipIntakeTest extends TestCase
     public function test_the_briefs_own_worked_example_classifies_the_same_way(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider, [
@@ -583,7 +583,7 @@ class CipIntakeTest extends TestCase
     public function test_removing_a_dependent_renumbers_the_rest(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, [
@@ -622,7 +622,7 @@ class CipIntakeTest extends TestCase
         // An administrator exists so the firm's owner is demonstrably not the
         // officer filing — with only one user, every fallback resolves to them.
         $this->user(Role::ADMINISTRATOR);
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
         $provider = $this->provider('GAL', $company);
 
@@ -665,7 +665,7 @@ class CipIntakeTest extends TestCase
     public function test_the_intake_uploads_land_in_document_slots(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $body = $this->file($staff, $this->payload($provider))
@@ -704,7 +704,7 @@ class CipIntakeTest extends TestCase
 
     public function test_a_bio_page_that_is_not_a_document_is_refused(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, [
@@ -727,7 +727,7 @@ class CipIntakeTest extends TestCase
      */
     public function test_a_requirement_takes_more_than_one_file(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, [
@@ -755,7 +755,7 @@ class CipIntakeTest extends TestCase
     /** One file on its own is still a list of one — the endpoint takes both. */
     public function test_a_single_file_is_accepted_where_a_list_is_expected(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, [
@@ -770,7 +770,7 @@ class CipIntakeTest extends TestCase
     public function test_an_edit_asks_the_same_questions_and_keeps_the_people(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $created = $this->file($staff, $this->payload($provider, array_merge(
@@ -837,7 +837,7 @@ class CipIntakeTest extends TestCase
     public function test_turning_the_sponsor_off_and_on_keeps_the_same_person(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $created = $this->file($staff, $this->payload($provider, array_merge(
@@ -871,7 +871,7 @@ class CipIntakeTest extends TestCase
     public function test_a_client_profile_can_ask_for_its_application(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider))->assertCreated();
@@ -894,7 +894,7 @@ class CipIntakeTest extends TestCase
     public function test_the_applicants_passport_photo_becomes_the_clients_picture(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, array_merge(
@@ -923,7 +923,7 @@ class CipIntakeTest extends TestCase
 
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void
     {
-        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $staff = $this->user(Role::ADMINISTRATOR);
         $this->provider('GAL');
 
         $form = $this->actingAs($staff)->getJson('/portal/cip/applications/form')->assertOk()->json();

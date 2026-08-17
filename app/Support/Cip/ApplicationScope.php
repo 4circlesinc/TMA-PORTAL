@@ -42,27 +42,27 @@ class ApplicationScope
         }
 
         /*
-         * An officer sees the files they hold, not the book.
+         * An officer sees the files they hold. Nothing else — not the
+         * unassigned pool, and not even applications they filed themselves.
          *
          * §10 is the reason: the administrator assigns, and the assignment is
          * what starts the review — so a file nobody has been given is the
-         * administrator's to see and nobody else's. An officer reading the
-         * whole table would be reading applications that are not yet, and may
-         * never be, their work.
+         * administrator's to see and nobody else's. A creator exception was
+         * tried here and taken out on the firm's own instruction: an officer
+         * who files an application hands it to the administrator like any
+         * provider does, and it comes back into their view the moment it is
+         * assigned to them.
          *
          * "Holds" is either assignment record — the client's list, which is
          * what the Assigned tab and §8's column read, or the application's own
          * workflow row; the picker writes both together, but a file must not
          * vanish from its officer because one half was written by an older
-         * path. Files the officer filed themselves stay visible too: losing
-         * sight of your own submission because nobody has assigned it back to
-         * you would make creating one feel like posting it into a void.
+         * path.
          */
         if (CipAccess::isOfficer($user)) {
             return $query->where(function (Builder $q) use ($user) {
                 $q->whereHas('assignments', fn ($a) => $a->live()->where('user_id', $user->id))
-                    ->orWhereHas('client.assignments', fn ($a) => $a->live()->where('user_id', $user->id))
-                    ->orWhere('cip_applications.created_by', $user->id);
+                    ->orWhereHas('client.assignments', fn ($a) => $a->live()->where('user_id', $user->id));
             });
         }
 
