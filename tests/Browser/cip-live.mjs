@@ -130,7 +130,7 @@ try {
     && after.chips['Review Applications'] === before.chips['Review Applications'] + 1,
     `the counts moved without a reload (New ${before.chips['New Applications']}→${after.chips['New Applications']},`
     + ` Review ${before.chips['Review Applications']}→${after.chips['Review Applications']})`);
-  check(after.row.includes('Review application'), 'the row says the new status');
+  check(after.row.includes('Review Applications'), 'the row says the new status');
   check(after.row.includes('Rita Officer'), 'and names the officer who now holds it');
   check(after.reqs === 2, `one read each for the table and the chips (${after.reqs})`);
 
@@ -149,7 +149,7 @@ try {
   }));
 
   const opened = await read();
-  check(opened.head.includes('Review application'), 'the header shows where it is');
+  check(opened.head.includes('Review Applications'), 'the header shows where it is');
   check(opened.rows > 0, `the history is there (${opened.rows} entries)`);
 
   colleague(`
@@ -162,9 +162,9 @@ try {
   await page.waitForTimeout(3000);
 
   const settled = await read();
-  check(settled.head.includes('Assessment feedback'), `the header caught up (${settled.head})`);
+  check(settled.head.includes('Assessment Feedback'), `the header caught up (${settled.head})`);
   check(settled.rows === opened.rows + 1, `the history gained the entry (${opened.rows} → ${settled.rows})`);
-  check(/Rita Officer moved it from Review application to Assessment feedback/.test(settled.top),
+  check(/Rita Officer moved it from Review Applications to Assessment Feedback/.test(settled.top),
     'and it reads as a sentence at the top');
 
   /*

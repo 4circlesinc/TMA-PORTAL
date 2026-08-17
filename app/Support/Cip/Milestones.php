@@ -85,7 +85,7 @@ class Milestones
     /**
      * The last step is called what happened, once something has.
      *
-     * "Decision" is the question and Granted or Denied is the answer, so the
+     * "Decision" is the question and Approved or Denied is the answer, so the
      * card stops asking as soon as it knows. The wording comes from
      * {@see Status} rather than a second list here: the decision column and the
      * two terminal statuses are the same vocabulary, and reading it there is

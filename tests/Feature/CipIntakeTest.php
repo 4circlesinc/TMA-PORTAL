@@ -148,8 +148,9 @@ class CipIntakeTest extends TestCase
         $this->assertSame($body['internalNumber'], $body['number']);
         $this->assertNull($body['cipNumber']);
 
-        // It starts as a draft — nothing is in the officers' queues yet.
-        $this->assertSame(Status::DRAFT, $body['status']);
+        // It starts in New Applications — the same queue the chip and the
+        // dashboard name.
+        $this->assertSame(Status::NEW, $body['status']);
 
         // The applicant is on it, or the number names nobody.
         $this->assertSame('John Smith', $body['applicant']['name']);

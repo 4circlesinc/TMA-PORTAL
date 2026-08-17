@@ -79,9 +79,11 @@ class CipTransitionController extends Controller
      * was a way to skip every one of those preconditions — which made the
      * guards in the other verbs decorative rather than binding.
      *
-     *  - NEW is submit(), which refuses a draft whose main applicant still owes
-     *    required documents. Reachable from here, an unassessable application
-     *    lands in the officers' queue and §14's first read cannot begin.
+     *  - NEW is submit(), which refuses a leftover draft whose main applicant
+     *    still owes required documents. Reachable from here, an unassessable
+     *    application lands in the officers' queue and §14's first read cannot
+     *    begin. New files already start at NEW, so this door is only for rows
+     *    that have not yet been moved.
      *  - PENDING REVIEW is {@see \App\Support\Cip\Submission::record()}, which
      *    records the CIP number and the submission date. Driven bare, §7's
      *    dual-numbering rule fails silently — every surface goes on showing the
@@ -95,7 +97,7 @@ class CipTransitionController extends Controller
     private function refuseIfItHasItsOwnVerb(string $status): void
     {
         $owned = [
-            Status::NEW => 'Use the submit verb to file a draft — it checks the applicant\'s documents first.',
+            Status::NEW => 'Use the submit verb to file a leftover draft — it checks the applicant\'s documents first.',
             Status::PENDING_REVIEW => 'Record the submission instead, so the CIP number and the date go with it.',
             Status::GRANTED => 'Record the decision instead, so the outcome and its date are stored.',
             Status::DENIED => 'Record the decision instead, so the outcome and its date are stored.',
@@ -105,11 +107,12 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * File a draft: Draft → New (§6).
+     * File a leftover draft: Draft → New Applications (§6).
      *
-     * Its own endpoint because of the guard below, and open to the
+     * New files start at NEW, so this door is only for rows that have not yet
+     * been moved. Its own endpoint because of the guard below, and open to the
      * application's creator as well as to `cip.create` — the provider side and
-     * the private client both submit their own drafts, and neither holds a
+     * the private client both file their own leftovers, and neither holds a
      * matrix capability. That grant lives in {@see Engine::allows()}, where the
      * rest of the lifecycle's permissions are.
      */
@@ -138,7 +141,7 @@ class CipTransitionController extends Controller
          */
         if ($outstanding !== []) {
             return response()->json([
-                'message' => 'This draft is missing the main applicant’s '.Arr::join($outstanding, ', ', ' and ').'.',
+                'message' => 'This application is missing the main applicant’s '.Arr::join($outstanding, ', ', ' and ').'.',
                 'outstanding' => $outstanding,
             ], 422);
         }

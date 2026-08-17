@@ -96,7 +96,7 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('Chen Wei', $row['applicantName']);
         $this->assertSame('Galaxy', $row['provider']);
         $this->assertSame('chen@example.com', $row['contactEmail']);
-        $this->assertSame('Draft', $row['statusLabel']);
+        $this->assertSame('New Applications', $row['statusLabel']);
     }
 
     public function test_the_assigned_column_names_the_staff_on_the_client(): void
@@ -228,7 +228,7 @@ class CipApplicationTableTest extends TestCase
         $this->application($staff, $provider, 1, false);
 
         $this->assertSame(1, $this->actingAs($staff)
-            ->getJson('/portal/cip/applications?status='.Status::DRAFT)->assertOk()->json('total'));
+            ->getJson('/portal/cip/applications?status='.Status::NEW)->assertOk()->json('total'));
 
         $this->assertSame(0, $this->actingAs($staff)
             ->getJson('/portal/cip/applications?status='.Status::GRANTED)->assertOk()->json('total'));

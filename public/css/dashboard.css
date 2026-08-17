@@ -35028,6 +35028,18 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-link, var(--dash-accent));
 }
 
+.tma-dash__clients-checklist-open-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  align-self: center;
+  opacity: 0.45;
+}
+
+.tma-dash__clients-checklist-open:hover .tma-dash__clients-checklist-open-icon {
+  opacity: 0.8;
+}
+
 .tma-dash__clients-checklist-open:focus-visible {
   outline: 2px solid var(--color-focus-ring, var(--color-primary));
   outline-offset: 2px;

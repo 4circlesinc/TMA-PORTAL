@@ -7,11 +7,10 @@ namespace App\Support\Cip;
  * though the transitions arrive over several build phases, so dashboards and
  * scope queries never need rework as statuses light up.
  *
- * DRAFT is deliberately part of the enum: an application exists and is
- * editable before it enters the workflow, and a state that is not in the
- * vocabulary cannot have visibility rules. Drafts are visible only to the
- * side that is writing them (the provider firm or the private client) and
- * appear in no officer bucket.
+ * The labels are the same words §9's buckets use, so a row's chip and the
+ * queue it sits in cannot disagree. DRAFT remains a leftover code for
+ * historical events and any row that has not yet been moved to NEW; nothing
+ * is filed into it any more.
  */
 class Status
 {
@@ -58,17 +57,19 @@ class Status
     public const TERMINAL = [self::GRANTED, self::DENIED];
 
     private const LABELS = [
-        self::DRAFT => 'Draft',
-        self::NEW => 'New',
-        self::REVIEW_APPLICATION => 'Review application',
-        self::ASSESSMENT_FEEDBACK => 'Assessment feedback',
-        self::UPDATE_REQUIRED => 'Update required',
-        self::READY_TO_SUBMIT => 'Ready to submit',
-        self::PENDING_REVIEW => 'Pending review',
+        // Leftover rows and old events wear the same words as NEW, so a chip
+        // never still says Draft after the vocabulary moved on.
+        self::DRAFT => 'New Applications',
+        self::NEW => 'New Applications',
+        self::REVIEW_APPLICATION => 'Review Applications',
+        self::ASSESSMENT_FEEDBACK => 'Assessment Feedback',
+        self::UPDATE_REQUIRED => 'Updates Required',
+        self::READY_TO_SUBMIT => 'Ready to Submit',
+        self::PENDING_REVIEW => 'Pending Review',
         self::NON_COMPLIANT => 'Non-compliant',
-        self::BACKGROUND_CHECK => 'Background check',
+        self::BACKGROUND_CHECK => 'Background Check',
         self::DELAYED => 'Delayed',
-        self::GRANTED => 'Granted',
+        self::GRANTED => 'Approved',
         self::DENIED => 'Denied',
     ];
 
@@ -101,6 +102,23 @@ class Status
         return in_array($status, self::TERMINAL, true);
     }
 
+    /**
+     * Statuses the filter menu offers.
+     *
+     * DRAFT is still valid so old events resolve, but nothing files into it,
+     * so offering it next to New Applications would be two ticks for one
+     * queue.
+     *
+     * @return list<string>
+     */
+    public static function listed(): array
+    {
+        return array_values(array_filter(
+            self::ALL,
+            fn (string $status) => $status !== self::DRAFT,
+        ));
+    }
+
     public static function label(string $status): string
     {
         return self::LABELS[$status] ?? $status;
@@ -108,7 +126,7 @@ class Status
 
     /**
      * The uppercase form the notification standard puts in email subjects:
-     * "KM - REVIEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 13.08.2026".
+     * "KM - REVIEW APPLICATIONS - GAL26-00001 - JOHN SMITH (F4) - 13.08.2026".
      */
     public static function subjectLabel(string $status): string
     {

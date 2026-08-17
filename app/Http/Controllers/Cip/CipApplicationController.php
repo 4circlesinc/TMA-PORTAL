@@ -366,7 +366,7 @@ class CipApplicationController extends Controller
             'lastPage' => $page->lastPage(),
             'perPage' => $page->perPage(),
             'total' => $page->total(),
-            'statuses' => collect(Status::ALL)->map(fn (string $s) => [
+            'statuses' => collect(Status::listed())->map(fn (string $s) => [
                 'value' => $s,
                 'label' => Status::label($s),
                 'tone' => Status::tone($s),

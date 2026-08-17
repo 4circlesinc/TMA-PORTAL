@@ -42,16 +42,17 @@ class CipEngineTest extends TestCase
         $creator = $this->user(Role::EMPLOYEE);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($galaxy, $creator);
+        $admin = $this->user(Role::ADMINISTRATOR);
 
-        Engine::apply($application, Status::NEW, $creator);
+        Engine::apply($application, Status::REVIEW_APPLICATION, $admin);
 
-        $this->assertSame(Status::NEW, $application->fresh()->status);
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
             'action' => 'status_changed',
-            'from_status' => Status::DRAFT,
-            'to_status' => Status::NEW,
-            'actor_id' => $creator->id,
+            'from_status' => Status::NEW,
+            'to_status' => Status::REVIEW_APPLICATION,
+            'actor_id' => $admin->id,
         ]);
     }
 
@@ -81,6 +82,7 @@ class CipEngineTest extends TestCase
         $creator = $this->user(Role::CLIENT);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($galaxy, $creator);
+        $application->forceFill(['status' => Status::DRAFT])->save();
 
         $stranger = $this->user(Role::CLIENT);
 
@@ -93,7 +95,6 @@ class CipEngineTest extends TestCase
         $creator = $this->user(Role::EMPLOYEE);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($galaxy, $creator);
-        Engine::apply($application, Status::NEW, $creator);
 
         $admin = $this->user(Role::ADMINISTRATOR);
         Engine::apply($application, Status::REVIEW_APPLICATION, $admin);

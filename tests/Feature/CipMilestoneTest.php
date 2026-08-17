@@ -125,7 +125,7 @@ class CipMilestoneTest extends TestCase
         ])->save();
 
         $granted = $decision($application->refresh());
-        $this->assertSame('Granted', $granted['label']);
+        $this->assertSame('Approved', $granted['label']);
         $this->assertSame('2026-08-10', $granted['date']);
         $this->assertTrue($granted['reached']);
 

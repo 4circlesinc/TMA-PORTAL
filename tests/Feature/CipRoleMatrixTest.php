@@ -100,7 +100,6 @@ class CipRoleMatrixTest extends TestCase
 
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($provider, $admin);
-        Engine::apply($application, Status::NEW, $admin);
         Engine::apply($application->fresh(), Status::REVIEW_APPLICATION, $admin);
 
         // Approving documents for submission is the reviewer's verb.

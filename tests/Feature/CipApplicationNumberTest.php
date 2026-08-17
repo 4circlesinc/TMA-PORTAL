@@ -59,7 +59,7 @@ class CipApplicationNumberTest extends TestCase
         ]);
         $application->forceFill(['client_id' => $client->id])->save();
 
-        foreach ([Status::NEW, Status::REVIEW_APPLICATION, Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT] as $to) {
+        foreach ([Status::REVIEW_APPLICATION, Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT] as $to) {
             Engine::apply($application, $to, $staff);
         }
 
@@ -200,8 +200,8 @@ class CipApplicationNumberTest extends TestCase
         $staff = $this->staff();
         $application = Applications::create($this->provider($staff), $staff);
 
-        // Straight from Draft. §16 begins at Ready to submit and the engine
-        // owns that edge — recording a number is not a way around it.
+        // Straight from New Applications. §16 begins at Ready to Submit and
+        // the engine owns that edge — recording a number is not a way around it.
         $this->expectException(\InvalidArgumentException::class);
         Submission::record($application, $staff, '10T1G12661P');
     }

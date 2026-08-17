@@ -86,6 +86,7 @@
     Close12: 'images/icons/tma/Close-12.svg',
     Briefcase: ICON + 'Briefcase.svg',
     ArrowUpRight: ICON + 'ArrowUpRight.svg',
+    ArrowSquareOut: ICON + 'ArrowSquareOut.svg',
     Buildings: ICON + 'Buildings.svg',
     Globe: ICON + 'Globe.svg',
     CalendarBlank: ICON + 'CalendarBlank.svg',
@@ -4291,7 +4292,23 @@
     return columns;
   }
 
-  function renderProfileListColumns(listItems) {
+  /*
+   * Half and half, extra field on the right.
+   *
+   * The person list used the contact profile's "six then the rest" split, so
+   * passport number + photo + four answers sat on the left and three on the
+   * right. The photo is already a tall row; piling the leftover fields under
+   * it made that column the whole card. Floor-split so the two sides carry
+   * the same number of fields, or the right carries the spare when the count
+   * is odd.
+   */
+  function splitEvenColumns(items) {
+    if (items.length <= 1) return [items, []];
+    var mid = Math.floor(items.length / 2);
+    return [items.slice(0, mid), items.slice(mid)];
+  }
+
+  function renderProfileListColumns(listItems, opts) {
     if (isClientsMobile()) {
       return (
         '<div class="tma-dash__clients-profile-body">' +
@@ -4300,7 +4317,9 @@
         '</ul></div>'
       );
     }
-    var columns = splitListColumns(listItems, 6);
+    var columns = (opts && opts.even)
+      ? splitEvenColumns(listItems)
+      : splitListColumns(listItems, 6);
     return (
       '<div class="tma-dash__clients-profile-body">' +
       columns.map(function (columnItems) {
@@ -4993,7 +5012,7 @@
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
-      renderProfileListColumns(rows) +
+      renderProfileListColumns(rows, { even: true }) +
       renderCipChecklist(person) +
       '</div>'
     );
@@ -5167,6 +5186,10 @@
     var opens = filed && d.fileId;
     var name =
       '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
+      (opens
+        ? '<img class="tma-dash__clients-checklist-open-icon" src="' + ICONS.ArrowSquareOut +
+          '" alt="" width="14" height="14">'
+        : '') +
       // Not a red star after every line: the mandatory ones are the norm and
       // the exception is worth naming, so the OPTIONAL ones are the ones
       // marked. A checklist of asterisks marks nothing.

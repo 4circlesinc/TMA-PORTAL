@@ -20,7 +20,7 @@ class Applications
     {
         return DB::transaction(function () use ($provider, $creator, $attributes) {
             $application = new CipApplication($attributes);
-            $application->status = Status::DRAFT;
+            $application->status = Status::NEW;
             $application->provider_id = $provider->id;
             $application->created_by = $creator->id;
             $application->internal_number = Numbering::next($provider);

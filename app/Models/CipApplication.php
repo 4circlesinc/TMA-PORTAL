@@ -36,7 +36,7 @@ class CipApplication extends Model
     {
         static::creating(function (self $application) {
             $application->uuid ??= (string) Str::uuid();
-            $application->status ??= Status::DRAFT;
+            $application->status ??= Status::NEW;
         });
     }
 

@@ -33,13 +33,13 @@ use Illuminate\Database\Eloquent\Builder;
  * answer this way and the two menus sit in the same panel, so a facet that
  * counted differently would read as one of them being wrong.
  *
- * DRAFTS ARE COUNTED HERE, UNLIKE IN THE BUCKETS
+ * LEFTOVER DRAFTS ARE COUNTED HERE, UNLIKE IN THE BUCKETS
  *
  * Deliberately, and the difference is real rather than an oversight. A bucket
- * is a question about work to pick up, and a half-written application is
- * nobody's work yet. A facet is a question about the table in front of you,
- * and the table lists drafts — so a provider filtered to their own firm must
- * see the same rows the facet promised, drafts among them. The rule that
+ * is a question about work to pick up, and a leftover draft is nobody's work
+ * yet. A facet is a question about the table in front of you, and the table
+ * still lists those rows — so a provider filtered to their own firm must see
+ * the same rows the facet promised, leftovers among them. The rule that
  * matters is the one both classes keep: the count is measured through the same
  * query as the list.
  *

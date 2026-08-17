@@ -52,7 +52,7 @@ class CipAssignmentTest extends TestCase
         return $user;
     }
 
-    /** An application at NEW: filed and submitted, waiting for an officer. */
+    /** An application at NEW: filed, waiting for an officer. */
     private function application(User $creator): CipApplication
     {
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
@@ -64,7 +64,7 @@ class CipAssignmentTest extends TestCase
             'first_name' => 'Chen', 'last_name' => 'Wei',
         ]);
 
-        return Engine::apply($application, Status::NEW, $creator);
+        return $application;
     }
 
     /** An application with a client, which is what §8's column actually reads. */

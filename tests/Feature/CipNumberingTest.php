@@ -62,7 +62,7 @@ class CipNumberingTest extends TestCase
             'action' => 'created',
             'actor_id' => $creator->id,
         ]);
-        $this->assertSame('draft', $application->status);
+        $this->assertSame('new', $application->status);
     }
 
     public function test_display_number_switches_when_the_cip_number_arrives(): void

@@ -95,12 +95,12 @@ class CipTimelineTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
         $application = $this->application($admin);
 
-        Engine::apply($application, Status::NEW, $admin);
+        Engine::apply($application, Status::REVIEW_APPLICATION, $admin);
 
-        // Newest first, and neither line mentions a status code: "moved it from
-        // draft to new" is the whole point of the class.
+        // Newest first, and neither line mentions a status code: the labels
+        // are the same words the buckets use.
         $this->assertSame([
-            'Ada Admin moved it from Draft to New',
+            'Ada Admin moved it from New Applications to Review Applications',
             'Ada Admin filed the application',
         ], $this->lines($application, $admin));
     }
@@ -110,7 +110,6 @@ class CipTimelineTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
         $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
         $application = $this->application($admin);
-        Engine::apply($application, Status::NEW, $admin);
 
         Assignments::assign($application->fresh(), $rita, $admin);
 
@@ -118,7 +117,7 @@ class CipTimelineTest extends TestCase
         $this->assertContains('Ada Admin assigned Rita Officer', $lines);
         // §10's other half: the assignment is what started the review, and the
         // history says so in its own line rather than implying it.
-        $this->assertContains('Ada Admin moved it from New to Review application', $lines);
+        $this->assertContains('Ada Admin moved it from New Applications to Review Applications', $lines);
 
         Assignments::end(Assignments::live($application)->first(), $admin);
 
@@ -130,7 +129,7 @@ class CipTimelineTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
         $application = $this->application($admin);
 
-        foreach ([Status::NEW, Status::REVIEW_APPLICATION, Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT] as $to) {
+        foreach ([Status::REVIEW_APPLICATION, Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT] as $to) {
             Engine::apply($application, $to, $admin);
         }
 
@@ -201,7 +200,7 @@ class CipTimelineTest extends TestCase
 
         $this->assertSame('the system', $entry['who']['name']);
         $this->assertNull($entry['who']['avatar']);
-        $this->assertSame('The system moved it from New to Review application', $entry['what']);
+        $this->assertSame('The system moved it from New Applications to Review Applications', $entry['what']);
     }
 
     public function test_a_reader_outside_the_scope_is_told_the_history_is_not_there(): void

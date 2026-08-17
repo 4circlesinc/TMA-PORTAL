@@ -13,7 +13,6 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
-use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -396,7 +395,6 @@ class CipBucketTest extends TestCase
         [$galaxy] = $this->providerWithContact('GAL');
 
         $application = Applications::create($galaxy, $admin);
-        Engine::apply($application, Status::NEW, $admin);
 
         $this->assertSame(0, $this->counts($rita)['assigned_reviews']);
 

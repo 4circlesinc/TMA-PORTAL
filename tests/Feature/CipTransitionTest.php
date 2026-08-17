@@ -98,7 +98,7 @@ class CipTransitionTest extends TestCase
         return CipProvider::firstOrCreate(['code' => 'GAL'], ['name' => 'Galaxy']);
     }
 
-    /** A draft, and the main applicant every application is filed for. */
+    /** An application, and the main applicant every application is filed for. */
     private function application(User $creator, array $attributes = []): CipApplication
     {
         $application = Applications::create($this->provider(), $creator, $attributes);
@@ -193,7 +193,7 @@ class CipTransitionTest extends TestCase
             ->postJson($this->statusUrl($application), ['status' => 'approved_ish'])
             ->assertStatus(422);
 
-        $this->assertSame(Status::DRAFT, $application->fresh()->status);
+        $this->assertSame(Status::NEW, $application->fresh()->status);
         $this->assertSame($events, CipEvent::count(), 'a refused transition left a trail');
     }
 
@@ -243,7 +243,7 @@ class CipTransitionTest extends TestCase
             $response->json('outstanding'),
         );
 
-        $this->assertSame(Status::DRAFT, $application->fresh()->status);
+        $this->assertSame(Status::NEW, $application->fresh()->status);
         $this->assertSame($events, CipEvent::count(), 'a refused submission half-happened');
     }
 
@@ -263,6 +263,7 @@ class CipTransitionTest extends TestCase
         ]);
 
         $application = $this->application($account, ['client_id' => $client->id]);
+        $application->forceFill(['status' => Status::DRAFT])->save();
         $this->slot($application, 'marriage_certificate', 'Marriage certificate', required: false);
 
         $this->assertFalse(CipAccess::can($account, 'cip.create'), 'the premise of this test');
@@ -322,7 +323,7 @@ class CipTransitionTest extends TestCase
             [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
             array_column($next, 'value'),
         );
-        $this->assertSame('Update required', $next[0]['label']);
+        $this->assertSame('Updates Required', $next[0]['label']);
     }
 
     public function test_a_note_travels_into_the_audit_row(): void
@@ -358,7 +359,7 @@ class CipTransitionTest extends TestCase
             ->postJson($this->submitUrl($application))
             ->assertNotFound();
 
-        $this->assertSame(Status::DRAFT, $application->fresh()->status);
+        $this->assertSame(Status::NEW, $application->fresh()->status);
     }
 
     /**
@@ -373,12 +374,13 @@ class CipTransitionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->application($staff);
 
-        // Draft → New belongs to submit(), which checks the checklist first.
+        // New → Review belongs to assign(); leftover Draft → New belongs to
+        // submit(), which checks the checklist first.
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => 'new'])
             ->assertStatus(422);
 
-        $this->assertSame(Status::DRAFT, $application->refresh()->status, 'and it moved nothing');
+        $this->assertSame(Status::NEW, $application->refresh()->status, 'and it moved nothing');
 
         foreach (['pending_review', 'granted', 'denied'] as $owned) {
             $this->actingAs($staff)

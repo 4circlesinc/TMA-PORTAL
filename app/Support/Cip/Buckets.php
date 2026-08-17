@@ -31,12 +31,11 @@ use Illuminate\Database\Eloquent\Builder;
  * status appears in both sets under different names: Assessment feedback is a
  * number on the administrator's report and a task on the officer's list.
  *
- * DRAFTS ARE IN NO BUCKET
+ * NOTHING IS FILED AS A DRAFT
  *
- * Deliberately, and by omission rather than by exclusion: no set names DRAFT,
- * so a half-written application counts nowhere. It belongs to the side writing
- * it (see {@see Status}), and putting it in front of an officer would be the
- * portal asking somebody to review a form nobody has finished.
+ * Applications are born at NEW and land in the New Applications bucket. DRAFT
+ * remains a leftover code — historical events, and any row that has not yet
+ * been moved — and no set names it, so those leftovers still count nowhere.
  *
  * NOT CACHED, AND MUST NOT BE
  *
@@ -129,14 +128,9 @@ class Buckets
             'scope' => self::SCOPE_ALL,
         ],
         /*
-         * One bucket wearing two words.
-         *
-         * §9's dashboards say "Approved" and the decision workflow says
-         * GRANTED; they are the same applications, so the label follows the
-         * dashboard and the query follows the engine. Client question 1 asks
-         * the firm which word users should see — when they answer, the label
-         * on this line is the only thing that changes, because nothing counts
-         * anything but Status::GRANTED.
+         * §9's dashboards say "Approved" and the engine stores GRANTED; they
+         * are the same applications. Status::label() is "Approved" too, so the
+         * chip on the row and this bucket cannot disagree.
          */
         'approved' => [
             'label' => 'Approved',
