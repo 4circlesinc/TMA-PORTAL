@@ -5,11 +5,15 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\CompanyMember;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -445,7 +449,7 @@ class Intake
         $attributes = [];
         foreach (self::PERSON_FIELDS as $field) {
             if (array_key_exists($field, $data)) {
-                $attributes[\Illuminate\Support\Str::snake($field)] = is_string($data[$field])
+                $attributes[Str::snake($field)] = is_string($data[$field])
                     ? trim($data[$field])
                     : $data[$field];
             }
@@ -474,7 +478,7 @@ class Intake
         $attributes = ['role' => $role];
         foreach (self::PERSON_FIELDS as $field) {
             if (array_key_exists($field, $data)) {
-                $attributes[\Illuminate\Support\Str::snake($field)] = is_string($data[$field])
+                $attributes[Str::snake($field)] = is_string($data[$field])
                     ? trim($data[$field])
                     : $data[$field];
             }
@@ -591,18 +595,37 @@ class Intake
      * choose from the registry. Returning the list rather than a boolean lets
      * the form show a picker to one and a fixed name to the other.
      *
-     * @return \Illuminate\Support\Collection<int, CipProvider>
+     * @return Collection<int, CipProvider>
      */
-    public static function providersFor(User $user): \Illuminate\Support\Collection
+    public static function providersFor(User $user): Collection
     {
-        if (\App\Support\Access\Role::isStaff($user)) {
-            return CipProvider::query()->where('active', true)->orderBy('name')->get();
+        if (Role::isStaff($user)) {
+            /*
+             * Only firms that are really in the system.
+             *
+             * A provider's company row is what puts it on the Service
+             * providers tab, and a registration whose company is missing or
+             * in the bin is a half-present firm: the wizard offered Galaxy
+             * Partners while the tab showed no such provider, which reads as
+             * the module contradicting itself. A firm you cannot see in the
+             * hub is not a firm you can file under.
+             *
+             * The PRI bucket is the one exception — private clients are not a
+             * firm, so no company row is required of it.
+             */
+            return CipProvider::query()
+                ->where('active', true)
+                ->where(fn ($q) => $q
+                    ->whereHas('company')
+                    ->orWhere('code', CipProvider::PRIVATE_CLIENT_CODE))
+                ->orderBy('name')
+                ->get();
         }
 
         if (CipAccess::isProviderContact($user)) {
             return CipProvider::query()
                 ->where('active', true)
-                ->whereIn('company_id', \App\Models\CompanyMember::query()
+                ->whereIn('company_id', CompanyMember::query()
                     ->select('company_id')->active()->where('user_id', $user->id))
                 ->orderBy('name')
                 ->get();
