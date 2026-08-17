@@ -56,6 +56,7 @@
       { id: 'clienthub-access', label: 'Access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
+      { id: 'cip-documents', label: 'Document requirements' },
     ] },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
@@ -1250,6 +1251,174 @@
             .then(function (d) { CFIELDS.data = d; ui().toast('Field deleted'); render(); })
             .catch(function (e) { ui().toastError(e.message); });
         });
+      });
+    },
+  };
+
+  /* ── CIP document requirements (§11) ───────────────────────────────
+   *
+   * The checklists every applicant is measured against, one list per
+   * applicant type, editable by administrators. The server already enforces
+   * the rules that matter — a retired requirement is a soft delete because
+   * filed documents key on it, re-adding one restores it, and renaming
+   * changes the label never the key — so this screen is honest chrome over
+   * /portal/cip/requirements.
+   */
+  var CIPDOCS = { loaded: false, loading: false, error: '', types: null };
+
+  function loadCipDocs() {
+    if (CIPDOCS.loading) return;
+    CIPDOCS.loading = true;
+    filelibJson('GET', '/portal/cip/requirements')
+      .then(function (d) { CIPDOCS.types = d.types || []; CIPDOCS.error = ''; })
+      .catch(function (e) { CIPDOCS.error = e.message; })
+      .then(function () { CIPDOCS.loaded = true; CIPDOCS.loading = false; render(); });
+  }
+
+  function cipDocRow(r, canEdit) {
+    // A retired row keeps its place in the list but drops to the muted ink —
+    // the same grey the table already uses — so the eye reads it as history.
+    var name = r.retired
+      ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
+      : '<strong>' + ui().esc(r.label) + '</strong>';
+
+    return '<tr>' +
+      '<td>' + name +
+      (r.retired ? ' <span class="tma-portal-tag">Retired</span>'
+        : (r.required ? ' <span class="tma-portal-tag">Mandatory</span>' : '')) +
+      (r.help ? '<br><span class="tma-portal-table__muted">' + ui().esc(r.help) + '</span>' : '') +
+      '</td>' +
+      '<td>' + (canEdit
+        ? '<div class="tma-portal-row-actions">' +
+          (r.retired
+            ? '<button type="button" class="tma-portal-icon-btn" data-cipdoc-restore="' + ui().esc(r.id) + '" title="Bring it back" aria-label="Bring it back"><img src="images/icons/phosphor/ArrowCounterClockwise.svg" alt=""></button>'
+            : '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-down="' + ui().esc(r.id) + '" title="Move down" aria-label="Move down"><img src="images/icons/phosphor/CaretDown.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-toggle="' + ui().esc(r.id) + '" title="' + (r.required ? 'Make it optional' : 'Make it mandatory') + '" aria-label="' + (r.required ? 'Make it optional' : 'Make it mandatory') + '"><img src="images/icons/phosphor/' + (r.required ? 'Circle' : 'CheckCircle') + '.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Rename" aria-label="Rename"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-retire="' + ui().esc(r.id) + '" title="Retire" aria-label="Retire"><img src="images/icons/phosphor/Trash.svg" alt=""></button>') +
+          '</div>'
+        : '') + '</td></tr>';
+  }
+
+  PAGES['cip-documents'] = {
+    render: function () {
+      if (CIPDOCS.error) return '<p class="tma-portal-note">Couldn’t load the requirements: ' + ui().esc(CIPDOCS.error) + '</p>';
+      if (!CIPDOCS.loaded) return ui().loading();
+
+      var canEdit = true;
+
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Every new application is measured against these lists.</p>' +
+        CIPDOCS.types.map(function (t) {
+          var live = t.requirements.filter(function (r) { return !r.retired; });
+          var retired = t.requirements.filter(function (r) { return r.retired; });
+
+          return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
+            (t.requirements.length
+              ? ui().table(['Document', ''], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''))
+              : '<p class="tma-portal-note">Nothing required of this person yet.</p>') +
+            '<div class="tma-dash__clients-assign-form">' +
+            '<input class="tma-dash__clients-field-input" type="text" placeholder="Add a document…" data-cipdoc-label="' + ui().esc(t.value) + '" aria-label="Document name for ' + ui().esc(t.label) + '">' +
+            '<button type="button" class="tma-dash__clients-assign-btn" data-cipdoc-add="' + ui().esc(t.value) + '">Add</button>' +
+            '</div>';
+        }).join('');
+    },
+    wire: function (el) {
+      if (!CIPDOCS.loaded) { loadCipDocs(); return; }
+
+      function req(id) {
+        var found = null;
+        CIPDOCS.types.forEach(function (t) {
+          t.requirements.forEach(function (r) { if (r.id === id) found = { type: t, r: r }; });
+        });
+        return found;
+      }
+
+      function saved() { CIPDOCS.loaded = false; loadCipDocs(); }
+      function failed(e) { ui().toastError(e.message); }
+
+      el.querySelectorAll('[data-cipdoc-add]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var type = b.getAttribute('data-cipdoc-add');
+          var input = el.querySelector('[data-cipdoc-label="' + type + '"]');
+          var label = input && input.value ? input.value.trim() : '';
+          if (!label) { ui().toastError('Name the document first.'); return; }
+          filelibJson('POST', '/portal/cip/requirements', { applicantType: type, label: label, required: true })
+            .then(function () { ui().toast('Added'); saved(); }).catch(failed);
+        });
+      });
+
+      // Enter in the add box is the same as pressing Add.
+      el.querySelectorAll('[data-cipdoc-label]').forEach(function (input) {
+        input.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          var btn = el.querySelector('[data-cipdoc-add="' + input.getAttribute('data-cipdoc-label') + '"]');
+          if (btn) btn.click();
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-toggle]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = req(b.getAttribute('data-cipdoc-toggle'));
+          if (!f) return;
+          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { required: !f.r.required })
+            .then(function () { ui().toast(f.r.required ? 'Now optional' : 'Now mandatory'); saved(); }).catch(failed);
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = req(b.getAttribute('data-cipdoc-edit'));
+          if (!f) return;
+          var label = window.prompt('Rename this document', f.r.label);
+          if (!label || !label.trim() || label.trim() === f.r.label) return;
+          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { label: label.trim() })
+            .then(function () { ui().toast('Renamed'); saved(); }).catch(failed);
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-retire]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = req(b.getAttribute('data-cipdoc-retire'));
+          if (!f) return;
+          // Retiring is reversible and documents already filed stay filed —
+          // the confirm says so, so nobody hesitates for the wrong reason.
+          if (!window.confirm('Retire “' + f.r.label + '” for ' + f.type.label + '? New applications stop asking for it; anything already uploaded stays on its file. You can bring it back any time.')) return;
+          filelibJson('DELETE', '/portal/cip/requirements/' + encodeURIComponent(f.r.id))
+            .then(function () { ui().toast('Retired'); saved(); }).catch(failed);
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-restore]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = req(b.getAttribute('data-cipdoc-restore'));
+          if (!f) return;
+          filelibJson('POST', '/portal/cip/requirements/' + encodeURIComponent(f.r.id) + '/restore')
+            .then(function () { ui().toast('Restored'); saved(); }).catch(failed);
+        });
+      });
+
+      function move(id, delta) {
+        var f = req(id);
+        if (!f) return;
+        var live = f.type.requirements.filter(function (r) { return !r.retired; });
+        var at = live.indexOf(f.r);
+        var to = at + delta;
+        if (at === -1 || to < 0 || to >= live.length) return;
+        live.splice(at, 1);
+        live.splice(to, 0, f.r);
+        var order = live.concat(f.type.requirements.filter(function (r) { return r.retired; }))
+          .map(function (r) { return r.id; });
+        filelibJson('POST', '/portal/cip/requirements/reorder', { applicantType: f.type.value, order: order })
+          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; render(); }).catch(failed);
+      }
+
+      el.querySelectorAll('[data-cipdoc-up]').forEach(function (b) {
+        b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-up'), -1); });
+      });
+      el.querySelectorAll('[data-cipdoc-down]').forEach(function (b) {
+        b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-down'), 1); });
       });
     },
   };

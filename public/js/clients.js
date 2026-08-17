@@ -1474,6 +1474,7 @@
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage access</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-documents">Manage documents</button>' +
           '</div></div>'
         : '') +
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
@@ -8465,6 +8466,7 @@
     'clienthub-access': { title: 'Access' },
     'service-teams': { title: 'Service teams' },
     'custom-fields': { title: 'Custom fields' },
+    'cip-documents': { title: 'Document requirements' },
   };
 
   function navigateToClientsAdminPage(adminPage) {

@@ -4338,6 +4338,19 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+/*
+ * Tables keep their height; the pane is what scrolls.
+ *
+ * The pane is a flex column and a table wrap declares overflow, which zeroes
+ * its automatic minimum size — so a page with several tables had them all
+ * crushed to a strip of their first row, each scrolling inside itself. One
+ * table per page never showed it; the CIP document requirements page, five
+ * lists tall, did.
+ */
+.tma-portal-admin__content .tma-portal-table-wrap {
+  flex-shrink: 0;
+}
+
 .tma-portal-admin__page-title {
   font-size: var(--text-size-16);
   line-height: var(--text-lh-16);
