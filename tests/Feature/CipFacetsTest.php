@@ -310,7 +310,8 @@ class CipFacetsTest extends TestCase
         $dear = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertCount(10, $body['assignees'], 'ten officers really are offered');
+        // Ten officers and the unassigned row, which is always offered.
+        $this->assertCount(11, $body['assignees'], 'ten officers really are offered');
 
         /*
          * Not equality. The first listing of the run also warms a cached

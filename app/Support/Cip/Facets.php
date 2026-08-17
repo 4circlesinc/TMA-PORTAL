@@ -3,7 +3,9 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplicationAssignment;
+use App\Models\CipProvider;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -53,9 +55,24 @@ class Facets
     public const UNASSIGNED = 'none';
 
     /**
-     * Who holds applications in this reader's slice, and how many each.
+     * Who could be holding applications in this reader's slice, and how many
+     * each actually is.
      *
-     * The unassigned count leads, because "what has nobody picked up" is the
+     * EVERY OFFICER, NOT ONLY THE BUSY ONES
+     *
+     * A filter menu is a list of the questions that can be asked, so it names
+     * every officer the firm has even when their count is zero — "who has
+     * nothing on" is a real question, and an officer who drops off the menu
+     * the moment their desk clears is a menu that changes shape under the
+     * reader. Zero is shown for the same reason the status list shows a
+     * bucket with none in it.
+     *
+     * The full staff list is for readers who can see the whole book. A
+     * provider contact is shown only the officers actually working their
+     * firm's files: the roster is not theirs, and a menu naming every officer
+     * would tell them how the firm is staffed.
+     *
+     * The unassigned row leads, because "what has nobody picked up" is the
      * question an administrator opens this menu to ask, and it is the one
      * answer that is not a person.
      *
@@ -75,28 +92,40 @@ class Facets
             ->groupBy('cip_application_assignments.user_id')
             ->pluck('total', 'user_id');
 
-        if ($held->isEmpty()) {
-            $people = collect();
-        } else {
-            // One more query for the names, rather than joining users into the
-            // count and grouping by three columns. Trashed included: an
-            // account in the Recycle Bin still holds its files until somebody
-            // ends the assignment, and dropping the name here would leave its
-            // count in the menu with nothing to call it.
-            $people = User::withTrashed()
-                ->whereIn('id', $held->keys())
+        /*
+         * The names, in one more query rather than joined into the count and
+         * grouped by three columns.
+         *
+         * For staff this is the officer roster, so somebody with nothing on
+         * is still offered. For everybody else it is exactly the people who
+         * appeared in the tally above — no roster, and trashed included,
+         * because an account in the Recycle Bin still holds its files until
+         * somebody ends the assignment and dropping the name would leave its
+         * count in the menu with nothing to call it.
+         */
+        $people = Role::isStaff($reader)
+            ? User::query()
+                ->whereIn('account_type', Role::OFFICERS)
+                ->where('status', 'approved')
                 ->get(['id', 'name', 'email', 'avatar_url'])
-                ->keyBy('id');
+                ->keyBy('id')
+            : collect();
+
+        $missing = $held->keys()->diff($people->keys());
+
+        if ($missing->isNotEmpty()) {
+            $people = $people->union(
+                User::withTrashed()
+                    ->whereIn('id', $missing)
+                    ->get(['id', 'name', 'email', 'avatar_url'])
+                    ->keyBy('id')
+            );
         }
 
         $officers = [];
 
-        foreach ($held as $userId => $total) {
-            $person = $people->get($userId);
-
-            if ($person === null) {
-                continue;
-            }
+        foreach ($people as $userId => $person) {
+            $total = (int) ($held[$userId] ?? 0);
 
             $officers[] = [
                 // A string, like the unassigned sentinel beside it, so the
@@ -105,7 +134,7 @@ class Facets
                 'id' => (string) $userId,
                 'name' => $person->name,
                 'avatar' => $person->photoUrl(),
-                'count' => (int) $total,
+                'count' => $total,
             ];
         }
 
@@ -113,35 +142,49 @@ class Facets
         // officer's account was created, which tells the reader nothing.
         usort($officers, fn (array $a, array $b) => $b['count'] <=> $a['count'] ?: strcmp($a['name'], $b['name']));
 
-        $unassigned = self::countUnassigned($reader);
-
-        // Offered only when there is something behind it. A menu that always
-        // carries "Unassigned 0" trains the reader to ignore the one row they
-        // most need to notice on the day it is not zero.
-        return $unassigned > 0
-            ? array_merge([[
-                'id' => self::UNASSIGNED,
-                'name' => 'Unassigned',
-                'avatar' => null,
-                'count' => $unassigned,
-            ]], $officers)
-            : $officers;
+        // Always offered, zero included: "nobody has picked anything up" is
+        // as much an answer as a number, and a row that vanishes on the good
+        // days is one the reader stops looking for on the bad ones.
+        return array_merge([[
+            'id' => self::UNASSIGNED,
+            'name' => 'Unassigned',
+            'avatar' => null,
+            'count' => self::countUnassigned($reader),
+        ]], $officers);
     }
 
     /**
-     * The provider firms with applications in this reader's slice.
+     * The provider firms this reader can filter by.
+     *
+     * Every firm they may see, whether or not it has filed anything yet — a
+     * firm with nothing on the table is the answer to "has Aurora sent us
+     * anything", and a list that only names the busy ones cannot answer it.
+     * A provider contact still sees one row, their own, because that is the
+     * whole of what they may see.
      *
      * @return list<array{id:string, name:string, code:string|null, companyId:string|null, count:int}>
      */
     public static function providers(User $reader): array
     {
-        $rows = ApplicationScope::query($reader)
+        // One grouped count of what has been filed, keyed by firm...
+        $filed = ApplicationScope::query($reader)
             ->join('cip_providers', 'cip_providers.id', '=', 'cip_applications.provider_id')
-            ->selectRaw('cip_providers.uuid, cip_providers.name, cip_providers.code, cip_providers.company_id, COUNT(*) as total')
-            ->groupBy('cip_providers.uuid', 'cip_providers.name', 'cip_providers.code', 'cip_providers.company_id')
-            ->orderByDesc('total')
-            ->orderBy('cip_providers.name')
-            ->get();
+            ->selectRaw('cip_providers.uuid, COUNT(*) as total')
+            ->groupBy('cip_providers.uuid')
+            ->pluck('total', 'uuid');
+
+        /*
+         * ...and the firms themselves, which is a different question.
+         *
+         * Staff filter across the register; anybody else can only ever be
+         * asking about the firms already in their own slice, so the tally is
+         * the whole list for them and no register is read.
+         */
+        $firms = Role::isStaff($reader)
+            ? CipProvider::query()->orderBy('name')->get(['uuid', 'name', 'code', 'company_id'])
+            : CipProvider::query()->whereIn('uuid', $filed->keys())->orderBy('name')->get(['uuid', 'name', 'code', 'company_id']);
+
+        $rows = $firms->sortByDesc(fn ($firm) => (int) ($filed[$firm->uuid] ?? 0))->values();
 
         return $rows->map(fn ($row) => [
             'id' => (string) $row->uuid,
@@ -157,7 +200,7 @@ class Facets
              * button checks before it offers itself.
              */
             'companyId' => $row->company_id === null ? null : (string) $row->company_id,
-            'count' => (int) $row->total,
+            'count' => (int) ($filed[$row->uuid] ?? 0),
         ])->all();
     }
 

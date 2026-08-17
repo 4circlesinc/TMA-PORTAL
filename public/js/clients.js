@@ -1245,26 +1245,20 @@
   }
 
   /*
-   * The same test for the officers.
+   * The same test for the officers and the firms.
    *
-   * The values are the officers who actually hold something, which the server
-   * counts over this reader's whole scope. With none of them holding anything
-   * the field offers "Unassigned" and nothing else, which narrows to the table
-   * the reader is already looking at.
+   * Only that the server had something to offer. It sends every officer and
+   * every firm this reader may filter by, counts included where they are
+   * zero, so there is nothing left for the browser to second-guess — a
+   * dropdown that hid itself when one of its answers happened to be empty
+   * would be a toolbar that changes shape as the work moves.
    */
   function assigneeFilterApplies(state) {
     return onApplicationsTable(state) && APP_TABLE.assignees.length > 0;
   }
 
-  /*
-   * And for the firms — offered only above one.
-   *
-   * A provider contact sees their own firm and nothing else, so the field
-   * would be a menu with a single value that narrows nothing. Two is where the
-   * question starts being worth asking.
-   */
   function providerFilterApplies(state) {
-    return onApplicationsTable(state) && APP_TABLE.providers.length > 1;
+    return onApplicationsTable(state) && APP_TABLE.providers.length > 0;
   }
 
   /*
