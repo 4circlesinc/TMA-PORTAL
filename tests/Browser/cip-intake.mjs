@@ -365,7 +365,9 @@ try {
   check(res.status() === 201, `filed (HTTP ${res.status()})`);
   const body = await res.json().catch(() => ({}));
   check(/^[A-Z]{2,8}\d{2}-\d{5}$/.test(body?.application?.number || ''), `numbered ${body?.application?.number}`);
-  check(body?.application?.status === 'draft', 'starts as a draft');
+  // Applications open at New since the draft state was retired — a filed
+  // application is the firm's to see immediately.
+  check(body?.application?.status === 'new', 'starts at New');
   check(body?.application?.applicant?.region === 'Middle East', 'region stored server-side');
   check(/^\/media\/avatars\//.test(body?.application?.applicant?.photo || ''),
     'the passport photo became the applicant’s profile picture');

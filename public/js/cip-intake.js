@@ -35,8 +35,37 @@
   /* Matches Intake::MAX_DOCUMENTS_PER_SLOT — the server is the authority. */
   var MAX_DOCUMENTS_PER_SLOT = 10;
   var MAX_DEPENDENTS = 20;
-  /* The requirements answered with a list of files rather than one. */
-  var DOCUMENT_LISTS = ['passportBioPage', 'birthCertificate'];
+  /*
+   * The document sections come from the requirement templates the admin
+   * screen edits — the server sends them with the form options, so what this
+   * wizard asks follows the settings without a deploy. Until the options
+   * land, the §2 trio stands in, which is also what an offline mount gets.
+   */
+  function docFields(section) {
+    var reqs = state.options && state.options.requirements;
+    var list = reqs && reqs[section];
+    if (list && list.length !== undefined) return list;
+
+    return section === 'principal'
+      ? [
+          { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: true, atFiling: true },
+          { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: true, atFiling: true },
+        ]
+      : [
+          { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: false, atFiling: false },
+          { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: false, atFiling: false },
+        ];
+  }
+
+  /* Every list field either section carries, for the checks that need the
+     full vocabulary rather than one section's. */
+  function allDocFields() {
+    var names = {};
+    docFields('principal').forEach(function (d) { names[d.field] = true; });
+    docFields('sponsor').forEach(function (d) { names[d.field] = true; });
+
+    return names;
+  }
 
   /* One draft per mount. Deliberately not persisted yet: until the form can
      save a partial application server-side, a "resume" that lived only in
@@ -100,9 +129,15 @@
     sponsored: 'Sponsored', relationship: 'Relationship',
   };
 
-  /* The label for a path: the last segment names the field. */
+  /* The label for a path: the template's wording where there is one, else
+     the built-in map. The last segment names the field. */
   function labelFor(path) {
-    return LABELS[path.split('.').pop()] || path;
+    var tail = path.split('.').pop();
+    var section = path.indexOf('sponsor.') === 0 ? 'sponsor' : 'principal';
+    var fromTemplate = null;
+    docFields(section).forEach(function (d) { if (d.field === tail) fromTemplate = d.label; });
+
+    return fromTemplate || LABELS[tail] || tail;
   }
 
   function sponsored() { return String(state.draft.sponsored) === '1'; }
@@ -135,9 +170,12 @@
 
   /* The requirements that take a list, and must have at least one. */
   function requiredDocuments() {
-    // The main applicant's only. §2's upload list is theirs; a sponsor's
-    // scans are offered here but not made the reason a draft cannot start.
-    return DOCUMENT_LISTS.slice();
+    // The main applicant's only, and only the ones the templates demand at
+    // filing. §2's upload list is theirs; a sponsor's scans are offered here
+    // but not made the reason a draft cannot start.
+    return docFields('principal')
+      .filter(function (d) { return d.atFiling; })
+      .map(function (d) { return d.field; });
   }
 
   function missing() {
@@ -453,13 +491,16 @@
       { modifier: 'tma-portal-section--wide' });
   }
 
-  /* The other two uploads, beside the person they belong to. Listed down one
-     column: two drop targets side by side are two small drop targets. */
+  /* The uploads beside the person they belong to, one drop target per
+     template the settings ask of that person. Listed down one column: two
+     drop targets side by side are two small drop targets. */
   function documentsCard(prefix) {
+    var fields = docFields(prefix === 'sponsor.' ? 'sponsor' : 'principal');
+    if (!fields.length) return '';
+
     return card('Documents',
       '<div class="tma-portal-drops">' +
-      documentField(prefix + 'passportBioPage') +
-      documentField(prefix + 'birthCertificate') +
+      fields.map(function (doc) { return documentField(prefix + doc.field); }).join('') +
       '</div>',
       { modifier: 'tma-dash__clients-card--narrow' });
   }
@@ -940,7 +981,7 @@
     // sponsor's own control, not the main applicant's.
     var listed = key.match(/^(.+)\.\d+$/);
 
-    return listed && DOCUMENT_LISTS.indexOf(listed[1].split('.').pop()) !== -1
+    return listed && allDocFields()[listed[1].split('.').pop()]
       ? listed[1]
       : key;
   }
@@ -1167,11 +1208,11 @@
       PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
       if (person.photo) state.previews[prefix + 'passportPhoto'] = person.photo;
       state.filed[prefix + 'passportPhoto'] = !!person.photo;
-      DOCUMENT_LISTS.forEach(function (list) {
+      docFields(prefix === 'sponsor.' ? 'sponsor' : 'principal').forEach(function (doc) {
         var slot = (person.documents || []).filter(function (d) {
-          return d.type === (list === 'passportBioPage' ? 'passport_bio_page' : 'birth_certificate');
+          return d.type === doc.key;
         })[0];
-        state.filed[prefix + list] = !!(slot && slot.uploaded);
+        state.filed[prefix + doc.field] = !!(slot && slot.uploaded);
       });
     };
 

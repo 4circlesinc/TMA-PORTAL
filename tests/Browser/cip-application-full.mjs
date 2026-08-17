@@ -143,8 +143,11 @@ try {
   const body = await res.json().catch(() => ({}));
   check(res.status() === 201, `filed (HTTP ${res.status()})`);
   const app = body.application || {};
-  check(/^GAL\d{2}-00001$/.test(app.number || ''), `numbered ${app.number}`);
-  check(app.status === 'draft', 'starts as a draft');
+  // Numbered in sequence — this suite may not be the first to file against
+  // its harness, so the shape is what is pinned, not the ordinal.
+  check(/^GAL\d{2}-\d{5}$/.test(app.number || ''), `numbered ${app.number}`);
+  // Applications open at New since the draft state was retired.
+  check(app.status === 'new', 'starts at New');
   check(app.familySize === 6, `family size counts everybody (${app.familySize})`);
 
   step(6, 'Who is on it, and how they are classified');

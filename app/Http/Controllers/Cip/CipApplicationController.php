@@ -88,6 +88,18 @@ class CipApplicationController extends Controller
             'countries' => Countries::options(),
             'investmentTypes' => InvestmentType::options(),
             'genders' => ['Male', 'Female'],
+            /*
+             * The wizard's document sections, from the same templates the
+             * admin screen edits — so a requirement added, reworded or
+             * retired there changes what the form asks without a deploy.
+             * Only the people the form collects: the applicant's list and
+             * the sponsor's. The photo controls stay their own thing and
+             * are gated by the passport_photo template's own flags.
+             */
+            'requirements' => [
+                'principal' => Intake::documentFields(ApplicantType::PRINCIPAL_APPLICANT),
+                'sponsor' => Intake::documentFields(ApplicantType::SPONSOR),
+            ],
         ]);
     }
 
@@ -480,17 +492,17 @@ class CipApplicationController extends Controller
             'applicant' => $this->orderByNullable($query, $this->mainApplicantNameSql(), $dir),
             'provider' => $this->orderByNullable(
                 $query,
-                "(SELECT LOWER(name) FROM cip_providers WHERE cip_providers.id = cip_applications.provider_id AND cip_providers.deleted_at IS NULL LIMIT 1)",
+                '(SELECT LOWER(name) FROM cip_providers WHERE cip_providers.id = cip_applications.provider_id AND cip_providers.deleted_at IS NULL LIMIT 1)',
                 $dir,
             ),
             'contact' => $this->orderByNullable(
                 $query,
-                "(SELECT LOWER(name) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)",
+                '(SELECT LOWER(name) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)',
                 $dir,
             ),
             'email' => $this->orderByNullable(
                 $query,
-                "(SELECT LOWER(email) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)",
+                '(SELECT LOWER(email) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)',
                 $dir,
             ),
             'investment' => $query->orderByRaw($this->investmentOrderSql().' '.$dir),

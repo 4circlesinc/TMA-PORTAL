@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\CompanyMember;
@@ -45,7 +46,53 @@ class Intake
     public const MAX_DOCUMENTS_PER_SLOT = 10;
 
     /** The §2 uploads that take a list rather than a single file. */
-    private const DOCUMENT_LISTS = ['passportBioPage', 'birthCertificate'];
+    /**
+     * §2's own three, by template key.
+     *
+     * The wizard's document fields come from the requirement templates now,
+     * so what the form ASKS follows the admin screen — but what filing
+     * DEMANDS stays §2's list. The brief makes exactly these three the
+     * intake requirements; everything else on the checklist is completed
+     * after filing, which is what the whole document-management phase is
+     * for. A firm can still loosen even these: retire one, or mark it
+     * optional, and filing stops demanding it.
+     */
+    private const AT_FILING = [
+        DocumentTypes::PASSPORT_PHOTO,
+        DocumentTypes::PASSPORT_BIO_PAGE,
+        DocumentTypes::BIRTH_CERTIFICATE,
+    ];
+
+    /**
+     * The upload fields one applicant type's wizard section carries, from the
+     * live templates. The photo is not among them — it has measurement rules
+     * and becomes the person's picture, so it keeps its own control — and the
+     * field name is the template key in camel case, which lands the legacy
+     * three on exactly the names the endpoint has always documented.
+     *
+     * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, atFiling:bool}>
+     */
+    public static function documentFields(string $applicantType): Collection
+    {
+        return Requirements::forType($applicantType)
+            ->reject(fn ($t) => $t->key === DocumentTypes::PASSPORT_PHOTO)
+            ->map(fn ($t) => [
+                'key' => $t->key,
+                'field' => Str::camel($t->key),
+                'label' => $t->label,
+                'help' => $t->help,
+                'required' => (bool) $t->required,
+                'atFiling' => (bool) $t->required && in_array($t->key, self::AT_FILING, true),
+            ])
+            ->values();
+    }
+
+    /** Is the photo still asked of this applicant type, and demanded? */
+    private static function photoTemplate(string $applicantType): ?CipDocumentRequirement
+    {
+        return Requirements::forType($applicantType)
+            ->firstWhere('key', DocumentTypes::PASSPORT_PHOTO);
+    }
 
     /** The shared person field set — §2's list, which §4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
@@ -108,13 +155,25 @@ class Intake
         $need = $editing ? 'nullable' : 'required';
         $min = $editing ? [] : ['min:1'];
 
-        return [
-            'passportPhoto' => [$need, 'file', self::photoRule()],
-            'passportBioPage' => array_merge([$need, 'array'], $min, ['max:'.self::MAX_DOCUMENTS_PER_SLOT]),
-            'passportBioPage.*' => self::documentRule(),
-            'birthCertificate' => array_merge([$need, 'array'], $min, ['max:'.self::MAX_DOCUMENTS_PER_SLOT]),
-            'birthCertificate.*' => self::documentRule(),
+        $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT);
+        $rules = [
+            'passportPhoto' => [
+                ! $editing && $photo && $photo->required ? 'required' : 'nullable',
+                'file', self::photoRule(),
+            ],
         ];
+
+        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT) as $doc) {
+            $demanded = ! $editing && $doc['atFiling'];
+            $rules[$doc['field']] = array_merge(
+                [$demanded ? $need : 'nullable', 'array'],
+                $demanded ? $min : [],
+                ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            );
+            $rules[$doc['field'].'.*'] = self::documentRule();
+        }
+
+        return $rules;
     }
 
     /**
@@ -127,7 +186,7 @@ class Intake
      */
     public static function normaliseDocuments(Request $request): void
     {
-        foreach (self::DOCUMENT_LISTS as $field) {
+        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT)->pluck('field') as $field) {
             /*
              * The bag, not $request->file().
              *
@@ -183,9 +242,12 @@ class Intake
             ? ['nullable', 'file', self::photoRule()]
             : [Rule::requiredIf($sponsored), 'file', self::photoRule()];
 
-        foreach (self::DOCUMENT_LISTS as $list) {
-            $rules['sponsor.'.$list] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
-            $rules['sponsor.'.$list.'.*'] = self::documentRule();
+        // The sponsor's scans are offered, never demanded at filing (§2): a
+        // sponsor is often added before their paperwork is in hand, and the
+        // checklist holds the door.
+        foreach (self::documentFields(ApplicantType::SPONSOR) as $doc) {
+            $rules['sponsor.'.$doc['field']] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules['sponsor.'.$doc['field'].'.*'] = self::documentRule();
         }
 
         return $rules;
@@ -533,10 +595,9 @@ class Intake
      */
     private static function fileDocuments(CipPerson $person, array $data, User $creator): void
     {
-        foreach ([
-            DocumentTypes::PASSPORT_BIO_PAGE => $data['passportBioPage'] ?? [],
-            DocumentTypes::BIRTH_CERTIFICATE => $data['birthCertificate'] ?? [],
-        ] as $type => $uploads) {
+        foreach (self::documentFields(ApplicantType::for($person))
+            ->mapWithKeys(fn ($doc) => [$doc['key'] => $data[$doc['field']] ?? []])
+            ->all() as $type => $uploads) {
             $filed = 0;
 
             foreach (Arr::wrap($uploads) as $upload) {

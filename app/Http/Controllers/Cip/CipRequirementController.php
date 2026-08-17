@@ -115,6 +115,15 @@ class CipRequirementController extends Controller
          */
         $requirement->fill($data)->save();
 
+        /*
+         * Open applications hear about it, the same way they hear about a new
+         * or restored requirement. Materialise already holds the judgement
+         * call: a slot still waiting adopts the new wording and the new
+         * mandatory flag, an answered one keeps the words it was answered
+         * under.
+         */
+        $this->reachOpenApplications();
+
         return response()->json(['requirement' => $this->record($requirement->fresh())]);
     }
 
