@@ -319,10 +319,17 @@ class Assignments
          * application. A file with no client record yet can only be reached
          * through the table, so the link searches it by number — landing
          * somewhere true beats a prettier link that 404s.
+         *
+         * Built from APP_URL, not from url(): url() answers with whichever
+         * host the triggering request arrived on, and an email is read long
+         * after that request — a notice fired through an internal hostname
+         * must still link to the portal's public address. The same rule
+         * Postcards::notification() already follows.
          */
-        $url = $application->client
-            ? url('/clients/'.$application->client->uid.'?tab=applicant')
-            : url('/clients?q='.urlencode($application->displayNumber()));
+        $path = $application->client
+            ? '/clients/'.$application->client->uid.'?tab=applicant'
+            : '/clients?q='.urlencode($application->displayNumber());
+        $url = rtrim(config('app.url'), '/').$path;
 
         Deliveries::send(
             Postcards::cipAssigned([
