@@ -4333,15 +4333,16 @@
     var loading = !!state.companyMembersLoading;
     var admin = isClientsAdmin();
 
+    /*
+     * An email and a button. The role dropdown sat here preselected to
+     * "Service provider member" and that is what everyone was added as — a
+     * question with one answer, the same one the assign form used to ask.
+     * Each member row still carries its own role controls for the day
+     * somebody really is the finance contact.
+     */
     var form = admin && !loading
       ? '<div class="tma-dash__clients-assign-form">' +
         '<input class="tma-dash__clients-field-input" type="email" placeholder="Email address" data-company-member-email aria-label="Member email">' +
-        '<select class="tma-dash__clients-field-select" data-company-member-role aria-label="Company role">' +
-        COMPANY_ROLES.map(function (r) {
-          return '<option value="' + esc(r.value) + '"' + (r.value === 'member' ? ' selected' : '') + '>' +
-            esc(r.label) + '</option>';
-        }).join('') +
-        '</select>' +
         '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>Add</button>' +
         '</div>'
       : '';
@@ -8851,7 +8852,6 @@
     if (memberAdd) {
       memberAdd.addEventListener('click', function () {
         var emailEl = root.querySelector('[data-company-member-email]');
-        var roleEl = root.querySelector('[data-company-member-role]');
         var email = emailEl && emailEl.value ? emailEl.value.trim() : '';
         if (!email) {
           clientsToast('Enter an email address', 'negative');
@@ -8860,7 +8860,8 @@
         memberAdd.disabled = true;
         CompanyMembersAPI.add(state.companyId, {
           email: email,
-          role: roleEl ? roleEl.value : 'member',
+          // Everyone joins as a member; the row's controls change it after.
+          role: 'member',
         }).then(function () {
           clientsToast('Member added', 'positive');
           refreshCompanyPanels();
