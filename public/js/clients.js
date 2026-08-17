@@ -3398,36 +3398,18 @@
   }
 
   /*
-   * Who this is, as one line under the name.
+   * Status only, beside the name.
    *
-   * §7 requires the portal to display the application number and to switch
-   * every user-facing reference to the CIP number once it is recorded — this
-   * is that reference. The number leads, because it is what the application
-   * is called; then the status and the family. Provider, dates and who holds
-   * the file live on the facts strip under the tabs, the same glance card CBI
-   * keeps on every tab. `number` is the server's `displayNumber()`: the
-   * internal number until the Unit's arrives, the CIP number after. The
-   * internal one is not dropped when superseded, it moves beside — invoices,
-   * reviews and assessment feedback go on quoting it.
+   * The application number and family live on the facts strip; repeating
+   * them here put three names for the same file in one head. The chip is
+   * what the head still has to say that the strip does not — where this
+   * file is in the lifecycle.
    */
-  function renderApplicationFacts(app) {
-    if (!app) return '';
+  function renderApplicationStatus(app) {
+    if (!app || !app.statusLabel) return '';
 
-    var bits = [];
-
-    if (app.number) {
-      bits.push('<span class="tma-dash__clients-profile-number">' + esc(app.number) + '</span>');
-    }
-    if (app.cipNumber && app.internalNumber) {
-      bits.push('<span>' + esc(app.internalNumber) + '</span>');
-    }
-    if (app.statusLabel) {
-      bits.push('<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
-        ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>');
-    }
-    if (app.familyLabel) bits.push('<span>' + esc(app.familyLabel) + '</span>');
-
-    return bits.join('<span class="tma-dash__clients-profile-dot" aria-hidden="true">·</span>');
+    return '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
+      ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>';
   }
 
 
@@ -3441,21 +3423,23 @@
   function renderContactProfileToolbar(c, state) {
     if (!c) return '';
     var app = applicationFor(c.id);
-    var subtitle = app ? renderApplicationFacts(app) : esc(contactProfileSubtitle(c));
+    var status = app ? renderApplicationStatus(app) : '';
+    var subtitle = app ? '' : esc(contactProfileSubtitle(c));
 
     /*
-     * Arrow, face, name — and under the name, who this is.
-     *
-     * The number and status sit here like a contact's job title. Dates,
-     * investment, who referred them and who holds the file are the facts
-     * strip under the tabs, so they stay in view whichever section is open.
+     * Arrow, face, name — and, on an application, the status beside the name.
+     * Number and family are on the facts strip; a second copy under the name
+     * was the same file answering twice.
      */
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
       renderClientsBackArrow(state) + renderAvatar(c, 40) +
       '<div class="tma-dash__clients-profile-ident">' +
+      '<span class="tma-dash__clients-profile-name-row">' +
       '<span class="tma-dash__clients-profile-name">' + esc(c.name) + '</span>' +
+      status +
+      '</span>' +
       (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + subtitle + '</span>' : '') +
       '</div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +

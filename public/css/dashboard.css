@@ -17815,6 +17815,17 @@
   color: var(--color-text-primary);
 }
 
+.tma-dash__clients-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-dash__clients-profile-name-row .tma-portal-status--inline {
+  margin-left: 0;
+}
+
 .tma-dash__clients-profile--form {
   overflow: hidden;
 }
