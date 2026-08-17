@@ -40,29 +40,20 @@
   padding: var(--status-badge-pill-padding-y) var(--status-badge-pill-padding-x);
   border-radius: var(--status-badge-pill-radius);
   overflow: hidden;
+  background: var(--status-badge-color);
 }
 
 .tma-status-badge--pill.tma-status-badge--muted {
-  background: var(--status-badge-pill-surface, rgba(0, 0, 0, 0.04));
+  background: var(--status-badge-color, #6b7280);
 }
 
 .tma-status-badge--pill::before,
 .tma-status-badge--pill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: var(--status-badge-pill-shape-radius);
-  pointer-events: none;
+  content: none;
 }
 
-.tma-status-badge--pill::before {
-  background: var(--status-badge-color);
-  opacity: var(--status-badge-pill-background-opacity);
-}
-
-.tma-status-badge--pill::after {
-  border: var(--status-badge-pill-border-width) solid var(--status-badge-color);
-  opacity: var(--status-badge-pill-border-opacity);
+.tma-status-badge--pill .tma-status-badge__label {
+  color: #fff;
 }
 
 .tma-status-badge__dot {

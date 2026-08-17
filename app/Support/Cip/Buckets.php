@@ -24,12 +24,13 @@ use Illuminate\Database\Eloquent\Builder;
  * one provider firm's book for a contact there, one applicant's own record for
  * a private client. Nobody's name is in the query.
  *
- * The Reviewing Officer's four are work queues. They count only the files that
- * officer holds, which is why they are scoped to assigned_officer_id rather
- * than to a status alone. That distinction is the difference between "how much
- * work is there" and "how much of it is mine", and it is the reason the same
- * status appears in both sets under different names: Assessment feedback is a
- * number on the administrator's report and a task on the officer's list.
+ * The Reviewing Officer's and Compliance Officer's four are work queues.
+ * They count only the files that officer holds, which is why they are scoped
+ * to that person rather than to a status alone. That distinction is the
+ * difference between "how much work is there" and "how much of it is mine",
+ * and it is the reason the same status appears in both sets under different
+ * names: Assessment feedback is a number on the administrator's report and a
+ * task on the officer's list.
  *
  * NOTHING IS FILED AS A DRAFT
  *
@@ -210,25 +211,9 @@ class Buckets
             return self::ADMINISTRATOR;
         }
 
-        if (CipAccess::isOfficer($user, CipAccess::REVIEWING_OFFICER)) {
+        if (CipAccess::isOfficer($user, CipAccess::REVIEWING_OFFICER)
+            || CipAccess::isOfficer($user, CipAccess::COMPLIANCE_OFFICER)) {
             return self::REVIEWING_OFFICER;
-        }
-
-        /*
-         * The Compliance Officer reads the administrator's dashboard.
-         *
-         * §9 names three sets and none of them is theirs, and the honest
-         * reading is that this is the one: their work is the tail of it —
-         * Pending review, Background check, Delayed, and the two decisions —
-         * over every application, which is exactly what these ten buckets
-         * count. The officer queues cannot serve instead, because a personal
-         * scope reads assigned_officer_id and that column caches the REVIEWING
-         * officer (see {@see Assignments::refreshCache}); "mine" would quietly
-         * be somebody else's. A fourth set is a question for the firm, not a
-         * guess to make here.
-         */
-        if (CipAccess::isOfficer($user)) {
-            return self::ADMINISTRATOR;
         }
 
         // A Service Provider contact or a Private Client: the same
@@ -379,16 +364,27 @@ class Buckets
     /**
      * The scope half: everything the reader may see, or only what they hold.
      *
-     * The cache column rather than a join through the assignments table.
-     * {@see Assignments} keeps it in step with the live row and it sits on the
-     * application being counted, so a queue is one predicate instead of a
-     * subquery per dashboard.
+     * A Reviewing Officer is usually the cache column, and a Compliance
+     * Officer is not: {@see Assignments::refreshCache} writes the reviewer
+     * into assigned_officer_id when a file is held in both jobs. The live
+     * assignment is the authority for either role, so "mine" is whoever holds
+     * the file now, not whoever the listing column happens to name. The cache
+     * is still matched so a fixture that only filled the column — and a queue
+     * that used to read only that column — keeps counting the same rows.
      */
     private static function scoped(Builder $query, string $scope, User $user): Builder
     {
-        return $scope === self::SCOPE_MINE
-            ? $query->where('assigned_officer_id', $user->id)
-            : $query;
+        if ($scope !== self::SCOPE_MINE) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where('cip_applications.assigned_officer_id', $user->id)
+                ->orWhereHas(
+                    'assignments',
+                    fn (Builder $a) => $a->live()->where('user_id', $user->id),
+                );
+        });
     }
 
     /**

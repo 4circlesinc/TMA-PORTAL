@@ -17842,32 +17842,6 @@ button.tma-cip-status-chip:focus-visible {
   outline-offset: 2px;
 }
 
-/*
- * Solid fill, white type — the tinted wash made the chip read as a label
- * rather than a control. These beat .tma-portal-status--* (including dark
- * theme) so the same chip does not go translucent again on a dark shell.
- */
-.tma-dash .tma-cip-status-chip.tma-portal-status--success {
-  background: #16a34a;
-  color: #fff;
-}
-.tma-dash .tma-cip-status-chip.tma-portal-status--danger {
-  background: #dc2626;
-  color: #fff;
-}
-.tma-dash .tma-cip-status-chip.tma-portal-status--pending {
-  background: #d97706;
-  color: #fff;
-}
-.tma-dash .tma-cip-status-chip.tma-portal-status--action {
-  background: #2563eb;
-  color: #fff;
-}
-.tma-dash .tma-cip-status-chip.tma-portal-status--neutral {
-  background: #6b7280;
-  color: #fff;
-}
-
 .tma-dash__clients-profile--form {
   overflow: hidden;
 }
@@ -35165,6 +35139,49 @@ span.tma-dash__messages-profile-avatar {
   min-width: 1148px;
 }
 
+/* Click-to-sort: the listing is server-paged, so the header asks the API
+   rather than reordering the fifty rows on screen. The button fills the cell
+   so a click on the padding still counts. */
+.tma-cip-table th.tma-cip-table__th-sort {
+  padding: 0;
+  vertical-align: middle;
+}
+.tma-cip-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.tma-cip-table__sort:hover,
+.tma-cip-table__sort.is-sorted {
+  color: var(--color-text-primary);
+}
+.tma-cip-table__sort.is-sorted {
+  font-weight: var(--font-weight-semibold);
+}
+.tma-cip-table__sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-4);
+}
+.tma-cip-table__sort-arrow {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
 /* The applicant, as a face and a name. The passport photo where there is one,
    their initials where there is not — never a stock silhouette. */
 .tma-cip-table__applicant {
@@ -35595,18 +35612,11 @@ span.tma-dash__messages-profile-avatar {
   background: var(--tma-cip-tone, var(--color-text-secondary));
 }
 
-.tma-portal-cip__dot--success { --tma-cip-tone: #15803d; }
-.tma-portal-cip__dot--danger  { --tma-cip-tone: #b91c1c; }
-.tma-portal-cip__dot--pending { --tma-cip-tone: #b45309; }
-.tma-portal-cip__dot--action  { --tma-cip-tone: #1d4ed8; }
-.tma-portal-cip__dot--neutral { --tma-cip-tone: var(--color-text-secondary); }
-
-/* On dark the light-surface tones go muddy, so the dot takes the lighter value
-   the chip switches to for the same reason. */
-.tma-dash[data-theme="dark"] .tma-portal-cip__dot--success { --tma-cip-tone: #4ade80; }
-.tma-dash[data-theme="dark"] .tma-portal-cip__dot--danger  { --tma-cip-tone: #fca5a5; }
-.tma-dash[data-theme="dark"] .tma-portal-cip__dot--pending { --tma-cip-tone: #fcd34d; }
-.tma-dash[data-theme="dark"] .tma-portal-cip__dot--action  { --tma-cip-tone: #93c5fd; }
+.tma-portal-cip__dot--success { --tma-cip-tone: #16a34a; }
+.tma-portal-cip__dot--danger  { --tma-cip-tone: #dc2626; }
+.tma-portal-cip__dot--pending { --tma-cip-tone: #d97706; }
+.tma-portal-cip__dot--action  { --tma-cip-tone: #2563eb; }
+.tma-portal-cip__dot--neutral { --tma-cip-tone: #6b7280; }
 
 /* The label names the queue; it is the count beside it that is being read, so
    the name sits back the way the old bucket chips had it. One line always —

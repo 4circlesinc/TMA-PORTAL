@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\ApplicantType;
@@ -57,6 +58,17 @@ class CipApplicationController extends Controller
 
     /** Rows in one page of the main application table (§8). */
     private const LIST_PAGE = 50;
+
+    /**
+     * Column keys the table headers may ask to order by.
+     *
+     * Anything else is ignored rather than rejected: a typed URL with a typo
+     * should still open the worklist, not a 422.
+     */
+    private const LIST_SORTS = [
+        'number', 'applicant', 'provider', 'contact', 'email',
+        'investment', 'family', 'status', 'assigned',
+    ];
 
     /** Everything the wizard needs to draw itself, in one request. */
     public function form(Request $request): JsonResponse
@@ -261,6 +273,17 @@ class CipApplicationController extends Controller
             'provider' => ['nullable', 'string', 'max:400'],
             'page' => ['nullable', 'integer', 'min:1'],
             'perPage' => ['nullable', 'integer', 'min:1', 'max:200'],
+            /*
+             * Which column, and which way.
+             *
+             * Applied on the server so page two of a sorted table is the next
+             * fifty of the same order, not a reorder of whichever fifty this
+             * page happened to hold. Unknown values are dropped in
+             * {@see applyListSort()} rather than validated out, so a bookmark
+             * with a typo still opens the worklist.
+             */
+            'sort' => ['nullable', 'string', 'max:32'],
+            'dir' => ['nullable', 'string', 'max:4'],
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
@@ -354,12 +377,9 @@ class CipApplicationController extends Controller
         Facets::applyProviders($query, self::list($data['provider'] ?? null));
 
         $this->applyListSearch($query, trim($data['q'] ?? ''));
+        $this->applyListSort($query, $data['sort'] ?? null, $data['dir'] ?? null);
 
-        $page = $query
-            // Newest first: the table is a worklist, and the application filed
-            // this morning is the one somebody is looking for.
-            ->orderByDesc('id')
-            ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
+        $page = $query->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
         return response()->json([
             'applications' => collect($page->items())->map(fn ($a) => $this->row($a, $user))->all(),
@@ -431,6 +451,128 @@ class CipApplicationController extends Controller
                 ->orWhereHas('people', fn (Builder $p) => $p
                     ->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$anywhere]));
         });
+    }
+
+    /**
+     * Order the listing the way a column header asked.
+     *
+     * Subqueries rather than joins: a person or assignment join would multiply
+     * rows, and a page of fifty would silently skip applications. No sort
+     * stays newest-first — the table is a worklist, and the application filed
+     * this morning is the one somebody is looking for.
+     */
+    private function applyListSort(Builder $query, ?string $sort, ?string $dir): void
+    {
+        if ($sort === null || $sort === '' || ! in_array($sort, self::LIST_SORTS, true)) {
+            $query->orderByDesc('cip_applications.id');
+
+            return;
+        }
+
+        $dir = strtolower((string) $dir) === 'asc' ? 'asc' : 'desc';
+
+        match ($sort) {
+            'number' => $this->orderByNullable(
+                $query,
+                'LOWER(COALESCE(cip_applications.cip_number, cip_applications.internal_number))',
+                $dir,
+            ),
+            'applicant' => $this->orderByNullable($query, $this->mainApplicantNameSql(), $dir),
+            'provider' => $this->orderByNullable(
+                $query,
+                "(SELECT LOWER(name) FROM cip_providers WHERE cip_providers.id = cip_applications.provider_id AND cip_providers.deleted_at IS NULL LIMIT 1)",
+                $dir,
+            ),
+            'contact' => $this->orderByNullable(
+                $query,
+                "(SELECT LOWER(name) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)",
+                $dir,
+            ),
+            'email' => $this->orderByNullable(
+                $query,
+                "(SELECT LOWER(email) FROM clients WHERE clients.id = cip_applications.client_id AND clients.deleted_at IS NULL LIMIT 1)",
+                $dir,
+            ),
+            'investment' => $query->orderByRaw($this->investmentOrderSql().' '.$dir),
+            'family' => $query->orderByRaw('people_count '.$dir),
+            'status' => $query->orderByRaw($this->statusOrderSql().' '.$dir),
+            'assigned' => $this->orderByNullable($query, $this->assignedNameSql(), $dir, $this->assignedNameBindings()),
+            default => $query->orderByDesc('cip_applications.id'),
+        };
+
+        // Equals keep newest-first so paging a column of identical names does
+        // not reshuffle them between requests.
+        $query->orderByDesc('cip_applications.id');
+    }
+
+    /** Empty cells trail the named ones, in either direction. */
+    private function orderByNullable(Builder $query, string $sql, string $dir, array $bindings = []): void
+    {
+        $query->orderByRaw('('.$sql.') IS NULL', $bindings)
+            ->orderByRaw($sql.' '.$dir, $bindings);
+    }
+
+    private function mainApplicantNameSql(): string
+    {
+        return "(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
+    }
+
+    /**
+     * The first live assignee's name — the same person the column leads with.
+     *
+     * Live window copied from {@see ClientAssignment::scopeLive()} rather than
+     * joined, so a client with two officers does not become two rows.
+     */
+    private function assignedNameSql(): string
+    {
+        return '(SELECT LOWER(users.name) FROM client_assignments INNER JOIN users ON users.id = client_assignments.user_id AND users.deleted_at IS NULL WHERE client_assignments.client_id = cip_applications.client_id AND client_assignments.status = ? AND (client_assignments.starts_at IS NULL OR client_assignments.starts_at <= ?) AND (client_assignments.ends_at IS NULL OR client_assignments.ends_at > ?) ORDER BY client_assignments.is_primary DESC, client_assignments.id ASC LIMIT 1)';
+    }
+
+    /** @return list<mixed> */
+    private function assignedNameBindings(): array
+    {
+        $now = now();
+
+        return [ClientAssignment::STATUS_ACTIVE, $now, $now];
+    }
+
+    /** Lifecycle order, so Status sorts as the chips read rather than A–Z. */
+    private function statusOrderSql(): string
+    {
+        $whens = [];
+        foreach (Status::listed() as $i => $status) {
+            $whens[$status] = $i;
+        }
+        $whens[Status::DRAFT] = $whens[Status::NEW] ?? 0;
+
+        return self::sqlCase('cip_applications.status', $whens);
+    }
+
+    /** The form's own option order, not the stored code alphabetically. */
+    private function investmentOrderSql(): string
+    {
+        $whens = [];
+        foreach (array_keys(InvestmentType::ALL) as $i => $value) {
+            $whens[$value] = $i;
+        }
+
+        return self::sqlCase('cip_applications.investment_type', $whens);
+    }
+
+    /** @param  array<string, int>  $whens */
+    private static function sqlCase(string $column, array $whens): string
+    {
+        $sql = 'CASE '.$column;
+        foreach ($whens as $value => $index) {
+            $sql .= ' WHEN '.self::sqlString((string) $value).' THEN '.(int) $index;
+        }
+
+        return $sql.' ELSE '.count($whens).' END';
+    }
+
+    private static function sqlString(string $value): string
+    {
+        return "'".str_replace("'", "''", $value)."'";
     }
 
     /**

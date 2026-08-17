@@ -819,14 +819,14 @@
    * App\Support\Cip\Buckets.
    *
    * Which set arrives is the server's decision and this card does not second
-   * guess it: an administrator (and a Compliance Officer) gets the ten the
-   * firm reports on, a Reviewing Officer gets their four work queues. The card
-   * renders whatever came back, in the order it came back in.
+   * guess it: an administrator gets the ten the firm reports on, a Reviewing
+   * Officer and a Compliance Officer get their four work queues, and a Service
+   * Provider contact gets the applicant-facing six. The card renders whatever
+   * came back, in the order it came back in.
    *
-   * The applicant-facing set never arrives, because this card is staff only —
-   * a provider contact and a private client both reach the module through
-   * their own applications and neither of them opens their day on the firm's
-   * book. The server decides that too, and says so in `staff`.
+   * A private client never sees this card. They share the service-provider set
+   * with the contact, so the dashboard name cannot decide it — the server
+   * answers with `card`.
    */
   var homeCipLoaded = false;
   var homeCip = null;
@@ -842,18 +842,13 @@
    * their to-do list into a report about everybody, and they would act on it.
    * The payload says which set it sent, so this says what that set covers.
    *
-   * There is no service_provider line and the absence is the point. That set
-   * is not one kind of reader: Buckets::setFor hands it to a provider contact
-   * AND to a private client, so "Your firm" describes at most half of it — a
-   * private client has no firm and is scoped to their own single record. Since
-   * no wording is true for both, the honest entry is none, and the card is
-   * staff only so the set cannot reach this file anyway. A set we have not been
-   * taught gets no meta rather than a guess, which is the rule a fourth
-   * dashboard added server-side would meet as well.
+   * service_provider is on this card for the contact, not the private client.
+   * "Your firm" is true of the one reader `card` lets through.
    */
   var CIP_SCOPE_META = {
     administrator: 'All applications',
     reviewing_officer: 'Assigned to you',
+    service_provider: 'Your firm',
   };
 
   /*
@@ -874,6 +869,14 @@
    */
   var CIP_TONES = ['success', 'danger', 'pending', 'action', 'neutral'];
 
+  function cipCardVisible(payload) {
+    if (!payload || payload.cip === false) return false;
+    if (payload.card === true) return true;
+    if (payload.card === false) return false;
+    // Warm snapshot from before `card` existed: staff was the gate.
+    return payload.staff === true;
+  }
+
   function cipTone(bucket) {
     if (!bucket.count) return 'neutral';
     return CIP_TONES.indexOf(bucket.tone) === -1 ? 'neutral' : bucket.tone;
@@ -889,8 +892,8 @@
 
   function cipSkeleton() {
     /*
-     * Six rows: the sets are four and ten long and which one this reader gets
-     * is not known until the payload lands, so a middle length is never badly
+     * Six rows: the sets are four, six and ten long and which one this reader
+     * gets is not known until the payload lands, so a middle length is never badly
      * wrong in either direction. Warm boot means a returning reader paints
      * their real set and never sees this at all.
      *
@@ -950,22 +953,18 @@
      * staff KPIs, and it is honoured the same way: no card, no explanation,
      * nothing to dismiss.
      *
-     * `staff: false` is that courtesy asked a second question, and it is the
-     * one this card turns on. The module IS for the external side: a provider
-     * contact and a private client both reach it through their own
-     * applications, so `cip` alone handed every external account a card
-     * summarising a book that is not theirs to read. The set name cannot
-     * decide it either — Buckets::setFor gives both external kinds the same
-     * applicant-facing set — so the server answers with the portal's one staff
-     * predicate and the browser never infers staffhood for itself.
+     * `card: false` is that courtesy asked a second question. The module IS
+     * for the external side: a provider contact and a private client both
+     * reach it through their own applications, and only the contact is offered
+     * this summary. They share a dashboard name, so the server answers with
+     * `card` rather than leaving the browser to infer it from `dashboard`.
      *
      * Drawn only on a positive answer, where the KPI row tests for the
      * negative. The difference is the warm store: a payload carrying no
-     * `staff` key at all is a snapshot written by a release that had not been
+     * `card` key at all is a snapshot written by a release that had not been
      * asked the question, and treating silence as consent would paint the card
-     * for exactly the reader it was taken away from. A staff reader loses one
-     * warm first paint the first time they open the app after this ships, and
-     * the refetch already on its way puts it back.
+     * for exactly the reader it was taken away from. `cipCardVisible` falls
+     * back to `staff` for that snapshot.
      *
      * A failed request lands here too, holding nothing, and it has to be
      * silent for a reason the KPI row does not have. The KPI row knows its
@@ -977,7 +976,7 @@
      * refresh asks again and the card appears the moment there is something
      * true to put in it.
      */
-    if (!homeCip || homeCip.cip === false || homeCip.staff !== true) return '';
+    if (!cipCardVisible(homeCip)) return '';
 
     var buckets = homeCip.buckets || [];
     if (!buckets.length) return '';
@@ -1323,16 +1322,14 @@
     { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
     { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
     /*
-     * staffOnly keeps this out of the Edit Dashboard list for a client account,
-     * which is a different question from whether the card draws: the server's
-     * `cip` and `staff` answers decide that, and between them they know about
-     * readers this flag cannot see — a staff member at a firm with no CIP role,
-     * and a provider contact who does reach the module but not this summary of
-     * it. Both are needed. Without the flag, an external account is offered a
-     * tile that would never appear; without the server's answer, a staff member
-     * without CIP gets an empty panel.
+     * staffOnly keeps Employees out of the Edit Dashboard list for a client
+     * account. CIP is a different question: a Service Provider contact is a
+     * client account and still gets this card, so the editor asks `card`
+     * rather than staffhood. Without the flag, every client would be offered a
+     * tile that would never appear; without the server's answer, a staff
+     * member without CIP gets an empty panel.
      */
-    { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', staffOnly: true },
+    { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', cipCard: true },
   ];
 
   // Shipped default board (3 equal columns, masonry):
@@ -1788,7 +1785,10 @@
     // While /me is loading, keep staff-only tiles visible in the editor so an
     // admin does not see them disappear and reappear.
     var staff = isStaffUser();
-    return DASH_TILES.filter(function (t) { return !t.staffOnly || staff !== false; });
+    return DASH_TILES.filter(function (t) {
+      if (t.cipCard) return staff !== false || cipCardVisible(homeCip);
+      return !t.staffOnly || staff !== false;
+    });
   }
 
   function tilePreview(kind) {

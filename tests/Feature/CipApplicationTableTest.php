@@ -265,4 +265,147 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(3, $body['total']);
         $this->assertSame(2, $body['lastPage']);
     }
+
+    public function test_it_sorts_by_applicant_across_pages(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->named($this->application($staff, $provider, 0, false), 'Zed', 'Zane');
+        $this->named($this->application($staff, $provider, 0, false), 'Ada', 'Able');
+
+        $asc = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?sort=applicant&dir=asc')
+            ->assertOk()
+            ->json('applications');
+
+        $this->assertSame(['Ada Able', 'Zed Zane'], array_column($asc, 'applicantName'));
+
+        $desc = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?sort=applicant&dir=desc')
+            ->assertOk()
+            ->json('applications');
+
+        $this->assertSame(['Zed Zane', 'Ada Able'], array_column($desc, 'applicantName'));
+
+        $page = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?sort=applicant&dir=asc&perPage=1&page=2')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('Zed Zane', $page['applications'][0]['applicantName']);
+        $this->assertSame(2, $page['total']);
+    }
+
+    public function test_an_unknown_sort_keeps_newest_first(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->named($this->application($staff, $provider, 0, false), 'Ada', 'Able');
+        $this->named($this->application($staff, $provider, 0, false), 'Zed', 'Zane');
+
+        $names = array_column(
+            $this->actingAs($staff)
+                ->getJson('/portal/cip/applications?sort=not-a-column&dir=asc')
+                ->assertOk()
+                ->json('applications'),
+            'applicantName',
+        );
+
+        $this->assertSame(['Zed Zane', 'Ada Able'], $names);
+    }
+
+    public function test_it_sorts_by_family_size(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->application($staff, $provider, 4, true);
+        $this->application($staff, $provider, 0, false);
+
+        $labels = array_column(
+            $this->actingAs($staff)
+                ->getJson('/portal/cip/applications?sort=family&dir=asc')
+                ->assertOk()
+                ->json('applications'),
+            'familyLabel',
+        );
+
+        $this->assertSame(['F1', 'F6'], $labels);
+    }
+
+    public function test_sorting_does_not_ask_a_question_per_row(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        foreach (range(1, 5) as $i) {
+            $this->application($staff, $provider, 3, true);
+        }
+
+        $this->actingAs($staff);
+        DB::enableQueryLog();
+        $this->getJson('/portal/cip/applications?sort=applicant&dir=asc')->assertOk();
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThan(20, $count, 'A sorted listing must not scale its queries with its rows.');
+    }
+
+    public function test_it_sorts_status_in_lifecycle_order(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->application($staff, $provider, 0, false);
+        $this->application($staff, $provider, 0, false)
+            ->forceFill(['status' => Status::GRANTED])
+            ->save();
+
+        $labels = array_column(
+            $this->actingAs($staff)
+                ->getJson('/portal/cip/applications?sort=status&dir=asc')
+                ->assertOk()
+                ->json('applications'),
+            'statusLabel',
+        );
+
+        $this->assertSame(['New Applications', 'Approved'], $labels);
+    }
+
+    public function test_it_sorts_assigned_with_unassigned_last(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $held = $this->application($staff, $provider, 0, false);
+        $this->application($staff, $provider, 0, false);
+
+        $officer = User::create(['name' => 'Omar Reviewer', 'email' => 'omar-sort@example.com', 'password' => bcrypt('password12345')]);
+        $officer->forceFill(['status' => 'approved', 'account_type' => 'Employee'])->save();
+
+        ClientAssignment::create([
+            'client_id' => $held->client_id, 'user_id' => $officer->id,
+            'assigned_by' => $staff->id, 'role' => 'case_officer',
+            'permission_level' => 'editor', 'status' => ClientAssignment::STATUS_ACTIVE,
+        ]);
+
+        $names = array_map(
+            fn (array $row) => ($row['assignedTo'][0] ?? [])['name'] ?? '',
+            $this->actingAs($staff)
+                ->getJson('/portal/cip/applications?sort=assigned&dir=asc')
+                ->assertOk()
+                ->json('applications'),
+        );
+
+        $this->assertSame(['Omar Reviewer', ''], $names);
+    }
+
+    private function named(CipApplication $application, string $first, string $last): CipApplication
+    {
+        $application->people()
+            ->where('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ->first()
+            ->forceFill(['first_name' => $first, 'last_name' => $last])
+            ->save();
+
+        $application->client->forceFill(['name' => $first.' '.$last])->save();
+
+        return $application->refresh();
+    }
 }

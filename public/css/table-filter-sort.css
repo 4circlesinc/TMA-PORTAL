@@ -611,9 +611,9 @@
 
 .tma-filter-popover__dot--success { background: #16a34a; }
 .tma-filter-popover__dot--danger  { background: #dc2626; }
-.tma-filter-popover__dot--pending { background: #f59e0b; }
+.tma-filter-popover__dot--pending { background: #d97706; }
 .tma-filter-popover__dot--action  { background: #2563eb; }
-.tma-filter-popover__dot--neutral { background: rgba(0, 0, 0, 0.25); }
+.tma-filter-popover__dot--neutral { background: #6b7280; }
 
 .tma-filter-popover__item--clear {
   color: var(--color-primary, #2563eb);
@@ -636,7 +636,7 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral {
-  background: rgba(255, 255, 255, 0.35);
+  background: #6b7280;
 }
 
 /* The face beside an officer's name.

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Support\Access\Role;
 use App\Support\Cip\Buckets;
+use App\Support\Cip\CipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,15 +18,12 @@ use Illuminate\Http\Request;
  * 403 is indistinguishable from the numbers being broken, and a page that is
  * simply not offered a row can drop it without knowing why.
  *
- * `staff` is the same courtesy asked a second question, because the module IS
- * for the external side and the home screen's CIP card is not. A provider
- * contact and a private client both reach the module, and both are told so; the
- * card that summarises the firm's book on a staff home screen is not theirs.
- * The dashboard name cannot decide it — {@see Buckets::setFor} hands the
- * applicant-facing six to both external kinds, so `service_provider` describes
- * the slice a reader sees rather than which side of the firm they sit on. This
- * answers with {@see Role::isStaff}, the portal's one definition, so the
- * browser never infers staffhood from a set name.
+ * `card` is whether the home screen draws this payload as the CIP Applications
+ * tile. Staff get it, and so does a Service Provider contact — §9's six are
+ * their day-opening view. A private client reaches the module through their
+ * own application and is not offered a summary of a book; they share the
+ * service-provider *set* with the contact, so the dashboard name cannot decide
+ * this and the contact-ness check has to.
  *
  * Everything else is {@see Buckets}, deliberately. The controller does not
  * know what a bucket is, so the counts served here and the filter the
@@ -52,14 +50,21 @@ class CipDashboardController extends Controller
              * Which side of the firm this reader is on.
              *
              * An administrator, a Compliance Officer and a Reviewing Officer
-             * are the people the home card is for; a Service Provider contact
-             * and a Private Client reach the module through their own
-             * applications and get nothing on their home screen. A parked
-             * Employee is staff by this predicate and never arrives here at
-             * all, because CipAccess::canReach turns them away before the
-             * dashboard exists.
+             * are staff; a Service Provider contact and a Private Client reach
+             * the module through their own applications. A parked Employee is
+             * staff by this predicate and never arrives here at all, because
+             * CipAccess::canReach turns them away before the dashboard exists.
              */
             'staff' => Role::isStaff($user),
+            /*
+             * Whether the home screen should draw the CIP Applications card.
+             *
+             * Staff, and the Service Provider contact whose six buckets are
+             * that card's other view. Not a private client: they share the
+             * service-provider set, and inferring the card from the set name
+             * would hang a firm's summary on an applicant's home screen.
+             */
+            'card' => Role::isStaff($user) || CipAccess::isProviderContact($user),
             // Which of §9's three dashboards this is. The counts alone do not
             // say whether they describe a firm's whole book or one officer's
             // desk, and a heading that got that wrong would be the difference

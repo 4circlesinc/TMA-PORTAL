@@ -13,6 +13,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -186,6 +187,23 @@ class CipBucketTest extends TestCase
         );
     }
 
+    public function test_a_compliance_officer_reads_the_same_four_queues(): void
+    {
+        $officer = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+
+        $body = $this->actingAs($officer)->getJson('/portal/cip/dashboard')->assertOk()->json();
+
+        $this->assertSame(Buckets::REVIEWING_OFFICER, $body['dashboard']);
+        $this->assertSame([
+            'Assigned Reviews', 'Reviews Pending', 'Assessment Feedback Tasks',
+            'Additional Information Requests',
+        ], array_column($body['buckets'], 'label'));
+        $this->assertSame(
+            array_fill(0, 4, Buckets::SCOPE_MINE),
+            array_column($body['buckets'], 'scope'),
+        );
+    }
+
     public function test_the_service_provider_dashboard_is_the_applicant_facing_six(): void
     {
         [, $contact] = $this->providerWithContact('GAL');
@@ -205,17 +223,22 @@ class CipBucketTest extends TestCase
         );
     }
 
-    public function test_a_compliance_officer_reads_the_administrators_dashboard(): void
+    public function test_a_compliance_officer_queue_counts_the_files_they_hold(): void
     {
-        $officer = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [$galaxy] = $this->providerWithContact('GAL');
 
-        $body = $this->actingAs($officer)->getJson('/portal/cip/dashboard')->assertOk()->json();
+        $theirs = $this->application($galaxy, $admin, Status::REVIEW_APPLICATION);
+        Assignments::assign($theirs, $colin, $admin, CipAccess::COMPLIANCE_OFFICER);
+        $this->application($galaxy, $admin, Status::REVIEW_APPLICATION, $rita);
 
-        // §9 names three sets and none of them is theirs. The compliance tail
-        // — Pending review, Background check, Delayed, and both decisions — is
-        // in the administrator's ten, so that is what they are given.
-        $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
-        $this->assertCount(10, $body['buckets']);
+        $hers = $this->counts($colin);
+
+        $this->assertSame(1, $hers['assigned_reviews']);
+        $this->assertSame(1, $hers['reviews_pending']);
+        $this->assertSame(0, $hers['assessment_feedback_tasks']);
     }
 
     public function test_the_three_working_roles_are_staff(): void
@@ -229,7 +252,9 @@ class CipBucketTest extends TestCase
         // capability check would be tempted to sort into "not administrator"
         // and drop, and they are exactly who opens that card each morning.
         foreach ([$admin, $colin, $rita] as $reader) {
-            $this->assertTrue($this->staffFlag($reader), $reader->email.' works here.');
+            $body = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json();
+            $this->assertTrue($body['staff'], $reader->email.' works here.');
+            $this->assertTrue($body['card'], $reader->email.' is offered the CIP card.');
         }
     }
 
@@ -255,6 +280,15 @@ class CipBucketTest extends TestCase
             $this->assertSame(Buckets::SERVICE_PROVIDER, $body['dashboard']);
             $this->assertFalse($body['staff'], $reader->email.' does not work here.');
         }
+
+        $this->assertTrue(
+            $this->actingAs($contact)->getJson('/portal/cip/dashboard')->json('card'),
+            'the Service Provider contact opens their day on the CIP card',
+        );
+        $this->assertFalse(
+            $this->actingAs($applicant)->getJson('/portal/cip/dashboard')->json('card'),
+            'a private client is not offered a summary of a book',
+        );
     }
 
     public function test_every_bucket_carries_a_tone_the_design_system_can_draw(): void
@@ -460,6 +494,10 @@ class CipBucketTest extends TestCase
         $this->assertNull(Buckets::find($admin, 'assigned_reviews'));
         $this->assertNull(Buckets::find($contact, 'background_check'));
         $this->assertNull(Buckets::find($employee, 'new'));
+
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        $this->assertNotNull(Buckets::find($colin, 'assigned_reviews'));
+        $this->assertNull(Buckets::find($colin, 'background_check'));
     }
 
     public function test_approved_is_the_granted_bucket(): void

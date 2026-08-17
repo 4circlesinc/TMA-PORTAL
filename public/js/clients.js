@@ -1001,6 +1001,10 @@
       var ticked = filterValues(field);
       if (ticked.length) listParams.push(field + '=' + encodeURIComponent(ticked.join(',')));
     });
+    if (APP_TABLE.sort && CIP_SORTS[APP_TABLE.sort]) {
+      listParams.push('sort=' + encodeURIComponent(APP_TABLE.sort));
+      listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
+    }
 
     return '/clients' + (listParams.length ? '?' + listParams.join('&') : '');
   }
@@ -1135,6 +1139,8 @@
       bucket: params.get('bucket') || null,
       assignee: params.get('assignee') || null,
       provider: params.get('provider') || null,
+      sort: params.get('sort') || null,
+      dir: params.get('dir') || null,
     };
   })();
 
@@ -1609,9 +1615,10 @@
       renderClientsCount(state) +
       '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
       renderTableFilterDropdowns(state) +
-      '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort' +
-      ' aria-pressed="' + (state.sort && state.sort !== 'name' ? 'true' : 'false') + '" aria-expanded="false">' +
-      '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
+      (onApplicationsTable(state) ? ''
+        : '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort' +
+          ' aria-pressed="' + (state.sort && state.sort !== 'name' ? 'true' : 'false') + '" aria-expanded="false">' +
+          '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>') +
       '<div class="tma-dash__toolbar-bulk" data-clients-bulk' + bulkHidden + '>' +
       '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
       '<span class="tma-dash__toolbar-selection" data-clients-selection-count aria-live="polite">' + selectionLabel + '</span>' +
@@ -2309,10 +2316,30 @@
   var APP_TABLE = {
     rows: [], page: 1, lastPage: 1, total: 0,
     loading: false, error: null, loadedKey: null, status: '',
+    // Empty until a header is clicked: the listing stays newest-first, which
+    // is the worklist order, not an implicit sort on Application.
+    sort: '', dir: 'asc',
     // What the filter menu can offer, from the last listing. Empty arrays
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
     assignees: [], providers: [], statuses: [],
+  };
+
+  /*
+   * Columns the applications table can be ordered by, keyed as the listing
+   * API understands them. The menu column is not in this list because it is
+   * not a fact about the application.
+   */
+  var CIP_SORTS = {
+    number: 'Application',
+    applicant: 'Applicant',
+    provider: 'Service provider',
+    contact: 'Contact person',
+    email: 'Contact email',
+    investment: 'Investment',
+    family: 'Family',
+    status: 'Status',
+    assigned: 'Assigned to',
   };
 
   /*
@@ -2346,8 +2373,8 @@
    * measured once on the server.
    *
    * Which set a reader gets is the server's to decide — an officer's four are
-   * a work queue and an administrator's ten are a report, and the difference
-   * is scope, not presentation.
+   * a work queue (CRO and Compliance share that view) and an administrator's
+   * ten are a report, and the difference is scope, not presentation.
    */
   var BUCKETS = { list: [], dashboard: null, loaded: false, loading: false, active: null };
 
@@ -2550,8 +2577,9 @@
      *
      * A field left out of it does not refetch, so the reader ticks it, the
      * chip appears and the rows never change — which is precisely how
-     * "Referred by" came to be decoration on this table. Adding a filter means
-     * adding it here.
+     * "Referred by" came to be decoration on this table. Sort belongs here
+     * too: a header click that does not change the key would paint a new
+     * arrow over the same page.
      */
     return [
       state.search || '',
@@ -2559,6 +2587,8 @@
       filterValues('bucket').join(','),
       filterValues('assignee').join(','),
       filterValues('provider').join(','),
+      APP_TABLE.sort || '',
+      APP_TABLE.dir || '',
       APP_TABLE.page,
     ].join('|');
   }
@@ -2583,6 +2613,10 @@
       var ticked = filterValues(field);
       if (ticked.length) params.push(field + '=' + encodeURIComponent(ticked.join(',')));
     });
+    if (APP_TABLE.sort && CIP_SORTS[APP_TABLE.sort]) {
+      params.push('sort=' + encodeURIComponent(APP_TABLE.sort));
+      params.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
+    }
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
@@ -2623,6 +2657,50 @@
     APP_TABLE.loadedKey = null;
   }
 
+  /*
+   * One sortable header. The whole cell is the control so a click on the
+   * padding still sorts, and aria-sort lives on the th — that is the column
+   * header, not the button inside it.
+   */
+  function applicationSortHeader(key, label) {
+    var active = APP_TABLE.sort === key;
+    var dir = active && APP_TABLE.dir === 'desc' ? 'desc' : 'asc';
+    var aria = !active ? 'none' : (dir === 'desc' ? 'descending' : 'ascending');
+    var arrow = active
+      ? '<span class="tma-cip-table__sort-arrow" aria-hidden="true">' +
+        (dir === 'desc' ? '↓' : '↑') + '</span>'
+      : '';
+
+    return {
+      html: '<button type="button" class="tma-cip-table__sort' + (active ? ' is-sorted' : '') +
+        '" data-cip-sort="' + key + '">' + esc(label) + arrow + '</button>',
+      attrs: ' class="tma-cip-table__th-sort" aria-sort="' + aria + '"',
+    };
+  }
+
+  function applicationTableHeaders() {
+    var headers = Object.keys(CIP_SORTS).map(function (key) {
+      return applicationSortHeader(key, CIP_SORTS[key]);
+    });
+    headers.push({ html: '', attrs: ' class="tma-portal-cell--menu"' });
+
+    return headers;
+  }
+
+  function setApplicationSort(col) {
+    if (!CIP_SORTS[col]) return;
+    if (APP_TABLE.sort === col) {
+      APP_TABLE.dir = APP_TABLE.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      APP_TABLE.sort = col;
+      APP_TABLE.dir = 'asc';
+    }
+    APP_TABLE.page = 1;
+    if (clientsMountState) syncClientsListUrl(clientsMountState);
+    forgetApplicationTable();
+    repaintClients();
+  }
+
   function renderApplicationTable(state) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.table) return '';
@@ -2632,11 +2710,7 @@
         '<p class="tma-portal-modal__text">' + esc(APP_TABLE.error) + '</p></div>';
     }
 
-    var headers = [
-      'Application', 'Applicant', 'Service provider', 'Contact person',
-      'Contact email', 'Investment', 'Family', 'Status', 'Assigned to',
-      { html: '', attrs: ' class="tma-portal-cell--menu"' },
-    ];
+    var headers = applicationTableHeaders();
 
     if (APP_TABLE.loading && !APP_TABLE.rows.length) {
       return ui.table(headers, applicationTableSkeleton(), { cls: 'tma-cip-table' });
@@ -2982,6 +3056,15 @@
      * same reason.
      */
     document.addEventListener('click', function (e) {
+      var sortCol = e.target.closest('[data-cip-sort]');
+      if (sortCol) {
+        e.preventDefault();
+        e.stopPropagation();
+        setApplicationSort(sortCol.getAttribute('data-cip-sort'));
+
+        return;
+      }
+
       var page = e.target.closest('[data-cip-page]');
       if (page) {
         APP_TABLE.page = parseInt(page.getAttribute('data-cip-page'), 10) || 1;
@@ -5357,7 +5440,7 @@
         : esc(String(who.name || '?').charAt(0).toUpperCase())) +
       '</span>' +
       '<span class="tma-dash__cip-activity-what">' + esc(e.what || '') + '</span>' +
-      '<span class="tma-dash__cip-activity-when">' + esc(fmtShortDate(e.when)) + '</span>' +
+      '<span class="tma-dash__cip-activity-when">' + esc(fmtDateTime(e.when)) + '</span>' +
       '</li>'
     );
   }
@@ -5472,6 +5555,15 @@
     var d = new Date(iso);
     if (isNaN(d)) return '';
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  /* Same shape CBI’s activity tab uses: the date the row already showed, plus
+     the time, so two events on one day are distinguishable. */
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return fmtShortDate(iso) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
   /**
@@ -8292,6 +8384,11 @@
           .map(function (v) { return v.trim(); })
           .filter(Boolean);
       });
+
+      var bootedSort = takeBootPosition('sort');
+      if (bootedSort && CIP_SORTS[bootedSort]) APP_TABLE.sort = bootedSort;
+      var bootedDir = takeBootPosition('dir');
+      if (bootedDir === 'asc' || bootedDir === 'desc') APP_TABLE.dir = bootedDir;
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet — so
