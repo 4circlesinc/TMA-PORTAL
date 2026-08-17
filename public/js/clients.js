@@ -4385,15 +4385,16 @@
     var assignable = state.companyStaffAssignable || [];
     var loading = !!state.companyStaffLoading;
 
+    /*
+     * A picker, the reach, and a button — the level dropdown is gone from
+     * here the same way it went from the client profile's form: preselected
+     * to Editor and never changed, a question with one answer. The reach
+     * stays, because company-only versus every-client is a real decision
+     * with real consequences the label spells out.
+     */
     var form = !loading
       ? '<div class="tma-dash__clients-assign-form">' +
         staffPicker('data-company-staff-user', assignable, state.companyStaffPick, 'Assign staff…') +
-        '<select class="tma-dash__clients-field-select" data-company-staff-level aria-label="Permission level">' +
-        ASSIGNMENT_LEVELS.map(function (l) {
-          return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
-            esc(l.label) + '</option>';
-        }).join('') +
-        '</select>' +
         '<select class="tma-dash__clients-field-select" data-company-staff-scope aria-label="How far this reaches">' +
         COMPANY_SCOPES.map(function (sc) {
           return '<option value="' + esc(sc.value) + '">' + esc(sc.label) + '</option>';
@@ -8905,7 +8906,6 @@
     if (staffAdd) {
       staffAdd.addEventListener('click', function () {
         var userEl = root.querySelector('[data-company-staff-user]');
-        var levelEl = root.querySelector('[data-company-staff-level]');
         var scopeEl = root.querySelector('[data-company-staff-scope]');
         var userId = userEl && userEl.value ? parseInt(userEl.value, 10) : 0;
         var scope = scopeEl ? scopeEl.value : 'company_only';
@@ -8919,7 +8919,8 @@
           staffAdd.disabled = true;
           CompanyStaffAPI.assign(state.companyId, {
             userId: userId,
-            level: levelEl ? levelEl.value : 'editor',
+            // Everyone starts as Editor; the row's controls change it after.
+            level: 'editor',
             appliesToClients: scope,
           }).then(function () {
             // Chosen and gone: they are on the list now, not in the picker.
