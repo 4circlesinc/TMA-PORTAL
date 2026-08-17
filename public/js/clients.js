@@ -3398,16 +3398,17 @@
   }
 
   /*
-   * What this application is and where it has got to, as one line under the
-   * name.
+   * Who this is, as one line under the name.
    *
    * §7 requires the portal to display the application number and to switch
    * every user-facing reference to the CIP number once it is recorded — this
    * is that reference. The number leads, because it is what the application
-   * is called; then the status, then who filed it. `number` is the server's
-   * `displayNumber()`: the internal number until the Unit's arrives, the CIP
-   * number after. The internal one is not dropped when superseded, it moves
-   * beside — invoices, reviews and assessment feedback go on quoting it.
+   * is called; then the status and the family. Provider, dates and who holds
+   * the file live on the facts strip under the tabs, the same glance card CBI
+   * keeps on every tab. `number` is the server's `displayNumber()`: the
+   * internal number until the Unit's arrives, the CIP number after. The
+   * internal one is not dropped when superseded, it moves beside — invoices,
+   * reviews and assessment feedback go on quoting it.
    */
   function renderApplicationFacts(app) {
     if (!app) return '';
@@ -3424,20 +3425,7 @@
       bits.push('<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
         ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>');
     }
-    if (app.provider) bits.push('<span>' + esc(app.provider) + '</span>');
     if (app.familyLabel) bits.push('<span>' + esc(app.familyLabel) + '</span>');
-    /*
-     * Who holds the file.
-     *
-     * §4d asks the header for four things and this was the missing one —
-     * without it, finding out whose desk an applicant is on meant going back
-     * out to the table, which is the trip the merged detail page exists to
-     * save.
-     */
-    bits.push(app.assignedOfficer
-      ? '<span class="tma-dash__clients-profile-officer">' + esc(app.assignedOfficer.name) + '</span>'
-      : '<span class="tma-dash__clients-profile-officer' +
-        ' tma-dash__clients-profile-officer--none">Unassigned</span>');
 
     return bits.join('<span class="tma-dash__clients-profile-dot" aria-hidden="true">·</span>');
   }
@@ -3456,12 +3444,11 @@
     var subtitle = app ? renderApplicationFacts(app) : esc(contactProfileSubtitle(c));
 
     /*
-     * Arrow, face, name — and under the name, what the application is.
+     * Arrow, face, name — and under the name, who this is.
      *
-     * The facts were tried in their own band below the tabs and it split
-     * "who, and where are they" across two places: the head named the person
-     * and a strip further down named the record. They live under the name,
-     * where a contact's job title would sit — one block answers both halves.
+     * The number and status sit here like a contact's job title. Dates,
+     * investment, who referred them and who holds the file are the facts
+     * strip under the tabs, so they stay in view whichever section is open.
      */
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
@@ -4744,13 +4731,74 @@
   }
 
   /*
+   * The case at a glance, under every tab — CBI's facts strip.
+   *
+   * Received, Submitted, Investment, who referred them, who holds the file.
+   * Empty dates drop out so a file that has only just been filed does not
+   * pretend it was submitted; Assigned always answers, Unassigned if nobody.
+   * The Timeline card on Overview still has the whole journey, holes and all.
+   */
+  function cipFact(label, value, rawHtml) {
+    if (value == null || value === '') return '';
+    return '<div class="tma-dash__clients-list-main">' +
+      '<span class="tma-dash__clients-list-label">' + esc(label) + '</span>' +
+      '<span class="tma-dash__clients-list-value">' + (rawHtml ? value : esc(value)) + '</span></div>';
+  }
+
+  function cipMilestoneDate(app, key) {
+    var steps = (app && app.milestones) || [];
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i].key === key && steps[i].date) {
+        var iso = steps[i].date;
+        var d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
+        if (isNaN(d)) return '';
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    }
+    return '';
+  }
+
+  function cipAssignedFaces(app) {
+    var people = Array.isArray(app.assignedTo)
+      ? app.assignedTo
+      : (app.assignedOfficer
+        ? [{
+            name: app.assignedOfficer.name,
+            first: String(app.assignedOfficer.name || '').trim().split(' ')[0],
+            email: app.assignedOfficer.email,
+            avatar: app.assignedOfficer.avatar
+          }]
+        : []);
+    if (window.TMAPersonCard && window.TMAPersonCard.faces) {
+      return window.TMAPersonCard.faces(people, { emptyLabel: 'Unassigned' });
+    }
+    return esc(people.map(function (p) { return p.first || p.name; }).join(', ') || 'Unassigned');
+  }
+
+  function renderFactsStrip(app) {
+    if (!app) return '';
+
+    var html =
+      cipFact('Received', cipMilestoneDate(app, 'filed')) +
+      cipFact('Submitted', cipMilestoneDate(app, 'submitted')) +
+      cipFact('Decision', cipMilestoneDate(app, 'decision')) +
+      cipFact('Investment', app.investmentType) +
+      cipFact('Referred by', app.provider) +
+      cipFact('Assigned', cipAssignedFaces(app), true);
+
+    if (!html) return '';
+
+    return '<section class="tma-dash__cip-strip" aria-label="Application facts">' +
+      '<div class="tma-dash__cip-strip-grid">' + html + '</div></section>';
+  }
+
+  /*
    * What can be DONE to this application, above the panels.
    *
-   * What it IS — the number, the status, the provider — moved under the name
-   * in the head, where the reader is already looking to find out whose page
-   * this is. What is left here is the verb, and when there is no verb to offer
-   * there is no band either: an empty strip between the tabs and the panels
-   * would be a row of chrome standing in for nothing.
+   * The facts strip already names the file; what is left here is the verb.
+   * When there is no verb to offer there is no band either: an empty strip
+   * between the tabs and the panels would be a row of chrome standing in
+   * for nothing.
    */
   function renderApplicationBar(state, app) {
     if (!app) return '';
@@ -4934,7 +4982,8 @@
    *
    * The tick still says whether a file is there at all, because "uploaded" and
    * "accepted" are different questions and a row that answered only the second
-   * would hide the first.
+   * would hide the first. It is the documented TMA checkbox (`.tma-dash__check`),
+   * not a Phosphor circle — same glyph the rest of the portal uses.
    */
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
@@ -4943,7 +4992,8 @@
 
     return (
       '<li class="tma-dash__clients-checklist-row">' +
-      '<img src="' + ICONS[filed ? 'CheckCircle' : 'Circle'] + '" alt="" width="18" height="18">' +
+      '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
+      ' disabled tabindex="-1" aria-hidden="true">' +
       '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
       // Not a red star after every line: the mandatory ones are the norm and
       // the exception is worth naming, so the OPTIONAL ones are the ones
@@ -6041,6 +6091,7 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
+      renderFactsStrip(app) +
       renderApplicationBar(state, app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out

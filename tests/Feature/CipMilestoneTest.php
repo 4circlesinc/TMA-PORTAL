@@ -152,6 +152,7 @@ class CipMilestoneTest extends TestCase
         $this->assertSame('Omar Reviewer', $body['assignedOfficer']['name']);
         $this->assertSame('omar@example.com', $body['assignedOfficer']['email']);
         $this->assertArrayHasKey('avatar', $body['assignedOfficer']);
+        $this->assertSame('Omar Reviewer', $body['assignedTo'][0]['name'] ?? null);
     }
 
     public function test_an_application_nobody_holds_names_nobody(): void
@@ -167,6 +168,7 @@ class CipMilestoneTest extends TestCase
         // Null rather than the last officer who held it, and rather than an
         // empty person the card would draw a blank row for.
         $this->assertNull($body['assignedOfficer']);
+        $this->assertSame([], $body['assignedTo']);
     }
 
     public function test_the_officer_leaves_the_record_when_the_assignment_ends(): void
@@ -184,6 +186,7 @@ class CipMilestoneTest extends TestCase
             ->json('application');
 
         $this->assertNull($body['assignedOfficer']);
+        $this->assertSame([], $body['assignedTo']);
     }
 
     /**

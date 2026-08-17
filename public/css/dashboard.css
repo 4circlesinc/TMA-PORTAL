@@ -18034,7 +18034,7 @@
  * which is the thing this whole change was undoing.
  */
 .tma-dash__clients-profile--cards >
-  .tma-dash__clients-profile-panel:not([data-clients-panel="dependents"]) {
+  .tma-dash__clients-profile-panel:not([data-clients-panel="dependents"]):not([data-clients-panel="overview"]) {
   padding: var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-card, var(--color-white));
@@ -18055,15 +18055,20 @@
  * loading.
  */
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"],
-.tma-dash__clients-profile-panel[data-clients-panel="sponsor"],
-.tma-dash__clients-profile-panel[data-clients-panel="overview"] {
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] {
   flex: 0 0 auto;
 }
 
-.tma-dash__clients-profile-panel[data-clients-panel="overview"] {
+.tma-dash__clients-profile-panel[data-clients-panel="overview"]:not([hidden]) {
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
+}
+
+/* Author `display: flex` above beats the UA [hidden] rule, so it has to be
+   restated — otherwise Timeline sits on every tab. */
+.tma-dash__clients-profile-panel[data-clients-panel="overview"][hidden] {
+  display: none;
 }
 
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"] .tma-dash__clients-profile-body,
@@ -34950,7 +34955,13 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-primary);
 }
 
-.tma-dash__clients-checklist-row img { opacity: 0.55; flex-shrink: 0; }
+/* Status, not a control: the documented checkbox, frozen so it cannot be
+   toggled. Disabled must not fade it — the grey outline / filled tick are
+   the two states, and opacity would invent a third. */
+.tma-dash__clients-checklist-row .tma-dash__check:disabled {
+  opacity: 1;
+  cursor: default;
+}
 
 /* The state sits at the end of the row, where a reader scanning for what is
    still missing looks — not tucked against the name it belongs to. */
@@ -35204,6 +35215,38 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__cip-tl .tma-portal-details__label {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * CBI's facts strip: Received, Submitted, Investment, Referred by, Assigned.
+ * Outside the tab panels so it stays on Overview, the people, Documents —
+ * every section of the file. Empty dates are omitted in the markup; Assigned
+ * always answers.
+ */
+.tma-dash__cip-strip {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: var(--space-24);
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card, var(--color-white));
+}
+
+.tma-dash__cip-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-12) var(--space-24);
+}
+
+.tma-dash__cip-strip .tma-dash__clients-list-value {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.tma-dash__cip-strip + .tma-dash__clients-appbar,
+.tma-dash__cip-strip + .tma-dash__clients-sync-notice {
+  margin-top: 0;
 }
 
 .tma-dash__clients-profile-officer--none { opacity: 0.6; }

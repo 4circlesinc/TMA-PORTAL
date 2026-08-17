@@ -144,12 +144,12 @@ class CipApplicationController extends Controller
          * and a column that was never selected reads as no photo at all.
          */
         $query = ApplicationScope::query($user)
-            ->with([
+            ->with(array_merge([
                 'provider',
                 'client',
                 'assignedOfficer:id,name,email,avatar_url,provider_avatar_url',
                 'people.documents.file',
-            ]);
+            ], self::assigneeRelations()));
 
         if ($since !== null) {
             /*
@@ -708,7 +708,9 @@ class CipApplicationController extends Controller
     {
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
-        $application->loadMissing(['provider', 'client', 'assignedOfficer', 'people.documents.file']);
+        $application->loadMissing(array_merge([
+            'provider', 'client', 'assignedOfficer', 'people.documents.file',
+        ], self::assigneeRelations()));
 
         /*
          * One presenter, primed once — for the family, or for the whole page.
@@ -766,6 +768,9 @@ class CipApplicationController extends Controller
             // how far it has left to go.
             'milestones' => Milestones::for($application),
             'assignedOfficer' => $this->officer($application),
+            // The same people the table column and Assigned tab name — faces
+            // on the facts strip under every tab, not a second list.
+            'assignedTo' => $this->assignees($application),
             'createdAt' => $application->created_at?->toIso8601String(),
             // Which client's profile this belongs under, and when it last
             // moved. Both are for the offline cache: a record arriving from
@@ -774,6 +779,26 @@ class CipApplicationController extends Controller
             // what it holds is older than what just arrived.
             'clientUid' => $application->client?->uid,
             'updatedAt' => $application->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Who {@see assignees()} names, loaded with the page rather than per row.
+     *
+     * The detail record carries the same list the table column draws, and a
+     * relation it has to fetch for itself is not one query — it is fifty on a
+     * sync page. Live only, both photo columns, because photoUrl() falls back
+     * from one to the other and a column that was never selected reads empty.
+     *
+     * @return array<string, \Closure>
+     */
+    private static function assigneeRelations(): array
+    {
+        return [
+            'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url,provider_avatar_url'),
+            'client.assignments' => fn ($q) => $q->live()
+                ->with('user:id,name,email,avatar_url,provider_avatar_url')
+                ->orderByDesc('is_primary'),
         ];
     }
 
