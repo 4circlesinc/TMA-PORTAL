@@ -6317,15 +6317,15 @@
       var unassigned = assignable.filter(function (s) {
         return !items.some(function (a) { return String(a.userId) === String(s.id); });
       });
+      /*
+       * A picker and a button, nothing else. The permission-level dropdown
+       * sat here and nobody chose anything but Editor — a question with one
+       * answer asked on every assignment. Everyone starts as Editor, and the
+       * level can still be changed on the assigned row afterwards.
+       */
       assignForm =
         '<div class="tma-dash__clients-assign-form">' +
         staffPicker('data-clients-assign-user', unassigned, state.assignPick, 'Assign staff…') +
-        '<select class="tma-dash__clients-field-select" data-clients-assign-level aria-label="Permission level">' +
-        ASSIGNMENT_LEVELS.map(function (l) {
-          return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
-            esc(l.label) + '</option>';
-        }).join('') +
-        '</select>' +
         '<button type="button" class="tma-dash__clients-assign-btn" data-clients-assign-submit>Assign</button>' +
         '</div>';
     }
@@ -8776,7 +8776,6 @@
     if (assignSubmit) {
       assignSubmit.addEventListener('click', function () {
         var userSel = root.querySelector('[data-clients-assign-user]');
-        var levelSel = root.querySelector('[data-clients-assign-level]');
         var userId = userSel && userSel.value ? parseInt(userSel.value, 10) : 0;
         if (!userId) {
           clientsToast('Choose a staff member to assign', 'negative');
@@ -8784,7 +8783,8 @@
         }
         ClientsAPI.assign(state.selectedId, {
           userId: userId,
-          level: levelSel ? levelSel.value : 'editor',
+          // Everyone starts as Editor; the row's own controls change it.
+          level: 'editor',
         }).then(function (res) {
           state.assignments = (res && res.assignments) || [];
           // Chosen and gone: they are on the list now, not in the picker.
