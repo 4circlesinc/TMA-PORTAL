@@ -226,6 +226,21 @@ class Tree
     }
 
     /**
+     * A named drawer inside a folder the caller already holds.
+     *
+     * The public door for the requirement templates, whose `folder` column
+     * says where a slot's uploads are filed ({@see DocumentSlots}). It is
+     * deliberately this narrow: the caller hands over a parent and a NAME,
+     * and the child is always created under that parent — there is no path
+     * to walk and no other ancestor to reach, so a folder name typed on a
+     * template can never file a document outside the person's own folder.
+     */
+    public static function subfolder(Folder $parent, string $name, ?User $actor = null): Folder
+    {
+        return self::childNamed($parent, $name, $actor);
+    }
+
+    /**
      * A child folder of this parent, found by name or created.
      *
      * Found by name only at creation time — once it exists the id is the
@@ -235,10 +250,21 @@ class Tree
      */
     private static function childNamed(Folder $parent, string $name, ?User $actor): Folder
     {
+        /*
+         * Case is folded in PHP, on both sides.
+         *
+         * SQL lower() and Str::lower() disagree on anything beyond ASCII —
+         * SQLite folds only A-Z — so comparing one against the other made a
+         * drawer named "Ödeme" miss its own row and mint a duplicate sibling
+         * on every batch. Drawer names are the administrator's to invent now,
+         * in whatever language the firm works in, and one folder's children
+         * are few enough that reading them is cheaper than being wrong.
+         */
+        $wanted = Str::lower(trim($name));
         $existing = Folder::query()
             ->where('parent_id', $parent->id)
-            ->whereRaw('lower(name) = ?', [Str::lower($name)])
-            ->first();
+            ->get()
+            ->first(fn (Folder $child) => Str::lower($child->name) === $wanted);
 
         if ($existing) {
             return $existing;

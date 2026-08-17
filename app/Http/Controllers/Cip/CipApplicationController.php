@@ -25,6 +25,7 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
+use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Files\Presenter;
@@ -727,6 +728,20 @@ class CipApplicationController extends Controller
     {
         $application = ApplicationScope::findOrFail($request->user(), $uuid);
 
+        /*
+         * The checklist is settled on the read that opens ONE file, so the
+         * detail tabs always show the templates as they stand — however a
+         * template arrived, a seeder and an import included. Materialise is
+         * idempotent and writes nothing when nothing changed, so this read
+         * stays a read on every open-and-look. Deliberately NOT done on
+         * sync() or index(): those serve fifty applications a page, and when
+         * the templates HAVE moved, a per-row write there would touch every
+         * application on the page — and the sync cursor answers "which
+         * applications moved since?" from exactly that timestamp.
+         */
+        Requirements::materialiseApplication($application);
+        $application->unsetRelation('people');
+
         return response()->json([
             'application' => $this->record($application, $request->user()),
         ]);
@@ -773,6 +788,14 @@ class CipApplicationController extends Controller
             ->whereHas('client', fn ($q) => $q->where('uid', $uid))
             ->latest('id')
             ->first();
+
+        // The client profile is the other detail read — settled here for the
+        // same reason show() settles it, and kept off the fifty-row pages for
+        // the same reason too.
+        if ($application) {
+            Requirements::materialiseApplication($application);
+            $application->unsetRelation('people');
+        }
 
         return response()->json([
             'application' => $application ? $this->record($application, $user) : null,
@@ -883,7 +906,8 @@ class CipApplicationController extends Controller
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
         $application->loadMissing(array_merge([
-            'provider', 'client', 'assignedOfficer', 'people.documents.file',
+            'provider', 'client', 'assignedOfficer',
+            'people.documents.file', 'people.documents.requirement',
         ], self::assigneeRelations()));
 
         /*
@@ -1082,24 +1106,30 @@ class CipApplicationController extends Controller
             // §11's applicant types decide which checklist this person owes.
             'applicantType' => ApplicantType::for($person),
             'applicantTypeLabel' => ApplicantType::label(ApplicantType::for($person)),
-            'documents' => $person->documents->map(fn ($slot) => [
-                'id' => $slot->uuid,
-                'type' => $slot->type,
-                'label' => $slot->label,
-                'required' => (bool) $slot->required,
-                'uploaded' => $slot->isFilled(),
-                /*
-                 * §12's own status, not the file library's review_status.
-                 * They are different vocabularies with different rules — a
-                 * document waiting for a reviewer is not the same idea as a
-                 * library file marked "pending review", and conflating them
-                 * would let either one overwrite the other.
-                 */
-                'status' => $slot->status,
-                'statusLabel' => DocumentStatus::label($slot->status ?? DocumentStatus::PENDING_UPLOAD),
-                'statusTone' => DocumentStatus::tone($slot->status ?? DocumentStatus::PENDING_UPLOAD),
-                'fileId' => $slot->file?->uuid,
-            ])->values()->all(),
+            'documents' => $person->documents
+                ->sortBy(fn ($slot) => [
+                    $slot->requirement?->sort_order ?? 10000,
+                    $slot->id,
+                ])
+                ->values()
+                ->map(fn ($slot) => [
+                    'id' => $slot->uuid,
+                    'type' => $slot->type,
+                    'label' => $slot->label,
+                    'required' => (bool) $slot->required,
+                    'uploaded' => $slot->isFilled(),
+                    /*
+                     * §12's own status, not the file library's review_status.
+                     * They are different vocabularies with different rules — a
+                     * document waiting for a reviewer is not the same idea as a
+                     * library file marked "pending review", and conflating them
+                     * would let either one overwrite the other.
+                     */
+                    'status' => $slot->status,
+                    'statusLabel' => DocumentStatus::label($slot->status ?? DocumentStatus::PENDING_UPLOAD),
+                    'statusTone' => DocumentStatus::tone($slot->status ?? DocumentStatus::PENDING_UPLOAD),
+                    'fileId' => $slot->file?->uuid,
+                ])->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
         ];
     }

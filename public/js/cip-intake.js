@@ -314,10 +314,12 @@
   /* The client form's photo control, wearing the passport photo's rules. The
      same component so a person's picture is added the way every other
      person's is; only the constraint is different, and the constraint is the
-     one thing worth saying out loud. */
+     one thing worth saying out loud. The --passport modifier is the size:
+     here the photo IS the document being filed, so the control is big enough
+     to judge the scan on, not an avatar disc. */
   function photoField(path) {
     var preview = state.previews[path];
-    return '<div class="tma-dash__clients-photo' +
+    return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport' +
       (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, labelFor(path)) +
       '<input type="file" accept="image/jpeg,image/png,image/webp"' +
@@ -325,8 +327,8 @@
       '<div class="tma-dash__clients-photo-wrap">' +
       '<button type="button" class="tma-dash__clients-photo-btn"' +
       (preview ? ' data-has-image="true"' : '') + ' data-cip-photo-btn="' + esc(path) + '">' +
-      '<img src="' + ICON + 'User.svg" alt="" class="tma-dash__clients-photo-placeholder" width="40" height="40">' +
-      '<img alt="" class="tma-dash__clients-photo-preview" width="80" height="80"' +
+      '<img src="' + ICON + 'User.svg" alt="" class="tma-dash__clients-photo-placeholder" width="120" height="120">' +
+      '<img alt="" class="tma-dash__clients-photo-preview" width="360" height="360"' +
       (preview ? ' src="' + esc(preview) + '"' : '') + '>' +
       '</button>' +
       '<button type="button" class="tma-dash__clients-photo-remove"' +
@@ -467,9 +469,10 @@
     var countries = countryOptions();
     var region = regionFor(state.draft[prefix + 'countryOfResidence']);
 
-    // Two to a row: a person's card is two thirds of the width now, and three
-    // columns in it left the fields narrower than the answers they take.
-    return '<div class="tma-portal-form-grid tma-portal-form-grid--two">' +
+    // One to a row: a person's card is the narrow half now — the width went
+    // to their documents — and a single generous column is filled in the way
+    // the paper form is read, one answer under the last.
+    return '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       selectField(prefix + 'gender', genderOptions(), 'Select') +
@@ -488,12 +491,14 @@
   function applicantCard() {
     return titledCard('Main applicant',
       photoField('passportPhoto') + personFields(''),
-      { modifier: 'tma-portal-section--wide' });
+      { modifier: 'tma-portal-section--person' });
   }
 
   /* The uploads beside the person they belong to, one drop target per
-     template the settings ask of that person. Listed down one column: two
-     drop targets side by side are two small drop targets. */
+     template the settings ask of that person. Two to a row: the card is the
+     wide half of the pairing now, so a pair of targets are both still
+     full-size — back when this card was a third of the row, two side by side
+     would have been two small drop targets, which is why it was one column. */
   function documentsCard(prefix) {
     var fields = docFields(prefix === 'sponsor.' ? 'sponsor' : 'principal');
     if (!fields.length) return '';
@@ -502,7 +507,7 @@
       '<div class="tma-portal-drops">' +
       fields.map(function (doc) { return documentField(prefix + doc.field); }).join('') +
       '</div>',
-      { modifier: 'tma-dash__clients-card--narrow' });
+      { modifier: 'tma-dash__clients-card--docs' });
   }
 
   function investmentCard() {
@@ -536,11 +541,12 @@
     if (!sponsored()) return '';
 
     // A person is a person: the sponsor gets the main applicant's row — name
-    // above the box, photo, fields two to a row, documents beside them. The
-    // only difference is that their scans are not demanded to start a draft.
+    // above the box, photo, fields one under the last, documents beside them.
+    // The only difference is that their scans are not demanded to start a
+    // draft.
     return titledCard('Sponsor',
       photoField('sponsor.passportPhoto') + personFields('sponsor.'),
-      { modifier: 'tma-portal-section--wide' }) +
+      { modifier: 'tma-portal-section--person' }) +
       documentsCard('sponsor.');
   }
 
@@ -577,7 +583,9 @@
       ' aria-label="Remove ' + esc(title) + '">' +
       '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
       '</div>' +
-      '<div class="tma-portal-form-grid">' +
+      // A dependent's four answers wear the person column too — the same
+      // fields at two sizes in one form would read as two different asks.
+      '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +

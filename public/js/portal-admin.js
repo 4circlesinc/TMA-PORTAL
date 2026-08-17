@@ -1275,6 +1275,71 @@
       .then(function () { CIPDOCS.loaded = true; CIPDOCS.loading = false; render(); });
   }
 
+  function cipDocFolders() {
+    var names = {};
+    CIPDOCS.types.forEach(function (t) {
+      t.requirements.forEach(function (r) {
+        if (r.folder) names[r.folder] = true;
+      });
+    });
+    return Object.keys(names).sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+  }
+
+  function cipDocFolderModal(f) {
+    var existing = cipDocFolders();
+    var current = f.r.folder || '';
+    var options = [{ value: '', label: 'Person’s own folder' }].concat(
+      existing.map(function (name) { return { value: name, label: name }; }),
+      [{ value: '__new__', label: 'Create a new folder…' }]
+    );
+    var selected = current && existing.indexOf(current) >= 0 ? current : (current ? '__new__' : '');
+
+    ui().openModal({
+      title: 'Filing folder',
+      body:
+        '<p class="tma-portal-note">Uploads stay inside that person’s own folder — Main Applicant, Sponsor, or Dependent. Pick a subfolder inside it, or create one. The main applicant’s files cannot be filed anywhere else.</p>' +
+        ui().field('Folder', ui().select(options, selected, 'data-cipdoc-folder-pick', 'Folder')) +
+        '<div data-cipdoc-folder-new' + (selected === '__new__' ? '' : ' hidden') + '>' +
+        ui().field('New folder name', ui().input({
+          placeholder: 'e.g. Passport',
+          value: selected === '__new__' ? current : '',
+          attrs: 'data-cipdoc-folder-name maxlength="64"',
+        })) +
+        '</div>' +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipdoc-folder-save' }) + '</div>',
+      onMount: function (host) {
+        var pick = host.querySelector('[data-cipdoc-folder-pick]');
+        var extra = host.querySelector('[data-cipdoc-folder-new]');
+        var nameInput = host.querySelector('[data-cipdoc-folder-name]');
+        function sync() {
+          extra.hidden = pick.value !== '__new__';
+        }
+        pick.addEventListener('change', sync);
+        host.querySelector('[data-cipdoc-folder-save]').addEventListener('click', function () {
+          var folder = pick.value === '__new__'
+            ? (nameInput.value || '').trim()
+            : pick.value;
+          if (pick.value === '__new__' && !folder) {
+            ui().toastError('Name the folder first.');
+            return;
+          }
+          if (folder === (f.r.folder || '')) { ui().closeModal(); return; }
+          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { folder: folder })
+            .then(function () {
+              ui().closeModal();
+              ui().toast(folder ? 'Now filing into “' + folder + '”' : 'Back to the person’s own folder');
+              CIPDOCS.loaded = false;
+              if (window.TMAStore) window.TMAStore.invalidate('cip:application:');
+              loadCipDocs();
+            })
+            .catch(function (e) { ui().toastError(e.message); });
+        });
+      },
+    });
+  }
+
   function cipDocRow(r, canEdit) {
     // A retired row keeps its place in the list but drops to the muted ink —
     // the same grey the table already uses — so the eye reads it as history.
@@ -1282,11 +1347,24 @@
       ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
       : '<strong>' + ui().esc(r.label) + '</strong>';
 
+    // Required is a tick in its own column. Ticked means required; unticked
+    // means optional. The old inverted reading — a filled circle for optional
+    // — is the thing this column exists to stop.
+    var tick = r.retired ? '' :
+      '<input type="checkbox" class="tma-dash__check" data-cipdoc-toggle="' + ui().esc(r.id) + '"' +
+      (r.required ? ' checked' : '') + (canEdit ? '' : ' disabled') +
+      ' title="' + (r.required ? 'Required — untick to make it optional' : 'Optional — tick to make it required') + '"' +
+      ' aria-label="Required — ' + ui().esc(r.label) + '">';
+
+    var meta = [];
+    if (r.help) meta.push(ui().esc(r.help));
+    if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
+
     return '<tr>' +
+      '<td class="tma-portal-table__check">' + tick + '</td>' +
       '<td>' + name +
-      (r.retired ? ' <span class="tma-portal-tag">Retired</span>'
-        : (r.required ? ' <span class="tma-portal-tag">Mandatory</span>' : '')) +
-      (r.help ? '<br><span class="tma-portal-table__muted">' + ui().esc(r.help) + '</span>' : '') +
+      (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
+      (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
       '</td>' +
       '<td>' + (canEdit
         ? '<div class="tma-portal-row-actions">' +
@@ -1294,7 +1372,7 @@
             ? '<button type="button" class="tma-portal-icon-btn" data-cipdoc-restore="' + ui().esc(r.id) + '" title="Bring it back" aria-label="Bring it back"><img src="images/icons/phosphor/ArrowCounterClockwise.svg" alt=""></button>'
             : '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-down="' + ui().esc(r.id) + '" title="Move down" aria-label="Move down"><img src="images/icons/phosphor/CaretDown.svg" alt=""></button>' +
-              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-toggle="' + ui().esc(r.id) + '" title="' + (r.required ? 'Make it optional' : 'Make it mandatory') + '" aria-label="' + (r.required ? 'Make it optional' : 'Make it mandatory') + '"><img src="images/icons/phosphor/' + (r.required ? 'Circle' : 'CheckCircle') + '.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-folder="' + ui().esc(r.id) + '" title="Choose a folder" aria-label="Choose a folder"><img src="images/icons/phosphor/FolderSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Rename" aria-label="Rename"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-retire="' + ui().esc(r.id) + '" title="Retire" aria-label="Retire"><img src="images/icons/phosphor/Trash.svg" alt=""></button>') +
           '</div>'
@@ -1308,14 +1386,14 @@
 
       var canEdit = true;
 
-      return '<p class="tma-portal-subtitle">What each person on an application must upload. Every new application is measured against these lists.</p>' +
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Tick a document to make it required; leave it unticked for optional. Every new application is measured against these lists.</p>' +
         CIPDOCS.types.map(function (t) {
           var live = t.requirements.filter(function (r) { return !r.retired; });
           var retired = t.requirements.filter(function (r) { return r.retired; });
 
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
             (t.requirements.length
-              ? ui().table(['Document', ''], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''))
+              ? ui().table(['Required', 'Document', ''], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
               : '<p class="tma-portal-note">Nothing required of this person yet.</p>') +
             '<div class="tma-dash__clients-assign-form">' +
             '<input class="tma-dash__clients-field-input" type="text" placeholder="Add a document…" data-cipdoc-label="' + ui().esc(t.value) + '" aria-label="Document name for ' + ui().esc(t.label) + '">' +
@@ -1334,7 +1412,11 @@
         return found;
       }
 
-      function saved() { CIPDOCS.loaded = false; loadCipDocs(); }
+      function saved() {
+        CIPDOCS.loaded = false;
+        if (window.TMAStore) window.TMAStore.invalidate('cip:application:');
+        loadCipDocs();
+      }
       function failed(e) { ui().toastError(e.message); }
 
       el.querySelectorAll('[data-cipdoc-add]').forEach(function (b) {
@@ -1358,12 +1440,23 @@
         });
       });
 
-      el.querySelectorAll('[data-cipdoc-toggle]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var f = req(b.getAttribute('data-cipdoc-toggle'));
+      el.querySelectorAll('[data-cipdoc-toggle]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var f = req(box.getAttribute('data-cipdoc-toggle'));
           if (!f) return;
-          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { required: !f.r.required })
-            .then(function () { ui().toast(f.r.required ? 'Now optional' : 'Now mandatory'); saved(); }).catch(failed);
+          var required = !!box.checked;
+          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { required: required })
+            .then(function () { ui().toast(required ? 'Now required' : 'Now optional'); saved(); })
+            // The box flipped the moment it was clicked; a redraw from the
+            // unchanged state snaps it back so it never shows a saved lie.
+            .catch(function (e) { failed(e); render(); });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-folder]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = req(b.getAttribute('data-cipdoc-folder'));
+          if (f) cipDocFolderModal(f);
         });
       });
 

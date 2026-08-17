@@ -57,7 +57,9 @@ class DocumentRequests
             'title' => $slot->label,
             'message' => 'Please upload '.$slot->label.' for '
                 .($slot->person?->fullName() ?? 'this application').'.',
-            'folder_id' => $slot->person?->folder_id,
+            // The same drawer a portal upload would use — a document must
+            // not land in two places depending on which door it came in by.
+            'folder_id' => DocumentSlots::destinationForSlot($slot, $creator),
             'client_id' => $slot->application?->client_id,
             'created_by' => $creator->id,
             // A requirement has one answer. See the note at the top.
@@ -128,7 +130,7 @@ class DocumentRequests
             } else {
                 $file = FileItem::create([
                     'uuid' => $stored['uuid'],
-                    'folder_id' => $slot->person?->folder_id,
+                    'folder_id' => DocumentSlots::destinationForSlot($slot, $owner),
                     'name' => $name,
                     'extension' => $meta['extension'],
                     'mime_type' => $meta['mime'],

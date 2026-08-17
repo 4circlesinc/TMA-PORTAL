@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CipApplication;
 use App\Models\CipDocument;
+use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -13,6 +14,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
@@ -750,6 +752,48 @@ class CipIntakeTest extends TestCase
             ->pluck('name')->all();
         $this->assertContains('John Smith — Birth certificate.pdf', $filed);
         $this->assertContains('John Smith — Birth certificate (2).pdf', $filed);
+    }
+
+    /**
+     * A requirement can name the drawer its uploads are filed into.
+     *
+     * The admin writes "Passport" on the bio-page template and every bio page
+     * lands in Main Applicant → Passport. The name is a child of the person's
+     * OWN folder, never a path out of it — that is the constraint — and a
+     * template naming nothing keeps filing straight into the person's folder,
+     * which is what every requirement did before the column existed.
+     */
+    public function test_a_requirement_naming_a_folder_files_its_uploads_into_it(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        CipDocumentRequirement::query()
+            ->where('applicant_type', ApplicantType::PRINCIPAL_APPLICANT)
+            ->where('key', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->update(['folder' => 'Passport']);
+
+        $this->file($staff, $this->payload($provider, [
+            'passportBioPage' => [$this->scan('front.pdf'), $this->scan('back.pdf')],
+        ]))->assertCreated();
+
+        $main = CipPerson::where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $drawer = Folder::where('parent_id', $main->folder_id)->where('name', 'Passport')->first();
+        $this->assertNotNull($drawer, 'the drawer is a child of the person\'s own folder');
+
+        // Both sheets — the answer and the extra file beside it — in the same
+        // drawer, or one requirement's papers end up in two places.
+        $this->assertSame(
+            ['John Smith — Passport bio page.pdf', 'John Smith — Passport bio page (2).pdf'],
+            FileItem::where('folder_id', $drawer->id)->orderBy('id')->pluck('name')->all(),
+        );
+
+        // The birth certificate's template names no folder, so it files where
+        // it always did.
+        $birth = CipDocument::where('person_id', $main->id)
+            ->where('type', DocumentTypes::BIRTH_CERTIFICATE)->firstOrFail();
+        $this->assertSame($main->folder_id, FileItem::find($birth->file_id)->folder_id);
     }
 
     /** One file on its own is still a list of one — the endpoint takes both. */

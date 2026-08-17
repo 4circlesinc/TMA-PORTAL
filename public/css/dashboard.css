@@ -17768,6 +17768,8 @@
   background: none;
   border-radius: 0;
   padding: 0;
+  container-type: inline-size;
+  container-name: cip-intake;
 }
 
 /* The element a form mounts into is a pass-through, not a layer of its own. */
@@ -18786,15 +18788,57 @@ button.tma-cip-status-chip:focus-visible {
 }
 
 /*
+ * The passport photo, at passport-photo size.
+ *
+ * The 80px disc above is an avatar control: fine for the picture that
+ * decorates a profile. On the CIP intake the photo IS a document being filed
+ * — square, 2×2 inches — and the control is where the reader judges the scan
+ * they just chose, so it gets three and a half times the disc and shows the
+ * square crop squarely; a circle this big would hide the corners the rule is
+ * about. min() rather than a fixed width so a phone keeps the whole control
+ * on screen; aspect-ratio keeps it square at whatever width it lands on.
+ * The remove badge moves inside the corner and grows with it — at this size
+ * a badge hanging off the edge would sit over whatever the card is next to.
+ */
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-wrap {
+  width: min(360px, 100%);
+}
+
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-btn {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-16);
+}
+
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-placeholder {
+  width: 120px;
+  height: 120px;
+}
+
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-remove {
+  top: var(--space-8);
+  right: var(--space-8);
+  width: 32px;
+  height: 32px;
+}
+
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-remove-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/*
  * The intake form's first row: a person, and their documents beside them.
  *
- * Two thirds and one third rather than half each. The applicant's eight
- * fields still want three to a row, and the documents are a short list of
- * drop boxes — splitting the width evenly would crush the one and strand the
- * other in whitespace.
+ * One third and two thirds, the person on the narrow side. Their fields
+ * run one to a row now, so the person's card wants one generous column and
+ * no more — the width earns its keep on the documents side, where two drop
+ * targets to a row only work if each of the pair is still a full-size
+ * target.
  */
 .tma-dash__clients-cards--intake {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2.2fr);
   gap: var(--space-16);
 }
 
@@ -18818,7 +18862,7 @@ button.tma-cip-status-chip:focus-visible {
 /* A section's documents card is in the same row, so it moves with it or the
    pair stops being a pair. The alignment offset below is carried through. */
 .tma-dash__clients-cards--intake
-  > .tma-portal-section:not(:first-child) + .tma-dash__clients-card--narrow {
+  > .tma-portal-section:not(:first-child) + .tma-dash__clients-card--docs {
   margin-top: calc(var(--text-lh-14) + var(--space-8) + var(--space-16));
 }
 
@@ -18827,7 +18871,7 @@ button.tma-cip-status-chip:focus-visible {
    for the wrong thing. */
 .tma-dash__clients-cards--intake > .tma-portal-section { grid-column: 1 / -1; }
 
-.tma-dash__clients-cards--intake > .tma-portal-section--wide { grid-column: 1; }
+.tma-dash__clients-cards--intake > .tma-portal-section--person { grid-column: 1; }
 
 /* A section stretches to its row, but the card inside it is only as tall as
    its fields — so a taller neighbour left the named card short by the
@@ -18846,7 +18890,7 @@ button.tma-cip-status-chip:focus-visible {
  * lines up both edges: the tops by this margin, and the bottoms because a
  * stretched item's height is what is left after its margins.
  */
-.tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
+.tma-dash__clients-cards--intake > .tma-dash__clients-card.tma-dash__clients-card--docs {
   grid-column: 2;
   margin-top: calc(var(--text-lh-14) + var(--space-8));
 }
@@ -18889,15 +18933,18 @@ button.tma-cip-status-chip:focus-visible {
   overscroll-behavior: auto;
 }
 
-/* Below the point where two thirds stops fitting three fields, they stack —
-   and a card with nothing beside it has nothing to line up with. */
-@media (max-width: 1250px) {
+/* Stack when the FORM itself is too narrow for a field beside a pair of
+   drop targets — not when the viewport is. The dashboard rail already eats
+   a couple of hundred pixels, so a 1250px screen query stacked this on
+   every ordinary desktop and the documents card never got the width the
+   two-column drops were sized for. */
+@container cip-intake (max-width: 760px) {
   .tma-dash__clients-cards--intake { grid-template-columns: minmax(0, 1fr); }
-  .tma-dash__clients-cards--intake > .tma-portal-section--wide,
-  .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
+  .tma-dash__clients-cards--intake > .tma-portal-section--person,
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card.tma-dash__clients-card--docs {
     grid-column: 1 / -1;
   }
-  .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow { margin-top: 0; }
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card.tma-dash__clients-card--docs { margin-top: 0; }
 }
 
 .tma-dash__clients-list--profile {

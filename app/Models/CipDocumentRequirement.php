@@ -32,7 +32,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'applicant_type', 'key', 'label', 'required', 'sort_order',
-    'active', 'help',
+    'active', 'help', 'folder',
 ])]
 class CipDocumentRequirement extends Model
 {

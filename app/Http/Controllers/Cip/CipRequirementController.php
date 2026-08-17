@@ -61,6 +61,7 @@ class CipRequirementController extends Controller
             'label' => ['required', 'string', 'max:191'],
             'required' => ['nullable', 'boolean'],
             'help' => ['nullable', 'string', 'max:2000'],
+            'folder' => ['nullable', 'string', 'max:64'],
         ]);
 
         abort_unless(ApplicantType::isValid($data['applicantType']), 422, 'That is not an applicant type.');
@@ -77,7 +78,20 @@ class CipRequirementController extends Controller
         // would otherwise be orphaned beside a duplicate.
         if ($clash) {
             $requirement = Requirements::restore($clash);
-            $requirement->forceFill(['label' => $data['label']])->save();
+
+            /*
+             * The folder only moves if the request actually spoke about it.
+             * The everyday add flow sends a name and nothing else, and a
+             * retire-then-re-add through it must not quietly wipe the drawer
+             * an administrator had set — restored means back as it was.
+             */
+            $changes = ['label' => $data['label']];
+
+            if (array_key_exists('folder', $data)) {
+                $changes['folder'] = $this->folder($data);
+            }
+
+            $requirement->forceFill($changes)->save();
         } else {
             $requirement = CipDocumentRequirement::create([
                 'applicant_type' => $data['applicantType'],
@@ -85,6 +99,7 @@ class CipRequirementController extends Controller
                 'label' => $data['label'],
                 'required' => $data['required'] ?? true,
                 'help' => $data['help'] ?? null,
+                'folder' => $this->folder($data),
                 'sort_order' => $this->nextOrder($data['applicantType']),
             ]);
         }
@@ -103,7 +118,18 @@ class CipRequirementController extends Controller
             'label' => ['sometimes', 'string', 'max:191'],
             'required' => ['sometimes', 'boolean'],
             'help' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'folder' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
+
+        /*
+         * Renaming the drawer moves nothing already filed. Like the label,
+         * the folder reaches forward only: documents filed under the old name
+         * keep the place they were put, and re-homing them here would mean an
+         * admin edit silently rearranging files reviewers have links to.
+         */
+        if (array_key_exists('folder', $data)) {
+            $data['folder'] = $this->folder($data);
+        }
 
         /*
          * The key is not in that list, and cannot be.
@@ -205,6 +231,23 @@ class CipRequirementController extends Controller
     }
 
     /**
+     * The subfolder the form named, or null.
+     *
+     * Trimmed, and an empty answer stored as null rather than '': the column
+     * means "file these uploads in a drawer of this name inside the person's
+     * folder", and a blank name is not a drawer — it is the person's folder
+     * itself, which is what null already says.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function folder(array $data): ?string
+    {
+        $folder = trim(str_replace(['/', '\\'], '', (string) ($data['folder'] ?? '')));
+
+        return $folder === '' ? null : $folder;
+    }
+
+    /**
      * A new requirement reaches the applications already in flight.
      *
      * Safe because materialise never removes a slot that holds a file: the
@@ -235,6 +278,7 @@ class CipRequirementController extends Controller
             'label' => $requirement->label,
             'required' => (bool) $requirement->required,
             'help' => $requirement->help,
+            'folder' => $requirement->folder,
             'sortOrder' => (int) $requirement->sort_order,
             'retired' => $requirement->trashed() || ! $requirement->active,
         ];

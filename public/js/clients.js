@@ -5292,6 +5292,7 @@
       window.TMAFileActions.open(file, function () {
         delete APPLICATIONS[state.selectedId];
         forgetApplication(state.selectedId);
+        state.applicationFreshFor = null;
         ensureApplicationLoaded(state, render);
       });
       return;
@@ -8171,6 +8172,7 @@
     state.profileErrorFinal = false;
         state.profileErrorFinal = false;
         state.profileLoadingFor = null;
+        state.applicationFreshFor = null;
         ensureProfileLoaded(state, render);
         ensureApplicationLoaded(state, render);
         render({ detailOnly: !usesPagedClientsFlow(state) });
@@ -9346,8 +9348,9 @@
    */
   function ensureApplicationLoaded(state, render) {
     var id = state.selectedId;
-    if (!id || applicationFor(id) !== undefined) return;
+    if (!id) return;
     if (state.applicationLoadingFor === id) return;
+    if (state.applicationFreshFor === id) return;
 
     state.applicationLoadingFor = id;
 
@@ -9358,10 +9361,15 @@
      * lands the screen shows a client that is not the one it is about to show.
      * Painted from the store first, which on a second visit means the right
      * tabs on the first frame.
+     *
+     * Always revalidated: document-requirement settings can grow the
+     * checklist after this profile was last opened, and a cache that skipped
+     * the request kept showing the original three documents.
      */
-    var paint = function (json) {
+    var paint = function (json, meta) {
       APPLICATIONS[id] = (json && json.application) || null;
       if (state.selectedId !== id) return;
+      if (!meta || !meta.stale) state.applicationFreshFor = id;
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
@@ -9667,6 +9675,7 @@
         state.accessLoadedFor = null;
         state.access = null;
         state.invitation = null;
+        state.applicationFreshFor = null;
       }
 
       // Portal access is loaded whenever a client is opened, not only when the
@@ -9677,6 +9686,7 @@
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
+        state.applicationFreshFor = null;
         ensureProfileLoaded(state, render);
         ensureApplicationLoaded(state, render);
         ensureAccessLoaded(state, render);
@@ -9724,6 +9734,7 @@
         // would open a blank form over a real client, and saving it would
         // write that blank back. Wait, and build it in ensureProfileLoaded.
         ensureProfileLoaded(state, render);
+        state.applicationFreshFor = null;
         ensureApplicationLoaded(state, render);
         state.draft = profileLoaded(contactId) ? contactToDraft(contactFor(contactId)) : null;
         state.companyDraft = null;

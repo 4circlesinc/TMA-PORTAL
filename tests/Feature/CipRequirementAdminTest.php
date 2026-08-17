@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\FileItem;
 use App\Models\User;
@@ -41,7 +43,7 @@ class CipRequirementAdminTest extends TestCase
         return $u;
     }
 
-    private function application(User $staff, string $code = 'GAL'): \App\Models\CipApplication
+    private function application(User $staff, string $code = 'GAL'): CipApplication
     {
         $company = Company::create(['uid' => Str::lower($code), 'name' => 'Galaxy', 'created_by' => $staff->id]);
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => $code, 'company_id' => $company->id]);
@@ -49,7 +51,7 @@ class CipRequirementAdminTest extends TestCase
         return Applications::create($provider, $staff);
     }
 
-    private function applicant(\App\Models\CipApplication $application): CipPerson
+    private function applicant(CipApplication $application): CipPerson
     {
         $person = CipPerson::create([
             'application_id' => $application->id,
@@ -178,6 +180,158 @@ class CipRequirementAdminTest extends TestCase
                 ->where('key', $created['key'])->count(),
             'one row, or every slot filed against the first one is orphaned beside the second',
         );
+    }
+
+    public function test_the_folder_a_requirement_names_survives_the_round_trip(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $created = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Second passport',
+            'folder' => '  Passport  ',
+        ])->assertCreated()->json('requirement');
+
+        // Trimmed, and held: the name comes back exactly as the drawer will
+        // be called.
+        $this->assertSame('Passport', $created['folder']);
+
+        $listed = collect($this->actingAs($admin)->getJson('/portal/cip/requirements')->json('types'))
+            ->firstWhere('value', ApplicantType::PRINCIPAL_APPLICANT)['requirements'];
+        $this->assertSame(
+            'Passport',
+            collect($listed)->firstWhere('key', $created['key'])['folder'],
+            'the admin page reads the folder back from the index',
+        );
+
+        // Clearing it is answering with nothing — '' stores as null, and
+        // uploads go back to the person's own folder.
+        $updated = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$created['id'], [
+            'folder' => '',
+        ])->assertOk()->json('requirement');
+
+        $this->assertNull($updated['folder']);
+    }
+
+    /**
+     * Opening an application settles its checklist against today's templates.
+     *
+     * A template can arrive without the admin endpoints ever firing — a
+     * seeder, an import — and until the detail read materialised, an
+     * application created while the templates were three showed three for
+     * ever. The read that opens ONE file is where the checklist catches up;
+     * the fifty-row sync and listing pages deliberately do not, because a
+     * write on those reads would report every application on the page as
+     * moved to the sync cursor.
+     */
+    public function test_opening_an_application_catches_its_checklist_up(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+        $application = $this->application($admin);
+        $person = $this->applicant($application);
+
+        // Straight to the table, so nothing has reached the open applications
+        // on this template's behalf.
+        (new CipDocumentRequirement)->forceFill([
+            'uuid' => (string) Str::uuid(),
+            'applicant_type' => ApplicantType::PRINCIPAL_APPLICANT,
+            'key' => 'bank_reference_letter',
+            'label' => 'Bank reference letter',
+            'required' => true,
+            'sort_order' => 99,
+            'active' => true,
+        ])->save();
+
+        $this->assertNotContains('Bank reference letter', $person->documents()->pluck('label')->all());
+
+        $shown = $this->actingAs($admin)->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()->json('application');
+
+        // One read, and the answer that read returns is already caught up —
+        // not the stale checklist with a promise about next time.
+        $this->assertContains(
+            'Bank reference letter',
+            collect($shown['applicant']['documents'])->pluck('label')->all(),
+        );
+        $this->assertContains('Bank reference letter', $person->documents()->pluck('label')->all());
+    }
+
+    public function test_the_client_profile_read_catches_the_checklist_up_too(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+        $application = $this->application($admin);
+        $person = $this->applicant($application);
+
+        $client = Client::create([
+            'uid' => 'chen-wei', 'name' => 'Chen Wei', 'data' => [], 'created_by' => $admin->id,
+        ]);
+        $application->forceFill(['client_id' => $client->id])->save();
+
+        // Straight to the table, past reachOpenApplications — the same
+        // arrangement the show() test makes, because the client-profile read
+        // is the OTHER door a stale checklist is seen through, and a fix that
+        // covered one door left the tabs the user actually reported showing
+        // three documents.
+        (new CipDocumentRequirement)->forceFill([
+            'uuid' => (string) Str::uuid(),
+            'applicant_type' => ApplicantType::PRINCIPAL_APPLICANT,
+            'key' => 'bank_reference_letter',
+            'label' => 'Bank reference letter',
+            'required' => true,
+            'sort_order' => 99,
+            'active' => true,
+        ])->save();
+
+        $this->assertNotContains('Bank reference letter', $person->documents()->pluck('label')->all());
+
+        $shown = $this->actingAs($admin)->getJson('/portal/cip/clients/chen-wei/application')
+            ->assertOk()->json('application');
+
+        $this->assertContains(
+            'Bank reference letter',
+            collect($shown['applicant']['documents'])->pluck('label')->all(),
+        );
+    }
+
+    public function test_the_intake_form_asks_for_whatever_the_templates_ask(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Bank reference letter',
+        ])->assertCreated();
+
+        $labels = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'))
+            ->pluck('label')->all();
+
+        $this->assertContains('Bank reference letter', $labels);
+    }
+
+    public function test_ticking_a_requirement_is_what_makes_it_required(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $created = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Proof of funds',
+            'required' => true,
+        ])->assertCreated()->json('requirement');
+
+        $this->assertTrue($created['required']);
+
+        $optional = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$created['id'], [
+            'required' => false,
+        ])->assertOk()->json('requirement');
+
+        $this->assertFalse($optional['required'], 'unticked means optional');
+
+        $required = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$created['id'], [
+            'required' => true,
+        ])->assertOk()->json('requirement');
+
+        $this->assertTrue($required['required'], 'ticked means required');
     }
 
     public function test_the_order_the_checklist_reads_in_is_the_firms(): void

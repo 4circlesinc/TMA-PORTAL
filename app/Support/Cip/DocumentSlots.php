@@ -6,11 +6,14 @@ use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -42,9 +45,9 @@ class DocumentSlots
      * {@see Requirements::materialise()} for what happens when a template
      * changes under an application already in flight.
      *
-     * @return \Illuminate\Support\Collection<int, CipDocument>
+     * @return Collection<int, CipDocument>
      */
-    public static function open(CipPerson $person): \Illuminate\Support\Collection
+    public static function open(CipPerson $person): Collection
     {
         return Requirements::materialise($person);
     }
@@ -58,16 +61,19 @@ class DocumentSlots
      */
     public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor): CipDocument
     {
-        $slot = self::slotFor($person, $type);
+        // Resolved once, for the slot AND the destination — the same single
+        // query slotFor always ran, not a second one beside it.
+        $template = self::template($person, $type);
+        $slot = self::slotFor($person, $type, $template);
 
-        $meta = \App\Support\Files\FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
+        $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
         // A name that says what it answers and who for. The uploaded filename
         // is usually "scan0001.pdf", which tells a reviewer nothing.
         $name = self::documentName($person, $type, $meta['extension']);
 
-        return DB::transaction(function () use ($slot, $person, $stored, $meta, $name, $actor) {
+        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor) {
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
                 $slot->forceFill(['uploaded_by' => $actor->id, 'uploaded_at' => now()])->save();
@@ -76,7 +82,7 @@ class DocumentSlots
                 return $slot;
             }
 
-            $file = self::storeFile($person, $stored, $meta, $name, $actor);
+            $file = self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor));
 
             $slot->forceFill([
                 'file_id' => $file->id,
@@ -127,11 +133,16 @@ class DocumentSlots
      */
     public static function attach(CipPerson $person, string $type, UploadedFile $upload, User $actor, int $number): FileItem
     {
-        $meta = \App\Support\Files\FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
+        // The same drawer the slot's first file went into: a bio page's back
+        // sheet filed outside its requirement's folder would split one answer
+        // across two places.
+        $template = self::template($person, $type);
+
+        $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
         $name = self::documentName($person, $type, $meta['extension'], $number);
 
-        return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor));
+        return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor)));
     }
 
     /** "Ada Lovelace — Birth certificate (2).pdf" */
@@ -141,12 +152,12 @@ class DocumentSlots
             ($number ? ' ('.$number.')' : '').'.'.$extension;
     }
 
-    /** One stored upload as a portal file in the person's folder. */
-    private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor): FileItem
+    /** One stored upload as a portal file, where {@see destination()} said. */
+    private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor, ?int $folderId): FileItem
     {
         $file = FileItem::create([
             'uuid' => $stored['uuid'],
-            'folder_id' => $person->folder_id,
+            'folder_id' => $folderId,
             'name' => $name,
             'extension' => $meta['extension'],
             'mime_type' => $meta['mime'],
@@ -192,21 +203,77 @@ class DocumentSlots
     }
 
     /**
+     * The template behind a type, matched the way slots are linked to
+     * requirements everywhere — the person's applicant type and the slug.
+     *
+     * The same match that stamps `requirement_id` onto a slot (here and in
+     * {@see Requirements}), so resolving by key IS resolving the slot's own
+     * requirement — and it also answers for the intake slots that predate the
+     * table and carry no requirement_id at all. One query, and only on the
+     * upload paths: the sync-scale readers never come through here.
+     */
+    /**
+     * Where an upload answering this SLOT should land — the one resolution,
+     * offered to the other doors a document can arrive through. The
+     * file-request path files a visitor's upload for a slot it never opened
+     * through fill(), and hardcoding the person's folder there put the same
+     * document in two different places depending on which door it came in by.
+     */
+    public static function destinationForSlot(CipDocument $slot, ?User $actor = null): ?int
+    {
+        $person = $slot->person;
+
+        if ($person === null) {
+            return null;
+        }
+
+        return self::destination($person, self::template($person, $slot->type), $actor);
+    }
+
+    private static function template(CipPerson $person, string $type): ?CipDocumentRequirement
+    {
+        return CipDocumentRequirement::query()
+            ->where('applicant_type', ApplicantType::for($person))
+            ->where('key', $type)
+            ->first();
+    }
+
+    /**
+     * Where the file lands: the person's folder, or the drawer the template
+     * names inside it.
+     *
+     * The template hands over a NAME and {@see Tree::subfolder} creates the
+     * child under the person's own folder — which is the constraint made
+     * structural: whatever an administrator types, an upload cannot land
+     * outside the person's repository. A template naming no folder, or a type
+     * with no template, files where uploads always did.
+     */
+    private static function destination(CipPerson $person, ?CipDocumentRequirement $template, User $actor): ?int
+    {
+        $name = trim((string) $template?->folder);
+
+        if ($name === '' || ! $person->folder_id) {
+            return $person->folder_id;
+        }
+
+        $parent = Folder::find($person->folder_id);
+
+        return $parent ? Tree::subfolder($parent, $name, $actor)->id : $person->folder_id;
+    }
+
+    /**
      * The slot a document of this type belongs in, made if it is not there.
      *
      * Takes its label and its mandatory flag from the requirement template
      * where one exists, so a slot created by an upload reads the same as one
      * materialised from the checklist. A type with no template still gets a
      * slot — a document the firm asked for by hand is still a document — and
-     * carries the type as its label rather than nothing.
+     * carries the type as its label rather than nothing. The template arrives
+     * from {@see fill()}, which resolved it once for this and for the filing
+     * destination together.
      */
-    private static function slotFor(CipPerson $person, string $type): CipDocument
+    private static function slotFor(CipPerson $person, string $type, ?CipDocumentRequirement $requirement): CipDocument
     {
-        $requirement = CipDocumentRequirement::query()
-            ->where('applicant_type', ApplicantType::for($person))
-            ->where('key', $type)
-            ->first();
-
         return CipDocument::firstOrCreate(
             ['person_id' => $person->id, 'type' => $type],
             [
