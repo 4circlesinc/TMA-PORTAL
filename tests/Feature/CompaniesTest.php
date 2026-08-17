@@ -126,4 +126,25 @@ class CompaniesTest extends TestCase
 
         $this->assertNotSoftDeleted('companies', ['id' => $company->id]);
     }
+
+    public function test_a_provider_backed_company_cannot_be_deleted_even_before_its_first_application(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        \App\Support\Cip\Providers::syncCode($company, 'GAL');
+
+        /*
+         * Refused with no applications too. The gap this closes put four
+         * provider firms in the Recycle Bin: the CIP registry kept offering
+         * them while the Service providers tab — which lists companies —
+         * showed nothing, and the bin does not list companies, so there was
+         * no way back from inside the portal.
+         */
+        $this->actingAs($staff)->deleteJson('/portal/companies/'.$company->uid)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This company is the service provider firm GAL. Remove the provider registration first.');
+
+        $this->assertNotSoftDeleted('companies', ['id' => $company->id]);
+    }
 }

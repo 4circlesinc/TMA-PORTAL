@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Realtime\Live;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\CompanyStaffAssignment;
 use App\Support\Access\AccessSync;
 use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
 use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
+use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +33,7 @@ class CompaniesController extends Controller
      * `people` list and the `referred` preview. Notably not `data`: the blob is
      * the widest column on the table and neither list draws any of it.
      *
-     * @see \App\Models\Company::toRecord()
+     * @see Company::toRecord()
      */
     private const PERSON_COLUMNS = [
         'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id',
@@ -100,7 +101,7 @@ class CompaniesController extends Controller
      * Eloquent cannot eager load a per-parent limit, so the ranking is done in
      * the database and only the first rows of each company come back.
      *
-     * @param  \Illuminate\Support\Collection<int, Company>  $companies
+     * @param  Collection<int, Company>  $companies
      */
     private function attachReferredPreviews(Collection $companies): void
     {
@@ -111,14 +112,14 @@ class CompaniesController extends Controller
         foreach ($companies as $company) {
             $company->setRelation(
                 'referredClients',
-                $previews[$company->id] ?? new EloquentCollection(),
+                $previews[$company->id] ?? new EloquentCollection,
             );
         }
     }
 
     /**
      * @param  array<int, int>  $companyIds
-     * @return array<int, \Illuminate\Database\Eloquent\Collection<int, Client>>
+     * @return array<int, EloquentCollection<int, Client>>
      */
     private function referredPreviews(array $companyIds): array
     {
@@ -187,13 +188,13 @@ class CompaniesController extends Controller
         // An employee's directory is their assignments — without this row the
         // provider they just created would vanish from their own list.
         if (! CompanyScope::seesEveryCompany($request->user())) {
-            \App\Models\CompanyStaffAssignment::create([
+            CompanyStaffAssignment::create([
                 'company_id' => $company->id,
                 'user_id' => $request->user()->id,
                 'role' => 'general',
                 'permission_level' => 'manager',
-                'applies_to_clients' => \App\Models\CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
-                'status' => \App\Models\CompanyStaffAssignment::STATUS_ACTIVE,
+                'applies_to_clients' => CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
+                'status' => CompanyStaffAssignment::STATUS_ACTIVE,
                 'assigned_by' => $request->user()->id,
             ]);
         }
@@ -280,12 +281,28 @@ class CompaniesController extends Controller
 
         $company = CompanyScope::findOrFail($request->user(), $uid);
 
-        // A service provider whose code has already numbered applications is
-        // not deletable: those numbers (GAL26-00001) name it forever, and an
-        // audit trail that cannot say who the provider was is worthless.
-        $applications = $company->cipProvider?->applications()->count() ?? 0;
-        abort_if($applications > 0, 422, 'This service provider has '.$applications.' application'
-            .($applications === 1 ? '' : 's').' and cannot be deleted.');
+        /*
+         * A company backing a CIP provider firm is not deletable at all.
+         *
+         * It used to be refused only once the provider had applications, and
+         * the gap put four provider firms in the bin: the CIP registry kept
+         * naming them (the wizard still offered Galaxy Partners, the table
+         * still printed it) while the Service providers tab — which lists
+         * companies — showed nothing, and the Recycle Bin does not list
+         * companies, so there was no way back from inside the portal. A firm
+         * half-present like that reads as the module being broken.
+         */
+        $provider = $company->cipProvider;
+
+        if ($provider !== null) {
+            $applications = $provider->applications()->count();
+
+            abort(422, $applications > 0
+                ? 'This service provider has '.$applications.' application'
+                    .($applications === 1 ? '' : 's').' and cannot be deleted.'
+                : 'This company is the service provider firm '.$provider->code
+                    .'. Remove the provider registration first.');
+        }
 
         // Settle the access first, while the company still exists to log it.
         AccessSync::companyArchived($company, $request->user());
