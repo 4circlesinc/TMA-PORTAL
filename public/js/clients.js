@@ -1555,6 +1555,53 @@
     );
   }
 
+  /*
+   * The filters, as dropdowns in the toolbar itself.
+   *
+   * Not behind the funnel. What the table can be narrowed by is part of
+   * reading the table, so the three questions sit in the open where the
+   * reader can see them and see which are answered — a funnel hides both, and
+   * a filter you have to go looking for is one nobody uses.
+   *
+   * Each opens its own checkbox list, because the reader is choosing several
+   * from a list rather than picking one: "New or Delayed" is one thought, and
+   * a control that closed on the first tick would make it three trips.
+   *
+   * Nothing is offered on the Service providers tab. All three are facts
+   * about an application — a status, an officer, a firm — and that tab lists
+   * firms, which hold none of them.
+   */
+  function renderTableFilterDropdowns(state) {
+    if (!onApplicationsTable(state)) return '';
+
+    var fields = [];
+    if (statusFilterApplies(state)) fields.push(['bucket', 'Status']);
+    if (assigneeFilterApplies(state)) fields.push(['assignee', 'Assigned to']);
+    if (providerFilterApplies(state)) fields.push(['provider', 'Service provider']);
+    if (!fields.length) return '';
+
+    return '<div class="tma-dash__toolbar-filters">' +
+      fields.map(function (pair) {
+        var field = pair[0];
+        var ticked = filterValues(field).length;
+
+        /*
+         * The button says how many are ticked rather than naming them. One
+         * name would be a lie the moment there are two, and three names would
+         * push the search box off the end of the toolbar — the chips under it
+         * already carry the detail, each with its own remove.
+         */
+        return '<button type="button" class="tma-dash__filter-drop" data-cip-dropdown="' + esc(field) + '"' +
+          ' aria-haspopup="true" aria-expanded="false"' +
+          ' aria-pressed="' + (ticked ? 'true' : 'false') + '">' +
+          '<span class="tma-dash__filter-drop-label">' + esc(pair[1]) + '</span>' +
+          (ticked ? '<span class="tma-dash__filter-drop-count">' + ticked + '</span>' : '') +
+          '<img class="tma-dash__filter-drop-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
+          '</button>';
+      }).join('') +
+      '</div>';
+  }
+
   function renderTableToolbar(state) {
     var count = selectedClientCount(state);
     var bulkHidden = count === 0 ? ' hidden' : '';
@@ -1566,21 +1613,7 @@
       '<div class="tma-dash__toolbar-actions">' +
       renderClientsCount(state) +
       '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
-      /*
-       * Offered only where it can answer something.
-       *
-       * All three fields it opens are facts about an application — a status,
-       * an officer, a firm — and the Service providers tab lists firms, which
-       * hold none of them. A button there could only open a panel with nothing
-       * in it, which reads as broken rather than as not applicable.
-       *
-       * aria-pressed carries the lit state on its own — see the tool-btn rule.
-       */
-      (onApplicationsTable(state)
-        ? '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
-          ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
-          '<img src="' + ICONS.FunnelSimple + '" alt=""></button>'
-        : '') +
+      renderTableFilterDropdowns(state) +
       '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort' +
       ' aria-pressed="' + (state.sort && state.sort !== 'name' ? 'true' : 'false') + '" aria-expanded="false">' +
       '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
@@ -6344,70 +6377,59 @@
   }
 
   /*
-   * The whole "Filtered by" panel, in one popover.
+   * One field's checkbox list, for the toolbar dropdown that opened it.
    *
-   * It used to be a drill-down: a list of field names, each opening a second
-   * popover of values. That shape can only express one value per field — you
-   * pick, it closes, and picking again replaces. Checkboxes are what the
-   * reader asked for, and checkboxes want every group visible at once so the
-   * combination being built is readable while it is being built.
-   *
-   * Only fields that can answer something appear. A group is left out rather
-   * than shown empty: an empty group invites a click that does nothing, and
-   * three of those would make the panel look broken on the tab where none of
-   * them apply.
+   * A single group rather than all three: each dropdown answers its own
+   * question and sits under its own button, so a panel carrying the other two
+   * would be three menus opening from whichever button was pressed last.
    */
-  function fillFilterFields() {
+  function fillFilterField(field) {
     var state = clientsFilterCtx && clientsFilterCtx.state;
-    var groups = '';
+    var group = '';
 
-    if (statusFilterApplies(state)) {
-      groups += filterGroup('bucket', 'Status', BUCKETS.list.map(function (b) {
+    if (field === 'bucket' && statusFilterApplies(state)) {
+      group = filterGroup('bucket', BUCKETS.list.map(function (b) {
         return { id: b.key, name: b.label, count: b.count, tone: b.tone };
       }));
+    } else if (field === 'assignee' && assigneeFilterApplies(state)) {
+      group = filterGroup('assignee', APP_TABLE.assignees);
+    } else if (field === 'provider' && providerFilterApplies(state)) {
+      group = filterGroup('provider', APP_TABLE.providers);
     }
 
-    if (assigneeFilterApplies(state)) {
-      groups += filterGroup('assignee', 'Assigned to', APP_TABLE.assignees);
-    }
-
-    if (providerFilterApplies(state)) {
-      groups += filterGroup('provider', 'Service provider', APP_TABLE.providers);
-    }
-
-    if (!groups) {
-      // Reachable only in the beat before the first listing answers. The
-      // button is not offered where nothing applies, so this is a wait rather
-      // than a dead end, and it says so.
+    if (!group) {
+      // Reachable only in the beat before the first listing answers: the
+      // button is not drawn where the field has nothing to offer, so this is
+      // a wait rather than a dead end, and it says so.
       clientsPop.fields.innerHTML =
-        '<div class="tma-filter-popover__title">Filtered by</div>' +
-        '<div class="tma-filter-popover__note">Loading what you can filter by…</div>';
+        '<div class="tma-filter-popover__note">Loading…</div>';
 
       return;
     }
 
-    clientsPop.fields.innerHTML =
-      '<div class="tma-filter-popover__title">Filtered by</div>' +
-      groups +
-      (anyTableFilterSet()
+    clientsPop.fields.innerHTML = group +
+      (filterValues(field).length
         ? '<div class="tma-filter-popover__divider"></div>' +
           '<button type="button" class="tma-filter-popover__item tma-filter-popover__item--clear"' +
-          ' data-cip-filter-clear>Clear all</button>'
+          ' data-cip-filter-clear="' + esc(field) + '">Clear</button>'
         : '');
   }
 
+
   /**
-   * One titled group of checkboxes.
+   * One field's values as checkboxes.
+   *
+   * No heading inside the panel: the dropdown button it hangs from already
+   * names the field, and repeating it an inch below is the panel telling the
+   * reader what they just pressed.
    *
    * @param {string} field  bucket | assignee | provider
-   * @param {string} label  the heading above the group
    * @param {Array}  items  [{ id, name, count, tone? }] in the server's order
    */
-  function filterGroup(field, label, items) {
+  function filterGroup(field, items) {
     if (!items || !items.length) return '';
 
-    return '<div class="tma-filter-popover__group" role="group" aria-label="' + esc(label) + '">' +
-      '<div class="tma-filter-popover__group-label">' + esc(label) + '</div>' +
+    return '<div class="tma-filter-popover__group" role="group">' +
       items.map(function (item) {
         var on = filterHas(field, item.id);
 
@@ -6453,7 +6475,7 @@
       el.setAttribute('aria-hidden', 'true');
     });
     if (!keep && clientsFilterCtx && clientsFilterCtx.root) {
-      clientsFilterCtx.root.querySelectorAll('[data-clients-filter],[data-clients-sort]').forEach(function (b) {
+      clientsFilterCtx.root.querySelectorAll('[data-cip-dropdown],[data-clients-sort]').forEach(function (b) {
         b.setAttribute('aria-expanded', 'false');
       });
     }
@@ -6531,7 +6553,7 @@
         /*
          * Claimed before the panel is rebuilt.
          *
-         * fillFilterFields() replaces this popover's innerHTML, which orphans
+         * fillFilterField() replaces this popover's innerHTML, which orphans
          * the button that was just clicked — and the outside-click listener on
          * the document runs after this one, by which time `closest()` on a
          * detached node can no longer find the popover it came from. It would
@@ -6539,17 +6561,23 @@
          */
         e._cipFilterHandled = true;
 
-        if (toggleFilter(tick.getAttribute('data-cip-filter'), tick.getAttribute('data-cip-value'))) {
+        var tickField = tick.getAttribute('data-cip-filter');
+        if (toggleFilter(tickField, tick.getAttribute('data-cip-value'))) {
           applyTableFilters();
-          fillFilterFields();
+          fillFilterField(tickField);
         }
 
         return;
       }
 
-      if (e.target.closest('[data-cip-filter-clear]')) {
+      var clear = e.target.closest('[data-cip-filter-clear]');
+      if (clear) {
         e.preventDefault();
-        if (clearTableFilters()) applyTableFilters();
+        var field = clear.getAttribute('data-cip-filter-clear');
+        if (filterValues(field).length) {
+          TABLE_FILTERS[field] = [];
+          applyTableFilters();
+        }
         closeClientsPopovers();
 
         return;
@@ -6573,7 +6601,7 @@
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
       // A tick inside the panel, whose node the redraw has already discarded.
       if (e._cipFilterHandled) return;
-      if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-clients-filter]') ||
+      if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-cip-dropdown]') ||
           e.target.closest('[data-clients-sort]')) return;
       closeClientsPopovers();
     });
@@ -7144,19 +7172,32 @@
     clientsFilterCtx = { root: root, state: state, render: render };
     ensureClientsPopovers();
 
-    var trigger = MORPH.unwiredOne(root, '[data-clients-filter]');
-    if (trigger) {
-      MORPH.on(trigger, 'click', function (e) {
+    /*
+     * One dropdown per field, each anchored to its own button in the toolbar.
+     *
+     * They share the single popover element rather than owning one each: only
+     * one can be open at a time, so a second element would only be a second
+     * thing to keep positioned and closed. The field it is currently showing
+     * is recorded on it, which is how pressing the same button twice knows to
+     * shut rather than refill.
+     */
+    MORPH.unwired(root, '[data-cip-dropdown]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        if (clientsPop.fields.hasAttribute('data-open')) {
+        var field = btn.getAttribute('data-cip-dropdown');
+        var open = clientsPop.fields.hasAttribute('data-open');
+
+        if (open && clientsPop.fields.getAttribute('data-cip-field') === field) {
           closeClientsPopovers();
           return;
         }
-        fillFilterFields();
-        openClientsPopover(clientsPop.fields, trigger);
+
+        clientsPop.fields.setAttribute('data-cip-field', field);
+        fillFilterField(field);
+        openClientsPopover(clientsPop.fields, btn);
       });
-    }
+    });
 
     var sortTrigger = MORPH.unwiredOne(root, '[data-clients-sort]');
     if (sortTrigger) {

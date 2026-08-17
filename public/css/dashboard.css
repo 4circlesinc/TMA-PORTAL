@@ -35484,3 +35484,79 @@ span.tma-dash__messages-profile-avatar {
  * the row already carries — out of the pointer tree as well as the reading one.
  */
 .tma-portal-cip__row:has(.tma-skeleton) { pointer-events: none; }
+
+/* ── Filter dropdowns, in the applications toolbar ───────────────────────
+ *
+ * The three filters sit in the open beside the row count rather than behind
+ * the funnel: what the table can be narrowed by is part of reading the table,
+ * and a filter you have to go looking for is one nobody uses. Each button
+ * opens its own checkbox list (.tma-filter-popover, in table-filter-sort.css)
+ * and carries a count of what is ticked inside it.
+ */
+.tma-dash__toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  /* Below the toolbar's own breakpoint the row count and the search box are
+     what must survive; the filters wrap to a second line rather than
+     squeezing the search field to nothing. */
+  flex-wrap: wrap;
+}
+
+.tma-dash__filter-drop {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tma-dash__filter-drop:hover { background: var(--color-hover); }
+
+.tma-dash__filter-drop:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Answered, rather than merely open. A dropdown with ticks in it is carrying
+   part of what the reader is looking at, so it stops being a quiet control. */
+.tma-dash__filter-drop[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.tma-dash__filter-drop-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+.tma-dash__filter-drop-caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.5;
+}
+
+.tma-dash__filter-drop[aria-expanded="true"] .tma-dash__filter-drop-caret {
+  transform: rotate(180deg);
+}
