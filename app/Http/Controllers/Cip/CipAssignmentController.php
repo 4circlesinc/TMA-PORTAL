@@ -86,7 +86,7 @@ class CipAssignmentController extends Controller
             ClientAssignments::assign($client, $officer, [
                 'role' => $role,
                 'level' => 'editor',
-            ], $request->user());
+            ], $request->user(), announce: false);
         }
 
         Assignments::assign($application, $officer, $request->user(), $role);

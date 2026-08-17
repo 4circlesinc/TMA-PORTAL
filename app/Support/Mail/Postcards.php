@@ -4,6 +4,9 @@ namespace App\Support\Mail;
 
 use App\Mail\Postcard;
 use App\Models\User;
+// The portal's one initials helper; it lives with signatures because they
+// needed it first, not because it is about signatures.
+use App\Support\Signatures\Presenter as SignaturePresenter;
 
 /**
  * The copy for every transactional email, one factory method each. Each returns
@@ -675,6 +678,54 @@ class Postcards
         }
 
         return $payload;
+    }
+
+    // ------------------------------------------------------------------- cip
+
+    /**
+     * §10's assignment notice: the file has been handed to this officer.
+     *
+     * The subject is §22's compliance format, not prose —
+     *
+     *   RO - REVIEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 17.08.2026
+     *
+     * because these emails are filed, and a mailbox full of them is sorted and
+     * searched by exactly those fields. The body carries what §10 names: the
+     * application number, the applicant, the provider firm, and a direct link.
+     *
+     * The number is displayNumber(), so a file the Unit has already numbered
+     * announces itself by the CIP number — §7's switching rule reaches email
+     * subjects through the same accessor as every screen.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int, statusLabel:string, roleLabel:string}  $facts
+     */
+    public static function cipAssigned(array $facts, User $officer, string $url): Postcard
+    {
+        $initials = SignaturePresenter::initials($officer->name);
+        $applicant = mb_strtoupper($facts['applicant']);
+
+        $subject = implode(' - ', array_filter([
+            $initials,
+            mb_strtoupper($facts['statusLabel']),
+            $facts['number'],
+            $applicant.' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' — '.$facts['applicant'].' is now yours to review.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => 'Hi '.(strtok($officer->name, ' ') ?: $officer->name).',',
+            'title' => 'An application has been assigned to you',
+            'lead' => 'You now hold '.$facts['number'].' as '.mb_strtolower($facts['roleLabel']).'.',
+            'details' => [
+                ['Application', $facts['number']],
+                ['Applicant', $facts['applicant']],
+                ['Service provider', $facts['provider']],
+                ['Family size', 'F'.$facts['familySize']],
+            ],
+            'button' => ['label' => 'Open the application', 'url' => $url],
+        ]);
     }
 
     /**

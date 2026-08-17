@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipPerson;
@@ -15,6 +16,7 @@ use App\Support\Cip\Assignments;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -299,4 +301,64 @@ class CipAssignmentTest extends TestCase
         $this->assertSame([$rita->id], array_column($body['assignments'], 'userId'));
         $this->assertSame([$colin->id], array_column($body['assignable'], 'id'));
     }
+    public function test_assigning_emails_the_officer_in_the_compliance_format(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Marshall');
+        $application = $this->filed($admin);
+
+        $this->assign($admin, $application, $officer)->assertCreated();
+
+        /*
+         * §10 names the contents and §22 names the subject. These emails are
+         * filed, and a mailbox full of them is sorted by exactly the fields
+         * the subject carries — so the format is pinned literally, not "some
+         * subject mentioning the number".
+         */
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($application) {
+            $expected = 'RM - REVIEW APPLICATIONS - '.$application->displayNumber()
+                .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
+
+            if ($mail->subjectLine !== $expected) {
+                return false;
+            }
+
+            $details = collect($mail->payload['details'])->mapWithKeys(fn ($row) => [$row[0] => $row[1]]);
+
+            return $mail->hasTo('rita@example.com')
+                && $details['Application'] === $application->displayNumber()
+                && $details['Applicant'] === 'Chen Wei'
+                && $details['Service provider'] === 'Galaxy'
+                && str_contains($mail->payload['button']['url'], '/clients/');
+        });
+
+        // Tracked on the file: the send is a row against this application, so
+        // the audit trail can answer "was the officer told, and when".
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'rita@example.com',
+            'template' => 'cip-assigned',
+        ]);
+    }
+
+    public function test_one_press_is_one_email(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Marshall');
+        $application = $this->filed($admin);
+
+        $this->assign($admin, $application, $officer)->assertCreated();
+
+        /*
+         * The picker writes the client assignment too (the Assigned tab and
+         * the table are one list), and that path carries its own welcome
+         * email. Left both on, one press arrived as two emails saying
+         * different things about the same fact.
+         */
+        Mail::assertSentCount(1);
+    }
+
 }

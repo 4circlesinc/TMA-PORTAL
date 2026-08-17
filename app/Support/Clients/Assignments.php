@@ -28,7 +28,7 @@ final class Assignments
      * Re-assigning somebody who previously left revives their old row rather
      * than stacking a second one, so their history stays in one place.
      */
-    public static function assign(Client $client, User $staff, array $attrs, User $by): ClientAssignment
+    public static function assign(Client $client, User $staff, array $attrs, User $by, bool $announce = true): ClientAssignment
     {
         $existing = ClientAssignment::where('client_id', $client->id)
             ->where('user_id', $staff->id)
@@ -74,8 +74,13 @@ final class Assignments
 
         // A level or role change on a live assignment is a change, not a new
         // ask — the person is already working with this client and does not
-        // need welcoming again.
-        if (! $wasLive) {
+        // need welcoming again. And a caller that carries its own notice —
+        // the CIP picker sends §10's formatted email about the same press —
+        // silences this one, or one assignment would arrive as two emails
+        // saying different things.
+        if (! $announce) {
+            // Nothing.
+        } elseif (! $wasLive) {
             self::announceAssigned($client, $assignment, $by);
         } elseif ($previousRole !== $assignment->role || $previousLevel !== $assignment->permission_level) {
             self::announceChanged($client, $assignment, $by, $previousRole, $previousLevel);
