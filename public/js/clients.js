@@ -6115,7 +6115,7 @@
         BUCKETS.list.map(function (b) {
           return clientsPopItem('data-clients-filter-value', b.key, b.label, {
             selected: activeKey === b.key,
-            meta: String(b.count),
+            meta: String(b.count || 0),
           });
         }).join('');
     } else if (field === 'referral') {

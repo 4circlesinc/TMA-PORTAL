@@ -814,9 +814,9 @@
    *
    * §9's buckets, counted, as one list. The applications table filters by
    * exactly these keys through exactly this endpoint, so a row here and the
-   * list it opens cannot end up disagreeing about what "Pending Review" means
-   * — the count and the filter are one definition read twice (App\Support\Cip\
-   * Buckets).
+   * list it opens cannot end up disagreeing about what "Pending Review" means:
+   * the count and the filter are one definition read twice, in
+   * App\Support\Cip\Buckets.
    *
    * Which set arrives is the server's decision and this card does not second
    * guess it: an administrator (and a Compliance Officer) gets the ten the
