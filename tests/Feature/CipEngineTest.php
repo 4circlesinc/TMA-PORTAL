@@ -6,7 +6,6 @@ use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
-use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -131,6 +130,26 @@ class CipEngineTest extends TestCase
             'application_id' => $application->id,
             'to_status' => Status::DELAYED,
             'actor_id' => null,
+        ]);
+    }
+
+    public function test_set_writes_a_status_the_lifecycle_has_no_edge_for(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $admin);
+
+        $this->assertSame(Status::NEW, $application->status);
+        $this->assertFalse(Engine::canTransition($application, Status::BACKGROUND_CHECK));
+
+        Engine::set($application, Status::BACKGROUND_CHECK, $admin);
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => 'status_changed',
+            'from_status' => Status::NEW,
+            'to_status' => Status::BACKGROUND_CHECK,
         ]);
     }
 }

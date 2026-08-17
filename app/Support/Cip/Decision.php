@@ -20,10 +20,10 @@ use Illuminate\Validation\ValidationException;
  * columns and then asks {@see Engine} to move the row, so a report measured
  * from the decision date is looking at a date that actually happened.
  *
- * The status change goes through the engine, not around it: the edge is
- * BACKGROUND CHECK / DELAYED → GRANTED or DENIED, it needs `cip.decide`, and
- * it writes the append-only event. Recording an outcome is not a way to skip
- * the lifecycle.
+ * The status change goes through the engine, not around it: permission
+ * is still `cip.decide`, and the outcome and its date are written before
+ * the row moves. The picker may record a decision from any status; the
+ * dedicated verb is what keeps `decided_at` from being left empty.
  */
 class Decision
 {
@@ -70,7 +70,11 @@ class Decision
                 $meta['note'] = $note;
             }
 
-            Engine::apply($application, $decision, $actor, $meta);
+            if (Engine::canTransition($application, $decision)) {
+                Engine::apply($application, $decision, $actor, $meta);
+            } else {
+                Engine::set($application, $decision, $actor, $meta);
+            }
 
             Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
 

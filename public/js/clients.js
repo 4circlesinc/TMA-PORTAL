@@ -2312,8 +2312,29 @@
     // What the filter menu can offer, from the last listing. Empty arrays
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
-    assignees: [], providers: [],
+    assignees: [], providers: [], statuses: [],
   };
+
+  /*
+   * Every application status the picker names, matching Status::listed().
+   *
+   * Used when the listing has not yet sent its copy — the chip on a profile
+   * can open before the table has loaded, and an empty menu would look like
+   * there was nothing to change to.
+   */
+  var CIP_STATUSES = [
+    { value: 'new', label: 'New Applications' },
+    { value: 'review_application', label: 'Review Applications' },
+    { value: 'assessment_feedback', label: 'Assessment Feedback' },
+    { value: 'update_required', label: 'Updates Required' },
+    { value: 'ready_to_submit', label: 'Ready to Submit' },
+    { value: 'pending_review', label: 'Pending Review' },
+    { value: 'non_compliant', label: 'Non-compliant' },
+    { value: 'background_check', label: 'Background Check' },
+    { value: 'delayed', label: 'Delayed' },
+    { value: 'granted', label: 'Approved' },
+    { value: 'denied', label: 'Denied' },
+  ];
 
   /*
    * §9's buckets — what the applications table can be narrowed to.
@@ -7380,27 +7401,24 @@
     return cipRowForMenu(extra, clientUid) || applicationFor(clientUid) || null;
   }
 
-  function cipTransitionsFor(extra, clientUid) {
-    var row = cipRowForMenu(extra, clientUid);
-    if (row && Array.isArray(row.availableTransitions)) return row.availableTransitions;
-    var app = applicationFor(clientUid);
-    if (app && Array.isArray(app.availableTransitions)) return app.availableTransitions;
+  function cipStatusMenu(extra, clientUid) {
+    var source = cipSourceFor(extra, clientUid);
+    var list = (APP_TABLE.statuses && APP_TABLE.statuses.length)
+      ? APP_TABLE.statuses
+      : CIP_STATUSES;
 
-    return [];
+    return { list: list, current: source && source.status };
   }
 
-  function renderCipStatusSub(list) {
-    if (!list.length) {
-      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
-        '<span class="tma-portal-context-menu__label">No status change available</span></div>';
-    }
-
+  function renderCipStatusSub(list, current) {
     return list.map(function (status) {
+      var on = status.value === current;
+
       return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+        (on ? ' aria-current="true"' : '') +
         ' data-cip-status-to="' + esc(status.value) + '"' +
         ' data-cip-status-label="' + esc(status.label) + '">' +
-        '<span class="tma-portal-status tma-portal-status--' + esc(status.tone || 'neutral') +
-        ' tma-portal-status--inline tma-cip-status-chip">' + esc(status.label) + '</span></button>';
+        '<span class="tma-portal-context-menu__label">' + esc(status.label) + '</span></button>';
     }).join('');
   }
 
@@ -7409,12 +7427,12 @@
     closeClientsCtxSub();
     parentBtn.setAttribute('data-open', 'true');
 
-    var list = cipTransitionsFor(extra, id);
+    var menu = cipStatusMenu(extra, id);
 
     clientsCtxSubEl = document.createElement('div');
     clientsCtxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
     clientsCtxSubEl.setAttribute('role', 'menu');
-    clientsCtxSubEl.innerHTML = renderCipStatusSub(list);
+    clientsCtxSubEl.innerHTML = renderCipStatusSub(menu.list, menu.current);
     document.body.appendChild(clientsCtxSubEl);
 
     var rect = parentBtn.getBoundingClientRect();
@@ -7434,11 +7452,11 @@
     closeClientsContextMenu();
     extra = extra || {};
 
-    var list = cipTransitionsFor(extra, clientUid);
+    var menu = cipStatusMenu(extra, clientUid);
     clientsCtxEl = document.createElement('div');
     clientsCtxEl.className = 'tma-portal-context-menu';
     clientsCtxEl.setAttribute('role', 'menu');
-    clientsCtxEl.innerHTML = renderCipStatusSub(list);
+    clientsCtxEl.innerHTML = renderCipStatusSub(menu.list, menu.current);
     document.body.appendChild(clientsCtxEl);
 
     var box = anchor.getBoundingClientRect();
@@ -7481,7 +7499,9 @@
     var state = (ctx && ctx.state) || clientsMountState;
     var render = (ctx && ctx.render) || repaintClients;
 
-    if (to === 'pending_review') {
+    if (source && source.status === to) return;
+
+    if (to === 'pending_review' && source && source.status === 'ready_to_submit') {
       if (!state) return;
       openSubmissionDialog(state, render, false, source || { id: applicationId, clientUid: clientUid });
 
@@ -7494,11 +7514,11 @@
       return;
     }
 
-    var leftoverNew = to === 'new';
+    var leftoverDraft = to === 'new' && source && source.status === 'draft';
     var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
-      (leftoverNew ? '/submit' : '/status');
+      (leftoverDraft ? '/submit' : '/status');
 
-    clientsFetch(url, leftoverNew ? { method: 'POST' } : { method: 'POST', json: { status: to } })
+    clientsFetch(url, leftoverDraft ? { method: 'POST' } : { method: 'POST', json: { status: to } })
       .then(function () {
         clientsToast('Moved to ' + (label || 'the next status'), 'positive');
         refreshAfterCipMove(clientUid);

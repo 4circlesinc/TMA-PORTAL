@@ -64,7 +64,7 @@ class CipTransitionController extends Controller
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $this->refuseIfItHasItsOwnVerb($data['status']);
+        $this->refuseIfItHasItsOwnVerb($application, $data['status']);
 
         $note = trim($data['note'] ?? '');
         $meta = $note === '' ? [] : ['note' => $note];
@@ -98,16 +98,19 @@ class CipTransitionController extends Controller
      *    columns null with no way back to fill them, and any report measured
      *    from the decision date is quietly wrong for ever.
      */
-    private function refuseIfItHasItsOwnVerb(string $status): void
+    private function refuseIfItHasItsOwnVerb(CipApplication $application, string $status): void
     {
-        $owned = [
-            Status::NEW => 'Use the submit verb to file a leftover draft — it checks the applicant\'s documents first.',
-            Status::PENDING_REVIEW => 'Record the submission instead, so the CIP number and the date go with it.',
-            Status::GRANTED => 'Record the decision instead, so the outcome and its date are stored.',
-            Status::DENIED => 'Record the decision instead, so the outcome and its date are stored.',
-        ];
+        if ($status === Status::NEW && $application->status === Status::DRAFT) {
+            abort(422, 'Use the submit verb to file a leftover draft — it checks the applicant\'s documents first.');
+        }
 
-        abort_if(isset($owned[$status]), 422, $owned[$status] ?? '');
+        if ($status === Status::PENDING_REVIEW && $application->status === Status::READY_TO_SUBMIT) {
+            abort(422, 'Record the submission instead, so the CIP number and the date go with it.');
+        }
+
+        if ($status === Status::GRANTED || $status === Status::DENIED) {
+            abort(422, 'Record the decision instead, so the outcome and its date are stored.');
+        }
     }
 
     /**
@@ -199,17 +202,19 @@ class CipTransitionController extends Controller
     /**
      * Hand the move to the engine, and translate its refusal.
      *
-     * An unmapped edge is the caller asking for something the lifecycle does
-     * not contain, which is their mistake to correct and so a 422 — an
-     * uncaught argument exception would report the same thing as a server
-     * fault. The authorisation failure is deliberately not caught: Laravel
-     * already renders it as a 403 carrying the engine's own wording, and
-     * catching it here would only be an opportunity to reword it.
+     * A mapped edge goes through {@see Engine::apply()}; any other listed
+     * status goes through {@see Engine::set()}, which is what the picker
+     * uses when it names a status that is not the next one in the lifecycle.
+     * An unlisted value is the caller's mistake and so a 422. The
+     * authorisation failure is deliberately not caught: Laravel already
+     * renders it as a 403 carrying the engine's own wording.
      */
     private function drive(CipApplication $application, string $to, ?User $actor, array $meta): CipApplication
     {
         try {
-            $application = Engine::apply($application, $to, $actor, $meta);
+            $application = Engine::canTransition($application, $to)
+                ? Engine::apply($application, $to, $actor, $meta)
+                : Engine::set($application, $to, $actor, $meta);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }

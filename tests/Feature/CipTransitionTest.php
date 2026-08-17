@@ -374,20 +374,29 @@ class CipTransitionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->application($staff);
 
-        // New → Review belongs to assign(); leftover Draft → New belongs to
-        // submit(), which checks the checklist first.
+        // Leftover Draft → New belongs to submit(), which checks the checklist.
+        $draft = $this->at($this->application($staff), Status::DRAFT);
         $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => 'new'])
+            ->postJson('/portal/cip/applications/'.$draft->uuid.'/status', ['status' => 'new'])
             ->assertStatus(422);
 
-        $this->assertSame(Status::NEW, $application->refresh()->status, 'and it moved nothing');
+        $this->assertSame(Status::DRAFT, $draft->refresh()->status, 'and it moved nothing');
 
-        foreach (['pending_review', 'granted', 'denied'] as $owned) {
+        // Ready to submit → Pending review belongs to the submission verb.
+        $ready = $this->at($this->application($staff), Status::READY_TO_SUBMIT);
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$ready->uuid.'/status', ['status' => 'pending_review'])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::READY_TO_SUBMIT, $ready->refresh()->status);
+
+        foreach (['granted', 'denied'] as $owned) {
             $this->actingAs($staff)
                 ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => $owned])
                 ->assertStatus(422);
         }
 
+        $this->assertSame(Status::NEW, $application->refresh()->status);
         $this->assertSame(0, CipEvent::where('action', CipEvent::ACTION_STATUS_CHANGED)->count());
     }
 

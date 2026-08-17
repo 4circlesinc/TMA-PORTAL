@@ -128,6 +128,41 @@ class Engine
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
         }
 
+        return self::write($application, $to, $actor, $meta);
+    }
+
+    /**
+     * Put the application on this status, whether or not the lifecycle has
+     * an edge there from here.
+     *
+     * The status picker lists every status, not only the next one, and a
+     * choice it offers has to land. Permission is still {@see allows()} —
+     * a reviewing officer cannot write a compliance status just because
+     * the menu named it. DRAFT is not a destination: nothing files into it.
+     */
+    public static function set(CipApplication $application, string $to, ?User $actor, array $meta = []): CipApplication
+    {
+        if (! Status::isValid($to) || $to === Status::DRAFT) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s is not a status this application can be set to.',
+                Status::label($to),
+            ));
+        }
+
+        if ($application->status === $to) {
+            return $application;
+        }
+
+        if (! self::allows($actor, $application, $to)) {
+            throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
+        }
+
+        return self::write($application, $to, $actor, $meta);
+    }
+
+    /** The row and the audit, once the move has already been allowed. */
+    private static function write(CipApplication $application, string $to, ?User $actor, array $meta): CipApplication
+    {
         return DB::transaction(function () use ($application, $to, $actor, $meta) {
             $from = $application->status;
             $application->forceFill(['status' => $to])->save();
