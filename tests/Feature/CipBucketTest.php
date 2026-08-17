@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CipApplication;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
@@ -128,6 +129,30 @@ class CipBucketTest extends TestCase
         return array_column($buckets, 'tone', 'key');
     }
 
+    /** What this reader's dashboard says about which side of the firm they sit on. */
+    private function staffFlag(User $user): mixed
+    {
+        return $this->actingAs($user)
+            ->getJson('/portal/cip/dashboard')
+            ->assertOk()
+            ->json('staff');
+    }
+
+    /** Somebody the firm holds a client record for, and no more than that. */
+    private function privateClient(string $email): User
+    {
+        $account = $this->user(Role::CLIENT, $email);
+
+        Client::create([
+            'uid' => strtok($email, '@'),
+            'name' => $account->name,
+            'user_id' => $account->id,
+            'data' => [],
+        ]);
+
+        return $account;
+    }
+
     public function test_the_administrator_dashboard_is_section_9s_ten_buckets(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
@@ -192,6 +217,45 @@ class CipBucketTest extends TestCase
         // in the administrator's ten, so that is what they are given.
         $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
         $this->assertCount(10, $body['buckets']);
+    }
+
+    public function test_the_three_working_roles_are_staff(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+
+        // The home screen's CIP card is offered on this flag alone, so all
+        // three have to answer it — the two officer types are the ones a
+        // capability check would be tempted to sort into "not administrator"
+        // and drop, and they are exactly who opens that card each morning.
+        foreach ([$admin, $colin, $rita] as $reader) {
+            $this->assertTrue($this->staffFlag($reader), $reader->email.' works here.');
+        }
+    }
+
+    public function test_neither_external_reader_is_staff(): void
+    {
+        [, $contact] = $this->providerWithContact('GAL');
+        $applicant = $this->privateClient('asem@example.com');
+
+        /*
+         * The bug this flag exists for.
+         *
+         * Both of these reach the module — they are promised their own
+         * applications — and Buckets::setFor hands both of them the same
+         * SERVICE_PROVIDER six, so the dashboard name says nothing about which
+         * side of the firm a reader is on. A home screen that inferred it from
+         * the set would have drawn the firm's CIP card for every external
+         * account in the portal.
+         */
+        foreach ([$contact, $applicant] as $reader) {
+            $body = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json();
+
+            $this->assertTrue($body['cip'], $reader->email.' still reaches the module.');
+            $this->assertSame(Buckets::SERVICE_PROVIDER, $body['dashboard']);
+            $this->assertFalse($body['staff'], $reader->email.' does not work here.');
+        }
     }
 
     public function test_every_bucket_carries_a_tone_the_design_system_can_draw(): void
@@ -259,6 +323,12 @@ class CipBucketTest extends TestCase
          */
         $outsider = $this->user(Role::CLIENT, 'eve@example.com');
 
+        /*
+         * Exact, and that is load-bearing now the served payload also carries
+         * `staff`. A reader with no dashboard is answered the one question
+         * they asked; going on to describe who they are would be the module
+         * telling the browser about somebody it just said it has nothing for.
+         */
         $this->actingAs($outsider)
             ->getJson('/portal/cip/dashboard')
             ->assertOk()

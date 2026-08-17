@@ -820,9 +820,13 @@
    *
    * Which set arrives is the server's decision and this card does not second
    * guess it: an administrator (and a Compliance Officer) gets the ten the
-   * firm reports on, a Reviewing Officer gets their four work queues, a
-   * service provider gets their firm's six. The card renders whatever came
-   * back, in the order it came back in.
+   * firm reports on, a Reviewing Officer gets their four work queues. The card
+   * renders whatever came back, in the order it came back in.
+   *
+   * The applicant-facing set never arrives, because this card is staff only —
+   * a provider contact and a private client both reach the module through
+   * their own applications and neither of them opens their day on the firm's
+   * book. The server decides that too, and says so in `staff`.
    */
   var homeCipLoaded = false;
   var homeCip = null;
@@ -832,19 +836,24 @@
   /*
    * What the counts are measured over — deliberately not a total.
    *
-   * The three dashboards count different things, so any single meta that fits
-   * one is a lie on the other two. A Reviewing Officer's four are the files on
+   * The two sets that can arrive count different things, so a single meta that
+   * fits one is a lie on the other. A Reviewing Officer's four are the files on
    * their own desk; a heading that read like a firm-wide figure would turn
    * their to-do list into a report about everybody, and they would act on it.
    * The payload says which set it sent, so this says what that set covers.
    *
-   * A set we have not been taught gets no meta at all rather than a guess: a
-   * fourth dashboard added server-side must not be described by this file.
+   * There is no service_provider line and the absence is the point. That set
+   * is not one kind of reader: Buckets::setFor hands it to a provider contact
+   * AND to a private client, so "Your firm" describes at most half of it — a
+   * private client has no firm and is scoped to their own single record. Since
+   * no wording is true for both, the honest entry is none, and the card is
+   * staff only so the set cannot reach this file anyway. A set we have not been
+   * taught gets no meta rather than a guess, which is the rule a fourth
+   * dashboard added server-side would meet as well.
    */
   var CIP_SCOPE_META = {
     administrator: 'All applications',
     reviewing_officer: 'Assigned to you',
-    service_provider: 'Your firm',
   };
 
   /*
@@ -856,6 +865,12 @@
    * The colour is the only part of a row that claims the reader has something
    * to do about it, and "Updates Required 0" has nothing behind it — the row
    * stays, because zero is a true answer worth reading, but it stops shouting.
+   *
+   * The greyed dot is the whole of what a zero earns. The row used to carry a
+   * `--empty` class as well, which no stylesheet defined and nothing read; the
+   * only thing such a hook could ever do is dim or flag a row for being empty,
+   * and an empty queue is the answer an administrator opened the card hoping
+   * for, not a fault to draw the eye to. It is not emitted any more.
    */
   var CIP_TONES = ['success', 'danger', 'pending', 'action', 'neutral'];
 
@@ -873,16 +888,32 @@
   }
 
   function cipSkeleton() {
-    // Six rows: the three sets are four, six and ten long and which one this
-    // reader gets is not known until the payload lands, so the middle length is
-    // never badly wrong in either direction. Warm boot means a returning reader
-    // paints their real set and never sees this at all.
+    /*
+     * Six rows: the sets are four and ten long and which one this reader gets
+     * is not known until the payload lands, so a middle length is never badly
+     * wrong in either direction. Warm boot means a returning reader paints
+     * their real set and never sees this at all.
+     *
+     * The placeholders sit straight in the row: there is nothing to press yet,
+     * so there is no button. That matters beyond tidiness — a
+     * .tma-portal-cip__link wrapper would hand the loading rows the link's
+     * pointer cursor and hover wash, so six rows nobody can click would invite
+     * the click. dashboard.css gives the row itself the padding and gap the
+     * link would have supplied (.tma-portal-cip__row:has(> .tma-skeleton)), so
+     * both shapes measure the same and the card does not jump when the counts
+     * arrive.
+     *
+     * No inline sizes. The stylesheet owns every measurement here — an inline
+     * width outranks it, and the two were quietly disagreeing about how wide a
+     * placeholder label is. --avatar is what keeps the dot round: .tma-skeleton
+     * loads after dashboard.css and would otherwise square it off with its own
+     * 6px radius.
+     */
     var row = '<li class="tma-portal-cip__row" aria-hidden="true">' +
-      '<span class="tma-portal-cip__link">' +
-      '<i class="tma-portal-cip__dot tma-skeleton" style="width:8px;height:8px;border-radius:50%"></i>' +
-      '<span class="tma-skeleton tma-skeleton--text" style="width:56%"></span>' +
-      '<span class="tma-skeleton tma-skeleton--text" style="width:14%;margin-left:auto"></span>' +
-      '</span></li>';
+      '<i class="tma-portal-cip__dot tma-skeleton tma-skeleton--avatar"></i>' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '</li>';
 
     return tileShell(
       'cipStatus', 'panel-cip', 'CIP Applications', panelHead('CIP Applications'),
@@ -893,15 +924,48 @@
   }
 
   function renderCipStatus() {
-    if (!homeCipLoaded) return cipSkeleton();
+    /*
+     * The skeleton is withheld from a reader we already know will not be given
+     * a card. /me settles well before this payload does, and six shimmering
+     * rows that resolve into nothing would have announced a module to somebody
+     * who does not have one — the exact thing the silences below are careful
+     * not to do. The KPI row and Employees both shimmer first and vanish
+     * second, which is right for them: those two are *staff* only, and the
+     * board they sit on is the staff board, so the flash is rare. This card is
+     * staff only AND CIP only, and its readers are the smaller set.
+     *
+     * One-sided on purpose. Only a positive "this is a client" suppresses it;
+     * an unloaded /me (null) still shimmers, so identity arriving late costs a
+     * staff reader nothing. And this can only ever withhold a placeholder —
+     * the card itself is the server's decision, taken below on data that has
+     * landed, so a wrong guess here cannot hide anybody's queues.
+     */
+    if (!homeCipLoaded) return isStaffUser() === false ? '' : cipSkeleton();
 
     /*
-     * Two different silences, and both are the right answer.
+     * Three different silences, and all of them are the right answer.
      *
      * `cip: false` is the server saying the module is not this reader's — the
      * same answer /portal/dashboard/metrics gives a client account asking for
      * staff KPIs, and it is honoured the same way: no card, no explanation,
      * nothing to dismiss.
+     *
+     * `staff: false` is that courtesy asked a second question, and it is the
+     * one this card turns on. The module IS for the external side: a provider
+     * contact and a private client both reach it through their own
+     * applications, so `cip` alone handed every external account a card
+     * summarising a book that is not theirs to read. The set name cannot
+     * decide it either — Buckets::setFor gives both external kinds the same
+     * applicant-facing set — so the server answers with the portal's one staff
+     * predicate and the browser never infers staffhood for itself.
+     *
+     * Drawn only on a positive answer, where the KPI row tests for the
+     * negative. The difference is the warm store: a payload carrying no
+     * `staff` key at all is a snapshot written by a release that had not been
+     * asked the question, and treating silence as consent would paint the card
+     * for exactly the reader it was taken away from. A staff reader loses one
+     * warm first paint the first time they open the app after this ships, and
+     * the refetch already on its way puts it back.
      *
      * A failed request lands here too, holding nothing, and it has to be
      * silent for a reason the KPI row does not have. The KPI row knows its
@@ -913,7 +977,7 @@
      * refresh asks again and the card appears the moment there is something
      * true to put in it.
      */
-    if (!homeCip || homeCip.cip === false) return '';
+    if (!homeCip || homeCip.cip === false || homeCip.staff !== true) return '';
 
     var buckets = homeCip.buckets || [];
     if (!buckets.length) return '';
@@ -921,8 +985,18 @@
     var rows = buckets.map(function (b) {
       // Keyed by bucket so morph leaves an unchanged row alone: the counts are
       // re-read on every CIP signal and most of them will not have moved.
-      return '<li class="tma-portal-cip__row' + (b.count ? '' : ' tma-portal-cip__row--empty') + '"' +
-        ' data-key="cip-' + ui().esc(b.key) + '">' +
+      /*
+       * A queue with nothing in it is marked, not hidden.
+       *
+       * Zero is a true answer and the row stays a control — an empty queue is
+       * a reasonable thing to open, and a reader who cannot open it has to
+       * confirm the zero some other way. All the modifier does is let the
+       * count step back to the grey its label is already written in, so the
+       * numbers that need reading are the ones standing in the page's ink.
+       * See dashboard.css, which carries the same reasoning at the rule.
+       */
+      return '<li class="tma-portal-cip__row' + (b.count ? '' : ' tma-portal-cip__row--empty') +
+        '" data-key="cip-' + ui().esc(b.key) + '">' +
         '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(b.key) + '">' +
         '<i class="tma-portal-cip__dot tma-portal-cip__dot--' + cipTone(b) + '" aria-hidden="true"></i>' +
         '<span class="tma-portal-cip__label">' + ui().esc(b.label) + '</span>' +
@@ -1251,10 +1325,12 @@
     /*
      * staffOnly keeps this out of the Edit Dashboard list for a client account,
      * which is a different question from whether the card draws: the server's
-     * `cip: false` decides that, and it knows about readers this flag cannot
-     * see — a staff member at a firm with no CIP role. Both are needed. Without
-     * the flag, a client is offered a tile that would never appear; without the
-     * server's answer, a staff member without CIP gets an empty panel.
+     * `cip` and `staff` answers decide that, and between them they know about
+     * readers this flag cannot see — a staff member at a firm with no CIP role,
+     * and a provider contact who does reach the module but not this summary of
+     * it. Both are needed. Without the flag, an external account is offered a
+     * tile that would never appear; without the server's answer, a staff member
+     * without CIP gets an empty panel.
      */
     { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', staffOnly: true },
   ];

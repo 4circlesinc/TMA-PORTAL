@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
+use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\ApplicantType;
-use App\Support\Cip\Assignments;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
@@ -17,6 +18,7 @@ use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Facets;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
@@ -238,8 +240,23 @@ class CipApplicationController extends Controller
         $data = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'string', 'max:32'],
-            // A dashboard chip clicking through (§9).
-            'bucket' => ['nullable', 'string', 'max:64'],
+            /*
+             * The three the filter menu offers, each a comma-separated list.
+             *
+             * Lists rather than single values because the menu is checkboxes:
+             * ticking New and Delayed asks for either, and a parameter that
+             * could only carry one would have made the second tick silently
+             * replace the first. Comma-separated rather than repeated keys so
+             * the whole filter still fits in a link somebody can paste.
+             *
+             * The lengths are bounded because these arrive in a URL: `max:400`
+             * is comfortably more than every bucket, officer and provider a
+             * reader could tick at once, and small enough that a hand-typed
+             * address cannot turn into a thousand-term WHERE IN.
+             */
+            'bucket' => ['nullable', 'string', 'max:400'],
+            'assignee' => ['nullable', 'string', 'max:400'],
+            'provider' => ['nullable', 'string', 'max:400'],
             'page' => ['nullable', 'integer', 'min:1'],
             'perPage' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
@@ -290,11 +307,49 @@ class CipApplicationController extends Controller
          * them, so it answers 404 rather than an empty table: an empty table
          * says "none of these", and the truth is "not yours to ask".
          */
-        if (! empty($data['bucket'])) {
-            $bucket = Buckets::find($user, $data['bucket']);
-            abort_unless($bucket, 404);
-            Buckets::apply($query, $bucket, $user);
+        $buckets = self::list($data['bucket'] ?? null);
+
+        if ($buckets !== []) {
+            $chosen = [];
+
+            foreach ($buckets as $key) {
+                $bucket = Buckets::find($user, $key);
+                abort_unless($bucket, 404);
+                $chosen[] = $bucket;
+            }
+
+            /*
+             * Several buckets are an OR, one bucket is what it always was.
+             *
+             * Kept as two paths rather than collapsed into one, because
+             * Buckets::apply is the single definition each count was measured
+             * through — including the officer queues, which are a person as
+             * well as a status. Re-expressing a set of them as one status list
+             * here would be a second definition, and the first time the two
+             * drifted the menu would promise rows the table could not produce.
+             */
+            if (count($chosen) === 1) {
+                Buckets::apply($query, $chosen[0], $user);
+            } else {
+                $query->where(function ($q) use ($chosen, $user) {
+                    foreach ($chosen as $bucket) {
+                        $q->orWhere(fn ($inner) => Buckets::apply($inner, $bucket, $user));
+                    }
+                });
+            }
         }
+
+        /*
+         * The other two narrow within the scope, never around it.
+         *
+         * An officer or a provider this reader cannot see simply matches
+         * nothing, which is the same answer they would get for one that does
+         * not exist — the listing is already scoped, so an id from outside it
+         * can no more be filtered *to* than it can be read. That is the
+         * portal's convention working by construction rather than by a check.
+         */
+        Facets::applyAssignees($query, self::list($data['assignee'] ?? null));
+        Facets::applyProviders($query, self::list($data['provider'] ?? null));
 
         $this->applyListSearch($query, trim($data['q'] ?? ''));
 
@@ -315,7 +370,39 @@ class CipApplicationController extends Controller
                 'label' => Status::label($s),
                 'tone' => Status::tone($s),
             ])->all(),
+            /*
+             * What the filter menu can offer, and how much sits behind each.
+             *
+             * Sent with the listing rather than fetched separately because the
+             * menu is opened from this table and nowhere else, and a second
+             * round trip would mean the reader could open it before it had
+             * anything to show. Measured over the whole slice rather than this
+             * page — see {@see Facets}.
+             */
+            'assignees' => Facets::assignees($user),
+            'providers' => Facets::providers($user),
         ]);
+    }
+
+    /**
+     * One comma-separated filter parameter as a list of values.
+     *
+     * Blanks are dropped rather than passed on: "a,,b" is what a browser sends
+     * when the last tick is cleared without rebuilding the string, and an
+     * empty term would otherwise become a filter matching nothing at all.
+     *
+     * @return list<string>
+     */
+    private static function list(?string $raw): array
+    {
+        if ($raw === null || trim($raw) === '') {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map('trim', explode(',', $raw)),
+            fn (string $value) => $value !== '',
+        )));
     }
 
     /**
@@ -711,7 +798,7 @@ class CipApplicationController extends Controller
     /**
      * A presenter primed across every passport photo on these applications.
      *
-     * @param  iterable<int, \App\Models\CipApplication>  $applications
+     * @param  iterable<int, CipApplication>  $applications
      */
     private static function presenterFor(User $viewer, iterable $applications): Presenter
     {

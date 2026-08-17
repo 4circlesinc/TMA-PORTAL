@@ -35310,8 +35310,9 @@ span.tma-dash__messages-profile-avatar {
  * a service provider, four for a reviewing officer — and it will be the same
  * ten tomorrow. A scroller would therefore hide rows that always had room, and
  * hide them below a fold with no affordance, which is exactly how a queue goes
- * unnoticed. The height is arithmetic instead: ten rows of 30px (an 18px line
- * box plus 6px of padding either side) and nine 2px gaps is 318px, against the
+ * unnoticed. The height is arithmetic instead: ten rows of 30px (a 12px line in
+ * its 16px box plus 6px of padding either side comes to 28, and the min-height
+ * is the floor that rounds it up) and nine 2px gaps is 318px, against the
  * 322px the Employees card asks for at six names. The two cards therefore end
  * level and the board is no taller than it already was. If the masonry ever
  * hands this tile less height than that, the packed panel body already scrolls
@@ -35426,14 +35427,45 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
+ * A queue with nothing in it.
+ *
+ * Zero is a true answer, not a fault, so this is the difference between a
+ * number and a *quiet* number and nothing more: the count steps back to the
+ * grey the label beside it is already written in, instead of standing in the
+ * page's ink like the six that need reading. Legible, because a reader came
+ * here to learn that it is zero.
+ *
+ * Everything that makes the row a control stays — the hover wash, the cursor,
+ * the focus ring. An empty queue is a perfectly reasonable thing to open, and
+ * a reader who cannot open it has to go and confirm the zero some other way.
+ * The dot needs no rule here: cipTone() already drops an empty bucket to
+ * neutral whatever tone the server sent, for the same reason.
+ */
+.tma-portal-cip__row--empty .tma-portal-cip__count { color: var(--color-text-secondary); }
+
+/*
  * Loading.
  *
- * The placeholders sit straight in the <li> — there is nothing to press yet,
- * so there is no button — which means the row itself has to carry the padding
- * and gap the link would otherwise supply. Without that the skeleton would be
- * shorter than the real thing and the card would jump the moment the counts
- * landed, which is the one thing a skeleton exists to prevent. :has() keeps
- * this off a row that does contain a link, so both shapes measure the same.
+ * Six placeholders standing in for a set nobody has counted yet, and the one
+ * thing they have to get exactly right is the height: a loading row that is
+ * not the same 30px as a real one makes the card jump the moment the counts
+ * land, which is the single job a skeleton has.
+ *
+ * Which element carries that 30px depends on how portal-home.js shapes the
+ * loading row, so both shapes are covered. Keep a .tma-portal-cip__link around
+ * the placeholders and the link's own box supplies the height, the padding and
+ * the gap already — which is exactly why the rule below is scoped to a *direct*
+ * child, because laying the same box on the row as well would make the loading
+ * row taller than the real one and cause the jump it is here to prevent. Put
+ * the placeholders straight in the <li> instead and there is no link to supply
+ * any of it, so the row supplies it itself.
+ *
+ * The placeholder *widths* are deliberately not here. portal-home.js sets them
+ * inline on each placeholder, as it does for every other tile on this board,
+ * and an inline width outranks anything a selector in this file can say. Two
+ * rules used to restate them and disagreed with the markup — 52% against 56%,
+ * 16px against 14% — which is how a stylesheet ends up describing a page that
+ * does not exist.
  */
 .tma-portal-cip__row:has(> .tma-skeleton) {
   align-items: center;
@@ -35442,8 +35474,13 @@ span.tma-dash__messages-profile-avatar {
   padding: var(--space-6) var(--space-8);
 }
 
-/* The name is long and the count is short, in both states — written as a
-   descendant so it holds whether the placeholders sit in the row or, should
-   the loading row ever keep its button, inside that. */
-.tma-portal-cip__row .tma-skeleton--text { width: 52%; }
-.tma-portal-cip__row .tma-skeleton--text ~ .tma-skeleton--text { width: 16px; margin-left: auto; }
+/*
+ * Nothing in a loading row is pressable, and it must not look as though it is.
+ * A placeholder row that keeps the wrapper is keeping a span wearing a button's
+ * class, so it borrows the pointer cursor and the hover wash with it and offers
+ * a press that answers nothing. Taken off the way portal.css takes it off
+ * .tma-portal-file-row--skeleton, in one declaration on the row: it holds
+ * whichever shape the placeholders arrive in, and it pairs with the aria-hidden
+ * the row already carries — out of the pointer tree as well as the reading one.
+ */
+.tma-portal-cip__row:has(.tma-skeleton) { pointer-events: none; }

@@ -515,3 +515,126 @@
 /* filter field: chevron points down while its submenu is open */
 .tma-filter-popover__item-chevron { transition: transform 0.15s ease; }
 .tma-filter-popover__item.is-open .tma-filter-popover__item-chevron { transform: rotate(90deg); }
+
+/* ── "Filtered by": one panel, checkbox groups ───────────────────────────
+ *
+ * The applications table's filter menu used to be a drill-down — a list of
+ * field names, each opening a second popover of values — which can only ever
+ * express one value per field. These rules dress the replacement: every group
+ * visible at once, each value a checkbox, so the combination being built stays
+ * readable while it is being built.
+ */
+
+.tma-filter-popover__title {
+  padding: 8px 8px 4px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Groups are separated by their own headings rather than by rules: three
+   dividers in a panel this size reads as three panels. */
+.tma-filter-popover__group + .tma-filter-popover__group {
+  margin-top: 4px;
+}
+
+.tma-filter-popover__note {
+  padding: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+/* The box is drawn here rather than shipped as an icon: it has three states
+   and an <img> can only have one. Sized and positioned to sit level with the
+   first line of a label that has wrapped to two. */
+.tma-filter-popover__check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid rgba(0, 0, 0, 0.25);
+  border-radius: 5px;
+  background: transparent;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.tma-filter-popover__item--check[aria-checked="true"] .tma-filter-popover__check {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary, #2563eb);
+}
+
+/* The tick, as a rotated corner rather than a glyph — no font to load and no
+   icon file to keep in step with the box around it. */
+.tma-filter-popover__item--check[aria-checked="true"] .tma-filter-popover__check::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/*
+ * A ticked row is NOT given the hover wash the other popovers use for
+ * selection. Here the box already says "chosen", and washing the row as well
+ * would leave a panel of six ticks looking like six rows under the pointer.
+ */
+.tma-filter-popover__item--check[data-selected] {
+  background: transparent;
+}
+
+.tma-filter-popover__item--check:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-filter-popover__item--check:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: -2px;
+}
+
+/* The status dot, coloured from the same five tones the status chips use
+   (.tma-portal-status--*), so a bucket wears one colour wherever it appears. */
+.tma-filter-popover__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+}
+
+.tma-filter-popover__dot--success { background: #16a34a; }
+.tma-filter-popover__dot--danger  { background: #dc2626; }
+.tma-filter-popover__dot--pending { background: #f59e0b; }
+.tma-filter-popover__dot--action  { background: #2563eb; }
+.tma-filter-popover__dot--neutral { background: rgba(0, 0, 0, 0.25); }
+
+.tma-filter-popover__item--clear {
+  color: var(--color-primary, #2563eb);
+}
+
+/* Dark. This file's popover is drawn on a light surface throughout — see the
+   rules above, which set explicit black text — so the dark treatment mirrors
+   them rather than relying on tokens the panel does not use. */
+.tma-dash[data-theme="dark"] .tma-filter-popover__title,
+.tma-dash[data-theme="dark"] .tma-filter-popover__note {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__check {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__item--check:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral {
+  background: rgba(255, 255, 255, 0.35);
+}

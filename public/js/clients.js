@@ -984,16 +984,24 @@
     }
 
     /*
-     * The bucket the table is filtered to is a position within the list, the
-     * way the tab and the folder are a position within a client — so it
-     * belongs in the address with it.
+     * What the applications table is narrowed to is a position within the
+     * list, the way the tab and the folder are a position within a client —
+     * so it belongs in the address with it. All three are server-applied
+     * filters, so all three travel: a link that carried the status but not the
+     * officer would open somebody else's table.
      *
-     * Built here rather than at the one place the filter changes, because
-     * every return to the list rewrites this URL (see navigate and syncRoute)
-     * and each of those would otherwise drop a filter the reader can still
-     * see on the screen in front of them.
+     * Built here rather than at the places the filters change, because every
+     * return to the list rewrites this URL (see navigate and syncRoute) and
+     * each of those would otherwise drop a filter the reader can still see on
+     * the screen in front of them.
      */
-    return '/clients' + (BUCKETS.active ? '?bucket=' + encodeURIComponent(BUCKETS.active) : '');
+    var listParams = [];
+    ['bucket', 'assignee', 'provider'].forEach(function (field) {
+      var ticked = filterValues(field);
+      if (ticked.length) listParams.push(field + '=' + encodeURIComponent(ticked.join(',')));
+    });
+
+    return '/clients' + (listParams.length ? '?' + listParams.join('&') : '');
   }
 
   /*
@@ -1039,20 +1047,63 @@
   }
 
   /*
-   * The same job for the list: keep the address saying which bucket the
-   * applications table is narrowed to.
+   * Is this view the page the reader is actually looking at?
    *
-   * Only when it would change anything. This is called from every paint of
-   * the table, and rewriting the address to what it already says is work in
-   * front of everything else that reads it. The pathname is checked too,
-   * because the view can be re-rendered while it is hidden behind another
-   * one — and a hidden view must not drag the address bar off the page the
-   * reader is actually looking at.
+   * The shell keeps every view mounted and hides all but one, so this module
+   * can be re-rendered — by a live signal, by a filter set from the Dashboard
+   * card — while the reader is somewhere else entirely. Anything that writes
+   * to the address bar has to ask this first.
+   */
+  function clientsViewShowing() {
+    var root = clientsMountRoot;
+    if (!root || !root.isConnected) return false;
+    var view = root.closest ? root.closest('.tma-dash__view') : null;
+
+    return !view || !view.hidden;
+  }
+
+  /* Set while a write is waiting for the shell to finish moving — see below. */
+  var listUrlRetry = false;
+
+  /*
+   * The same job for the list: keep the address saying what the applications
+   * table is narrowed to.
+   *
+   * Only when it would change anything. This is called from every paint of the
+   * table, and rewriting the address to what it already says is work in front
+   * of everything else that reads it.
+   *
+   * The wait is the subtle part. Coming back to the hub from another view,
+   * dashboard.js shows this view and lets it render — which is where this is
+   * called from — and only then pushes /clients. So the address still says
+   * /files at this moment, and writing now would both aim at the wrong page
+   * and replace the entry the reader would press Back to reach. Writing later
+   * is safe: dashboard.js compares pathnames alone, so it leaves a /clients
+   * address that already carries a query untouched.
+   *
+   * This used to return when the address did not parse as a clients route,
+   * which meant it never wrote at all on the way in — the filter stayed on the
+   * screen while the address forgot it, and a reload or a shared link lost it.
+   * The property that guard was protecting is now asked directly, of the view
+   * rather than of the URL.
    */
   function syncClientsListUrl(state) {
     if (!window.history || !history.replaceState) return;
     if (!state || state.screen !== 'list') return;
-    if (!parseClientsPath(window.location.pathname)) return;
+    if (!clientsViewShowing()) return;
+
+    if (!parseClientsPath(window.location.pathname)) {
+      if (listUrlRetry) return;
+      listUrlRetry = true;
+      setTimeout(function () {
+        listUrlRetry = false;
+        // Re-asked from the top: by now the reader may have moved on again,
+        // and this is the same one-line answer as any other caller's.
+        syncClientsListUrl(clientsMountState);
+      }, 0);
+
+      return;
+    }
 
     var url = pathForClientsScreen('list');
     if (window.location.pathname + window.location.search === url) return;
@@ -1076,9 +1127,13 @@
     return {
       tab: params.get('tab') || (folder ? 'folders' : null),
       folder: folder,
-      // Which bucket the applications table opens filtered to, so a reload or
-      // a link from the Dashboard's CIP card lands on the same rows.
+      // What the applications table opens filtered to, so a reload or a link
+      // from the Dashboard's CIP card lands on the same rows. Each is checked
+      // against the server's own set before it is trusted — see
+      // settleApplicationFacets and ensureBuckets.
       bucket: params.get('bucket') || null,
+      assignee: params.get('assignee') || null,
+      provider: params.get('provider') || null,
     };
   })();
 
@@ -1166,31 +1221,65 @@
   }
 
   /*
+   * Which list is on screen.
+   *
+   * One filter menu serves both tabs on this page, and every field it offers
+   * asks about an application: what state it is in, whose desk it is on, whose
+   * firm filed it. A service provider is a firm — it is the answer to the
+   * third question, not a subject of any of them — so on that tab the menu has
+   * nothing to say and is not offered at all. Every field below starts here.
+   */
+  function onApplicationsTable(state) {
+    return !!state && state.screen === 'list' && !onProvidersTab(state);
+  }
+
+  /*
    * Where a status filter means anything.
    *
-   * One filter menu serves both lists on this page, and only one of them is a
-   * list of applications. A service provider is a firm: it holds no status of
-   * its own, and offering the field there would be a filter that can only
-   * empty the table. The server's set is the second half of the test — if it
-   * named no buckets then this reader has no CIP dashboard, and a field with
-   * no values is a dead end.
+   * The server's set is the second half of the test — if it named no buckets
+   * then this reader has no CIP dashboard, and a field with no values is a
+   * dead end.
    */
   function statusFilterApplies(state) {
-    return !!state && state.screen === 'list' && !onProvidersTab(state) && BUCKETS.list.length > 0;
+    return onApplicationsTable(state) && BUCKETS.list.length > 0;
+  }
+
+  /*
+   * The same test for the officers.
+   *
+   * The values are the officers who actually hold something, which the server
+   * counts over this reader's whole scope. With none of them holding anything
+   * the field offers "Unassigned" and nothing else, which narrows to the table
+   * the reader is already looking at.
+   */
+  function assigneeFilterApplies(state) {
+    return onApplicationsTable(state) && APP_TABLE.assignees.length > 0;
+  }
+
+  /*
+   * And for the firms — offered only above one.
+   *
+   * A provider contact sees their own firm and nothing else, so the field
+   * would be a menu with a single value that narrows nothing. Two is where the
+   * question starts being worth asking.
+   */
+  function providerFilterApplies(state) {
+    return onApplicationsTable(state) && APP_TABLE.providers.length > 1;
   }
 
   /*
    * What lights the Filter button.
    *
-   * The directory's own filters are held on the state and matched in the
-   * browser; the status is held on BUCKETS because the server pages by it.
-   * To the reader they are one control, so a lit state that knew about only
-   * half of what is applied would be the button telling them nothing is
-   * filtered while the table says otherwise.
+   * All three live on the module rather than on the state, because the server
+   * is what applies them — the listing is re-asked for, not re-matched over
+   * rows the browser holds. To the reader they are one control, so a lit state
+   * that knew about only some of what is applied would be the button telling
+   * them nothing is filtered while the table says otherwise.
    */
   function anyTableFilter(state) {
-    return anyClientFilter(state && state.filters) ||
-      !!(statusFilterApplies(state) && BUCKETS.active);
+    if (!onApplicationsTable(state)) return false;
+
+    return anyTableFilterSet();
   }
 
   /*
@@ -1477,10 +1566,21 @@
       '<div class="tma-dash__toolbar-actions">' +
       renderClientsCount(state) +
       '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
-      // aria-pressed carries the lit state on its own — see the tool-btn rule.
-      '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
-      ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
-      '<img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
+      /*
+       * Offered only where it can answer something.
+       *
+       * All three fields it opens are facts about an application — a status,
+       * an officer, a firm — and the Service providers tab lists firms, which
+       * hold none of them. A button there could only open a panel with nothing
+       * in it, which reads as broken rather than as not applicable.
+       *
+       * aria-pressed carries the lit state on its own — see the tool-btn rule.
+       */
+      (onApplicationsTable(state)
+        ? '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
+          ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
+          '<img src="' + ICONS.FunnelSimple + '" alt=""></button>'
+        : '') +
       '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort' +
       ' aria-pressed="' + (state.sort && state.sort !== 'name' ? 'true' : 'false') + '" aria-expanded="false">' +
       '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
@@ -1505,6 +1605,9 @@
     toolbar.classList.toggle('tma-dash__toolbar--selected', count > 0);
     label.textContent = count === 1 ? '1 Selected' : count + ' Selected';
   }
+  /* Kept for the dead directory list below, which still names its filters
+     this way. Nothing on a live screen calls it — the applications table's
+     filters are named from the server's own facets. */
   function referralFilterLabel(value) {
     if (value === 'company') return 'Any service provider';
     if (value === 'private') return 'Private';
@@ -1531,15 +1634,34 @@
      * the set lands there is no label to put on the chip — a heartbeat with
      * no chip reads better than a chip that says "update_required".
      */
-    var bucket = statusFilterApplies(state) ? bucketFor(BUCKETS.active) : null;
-    if (bucket) {
-      tags.push({ id: 'status', label: 'Status: ' + bucket.label });
-    }
-    if (filters.referral) {
-      tags.push({ id: 'referral', label: 'Referred by: ' + referralFilterLabel(filters.referral) });
-    }
-    if (filters.clientType) {
-      tags.push({ id: 'clientType', label: 'Type: ' + clientTypeLabel(filters.clientType) });
+    /*
+     * One chip per tick, not one per field.
+     *
+     * Three statuses ticked is three chips, each with its own ×, because the
+     * reader's next thought is usually "not that one" rather than "none of
+     * them" — and a single chip reading "Status: 3 selected" would make
+     * removing one of them a trip back into the menu.
+     *
+     * Every chip is named from the server's own list. A value the reader has
+     * no dashboard for cannot be filtered to, and until the lists land there
+     * is no label to put on a chip — a beat with no chip reads better than a
+     * chip that says "update_required" or an officer's bare id.
+     */
+    if (onApplicationsTable(state)) {
+      [
+        { field: 'bucket', prefix: 'Status' },
+        { field: 'assignee', prefix: 'Assigned to' },
+        { field: 'provider', prefix: 'Provider' },
+      ].forEach(function (group) {
+        filterValues(group.field).forEach(function (value) {
+          var label = filterValueLabel(group.field, value);
+          if (!label) return;
+          tags.push({
+            id: group.field + ':' + value,
+            label: group.prefix + ': ' + label,
+          });
+        });
+      });
     }
     if (state.sort && state.sort !== 'name') {
       tags.push({ id: 'sort', label: 'Sorted by ' + clientSortLabel(state.sort), icon: ICONS.ArrowsDownUp });
@@ -2159,6 +2281,10 @@
   var APP_TABLE = {
     rows: [], page: 1, lastPage: 1, total: 0,
     loading: false, error: null, loadedKey: null, status: '',
+    // What the filter menu can offer, from the last listing. Empty arrays
+    // rather than undefined so the predicates that read .length can run
+    // before the first response has landed.
+    assignees: [], providers: [],
   };
 
   /*
@@ -2179,6 +2305,27 @@
   /* The bucket a key names, or null. The reader's own set is the authority:
      the listing 404s on a bucket that was never on their dashboard, so a key
      it does not name is not a filter, it is an error waiting to be sent. */
+  /*
+   * The CIP provider firm behind a client-hub company, if there is one.
+   *
+   * The two are separate records on purpose — provider config lives in
+   * cip_providers so that firms do not leak into the hub's client directory —
+   * and the facet carries the pairing so this does not have to guess at it by
+   * name. Null when the company is not a provider, or is one with nothing in
+   * this reader's slice: either way there is no filtered table to send anybody
+   * to, and the caller offers no button rather than a button that empties the
+   * list.
+   */
+  function providerForCompany(companyId) {
+    if (!companyId) return null;
+    var match = null;
+    (APP_TABLE.providers || []).forEach(function (p) {
+      if (p.companyId && String(p.companyId) === String(companyId)) match = p;
+    });
+
+    return match;
+  }
+
   function bucketFor(key) {
     if (!key) return null;
     for (var i = 0; i < BUCKETS.list.length; i++) {
@@ -2188,10 +2335,78 @@
     return null;
   }
 
-  function activeBucketLabel() {
-    var bucket = bucketFor(BUCKETS.active);
+  /*
+   * What the applications table is narrowed to — the whole of it, in one
+   * place.
+   *
+   * Three lists rather than three values, because the menu is checkboxes.
+   * Within a field the ticks are an OR: asking for New and Delayed asks for
+   * either, which is what a reader building up a view of "everything that
+   * needs a decision" means. Across fields it is an AND — Rita's files that
+   * are also Delayed — because a second question added to the first narrows
+   * it. The server applies exactly those rules; this only records the ticks.
+   *
+   * Not on `state.filters`, deliberately. That object is the dead directory's
+   * client-side matcher, and these three are server-applied: the table is
+   * re-asked for rather than filtered over rows the browser already holds.
+   * Keeping them apart is what stops a future edit "tidying" one into the
+   * other and quietly making these inert — which is exactly what had already
+   * happened to Referred by and Client type.
+   */
+  var TABLE_FILTERS = { bucket: [], assignee: [], provider: [] };
 
-    return bucket ? bucket.label : '';
+  /** The ticked values of one field, always an array. */
+  function filterValues(field) {
+    var list = TABLE_FILTERS[field];
+
+    return Array.isArray(list) ? list : [];
+  }
+
+  function filterHas(field, value) {
+    return filterValues(field).indexOf(String(value)) !== -1;
+  }
+
+  /* Tick or untick one value. Returns whether anything actually moved, so a
+     caller can skip the refetch when it did not. */
+  function toggleFilter(field, value) {
+    if (!TABLE_FILTERS[field]) return false;
+    var v = String(value);
+    var at = TABLE_FILTERS[field].indexOf(v);
+
+    if (at === -1) TABLE_FILTERS[field].push(v);
+    else TABLE_FILTERS[field].splice(at, 1);
+
+    return true;
+  }
+
+  function clearTableFilters() {
+    var had = anyTableFilterSet();
+    TABLE_FILTERS = { bucket: [], assignee: [], provider: [] };
+
+    return had;
+  }
+
+  function anyTableFilterSet() {
+    return filterValues('bucket').length > 0 ||
+      filterValues('assignee').length > 0 ||
+      filterValues('provider').length > 0;
+  }
+
+  /* A ticked value as the reader would say it, for the chip under the toolbar
+     and the summary on the Filter button. Named from the server's own lists so
+     no chip can read "update_required" or an officer's bare id. */
+  function filterValueLabel(field, value) {
+    if (field === 'bucket') {
+      var bucket = bucketFor(value);
+
+      return bucket ? bucket.label : '';
+    }
+
+    var list = field === 'assignee' ? (APP_TABLE.assignees || []) : (APP_TABLE.providers || []);
+    var found = null;
+    list.forEach(function (item) { if (String(item.id) === String(value)) found = item; });
+
+    return found ? found.name : '';
   }
 
   function ensureBuckets(render) {
@@ -2215,11 +2430,10 @@
          * a bucket this reader was never offered, so leaving it on would show
          * "Could not load applications" in place of a table that is fine.
          */
-        var dropped = !!BUCKETS.active && !bucketFor(BUCKETS.active);
-        if (dropped) {
-          BUCKETS.active = null;
-          syncClientsListUrl(clientsMountState);
-        }
+        var before = filterValues('bucket').length;
+        TABLE_FILTERS.bucket = filterValues('bucket').filter(bucketFor);
+        var dropped = TABLE_FILTERS.bucket.length !== before;
+        if (dropped) syncClientsListUrl(clientsMountState);
 
         if (dropped || BUCKETS.list.length) render();
       });
@@ -2255,7 +2469,10 @@
      */
     if (key && BUCKETS.loaded && !bucketFor(key)) return;
 
-    BUCKETS.active = key || null;
+    // The card opens one bucket, so it replaces whatever was ticked rather
+    // than adding to it: a reader pressing "Delayed" on the Dashboard means
+    // "show me the delayed ones", not "add them to yesterday's filter".
+    TABLE_FILTERS.bucket = key ? [String(key)] : [];
     APP_TABLE.page = 1;
 
     /*
@@ -2279,7 +2496,22 @@
   }
 
   function applicationTableKey(state) {
-    return [state.search || '', APP_TABLE.status || '', BUCKETS.active || '', APP_TABLE.page].join('|');
+    /*
+     * Every server-applied filter belongs in this key.
+     *
+     * A field left out of it does not refetch, so the reader ticks it, the
+     * chip appears and the rows never change — which is precisely how
+     * "Referred by" came to be decoration on this table. Adding a filter means
+     * adding it here.
+     */
+    return [
+      state.search || '',
+      APP_TABLE.status || '',
+      filterValues('bucket').join(','),
+      filterValues('assignee').join(','),
+      filterValues('provider').join(','),
+      APP_TABLE.page,
+    ].join('|');
   }
 
   function ensureApplicationTable(state, render) {
@@ -2293,9 +2525,15 @@
     var params = ['perPage=50', 'page=' + APP_TABLE.page];
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
-    // The same key the count was measured through, so the number beside a
-    // status and the rows behind it come from one definition on the server.
-    if (BUCKETS.active) params.push('bucket=' + encodeURIComponent(BUCKETS.active));
+    /*
+     * The same keys the counts were measured through, so the number beside a
+     * value and the rows behind it come from one definition on the server.
+     * Comma-separated because each is a list of ticks.
+     */
+    ['bucket', 'assignee', 'provider'].forEach(function (field) {
+      var ticked = filterValues(field);
+      if (ticked.length) params.push(field + '=' + encodeURIComponent(ticked.join(',')));
+    });
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
@@ -2307,6 +2545,14 @@
         APP_TABLE.lastPage = (json && json.lastPage) || 1;
         APP_TABLE.total = (json && json.total) || 0;
         APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
+        /*
+         * What the menu can offer, measured over the whole slice rather than
+         * this page. Held even when a request answers with none, so a filter
+         * that empties the table does not also empty the menu that would let
+         * the reader undo it.
+         */
+        if (json && json.assignees) APP_TABLE.assignees = json.assignees;
+        if (json && json.providers) APP_TABLE.providers = json.providers;
         APP_TABLE.loadedKey = key;
       })
       .catch(function (err) {
@@ -3818,7 +4064,15 @@
     var shown = company.referred || [];
     return '<div class="tma-dash__clients-company-people">' +
       shown.map(companyPersonRow).join('') + '</div>' +
-      (total > shown.length
+      /*
+       * Offered only when it can land somewhere. The destination is the
+       * applications table filtered to this firm, and a company with no CIP
+       * provider behind it — or one with no applications this reader may see —
+       * has no such table. A button that opened an empty list would read as
+       * "there are none", when the truth is that this company is not a filing
+       * firm.
+       */
+      (total > shown.length && providerForCompany(company.id)
         ? '<button type="button" class="tma-dash__clients-see-all" data-clients-see-referred="' +
           esc(company.id) + '">See all ' + total.toLocaleString() + '</button>'
         : '');
@@ -5989,11 +6243,27 @@
       MORPH.on(btn, 'click', function (e) {
         e.preventDefault();
         e.stopPropagation();
+        /*
+         * "See all" opens the applications table filtered to this firm.
+         *
+         * It used to set the directory's referral filter and navigate to a
+         * table that has never consulted it — so the reader got the whole,
+         * unfiltered list with a chip claiming otherwise. The honest
+         * equivalent on a table of applications is the firm that filed them,
+         * which is the Service provider filter.
+         */
+        var provider = providerForCompany(btn.getAttribute('data-clients-see-referred'));
+        if (!provider) return;
+
+        clearTableFilters();
+        TABLE_FILTERS.provider = [String(provider.id)];
+        APP_TABLE.page = 1;
         state.filters = emptyClientFilters();
-        state.filters.referral = 'company:' + btn.getAttribute('data-clients-see-referred');
         state.page = 1;
         state.selected = {};
         state.search = '';
+        state.listTab = 'applications';
+        saveListTab('applications');
         // The filter only has a surface in the table view; landing on the
         // directory list would apply it invisibly.
         state.viewMode = 'list';
@@ -6073,94 +6343,95 @@
     return (clientsFilterCtx && clientsFilterCtx.state.filters) || emptyClientFilters();
   }
 
+  /*
+   * The whole "Filtered by" panel, in one popover.
+   *
+   * It used to be a drill-down: a list of field names, each opening a second
+   * popover of values. That shape can only express one value per field — you
+   * pick, it closes, and picking again replaces. Checkboxes are what the
+   * reader asked for, and checkboxes want every group visible at once so the
+   * combination being built is readable while it is being built.
+   *
+   * Only fields that can answer something appear. A group is left out rather
+   * than shown empty: an empty group invites a click that does nothing, and
+   * three of those would make the panel look broken on the tab where none of
+   * them apply.
+   */
   function fillFilterFields() {
-    var filters = currentClientFilters();
-    clientsPop.fields.innerHTML =
-      // Status leads because it is the question the applications table is
-      // most often asked, and it is offered only where it can be answered —
-      // see statusFilterApplies.
-      (statusFilterApplies(clientsFilterCtx && clientsFilterCtx.state)
-        ? clientsPopItem('data-clients-filter-field', 'status', 'Status', {
-          chevron: true,
-          meta: activeBucketLabel(),
-        })
-        : '') +
-      clientsPopItem('data-clients-filter-field', 'referral', 'Referred by', {
-        chevron: true,
-        meta: filters.referral ? referralFilterLabel(filters.referral) : '',
-      }) +
-      clientsPopItem('data-clients-filter-field', 'clientType', 'Client type', {
-        chevron: true,
-        meta: filters.clientType ? clientTypeLabel(filters.clientType) : '',
-      });
-  }
+    var state = clientsFilterCtx && clientsFilterCtx.state;
+    var groups = '';
 
-  function fillFilterValues(field) {
-    var filters = currentClientFilters();
-    var html;
-
-    if (field === 'status') {
-      var activeKey = BUCKETS.active || '';
-
-      /*
-       * Every bucket, in the server's order, each carrying its own count.
-       *
-       * Zero is shown where the other fields hide it. A referral partner who
-       * has referred nobody is a dead end worth leaving out of the list; a
-       * status with nothing in it is the answer — "Delayed 0" is the reader
-       * finding out there is nothing delayed, which is the whole reason they
-       * opened the menu.
-       */
-      html = clientsPopItem('data-clients-filter-value', '', 'All statuses', { selected: !activeKey }) +
-        BUCKETS.list.map(function (b) {
-          return clientsPopItem('data-clients-filter-value', b.key, b.label, {
-            selected: activeKey === b.key,
-            meta: String(b.count || 0),
-          });
-        }).join('');
-    } else if (field === 'referral') {
-      var facets = referralFacets();
-      var current = filters.referral || '';
-      html = clientsPopItem('data-clients-filter-value', '', 'All clients', { selected: !current }) +
-        clientsPopItem('data-clients-filter-value', 'company', 'Any service provider', {
-          selected: current === 'company',
-          meta: facets.company ? String(facets.company) : '',
-        }) +
-        clientsPopItem('data-clients-filter-value', 'private', 'Private', {
-          selected: current === 'private',
-          meta: facets.private ? String(facets.private) : '',
-        }) +
-        clientsPopItem('data-clients-filter-value', 'none', 'No referral', {
-          selected: current === 'none',
-          meta: facets.none ? String(facets.none) : '',
-        });
-
-      var referrers = COMPANIES.filter(function (c) { return facets.byCompany[c.id]; });
-      if (referrers.length) {
-        html += '<div class="tma-filter-popover__divider"></div>';
-        html += referrers.map(function (c) {
-          var value = 'company:' + c.id;
-          return clientsPopItem('data-clients-filter-value', value, c.name, {
-            selected: current === value,
-            meta: String(facets.byCompany[c.id]),
-          });
-        }).join('');
-      }
-    } else {
-      var typeFacets = clientTypeFacets();
-      var currentType = filters.clientType || '';
-      html = clientsPopItem('data-clients-filter-value', '', 'All types', { selected: !currentType }) +
-        CLIENT_TYPES.map(function (t) {
-          return clientsPopItem('data-clients-filter-value', t.value, t.label, {
-            selected: currentType === t.value,
-            meta: typeFacets[t.value] ? String(typeFacets[t.value]) : '',
-          });
-        }).join('');
+    if (statusFilterApplies(state)) {
+      groups += filterGroup('bucket', 'Status', BUCKETS.list.map(function (b) {
+        return { id: b.key, name: b.label, count: b.count, tone: b.tone };
+      }));
     }
 
-    clientsPop.values.innerHTML = html;
-    clientsPop.values.setAttribute('data-clients-filter-field-name', field);
+    if (assigneeFilterApplies(state)) {
+      groups += filterGroup('assignee', 'Assigned to', APP_TABLE.assignees);
+    }
+
+    if (providerFilterApplies(state)) {
+      groups += filterGroup('provider', 'Service provider', APP_TABLE.providers);
+    }
+
+    if (!groups) {
+      // Reachable only in the beat before the first listing answers. The
+      // button is not offered where nothing applies, so this is a wait rather
+      // than a dead end, and it says so.
+      clientsPop.fields.innerHTML =
+        '<div class="tma-filter-popover__title">Filtered by</div>' +
+        '<div class="tma-filter-popover__note">Loading what you can filter by…</div>';
+
+      return;
+    }
+
+    clientsPop.fields.innerHTML =
+      '<div class="tma-filter-popover__title">Filtered by</div>' +
+      groups +
+      (anyTableFilterSet()
+        ? '<div class="tma-filter-popover__divider"></div>' +
+          '<button type="button" class="tma-filter-popover__item tma-filter-popover__item--clear"' +
+          ' data-cip-filter-clear>Clear all</button>'
+        : '');
   }
+
+  /**
+   * One titled group of checkboxes.
+   *
+   * @param {string} field  bucket | assignee | provider
+   * @param {string} label  the heading above the group
+   * @param {Array}  items  [{ id, name, count, tone? }] in the server's order
+   */
+  function filterGroup(field, label, items) {
+    if (!items || !items.length) return '';
+
+    return '<div class="tma-filter-popover__group" role="group" aria-label="' + esc(label) + '">' +
+      '<div class="tma-filter-popover__group-label">' + esc(label) + '</div>' +
+      items.map(function (item) {
+        var on = filterHas(field, item.id);
+
+        /*
+         * A real checkbox role rather than a pressed button: the reader is
+         * choosing several from a list, and a screen reader has to say
+         * "checked" for that to be understood. The tick itself is drawn by
+         * the stylesheet from this state, so the markup carries no icon.
+         */
+        return '<button type="button" class="tma-filter-popover__item tma-filter-popover__item--check"' +
+          ' role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
+          (on ? ' data-selected' : '') +
+          ' data-cip-filter="' + esc(field) + '" data-cip-value="' + esc(item.id) + '">' +
+          '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
+          (item.tone
+            ? '<i class="tma-filter-popover__dot tma-filter-popover__dot--' + esc(item.tone) + '"></i>'
+            : '') +
+          '<span class="tma-filter-popover__item-label">' + esc(item.name) + '</span>' +
+          '<span class="tma-filter-popover__item-meta">' + esc(String(item.count)) + '</span>' +
+          '</button>';
+      }).join('') +
+      '</div>';
+  }
+
 
   function positionClientsPopover(el, rect) {
     if (!rect) return;
@@ -6211,51 +6482,76 @@
    * leave the table but the bulk bar would still hold them, and Delete would
    * take clients the reader can no longer see.
    */
-  function setClientsFilter(field, value) {
+  /*
+   * A filter changed: re-ask the server and redraw.
+   *
+   * All three are server-applied, so there is nothing to match over rows the
+   * browser already holds — the page number goes back to one because page 4 of
+   * the old answer is not page 4 of the new one, and the selection is dropped
+   * because the rows it referred to may not be in the new answer at all.
+   */
+  function applyTableFilters() {
     if (!clientsFilterCtx) return;
     var state = clientsFilterCtx.state;
 
-    /*
-     * Status is not one of the directory's own filters.
-     *
-     * It lives on BUCKETS because the server is what applies it — the listing
-     * is paged through the same bucket definition the count was measured
-     * through — so it is re-asked for rather than matched over rows the
-     * browser already holds. Which is also why the page number goes back to
-     * one: page 4 of the old answer is not page 4 of the new one.
-     *
-     * No toggling off by re-picking. The chips it replaced had to offer that,
-     * because pressing the lit chip was the only way back; a menu has "All
-     * statuses" at the top and a removable chip under the toolbar, and the
-     * fields beside it behave this way.
-     */
-    if (field === 'status') {
-      BUCKETS.active = value || null;
-      APP_TABLE.page = 1;
-      state.page = 1;
-      state.selected = {};
-      syncClientsListUrl(state);
-      clientsFilterCtx.render({ forceFull: true });
-
-      return;
-    }
-
-    state.filters = state.filters || emptyClientFilters();
-    state.filters[field] = value || '';
+    APP_TABLE.page = 1;
     state.page = 1;
     state.selected = {};
+    syncClientsListUrl(state);
     clientsFilterCtx.render({ forceFull: true });
+  }
+
+  /** Untick one value, from the chip under the toolbar. */
+  function removeTableFilter(tagId) {
+    var at = String(tagId).indexOf(':');
+    if (at === -1) return false;
+
+    var field = tagId.slice(0, at);
+    if (!TABLE_FILTERS[field]) return false;
+
+    return filterHas(field, tagId.slice(at + 1)) && toggleFilter(field, tagId.slice(at + 1));
   }
 
   function wireClientsPopovers() {
     clientsPop.host.addEventListener('click', function (e) {
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
 
-      var field = e.target.closest('[data-clients-filter-field]');
-      if (field) {
+      /*
+       * A tick, which leaves the panel open.
+       *
+       * Closing on every tick would be the drill-down behaviour this replaced:
+       * a reader building "New or Delayed, unassigned" would have to reopen
+       * the menu three times, and would never see the combination they were
+       * assembling. The group is redrawn in place instead, so the tick appears
+       * and the counts beside it stay put.
+       */
+      var tick = e.target.closest('[data-cip-filter]');
+      if (tick) {
         e.preventDefault();
-        fillFilterValues(field.getAttribute('data-clients-filter-field'));
-        openClientsPopover(clientsPop.values, field, [clientsPop.fields]);
+        /*
+         * Claimed before the panel is rebuilt.
+         *
+         * fillFilterFields() replaces this popover's innerHTML, which orphans
+         * the button that was just clicked — and the outside-click listener on
+         * the document runs after this one, by which time `closest()` on a
+         * detached node can no longer find the popover it came from. It would
+         * read the tick as a click outside and shut the panel on every tick.
+         */
+        e._cipFilterHandled = true;
+
+        if (toggleFilter(tick.getAttribute('data-cip-filter'), tick.getAttribute('data-cip-value'))) {
+          applyTableFilters();
+          fillFilterFields();
+        }
+
+        return;
+      }
+
+      if (e.target.closest('[data-cip-filter-clear]')) {
+        e.preventDefault();
+        if (clearTableFilters()) applyTableFilters();
+        closeClientsPopovers();
+
         return;
       }
 
@@ -6270,20 +6566,13 @@
         return;
       }
 
-      var value = e.target.closest('[data-clients-filter-value]');
-      if (value) {
-        e.preventDefault();
-        setClientsFilter(
-          clientsPop.values.getAttribute('data-clients-filter-field-name'),
-          value.getAttribute('data-clients-filter-value')
-        );
-        closeClientsPopovers();
-      }
     });
 
     document.addEventListener('click', function (e) {
       if (!clientsPop || !clientsPop.host.isConnected) return;
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
+      // A tick inside the panel, whose node the redraw has already discarded.
+      if (e._cipFilterHandled) return;
       if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-clients-filter]') ||
           e.target.closest('[data-clients-sort]')) return;
       closeClientsPopovers();
@@ -6895,7 +7184,7 @@
           render({ forceFull: true });
           return;
         }
-        setClientsFilter(id, '');
+        if (removeTableFilter(id)) applyTableFilters();
       });
     });
 
@@ -6906,9 +7195,10 @@
         state.sort = 'name';
         state.page = 1;
         state.selected = {};
-        // The status sits in the same bar under the same Reset, so leaving it
-        // applied would be the one chip the button does not clear.
-        BUCKETS.active = null;
+        // The three table filters sit in the same bar under the same Reset, so
+        // leaving any of them applied would be a chip the button does not
+        // clear.
+        clearTableFilters();
         APP_TABLE.page = 1;
         syncClientsListUrl(state);
         render({ forceFull: true });
@@ -7441,8 +7731,16 @@
        * reader would be sent the whole list and watch it narrow under them a
        * moment later.
        */
-      var booted = takeBootPosition('bucket');
-      if (booted) BUCKETS.active = booted;
+      ['bucket', 'assignee', 'provider'].forEach(function (field) {
+        var booted = takeBootPosition(field);
+        if (!booted) return;
+        // A comma-separated list, the way it was written into the address.
+        // Blanks dropped: "a,,b" is what a hand-edited URL looks like, and an
+        // empty term would become a filter matching nothing.
+        TABLE_FILTERS[field] = String(booted).split(',')
+          .map(function (v) { return v.trim(); })
+          .filter(Boolean);
+      });
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet — so
