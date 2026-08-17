@@ -35172,61 +35172,14 @@ span.tma-dash__messages-profile-avatar {
 .tma-cip-table tbody tr[data-cip-open]:hover { background: var(--color-hover); }
 
 /*
- * §9's buckets, on the table they filter.
- *
- * A count and a name, sized so a row of ten reads as a set rather than ten
- * separate controls. The empty ones stay — a queue that is clear is a fact
- * worth seeing, and hiding it would make the row's shape change under a
- * reader every time somebody else worked.
+ * §9's buckets used to sit above this table as a row of ten chip cards, and
+ * that row is gone: the buckets are a *filter* now, offered by the filter menu
+ * the table already had, and the counts moved to a card on the portal home
+ * (.tma-portal-cip, at the foot of this file). Ten controls occupying the top
+ * of a table in order to narrow it were competing with the filter that does
+ * the same job one row lower, and a reader had to learn which of the two to
+ * reach for. The chip styles went with the markup.
  */
-.tma-dash__cip-buckets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-8);
-  margin-bottom: var(--space-16);
-}
-
-.tma-dash__cip-bucket {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--space-12);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-8);
-  background: var(--color-white);
-  font-family: var(--font-family);
-  cursor: pointer;
-}
-
-.tma-dash__cip-bucket:hover { background: var(--color-hover); }
-
-.tma-dash__cip-bucket--on {
-  border-color: var(--color-primary-dark);
-  box-shadow: 0 0 0 1px var(--color-primary-dark);
-}
-
-.tma-dash__cip-bucket-count {
-  font-size: var(--text-size-16);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.tma-dash__cip-bucket-label {
-  font-size: var(--text-size-12);
-  color: var(--color-text-secondary);
-}
-
-/* Nothing waiting reads quieter, without leaving the row. */
-.tma-dash__cip-bucket--empty .tma-dash__cip-bucket-count { color: var(--color-text-secondary); }
-
-.tma-dash__cip-bucket-clear {
-  border: 0;
-  background: none;
-  padding: 0 var(--space-8);
-  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
-  color: var(--color-primary-dark);
-  cursor: pointer;
-}
 
 /* The journey, below the tabs. A row on a wide window, a column when the
    dates would otherwise be squeezed to nothing. */
@@ -35333,3 +35286,164 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__cip-assign:focus-visible { opacity: 1; }
 
 .tma-dash__cip-assign:hover { background: var(--color-hover); }
+
+/*
+ * §9's buckets as one card on the portal home.
+ *
+ * Ten queues, each a name and a number, and the number is the reason the card
+ * exists: an administrator opening the portal should see where the work has
+ * piled up before deciding what to open. So the counts are a column — one
+ * under the other, right-aligned, tabular — rather than ten separate figures
+ * scattered through a paragraph of labels.
+ *
+ * The whole row is the control. A count is only useful if the reader can act
+ * on it, and the act is always the same one: show me those. Making the row a
+ * button rather than putting a link on the number means the pointer never has
+ * to find a four-pixel target, and the hover wash tells a reader the row is
+ * more than a readout before they try it.
+ *
+ * It grows; it does not scroll — the opposite of .tma-portal-employees--scroll
+ * next door, and for a reason that is worth writing down. That list scrolls
+ * because it is as long as the firm is: nobody knows how many colleagues will
+ * be in it next month, so the card has to be able to refuse to grow. This list
+ * is a *fixed* set the server names — ten buckets for an administrator, six for
+ * a service provider, four for a reviewing officer — and it will be the same
+ * ten tomorrow. A scroller would therefore hide rows that always had room, and
+ * hide them below a fold with no affordance, which is exactly how a queue goes
+ * unnoticed. The height is arithmetic instead: ten rows of 30px (an 18px line
+ * box plus 6px of padding either side) and nine 2px gaps is 318px, against the
+ * 322px the Employees card asks for at six names. The two cards therefore end
+ * level and the board is no taller than it already was. If the masonry ever
+ * hands this tile less height than that, the packed panel body already scrolls
+ * (see .is-packed in portal.css) — nothing here needs to.
+ */
+.tma-portal-cip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  /* The hover wash reaches past the text toward the card's padding, the way
+     the employee and email rows do, without the focus ring being clipped. */
+  margin: 0 -4px;
+  padding: 0 4px;
+  min-width: 0;
+}
+
+.tma-portal-cip__row {
+  display: flex;
+  min-width: 0;
+  /*
+   * Load-bearing, not tidying — the same trap .tma-portal-employee documents.
+   * The list is a flex column inside a body that can be given a definite
+   * height by the masonry, so its children are eligible to shrink; without
+   * this the ten rows would be squeezed into whatever space the tile ended up
+   * with and the labels would overlap instead of the body scrolling.
+   */
+  flex-shrink: 0;
+}
+
+.tma-portal-cip__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-cip__link:hover { background: var(--color-hover); }
+
+/* Keyboard readers get the same row, said out loud. Matches the ring the rest
+   of the home board uses (.tma-portal-employee__action, portal.css). */
+.tma-portal-cip__link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/*
+ * The tone dot.
+ *
+ * Colour here is not decoration: it is the same question the status chips
+ * answer — whose move is it — so it has to be the same five answers, in the
+ * same five colours. The values below are lifted from .tma-portal-status--*
+ * in portal-files.css, which is where the vocabulary is defined and where any
+ * change to it belongs; they are held as a custom property per tone so the dot
+ * has one place to read a colour from and an unknown tone still paints
+ * something rather than a hole in the row.
+ */
+.tma-portal-cip__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tma-cip-tone, var(--color-text-secondary));
+}
+
+.tma-portal-cip__dot--success { --tma-cip-tone: #15803d; }
+.tma-portal-cip__dot--danger  { --tma-cip-tone: #b91c1c; }
+.tma-portal-cip__dot--pending { --tma-cip-tone: #b45309; }
+.tma-portal-cip__dot--action  { --tma-cip-tone: #1d4ed8; }
+.tma-portal-cip__dot--neutral { --tma-cip-tone: var(--color-text-secondary); }
+
+/* On dark the light-surface tones go muddy, so the dot takes the lighter value
+   the chip switches to for the same reason. */
+.tma-dash[data-theme="dark"] .tma-portal-cip__dot--success { --tma-cip-tone: #4ade80; }
+.tma-dash[data-theme="dark"] .tma-portal-cip__dot--danger  { --tma-cip-tone: #fca5a5; }
+.tma-dash[data-theme="dark"] .tma-portal-cip__dot--pending { --tma-cip-tone: #fcd34d; }
+.tma-dash[data-theme="dark"] .tma-portal-cip__dot--action  { --tma-cip-tone: #93c5fd; }
+
+/* The label names the queue; it is the count beside it that is being read, so
+   the name sits back the way the old bucket chips had it. One line always —
+   "Assessment Feedback" wrapping would make one row twice the height of its
+   nine neighbours and cost the card the arithmetic above. */
+.tma-portal-cip__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+/* Tabular figures so a 7 and a 11 stack digit under digit down the column;
+   without them ten proportional numbers read as a ragged edge. */
+.tma-portal-cip__count {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-black);
+}
+
+/*
+ * Loading.
+ *
+ * The placeholders sit straight in the <li> — there is nothing to press yet,
+ * so there is no button — which means the row itself has to carry the padding
+ * and gap the link would otherwise supply. Without that the skeleton would be
+ * shorter than the real thing and the card would jump the moment the counts
+ * landed, which is the one thing a skeleton exists to prevent. :has() keeps
+ * this off a row that does contain a link, so both shapes measure the same.
+ */
+.tma-portal-cip__row:has(> .tma-skeleton) {
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 30px;
+  padding: var(--space-6) var(--space-8);
+}
+
+/* The name is long and the count is short, in both states — written as a
+   descendant so it holds whether the placeholders sit in the row or, should
+   the loading row ever keep its button, inside that. */
+.tma-portal-cip__row .tma-skeleton--text { width: 52%; }
+.tma-portal-cip__row .tma-skeleton--text ~ .tma-skeleton--text { width: 16px; margin-left: auto; }

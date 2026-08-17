@@ -982,7 +982,18 @@
     if (screen === 'detail' && contactId) {
       return '/clients/' + encodeURIComponent(contactId);
     }
-    return '/clients';
+
+    /*
+     * The bucket the table is filtered to is a position within the list, the
+     * way the tab and the folder are a position within a client — so it
+     * belongs in the address with it.
+     *
+     * Built here rather than at the one place the filter changes, because
+     * every return to the list rewrites this URL (see navigate and syncRoute)
+     * and each of those would otherwise drop a filter the reader can still
+     * see on the screen in front of them.
+     */
+    return '/clients' + (BUCKETS.active ? '?bucket=' + encodeURIComponent(BUCKETS.active) : '');
   }
 
   /*
@@ -1028,6 +1039,27 @@
   }
 
   /*
+   * The same job for the list: keep the address saying which bucket the
+   * applications table is narrowed to.
+   *
+   * Only when it would change anything. This is called from every paint of
+   * the table, and rewriting the address to what it already says is work in
+   * front of everything else that reads it. The pathname is checked too,
+   * because the view can be re-rendered while it is hidden behind another
+   * one — and a hidden view must not drag the address bar off the page the
+   * reader is actually looking at.
+   */
+  function syncClientsListUrl(state) {
+    if (!window.history || !history.replaceState) return;
+    if (!state || state.screen !== 'list') return;
+    if (!parseClientsPath(window.location.pathname)) return;
+
+    var url = pathForClientsScreen('list');
+    if (window.location.pathname + window.location.search === url) return;
+    history.replaceState(history.state, '', url);
+  }
+
+  /*
    * Where the address says to be, read once at boot.
    *
    * Read eagerly, because dashboard.js rewrites the URL as it settles the
@@ -1041,14 +1073,21 @@
 
     // A folder can only be shown on the documents tab, so it says which tab
     // to open — a link that carries one and not the other still works.
-    return { tab: params.get('tab') || (folder ? 'folders' : null), folder: folder };
+    return {
+      tab: params.get('tab') || (folder ? 'folders' : null),
+      folder: folder,
+      // Which bucket the applications table opens filtered to, so a reload or
+      // a link from the Dashboard's CIP card lands on the same rows.
+      bucket: params.get('bucket') || null,
+    };
   })();
 
   /* Taken, not read: a boot position applies to the screen it was typed for,
-     and must not reapply when the reader moves on to another client. Each half
+     and must not reapply when the reader moves on to another client. Each part
      is claimed by whatever restores it, which happen at different moments —
      the tab once the profile knows which tabs it has, the folder once the
-     documents panel mounts. */
+     documents panel mounts, the bucket at the first paint of the table it
+     filters. */
   function takeBootPosition(key) {
     var value = BOOT_POSITION[key];
     BOOT_POSITION[key] = null;
@@ -1124,6 +1163,34 @@
 
   function anyClientFilter(filters) {
     return !!(filters && (filters.referral || filters.clientType));
+  }
+
+  /*
+   * Where a status filter means anything.
+   *
+   * One filter menu serves both lists on this page, and only one of them is a
+   * list of applications. A service provider is a firm: it holds no status of
+   * its own, and offering the field there would be a filter that can only
+   * empty the table. The server's set is the second half of the test — if it
+   * named no buckets then this reader has no CIP dashboard, and a field with
+   * no values is a dead end.
+   */
+  function statusFilterApplies(state) {
+    return !!state && state.screen === 'list' && !onProvidersTab(state) && BUCKETS.list.length > 0;
+  }
+
+  /*
+   * What lights the Filter button.
+   *
+   * The directory's own filters are held on the state and matched in the
+   * browser; the status is held on BUCKETS because the server pages by it.
+   * To the reader they are one control, so a lit state that knew about only
+   * half of what is applied would be the button telling them nothing is
+   * filtered while the table says otherwise.
+   */
+  function anyTableFilter(state) {
+    return anyClientFilter(state && state.filters) ||
+      !!(statusFilterApplies(state) && BUCKETS.active);
   }
 
   /*
@@ -1403,7 +1470,7 @@
     var count = selectedClientCount(state);
     var bulkHidden = count === 0 ? ' hidden' : '';
     var selectionLabel = count === 1 ? '1 Selected' : count + ' Selected';
-    var filtered = anyClientFilter(state.filters);
+    var filtered = anyTableFilter(state);
 
     return (
       '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
@@ -1454,6 +1521,20 @@
   function renderClientsFilterChips(state) {
     var filters = state.filters || {};
     var tags = [];
+
+    /*
+     * The status leads, because it is the one filter that changes which
+     * applications the server sent rather than which of them are drawn.
+     *
+     * Named from the server's own set, not from the key: a bucket the reader
+     * has no dashboard for is a bucket they cannot be filtered to, and until
+     * the set lands there is no label to put on the chip — a heartbeat with
+     * no chip reads better than a chip that says "update_required".
+     */
+    var bucket = statusFilterApplies(state) ? bucketFor(BUCKETS.active) : null;
+    if (bucket) {
+      tags.push({ id: 'status', label: 'Status: ' + bucket.label });
+    }
     if (filters.referral) {
       tags.push({ id: 'referral', label: 'Referred by: ' + referralFilterLabel(filters.referral) });
     }
@@ -2081,18 +2162,37 @@
   };
 
   /*
-   * §9's buckets, above the table they filter.
+   * §9's buckets — what the applications table can be narrowed to.
    *
-   * A dashboard rather than a separate page: the brief asks for counts that
-   * click through to the pre-filtered table, and a screen of numbers whose
-   * only purpose is to send you somewhere else is a page nobody would keep
-   * open. The chips sit on the table, and pressing one filters it in place.
+   * They were a row of counting chips above the table and are now the Status
+   * field in its filter menu, which is where the reader already goes to narrow
+   * a list. The counts they carry did not stop being useful, so each value in
+   * the menu shows its own — the same figure the Dashboard's CIP card reports,
+   * measured once on the server.
    *
    * Which set a reader gets is the server's to decide — an officer's four are
    * a work queue and an administrator's ten are a report, and the difference
    * is scope, not presentation.
    */
   var BUCKETS = { list: [], dashboard: null, loaded: false, loading: false, active: null };
+
+  /* The bucket a key names, or null. The reader's own set is the authority:
+     the listing 404s on a bucket that was never on their dashboard, so a key
+     it does not name is not a filter, it is an error waiting to be sent. */
+  function bucketFor(key) {
+    if (!key) return null;
+    for (var i = 0; i < BUCKETS.list.length; i++) {
+      if (BUCKETS.list[i].key === key) return BUCKETS.list[i];
+    }
+
+    return null;
+  }
+
+  function activeBucketLabel() {
+    var bucket = bucketFor(BUCKETS.active);
+
+    return bucket ? bucket.label : '';
+  }
 
   function ensureBuckets(render) {
     if (BUCKETS.loaded || BUCKETS.loading) return;
@@ -2107,7 +2207,21 @@
       .then(function () {
         BUCKETS.loading = false;
         BUCKETS.loaded = true;
-        if (BUCKETS.list.length) render();
+
+        /*
+         * A key can arrive from the address bar, where anything can be typed,
+         * and this is the first moment there is a set to check it against. An
+         * unknown one is dropped rather than sent: the listing answers 404 to
+         * a bucket this reader was never offered, so leaving it on would show
+         * "Could not load applications" in place of a table that is fine.
+         */
+        var dropped = !!BUCKETS.active && !bucketFor(BUCKETS.active);
+        if (dropped) {
+          BUCKETS.active = null;
+          syncClientsListUrl(clientsMountState);
+        }
+
+        if (dropped || BUCKETS.list.length) render();
       });
   }
 
@@ -2117,29 +2231,51 @@
     BUCKETS.loaded = false;
   }
 
-  function renderBuckets() {
-    if (!BUCKETS.list.length) return '';
+  /*
+   * Open the table on one bucket, asked from outside this view — the
+   * Dashboard's CIP card is the caller, and window.TMAClients is the door.
+   *
+   * It has to work before the view exists. The card navigates first and says
+   * which bucket second, so by the time this runs the clients view may not
+   * have mounted; the filter is module state either way, and the mount reads
+   * it when it comes up. Nothing is parked in BOOT_POSITION for the same
+   * reason — that is for what the address said at page load, and this is a
+   * caller in the same page saying it now.
+   */
+  function openBucket(key) {
+    key = key || '';
 
-    return (
-      '<div class="tma-dash__cip-buckets" role="group" aria-label="Filter by what needs doing">' +
-      BUCKETS.list.map(function (b) {
-        var on = BUCKETS.active === b.key;
+    /*
+     * An unknown key is ignored rather than applied. The listing answers 404
+     * to a bucket that was never on this reader's dashboard, so filtering to
+     * one would replace the table with an error — and a card that quietly
+     * does nothing is better than a card that appears to break the page.
+     * Before the set has landed there is nothing to check against; the same
+     * check runs again in ensureBuckets when there is.
+     */
+    if (key && BUCKETS.loaded && !bucketFor(key)) return;
 
-        return '<button type="button" class="tma-dash__cip-bucket' +
-          (on ? ' tma-dash__cip-bucket--on' : '') +
-          (b.count ? '' : ' tma-dash__cip-bucket--empty') + '"' +
-          ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
-          ' data-cip-bucket="' + esc(b.key) + '">' +
-          '<span class="tma-dash__cip-bucket-count">' + esc(String(b.count)) + '</span>' +
-          '<span class="tma-dash__cip-bucket-label">' + esc(b.label) + '</span>' +
-          '</button>';
-      }).join('') +
-      (BUCKETS.active
-        ? '<button type="button" class="tma-dash__cip-bucket-clear" data-cip-bucket="">' +
-          'Show all</button>'
-        : '') +
-      '</div>'
-    );
+    BUCKETS.active = key || null;
+    APP_TABLE.page = 1;
+
+    /*
+     * On the applications tab, whichever tab the reader left the page on. A
+     * status is a fact about an application and the service providers list
+     * holds none, so somebody whose last visit ended on Service providers
+     * would otherwise arrive at a filter they cannot see. Saved as well as
+     * set, because an unmounted view reads the stored tab when it comes up.
+     */
+    saveListTab('applications');
+
+    var state = clientsMountState;
+    if (state) {
+      state.listTab = 'applications';
+      state.page = 1;
+      state.selected = {};
+      syncClientsListUrl(state);
+    }
+
+    repaintClients();
   }
 
   function applicationTableKey(state) {
@@ -2157,8 +2293,8 @@
     var params = ['perPage=50', 'page=' + APP_TABLE.page];
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
-    // The same key the count was measured through, so the chip and the rows
-    // behind it come from one definition on the server.
+    // The same key the count was measured through, so the number beside a
+    // status and the rows behind it come from one definition on the server.
     if (BUCKETS.active) params.push('bucket=' + encodeURIComponent(BUCKETS.active));
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
@@ -2546,18 +2682,6 @@
         return;
       }
 
-      var chip = e.target.closest('[data-cip-bucket]');
-      if (chip) {
-        var key = chip.getAttribute('data-cip-bucket');
-        // Pressing the chip that is already on turns it off — a filter you
-        // cannot see the way out of is a trap.
-        BUCKETS.active = (!key || key === BUCKETS.active) ? null : key;
-        APP_TABLE.page = 1;
-        repaintClients();
-
-        return;
-      }
-
       var row = e.target.closest('[data-cip-open]');
       if (!row) return;
       // The Contact email column is a mailto — its own destination.
@@ -2585,7 +2709,6 @@
     if (!providers) {
       return (
         renderTableToolbar(state) +
-        renderBuckets() +
         renderClientsFilterChips(state) +
         '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
         renderApplicationTable(state) +
@@ -5953,6 +6076,15 @@
   function fillFilterFields() {
     var filters = currentClientFilters();
     clientsPop.fields.innerHTML =
+      // Status leads because it is the question the applications table is
+      // most often asked, and it is offered only where it can be answered —
+      // see statusFilterApplies.
+      (statusFilterApplies(clientsFilterCtx && clientsFilterCtx.state)
+        ? clientsPopItem('data-clients-filter-field', 'status', 'Status', {
+          chevron: true,
+          meta: activeBucketLabel(),
+        })
+        : '') +
       clientsPopItem('data-clients-filter-field', 'referral', 'Referred by', {
         chevron: true,
         meta: filters.referral ? referralFilterLabel(filters.referral) : '',
@@ -5967,7 +6099,26 @@
     var filters = currentClientFilters();
     var html;
 
-    if (field === 'referral') {
+    if (field === 'status') {
+      var activeKey = BUCKETS.active || '';
+
+      /*
+       * Every bucket, in the server's order, each carrying its own count.
+       *
+       * Zero is shown where the other fields hide it. A referral partner who
+       * has referred nobody is a dead end worth leaving out of the list; a
+       * status with nothing in it is the answer — "Delayed 0" is the reader
+       * finding out there is nothing delayed, which is the whole reason they
+       * opened the menu.
+       */
+      html = clientsPopItem('data-clients-filter-value', '', 'All statuses', { selected: !activeKey }) +
+        BUCKETS.list.map(function (b) {
+          return clientsPopItem('data-clients-filter-value', b.key, b.label, {
+            selected: activeKey === b.key,
+            meta: String(b.count),
+          });
+        }).join('');
+    } else if (field === 'referral') {
       var facets = referralFacets();
       var current = filters.referral || '';
       html = clientsPopItem('data-clients-filter-value', '', 'All clients', { selected: !current }) +
@@ -6063,6 +6214,32 @@
   function setClientsFilter(field, value) {
     if (!clientsFilterCtx) return;
     var state = clientsFilterCtx.state;
+
+    /*
+     * Status is not one of the directory's own filters.
+     *
+     * It lives on BUCKETS because the server is what applies it — the listing
+     * is paged through the same bucket definition the count was measured
+     * through — so it is re-asked for rather than matched over rows the
+     * browser already holds. Which is also why the page number goes back to
+     * one: page 4 of the old answer is not page 4 of the new one.
+     *
+     * No toggling off by re-picking. The chips it replaced had to offer that,
+     * because pressing the lit chip was the only way back; a menu has "All
+     * statuses" at the top and a removable chip under the toolbar, and the
+     * fields beside it behave this way.
+     */
+    if (field === 'status') {
+      BUCKETS.active = value || null;
+      APP_TABLE.page = 1;
+      state.page = 1;
+      state.selected = {};
+      syncClientsListUrl(state);
+      clientsFilterCtx.render({ forceFull: true });
+
+      return;
+    }
+
     state.filters = state.filters || emptyClientFilters();
     state.filters[field] = value || '';
     state.page = 1;
@@ -6729,6 +6906,11 @@
         state.sort = 'name';
         state.page = 1;
         state.selected = {};
+        // The status sits in the same bar under the same Reset, so leaving it
+        // applied would be the one chip the button does not clear.
+        BUCKETS.active = null;
+        APP_TABLE.page = 1;
+        syncClientsListUrl(state);
         render({ forceFull: true });
       });
     }
@@ -7253,6 +7435,21 @@
     // whatever the search box and the page buttons currently say, and those
     // change without a route change.
     if (state.screen === 'list' && !onProvidersTab(state)) {
+      /*
+       * The bucket a link asked for, claimed at the first paint of the table
+       * it filters — and claimed before the request below goes out, or the
+       * reader would be sent the whole list and watch it narrow under them a
+       * moment later.
+       */
+      var booted = takeBootPosition('bucket');
+      if (booted) BUCKETS.active = booted;
+
+      // The Dashboard's CIP card sets the filter from outside this view, and
+      // cannot write an address for a screen that has not mounted yet — so
+      // the address is settled here, where it only writes when the two
+      // actually disagree.
+      syncClientsListUrl(state);
+
       ensureBuckets(render);
       ensureApplicationTable(state, render);
     }
@@ -8906,6 +9103,9 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
+    // Filter the applications table to one of §9's buckets. The Dashboard's
+    // CIP card navigates here and then calls this; an unknown key is ignored.
+    openBucket: openBucket,
     listDirectory: function (opts) { return ClientsAPI.list(opts); },
     // The hub's own data layer, for lists that live outside this view — the
     // same reason TMAFileActions exists. Everything on it goes through

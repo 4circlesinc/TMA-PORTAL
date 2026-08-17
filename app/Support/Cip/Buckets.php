@@ -248,7 +248,7 @@ class Buckets
      * This reader's dashboard: every bucket with its count and the filter that
      * reproduces it.
      *
-     * @return list<array{key: string, label: string, count: int, statuses: list<string>, scope: string, filter: array<string, string>}>
+     * @return list<array{key: string, label: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>}>
      */
     public static function for(?User $user): array
     {
@@ -289,6 +289,11 @@ class Buckets
                 // that covers is asking the reader to take it on trust.
                 'statuses' => $definition['statuses'],
                 'scope' => $definition['scope'],
+                // The colour this bucket is drawn in, wherever it is drawn.
+                // The dashboard card and the listing's filter menu both read
+                // it, so neither has to keep its own opinion about which
+                // buckets are work and which are decisions.
+                'tone' => self::tone($definition['statuses']),
                 /*
                  * What to hand the applications listing to see these rows.
                  *
@@ -341,6 +346,40 @@ class Buckets
     {
         return self::scoped($query, $bucket['scope'], $user)
             ->whereIn('status', $bucket['statuses']);
+    }
+
+    /**
+     * The one tone a bucket is drawn in, borrowed from the statuses inside it.
+     *
+     * {@see Status::tone()} owns the mapping and this asks it rather than
+     * restating it, for the same reason {@see self::apply()} shares a
+     * definition with the count: a bucket whose dot said one thing and whose
+     * rows all wore a chip saying another would be two answers to "what kind
+     * of work is this", and the reader has no way to tell which is the real
+     * one. Sixteen of the seventeen buckets cover a single status and simply
+     * take its tone.
+     *
+     * THE MULTI-STATUS ONE
+     *
+     * Only the Reviewing Officer's Assigned Reviews covers several — the three
+     * states of {@see self::UNDER_REVIEW} — and a dot can only be one colour,
+     * so it takes the tone of the first status in the definition. That is the
+     * state the queue is named for and the one work enters it at, and the tone
+     * is describing what kind of bucket this is rather than how the files in
+     * it are doing: a total that turned red because one of six went
+     * non-compliant would be reporting a single row's state as the whole
+     * queue's, on a number whose entire job is to say how much there is.
+     *
+     * Nothing is being papered over yet. UNDER_REVIEW is unanimously 'action'
+     * today, so the rule settles no live disagreement; it is written down here
+     * to decide the first one, rather than leaving it to whichever status a
+     * later edit happens to put first.
+     *
+     * @param  list<string>  $statuses
+     */
+    private static function tone(array $statuses): string
+    {
+        return Status::tone($statuses[0]);
     }
 
     /**

@@ -117,6 +117,17 @@ class CipBucketTest extends TestCase
         return array_column($buckets, 'count', 'key');
     }
 
+    /** The same dashboard as bucket key => tone. */
+    private function tones(User $user): array
+    {
+        $buckets = $this->actingAs($user)
+            ->getJson('/portal/cip/dashboard')
+            ->assertOk()
+            ->json('buckets');
+
+        return array_column($buckets, 'tone', 'key');
+    }
+
     public function test_the_administrator_dashboard_is_section_9s_ten_buckets(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
@@ -181,6 +192,58 @@ class CipBucketTest extends TestCase
         // in the administrator's ten, so that is what they are given.
         $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
         $this->assertCount(10, $body['buckets']);
+    }
+
+    public function test_every_bucket_carries_a_tone_the_design_system_can_draw(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [, $contact] = $this->providerWithContact('GAL');
+
+        /*
+         * The five the portal has, and there is no sixth to invent.
+         *
+         * They are rendered as `.tma-portal-status--<tone>`, so a bucket that
+         * answered with a word outside this list would not be drawn in some
+         * other colour — it would be drawn in none, and the dot beside a count
+         * would silently disappear on whichever dashboard grew the new word.
+         */
+        $vocabulary = ['success', 'danger', 'pending', 'action', 'neutral'];
+
+        foreach ([$admin, $rita, $contact] as $reader) {
+            foreach ($this->tones($reader) as $key => $tone) {
+                $this->assertContains($tone, $vocabulary, $key.' must wear a tone the portal styles.');
+            }
+        }
+    }
+
+    public function test_a_bucket_wears_the_tone_of_the_status_it_is_named_for(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+
+        $tones = $this->tones($admin);
+
+        // Pinned to the colour, not to the call that produced it: asking
+        // Status::tone() what Status::tone() answered would pass however the
+        // mapping was rewritten, and these are the four the whole vocabulary
+        // hangs off — work to pick up, a wait, and the two decisions.
+        $this->assertSame('action', $tones['new']);
+        $this->assertSame('pending', $tones['pending_review']);
+        $this->assertSame('success', $tones['approved']);
+        $this->assertSame('danger', $tones['denied']);
+
+        // And it is the status's own tone, not a second table kept beside it.
+        // Approved counts GRANTED under §9's word for it, so the bucket and
+        // every chip inside it are coloured by the one mapping.
+        $this->assertSame(Status::tone(Status::GRANTED), $tones['approved']);
+
+        // The one bucket covering several statuses takes the first, which is
+        // the state its name describes and the one work arrives in.
+        $this->assertSame(
+            Status::tone(Status::REVIEW_APPLICATION),
+            $this->tones($rita)['assigned_reviews'],
+        );
     }
 
     public function test_a_reader_the_module_is_not_for_gets_an_empty_payload_not_a_refusal(): void

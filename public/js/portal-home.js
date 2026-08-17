@@ -110,7 +110,7 @@
    * stamps loaded-empty, and a guard on "loaded" then throws the snapshot
    * away in favour of an empty tile.
    */
-  var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false };
+  var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false, cip: false };
 
   /*
    * ── Warm boot ─────────────────────────────────────────────────────
@@ -184,6 +184,17 @@
       homeChatsLoaded = true;
       remount();
     });
+
+    window.TMAStore.get('home:cip').then(function (snap) {
+      if (!snap || homeReal.cip) return;
+      // Counts a restart old, corrected by the refetch already on its way —
+      // the same bargain the presence dots above make. This is not the cache
+      // Buckets forbids: that one is a server holding an answer back for five
+      // minutes, this is a first paint that the very next request overwrites.
+      homeCip = snap;
+      homeCipLoaded = true;
+      remount();
+    });
   }
 
   var homeMetricsLoaded = false;
@@ -204,6 +215,11 @@
   var FRESH_MS = 60000;         // Recent Files, Favorites, Default Folders
   var METRICS_FRESH_MS = 300000; // the KPI row is a rolling measurement
   var PRESENCE_FRESH_MS = 20000; // who is online moves faster than anything else
+  /* A bucket only moves when an application does, and every CIP write raises
+     the live signal this card listens to — so the window is a backstop for the
+     changes whose signal we never saw (another firm's officer, a queued job),
+     not the way the counts normally arrive. */
+  var CIP_FRESH_MS = 30000;
 
   function stale(at, within) { return (Date.now() - at) > (within || FRESH_MS); }
 
@@ -793,6 +809,206 @@
     }
   }
 
+  /*
+   * ── CIP Applications ──────────────────────────────────────────────
+   *
+   * §9's buckets, counted, as one list. The applications table filters by
+   * exactly these keys through exactly this endpoint, so a row here and the
+   * list it opens cannot end up disagreeing about what "Pending Review" means
+   * — the count and the filter are one definition read twice (App\Support\Cip\
+   * Buckets).
+   *
+   * Which set arrives is the server's decision and this card does not second
+   * guess it: an administrator (and a Compliance Officer) gets the ten the
+   * firm reports on, a Reviewing Officer gets their four work queues, a
+   * service provider gets their firm's six. The card renders whatever came
+   * back, in the order it came back in.
+   */
+  var homeCipLoaded = false;
+  var homeCip = null;
+  var homeCipInflight = null;
+  var homeCipAt = 0;
+
+  /*
+   * What the counts are measured over — deliberately not a total.
+   *
+   * The three dashboards count different things, so any single meta that fits
+   * one is a lie on the other two. A Reviewing Officer's four are the files on
+   * their own desk; a heading that read like a firm-wide figure would turn
+   * their to-do list into a report about everybody, and they would act on it.
+   * The payload says which set it sent, so this says what that set covers.
+   *
+   * A set we have not been taught gets no meta at all rather than a guess: a
+   * fourth dashboard added server-side must not be described by this file.
+   */
+  var CIP_SCOPE_META = {
+    administrator: 'All applications',
+    reviewing_officer: 'Assigned to you',
+    service_provider: 'Your firm',
+  };
+
+  /*
+   * The five-tone status vocabulary (App\Support\Cip\Status), whitelisted here
+   * because the tone is interpolated into a class name and an unrecognised
+   * value must fall back rather than travel into the markup.
+   *
+   * A bucket with nothing in it is neutral whatever tone the server gave it.
+   * The colour is the only part of a row that claims the reader has something
+   * to do about it, and "Updates Required 0" has nothing behind it — the row
+   * stays, because zero is a true answer worth reading, but it stops shouting.
+   */
+  var CIP_TONES = ['success', 'danger', 'pending', 'action', 'neutral'];
+
+  function cipTone(bucket) {
+    if (!bucket.count) return 'neutral';
+    return CIP_TONES.indexOf(bucket.tone) === -1 ? 'neutral' : bucket.tone;
+  }
+
+  /* Thousands separated, and zeros written out. formatShortcutCount hides a
+     zero because an empty badge is the honest shortcut; here the zero IS the
+     answer somebody came to the card for. */
+  function cipCount(n) {
+    n = Math.max(0, parseInt(n, 10) || 0);
+    try { return n.toLocaleString('en-US'); } catch (e) { return String(n); }
+  }
+
+  function cipSkeleton() {
+    // Six rows: the three sets are four, six and ten long and which one this
+    // reader gets is not known until the payload lands, so the middle length is
+    // never badly wrong in either direction. Warm boot means a returning reader
+    // paints their real set and never sees this at all.
+    var row = '<li class="tma-portal-cip__row" aria-hidden="true">' +
+      '<span class="tma-portal-cip__link">' +
+      '<i class="tma-portal-cip__dot tma-skeleton" style="width:8px;height:8px;border-radius:50%"></i>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:56%"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:14%;margin-left:auto"></span>' +
+      '</span></li>';
+
+    return tileShell(
+      'cipStatus', 'panel-cip', 'CIP Applications', panelHead('CIP Applications'),
+      '<ul class="tma-portal-cip" aria-hidden="true">' + new Array(6).fill(row).join('') + '</ul>',
+      'tma-portal-panel--cip',
+      true
+    );
+  }
+
+  function renderCipStatus() {
+    if (!homeCipLoaded) return cipSkeleton();
+
+    /*
+     * Two different silences, and both are the right answer.
+     *
+     * `cip: false` is the server saying the module is not this reader's — the
+     * same answer /portal/dashboard/metrics gives a client account asking for
+     * staff KPIs, and it is honoured the same way: no card, no explanation,
+     * nothing to dismiss.
+     *
+     * A failed request lands here too, holding nothing, and it has to be
+     * silent for a reason the KPI row does not have. The KPI row knows its
+     * four labels and can show em-dashes under them; here the labels, the
+     * counts AND whether this reader has CIP at all were all in the answer
+     * that never came. An error note would announce a module to people who do
+     * not have one, which is a worse lie than saying nothing. The loader
+     * leaves homeCipAt at zero, so the next mount, live signal or pull-to-
+     * refresh asks again and the card appears the moment there is something
+     * true to put in it.
+     */
+    if (!homeCip || homeCip.cip === false) return '';
+
+    var buckets = homeCip.buckets || [];
+    if (!buckets.length) return '';
+
+    var rows = buckets.map(function (b) {
+      // Keyed by bucket so morph leaves an unchanged row alone: the counts are
+      // re-read on every CIP signal and most of them will not have moved.
+      return '<li class="tma-portal-cip__row' + (b.count ? '' : ' tma-portal-cip__row--empty') + '"' +
+        ' data-key="cip-' + ui().esc(b.key) + '">' +
+        '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(b.key) + '">' +
+        '<i class="tma-portal-cip__dot tma-portal-cip__dot--' + cipTone(b) + '" aria-hidden="true"></i>' +
+        '<span class="tma-portal-cip__label">' + ui().esc(b.label) + '</span>' +
+        '<span class="tma-portal-cip__count">' + ui().esc(cipCount(b.count)) + '</span>' +
+        '</button></li>';
+    }).join('');
+
+    return tileShell(
+      'cipStatus', 'panel-cip', 'CIP Applications',
+      panelHead('CIP Applications', CIP_SCOPE_META[homeCip.dashboard] || ''),
+      '<ul class="tma-portal-cip">' + rows + '</ul>',
+      'tma-portal-panel--cip'
+    );
+  }
+
+  /*
+   * The counts, re-read rather than adjusted by hand.
+   *
+   * Buckets are uncached server-side on purpose — an officer who clears a file
+   * and watches the number sit still concludes the portal is broken — so the
+   * only thing between a status change and this card is the window below, and
+   * the `cip` live signal that every CIP write already raises cuts through it.
+   *
+   * A failed refresh keeps the counts already on screen, exactly like the KPI
+   * row: the previous answer was true a minute ago, and a card that empties
+   * itself because one request timed out is worse than one that is a minute
+   * behind. Only the very first attempt has nothing to fall back on.
+   */
+  function loadHomeCip(el) {
+    if (homeCipInflight) return;
+
+    var before = JSON.stringify(homeCip || null);
+
+    homeCipInflight = fetch('/portal/cip/dashboard', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j) return;
+        homeCip = j;
+        homeCipAt = Date.now();
+        homeReal.cip = true;
+        keepWarm('cip', j);
+      })
+      .catch(function () {})
+      .then(function () {
+        homeCipInflight = null;
+        var wasLoaded = homeCipLoaded;
+        homeCipLoaded = true;
+        // Same counts, same rows — leave the card alone. Every loader on this
+        // board answers on every visit, and each answer used to repaint it.
+        if ((!wasLoaded || JSON.stringify(homeCip || null) !== before) && el.isConnected) {
+          mount(el, { fromLoad: true });
+        }
+      });
+  }
+
+  /**
+   * Open the CIP applications table, filtered to one bucket.
+   *
+   * The view first, the filter second, and that order is what makes it safe
+   * both ways round. navigate() activates the clients view and settles its URL
+   * synchronously, so by the time openBucket runs there is a table to narrow;
+   * and when there isn't one — the view has never been mounted in this session
+   * — openBucket parks the key for the mount to pick up, the way the tab and
+   * folder position is parked. The other order is the one that breaks:
+   * navigate's own URL sync would land last and drop the ?bucket= the filter
+   * had just written, so a reload would come back unfiltered.
+   *
+   * Guarded on openBucket because clients.js is a separate bundle: without it
+   * the row still opens the unfiltered table, which is the smaller failure.
+   */
+  function openCipBucket(key) {
+    navigate({
+      navId: 'clients',
+      view: 'clients',
+      title: 'CIP Applications',
+      crumb: 'CIP Applications',
+      clientsScreen: 'list',
+    });
+    if (window.TMAClients && window.TMAClients.openBucket) {
+      window.TMAClients.openBucket(key);
+    }
+  }
+
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
@@ -811,6 +1027,10 @@
       favorites: function () { return show.favorites ? renderFavorites(s) : ''; },
       tutorials: function () { return show.tutorials ? renderTutorials(s) : ''; },
       road: function () { return show.road !== false ? renderRoadPanel() : ''; },
+      // On unless the reader turned it off, like every tile that shipped after
+      // the original board. Whether there is anything to draw is a separate
+      // question, and the server answers that one — see renderCipStatus.
+      cipStatus: function () { return show.cipStatus !== false ? renderCipStatus() : ''; },
     };
     return tileOrder().map(function (id) {
       return renderers[id] ? renderers[id]() : '';
@@ -1028,15 +1248,24 @@
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
     { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
     { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
+    /*
+     * staffOnly keeps this out of the Edit Dashboard list for a client account,
+     * which is a different question from whether the card draws: the server's
+     * `cip: false` decides that, and it knows about readers this flag cannot
+     * see — a staff member at a firm with no CIP role. Both are needed. Without
+     * the flag, a client is offered a tile that would never appear; without the
+     * server's answer, a staff member without CIP gets an empty panel.
+     */
+    { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', staffOnly: true },
   ];
 
   // Shipped default board (3 equal columns, masonry):
   //   Recent Files → Favorites
   //   Recent Email → What's on the road?
-  //   Shortcuts → Employees
+  //   Shortcuts → CIP Applications → Employees
   // Messages then lands in whichever column is shortest.
   // Tutorials stays off by default.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'messages', 'tutorials'];
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'cipStatus', 'employees', 'messages', 'tutorials'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -1048,6 +1277,7 @@
     tutorials: 'third',
     shortcuts: 'third',
     road: 'third',
+    cipStatus: 'third',
   };
 
   var TILE_GAP = 20;
@@ -1371,7 +1601,10 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 11;
+  // 12 adds the CIP Applications card. Bumped rather than left to tileOrder's
+  // append-the-missing rule, which would have parked a card the firm asked to
+  // lead with at the bottom of whichever column ended up shortest.
+  var DASHBOARD_LAYOUT_GEN = 12;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -1381,7 +1614,7 @@
     s.dashboardTileOrder = DEFAULT_TILE_ORDER.slice();
     s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
       recentFiles: true, email: true, shortcuts: true, employees: true,
-      favorites: true, road: true, messages: true, tutorials: false,
+      favorites: true, road: true, messages: true, cipStatus: true, tutorials: false,
     });
     s.dashboardLayoutGen = DASHBOARD_LAYOUT_GEN;
     data().save();
@@ -1460,6 +1693,7 @@
     if (s.dashboardTiles.email == null) s.dashboardTiles.email = true;
     if (s.dashboardTiles.messages == null) s.dashboardTiles.messages = true;
     if (s.dashboardTiles.road == null) s.dashboardTiles.road = true;
+    if (s.dashboardTiles.cipStatus == null) s.dashboardTiles.cipStatus = true;
     return s.dashboardTiles;
   }
 
@@ -1495,6 +1729,20 @@
         '<span class="tma-portal-tilerow__preview-grid">' +
         new Array(8 + 1).join('<span class="tma-portal-tilerow__preview-circle"></span>') +
         '</span>';
+    } else if (kind === 'cip') {
+      // A labelled count per line: dot, a full-width bar for the bucket name,
+      // and a short stub on the right for the number. The stub reuses the
+      // --title modifier because that is the one that means "fixed width and a
+      // shade stronger"; only its width is overridden, so no new preview class
+      // has to exist for a thumbnail 96px wide.
+      inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
+      for (var c = 0; c < 4; c++) {
+        inner += '<span class="tma-portal-tilerow__preview-line">' +
+          '<span class="tma-portal-tilerow__preview-dot"></span>' +
+          '<span class="tma-portal-tilerow__preview-bar"></span>' +
+          '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title" style="width:12px"></span>' +
+          '</span>';
+      }
     } else if (kind === 'employees' || kind === 'email' || kind === 'messages') {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
       for (var e = 0; e < 3; e++) {
@@ -2074,6 +2322,12 @@
       });
     });
 
+    pick('[data-home-cip-bucket]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        openCipBucket(b.getAttribute('data-home-cip-bucket'));
+      });
+    });
+
     pick('[data-home-employee-action]').forEach(function (b) {
       b.addEventListener('click', function (e) {
         e.preventDefault();
@@ -2095,6 +2349,7 @@
 
     fillShortcutCounts(el);
     watchLiveFiles();
+    watchLiveCip();
 
     /*
      * Revalidate on a genuine mount — but only what has actually gone stale.
@@ -2125,6 +2380,7 @@
       // the board is open, and both listen for their live signals.
       if (force || !homeEmailLoaded || stale(homeEmailAt)) loadHomeEmail(el);
       if (force || !homeChatsLoaded || stale(homeChatsAt)) loadHomeChats(el);
+      if (force || !homeCipLoaded || stale(homeCipAt, CIP_FRESH_MS)) loadHomeCip(el);
       if (window.TMAPortalHomeLibrary) {
         // Only forced on an explicit refresh. A forced load replaced
         // state.defaults with preview-less folders straight away, so every card
@@ -2175,6 +2431,39 @@
         var live = dashMount();
         if (live) mount(live, { fromLoad: true });
       });
+    }, {
+      // Registered for the life of the page, so skip the work whenever the
+      // Dashboard is not the view on screen.
+      active: function () {
+        var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
+        return !!view && !view.hidden;
+      },
+    });
+  }
+
+  /*
+   * An application moves → the counts move, and nothing else on this board does.
+   *
+   * Its own registration rather than a second job on the files entry, for the
+   * reason clients.js gives for keeping its CIP entry separate: a status change
+   * does not touch Recent Files and an upload does not move a bucket, so one
+   * shared entry would make every write on either side refetch the other's.
+   * This is the same `cip` signal the applications table listens to, which is
+   * what keeps the card and the list it opens onto in step.
+   */
+  var liveCipBound = false;
+  function watchLiveCip() {
+    if (liveCipBound || !window.TMALive) return;
+    liveCipBound = true;
+
+    window.TMALive.register(window.TMALive.RESOURCES.CIP, function () {
+      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+      if (!el || !el.isConnected) return null;
+      // Force past the freshness window: this is a signal that a status
+      // actually changed, not a speculative revalidation.
+      homeCipAt = 0;
+      loadHomeCip(el);
+      return null;
     }, {
       // Registered for the life of the page, so skip the work whenever the
       // Dashboard is not the view on screen.
