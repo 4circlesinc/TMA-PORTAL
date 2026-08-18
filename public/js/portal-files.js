@@ -1861,6 +1861,10 @@
       if (perm(f, 'preview')) html += toolBtnHtml('Printer', 'print', 'Print');
       if (perm(f, 'share')) html += toolBtnHtml('ShareNetwork', 'share', 'Share');
       if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
+      // The bubbles open by default; this only tucks them away for an
+      // unobstructed read and brings them back.
+      html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
+        { active: viewerPrefs.comments });
       html += toolBtnHtml('Clipboard', 'approvals', 'Reviews and approvals',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'approvals' });
       html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
@@ -2677,11 +2681,9 @@
         }
       }
 
+      // No Reply line: the whole bubble answers to a click, and a label
+      // repeating what the card already does was one more word per comment.
       var actions = '';
-      if (!editing && opts.root && opts.canReply && e.replyingTo !== opts.threadId) {
-        actions += '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open"' +
-          ' data-lb-replyopen="' + esc(opts.threadId) + '">Reply</button>';
-      }
 
       var body = editing
         ? '<div class="tma-portal-viewer__editbox">' +
@@ -4545,13 +4547,16 @@
           if (vhead) vhead.outerHTML = viewerHead(current());
           paintPanel();
           return;
-        case 'comments': {
-          // The feed is always open, so the chip's job is only to bring it
-          // into view and put the cursor where the answer starts.
-          var feedInput = lb.querySelector('[data-lb-input]');
-          if (feedInput) feedInput.focus();
+        case 'comments':
+          // A details chip always opens the feed; the toolbar button toggles
+          // the floating column, which starts open.
+          if (act.classList.contains('tma-portal-viewer__count')) {
+            viewerPrefs.comments = true;
+          } else {
+            viewerPrefs.comments = !viewerPrefs.comments;
+          }
+          paintCommentsPanel();
           return;
-        }
         case 'more': return openViewerMenu(act, f);
       }
     });
