@@ -18822,7 +18822,7 @@ button.tma-cip-status-chip:focus-visible {
  * a badge hanging off the edge would sit over whatever the card is next to.
  */
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-wrap {
-  width: min(360px, 100%);
+  width: min(216px, 100%);
 }
 
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-btn {
@@ -18833,8 +18833,8 @@ button.tma-cip-status-chip:focus-visible {
 }
 
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-placeholder {
-  width: 120px;
-  height: 120px;
+  width: 72px;
+  height: 72px;
 }
 
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-remove {

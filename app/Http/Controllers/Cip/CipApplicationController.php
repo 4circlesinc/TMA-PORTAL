@@ -856,17 +856,22 @@ class CipApplicationController extends Controller
             // Recorded, not assumed: staff enter a submission after the fact
             // as often as on the day, and defaulting silently to today would
             // put the wrong date on an audit trail.
-            'submittedAt' => ['nullable', 'date'],
+            'submittedAt' => ['required', 'date'],
         ], [
             'cipNumber.required' => 'Enter the CIP application number from the Unit.',
+            'submittedAt.required' => 'Enter the submission date.',
         ]);
 
-        $application = Submission::record(
-            $application,
-            $user,
-            $data['cipNumber'],
-            isset($data['submittedAt']) ? Carbon::parse($data['submittedAt']) : null,
-        );
+        try {
+            $application = Submission::record(
+                $application,
+                $user,
+                $data['cipNumber'],
+                Carbon::parse($data['submittedAt']),
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
 
         Live::staff(Live::CIP);
 
@@ -950,6 +955,7 @@ class CipApplicationController extends Controller
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
+            'submittedAt' => $application->submitted_at?->toDateString(),
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
@@ -1140,6 +1146,9 @@ class CipApplicationController extends Controller
                     'statusLabel' => DocumentStatus::label($slot->status ?? DocumentStatus::PENDING_UPLOAD),
                     'statusTone' => DocumentStatus::tone($slot->status ?? DocumentStatus::PENDING_UPLOAD),
                     'fileId' => $slot->file?->uuid,
+                    'fileName' => $slot->file?->name,
+                    'fileSize' => $slot->file?->size,
+                    'fileExt' => $slot->file ? strtolower(pathinfo($slot->file->name, PATHINFO_EXTENSION)) : null,
                 ])->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
         ];

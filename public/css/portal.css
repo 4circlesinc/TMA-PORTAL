@@ -741,7 +741,7 @@
 
 /* Same size as dashboard.css — the photo IS the document, not an avatar. */
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-wrap {
-  width: min(360px, 100%);
+  width: min(216px, 100%);
 }
 
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-btn {
@@ -917,6 +917,25 @@
   font-size: var(--text-size-13);
   color: var(--color-text-secondary);
 }
+
+/* Locked state: clickable file row */
+.tma-portal-drop__file--locked {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  border: 0;
+  background: var(--color-hover);
+}
+.tma-portal-drop__file--locked:hover { background: var(--color-overlay-4); }
+
+/* Small muted note under the file row in the locked state */
+.tma-portal-drop__locked-note {
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-size-11);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-tertiary);
+}
+.tma-portal-drop__locked-note strong { font-weight: 500; color: var(--color-text-secondary); }
 
 .tma-portal-drop.is-invalid .tma-portal-drop__zone { border-color: var(--color-red); }
 

@@ -7648,6 +7648,13 @@
           }
 
           var dateEl = el.querySelector('[data-cip-submitted]');
+          if (!correcting && (!dateEl || !dateEl.value)) {
+            clientsToast('Enter the submission date.', 'negative');
+            if (dateEl) dateEl.focus();
+
+            return;
+          }
+
           save.disabled = true;
           save.textContent = 'Saving…';
 

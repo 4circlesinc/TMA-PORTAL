@@ -393,16 +393,20 @@
     var locked = meta && meta.uploaded && meta.status !== 'update_required';
 
     if (locked) {
+      var lockedFile = meta.fileId
+        ? '<button type="button" class="tma-portal-drop__file tma-portal-drop__file--locked" data-cip-open-file="' + esc(meta.fileId) + '">' +
+          '<img class="tma-portal-drop__file-icon" src="' + esc(fileIcon(meta.fileName || '')) + '" alt="" width="20" height="20">' +
+          '<span class="tma-portal-drop__file-name">' + esc(meta.fileName || 'Filed document') + '</span>' +
+          (meta.fileSize ? '<span class="tma-portal-drop__file-size">' + esc(fileSize(meta.fileSize)) + '</span>' : '') +
+          '</button>'
+        : '';
       return '<div class="tma-portal-drop is-filled is-locked' +
         (state.errors[path] ? ' is-invalid' : '') + '">' +
         fieldLabel(path, labelFor(path)) +
-        '<p class="tma-portal-drop__meta">Already filed and in ' +
+        lockedFile +
+        '<p class="tma-portal-drop__locked-note">Filed and in ' +
         esc(meta.statusLabel || 'application review') +
-        '. Use <strong>Upload new version</strong> in the file viewer to replace it.</p>' +
-        (meta.fileId
-          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-open-file="' +
-            esc(meta.fileId) + '">Open filed document</button>'
-          : '') +
+        '. Use <strong>Upload new version</strong> in the file viewer to replace.</p>' +
         fieldError(path) +
         '</div>';
     }
@@ -1321,6 +1325,9 @@
           status: slot.status || 'pending_upload',
           statusLabel: slot.statusLabel || '',
           fileId: slot.fileId || null,
+          fileName: slot.fileName || null,
+          fileSize: slot.fileSize || null,
+          fileExt: slot.fileExt || null,
         } : null;
       });
     };

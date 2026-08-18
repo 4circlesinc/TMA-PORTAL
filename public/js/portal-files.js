@@ -4693,6 +4693,29 @@
     }
 
     paintShell();
+
+    /* When the item was opened from outside the File Library (e.g. cip-intake's
+     * "Open filed document") it arrives as a bare { id } stub with no category,
+     * previewUrl or permissions.  The viewer has already rendered a shell so the
+     * user sees a frame immediately — now fetch the full row and swap in the
+     * real stage so the PDF (or image/text) loads exactly like normal. */
+    (function resolveStub() {
+      var f = current();
+      if (f.category) return; // already a full row — nothing to do
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id)))
+        .then(function (row) {
+          if (!lb || current().id !== f.id) return; // viewer was closed / moved on
+          // Merge all server fields into the gallery entry in-place so that
+          // `current()` immediately reflects the full shape.
+          Object.keys(row).forEach(function (k) { gallery[idx][k] = row[k]; });
+          repaintStage(gallery[idx]);
+        })
+        .catch(function () {
+          // Best-effort — if the fetch fails the viewer is still usable for
+          // non-preview actions (download, activity, etc.).
+        });
+    })();
   }
 
   /* Printing goes through the same authorized preview stream the viewer uses;

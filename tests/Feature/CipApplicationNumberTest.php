@@ -137,6 +137,7 @@ class CipApplicationNumberTest extends TestCase
         $this->assertSame('10T1G12661P', $after['cipNumber']);
         $this->assertSame($internal, $after['internalNumber'], 'Still there underneath.');
         $this->assertSame('pending_review', $after['status']);
+        $this->assertSame('2026-08-10', $after['submittedAt']);
     }
 
     public function test_an_application_can_be_found_by_either_number_or_by_name(): void
