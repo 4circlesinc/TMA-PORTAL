@@ -3620,6 +3620,7 @@
       (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + subtitle + '</span>' : '') +
       '</div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
+      renderCorrectNumberAction(app) +
       (clientFolderUuid(c.id)
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
@@ -5206,8 +5207,8 @@
    * Offered only from Ready to submit, because that is the one edge the server
    * accepts (§16) — an action that could be pressed from anywhere and then
    * refused would be the interface hiding a rule it could have simply not
-   * shown. Once the number is in, the same control corrects a typo, which does
-   * not move the status.
+   * shown. A typo in a number already recorded is Correct number, up in the
+   * profile head — it does not move the status and does not belong here.
    */
   function renderSubmissionAction(state, app) {
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
@@ -5224,12 +5225,19 @@
       return '<p class="tma-dash__clients-appbar-note">Waiting for the service provider to confirm submission.</p>';
     }
 
-    if (app.cipNumber && canRecordSubmission()) {
-      return '<button type="button" class="tma-dash__clients-appbar-action' +
-        ' tma-dash__clients-appbar-action--quiet" data-cip-fix-number>Correct number</button>';
-    }
-
     return '';
+  }
+
+  /*
+   * A CIP number already recorded, but typed wrong. Lives next to the name
+   * and the other profile actions — it is a correction to this file, not a
+   * step in the workflow band under the tabs.
+   */
+  function renderCorrectNumberAction(app) {
+    if (!app || !app.cipNumber || !canRecordSubmission()) return '';
+
+    return '<button type="button" class="tma-dash__clients-edit-btn" data-cip-fix-number>' +
+      'Correct number</button>';
   }
 
   function canRecordSubmission() {

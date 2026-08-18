@@ -135,6 +135,19 @@ class Contacts
             ];
         }
 
+        // The company's own mailbox, when it is not already a member or the
+        // registry contact — that is the service provider email on the firm
+        // record, and CIP notices have to reach it too.
+        $firmEmail = $company?->email;
+
+        if ($firmEmail && ! isset($recipients[mb_strtolower($firmEmail)])) {
+            $recipients[mb_strtolower($firmEmail)] = [
+                'email' => $firmEmail,
+                'name' => $company->name,
+                'userId' => null,
+            ];
+        }
+
         // A private client is their own provider side.
         if ($recipients === [] && $application->client) {
             $email = $application->client->user?->email ?: $application->client->email;
