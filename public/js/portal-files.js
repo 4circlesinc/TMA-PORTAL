@@ -1861,10 +1861,7 @@
       if (perm(f, 'preview')) html += toolBtnHtml('Printer', 'print', 'Print');
       if (perm(f, 'share')) html += toolBtnHtml('ShareNetwork', 'share', 'Share');
       if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
-      // The bubbles open by default; this only tucks them away for an
-      // unobstructed read and brings them back.
-      html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
-        { active: viewerPrefs.comments });
+      html += toolBtnHtml('ChatCircle', 'comments', 'Add a comment');
       html += toolBtnHtml('Clipboard', 'approvals', 'Reviews and approvals',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'approvals' });
       html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
@@ -4542,19 +4539,16 @@
           if (vhead) vhead.outerHTML = viewerHead(current());
           paintPanel();
           return;
-        case 'comments':
-          // A details chip always opens the feed; the toolbar button toggles
-          // the floating column, which starts open.
-          if (act.classList.contains('tma-portal-viewer__count')) {
-            viewerPrefs.comments = true;
-            entry(f).composerOpen = true;
-          } else {
-            viewerPrefs.comments = !viewerPrefs.comments;
-          }
+        case 'comments': {
+          // Adding a comment, not opening and closing: the button summons the
+          // composer into its place at the bottom of the always-open column.
+          viewerPrefs.comments = true;
+          entry(f).composerOpen = true;
           paintCommentsPanel();
           var openedInput = lb.querySelector('[data-lb-input]');
           if (openedInput) openedInput.focus();
           return;
+        }
         case 'more': return openViewerMenu(act, f);
       }
     });
