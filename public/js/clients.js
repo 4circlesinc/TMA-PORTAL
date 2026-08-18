@@ -5207,7 +5207,7 @@
    * Offered only from Ready to submit, because that is the one edge the server
    * accepts (§16) — an action that could be pressed from anywhere and then
    * refused would be the interface hiding a rule it could have simply not
-   * shown. A typo in a number already recorded is Correct number, up in the
+   * shown. A typo in a number already recorded is Edit CIP number, up in the
    * profile head — it does not move the status and does not belong here.
    */
   function renderSubmissionAction(state, app) {
@@ -5237,7 +5237,7 @@
     if (!app || !app.cipNumber || !canRecordSubmission()) return '';
 
     return '<button type="button" class="tma-dash__clients-edit-btn" data-cip-fix-number>' +
-      'Correct number</button>';
+      'Edit CIP number</button>';
   }
 
   function canRecordSubmission() {
@@ -7675,7 +7675,7 @@
     var today = new Date().toISOString().slice(0, 10);
 
     ui.openModal({
-      title: correcting ? 'Correct the CIP number' : 'Record submission to the Unit',
+      title: correcting ? 'Edit CIP number' : 'Record submission to the Unit',
       body:
         '<div class="tma-dash__clients-field">' +
         '<label class="tma-dash__clients-field-label" for="cip-number">CIP application number</label>' +
@@ -9817,9 +9817,10 @@
       });
     });
 
-    MORPH.unwired(root, '[data-cip-fix-number]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () { openSubmissionDialog(state, render, true); });
-    });
+    var fixNumberBtn = unwiredClientsChrome(root, '[data-cip-fix-number]');
+    if (fixNumberBtn) {
+      MORPH.on(fixNumberBtn, 'click', function () { openSubmissionDialog(state, render, true); });
+    }
 
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
