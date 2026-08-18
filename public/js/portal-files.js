@@ -3810,11 +3810,16 @@
           paintPdfThumbs(f, pdf);
           renderPdfPage(f, e.pdfPage);
         })
-        .catch(function () {
+        .catch(function (err) {
           if (current().id !== f.id) return;
           if (loading) {
             loading.hidden = false;
-            loading.textContent = 'Could not load this PDF.';
+            // A corrupt upload and a failed fetch look identical from here
+            // unless pdf.js's parse error is surfaced — and "could not load"
+            // sends people chasing the network when the file was never a PDF.
+            loading.textContent = err && err.name === 'InvalidPDFException'
+              ? 'This file is not a valid PDF.'
+              : 'Could not load this PDF.';
           }
         });
     }

@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
 import { deflateSync } from 'node:zlib';
 
 /*
@@ -75,7 +76,7 @@ function png(size) {
 }
 
 function pdf() {
-  return Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+  return tinyPdfBuffer();
 }
 
 const failures = [];

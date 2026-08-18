@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
 import { deflateSync } from 'node:zlib';
 
 // The CIP intake wizard (§2, §3). PHPUnit pins the endpoint; this pins that
@@ -60,9 +61,9 @@ function png(width, height) {
   ]);
 }
 
-/* The smallest thing a mime sniffer will call a PDF. */
+/* A real (if blank) one-page PDF, so uploaded documents preview. */
 function pdf() {
-  return Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+  return tinyPdfBuffer();
 }
 
 const failures = [];
@@ -234,12 +235,12 @@ try {
    * heading held above it, and comparing those would pass while the boxes a
    * reader sees were an eyebrow apart.
    */
-  const edges = async sel => page.locator(sel).evaluate(el => {
+  const edges = async sel => page.locator(sel).first().evaluate(el => {
     const r = el.getBoundingClientRect();
     return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
   });
-  const applicantBox = await edges('.tma-portal-section--wide > .tma-portal-section__card');
-  const documentsBox = await edges('.tma-dash__clients-card--narrow');
+  const applicantBox = await edges('.tma-portal-section--person > .tma-portal-section__card');
+  const documentsBox = await edges('.tma-dash__clients-card--docs');
   check(Math.abs(applicantBox.top - documentsBox.top) <= 1
     && Math.abs(applicantBox.bottom - documentsBox.bottom) <= 1,
     `the applicant and documents cards are the same box (${applicantBox.top}–${applicantBox.bottom} vs ${documentsBox.top}–${documentsBox.bottom})`);
@@ -283,7 +284,7 @@ try {
     const box = [...document.querySelectorAll('.tma-portal-section')]
       .find(el => el.querySelector('[data-cip-field="sponsor.firstName"]'))
       .querySelector('.tma-portal-section__card').getBoundingClientRect();
-    const docs = [...document.querySelectorAll('.tma-dash__clients-card--narrow')]
+    const docs = [...document.querySelectorAll('.tma-dash__clients-card--docs')]
       .find(el => el.querySelector('[data-cip-drop="sponsor.passportBioPage"]'))
       .getBoundingClientRect();
 
@@ -295,7 +296,7 @@ try {
   // ...but not marked required, because they are not. The applicant's two
   // identical controls are, which is the whole point of marking anything.
   check(await page.evaluate(() => {
-    const docs = [...document.querySelectorAll('.tma-dash__clients-card--narrow')]
+    const docs = [...document.querySelectorAll('.tma-dash__clients-card--docs')]
       .find(el => el.querySelector('[data-cip-drop="sponsor.passportBioPage"]'));
 
     return [...docs.querySelectorAll('.tma-portal-field__label')]

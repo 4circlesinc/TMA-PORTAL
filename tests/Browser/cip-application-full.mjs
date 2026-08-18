@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
 import { deflateSync } from 'node:zlib';
 
 /*
@@ -42,7 +43,7 @@ function png(width, height) {
     chunk('IHDR', ih), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
   ]);
 }
-const pdf = () => Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+const pdf = () => tinyPdfBuffer();
 const photo = name => ({ name, mimeType: 'image/png', buffer: png(600, 600) });
 const scan = name => ({ name, mimeType: 'application/pdf', buffer: pdf() });
 

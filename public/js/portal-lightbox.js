@@ -211,9 +211,13 @@
           }
         });
       })
-      .catch(function () {
+      .catch(function (err) {
         if (dead) return;
-        docStatus(host, 'Could not load this PDF — download it instead.');
+        // Distinguish a corrupt file from a failed fetch: "could not load"
+        // sends people chasing the network when the file was never a PDF.
+        docStatus(host, err && err.name === 'InvalidPDFException'
+          ? 'This file is not a valid PDF.'
+          : 'Could not load this PDF — download it instead.');
       });
 
     return function () {
