@@ -738,6 +738,54 @@ class Postcards
     }
 
     /**
+     * §14's notice to the provider side: documents have been sent back.
+     *
+     * Fired when the APPLICATION reaches Updates required, not per document —
+     * an officer working through a checklist in one sitting must not put five
+     * emails in the firm's inbox saying pieces of one fact. The body lists
+     * every document sent back so far, each with the reviewer's reason,
+     * because §12 promises the provider is told what needs work without
+     * clicking through documents to find it.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     * @param  list<array{label:string, reason:?string}>  $sentBack
+     */
+    public static function cipUpdatesRequired(array $facts, array $sentBack, User $actor, string $url, ?string $recipientName = null): Postcard
+    {
+        $initials = SignaturePresenter::initials($actor->name);
+
+        $subject = implode(' - ', array_filter([
+            $initials,
+            'UPDATES REQUIRED',
+            $facts['number'],
+            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        $list = collect($sentBack)->map(fn (array $doc) => '<li><strong>'.e($doc['label']).'</strong>'
+            .($doc['reason'] ? ' — '.e($doc['reason']) : '')
+            .'</li>')->implode('');
+
+        $count = count($sentBack);
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' — '.$count.' document'.($count === 1 ? '' : 's').' need'.($count === 1 ? 's' : '').' an update.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => 'Updates required on '.$facts['number'],
+            'lead' => 'The reviewing officer has assessed '.$facts['applicant'].'’s documents and sent '
+                .($count === 1 ? 'one back' : $count.' back').' with notes.',
+            'details' => [
+                ['Application', $facts['number']],
+                ['Applicant', $facts['applicant']],
+                ['Service provider', $facts['provider']],
+            ],
+            'bodyHtml' => '<ul>'.$list.'</ul>',
+            'button' => ['label' => 'Open the documents', 'url' => $url],
+        ]);
+    }
+
+    /**
      * The email twin of a portal notification, for accounts that switched the
      * email channel on for that module. Kept deliberately spare: the subject
      * and body ARE the notification; the button deep-links to whatever the

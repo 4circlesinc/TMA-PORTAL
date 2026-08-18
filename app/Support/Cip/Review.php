@@ -4,7 +4,12 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipDocument;
+use App\Models\CipPerson;
+use App\Models\CompanyMember;
 use App\Models\User;
+use App\Support\Mail\Deliveries;
+use App\Support\Mail\Postcards;
+use App\Support\Notifications\Notifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -103,14 +108,6 @@ class Review
 
             self::settle($document->loadMissing('application')->application, $actor);
 
-            /*
-             * Phase 5's fan-out attaches here, and here specifically: this is
-             * the first moment both halves of what the provider side needs
-             * exist — the document sent back, and the reason why. There is no
-             * mailer to call yet. The seam is the point, exactly as {@see
-             * Engine} says it is for the application's own transitions.
-             */
-
             return $document;
         });
     }
@@ -138,7 +135,151 @@ class Review
             return $application;
         }
 
-        return Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
+        $application = Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
+
+        /*
+         * §14's notice, at §14's moment.
+         *
+         * The provider side is told when the APPLICATION reaches Updates
+         * required — once per episode, not once per document, because an
+         * officer working through a checklist in a sitting must not put five
+         * emails in the firm's inbox saying pieces of one fact. Documents
+         * sent back while the file already stands here join the same open
+         * episode: the checklist names each of them, and the notice already
+         * said there is work. Entering ASSESSMENT FEEDBACK sends nothing —
+         * §14 promises a notification for updates, and news that everything
+         * was fine is the status screen's to show, not the inbox's to carry.
+         *
+         * Announced after the transition has committed, and never allowed to
+         * undo it: the state change is the workflow's, the telling is not.
+         */
+        if ($target === Status::UPDATE_REQUIRED && $actor !== null) {
+            self::announceUpdatesRequired($application, $actor);
+        }
+
+        return $application;
+    }
+
+    /**
+     * Tell the provider side what was sent back, and why.
+     *
+     * Recipients are the firm's people: its active portal members, and the
+     * registry's own contact address where that is somebody else — or, for a
+     * private client, the applicant's own account. Each email is recorded
+     * against the application, so the audit trail can answer whether the
+     * firm was told and when. Bells go to the member accounts with the email
+     * channel off; the postcard IS this notification's email.
+     */
+    private static function announceUpdatesRequired(CipApplication $application, User $actor): void
+    {
+        $application->loadMissing(['provider.company', 'client', 'people']);
+
+        $sentBack = CipDocument::query()
+            ->where('application_id', $application->id)
+            ->where('status', DocumentStatus::UPDATE_REQUIRED)
+            ->with(['comments' => fn ($q) => $q->latest('id')->limit(1)])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (CipDocument $slot) => [
+                'label' => $slot->label,
+                'reason' => $slot->comments->first()?->body,
+            ])
+            ->all();
+
+        if ($sentBack === []) {
+            return;
+        }
+
+        $applicant = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        $facts = [
+            'number' => $application->displayNumber(),
+            'applicant' => $applicant?->fullName() ?: ($application->client?->name ?? 'Unnamed applicant'),
+            'provider' => $application->provider?->name ?? 'Private client',
+            'familySize' => $application->familySize(),
+        ];
+
+        $path = $application->client
+            ? '/clients/'.$application->client->uid.'?tab=folders'
+            : '/clients?q='.urlencode($application->displayNumber());
+        $url = rtrim(config('app.url'), '/').$path;
+
+        foreach (self::providerRecipients($application) as $recipient) {
+            Deliveries::send(
+                Postcards::cipUpdatesRequired($facts, $sentBack, $actor, $url, $recipient['name']),
+                $recipient['email'],
+                $application,
+                'cip-updates-required',
+                immediate: true,
+            );
+
+            if ($recipient['userId'] !== null) {
+                Notifier::send([
+                    'user' => User::find($recipient['userId']),
+                    'actor' => $actor,
+                    'type' => 'cip.updates-required',
+                    'title' => $facts['number'].' needs updates',
+                    'message' => count($sentBack).' document'.(count($sentBack) === 1 ? '' : 's').' sent back with notes.',
+                    'subject' => $application,
+                    'action_url' => $path,
+                    'email' => false,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Who "the Service Provider" is for one application, deduplicated by
+     * address.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    private static function providerRecipients(CipApplication $application): array
+    {
+        $recipients = [];
+
+        $company = $application->provider?->company;
+
+        if ($company) {
+            foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->get() as $member) {
+                $email = $member->email ?: $member->user?->email;
+
+                if ($email) {
+                    $recipients[mb_strtolower($email)] = [
+                        'email' => $email,
+                        'name' => $member->name,
+                        'userId' => $member->user_id,
+                    ];
+                }
+            }
+        }
+
+        // The registry's own contact address, where it is nobody already on
+        // the list — a firm may route notices to a mailbox no member owns.
+        $contact = $application->provider?->contact_email;
+
+        if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
+            $recipients[mb_strtolower($contact)] = [
+                'email' => $contact,
+                'name' => $application->provider->contact_name,
+                'userId' => null,
+            ];
+        }
+
+        // A private client is their own provider side.
+        if ($recipients === [] && $application->client) {
+            $email = $application->client->user?->email ?: $application->client->email;
+
+            if ($email) {
+                $recipients[mb_strtolower($email)] = [
+                    'email' => $email,
+                    'name' => $application->client->name,
+                    'userId' => $application->client->user_id,
+                ];
+            }
+        }
+
+        return array_values($recipients);
     }
 
     /**

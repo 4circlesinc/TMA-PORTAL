@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
@@ -18,6 +19,7 @@ use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -403,5 +405,91 @@ class CipReviewTest extends TestCase
         $this->assertSame(2, $progress['total']);
         $this->assertSame(2, $progress['outstanding']);
         $this->assertSame(0, $progress['counts'][DocumentStatus::READY_FOR_SUBMISSION]);
+    }
+
+    public function test_updates_required_notifies_the_provider_side_once_per_episode(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $company = null;
+        $application = $this->application($staff, Status::ASSESSMENT_FEEDBACK, $company);
+        $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $birth = $this->slot($application, 'birth_certificate', 'Birth certificate');
+        $officer = $this->officer($application);
+
+        // The firm's people: one member with an account, and the registry's
+        // own contact mailbox that no member owns.
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $application->provider->forceFill(['contact_email' => 'notices@galaxy.example', 'contact_name' => 'Galaxy Notices'])->save();
+
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes', [
+                'comment' => 'The bottom edge of the scan is cut off.',
+            ])->assertOk();
+
+        /*
+         * §14: the provider is told, in §22's filing format, with the reason
+         * in the body — the promise is that nobody has to click through
+         * documents to learn what needs work.
+         */
+        $expected = 'RO - UPDATES REQUIRED - '.$application->fresh()->displayNumber()
+            .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
+
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
+            return $mail->subjectLine === $expected
+                && $mail->hasTo('gil@galaxy.example')
+                && str_contains($mail->payload['bodyHtml'], 'Passport bio page')
+                && str_contains($mail->payload['bodyHtml'], 'The bottom edge of the scan is cut off.');
+        });
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+        Mail::assertSentCount(2);
+
+        // Tracked against the file, and the bell raised for the member.
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'gil@galaxy.example', 'template' => 'cip-updates-required',
+        ]);
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id, 'type' => 'cip.updates-required',
+        ]);
+
+        /*
+         * A second document sent back while the file already stands at
+         * Updates required joins the same open episode: the checklist names
+         * it, and the notice already said there is work. Two emails saying
+         * pieces of one fact would teach the firm to skim them.
+         */
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/documents/'.$birth->uuid.'/request-changes', [
+                'comment' => 'The certificate is the short form.',
+            ])->assertOk();
+
+        Mail::assertSentCount(2);
+    }
+
+    public function test_reaching_assessment_feedback_sends_nothing(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::REVIEW_APPLICATION);
+        $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $officer = $this->officer($application);
+
+        // The one required document approved: every document assessed, the
+        // application moves to Assessment feedback (§14) — and the inbox
+        // stays quiet, because §14 promises a notification for updates and
+        // good news is the status screen's to show.
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
+        Mail::assertNothingSent();
     }
 }
