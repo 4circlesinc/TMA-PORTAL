@@ -19,26 +19,46 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('conversations', function (Blueprint $table) {
-            $table->foreignId('client_id')->nullable()->after('created_by')
-                ->constrained('clients')->nullOnDelete();
-            $table->foreignId('company_id')->nullable()->after('client_id')
-                ->constrained('companies')->nullOnDelete();
-            $table->foreignId('cip_application_id')->nullable()->after('company_id')
-                ->constrained('cip_applications')->nullOnDelete();
-            $table->string('subject', 16)->nullable()->after('cip_application_id');
+            if (! Schema::hasColumn('conversations', 'client_id')) {
+                $table->foreignId('client_id')->nullable()->after('created_by')
+                    ->constrained('clients')->nullOnDelete();
+            }
+            if (! Schema::hasColumn('conversations', 'company_id')) {
+                $table->foreignId('company_id')->nullable()->after('client_id')
+                    ->constrained('companies')->nullOnDelete();
+            }
+            if (! Schema::hasColumn('conversations', 'cip_application_id')) {
+                $table->foreignId('cip_application_id')->nullable()->after('company_id')
+                    ->constrained('cip_applications')->nullOnDelete();
+            }
+            if (! Schema::hasColumn('conversations', 'subject')) {
+                $table->string('subject', 16)->nullable()->after('cip_application_id');
+            }
 
-            $table->index(['client_id', 'subject']);
+            if (! Schema::hasIndex('conversations', ['client_id', 'subject'])) {
+                $table->index(['client_id', 'subject']);
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('conversations', function (Blueprint $table) {
-            $table->dropIndex(['client_id', 'subject']);
-            $table->dropConstrainedForeignId('cip_application_id');
-            $table->dropConstrainedForeignId('company_id');
-            $table->dropConstrainedForeignId('client_id');
-            $table->dropColumn('subject');
+            if (Schema::hasIndex('conversations', ['client_id', 'subject'])) {
+                $table->dropIndex(['client_id', 'subject']);
+            }
+            if (Schema::hasColumn('conversations', 'cip_application_id')) {
+                $table->dropConstrainedForeignId('cip_application_id');
+            }
+            if (Schema::hasColumn('conversations', 'company_id')) {
+                $table->dropConstrainedForeignId('company_id');
+            }
+            if (Schema::hasColumn('conversations', 'client_id')) {
+                $table->dropConstrainedForeignId('client_id');
+            }
+            if (Schema::hasColumn('conversations', 'subject')) {
+                $table->dropColumn('subject');
+            }
         });
     }
 };
