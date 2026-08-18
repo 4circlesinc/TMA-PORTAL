@@ -1674,6 +1674,20 @@
       return '';
     }
 
+    /* Insert, replace or remove the left rail when the open file's preview type changes. */
+    function syncLeftRail(f) {
+      var body = lb.querySelector('.tma-portal-viewer__body');
+      var oldRail = lb.querySelector('[data-lb-rail], [data-lb-pages]');
+      var railMarkup = leftRailHtml(f);
+      if (oldRail && railMarkup) {
+        oldRail.outerHTML = railMarkup;
+      } else if (oldRail && !railMarkup) {
+        oldRail.remove();
+      } else if (!oldRail && railMarkup && body) {
+        body.insertAdjacentHTML('afterbegin', railMarkup);
+      }
+    }
+
     /* ── active viewers (presence) ───────────────────── */
 
     /* One id per TAB, not per person: the same file open twice must count as
@@ -1974,7 +1988,14 @@
         var openInput = lb.querySelector('[data-lb-input]');
         if (openInput) entry(current()).draft = openInput.value;
       }
-      panel.hidden = !viewerPrefs.comments;
+      /*
+       * The details panel and the bubbles share the same edge of the screen,
+       * so they take turns: any details tab open puts the comments away, and
+       * closing it brings them straight back. One flag stays the reader's
+       * (comments), the other is the panel's own state — visibility is
+       * derived, never juggled.
+       */
+      panel.hidden = !viewerPrefs.comments || viewerPrefs.panel;
       var head = lb.querySelector('.tma-portal-viewer__head');
       if (head) head.outerHTML = viewerHead(current());
       if (!viewerPrefs.comments) return;
@@ -4032,16 +4053,7 @@
       if (head) head.outerHTML = viewerHead(f);
 
       // Left rail can switch between page thumbs (PDF) and file thumbs.
-      var body = lb.querySelector('.tma-portal-viewer__body');
-      var oldRail = lb.querySelector('[data-lb-rail], [data-lb-pages]');
-      var railMarkup = leftRailHtml(f);
-      if (oldRail && railMarkup) {
-        oldRail.outerHTML = railMarkup;
-      } else if (oldRail && !railMarkup) {
-        oldRail.remove();
-      } else if (!oldRail && railMarkup && body) {
-        body.insertAdjacentHTML('afterbegin', railMarkup);
-      }
+      syncLeftRail(f);
 
       repaintStage(f);
       startPresence(f);
@@ -4534,6 +4546,7 @@
           var head2 = lb.querySelector('.tma-portal-viewer__head');
           if (head2) head2.outerHTML = viewerHead(current());
           if (viewerPrefs.panel) paintPanel();
+          paintCommentsPanel();
           return;
         case 'approvals':
           viewerPrefs.tab = 'approvals';
@@ -4543,6 +4556,7 @@
           var ahead = lb.querySelector('.tma-portal-viewer__head');
           if (ahead) ahead.outerHTML = viewerHead(current());
           paintPanel();
+          paintCommentsPanel();
           return;
         case 'versions':
           viewerPrefs.tab = 'versions';
@@ -4552,11 +4566,18 @@
           var vhead = lb.querySelector('.tma-portal-viewer__head');
           if (vhead) vhead.outerHTML = viewerHead(current());
           paintPanel();
+          paintCommentsPanel();
           return;
         case 'comments': {
           // Adding a comment, not opening and closing: the button summons the
-          // composer into its place at the bottom of the always-open column.
+          // composer — and takes the details panel with it, since the two
+          // share the same edge of the screen.
           viewerPrefs.comments = true;
+          viewerPrefs.panel = false;
+          var cpanel = lb.querySelector('[data-lb-panel]');
+          if (cpanel) cpanel.hidden = true;
+          var chead = lb.querySelector('.tma-portal-viewer__head');
+          if (chead) chead.outerHTML = viewerHead(current());
           entry(f).composerOpen = true;
           paintCommentsPanel();
           var openedInput = lb.querySelector('[data-lb-input]');
@@ -4685,6 +4706,7 @@
           var head = lb.querySelector('.tma-portal-viewer__head');
           if (head) head.outerHTML = viewerHead(current());
           paintPanel();
+          paintCommentsPanel();
         },
       });
 
@@ -4709,7 +4731,18 @@
           // Merge all server fields into the gallery entry in-place so that
           // `current()` immediately reflects the full shape.
           Object.keys(row).forEach(function (k) { gallery[idx][k] = row[k]; });
-          repaintStage(gallery[idx]);
+          var full = gallery[idx];
+
+          // Stub shell had no category, so the PDF page rail was never painted.
+          syncLeftRail(full);
+
+          var head = lb.querySelector('.tma-portal-viewer__head');
+          if (head) head.outerHTML = viewerHead(full);
+
+          repaintStage(full);
+
+          var foot = lb.querySelector('[data-lb-foot]');
+          if (foot) foot.innerHTML = footHtml(full);
         })
         .catch(function () {
           // Best-effort — if the fetch fails the viewer is still usable for
