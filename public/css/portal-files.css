@@ -921,6 +921,8 @@
 }
 .tma-portal-viewer__anchor-box.is-drawing { border-style: dashed; }
 
+.tma-portal-viewer__replybox { position: relative; }
+
 .tma-portal-viewer__composer {
   position: relative; flex: 0 0 auto; margin: 0; padding: var(--space-12);
   border: 0; border-radius: 12px; background: #fff;

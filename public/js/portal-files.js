@@ -2737,6 +2737,7 @@
       if (e.replyingTo === t.id) {
         return '<div class="tma-portal-viewer__reply tma-portal-viewer__replybox">' +
           '<textarea class="tma-portal-viewer__input" data-lb-replyinput rows="2" placeholder="Write a reply…"></textarea>' +
+          '<div class="tma-portal-viewer__mention-pop" data-lb-mentions hidden></div>' +
           '<div class="tma-portal-viewer__composer-actions">' +
             '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-replycancel>Cancel</button>' +
             '<button type="button" class="tma-portal-viewer__btn" data-lb-replysend="' + esc(t.id) + '">Reply</button>' +
@@ -2849,9 +2850,15 @@
       var body = input.value.trim();
       if (!body) return;
 
+      // The same rule as the composer: only names still in the text count.
+      var mentions = (e.pendingMentions || []).filter(function (m) {
+        return body.indexOf(m.name) !== -1;
+      });
+      e.pendingMentions = [];
+
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
         method: 'POST',
-        json: { body: body, parent: threadId },
+        json: { body: body, parent: threadId, mentions: mentions.map(function (m) { return m.id; }) },
       })
         .then(function () { e.replyingTo = null; e.comments = null; loadComments(f); })
         .catch(function (err) { ui().toast((err && err.message) || 'Could not post that reply'); });
@@ -2938,11 +2945,16 @@
     function onComposerInput(input) {
       var f = current();
       var e = entry(f);
-      e.draft = input.value;
+      // Only the main composer keeps a draft; a reply box lives and dies
+      // with its thread.
+      if (input.hasAttribute('data-lb-input')) e.draft = input.value;
 
       var upto = input.value.slice(0, input.selectionStart);
       var m = /@([\w' -]{0,40})$/.exec(upto);
-      var pop = lb.querySelector('[data-lb-mentions]');
+      // The pop that belongs to THIS box — the reply box carries its own, or
+      // @ing in a reply would open the suggestion list under the composer.
+      var box = input.closest('[data-lb-composer], .tma-portal-viewer__replybox');
+      var pop = box && box.querySelector('[data-lb-mentions]');
       if (!pop) return;
 
       if (!m) { pop.hidden = true; return; }
@@ -2964,11 +2976,13 @@
         .catch(function () { pop.hidden = true; });
     }
 
-    function insertMention(id, name) {
+    function insertMention(id, name, item) {
       var f = current();
       var e = entry(f);
-      var input = lb.querySelector('[data-lb-input]');
-      var pop = lb.querySelector('[data-lb-mentions]');
+      // The box the suggestion list belongs to — composer or a reply.
+      var box = item && item.closest('[data-lb-composer], .tma-portal-viewer__replybox');
+      var input = (box && box.querySelector('textarea')) || lb.querySelector('[data-lb-input]');
+      var pop = box && box.querySelector('[data-lb-mentions]');
       if (!input) return;
 
       var pos = input.selectionStart;
@@ -2980,7 +2994,7 @@
       input.setSelectionRange(caret, caret);
 
       e.pendingMentions = (e.pendingMentions || []).concat([{ id: parseInt(id, 10), name: name }]);
-      e.draft = input.value;
+      if (input.hasAttribute('data-lb-input')) e.draft = input.value;
       if (pop) pop.hidden = true;
     }
 
@@ -4404,7 +4418,7 @@
       var en = entry(f);
       var mention = e.target.closest('[data-lb-mention]');
       if (mention) {
-        insertMention(mention.getAttribute('data-lb-mention'), mention.getAttribute('data-name'));
+        insertMention(mention.getAttribute('data-lb-mention'), mention.getAttribute('data-name'), mention);
         return;
       }
       if (e.target.closest('[data-lb-send]')) { sendComment(); return; }
@@ -4554,7 +4568,7 @@
     });
 
     lb.addEventListener('input', function (e) {
-      if (e.target.closest('[data-lb-input]')) onComposerInput(e.target);
+      if (e.target.closest('[data-lb-input], [data-lb-replyinput]')) onComposerInput(e.target);
     });
 
     // Enter sends, Shift+Enter makes a new line — §16.
