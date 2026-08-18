@@ -2532,17 +2532,12 @@
 
       /*
        * The box is summoned, not resident. By default the column is only the
-       * conversation; the round button up top (or highlighting a spot on the
-       * document) opens the composer in its place at the bottom, and posting
-       * puts it away again — a form that always sat there made every file
-       * read as a request to say something.
+       * conversation; highlighting a spot on the document — or the comments
+       * count chip in the details panel — opens the composer in its place at
+       * the bottom, and posting puts it away again. A form that always sat
+       * there made every file read as a request to say something.
        */
       host.innerHTML =
-        '<div class="tma-portal-viewer__comments-top">' +
-          '<button type="button" class="tma-portal-viewer__comments-add" data-lb-composer-open' +
-          ' title="Add a comment" aria-label="Add a comment">' +
-          '<img src="images/icons/phosphor/ChatCircleDots.svg" alt="" width="16" height="16"></button>' +
-        '</div>' +
         '<div class="tma-portal-viewer__comments-feed" data-lb-comments>' +
           (stale ? commentsHtml(stale, e) : ui().loading({ count: 3 })) +
         '</div>' +
@@ -4552,10 +4547,13 @@
           // the floating column, which starts open.
           if (act.classList.contains('tma-portal-viewer__count')) {
             viewerPrefs.comments = true;
+            entry(f).composerOpen = true;
           } else {
             viewerPrefs.comments = !viewerPrefs.comments;
           }
           paintCommentsPanel();
+          var openedInput = lb.querySelector('[data-lb-input]');
+          if (openedInput) openedInput.focus();
           return;
         case 'more': return openViewerMenu(act, f);
       }
