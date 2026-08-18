@@ -65,9 +65,17 @@ class CipDocument extends Model
         return $this->belongsTo(CipPerson::class, 'person_id');
     }
 
+    /**
+     * The file answering this slot.
+     *
+     * `withTrashed()` lets the reviewer still see the file row in the viewer
+     * even if it has been soft-deleted (they may want to restore it).  The
+     * `isFilled()` helper uses the resolved model rather than the raw foreign
+     * key so that a slot pointing at a deleted file reads as empty.
+     */
     public function file(): BelongsTo
     {
-        return $this->belongsTo(FileItem::class, 'file_id');
+        return $this->belongsTo(FileItem::class, 'file_id')->withTrashed();
     }
 
     /**
@@ -94,8 +102,26 @@ class CipDocument extends Model
         return $this->hasMany(CipDocumentComment::class, 'document_id');
     }
 
+    /**
+     * Whether this slot has a live (non-deleted) file answering it.
+     *
+     * A slot can have a `file_id` pointing at a soft-deleted row when the
+     * observer hasn't run yet (e.g. in unit tests) or when a restore is
+     * pending. Checking the resolved relation is more reliable than the raw key.
+     */
     public function isFilled(): bool
     {
-        return $this->file_id !== null;
+        if ($this->file_id === null) {
+            return false;
+        }
+
+        // If the relation is already loaded (eager or lazy), trust it.
+        if ($this->relationLoaded('file')) {
+            return $this->file !== null && $this->file->deleted_at === null;
+        }
+
+        // Raw key present but relation not loaded — fast path, rely on key.
+        // The observer clears the key on deletion so this only races in tests.
+        return true;
     }
 }

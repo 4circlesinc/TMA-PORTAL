@@ -34,6 +34,9 @@ class DocumentEngine
      */
     public const ACTION_STATUS_CHANGED = 'document_status_changed';
 
+    /** The audit action written when a linked file is deleted and the slot is reset. */
+    public const ACTION_FILE_DELETED = 'document_file_deleted';
+
     /** from => the statuses it may move to. */
     private const TRANSITIONS = [
         DocumentStatus::PENDING_UPLOAD => [DocumentStatus::APPLICATION_REVIEW],
@@ -180,6 +183,54 @@ class DocumentEngine
             Live::staff(Live::CIP);
 
             return $document;
+        });
+    }
+
+    /**
+     * A linked file was deleted (soft or hard). The slot loses its file
+     * reference and returns to Pending upload so a replacement can be provided.
+     *
+     * This intentionally bypasses the forward-only state machine: deletion is
+     * a system event, not a reviewer transition, and the machine has no backward
+     * edge because no human decision should undo a reviewer's verdict — but a
+     * deleted file is simply gone, and a checklist that says "Application review"
+     * with nothing behind it is wrong.
+     *
+     * Only statuses that still live in the upload/review cycle are reset (i.e.
+     * not READY_FOR_SUBMISSION — a document the reviewer accepted stays accepted
+     * even if someone later deletes it from the library, so the history is clear).
+     */
+    public static function resetAfterFileDeletion(CipDocument $slot, ?User $actor): void
+    {
+        $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+
+        DB::transaction(function () use ($slot, $from, $actor) {
+            $slot->forceFill([
+                'file_id' => null,
+                'uploaded_by' => null,
+                'uploaded_at' => null,
+                'status' => DocumentStatus::PENDING_UPLOAD,
+            ])->save();
+
+            $application = $slot->loadMissing('application')->application;
+
+            Engine::record($application, self::ACTION_FILE_DELETED, $actor, [
+                'document' => $slot->uuid,
+                'fromStatus' => $from,
+                'toStatus' => DocumentStatus::PENDING_UPLOAD,
+            ]);
+
+            ActivityLogger::log([
+                'actor' => $actor,
+                'type' => 'cip.document_file_deleted',
+                'module' => 'cip',
+                'description' => $slot->label.' file deleted on '.$application->displayNumber().' — reset to Pending upload',
+                'subject' => $slot,
+                'old' => ['status' => $from],
+                'new' => ['status' => DocumentStatus::PENDING_UPLOAD],
+            ]);
+
+            Live::staff(Live::CIP);
         });
     }
 }

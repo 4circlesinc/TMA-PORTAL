@@ -10,6 +10,7 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -169,6 +170,36 @@ class CipDocumentUploadSyncTest extends TestCase
 
         $this->assertSame($file->id, $slot->file_id);
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->status);
+    }
+
+    public function test_deleting_a_filed_file_resets_the_slot_to_pending_upload(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->first();
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+
+        $this->assertNotNull($slot->file_id);
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->status);
+        $this->assertTrue($slot->isFilled());
+
+        $file = $slot->file;
+        DocumentEngine::resetAfterFileDeletion($slot->fresh(), $staff);
+
+        $slot->refresh();
+        $this->assertNull($slot->file_id);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $slot->status);
+        $this->assertFalse($slot->isFilled());
     }
 
     public function test_intake_edit_does_not_replace_a_filed_document_unless_sent_back(): void
