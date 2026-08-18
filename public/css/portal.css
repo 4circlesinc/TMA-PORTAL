@@ -482,7 +482,8 @@
 /* file row right-click context menu */
 .tma-portal-context-menu {
   position: fixed;
-  z-index: 500;
+  /* Above the modal (620): a context menu can be opened from inside one. */
+  z-index: 640;
   display: flex;
   flex-direction: column;
   width: max-content;
@@ -579,7 +580,7 @@
 .tma-portal-context-menu__item--static:hover { background: transparent; }
 
 /* The submenu is the same menu, one level along. */
-.tma-portal-context-menu--sub { z-index: 501; }
+.tma-portal-context-menu--sub { z-index: 641; }
 
 /* favorite star - always visible; muted outline, full opacity when starred (column after checkbox) */
 .tma-portal-star img { opacity: 0.4; }
@@ -1347,10 +1348,13 @@
 .tma-portal-modal {
   position: fixed;
   inset: 0;
-  /* Above the full-screen signature wizard (280). At 240 a modal opened from
-     inside the wizard - the recipient picker, the signed-copy folder picker -
-     was painted behind it: present in the DOM, but invisible and unclickable. */
-  z-index: 300;
+  /* Above the file viewer (600), which is itself above the signature wizard
+     (280). This keeps moving up because modals are OPENED FROM those
+     surfaces: Share pressed inside the viewer painted its dialog behind the
+     lightbox — present in the DOM, invisible and unclickable — exactly the
+     bug the wizard had at 240. The rule worth keeping: a modal outranks every
+     surface that can open one; only menus and toasts sit higher. */
+  z-index: 620;
   display: flex;
   align-items: center;
   justify-content: center;
