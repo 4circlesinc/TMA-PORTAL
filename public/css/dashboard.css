@@ -35503,6 +35503,11 @@ span.tma-dash__messages-profile-avatar {
   font-variant-numeric: tabular-nums;
 }
 
+.tma-dash__cip-tl-ahead,
+.tma-dash__cip-tl-ahead .tma-portal-details__label {
+  color: var(--color-text-muted, #6b7280);
+}
+
 .tma-dash__cip-ov-lead {
   margin: 0 0 var(--space-8);
   font-size: var(--text-size-13, 13px);

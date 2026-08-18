@@ -197,12 +197,13 @@ class CipTimelineTest extends TestCase
 
         Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $admin, [
             'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
         ]);
 
         $entry = Timeline::for($application, $admin)[0];
 
         $this->assertSame(CipEvent::ACTION_DECISION_RECORDED, $entry['action']);
-        $this->assertSame('Ada Admin recorded the decision: Approved', $entry['what']);
+        $this->assertSame('Ada Admin recorded the decision: Approved on 2026-08-18', $entry['what']);
     }
 
     public function test_a_recorded_query_reads_as_the_day_the_unit_asked(): void

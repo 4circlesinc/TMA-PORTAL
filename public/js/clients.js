@@ -4941,13 +4941,18 @@
     if (!steps.length) return '';
 
     return overviewList(steps.map(function (m) {
-      return overviewRow(m.label, m.date ? fmtShortDate(m.date) : '—');
+      return overviewRow(
+        m.label,
+        m.date ? fmtShortDate(m.date) : '—',
+        false,
+        m.reached ? '' : 'tma-dash__cip-tl-ahead'
+      );
     }).join(''));
   }
 
-  function overviewRow(label, value, rawHtml) {
+  function overviewRow(label, value, rawHtml, extraClass) {
     if (value == null || value === '') return '';
-    return '<li class="tma-portal-details__row">' +
+    return '<li class="tma-portal-details__row' + (extraClass ? ' ' + extraClass : '') + '">' +
       '<span>' + esc(label) + '</span>' +
       '<span class="tma-portal-details__label">' + (rawHtml ? value : esc(value)) + '</span></li>';
   }
@@ -5117,17 +5122,21 @@
       '<span class="tma-dash__clients-list-value">' + (rawHtml ? value : esc(value)) + '</span></div>';
   }
 
-  function cipMilestoneDate(app, key) {
+  function cipMilestone(app, key) {
     var steps = (app && app.milestones) || [];
     for (var i = 0; i < steps.length; i++) {
-      if (steps[i].key === key && steps[i].date) {
-        var iso = steps[i].date;
-        var d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
-        if (isNaN(d)) return '';
-        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-      }
+      if (steps[i].key === key) return steps[i];
     }
-    return '';
+    return null;
+  }
+
+  function cipMilestoneDate(app, key) {
+    var step = cipMilestone(app, key);
+    var iso = step && step.date;
+    if (!iso) return '';
+    var d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   function cipAssignedFaces(app) {
@@ -5150,11 +5159,12 @@
   function renderFactsStrip(app) {
     if (!app) return '';
 
+    var decision = cipMilestone(app, 'decision');
     var html =
       cipFact('Application number', app.number) +
       cipFact('Received', cipMilestoneDate(app, 'filed')) +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '—') +
-      cipFact('Decision', cipMilestoneDate(app, 'decision')) +
+      cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
       cipFact('Investment', app.investmentType) +
       cipFact('Referred by', app.provider) +
       cipFact('Assigned', cipAssignedFaces(app), true);
@@ -8062,7 +8072,10 @@
   function refreshAfterCipMove(clientUid) {
     forgetApplicationTable();
     forgetBuckets();
-    if (clientUid) forgetApplication(clientUid);
+    if (clientUid) {
+      forgetApplication(clientUid);
+      delete TIMELINE[clientUid];
+    }
     if (clientsMenuCtx && clientsMenuCtx.render) clientsMenuCtx.render({ forceFull: true });
     else repaintClients();
   }

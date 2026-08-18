@@ -192,19 +192,29 @@ class Timeline
     }
 
     /**
-     * The Unit's decision, named as the status chip names it.
+     * The Unit's decision, named as the status chip names it, and by the day.
      *
      * @param  array<string, mixed>  $meta
      */
     private static function decisionSentence(array $meta, string $who): string
     {
         $decision = $meta['decision'] ?? null;
+        $date = $meta['decidedAt'] ?? null;
+        $outcome = ($decision !== null && Status::isTerminal($decision))
+            ? Status::label($decision)
+            : null;
 
-        if ($decision === null || ! Status::isTerminal($decision)) {
-            return "{$who} recorded the decision";
+        if ($outcome && $date) {
+            return "{$who} recorded the decision: {$outcome} on {$date}";
         }
 
-        return "{$who} recorded the decision: ".Status::label($decision);
+        if ($outcome) {
+            return "{$who} recorded the decision: {$outcome}";
+        }
+
+        return $date
+            ? "{$who} recorded the decision on {$date}"
+            : "{$who} recorded the decision";
     }
 
     /**

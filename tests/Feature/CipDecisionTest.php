@@ -18,6 +18,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Decision;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\Status;
+use App\Support\Cip\Timeline;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -119,6 +120,11 @@ class CipDecisionTest extends TestCase
             'from_status' => Status::BACKGROUND_CHECK,
             'to_status' => Status::GRANTED,
         ]);
+
+        $this->assertSame(
+            'Ada Admin recorded the decision: Approved on 2026-08-18',
+            Timeline::for($fresh, $staff)[0]['what'],
+        );
     }
 
     public function test_recording_denied_moves_the_file_to_denied(): void
@@ -137,6 +143,10 @@ class CipDecisionTest extends TestCase
             ->assertJsonPath('application.decision', Status::DENIED);
 
         $this->assertSame(Status::DENIED, $application->fresh()->status);
+        $this->assertSame(
+            'Ada Admin recorded the decision: Denied on 2026-08-18',
+            Timeline::for($application->fresh(), $staff)[0]['what'],
+        );
     }
 
     public function test_a_delayed_file_can_be_decided(): void
