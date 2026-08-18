@@ -1599,7 +1599,7 @@
     function entry(f) {
       if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null, approvals: null,
         expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null,
-        pdfDoc: null, pdfUrl: null, pdfPage: 1 };
+        pdfDoc: null, pdfUrl: null, pdfPage: 1, pdfZoomMode: 'width', pdfZoomScale: 1 };
       return cache[f.id];
     }
 
@@ -1891,10 +1891,7 @@
 
     function footHtml(f) {
       var bits = [];
-      if (f.category === 'pdf') {
-        var e = entry(f);
-        if (e.pdfDoc) bits.push(e.pdfPage + ' / ' + e.pdfDoc.numPages);
-      } else if (gallery.length > 1) {
+      if (f.category !== 'pdf' && gallery.length > 1) {
         bits.push((idx + 1) + ' of ' + gallery.length);
       }
       if (f.sizeLabel) bits.push(esc(f.sizeLabel));
@@ -2495,14 +2492,18 @@
         : '<p class="tma-portal-viewer__comment-body">' + decorateMentions(c) + '</p>';
 
       return '<div class="tma-portal-viewer__comment" data-comment="' + esc(c.id) + '">' +
-        '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(c.author)) + '" alt="" width="28" height="28">' +
+        '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(c.author)) + '" alt="" width="24" height="24">' +
         '<div class="tma-portal-viewer__comment-main">' +
+          // The face on the left, the name beside it, and the moment it was
+          // said UNDER the name — who spoke and when are one fact, read top
+          // to bottom, not a line the eye has to parse across.
           '<div class="tma-portal-viewer__comment-head">' +
-            '<strong>' + esc(who) + '</strong>' +
-            '<time datetime="' + esc(c.createdAt) + '">' + esc(fmtDateTime(c.createdAt)) + '</time>' +
+            '<span class="tma-portal-viewer__comment-name"><strong>' + esc(who) + '</strong>' +
             (c.editedAt ? '<span class="tma-portal-viewer__comment-flag">edited</span>' : '') +
             (c.resolved ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Resolved' +
               (c.resolvedBy ? ' by ' + esc(c.resolvedBy) : '') + '</span>' : '') +
+            '</span>' +
+            '<time datetime="' + esc(c.createdAt) + '">' + esc(fmtDateTime(c.createdAt)) + '</time>' +
           '</div>' +
           body +
           (actions ? '<div class="tma-portal-viewer__comment-actions">' + actions + '</div>' : '') +
@@ -3809,12 +3810,103 @@
     function repaintStage(f) {
       var stage = lb.querySelector('[data-lb-stage]');
       if (!stage) return;
+      stage.classList.toggle(
+        'tma-portal-viewer__stage--pdf',
+        f.category === 'pdf' && f.previewUrl && perm(f, 'preview')
+      );
       stage.innerHTML = lightboxBody(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
       mountPdf(f);
     }
 
     /* ── PDF via pdf.js (works on Mac/Safari where iframe PDF often fails) ── */
+
+    var PDF_ZOOM_STEP = 1.25;
+    var PDF_ZOOM_MIN = 0.25;
+    var PDF_ZOOM_MAX = 4;
+
+    function pdfScrollEl(host) {
+      return host.querySelector('[data-lb-pdf-scroll]') || host;
+    }
+
+    function pdfBases(page, scrollEl) {
+      var pad = 24;
+      var w = Math.max(120, scrollEl.clientWidth - pad);
+      var h = Math.max(120, scrollEl.clientHeight - pad);
+      var vp1 = page.getViewport({ scale: 1 });
+      return {
+        fitWidth: w / vp1.width,
+        fitPage: Math.min(w / vp1.width, h / vp1.height),
+      };
+    }
+
+    function pdfScaleFor(e, bases) {
+      if (e.pdfZoomMode === 'page') return bases.fitPage;
+      if (e.pdfZoomMode === 'width') return bases.fitWidth;
+      return bases.fitWidth * e.pdfZoomScale;
+    }
+
+    function updatePdfToolbar(f, e, pdf, pageNum, bases, effectiveScale) {
+      var host = lb.querySelector('[data-lb-pdf]');
+      if (!host) return;
+      var toolbar = host.querySelector('[data-lb-pdf-toolbar]');
+      if (toolbar) toolbar.hidden = false;
+
+      var zoomLabel = host.querySelector('[data-lb-pdf-zoom-label]');
+      if (zoomLabel && bases) {
+        zoomLabel.textContent = Math.round((effectiveScale / bases.fitWidth) * 100) + '%';
+      }
+
+      var pageLabel = host.querySelector('[data-lb-pdf-page-label]');
+      if (pageLabel && pdf) pageLabel.textContent = pageNum + ' / ' + pdf.numPages;
+
+      var prev = host.querySelector('[data-lb-pdf-prev]');
+      var next = host.querySelector('[data-lb-pdf-next]');
+      if (prev) {
+        prev.hidden = pdf.numPages < 2;
+        prev.disabled = pageNum <= 1;
+      }
+      if (next) {
+        next.hidden = pdf.numPages < 2;
+        next.disabled = pageNum >= pdf.numPages;
+      }
+    }
+
+    function pdfZoomIn(f) {
+      var e = entry(f);
+      if (!e.pdfDoc) return;
+      if (e.pdfZoomMode !== 'custom') {
+        e.pdfZoomMode = 'custom';
+        e.pdfZoomScale = 1;
+      }
+      e.pdfZoomScale = Math.min(PDF_ZOOM_MAX, e.pdfZoomScale * PDF_ZOOM_STEP);
+      renderPdfPage(f, e.pdfPage);
+    }
+
+    function pdfZoomOut(f) {
+      var e = entry(f);
+      if (!e.pdfDoc) return;
+      if (e.pdfZoomMode !== 'custom') {
+        e.pdfZoomMode = 'custom';
+        e.pdfZoomScale = 1;
+      }
+      e.pdfZoomScale = Math.max(PDF_ZOOM_MIN, e.pdfZoomScale / PDF_ZOOM_STEP);
+      renderPdfPage(f, e.pdfPage);
+    }
+
+    function pdfFitWidth(f) {
+      var e = entry(f);
+      e.pdfZoomMode = 'width';
+      e.pdfZoomScale = 1;
+      renderPdfPage(f, e.pdfPage);
+    }
+
+    function pdfFitPage(f) {
+      var e = entry(f);
+      e.pdfZoomMode = 'page';
+      e.pdfZoomScale = 1;
+      renderPdfPage(f, e.pdfPage);
+    }
 
     function mountPdf(f) {
       if (!f || f.category !== 'pdf' || !f.previewUrl || !perm(f, 'preview')) return;
@@ -3839,6 +3931,8 @@
             e.pdfDoc = pdf;
             e.pdfUrl = f.previewUrl;
             if (!e.pdfPage || e.pdfPage < 1) e.pdfPage = 1;
+            e.pdfZoomMode = 'width';
+            e.pdfZoomScale = 1;
             return pdf;
           });
 
