@@ -80,6 +80,9 @@ class CommentPresenter
         return [
             'id' => $comment->uuid,
             'body' => $deleted ? null : $comment->body,
+            // The highlighted area the thread is about, or null — the viewer
+            // draws it back onto the page on hover.
+            'anchor' => $comment->anchor,
             'deleted' => $deleted,
             'author' => $comment->author ? [
                 'id' => $comment->author->id,

@@ -1484,7 +1484,13 @@
   // stepping through a folder keeps the reader where they were.
   // Details stay closed until asked for; comments live in their own floating
   // column (not a tab) and are likewise opt-in.
-  var viewerPrefs = { panel: false, tab: 'details', filter: 'all', comments: false };
+  /*
+   * `comments: true` is not a preference any more — the discussion is part
+   * of the viewer, always open, floating over the right edge. The toggle
+   * taught people to lose it; the file's conversation should be as present
+   * as the file.
+   */
+  var viewerPrefs = { panel: false, tab: 'details', filter: 'all', comments: true };
 
   /*
    * `count` names the key in the details payload's `counts` block that this
@@ -1617,8 +1623,7 @@
               '<div class="tma-portal-viewer__stage" data-lb-stage>' + lightboxBody(f) + '</div>' +
               '<div class="tma-portal-viewer__foot" data-lb-foot>' + footHtml(f) + '</div>' +
             '</div>' +
-            '<aside class="tma-portal-viewer__comments" data-lb-comments-panel' +
-              (viewerPrefs.comments ? '' : ' hidden') + ' aria-label="Comments">' +
+            '<aside class="tma-portal-viewer__comments" data-lb-comments-panel aria-label="Comments">' +
               '<div class="tma-portal-viewer__comments-body" data-lb-comments-body></div>' +
             '</aside>' +
             '<aside class="tma-portal-viewer__panel" data-lb-panel' + (viewerPrefs.panel ? '' : ' hidden') + '>' +
@@ -1641,7 +1646,8 @@
       }
 
       paintPanel();
-      if (viewerPrefs.comments) paintCommentsPanel();
+      paintCommentsPanel();
+      bindAnchorSelect();
       mountPdf(f);
       subscribeToFile(f);
       startPresence(f);
@@ -1855,8 +1861,6 @@
       if (perm(f, 'preview')) html += toolBtnHtml('Printer', 'print', 'Print');
       if (perm(f, 'share')) html += toolBtnHtml('ShareNetwork', 'share', 'Share');
       if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
-      html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
-        { active: viewerPrefs.comments });
       html += toolBtnHtml('Clipboard', 'approvals', 'Reviews and approvals',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'approvals' });
       html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
@@ -2237,6 +2241,158 @@
     function repaintComments(e) {
       var slot = lb.querySelector('[data-lb-comments]');
       if (slot && e.comments) slot.innerHTML = commentsHtml(e.comments, e);
+      paintComposerAnchor(e);
+    }
+
+    // The composer's little "on a highlighted area" chip, redrawn without
+    // rebuilding the box the reader may be mid-sentence in.
+    function paintComposerAnchor(e) {
+      var composer = lb.querySelector('[data-lb-composer]');
+      if (!composer) return;
+      var chip = composer.querySelector('[data-lb-anchor-chip]');
+      if (chip) chip.remove();
+
+      if (!e.pendingAnchor) return;
+
+      var el = document.createElement('div');
+      el.className = 'tma-portal-viewer__anchor-chip';
+      el.setAttribute('data-lb-anchor-chip', '');
+      el.innerHTML = 'On a highlighted area' + (e.pendingAnchor.page > 1 ? ' · page ' + e.pendingAnchor.page : '') +
+        '<button type="button" data-lb-anchor-clear aria-label="Remove the highlight">×</button>';
+      composer.insertBefore(el, composer.firstChild.nextSibling);
+    }
+
+    /* ── highlight-to-comment ─────────────────────────
+     *
+     * Drag on the document to name the part a comment is about. The
+     * rectangle is stored as fractions of the rendered media, so the same
+     * anchor lands on the same words at any zoom on any screen; a click on a
+     * thread's "Highlighted area" tag draws it back.
+     */
+
+    function anchorMedia() {
+      var stage = lb.querySelector('[data-lb-stage]');
+
+      // Whatever the stage is showing: a PDF page's canvas, a plain image
+      // (which wears __img), or the audio/video media element.
+      return stage && stage.querySelector('canvas, img.tma-portal-viewer__img, .tma-portal-viewer__media');
+    }
+
+    function clearAnchorOverlay() {
+      var box = lb && lb.querySelector('[data-lb-anchor-box]');
+      if (box) box.remove();
+    }
+
+    function showAnchorOverlay(anchor) {
+      clearAnchorOverlay();
+      if (!anchor) return;
+
+      var e = entry(current());
+
+      // Another page of the PDF: go there first; the overlay would otherwise
+      // point at the right coordinates on the wrong words.
+      if (e.pdfDoc && anchor.page && anchor.page !== e.pdfPage) {
+        renderPdfPage(current(), anchor.page);
+        setTimeout(function () { showAnchorOverlay(anchor); }, 350);
+        return;
+      }
+
+      var media = anchorMedia();
+      var stage = lb.querySelector('[data-lb-stage]');
+      if (!media || !stage) return;
+
+      var mr = media.getBoundingClientRect();
+      var sr = stage.getBoundingClientRect();
+      var box = document.createElement('div');
+      box.className = 'tma-portal-viewer__anchor-box';
+      box.setAttribute('data-lb-anchor-box', '');
+      box.style.left = (mr.left - sr.left + anchor.x * mr.width) + 'px';
+      box.style.top = (mr.top - sr.top + anchor.y * mr.height) + 'px';
+      box.style.width = (anchor.w * mr.width) + 'px';
+      box.style.height = (anchor.h * mr.height) + 'px';
+      stage.appendChild(box);
+
+      // It fades rather than staying: the overlay answers "where", and once
+      // read it must not sit on the document the reader is trying to see.
+      setTimeout(clearAnchorOverlay, 2600);
+    }
+
+    function bindAnchorSelect() {
+      var stage = lb.querySelector('[data-lb-stage]');
+      if (!stage || stage._anchorBound) return;
+      stage._anchorBound = true;
+
+      var start = null;
+      var box = null;
+
+      stage.addEventListener('mousedown', function (ev) {
+        var media = anchorMedia();
+        if (!media || ev.button !== 0) return;
+        if (!media.contains(ev.target) && ev.target !== media) return;
+
+        var mr = media.getBoundingClientRect();
+        start = { x: ev.clientX, y: ev.clientY, mr: mr };
+        box = null;
+        // Without this an <img> begins the browser's own picture-drag on the
+        // first moved pixel, and the highlight never gets a single mousemove.
+        ev.preventDefault();
+      });
+
+      stage.addEventListener('mousemove', function (ev) {
+        if (!start) return;
+
+        var dx = Math.abs(ev.clientX - start.x);
+        var dy = Math.abs(ev.clientY - start.y);
+        // A wobble is a click; only a real drag starts a highlight.
+        if (!box && dx < 6 && dy < 6) return;
+
+        if (!box) {
+          box = document.createElement('div');
+          box.className = 'tma-portal-viewer__anchor-box is-drawing';
+          box.setAttribute('data-lb-anchor-box', '');
+          stage.appendChild(box);
+        }
+
+        var sr = stage.getBoundingClientRect();
+        box.style.left = (Math.min(start.x, ev.clientX) - sr.left) + 'px';
+        box.style.top = (Math.min(start.y, ev.clientY) - sr.top) + 'px';
+        box.style.width = dx + 'px';
+        box.style.height = dy + 'px';
+        ev.preventDefault();
+      });
+
+      window.addEventListener('mouseup', function (ev) {
+        if (!start) return;
+        var began = start;
+        start = null;
+
+        if (!box) return;
+        var drawn = box;
+        box = null;
+
+        var mr = began.mr;
+        var x1 = Math.max(mr.left, Math.min(began.x, ev.clientX));
+        var y1 = Math.max(mr.top, Math.min(began.y, ev.clientY));
+        var x2 = Math.min(mr.right, Math.max(began.x, ev.clientX));
+        var y2 = Math.min(mr.bottom, Math.max(began.y, ev.clientY));
+        drawn.remove();
+
+        if (x2 - x1 < 12 || y2 - y1 < 12) return;
+
+        var en = entry(current());
+        en.pendingAnchor = {
+          page: en.pdfDoc ? en.pdfPage : 1,
+          x: (x1 - mr.left) / mr.width,
+          y: (y1 - mr.top) / mr.height,
+          w: (x2 - x1) / mr.width,
+          h: (y2 - y1) / mr.height,
+        };
+        paintComposerAnchor(en);
+        showAnchorOverlay(en.pendingAnchor);
+
+        var input = lb.querySelector('[data-lb-input]');
+        if (input) input.focus();
+      });
     }
 
     /**
@@ -2425,7 +2581,9 @@
     function commentsHtml(data, e) {
       var threads = (data && data.threads) || [];
       if (!threads.length) {
-        return '<p class="tma-portal-viewer__empty">No comments yet. Start the discussion below.</p>';
+        // Nothing — an empty feed is the composer waiting, and a sentence
+        // announcing the emptiness only pushes the box people came to type in.
+        return '';
       }
 
       // Latest on top; "earlier" loads older threads underneath.
@@ -2475,18 +2633,40 @@
        * happens to a *thread*, so offering it against every reply was both
        * repetition and a small lie about what the button does.
        */
-      var actions = '';
+      /*
+       * The verbs live in the bubble's top corner and show on hover: a tick
+       * to mark the thread resolved, and a ⋯ holding Edit and Delete — the
+       * two that change what is already written earn a step of intent. Reply
+       * keeps a visible line of its own below; it is the one verb a reader
+       * came to use.
+       */
+      var hover = '';
       if (!editing) {
-        if (opts.root && opts.canReply && e.replyingTo !== opts.threadId) {
-          actions += '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open"' +
-            ' data-lb-replyopen="' + esc(opts.threadId) + '">Reply</button>';
-        }
         if (opts.root && c.can.resolve) {
-          actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-resolve="' + esc(c.id) + '"' +
-            ' data-resolved="' + c.resolved + '">' + (c.resolved ? 'Reopen' : 'Resolve') + '</button>';
+          hover += '<button type="button" class="tma-portal-viewer__hover-act" data-lb-resolve="' + esc(c.id) + '"' +
+            ' data-resolved="' + c.resolved + '" title="' + (c.resolved ? 'Reopen' : 'Mark as resolved') + '"' +
+            ' aria-label="' + (c.resolved ? 'Reopen' : 'Mark as resolved') + '">' +
+            '<img src="images/icons/phosphor/' + (c.resolved ? 'ArrowCounterClockwise' : 'Check') + '.svg" alt="" width="14" height="14"></button>';
         }
-        if (c.can.edit) actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-edit="' + esc(c.id) + '">Edit</button>';
-        if (c.can.delete) actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-del="' + esc(c.id) + '">Delete</button>';
+        if (c.can.edit || c.can.delete) {
+          hover += '<button type="button" class="tma-portal-viewer__hover-act" data-lb-commentmenu="' + esc(c.id) + '"' +
+            ' title="More" aria-label="More options" aria-haspopup="menu">' +
+            '<img src="images/icons/phosphor/DotsThree.svg" alt="" width="14" height="14"></button>' +
+            '<div class="tma-portal-viewer__comment-menu" data-lb-commentmenu-pop="' + esc(c.id) + '" hidden>' +
+            (c.can.edit
+              ? '<button type="button" data-lb-edit="' + esc(c.id) + '"><img src="images/icons/phosphor/PencilSimple.svg" alt="" width="14" height="14">Edit</button>'
+              : '') +
+            (c.can.delete
+              ? '<button type="button" data-lb-del="' + esc(c.id) + '"><img src="images/icons/phosphor/Trash.svg" alt="" width="14" height="14">Delete</button>'
+              : '') +
+            '</div>';
+        }
+      }
+
+      var actions = '';
+      if (!editing && opts.root && opts.canReply && e.replyingTo !== opts.threadId) {
+        actions += '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open"' +
+          ' data-lb-replyopen="' + esc(opts.threadId) + '">Reply</button>';
       }
 
       var body = editing
@@ -2499,12 +2679,15 @@
           '</div>'
         : '<p class="tma-portal-viewer__comment-body">' + decorateMentions(c) + '</p>';
 
+      /*
+       * The face and the name head the bubble; the message runs the full
+       * width UNDER them, flush with the face's own left edge — the head
+       * identifies, the body speaks, and neither is squeezed into the
+       * other's column.
+       */
       return '<div class="tma-portal-viewer__comment" data-comment="' + esc(c.id) + '">' +
-        '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(c.author)) + '" alt="" width="24" height="24">' +
-        '<div class="tma-portal-viewer__comment-main">' +
-          // The face on the left, the name beside it, and the moment it was
-          // said UNDER the name — who spoke and when are one fact, read top
-          // to bottom, not a line the eye has to parse across.
+        '<div class="tma-portal-viewer__comment-top">' +
+          '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(c.author)) + '" alt="" width="24" height="24">' +
           '<div class="tma-portal-viewer__comment-head">' +
             '<span class="tma-portal-viewer__comment-name"><strong>' + esc(who) + '</strong>' +
             (c.editedAt ? '<span class="tma-portal-viewer__comment-flag">edited</span>' : '') +
@@ -2513,9 +2696,15 @@
             '</span>' +
             '<time datetime="' + esc(c.createdAt) + '">' + esc(fmtDateTime(c.createdAt)) + '</time>' +
           '</div>' +
-          body +
-          (actions ? '<div class="tma-portal-viewer__comment-actions">' + actions + '</div>' : '') +
+          (hover ? '<div class="tma-portal-viewer__hover-acts">' + hover + '</div>' : '') +
         '</div>' +
+        (c.anchor
+          ? '<button type="button" class="tma-portal-viewer__anchor-tag" data-lb-anchor-show="' + esc(c.id) + '"' +
+            ' data-anchor="' + esc(JSON.stringify(c.anchor)) + '">' +
+            'Highlighted area' + (c.anchor.page > 1 ? ' · page ' + c.anchor.page : '') + '</button>'
+          : '') +
+        body +
+        (actions ? '<div class="tma-portal-viewer__comment-actions">' + actions + '</div>' : '') +
       '</div>';
     }
 
@@ -2556,7 +2745,21 @@
         return '<p class="tma-portal-viewer__empty">You can view this discussion but not add to it.</p>';
       }
 
+      var me = (window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get()) || {};
+      var pending = e.pendingAnchor;
+
       return '<div class="tma-portal-viewer__composer" data-lb-composer>' +
+        // The author's own face and name over the box, so the composer reads
+        // as "you, about to speak" rather than an anonymous form.
+        '<div class="tma-portal-viewer__composer-who">' +
+          '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor({ name: me.name, avatar: me.avatarUrl || me.avatar })) + '" alt="" width="24" height="24">' +
+          '<strong>' + esc(me.name || 'You') + '</strong>' +
+        '</div>' +
+        (pending
+          ? '<div class="tma-portal-viewer__anchor-chip" data-lb-anchor-chip>' +
+            'On a highlighted area' + (pending.page > 1 ? ' · page ' + pending.page : '') +
+            '<button type="button" data-lb-anchor-clear aria-label="Remove the highlight">×</button></div>'
+          : '') +
         // "Use @ to mention someone" was a second sentence teaching a
         // convention every messaging surface in the portal already uses, sat
         // in front of an empty box on every single file.
@@ -2594,19 +2797,24 @@
         return body.indexOf(m.name) !== -1;
       });
 
+      var anchor = e.pendingAnchor || null;
+
       input.value = '';
       e.draft = '';
       e.pendingMentions = [];
+      e.pendingAnchor = null;
+      clearAnchorOverlay();
 
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
         method: 'POST',
-        json: { body: body, mentions: mentions.map(function (m) { return m.id; }) },
+        json: { body: body, mentions: mentions.map(function (m) { return m.id; }), anchor: anchor },
       })
         .then(function () { e.comments = null; loadComments(f); })
         .catch(function (err) {
           // Give the words back rather than losing them to a failed request.
           input.value = body;
           e.draft = body;
+          e.pendingAnchor = anchor;
           ui().toast((err && err.message) || 'Could not post that comment');
         });
     }
@@ -3827,56 +4035,38 @@
       mountPdf(f);
     }
 
-    /* ── PDF via pdf.js (works on Mac/Safari where iframe PDF often fails) ── */
+    /* ── PDF via pdf.js — continuous scroll, floating toolbar ── */
 
     var PDF_ZOOM_STEP = 1.25;
     var PDF_ZOOM_MIN = 0.25;
     var PDF_ZOOM_MAX = 4;
 
-    function pdfScrollEl(host) {
-      return host.querySelector('[data-lb-pdf-scroll]') || host;
-    }
-
-    function pdfBases(page, scrollEl) {
-      var pad = 24;
+    /* Scale for a given mode relative to the scroll container width/height. */
+    function pdfEffectiveScale(e, scrollEl, vp1) {
+      var pad = 32;
       var w = Math.max(120, scrollEl.clientWidth - pad);
       var h = Math.max(120, scrollEl.clientHeight - pad);
-      var vp1 = page.getViewport({ scale: 1 });
-      return {
-        fitWidth: w / vp1.width,
-        fitPage: Math.min(w / vp1.width, h / vp1.height),
-      };
+      var fitWidth = w / vp1.width;
+      var fitPage  = Math.min(fitWidth, h / vp1.height);
+      if (e.pdfZoomMode === 'page')   return fitPage;
+      if (e.pdfZoomMode === 'custom') return fitPage * e.pdfZoomScale;
+      return fitPage; // default / 'page'
     }
 
-    function pdfScaleFor(e, bases) {
-      if (e.pdfZoomMode === 'page') return bases.fitPage;
-      if (e.pdfZoomMode === 'width') return bases.fitWidth;
-      return bases.fitWidth * e.pdfZoomScale;
-    }
-
-    function updatePdfToolbar(f, e, pdf, pageNum, bases, effectiveScale) {
+    function pdfUpdateToolbar(f) {
+      var e = entry(f);
       var host = lb.querySelector('[data-lb-pdf]');
-      if (!host) return;
+      if (!host || !e.pdfDoc) return;
       var toolbar = host.querySelector('[data-lb-pdf-toolbar]');
       if (toolbar) toolbar.hidden = false;
 
-      var zoomLabel = host.querySelector('[data-lb-pdf-zoom-label]');
-      if (zoomLabel && bases) {
-        zoomLabel.textContent = Math.round((effectiveScale / bases.fitWidth) * 100) + '%';
-      }
-
       var pageLabel = host.querySelector('[data-lb-pdf-page-label]');
-      if (pageLabel && pdf) pageLabel.textContent = pageNum + ' / ' + pdf.numPages;
+      if (pageLabel) pageLabel.textContent = e.pdfPage + ' / ' + e.pdfDoc.numPages;
 
-      var prev = host.querySelector('[data-lb-pdf-prev]');
-      var next = host.querySelector('[data-lb-pdf-next]');
-      if (prev) {
-        prev.hidden = pdf.numPages < 2;
-        prev.disabled = pageNum <= 1;
-      }
-      if (next) {
-        next.hidden = pdf.numPages < 2;
-        next.disabled = pageNum >= pdf.numPages;
+      var zoomLabel = host.querySelector('[data-lb-pdf-zoom-label]');
+      if (zoomLabel) {
+        var pct = e.pdfZoomMode === 'custom' ? Math.round(e.pdfZoomScale * 100) : 'Fit';
+        zoomLabel.textContent = pct + (e.pdfZoomMode === 'custom' ? '%' : '');
       }
     }
 
@@ -3884,11 +4074,12 @@
       var e = entry(f);
       if (!e.pdfDoc) return;
       if (e.pdfZoomMode !== 'custom') {
+        // Leaving fit-page: seed the scale at 1× (fit-page), then step up.
         e.pdfZoomMode = 'custom';
         e.pdfZoomScale = 1;
       }
       e.pdfZoomScale = Math.min(PDF_ZOOM_MAX, e.pdfZoomScale * PDF_ZOOM_STEP);
-      renderPdfPage(f, e.pdfPage);
+      renderAllPdfPages(f);
     }
 
     function pdfZoomOut(f) {
@@ -3899,21 +4090,73 @@
         e.pdfZoomScale = 1;
       }
       e.pdfZoomScale = Math.max(PDF_ZOOM_MIN, e.pdfZoomScale / PDF_ZOOM_STEP);
-      renderPdfPage(f, e.pdfPage);
+      renderAllPdfPages(f);
     }
 
     function pdfFitWidth(f) {
       var e = entry(f);
       e.pdfZoomMode = 'width';
       e.pdfZoomScale = 1;
-      renderPdfPage(f, e.pdfPage);
+      renderAllPdfPages(f);
     }
 
     function pdfFitPage(f) {
       var e = entry(f);
       e.pdfZoomMode = 'page';
       e.pdfZoomScale = 1;
-      renderPdfPage(f, e.pdfPage);
+      renderAllPdfPages(f);
+    }
+
+    /* Render all pages into the scroll container as a vertical stack. */
+    function renderAllPdfPages(f) {
+      var e = entry(f);
+      var pdf = e.pdfDoc;
+      var host = lb.querySelector('[data-lb-pdf]');
+      var scroll = host && host.querySelector('[data-lb-pdf-scroll]');
+      if (!pdf || !scroll) return;
+
+      // Measure scale from page 1's viewport.
+      pdf.getPage(1).then(function (firstPage) {
+        if (current().id !== f.id) return;
+        var vp1 = firstPage.getViewport({ scale: 1 });
+        var scale = pdfEffectiveScale(e, scroll, vp1);
+        var dpr = window.devicePixelRatio || 1;
+
+        // Remove old canvases, rebuild.
+        scroll.innerHTML = '';
+
+        for (var p = 1; p <= pdf.numPages; p++) {
+          (function (pageNum) {
+            var canvas = document.createElement('canvas');
+            canvas.setAttribute('data-lb-pdf-canvas', pageNum);
+            canvas.style.display = 'block';
+            canvas.style.margin = '0 auto';
+            canvas.style.borderRadius = '0';
+            scroll.appendChild(canvas);
+
+            pdf.getPage(pageNum).then(function (page) {
+              if (current().id !== f.id) return;
+              var viewport = page.getViewport({ scale: scale * dpr });
+              canvas.width = Math.floor(viewport.width);
+              canvas.height = Math.floor(viewport.height);
+              canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
+              canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
+              if (canvas._pdfTask) canvas._pdfTask.cancel();
+              var task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
+              canvas._pdfTask = task;
+              return task.promise.then(
+                function () { canvas._pdfTask = null; },
+                function (err) {
+                  canvas._pdfTask = null;
+                  if (err && err.name !== 'RenderingCancelledException') throw err;
+                }
+              );
+            }).catch(function () { /* best-effort */ });
+          })(p);
+        }
+
+        pdfUpdateToolbar(f);
+      }).catch(function () {});
     }
 
     function mountPdf(f) {
@@ -3928,9 +4171,7 @@
         ? Promise.resolve(e.pdfDoc)
         : loadPdfDocument(f.previewUrl).then(function (pdf) {
             if (current().id !== f.id) {
-              if (pdf && pdf.destroy) {
-                try { pdf.destroy(); } catch (err) { /* ignore */ }
-              }
+              if (pdf && pdf.destroy) { try { pdf.destroy(); } catch (err) { /* ignore */ } }
               return null;
             }
             if (e.pdfDoc && e.pdfDoc.destroy) {
@@ -3938,8 +4179,8 @@
             }
             e.pdfDoc = pdf;
             e.pdfUrl = f.previewUrl;
-            if (!e.pdfPage || e.pdfPage < 1) e.pdfPage = 1;
-            e.pdfZoomMode = 'width';
+            e.pdfPage = 1;
+            e.pdfZoomMode = 'page'; // always open fit-page
             e.pdfZoomScale = 1;
             return pdf;
           });
@@ -3948,22 +4189,19 @@
         .then(function (pdf) {
           if (!pdf || current().id !== f.id) return;
           if (loading) loading.hidden = true;
-          if (e.pdfPage > pdf.numPages) e.pdfPage = 1;
           paintPdfThumbs(f, pdf);
-          renderPdfPage(f, e.pdfPage);
-          // First paint can run before the scroll area has its height — one
-          // frame later the fit-width / fit-page math has real dimensions.
+          // Two-frame wait: first frame lets the scroll container get its height
+          // from flexbox, second ensures the layout has settled.
           requestAnimationFrame(function () {
-            if (current().id === f.id && entry(f).pdfDoc) renderPdfPage(f, e.pdfPage);
+            requestAnimationFrame(function () {
+              if (current().id === f.id && entry(f).pdfDoc) renderAllPdfPages(f);
+            });
           });
         })
         .catch(function (err) {
           if (current().id !== f.id) return;
           if (loading) {
             loading.hidden = false;
-            // A corrupt upload and a failed fetch look identical from here
-            // unless pdf.js's parse error is surfaced — and "could not load"
-            // sends people chasing the network when the file was never a PDF.
             loading.textContent = err && err.name === 'InvalidPDFException'
               ? 'This file is not a valid PDF.'
               : 'Could not load this PDF.';
@@ -4004,48 +4242,26 @@
       }
     }
 
+    /* Scroll to a page in the continuous view — used by left-rail clicks. */
     function renderPdfPage(f, pageNum) {
       var e = entry(f);
       var pdf = e.pdfDoc;
+      if (!pdf) return;
       var host = lb.querySelector('[data-lb-pdf]');
-      var canvas = host && host.querySelector('[data-lb-pdf-canvas]');
-      if (!pdf || !canvas || !host) return Promise.resolve();
+      var scroll = host && host.querySelector('[data-lb-pdf-scroll]');
+      if (!scroll) return;
 
       e.pdfPage = pageNum;
-
       lb.querySelectorAll('[data-lb-pdf-page]').forEach(function (btn) {
         var n = parseInt(btn.getAttribute('data-lb-pdf-page'), 10);
         btn.classList.toggle('is-current', n === pageNum);
         btn.setAttribute('aria-current', n === pageNum ? 'true' : 'false');
       });
 
-      var foot = lb.querySelector('[data-lb-foot]');
-      if (foot) foot.innerHTML = footHtml(f);
-
-      return pdf.getPage(pageNum).then(function (page) {
-        if (current().id !== f.id) return;
-        var scrollEl = pdfScrollEl(host);
-        var bases = pdfBases(page, scrollEl);
-        var scale = pdfScaleFor(e, bases);
-        var dpr = window.devicePixelRatio || 1;
-        var viewport = page.getViewport({ scale: scale * dpr });
-        canvas.hidden = false;
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
-        canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
-        updatePdfToolbar(f, e, pdf, pageNum, bases, scale);
-        if (canvas._pdfTask) canvas._pdfTask.cancel();
-        var task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
-        canvas._pdfTask = task;
-        return task.promise.then(
-          function () { canvas._pdfTask = null; },
-          function (err) {
-            canvas._pdfTask = null;
-            if (!err || err.name !== 'RenderingCancelledException') throw err;
-          }
-        );
-      }).catch(function () { /* cancelled or gone */ });
+      // Scroll the canvas for that page into view.
+      var canvas = scroll.querySelector('[data-lb-pdf-canvas="' + pageNum + '"]');
+      if (canvas) canvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pdfUpdateToolbar(f);
     }
 
     /** @returns {boolean} true when the key was consumed as a PDF page turn */
@@ -4082,12 +4298,8 @@
         renderPdfPage(current(), parseInt(pdfPageBtn.getAttribute('data-lb-pdf-page'), 10) || 1);
         return;
       }
-      if (e.target.closest('[data-lb-pdf-prev]')) { pdfNav(-1); return; }
-      if (e.target.closest('[data-lb-pdf-next]')) { pdfNav(1); return; }
       if (e.target.closest('[data-lb-pdf-zoom-in]')) { pdfZoomIn(current()); return; }
       if (e.target.closest('[data-lb-pdf-zoom-out]')) { pdfZoomOut(current()); return; }
-      if (e.target.closest('[data-lb-pdf-fit-width]')) { pdfFitWidth(current()); return; }
-      if (e.target.closest('[data-lb-pdf-fit-page]')) { pdfFitPage(current()); return; }
 
       var tab = e.target.closest('[data-lb-tab]');
       if (tab) { viewerPrefs.tab = tab.getAttribute('data-lb-tab'); paintPanel(); return; }
@@ -4143,6 +4355,31 @@
         return;
       }
       if (e.target.closest('[data-lb-emoji]')) { openEmojiPicker(); return; }
+
+      // The bubble's ⋯ — open its little menu; any other click closes it.
+      var menuBtn = e.target.closest('[data-lb-commentmenu]');
+      if (menuBtn) {
+        var pop = lb.querySelector('[data-lb-commentmenu-pop="' + menuBtn.getAttribute('data-lb-commentmenu') + '"]');
+        lb.querySelectorAll('[data-lb-commentmenu-pop]').forEach(function (m) { if (m !== pop) m.hidden = true; });
+        if (pop) pop.hidden = !pop.hidden;
+        return;
+      }
+      if (!e.target.closest('[data-lb-commentmenu-pop]')) {
+        lb.querySelectorAll('[data-lb-commentmenu-pop]').forEach(function (m) { m.hidden = true; });
+      }
+
+      // A highlighted-area tag: show the rectangle it names on the page.
+      var anchorShow = e.target.closest('[data-lb-anchor-show]');
+      if (anchorShow) {
+        try { showAnchorOverlay(JSON.parse(anchorShow.getAttribute('data-anchor'))); } catch (err) {}
+        return;
+      }
+      if (e.target.closest('[data-lb-anchor-clear]')) {
+        en.pendingAnchor = null;
+        clearAnchorOverlay();
+        repaintComments(en);
+        return;
+      }
 
       var replyOpen = e.target.closest('[data-lb-replyopen]');
       if (replyOpen) {
@@ -4209,15 +4446,13 @@
           if (vhead) vhead.outerHTML = viewerHead(current());
           paintPanel();
           return;
-        case 'comments':
-          // Details chips always open the feed; the toolbar button toggles it.
-          if (act.classList.contains('tma-portal-viewer__count')) {
-            viewerPrefs.comments = true;
-          } else {
-            viewerPrefs.comments = !viewerPrefs.comments;
-          }
-          paintCommentsPanel();
+        case 'comments': {
+          // The feed is always open, so the chip's job is only to bring it
+          // into view and put the cursor where the answer starts.
+          var feedInput = lb.querySelector('[data-lb-input]');
+          if (feedInput) feedInput.focus();
           return;
+        }
         case 'more': return openViewerMenu(act, f);
       }
     });
@@ -4275,7 +4510,7 @@
       pdfResizeTimer = setTimeout(function () {
         var cf = current();
         if (!cf || cf.category !== 'pdf' || !entry(cf).pdfDoc) return;
-        renderPdfPage(cf, entry(cf).pdfPage);
+        renderAllPdfPages(cf);
       }, 150);
     }
     window.addEventListener('resize', onPdfResize);
@@ -4379,10 +4614,12 @@
     var d = new Date(iso);
     if (isNaN(d)) return '';
 
-    var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    // "Aug 18 at 3:07 AM" — the date and the moment read as one phrase.
+    var day = { month: 'short', day: 'numeric' };
+    if (d.getFullYear() !== new Date().getFullYear()) day.year = 'numeric';
 
-    return d.toLocaleString(undefined, opts);
+    return d.toLocaleDateString(undefined, day) + ' at '
+      + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
   function lightboxBody(f) {
@@ -4394,28 +4631,17 @@
           return '<img class="tma-portal-viewer__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
         case 'pdf':
           return '<div class="tma-portal-viewer__pdf" data-lb-pdf>' +
-            '<div class="tma-portal-viewer__pdf-scroll" data-lb-pdf-scroll>' +
-              '<canvas class="tma-portal-viewer__pdf-canvas" data-lb-pdf-canvas hidden></canvas>' +
-            '</div>' +
+            '<div class="tma-portal-viewer__pdf-scroll" data-lb-pdf-scroll></div>' +
             '<div class="tma-portal-viewer__pdf-toolbar" data-lb-pdf-toolbar hidden role="toolbar" aria-label="PDF controls">' +
               '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-zoom-out aria-label="Zoom out">' +
-                '<img src="images/icons/phosphor/MagnifyingGlassMinus.svg" alt="" width="18" height="18">' +
+                '<img src="images/icons/phosphor/MagnifyingGlassMinus.svg" alt="" width="16" height="16">' +
               '</button>' +
-              '<span class="tma-portal-viewer__pdf-zoom-label" data-lb-pdf-zoom-label>100%</span>' +
+              '<span class="tma-portal-viewer__pdf-zoom-label" data-lb-pdf-zoom-label>Fit</span>' +
               '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-zoom-in aria-label="Zoom in">' +
-                '<img src="images/icons/phosphor/MagnifyingGlassPlus.svg" alt="" width="18" height="18">' +
+                '<img src="images/icons/phosphor/MagnifyingGlassPlus.svg" alt="" width="16" height="16">' +
               '</button>' +
               '<span class="tma-portal-viewer__pdf-tool-sep" aria-hidden="true"></span>' +
-              '<button type="button" class="tma-portal-viewer__pdf-tool tma-portal-viewer__pdf-tool--text" data-lb-pdf-fit-width>Fit width</button>' +
-              '<button type="button" class="tma-portal-viewer__pdf-tool tma-portal-viewer__pdf-tool--text" data-lb-pdf-fit-page>Fit page</button>' +
-              '<span class="tma-portal-viewer__pdf-tool-sep" aria-hidden="true"></span>' +
-              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-prev hidden aria-label="Previous page">' +
-                '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="18" height="18">' +
-              '</button>' +
-              '<span class="tma-portal-viewer__pdf-page-label" data-lb-pdf-page-label>1 / 1</span>' +
-              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-next hidden aria-label="Next page">' +
-                '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="18" height="18">' +
-              '</button>' +
+              '<span class="tma-portal-viewer__pdf-page-label" data-lb-pdf-page-label></span>' +
             '</div>' +
             '<p class="tma-portal-viewer__pdf-loading" data-lb-pdf-loading>Loading PDF…</p>' +
           '</div>';

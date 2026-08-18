@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
-    'uuid', 'file_id', 'author_id', 'parent_id', 'root_id', 'body',
+    'uuid', 'file_id', 'author_id', 'parent_id', 'root_id', 'body', 'anchor',
     'edited_at', 'resolved_at', 'resolved_by', 'deleted_by',
 ])]
 class FileComment extends Model
@@ -19,6 +19,7 @@ class FileComment extends Model
     protected function casts(): array
     {
         return [
+            'anchor' => 'array',
             'edited_at' => 'datetime',
             'resolved_at' => 'datetime',
             'deleted_at' => 'datetime',

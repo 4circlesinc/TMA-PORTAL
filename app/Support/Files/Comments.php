@@ -50,10 +50,11 @@ class Comments
         string $body,
         ?FileComment $parent = null,
         array $mentionIds = [],
+        ?array $anchor = null,
     ): FileComment {
         $body = trim($body);
 
-        $comment = DB::transaction(function () use ($file, $author, $body, $parent, $mentionIds) {
+        $comment = DB::transaction(function () use ($file, $author, $body, $parent, $mentionIds, $anchor) {
             $comment = FileComment::create([
                 'uuid' => (string) Str::uuid(),
                 'file_id' => $file->id,
@@ -63,6 +64,10 @@ class Comments
                 // the same root, so a thread never becomes an endless indent.
                 'root_id' => $parent ? ($parent->root_id ?? $parent->id) : null,
                 'body' => $body,
+                // Only a thread points at the document — a reply is about the
+                // conversation, and it inherits its thread's anchor by being
+                // in it.
+                'anchor' => $parent ? null : $anchor,
             ]);
 
             // A top-level comment is its own root, which makes "load one whole

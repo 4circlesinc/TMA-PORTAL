@@ -57,6 +57,18 @@ class FileCommentController extends BaseFilesController
             'parent' => ['nullable', 'string', 'max:64'],
             'mentions' => ['nullable', 'array', 'max:50'],
             'mentions.*' => ['integer', 'min:1'],
+            /*
+             * The highlighted area this comment is about, as fractions of the
+             * rendered page — resolution-independent, so the same anchor
+             * lands on the same words on any screen. Bounded to the page so a
+             * hand-built request cannot park a marker off the document.
+             */
+            'anchor' => ['nullable', 'array:page,x,y,w,h'],
+            'anchor.page' => ['required_with:anchor', 'integer', 'min:1', 'max:10000'],
+            'anchor.x' => ['required_with:anchor', 'numeric', 'min:0', 'max:1'],
+            'anchor.y' => ['required_with:anchor', 'numeric', 'min:0', 'max:1'],
+            'anchor.w' => ['required_with:anchor', 'numeric', 'min:0', 'max:1'],
+            'anchor.h' => ['required_with:anchor', 'numeric', 'min:0', 'max:1'],
         ]);
 
         abort_if(trim($data['body']) === '', 422, 'A comment can’t be empty.');
@@ -66,7 +78,7 @@ class FileCommentController extends BaseFilesController
             $parent = $this->findComment($file, $data['parent']);
         }
 
-        $comment = Comments::create($file, $user, $data['body'], $parent, $data['mentions'] ?? []);
+        $comment = Comments::create($file, $user, $data['body'], $parent, $data['mentions'] ?? [], $data['anchor'] ?? null);
 
         return response()->json(
             CommentPresenter::comment($comment->fresh()->load('author'), $user, $file) + ['replies' => []],

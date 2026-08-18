@@ -457,50 +457,59 @@
   display: flex; flex-direction: column;
 }
 .tma-portal-viewer__pdf-scroll {
-  flex: 1; min-height: 0; overflow: auto;
-  display: flex; justify-content: center; align-items: flex-start;
-  padding: var(--space-16);
+  flex: 1; min-height: 0;
+  overflow-y: scroll; overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-12); padding: var(--space-16) var(--space-16) var(--space-60);
 }
+.tma-portal-viewer__pdf-scroll::-webkit-scrollbar { display: none; }
 .tma-portal-viewer__pdf-loading {
   position: absolute; inset: 0; z-index: 1;
   display: flex; align-items: center; justify-content: center;
   margin: 0; color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
   pointer-events: none;
 }
-.tma-portal-viewer__pdf-canvas {
+/* Each page canvas — no border-radius, just a subtle shadow */
+[data-lb-pdf-canvas] {
   display: block; flex: 0 0 auto;
-  border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  border-radius: 0 !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
   background: #fff;
 }
+/* Floating compact toolbar — centred at the bottom of the viewer */
 .tma-portal-viewer__pdf-toolbar {
-  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: var(--space-4);
-  margin: 0 var(--space-16) var(--space-12); padding: var(--space-6) var(--space-10);
-  border-radius: var(--radius-12);
-  background: rgba(0, 0, 0, 0.58); backdrop-filter: blur(10px);
+  position: absolute; bottom: var(--space-16); left: 50%; transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-8);
+  background: rgba(20, 20, 20, 0.72); backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
 }
 .tma-portal-viewer__pdf-tool {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 34px; height: 34px; padding: 0 var(--space-6);
-  border: 0; border-radius: var(--radius-8); background: transparent;
+  width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: var(--radius-6); background: transparent;
   color: rgba(255, 255, 255, 0.9); cursor: pointer;
-  font-size: var(--text-size-12); font-weight: 600;
 }
-.tma-portal-viewer__pdf-tool--text { padding: 0 var(--space-10); }
 .tma-portal-viewer__pdf-tool:hover { background: rgba(255, 255, 255, 0.14); }
 .tma-portal-viewer__pdf-tool[disabled] { opacity: 0.28; cursor: default; }
-.tma-portal-viewer__pdf-tool img { filter: brightness(0) invert(1); opacity: 0.9; }
+.tma-portal-viewer__pdf-tool img { filter: brightness(0) invert(1); opacity: 0.9; pointer-events: none; }
 .tma-portal-viewer__pdf-tool-sep {
-  width: 1px; height: 20px; margin: 0 var(--space-2);
-  background: rgba(255, 255, 255, 0.22);
+  width: 1px; height: 18px; margin: 0 var(--space-2);
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
 }
 .tma-portal-viewer__pdf-zoom-label,
 .tma-portal-viewer__pdf-page-label {
-  min-width: 3.5rem; text-align: center;
-  font-size: var(--text-size-12); font-weight: 600; color: rgba(255, 255, 255, 0.88);
+  min-width: 2.6rem; text-align: center;
+  font-size: var(--text-size-11); font-weight: 600; color: rgba(255, 255, 255, 0.85);
   user-select: none;
 }
-.tma-portal-viewer__pdf-page-label { min-width: 4rem; }
+.tma-portal-viewer__pdf-page-label { min-width: 3.2rem; }
 /* display:block/inline-flex on the canvas and nav beat the UA [hidden] rule,
  * which is why an empty white sheet sat next to "Loading PDF…" forever. */
 .tma-portal-viewer__pdf-canvas[hidden],
@@ -782,19 +791,57 @@
   font-size: var(--text-size-13);
 }
 .tma-portal-viewer__thread.is-resolved { opacity: 0.72; }
-.tma-portal-viewer__comment { display: flex; gap: var(--space-8); padding: var(--space-4) 0; }
-
 /*
- * The face on the left; the name with the moment it was said UNDER it, not
- * beside it — who spoke and when are one fact read top to bottom.
+ * A bubble reads top to bottom: the face and the name head it, the message
+ * runs the full width underneath, flush with the face's own left edge. The
+ * verbs live in the top corner and only show themselves under the pointer.
  */
-.tma-portal-viewer__comment-head { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.tma-portal-viewer__comment { display: block; position: relative; padding: var(--space-4) 0; }
+.tma-portal-viewer__comment-top { display: flex; align-items: center; gap: var(--space-8); }
+.tma-portal-viewer__comment-head { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; }
 .tma-portal-viewer__comment-name { display: inline-flex; align-items: center; gap: var(--space-6); }
-.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.3; }
+.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.2; }
 .tma-portal-viewer__comment-head time {
-  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3;
+  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.2;
 }
-.tma-portal-viewer__comment-body { font-size: var(--text-size-13); }
+.tma-portal-viewer__comment-body {
+  font-size: var(--text-size-13);
+  /* The separation the head cannot give: the message gets its own air. */
+  padding: var(--space-10) 0;
+  margin: 0;
+}
+
+/* The corner verbs: a tick to resolve, a ⋯ for the rest. Invisible until the
+   bubble is under the pointer, so a thread reads as words, not chrome. */
+.tma-portal-viewer__hover-acts {
+  position: absolute; top: var(--space-4); right: 0;
+  display: inline-flex; gap: 2px; opacity: 0;
+  transition: opacity 120ms ease;
+}
+.tma-portal-viewer__comment:hover .tma-portal-viewer__hover-acts,
+.tma-portal-viewer__hover-acts:focus-within { opacity: 1; }
+.tma-portal-viewer__hover-act {
+  width: 24px; height: 24px; display: inline-grid; place-items: center;
+  border: 0; border-radius: 50%; background: transparent; cursor: pointer;
+}
+.tma-portal-viewer__hover-act:hover { background: var(--color-hover); }
+.tma-portal-viewer__hover-act img { opacity: 0.6; }
+.tma-portal-viewer__hover-act:hover img { opacity: 1; }
+
+.tma-portal-viewer__comment-menu {
+  position: absolute; top: 28px; right: 0; z-index: 5;
+  min-width: 120px; padding: var(--space-4);
+  background: #fff; border: 1px solid var(--color-border);
+  border-radius: var(--radius-8); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.tma-portal-viewer__comment-menu button {
+  display: flex; align-items: center; gap: var(--space-8);
+  width: 100%; padding: var(--space-6) var(--space-8);
+  border: 0; border-radius: 6px; background: transparent;
+  font-size: var(--text-size-13); color: var(--color-text-primary);
+  text-align: left; cursor: pointer;
+}
+.tma-portal-viewer__comment-menu button:hover { background: var(--color-hover); }
 .tma-portal-viewer__comment.is-deleted { padding-left: 38px; color: var(--color-text-secondary); font-size: var(--text-size-13); }
 .tma-portal-viewer__comment-main { flex: 1; min-width: 0; }
 .tma-portal-viewer__comment-head {
@@ -818,13 +865,47 @@
   font-size: var(--text-size-12); color: var(--color-text-secondary); font-weight: 500;
 }
 .tma-portal-viewer__comment-act:hover { color: var(--color-primary-dark); text-decoration: underline; }
-.tma-portal-viewer__reply { margin-left: 38px; }
+/* Replies sit flush — being inside the bubble already says what they answer,
+   and an indent only stole a third of an already narrow column. */
+.tma-portal-viewer__reply { margin-left: 0; border-top: 1px solid var(--color-border-soft); padding-top: var(--space-6); margin-top: var(--space-2, 2px); }
 /* No indent: Reply is one button in the comment's action row now, not a row of
    its own that had to line itself up under the avatar. The old 38px pushed the
    whole row — Resolve, Edit and Delete with it — off to the right of the text
    it belongs to. */
 .tma-portal-viewer__reply-open { margin-top: 0; }
 .tma-portal-viewer__replybox, .tma-portal-viewer__editbox { margin-top: var(--space-6); }
+
+.tma-portal-viewer__composer-who {
+  display: flex; align-items: center; gap: var(--space-8);
+  margin-bottom: var(--space-8); font-size: var(--text-size-13);
+}
+
+.tma-portal-viewer__anchor-chip {
+  display: inline-flex; align-items: center; gap: var(--space-6);
+  margin-bottom: var(--space-6); padding: 2px var(--space-8);
+  border-radius: 999px; background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8; font-size: var(--text-size-11, 11px);
+}
+.tma-portal-viewer__anchor-chip button {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  font-size: 12px; line-height: 1; padding: 0;
+}
+
+.tma-portal-viewer__anchor-tag {
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  margin-top: var(--space-6); padding: 1px var(--space-8);
+  border: 0; border-radius: 999px; background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8; font-size: var(--text-size-11, 11px); cursor: pointer;
+}
+.tma-portal-viewer__anchor-tag:hover { background: rgba(37, 99, 235, 0.18); }
+
+/* The rectangle a comment is about, drawn back over the document. */
+.tma-portal-viewer__anchor-box {
+  position: absolute; z-index: 4; pointer-events: none;
+  border: 2px solid #2563eb; border-radius: 4px;
+  background: rgba(37, 99, 235, 0.14);
+}
+.tma-portal-viewer__anchor-box.is-drawing { border-style: dashed; }
 
 .tma-portal-viewer__composer {
   position: relative; flex: 0 0 auto; margin: 0; padding: var(--space-12);
@@ -839,8 +920,10 @@
    floating in it. */
 .tma-portal-viewer__input {
   width: 100%; resize: vertical; min-height: 64px;
-  padding: var(--space-8) var(--space-10);
-  border: 1px solid var(--color-border-soft); border-radius: var(--radius-8);
+  padding: var(--space-8) var(--space-12);
+  /* Rounded like a spoken line, not a form field — the reference the firm
+     pointed at draws the box as a pill and lets focus carry the colour. */
+  border: 1px solid var(--color-border-soft); border-radius: 18px;
   background: var(--color-bg-card); color: var(--color-text-primary);
   font-family: inherit; font-size: var(--text-size-13); line-height: 1.5;
 }
