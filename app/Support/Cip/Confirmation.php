@@ -8,9 +8,6 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
@@ -111,44 +108,6 @@ class Confirmation
 
             return $application->refresh();
         });
-    }
-
-    /**
-     * Tell the provider side the file is ready and they must confirm.
-     *
-     * Fired when the application reaches Ready to submit, once — the same
-     * once-per-episode rule §14 uses for updates. The postcard IS this
-     * notification's email; bells go to member accounts with the email
-     * channel off.
-     */
-    public static function announce(CipApplication $application, ?User $actor): void
-    {
-        $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
-        $url = Contacts::url($application);
-
-        foreach (Contacts::providerSide($application) as $recipient) {
-            Deliveries::send(
-                Postcards::cipReadyToSubmit($facts, $url, $recipient['name']),
-                $recipient['email'],
-                $application,
-                'cip-ready-to-submit',
-                immediate: true,
-            );
-
-            if ($recipient['userId'] !== null) {
-                Notifier::send([
-                    'user' => User::find($recipient['userId']),
-                    'actor' => $actor,
-                    'type' => 'cip.ready-to-submit',
-                    'title' => $facts['number'].' is ready to submit',
-                    'message' => 'Confirm submission to lock the original package.',
-                    'subject' => $application,
-                    'action_url' => $path,
-                    'email' => false,
-                ]);
-            }
-        }
     }
 
     /**

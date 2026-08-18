@@ -57,6 +57,7 @@
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
       { id: 'cip-documents', label: 'Document requirements' },
+      { id: 'cip-letters', label: 'Granted and Denied letters' },
     ] },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
@@ -1512,6 +1513,117 @@
       });
       el.querySelectorAll('[data-cipdoc-down]').forEach(function (b) {
         b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-down'), 1); });
+      });
+    },
+  };
+
+  /* ── CIP Granted / Denied letters (§23) ─────────────────────────────
+   *
+   * Ten templates, one pair per investment type. The filing subject is
+   * still §22; this screen is the body the administrator keeps. Tokens
+   * are filled from the application when the letter is sent.
+   */
+  var CIPLETTERS = { loaded: false, loading: false, error: '', data: null };
+
+  function loadCipLetters() {
+    if (CIPLETTERS.loading) return;
+    CIPLETTERS.loading = true;
+    filelibJson('GET', '/portal/cip/letters')
+      .then(function (d) { CIPLETTERS.data = d; CIPLETTERS.error = ''; })
+      .catch(function (e) { CIPLETTERS.error = e.message; })
+      .then(function () { CIPLETTERS.loaded = true; CIPLETTERS.loading = false; render(); });
+  }
+
+  function cipLetterFor(id) {
+    var found = null;
+    (CIPLETTERS.data.types || []).forEach(function (t) {
+      t.letters.forEach(function (letter) { if (letter.id === id) found = { type: t, letter: letter }; });
+    });
+    return found;
+  }
+
+  function cipLetterModal(found) {
+    var letter = found.letter;
+    var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
+      return '{{' + p.token + '}} — ' + p.meaning;
+    }).join('<br>');
+
+    ui().openModal({
+      title: found.type.label + ' · ' + letter.decisionLabel,
+      body:
+        '<p class="tma-portal-note">The email subject stays in the filing format. This is the letter itself. Placeholders are filled from the application when it is sent.</p>' +
+        ui().field('Title', ui().input({
+          value: letter.title,
+          attrs: 'data-cipletter-title maxlength="191"',
+          ariaLabel: 'Letter title',
+        })) +
+        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="8" maxlength="8000">' + ui().esc(letter.body) + '</textarea>') +
+        '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+        '<div class="tma-portal-form-actions">' +
+          ui().btn({ label: 'Save', attrs: 'data-cipletter-save' }) +
+          (letter.customized ? ui().btn({ label: 'Restore default', attrs: 'data-cipletter-restore', variant: 'ghost' }) : '') +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-cipletter-save]').addEventListener('click', function () {
+          var title = (host.querySelector('[data-cipletter-title]').value || '').trim();
+          var body = (host.querySelector('[data-cipletter-body]').value || '').trim();
+          if (!title || !body) { ui().toastError('Title and letter are both required.'); return; }
+          filelibJson('PATCH', '/portal/cip/letters/' + encodeURIComponent(letter.id), { title: title, body: body })
+            .then(function () {
+              ui().closeModal();
+              ui().toast('Letter saved');
+              CIPLETTERS.loaded = false;
+              loadCipLetters();
+            })
+            .catch(function (e) { ui().toastError(e.message); });
+        });
+        var restore = host.querySelector('[data-cipletter-restore]');
+        if (restore) restore.addEventListener('click', function () {
+          filelibJson('POST', '/portal/cip/letters/' + encodeURIComponent(letter.id) + '/restore')
+            .then(function () {
+              ui().closeModal();
+              ui().toast('Restored to the default');
+              CIPLETTERS.loaded = false;
+              loadCipLetters();
+            })
+            .catch(function (e) { ui().toastError(e.message); });
+        });
+      },
+    });
+  }
+
+  PAGES['cip-letters'] = {
+    render: function () {
+      if (CIPLETTERS.error) return '<p class="tma-portal-note">Couldn’t load the letters: ' + ui().esc(CIPLETTERS.error) + '</p>';
+      if (!CIPLETTERS.loaded) return ui().loading();
+
+      var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
+
+      return '<p class="tma-portal-subtitle">Granted and Denied letters, one pair per investment type. The subject line is still the filing format; these are the bodies that go out when a decision is recorded.</p>' +
+        (canEdit ? '' : '<p class="tma-portal-note">Only an administrator can change these letters.</p>') +
+        (CIPLETTERS.data.types || []).map(function (t) {
+          return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
+            ui().table(['Decision', 'Title', ''], t.letters.map(function (letter) {
+              return '<tr>' +
+                '<td>' + ui().esc(letter.decisionLabel) +
+                (letter.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
+                '<td class="tma-portal-table__muted">' + ui().esc(letter.title) + '</td>' +
+                '<td>' + (canEdit
+                  ? '<div class="tma-portal-row-actions">' +
+                    '<button type="button" class="tma-portal-icon-btn" data-cipletter-edit="' + ui().esc(letter.id) + '" title="Edit letter" aria-label="Edit letter"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+                    '</div>'
+                  : '') + '</td></tr>';
+            }).join(''));
+        }).join('');
+    },
+    wire: function (el) {
+      if (!CIPLETTERS.loaded) { loadCipLetters(); return; }
+
+      el.querySelectorAll('[data-cipletter-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var found = cipLetterFor(b.getAttribute('data-cipletter-edit'));
+          if (found) cipLetterModal(found);
+        });
       });
     },
   };

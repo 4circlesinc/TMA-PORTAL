@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\DB;
  * per-transition permission, applied in a transaction that also writes the
  * append-only cip_events row. Nothing else writes cip_applications.status.
  *
- * The map is the whole lifecycle from day one; later build phases add the
- * *callers* (reviewer verbs, date-entry actions, the DELAYED daily job), not
- * new machinery. Notification fan-out attaches at the transition points once
- * the notification engine exists — the engine is the hook, deliberately.
+ * The map is the whole lifecycle from day one. Notification fan-out attaches
+ * at {@see write()} — every status change is one §22 notice, in the filing
+ * subject format, to the four named classes. Special-case mailers must not
+ * send a second copy of the same move.
  */
 class Engine
 {
@@ -163,14 +163,12 @@ class Engine
     /** The row and the audit, once the move has already been allowed. */
     private static function write(CipApplication $application, string $to, ?User $actor, array $meta): CipApplication
     {
-        return DB::transaction(function () use ($application, $to, $actor, $meta) {
-            $from = $application->status;
+        $from = $application->status;
+        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from) {
             $application->forceFill(['status' => $to])->save();
 
             self::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $to);
 
-            // Mirror into the portal-wide trail too — that copy is pruned per
-            // retention preference; cip_events above is the durable one.
             ActivityLogger::log([
                 'actor' => $actor,
                 'type' => 'cip.status_changed',
@@ -181,19 +179,17 @@ class Engine
                 'new' => ['status' => $to],
             ]);
 
-            /*
-             * Phase 5's notification fan-out attaches here, and only here.
-             *
-             * The status notice the standard describes ("KM - REVIEW
-             * APPLICATION - GAL26-00001 - …") is sent for a move, so it
-             * belongs at the one place a move happens — after the row and the
-             * event have both landed, so nothing is announced that did not
-             * occur. There is no mailer yet, deliberately: an invented one
-             * would have to be unpicked when the real engine arrives.
-             */
-
             return $application;
         });
+
+        /*
+         * §22: every status change is a notice, in the filing subject format,
+         * to the four named classes. Sent after the row and the event have
+         * both landed, so nothing is announced that did not occur.
+         */
+        Notices::announce($application, $to, $actor);
+
+        return $application;
     }
 
     /** Append one audit row. The only writer of cip_events. */

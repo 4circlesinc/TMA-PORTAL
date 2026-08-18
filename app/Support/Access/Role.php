@@ -352,6 +352,7 @@ class Role
         'clienthub-access' => 'settings.clientHub',
         'service-teams' => 'settings.clientHub',
         'custom-fields' => 'settings.clientHub',
+        'cip-letters' => 'settings.clientHub',
         // "Account security" is the reader's own password and 2FA and stays
         // open; everything else under Security is firm-wide policy.
         'security-insights' => 'settings.security',

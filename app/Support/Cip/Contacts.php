@@ -5,16 +5,16 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CompanyMember;
+use App\Models\Group;
 use App\Models\User;
 use App\Support\Access\Role;
 
 /**
- * Who a CIP notice writes to — the provider side for §14, §15 and §18, and
- * the staff classes §20 and §21 name beside them.
+ * Who a CIP notice writes to — §22's four classes, unique by mailbox.
  *
- * Deduplicated by address: a member whose mailbox is also the registry contact
- * is one recipient, not two, and a private client with no firm behind them is
- * their own provider side.
+ * A member whose mailbox is also the registry contact is one recipient, not
+ * two, and a private client with no firm behind them is their own provider
+ * side.
  */
 class Contacts
 {
@@ -49,24 +49,111 @@ class Contacts
     }
 
     /**
-     * Administrator + Reviewing Officer + Service Provider, unique by mailbox.
+     * §22's four classes: CIP Distribution Group + Assigned Officer +
+     * Administrators + Service Provider Contact, unique by mailbox.
      *
-     * §20 names these three; §21's decision notice uses the same set. A person
-     * in two classes is one recipient. An application with no reviewing
-     * officer still writes to the other two.
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function notices(CipApplication $application): array
+    {
+        $recipients = [];
+
+        foreach ([
+            ...self::distributionGroup(),
+            ...self::assignedOfficers($application),
+            ...self::administrators(),
+            ...self::providerSide($application),
+        ] as $recipient) {
+            $recipients[mb_strtolower($recipient['email'])] = $recipient;
+        }
+
+        return array_values($recipients);
+    }
+
+    /**
+     * Administrator + Reviewing Officer + Service Provider + CIP Distribution
+     * Group, unique by mailbox. Alias of {@see notices()}.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
      */
     public static function parties(CipApplication $application): array
     {
+        return self::notices($application);
+    }
+
+    /**
+     * Members of the CIP Distribution Group, plus any extra mailboxes in
+     * config. A Person who is also an administrator is still one recipient.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function distributionGroup(): array
+    {
         $recipients = [];
 
-        foreach ([
-            ...self::administrators(),
-            ...self::reviewingOfficer($application),
-            ...self::providerSide($application),
-        ] as $recipient) {
-            $recipients[mb_strtolower($recipient['email'])] = $recipient;
+        $name = trim((string) config('cip.distribution_group', 'CIP Distribution Group'));
+
+        if ($name !== '') {
+            $group = Group::query()
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->where('is_archived', false)
+                ->first();
+
+            foreach ($group?->members()->with('user:id,name,email')->get() ?? [] as $member) {
+                $user = $member->user;
+                $email = $user?->email;
+
+                if (! $email) {
+                    continue;
+                }
+
+                $recipients[mb_strtolower($email)] = [
+                    'email' => $email,
+                    'name' => $user->name,
+                    'userId' => $user->id,
+                ];
+            }
+        }
+
+        foreach (config('cip.distribution_emails', []) as $email) {
+            $email = trim((string) $email);
+
+            if ($email === '' || isset($recipients[mb_strtolower($email)])) {
+                continue;
+            }
+
+            $recipients[mb_strtolower($email)] = [
+                'email' => $email,
+                'name' => null,
+                'userId' => null,
+            ];
+        }
+
+        return array_values($recipients);
+    }
+
+    /**
+     * Everyone currently holding this file — reviewing officer and, when one
+     * is named, the compliance officer. §22 says "Assigned Officer".
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function assignedOfficers(CipApplication $application): array
+    {
+        $recipients = [];
+
+        foreach (Assignments::live($application) as $assignment) {
+            $officer = $assignment->user;
+
+            if ($officer === null || ! $officer->email) {
+                continue;
+            }
+
+            $recipients[mb_strtolower($officer->email)] = [
+                'email' => $officer->email,
+                'name' => $officer->name,
+                'userId' => $officer->id,
+            ];
         }
 
         return array_values($recipients);

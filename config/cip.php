@@ -24,4 +24,23 @@ return [
 
     'dependent_age_cutoff' => (int) env('CIP_DEPENDENT_AGE_CUTOFF', 16),
 
+    /*
+    |--------------------------------------------------------------------------
+    | CIP Distribution Group (§22)
+    |--------------------------------------------------------------------------
+    |
+    | Every CIP notice fans out to this People group (by name), plus any extra
+    | mailboxes listed here, then to the assigned officer, administrators, and
+    | the service provider contact. Maintain the group on People → Distribution
+    | groups; extra addresses cover mailboxes that are not portal accounts.
+    |
+    */
+
+    'distribution_group' => env('CIP_DISTRIBUTION_GROUP', 'CIP Distribution Group'),
+
+    'distribution_emails' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('CIP_DISTRIBUTION_EMAILS', '')),
+    ))),
+
 ];

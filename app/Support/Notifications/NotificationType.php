@@ -112,6 +112,8 @@ final class NotificationType
         'client.approval_needed' => ['module' => 'clients', 'level' => Notification::LEVEL_APPROVAL, 'icon' => 'SealQuestion', 'priority' => 'high',   'pref' => 'approvals', 'action_label' => 'Review client'],
 
         // ── CIP Applications ───────────────────────────────────
+        'cip.status' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'AddressBook', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the application'],
+        'cip.assigned' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'UserGear', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.updates-required' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
         'cip.ready-to-submit' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
         'cip.non-compliant' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open Additional Documents'],

@@ -11,6 +11,7 @@ use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\CompanyStaffAssignment;
+use App\Models\EmailDelivery;
 use App\Models\User;
 use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
@@ -331,7 +332,7 @@ class CipAssignmentTest extends TestCase
          * subject mentioning the number".
          */
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($application) {
-            $expected = 'RM - REVIEW APPLICATIONS - '.$application->displayNumber()
+            $expected = 'AA - REVIEW APPLICATION - '.$application->displayNumber()
                 .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
             if ($mail->subjectLine !== $expected) {
@@ -375,9 +376,18 @@ class CipAssignmentTest extends TestCase
          * The picker writes the client assignment too (the Assigned tab and
          * the table are one list), and that path carries its own welcome
          * email. Left both on, one press arrived as two emails saying
-         * different things about the same fact.
+         * different things about the same fact. §22 fans the status notice
+         * to every named class; none of those copies is the client-assignment
+         * welcome.
          */
-        Mail::assertSentCount(1);
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
+        $this->assertDatabaseMissing('email_deliveries', [
+            'template' => 'staffAssignedToClient',
+        ]);
+        $this->assertTrue(
+            collect(EmailDelivery::pluck('template'))->every(fn ($t) => $t === 'cip-assigned'),
+        );
     }
 
     public function test_the_provider_firm_comes_with_the_file_and_goes_back_with_the_last_one(): void

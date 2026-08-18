@@ -1485,6 +1485,7 @@
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-documents">Manage documents</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-letters">Manage decision letters</button>' +
           '</div></div>'
         : '') +
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
@@ -8953,6 +8954,7 @@
     'service-teams': { title: 'Service teams' },
     'custom-fields': { title: 'Custom fields' },
     'cip-documents': { title: 'Document requirements' },
+    'cip-letters': { title: 'Granted and Denied letters' },
   };
 
   function navigateToClientsAdminPage(adminPage) {

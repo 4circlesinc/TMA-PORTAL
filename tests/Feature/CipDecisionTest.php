@@ -331,7 +331,7 @@ class CipDecisionTest extends TestCase
             ])
             ->assertOk();
 
-        $expected = 'AA - APPROVED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
+        $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected

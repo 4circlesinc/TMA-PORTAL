@@ -4,10 +4,6 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipEvent;
-use App\Models\User;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -22,8 +18,7 @@ use Illuminate\Support\Facades\DB;
  * with a null actor (the system), and this is the caller that uses it.
  *
  * Idempotent on purpose. An already-delayed file is not in the due set, so a
- * second daily tick never re-notifies. The brief names three recipients:
- * Administrator, Reviewing Officer, Service Provider.
+ * second daily tick never re-notifies. Engine tells §22's four classes.
  */
 class Delay
 {
@@ -118,55 +113,13 @@ class Delay
             return $application->refresh();
         });
 
-        self::announce($application);
         Live::staff(Live::CIP);
 
         return $application;
     }
 
     /**
-     * Tell the Administrator, the Reviewing Officer, and the Service Provider.
-     *
-     * Deduplicated by address so an administrator who also holds the file as
-     * reviewing officer is one recipient, not two. Bells go to member accounts
-     * with the email channel off; the postcard IS this notification's email.
-     */
-    public static function announce(CipApplication $application): void
-    {
-        $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
-        $url = Contacts::url($application);
-        $acceptedAt = $application->accepted_at?->toDateString();
-        $days = $application->accepted_at
-            ? (int) $application->accepted_at->copy()->startOfDay()->diffInDays(now()->startOfDay())
-            : self::DAYS;
-
-        foreach (self::recipients($application) as $recipient) {
-            Deliveries::send(
-                Postcards::cipDelayed($facts, $url, $acceptedAt, $days, $recipient['name']),
-                $recipient['email'],
-                $application,
-                'cip-delayed',
-                immediate: true,
-            );
-
-            if ($recipient['userId'] !== null) {
-                Notifier::send([
-                    'user' => User::find($recipient['userId']),
-                    'actor' => null,
-                    'type' => 'cip.delayed',
-                    'title' => $facts['number'].' is delayed',
-                    'message' => $days.' days have passed since acceptance with no decision.',
-                    'subject' => $application,
-                    'action_url' => $path,
-                    'email' => false,
-                ]);
-            }
-        }
-    }
-
-    /**
-     * The three classes the brief names, merged and unique by mailbox.
+     * The named classes, merged and unique by mailbox.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
      */

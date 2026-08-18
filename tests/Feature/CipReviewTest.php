@@ -450,7 +450,7 @@ class CipReviewTest extends TestCase
          * in the body — the promise is that nobody has to click through
          * documents to learn what needs work.
          */
-        $expected = 'RO - UPDATES REQUIRED - '.$application->fresh()->displayNumber()
+        $expected = 'RO - UPDATE REQUIRED - '.$application->fresh()->displayNumber()
             .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
@@ -460,7 +460,18 @@ class CipReviewTest extends TestCase
                 && str_contains($mail->payload['bodyHtml'], 'The bottom edge of the scan is cut off.');
         });
         Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
-        Mail::assertSentCount(2);
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com')
+            && $mail->subjectLine === $expected);
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com')
+            && $mail->subjectLine === $expected);
+
+        $assessment = 'RO - ASSESSMENT FEEDBACK - '.$application->fresh()->displayNumber()
+            .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $assessment
+            && $mail->hasTo('gil@galaxy.example'));
+
+        // Assessment feedback then Update required, each to the four classes.
+        Mail::assertSentCount(8);
 
         // Tracked against the file, and the bell raised for the member.
         $this->assertDatabaseHas('email_deliveries', [
@@ -481,7 +492,7 @@ class CipReviewTest extends TestCase
                 'comment' => 'The certificate is the short form.',
             ])->assertOk();
 
-        Mail::assertSentCount(2);
+        Mail::assertSentCount(8);
     }
 
     public function test_reaching_ready_to_submit_notifies_the_provider_side(): void
@@ -507,7 +518,7 @@ class CipReviewTest extends TestCase
 
         $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
 
-        $expected = 'READY TO SUBMIT - '.$application->fresh()->displayNumber()
+        $expected = 'RO - READY TO SUBMIT - '.$application->fresh()->displayNumber()
             .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
@@ -515,6 +526,10 @@ class CipReviewTest extends TestCase
                 && $mail->hasTo('gil@galaxy.example')
                 && str_contains($mail->payload['lead'] ?? '', 'ready to submit');
         });
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com')
+            && $mail->subjectLine === $expected);
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com')
+            && $mail->subjectLine === $expected);
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => 'gil@galaxy.example', 'template' => 'cip-ready-to-submit',
         ]);

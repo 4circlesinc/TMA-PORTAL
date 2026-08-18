@@ -5,14 +5,10 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipEvent;
-use App\Models\CipPerson;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -96,6 +92,8 @@ class Assignments
             return $held;
         }
 
+        $fromStatus = $application->status;
+
         $assignment = DB::transaction(function () use ($application, $officer, $actor, $role, $held) {
             $held?->end($actor);
 
@@ -144,7 +142,16 @@ class Assignments
             'subject' => $application,
         ]);
 
-        self::announceAssigned($application, $assignment);
+        /*
+         * NEW → REVIEW APPLICATION is announced by Engine. A file already
+         * underway is only changing hands, so the four §22 classes still hear
+         * that a new officer holds it, in the filing subject for where the
+         * file actually stands.
+         */
+        if ($fromStatus !== Status::NEW) {
+            $application = $application->fresh();
+            Notices::announce($application, $application->status, $actor);
+        }
 
         return $assignment;
     }
@@ -270,94 +277,5 @@ class Assignments
         $holder = $live->firstWhere('role', CipAccess::REVIEWING_OFFICER) ?? $live->first();
 
         $application->forceFill(['assigned_officer_id' => $holder?->user_id])->save();
-    }
-
-    /**
-     * Phase 5 attaches here: telling the officer the file is theirs.
-     *
-     * §10 fixes what that message carries — the application number from
-     * {@see CipApplication::displayNumber()} so a submitted file is named by
-     * its CIP number rather than the internal one, the main applicant's name,
-     * the service provider, and a direct link to the application at
-     * /cip/applications/{uuid}. Nothing is sent yet: the notification engine
-     * is phase 5, and a mailer invented here would have to be unpicked the day
-     * it arrives.
-     */
-    /**
-     * §10's notice: tell the officer the file is now theirs.
-     *
-     * Sent inline, not queued — no worker has drained the queue since July,
-     * and this is the email the whole workflow waits on: an assignment nobody
-     * hears about is a file sitting in Review that nobody is reviewing.
-     * Deliveries records the send against the application, so every notice —
-     * delivered or failed — is on the file's own audit trail.
-     *
-     * The bell is raised separately with its email channel off, exactly so the
-     * Notifier's automatic email twin cannot fire a second, differently-worded
-     * copy of the same news (its subject would be the notification title,
-     * which is not §22's format).
-     *
-     * Announcing must never undo the assignment it announces: the rows are
-     * committed before this runs, and a refused transport is recorded on the
-     * delivery rather than thrown.
-     */
-    private static function announceAssigned(CipApplication $application, CipApplicationAssignment $assignment): void
-    {
-        $officer = $assignment->user ?? User::find($assignment->user_id);
-
-        if ($officer === null || ! $officer->email) {
-            return;
-        }
-
-        $application->loadMissing(['provider', 'client', 'people']);
-
-        $applicant = $application->people
-            ->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
-
-        /*
-         * The direct portal link (§10): the applicant's profile, open on the
-         * application. A file with no client record yet can only be reached
-         * through the table, so the link searches it by number — landing
-         * somewhere true beats a prettier link that 404s.
-         *
-         * Built from APP_URL, not from url(): url() answers with whichever
-         * host the triggering request arrived on, and an email is read long
-         * after that request — a notice fired through an internal hostname
-         * must still link to the portal's public address. The same rule
-         * Postcards::notification() already follows.
-         */
-        $path = $application->client
-            ? '/clients/'.$application->client->uid.'?tab=applicant'
-            : '/clients?q='.urlencode($application->displayNumber());
-        $url = rtrim(config('app.url'), '/').$path;
-
-        Deliveries::send(
-            Postcards::cipAssigned([
-                'number' => $application->displayNumber(),
-                'applicant' => $applicant?->fullName() ?: ($application->client?->name ?? 'Unnamed applicant'),
-                'provider' => $application->provider?->name ?? 'Private client',
-                'familySize' => $application->familySize(),
-                'statusLabel' => Status::label($application->status),
-                'roleLabel' => self::roleLabel($assignment->role),
-            ], $officer, $url),
-            $officer->email,
-            $application,
-            'cip-assigned',
-            immediate: true,
-        );
-
-        Notifier::send([
-            'user' => $officer,
-            'actor' => $assignment->assigned_by ? User::find($assignment->assigned_by) : null,
-            'type' => 'cip.assigned',
-            'title' => $application->displayNumber().' assigned to you',
-            'message' => 'As '.mb_strtolower(self::roleLabel($assignment->role)).'.',
-            'subject' => $application,
-            'action_url' => $application->client
-                ? '/clients/'.$application->client->uid.'?tab=applicant'
-                : '/clients?q='.urlencode($application->displayNumber()),
-            // The postcard above IS this notification's email.
-            'email' => false,
-        ]);
     }
 }

@@ -5,9 +5,6 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -101,54 +98,6 @@ class Decision
             return $application->refresh();
         });
 
-        if (! $already) {
-            self::announce($application, $actor);
-        }
-
         return $application;
-    }
-
-    /**
-     * Tell the Administrator, the Reviewing Officer, and the Service Provider.
-     *
-     * The brief's §23 templates (per investment type) are a later door; this
-     * is the decision notice itself — outcome, date, and a link to the file.
-     * Bells go to member accounts with the email channel off.
-     */
-    public static function announce(CipApplication $application, ?User $actor): void
-    {
-        $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
-        $url = Contacts::url($application);
-        $date = $application->decided_at?->toDateString();
-        $decision = $application->decision ?? $application->status;
-        $granted = $decision === Status::GRANTED;
-        $template = $granted ? 'cip-granted' : 'cip-denied';
-        $type = $granted ? 'cip.granted' : 'cip.denied';
-
-        foreach (Contacts::parties($application) as $recipient) {
-            Deliveries::send(
-                Postcards::cipDecision($facts, $url, $decision, $date, $recipient['name'], $actor),
-                $recipient['email'],
-                $application,
-                $template,
-                immediate: true,
-            );
-
-            if ($recipient['userId'] !== null) {
-                Notifier::send([
-                    'user' => User::find($recipient['userId']),
-                    'actor' => $actor,
-                    'type' => $type,
-                    'title' => $facts['number'].' was '.strtolower(Status::label($decision)),
-                    'message' => $granted
-                        ? 'The Unit has granted this application.'
-                        : 'The Unit has denied this application.',
-                    'subject' => $application,
-                    'action_url' => $path,
-                    'email' => false,
-                ]);
-            }
-        }
     }
 }

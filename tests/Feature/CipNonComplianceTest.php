@@ -147,6 +147,7 @@ class CipNonComplianceTest extends TestCase
                 && str_contains($mail->payload['lead'], 'Additional Documents');
         });
         Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
 
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => 'gil@galaxy.example', 'template' => 'cip-non-compliant',
@@ -250,7 +251,7 @@ class CipNonComplianceTest extends TestCase
         ]);
 
         NonCompliance::record($application, $staff, now()->startOfDay()->setDate(2026, 8, 10));
-        Mail::assertSentCount(1);
+        Mail::assertSentCount(2);
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
@@ -260,7 +261,7 @@ class CipNonComplianceTest extends TestCase
             ->assertJsonPath('application.queryReceivedAt', '2026-08-18')
             ->assertJsonPath('application.status', Status::NON_COMPLIANT);
 
-        Mail::assertSentCount(1);
+        Mail::assertSentCount(2);
         $this->assertSame(2, CipEvent::query()
             ->where('application_id', $application->id)
             ->where('action', CipEvent::ACTION_QUERY_RECEIVED)

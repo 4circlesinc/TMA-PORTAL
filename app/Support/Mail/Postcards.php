@@ -4,10 +4,8 @@ namespace App\Support\Mail;
 
 use App\Mail\Postcard;
 use App\Models\User;
+use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
-// The portal's one initials helper; it lives with signatures because they
-// needed it first, not because it is about signatures.
-use App\Support\Signatures\Presenter as SignaturePresenter;
 
 /**
  * The copy for every transactional email, one factory method each. Each returns
@@ -700,33 +698,17 @@ class Postcards
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int, statusLabel:string, roleLabel:string}  $facts
      */
-    public static function cipAssigned(array $facts, User $officer, string $url): Postcard
+    public static function cipAssigned(array $facts, ?User $officer, string $url, ?string $subject = null, ?string $recipientName = null): Postcard
     {
-        $initials = SignaturePresenter::initials($officer->name);
-        $applicant = mb_strtoupper($facts['applicant']);
-
-        $subject = implode(' - ', array_filter([
-            $initials,
-            mb_strtoupper($facts['statusLabel']),
-            $facts['number'],
-            $applicant.' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
+        $subject ??= Notices::line($facts, Status::REVIEW_APPLICATION, $officer);
+        $hello = $recipientName ?: $officer?->name;
 
         return new Postcard($subject, [
-            'preheader' => $facts['number'].' — '.$facts['applicant'].' is now yours to review.',
+            'preheader' => $facts['number'].' — '.$facts['applicant'].' is now at '.$facts['statusLabel'].'.',
             'eyebrow' => 'CIP Applications',
-            'greeting' => 'Hi '.(strtok($officer->name, ' ') ?: $officer->name).',',
-            'title' => 'An application has been assigned to you',
-            'lead' => 'You now hold '.$facts['number'].' as '.mb_strtolower($facts['roleLabel'])
-                .' — it stands at '.$facts['statusLabel'].'.',
-            /*
-             * The status is in the body as well as the subject. The subject
-             * announces it in §22's filing format, and a body that then said
-             * only "assigned to you" left the reader to work out what
-             * ASSESSMENT FEEDBACK meant for them — the one fact that decides
-             * what kind of work just landed.
-             */
+            'greeting' => $hello ? 'Hi '.(strtok($hello, ' ') ?: $hello).',' : 'Hello,',
+            'title' => $facts['number'].' is in review',
+            'lead' => $facts['number'].' stands at '.$facts['statusLabel'].'.',
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
@@ -751,17 +733,9 @@ class Postcards
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      * @param  list<array{label:string, reason:?string}>  $sentBack
      */
-    public static function cipUpdatesRequired(array $facts, array $sentBack, User $actor, string $url, ?string $recipientName = null): Postcard
+    public static function cipUpdatesRequired(array $facts, array $sentBack, ?User $actor, string $url, ?string $recipientName = null, ?string $subject = null): Postcard
     {
-        $initials = SignaturePresenter::initials($actor->name);
-
-        $subject = implode(' - ', array_filter([
-            $initials,
-            'UPDATES REQUIRED',
-            $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
+        $subject ??= Notices::line($facts, Status::UPDATE_REQUIRED, $actor);
 
         $list = collect($sentBack)->map(fn (array $doc) => '<li><strong>'.e($doc['label']).'</strong>'
             .($doc['reason'] ? ' — '.e($doc['reason']) : '')
@@ -795,14 +769,9 @@ class Postcards
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
-    public static function cipReadyToSubmit(array $facts, string $url, ?string $recipientName = null): Postcard
+    public static function cipReadyToSubmit(array $facts, string $url, ?string $recipientName = null, ?string $subject = null): Postcard
     {
-        $subject = implode(' - ', array_filter([
-            'READY TO SUBMIT',
-            $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
+        $subject ??= Notices::line($facts, Status::READY_TO_SUBMIT);
 
         return new Postcard($subject, [
             'preheader' => $facts['number'].' is ready to submit — confirm to lock the original package.',
@@ -834,16 +803,9 @@ class Postcards
         ?string $queryReceivedAt = null,
         ?string $recipientName = null,
         ?User $actor = null,
+        ?string $subject = null,
     ): Postcard {
-        $initials = $actor ? SignaturePresenter::initials($actor->name) : null;
-
-        $subject = implode(' - ', array_filter([
-            $initials,
-            'NON-COMPLIANT',
-            $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
+        $subject ??= Notices::line($facts, Status::NON_COMPLIANT, $actor);
 
         $details = [
             ['Application', $facts['number']],
@@ -868,9 +830,8 @@ class Postcards
     /**
      * §20's notice: 180 days after acceptance, still no decision.
      *
-     * Fired by the daily job, not by a person, so the subject has no initials
-     * — DELAYED is the first token. The three named classes (Administrator,
-     * Reviewing Officer, Service Provider) share this copy.
+     * Fired by the daily job, not by a person. Initials are the assigned
+     * reviewing officer's when there is one.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -880,13 +841,9 @@ class Postcards
         ?string $acceptedAt = null,
         int $days = 180,
         ?string $recipientName = null,
+        ?string $subject = null,
     ): Postcard {
-        $subject = implode(' - ', array_filter([
-            'DELAYED',
-            $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
+        $subject ??= Notices::line($facts, Status::DELAYED);
 
         $details = [
             ['Application', $facts['number']],
@@ -909,14 +866,11 @@ class Postcards
     }
 
     /**
-     * §21's notice: the Unit decided. Approved or Denied.
-     *
-     * The per-investment-type letters (§23) are a later door; this is the
-     * decision itself — outcome, date, and a link to the file. Subject uses
-     * the chip's word (APPROVED / DENIED) so the email and the status cannot
-     * disagree.
+     * §21 / §23: the Unit decided. Subject stays §22's filing format.
+     * Title and body come from the investment-type letter when one is given.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     * @param  array{title:string, lead:string, bodyHtml:?string}|null  $copy
      */
     public static function cipDecision(
         array $facts,
@@ -925,18 +879,11 @@ class Postcards
         ?string $decidedAt = null,
         ?string $recipientName = null,
         ?User $actor = null,
+        ?string $subject = null,
+        ?array $copy = null,
     ): Postcard {
-        $initials = $actor ? SignaturePresenter::initials($actor->name) : null;
-        $outcome = Status::subjectLabel($decision);
+        $subject ??= Notices::line($facts, $decision, $actor);
         $granted = $decision === Status::GRANTED;
-
-        $subject = implode(' - ', array_filter([
-            $initials,
-            $outcome,
-            $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
-            now()->format('d.m.Y'),
-        ]));
 
         $details = [
             ['Application', $facts['number']],
@@ -948,15 +895,51 @@ class Postcards
             $details[] = ['Decision date', $decidedAt];
         }
 
-        return new Postcard($subject, [
+        $title = $copy['title'] ?? ($facts['number'].' was '.strtolower(Status::label($decision)));
+        $lead = $copy['lead'] ?? ($granted
+            ? 'The Unit has granted '.$facts['applicant'].'’s application.'
+            : 'The Unit has denied '.$facts['applicant'].'’s application.');
+
+        $payload = [
             'preheader' => $facts['number'].' was '.strtolower(Status::label($decision)).'.',
             'eyebrow' => 'CIP Applications',
             'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => $facts['number'].' was '.strtolower(Status::label($decision)),
-            'lead' => $granted
-                ? 'The Unit has granted '.$facts['applicant'].'’s application.'
-                : 'The Unit has denied '.$facts['applicant'].'’s application.',
+            'title' => $title,
+            'lead' => $lead,
             'details' => $details,
+            'button' => ['label' => 'Open the application', 'url' => $url],
+        ];
+        if (! empty($copy['bodyHtml'])) {
+            $payload['bodyHtml'] = $copy['bodyHtml'];
+        }
+
+        return new Postcard($subject, $payload);
+    }
+
+    /**
+     * A §22 status notice whose body is the move itself — New Application,
+     * Assessment Feedback, Pending Review, Background Check.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipStatus(array $facts, string $status, string $url, ?string $recipientName = null, ?string $subject = null): Postcard
+    {
+        $subject ??= Notices::line($facts, $status);
+        $label = Status::label($status);
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' now stands at '.$label.'.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => $facts['number'].' — '.$label,
+            'lead' => $facts['applicant'].'’s application now stands at '.$label.'.',
+            'details' => [
+                ['Application', $facts['number']],
+                ['Applicant', $facts['applicant']],
+                ['Service provider', $facts['provider']],
+                ['Status', $label],
+                ['Family size', 'F'.$facts['familySize']],
+            ],
             'button' => ['label' => 'Open the application', 'url' => $url],
         ]);
     }

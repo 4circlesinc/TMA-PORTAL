@@ -5,9 +5,6 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\User;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -144,88 +141,9 @@ class Review
             }
 
             $application = Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
-
-            /*
-             * §14 / §15 notices, at the moment the APPLICATION arrives.
-             *
-             * The provider side is told once per episode, not once per
-             * document: an officer working through a checklist in a sitting
-             * must not put five emails in the firm's inbox saying pieces of
-             * one fact. Documents sent back while the file already stands at
-             * Updates required join the same open episode. Ready to submit
-             * is the all-clear, and it carries its own copy because the firm
-             * must press Confirm submission.
-             *
-             * Announced after the transition has committed, and never allowed
-             * to undo it: the state change is the workflow's, the telling is
-             * not.
-             */
-            if ($target === Status::UPDATE_REQUIRED && $actor !== null) {
-                self::announceUpdatesRequired($application, $actor);
-            }
-
-            if ($target === Status::READY_TO_SUBMIT) {
-                Confirmation::announce($application, $actor);
-            }
         }
 
         return $application;
-    }
-
-    /**
-     * Tell the provider side what was sent back, and why.
-     *
-     * Recipients are the firm's people: its active portal members, and the
-     * registry's own contact address where that is somebody else — or, for a
-     * private client, the applicant's own account. Each email is recorded
-     * against the application, so the audit trail can answer whether the
-     * firm was told and when. Bells go to the member accounts with the email
-     * channel off; the postcard IS this notification's email.
-     */
-    private static function announceUpdatesRequired(CipApplication $application, User $actor): void
-    {
-        $sentBack = CipDocument::query()
-            ->where('application_id', $application->id)
-            ->where('status', DocumentStatus::UPDATE_REQUIRED)
-            ->with(['comments' => fn ($q) => $q->latest('id')->limit(1)])
-            ->orderBy('id')
-            ->get()
-            ->map(fn (CipDocument $slot) => [
-                'label' => $slot->label,
-                'reason' => $slot->comments->first()?->body,
-            ])
-            ->all();
-
-        if ($sentBack === []) {
-            return;
-        }
-
-        $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
-        $url = Contacts::url($application);
-
-        foreach (Contacts::providerSide($application) as $recipient) {
-            Deliveries::send(
-                Postcards::cipUpdatesRequired($facts, $sentBack, $actor, $url, $recipient['name']),
-                $recipient['email'],
-                $application,
-                'cip-updates-required',
-                immediate: true,
-            );
-
-            if ($recipient['userId'] !== null) {
-                Notifier::send([
-                    'user' => User::find($recipient['userId']),
-                    'actor' => $actor,
-                    'type' => 'cip.updates-required',
-                    'title' => $facts['number'].' needs updates',
-                    'message' => count($sentBack).' document'.(count($sentBack) === 1 ? '' : 's').' sent back with notes.',
-                    'subject' => $application,
-                    'action_url' => $path,
-                    'email' => false,
-                ]);
-            }
-        }
     }
 
     /**

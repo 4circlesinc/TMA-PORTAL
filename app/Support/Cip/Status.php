@@ -74,6 +74,27 @@ class Status
     ];
 
     /**
+     * The status token §22 puts in email subjects — not the chip/bucket label.
+     *
+     * Chips say Review Applications and Approved; the filing format says
+     * REVIEW APPLICATION and GRANTED, matching the brief's worked examples.
+     */
+    private const SUBJECT_LABELS = [
+        self::DRAFT => 'NEW APPLICATION',
+        self::NEW => 'NEW APPLICATION',
+        self::REVIEW_APPLICATION => 'REVIEW APPLICATION',
+        self::ASSESSMENT_FEEDBACK => 'ASSESSMENT FEEDBACK',
+        self::UPDATE_REQUIRED => 'UPDATE REQUIRED',
+        self::READY_TO_SUBMIT => 'READY TO SUBMIT',
+        self::PENDING_REVIEW => 'PENDING REVIEW',
+        self::NON_COMPLIANT => 'NON-COMPLIANT',
+        self::BACKGROUND_CHECK => 'BACKGROUND CHECK',
+        self::DELAYED => 'DELAYED',
+        self::GRANTED => 'GRANTED',
+        self::DENIED => 'DENIED',
+    ];
+
+    /**
      * One colour per listed status, so a filter row, a table chip and a
      * dashboard dot can tell the queues apart without reading the label.
      *
@@ -132,11 +153,11 @@ class Status
 
     /**
      * The uppercase form the notification standard puts in email subjects:
-     * "KM - REVIEW APPLICATIONS - GAL26-00001 - JOHN SMITH (F4) - 13.08.2026".
+     * "KM - REVIEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 13.08.2026".
      */
     public static function subjectLabel(string $status): string
     {
-        return strtoupper(self::label($status));
+        return self::SUBJECT_LABELS[$status] ?? strtoupper(self::label($status));
     }
 
     public static function tone(string $status): string

@@ -122,7 +122,7 @@ class CipDelayTest extends TestCase
             'actor_id' => null,
         ]);
 
-        $expected = 'DELAYED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
+        $expected = 'RO - DELAYED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected

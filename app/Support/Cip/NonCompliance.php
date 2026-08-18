@@ -5,9 +5,6 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
-use App\Support\Mail\Deliveries;
-use App\Support\Mail\Postcards;
-use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -67,48 +64,6 @@ class NonCompliance
             return $application->refresh();
         });
 
-        if (! $already) {
-            self::announce($application, $actor);
-        }
-
         return $application;
-    }
-
-    /**
-     * Tell the provider side the Unit has asked for more.
-     *
-     * The brief names the Service Provider; the postcard is that notice. Bells
-     * go to member accounts with the email channel off. Response documents
-     * go in Additional Documents — the original package is frozen.
-     */
-    public static function announce(CipApplication $application, ?User $actor): void
-    {
-        $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
-        $url = Contacts::url($application);
-        $date = $application->query_received_at?->toDateString();
-
-        foreach (Contacts::providerSide($application) as $recipient) {
-            Deliveries::send(
-                Postcards::cipNonCompliant($facts, $url, $date, $recipient['name'], $actor),
-                $recipient['email'],
-                $application,
-                'cip-non-compliant',
-                immediate: true,
-            );
-
-            if ($recipient['userId'] !== null) {
-                Notifier::send([
-                    'user' => User::find($recipient['userId']),
-                    'actor' => $actor,
-                    'type' => 'cip.non-compliant',
-                    'title' => $facts['number'].' is non-compliant',
-                    'message' => 'The Unit has requested additional information. Upload it through Additional Documents.',
-                    'subject' => $application,
-                    'action_url' => $path,
-                    'email' => false,
-                ]);
-            }
-        }
     }
 }

@@ -18,6 +18,7 @@ use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipEventController;
+use App\Http\Controllers\Cip\CipLetterController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipTransitionController;
@@ -446,6 +447,17 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('requirements.destroy');
         Route::post('/requirements/{uuid}/restore', [CipRequirementController::class, 'restore'])
             ->name('requirements.restore');
+
+        /*
+         * §23: Granted and Denied letters, one pair per investment type.
+         *
+         * Readable by anyone who may reach the module; changeable only with
+         * cip.configure, because one edit is every future decision letter.
+         */
+        Route::get('/letters', [CipLetterController::class, 'index'])->name('letters.index');
+        Route::patch('/letters/{uuid}', [CipLetterController::class, 'update'])->name('letters.update');
+        Route::post('/letters/{uuid}/restore', [CipLetterController::class, 'restore'])
+            ->name('letters.restore');
 
         /*
          * §13: the conversation on one checklist document.
