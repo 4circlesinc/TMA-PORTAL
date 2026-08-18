@@ -743,22 +743,20 @@
 
 /* Floating comments (Drive-style cards beside the document) ----------- */
 /*
- * An overlay, never a sibling.
+ * Floating bubbles, never a sibling and never a wall.
  *
  * As a flex column beside the stage, opening the comments squeezed the media
  * left of centre — and the document is what the viewer is FOR, so it stays
- * centred on the screen and the discussion floats over the right edge. Solid,
- * too: a transparent panel let the page underneath bleed through between the
- * bubbles, which read as the comments sitting behind the buttons of a screen
- * they are not even part of.
+ * centred and the discussion floats over the right edge. The column itself
+ * has no surface: each bubble is its own white card on the viewer's dark, so
+ * the conversation reads as notes pinned over the document rather than a
+ * panel bolted to it.
  */
 .tma-portal-viewer__comments {
   position: absolute; top: 0; right: 0; bottom: 0; z-index: 4;
   width: min(320px, 34vw);
   display: flex; flex-direction: column; min-height: 0;
-  padding: var(--space-12); background: #17181a;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.35);
+  padding: var(--space-12); background: transparent;
   /* Light cards on the dark viewer — do not inherit the details-panel tokens. */
   --color-white: #ffffff;
   --color-bg-card: #ffffff;
@@ -800,9 +798,10 @@
 .tma-portal-viewer__comment-top { display: flex; align-items: center; gap: var(--space-8); }
 .tma-portal-viewer__comment-head { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; }
 .tma-portal-viewer__comment-name { display: inline-flex; align-items: center; gap: var(--space-6); }
-.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.2; }
+.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.1; }
 .tma-portal-viewer__comment-head time {
-  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.2;
+  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.1;
+  margin-top: -1px;
 }
 .tma-portal-viewer__comment-body {
   font-size: var(--text-size-13);
@@ -874,6 +873,21 @@
    it belongs to. */
 .tma-portal-viewer__reply-open { margin-top: 0; }
 .tma-portal-viewer__replybox, .tma-portal-viewer__editbox { margin-top: var(--space-6); }
+
+/* The one control the empty column carries: a round white button that
+   summons the composer. Right-aligned so it hangs where the box appears. */
+.tma-portal-viewer__comments-top { display: flex; justify-content: flex-end; margin-bottom: var(--space-8); }
+.tma-portal-viewer__comments-add {
+  width: 34px; height: 34px; display: inline-grid; place-items: center;
+  border: 0; border-radius: 50%; background: #fff; cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+}
+.tma-portal-viewer__comments-add:hover { background: #f3f4f6; }
+
+/* The whole card answers to a click as a reply — say so with the cursor. */
+.tma-portal-viewer__thread { cursor: pointer; }
+.tma-portal-viewer__thread .tma-portal-viewer__replybox,
+.tma-portal-viewer__thread textarea { cursor: auto; }
 
 .tma-portal-viewer__composer-who {
   display: flex; align-items: center; gap: var(--space-8);

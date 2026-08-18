@@ -1604,7 +1604,7 @@
     function current() { return gallery[idx] || file; }
     function entry(f) {
       if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null, approvals: null,
-        expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null,
+        expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null, composerOpen: false,
         pdfDoc: null, pdfUrl: null, pdfPage: 1, pdfZoomMode: 'width', pdfZoomScale: 1 };
       return cache[f.id];
     }
@@ -2387,7 +2387,9 @@
           w: (x2 - x1) / mr.width,
           h: (y2 - y1) / mr.height,
         };
-        paintComposerAnchor(en);
+        en.composerOpen = true;
+        var cbody = lb.querySelector('[data-lb-comments-body]');
+        if (cbody) paintComments(cbody);
         showAnchorOverlay(en.pendingAnchor);
 
         var input = lb.querySelector('[data-lb-input]');
@@ -2524,7 +2526,19 @@
       var e = entry(f);
       var stale = e.comments;
 
+      /*
+       * The box is summoned, not resident. By default the column is only the
+       * conversation; the round button up top (or highlighting a spot on the
+       * document) opens the composer in its place at the bottom, and posting
+       * puts it away again — a form that always sat there made every file
+       * read as a request to say something.
+       */
       host.innerHTML =
+        '<div class="tma-portal-viewer__comments-top">' +
+          '<button type="button" class="tma-portal-viewer__comments-add" data-lb-composer-open' +
+          ' title="Add a comment" aria-label="Add a comment">' +
+          '<img src="images/icons/phosphor/ChatCircleDots.svg" alt="" width="16" height="16"></button>' +
+        '</div>' +
         '<div class="tma-portal-viewer__comments-feed" data-lb-comments>' +
           (stale ? commentsHtml(stale, e) : ui().loading({ count: 3 })) +
         '</div>' +
@@ -2748,6 +2762,9 @@
       var me = (window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get()) || {};
       var pending = e.pendingAnchor;
 
+      // Nothing until asked for — the button above or a highlight opens it.
+      if (!e.composerOpen && !pending) return '';
+
       return '<div class="tma-portal-viewer__composer" data-lb-composer>' +
         // The author's own face and name over the box, so the composer reads
         // as "you, about to speak" rather than an anonymous form.
@@ -2803,18 +2820,29 @@
       e.draft = '';
       e.pendingMentions = [];
       e.pendingAnchor = null;
+      // Said and sent: the box goes away until it is asked for again.
+      e.composerOpen = false;
       clearAnchorOverlay();
 
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
         method: 'POST',
         json: { body: body, mentions: mentions.map(function (m) { return m.id; }), anchor: anchor },
       })
-        .then(function () { e.comments = null; loadComments(f); })
+        .then(function () {
+          e.comments = null;
+          // The whole column, not just the feed: the composer has to leave
+          // the screen with the words it delivered.
+          var cbody = lb.querySelector('[data-lb-comments-body]');
+          if (cbody) paintComments(cbody);
+          else loadComments(f);
+        })
         .catch(function (err) {
           // Give the words back rather than losing them to a failed request.
-          input.value = body;
           e.draft = body;
           e.pendingAnchor = anchor;
+          e.composerOpen = true;
+          var cbody = lb.querySelector('[data-lb-comments-body]');
+          if (cbody) paintComments(cbody);
           ui().toast((err && err.message) || 'Could not post that comment');
         });
     }
@@ -4156,7 +4184,48 @@
         }
 
         pdfUpdateToolbar(f);
+        attachPdfScrollTracker(f, scroll);
       }).catch(function () {});
+    }
+
+    /* Update the active page indicator as the user scrolls continuously. */
+    function attachPdfScrollTracker(f, scroll) {
+      // Remove any old listener on this scroll container.
+      if (scroll._pdfScrollOff) { scroll._pdfScrollOff(); scroll._pdfScrollOff = null; }
+
+      function onScroll() {
+        var e = entry(f);
+        if (!e.pdfDoc) return;
+        var scrollMid = scroll.scrollTop + scroll.clientHeight / 2;
+        var best = 1;
+        var bestDist = Infinity;
+        for (var n = 1; n <= e.pdfDoc.numPages; n++) {
+          var canvas = scroll.querySelector('[data-lb-pdf-canvas="' + n + '"]');
+          if (!canvas) continue;
+          var mid = canvas.offsetTop + canvas.offsetHeight / 2;
+          var dist = Math.abs(mid - scrollMid);
+          if (dist < bestDist) { bestDist = dist; best = n; }
+        }
+        if (best !== e.pdfPage) {
+          e.pdfPage = best;
+          // Update left-rail highlights.
+          lb.querySelectorAll('[data-lb-pdf-page]').forEach(function (btn) {
+            var n = parseInt(btn.getAttribute('data-lb-pdf-page'), 10);
+            btn.classList.toggle('is-current', n === best);
+            btn.setAttribute('aria-current', n === best ? 'true' : 'false');
+            if (n === best) { btn.scrollIntoView({ block: 'nearest' }); }
+          });
+          // Update floating toolbar page label.
+          var pageLabel = scroll.closest('[data-lb-pdf]') &&
+            scroll.closest('[data-lb-pdf]').querySelector('[data-lb-pdf-page-label]');
+          if (pageLabel) pageLabel.textContent = best + ' / ' + e.pdfDoc.numPages;
+        }
+      }
+
+      scroll.addEventListener('scroll', onScroll, { passive: true });
+      scroll._pdfScrollOff = function () {
+        scroll.removeEventListener('scroll', onScroll);
+      };
     }
 
     function mountPdf(f) {
@@ -4346,15 +4415,45 @@
       }
       if (e.target.closest('[data-lb-send]')) { sendComment(); return; }
       if (e.target.closest('[data-lb-clear]')) {
-        var box = lb.querySelector('[data-lb-input]');
-        if (box) box.value = '';
+        // Cancel puts the composer away entirely — it came out for a reason
+        // that no longer holds.
         en.draft = '';
         en.pendingMentions = [];
-        var pop = lb.querySelector('[data-lb-mentions]');
-        if (pop) pop.hidden = true;
+        en.pendingAnchor = null;
+        en.composerOpen = false;
+        clearAnchorOverlay();
+        var cbody = lb.querySelector('[data-lb-comments-body]');
+        if (cbody) paintComments(cbody);
         return;
       }
       if (e.target.closest('[data-lb-emoji]')) { openEmojiPicker(); return; }
+
+      if (e.target.closest('[data-lb-composer-open]')) {
+        en.composerOpen = true;
+        var chost = lb.querySelector('[data-lb-comments-body]');
+        if (chost) paintComments(chost);
+        var cinput = lb.querySelector('[data-lb-input]');
+        if (cinput) cinput.focus();
+        return;
+      }
+
+      /*
+       * The bubble itself is the reply control: clicking anywhere in a
+       * thread that is not already a button opens its reply box. The Reply
+       * line stays for whoever looks for it, but the whole card answering to
+       * a click is what a conversation feels like.
+       */
+      var bubble = e.target.closest('.tma-portal-viewer__thread');
+      if (bubble && !e.target.closest('button, a, textarea, input, [data-lb-commentmenu-pop]')) {
+        var tid = bubble.getAttribute('data-thread');
+        if (tid && en.replyingTo !== tid) {
+          en.replyingTo = tid;
+          repaintComments(en);
+          var rinput = lb.querySelector('[data-lb-replyinput]');
+          if (rinput) rinput.focus();
+          return;
+        }
+      }
 
       // The bubble's ⋯ — open its little menu; any other click closes it.
       var menuBtn = e.target.closest('[data-lb-commentmenu]');
@@ -4673,6 +4772,8 @@
     if (lb._key) document.removeEventListener('keydown', lb._key);
     if (lb._pdfResize) lb._pdfResize();
     if (lb._pdfWheel) lb._pdfWheel();
+    var pdfScroll = lb.querySelector('[data-lb-pdf-scroll]');
+    if (pdfScroll && pdfScroll._pdfScrollOff) { pdfScroll._pdfScrollOff(); pdfScroll._pdfScrollOff = null; }
     if (lb._leave) lb._leave();
     // Leave the file's channel, or every file opened this session keeps a
     // subscription alive for the rest of the page's life.
