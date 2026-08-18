@@ -4,9 +4,7 @@ namespace App\Observers;
 
 use App\Models\FileItem;
 use App\Models\User;
-use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentSlots;
-use App\Support\Cip\DocumentStatus;
 use App\Support\Realtime\Live;
 
 /**
@@ -51,12 +49,12 @@ class CipFileObserver
             return;
         }
 
-        if (($slot->status ?? DocumentStatus::PENDING_UPLOAD) === DocumentStatus::READY_FOR_SUBMISSION) {
-            return;
+        $actor = $file->deleted_by ? User::find($file->deleted_by) : null;
+
+        if ($actor === null && $file->uploaded_by) {
+            $actor = User::find($file->uploaded_by);
         }
 
-        $actor = $file->uploaded_by ? User::find($file->uploaded_by) : null;
-
-        DocumentEngine::resetAfterFileDeletion($slot, $actor);
+        DocumentSlots::reconcile($slot, $actor);
     }
 }

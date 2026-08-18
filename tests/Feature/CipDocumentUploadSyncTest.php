@@ -15,12 +15,12 @@ use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
-use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use App\Support\Files\Versions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -84,7 +84,7 @@ class CipDocumentUploadSyncTest extends TestCase
         $this->assertNull($slot->file_id);
 
         $file = FileItem::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'folder_id' => $person->folder_id,
             'name' => 'Chen Wei — Passport bio page.pdf',
             'extension' => 'pdf',
@@ -129,7 +129,7 @@ class CipDocumentUploadSyncTest extends TestCase
         $file = $slot->file;
 
         $stored = [
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'disk' => config('filesystems.files_disk', 'local'),
             'path' => 'cip/rescan.pdf',
             'size' => 50,
@@ -148,7 +148,7 @@ class CipDocumentUploadSyncTest extends TestCase
         $person = $application->people->first();
 
         $file = FileItem::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'folder_id' => $person->folder_id,
             'name' => 'Passport bio page scan.pdf',
             'extension' => 'pdf',
@@ -170,6 +170,40 @@ class CipDocumentUploadSyncTest extends TestCase
 
         $this->assertSame($file->id, $slot->file_id);
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->status);
+    }
+
+    public function test_reconcile_clears_a_slot_when_its_file_was_soft_deleted(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->first();
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+
+        $file = $slot->file;
+        $file->update(['deleted_by' => $staff->id]);
+        $file->delete();
+
+        $slot->refresh();
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->status);
+        $this->assertFalse($slot->isFilled());
+
+        $this->assertTrue(DocumentSlots::reconcile($slot, $staff, false));
+
+        $slot->refresh();
+        $this->assertNull($slot->file_id);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $slot->status);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $slot->displayStatus());
+        $this->assertFalse($slot->isFilled());
     }
 
     public function test_deleting_a_filed_file_resets_the_slot_to_pending_upload(): void

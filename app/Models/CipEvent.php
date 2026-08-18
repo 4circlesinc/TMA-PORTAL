@@ -59,6 +59,34 @@ class CipEvent extends Model
      */
     public const ACTION_PACKAGE_CONFIRMED = 'package_confirmed';
 
+    /**
+     * The Unit asked for more information (§18).
+     *
+     * Its own action rather than a detail of the status change: the query
+     * date lives on the application, and which day a report measures from is
+     * an audit question the status event alone does not answer.
+     */
+    public const ACTION_QUERY_RECEIVED = 'query_received';
+
+    /**
+     * The Unit accepted the file for processing (§19).
+     *
+     * Its own action rather than a detail of the status change: the accepted
+     * date lives on the application, and the delay clock (§20) measures from
+     * it — an audit question the status event alone does not answer.
+     */
+    public const ACTION_ACCEPTED_FOR_PROCESSING = 'accepted_for_processing';
+
+    /**
+     * The delay clock ran out (§20).
+     *
+     * Its own action rather than a detail of the status change: the accepted
+     * date lives on the application, and how many days passed before the
+     * file was flagged is an audit question the status event alone does
+     * not answer. actor_id is null — a scheduled job, not a person.
+     */
+    public const ACTION_DELAYED = 'delayed';
+
     protected function casts(): array
     {
         return [

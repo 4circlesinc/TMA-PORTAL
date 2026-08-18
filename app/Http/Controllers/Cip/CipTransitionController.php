@@ -7,10 +7,12 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
+use App\Support\Cip\NonCompliance;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Realtime\Live;
@@ -79,7 +81,7 @@ class CipTransitionController extends Controller
      * Some edges are not this endpoint's to drive.
      *
      * The generic endpoint exists for the transitions that are only a change of
-     * state. Three are not: they carry work the state alone does not capture,
+     * state. Several are not: they carry work the state alone does not capture,
      * and each already has a verb that does it properly. Left open, this route
      * was a way to skip every one of those preconditions — which made the
      * guards in the other verbs decorative rather than binding.
@@ -98,6 +100,12 @@ class CipTransitionController extends Controller
      *    `decided_at`. Both are terminal, so a bare transition leaves those
      *    columns null with no way back to fill them, and any report measured
      *    from the decision date is quietly wrong for ever.
+     *  - NON-COMPLIANT is {@see NonCompliance::record()}, which writes the
+     *    Query received date. Driven bare, the status flips and the date the
+     *    Unit asked is never stored.
+     *  - BACKGROUND CHECK is {@see BackgroundCheck::record()}, which writes
+     *    the Accepted for processing date. Driven bare, the delay clock (§20)
+     *    has nothing to measure from.
      */
     private function refuseIfItHasItsOwnVerb(CipApplication $application, string $status): void
     {
@@ -107,6 +115,14 @@ class CipTransitionController extends Controller
 
         if ($status === Status::PENDING_REVIEW && $application->status === Status::READY_TO_SUBMIT) {
             abort(422, 'Record the submission instead, so the CIP number and the date go with it.');
+        }
+
+        if ($status === Status::NON_COMPLIANT) {
+            abort(422, 'Record the query received date instead, so the day the Unit asked is stored.');
+        }
+
+        if ($status === Status::BACKGROUND_CHECK) {
+            abort(422, 'Record the accepted for processing date instead, so the day the Unit accepted it is stored.');
         }
 
         if ($status === Status::GRANTED || $status === Status::DENIED) {
@@ -202,8 +218,10 @@ class CipTransitionController extends Controller
             'decision' => ['required', 'string', Rule::in([Status::GRANTED, Status::DENIED])],
             // Recorded, not assumed: a decision letter is dated, and staff
             // enter it after the fact as often as on the day.
-            'decidedAt' => ['nullable', 'date'],
+            'decidedAt' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'decidedAt.required' => 'Enter the decision date.',
         ]);
 
         try {
@@ -211,8 +229,78 @@ class CipTransitionController extends Controller
                 $application,
                 $user,
                 $data['decision'],
-                isset($data['decidedAt']) ? Carbon::parse($data['decidedAt']) : null,
+                Carbon::parse($data['decidedAt']),
                 trim($data['note'] ?? ''),
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Record a Unit query: the Query received date, then Non-compliant (§18).
+     *
+     * Its own endpoint because of the column below. The generic status route
+     * refuses NON-COMPLIANT so a bare move cannot leave `query_received_at`
+     * empty. Permission is still `cip.compliance`, through {@see Engine}.
+     */
+    public function query(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            // Recorded, not assumed: a Unit letter is dated, and staff enter
+            // it after the fact as often as on the day.
+            'queryReceivedAt' => ['required', 'date'],
+        ], [
+            'queryReceivedAt.required' => 'Enter the query received date.',
+        ]);
+
+        try {
+            $application = NonCompliance::record(
+                $application,
+                $user,
+                Carbon::parse($data['queryReceivedAt']),
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Record acceptance for processing: the date, then Background check (§19).
+     *
+     * Its own endpoint because of the column below. The generic status route
+     * refuses BACKGROUND CHECK so a bare move cannot leave `accepted_at`
+     * empty. Permission is still `cip.compliance`, through {@see Engine}.
+     */
+    public function accept(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            // Recorded, not assumed: an acceptance letter is dated, and staff
+            // enter it after the fact as often as on the day.
+            'acceptedAt' => ['required', 'date'],
+        ], [
+            'acceptedAt.required' => 'Enter the accepted for processing date.',
+        ]);
+
+        try {
+            $application = BackgroundCheck::record(
+                $application,
+                $user,
+                Carbon::parse($data['acceptedAt']),
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -300,6 +388,10 @@ class CipTransitionController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             ...Confirmation::payload($application, $actor),
+            'queryReceivedAt' => $application->query_received_at?->toDateString(),
+            'acceptedAt' => $application->accepted_at?->toDateString(),
+            'decision' => $application->decision,
+            'decidedAt' => $application->decided_at?->toDateString(),
             'availableTransitions' => collect(Engine::availableTransitions($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,

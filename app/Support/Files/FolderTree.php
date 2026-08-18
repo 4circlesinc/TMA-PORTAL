@@ -275,8 +275,10 @@ class FolderTree
         DB::transaction(function () use ($folder, $userId) {
             $ids = array_merge([$folder->id], self::descendantIdsWithTrashed($folder));
 
-            FileItem::whereIn('folder_id', $ids)->update(['deleted_by' => $userId]);
-            FileItem::whereIn('folder_id', $ids)->delete();
+            FileItem::whereIn('folder_id', $ids)->get()->each(function (FileItem $file) use ($userId) {
+                $file->update(['deleted_by' => $userId]);
+                $file->delete();
+            });
 
             Folder::whereIn('id', $ids)->update(['deleted_by' => $userId]);
             Folder::whereIn('id', $ids)->delete();
@@ -300,10 +302,12 @@ class FolderTree
         $ids = array_merge([$folder->id], self::descendantIdsWithTrashed($folder));
 
         FileItem::withTrashed()->whereIn('folder_id', $ids)->get()
-            ->each(fn (FileItem $f) => Vault::delete($f));
+            ->each(function (FileItem $file) {
+                Vault::delete($file);
+                $file->forceDelete();
+            });
 
         DB::transaction(function () use ($ids) {
-            FileItem::withTrashed()->whereIn('folder_id', $ids)->forceDelete();
             Folder::withTrashed()->whereIn('id', $ids)->forceDelete();
         });
     }

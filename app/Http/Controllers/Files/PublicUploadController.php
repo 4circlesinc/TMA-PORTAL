@@ -7,13 +7,14 @@ use App\Models\FileItem;
 use App\Models\FileRequest;
 use App\Models\FileRequestUpload;
 use App\Models\Folder;
+use App\Support\Cip\DocumentRequests;
+use App\Support\Cip\Package;
 use App\Support\Files\Activity;
 use App\Support\Files\FileRequests;
 use App\Support\Files\FileType;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
-use App\Support\Cip\DocumentRequests;
 use App\Support\Files\Versions;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -46,8 +47,10 @@ class PublicUploadController extends Controller
             return response()->view('request.expired', ['reason' => 'missing'], 404);
         }
 
-        if (! $fileRequest->isOpen()) {
-            return response()->view('request.expired', ['reason' => $fileRequest->closedReason()], 410);
+        if (! $fileRequest->isOpen() || Package::refusesRequest($fileRequest)) {
+            return response()->view('request.expired', [
+                'reason' => $fileRequest->closedReason() ?? 'revoked',
+            ], 410);
         }
 
         if ($fileRequest->password_hash && ! $this->unlocked($request, $token)) {
@@ -67,7 +70,7 @@ class PublicUploadController extends Controller
     {
         $fileRequest = $this->find($token);
 
-        if (! $fileRequest || ! $fileRequest->isOpen()) {
+        if (! $fileRequest || ! $fileRequest->isOpen() || Package::refusesRequest($fileRequest)) {
             return response()->view('request.expired', ['reason' => $fileRequest?->closedReason() ?? 'missing'], 410);
         }
 
@@ -92,7 +95,7 @@ class PublicUploadController extends Controller
         $fileRequest = $this->find($token);
 
         abort_unless($fileRequest, 404, 'This upload link no longer exists.');
-        abort_unless($fileRequest->isOpen(), 410, $this->closedMessage($fileRequest));
+        abort_unless($fileRequest->isOpen() && ! Package::refusesRequest($fileRequest), 410, $this->closedMessage($fileRequest));
         abort_if(
             $fileRequest->password_hash && ! $this->unlocked($request, $token),
             403,
@@ -252,6 +255,10 @@ class PublicUploadController extends Controller
 
     private function closedMessage(FileRequest $fileRequest): string
     {
+        if (Package::refusesRequest($fileRequest)) {
+            return 'This upload link has been withdrawn.';
+        }
+
         return match ($fileRequest->closedReason()) {
             'expired' => 'This upload link has expired.',
             'revoked' => 'This upload link has been withdrawn.',

@@ -1,17 +1,45 @@
 <?php
 
+use App\Jobs\PublishScheduledFeedPost;
 use App\Jobs\RefreshIcsSubscription;
+use App\Jobs\SyncCbiHub;
 use App\Jobs\SyncMailbox;
 use App\Jobs\SyncProviderCalendar;
+use App\Jobs\SyncSmartsheetSheet;
+use App\Models\AuthEvent;
 use App\Models\Calendar;
 use App\Models\ConnectedAccount;
+use App\Models\FeedAttachment;
+use App\Models\FeedPost;
+use App\Models\FileWorkflow;
+use App\Models\FileWorkflowStep;
+use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
+use App\Models\Report;
+use App\Models\SmartsheetSheet;
 use App\Models\User;
+use App\Support\Cbi\Mapper;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\Delay;
 use App\Support\Files\ChunkedUpload;
+use App\Support\Files\Presence;
+use App\Support\Files\Workflow\Engine;
+use App\Support\Files\Workflow\Status;
+use App\Support\Imports\ImportPause;
+use App\Support\Mail\Deliveries;
+use App\Support\Mail\Postcards;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\Thumbnailer;
+use App\Support\Notifications\Notifier;
+use App\Support\Reports\ReportRunner;
+use App\Support\Security\SecurityAlerts;
+use App\Support\Smartsheet\Client;
+use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -38,14 +66,14 @@ Schedule::command('files:cleanup-uploads')->hourly();
  */
 Artisan::command('files:workflow-maintenance', function () {
     $expired = 0;
-    App\Models\FileWorkflow::query()
-        ->whereNotIn('status', App\Support\Files\Workflow\Status::TERMINAL)
+    FileWorkflow::query()
+        ->whereNotIn('status', Status::TERMINAL)
         ->whereNotNull('due_at')
         ->where('due_at', '<', now())
-        ->each(function (App\Models\FileWorkflow $workflow) use (&$expired) {
-            $workflow->update(['status' => App\Support\Files\Workflow\Status::EXPIRED, 'completed_at' => now()]);
-            App\Support\Files\Workflow\Engine::log($workflow, null, 'expired', 'The due date passed.');
-            App\Support\Notifications\Notifier::send([
+        ->each(function (FileWorkflow $workflow) use (&$expired) {
+            $workflow->update(['status' => Status::EXPIRED, 'completed_at' => now()]);
+            Engine::log($workflow, null, 'expired', 'The due date passed.');
+            Notifier::send([
                 'user' => $workflow->created_by,
                 'type' => 'file.approval_decision',
                 'title' => $workflow->file->name.' — request expired',
@@ -55,11 +83,11 @@ Artisan::command('files:workflow-maintenance', function () {
         });
 
     $reminded = 0;
-    App\Models\FileWorkflow::query()
-        ->whereNotIn('status', App\Support\Files\Workflow\Status::TERMINAL)
+    FileWorkflow::query()
+        ->whereNotIn('status', Status::TERMINAL)
         ->whereNotNull('reminder_days')
         ->with('file')
-        ->each(function (App\Models\FileWorkflow $workflow) use (&$reminded) {
+        ->each(function (FileWorkflow $workflow) use (&$reminded) {
             $cutoff = now()->subDays(max(1, (int) $workflow->reminder_days));
 
             $workflow->steps()
@@ -71,11 +99,11 @@ Artisan::command('files:workflow-maintenance', function () {
                         $w->whereNull('last_reminded_at')->where('invited_at', '<', $cutoff);
                     })->orWhere('last_reminded_at', '<', $cutoff);
                 })
-                ->each(function (App\Models\FileWorkflowStep $step) use ($workflow, &$reminded) {
+                ->each(function (FileWorkflowStep $step) use ($workflow, &$reminded) {
                     if (! $step->user_id) {
                         return;
                     }
-                    App\Support\Notifications\Notifier::send([
+                    Notifier::send([
                         'user' => $step->user_id,
                         'actor' => $workflow->sender,
                         'type' => 'file.approval_reminder',
@@ -87,7 +115,7 @@ Artisan::command('files:workflow-maintenance', function () {
                         'last_reminded_at' => now(),
                         'reminder_count' => $step->reminder_count + 1,
                     ]);
-                    App\Support\Files\Workflow\Engine::log($workflow, null, 'reminded', null, ['step' => $step->uuid]);
+                    Engine::log($workflow, null, 'reminded', null, ['step' => $step->uuid]);
                     $reminded++;
                 });
         });
@@ -98,12 +126,34 @@ Artisan::command('files:workflow-maintenance', function () {
 Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping();
 
 /*
+ * CIP delayed applications (§20).
+ *
+ * If 180 days have passed since the Accepted for processing date and the
+ * Unit has recorded no decision, the file is Delayed. Notices go to the
+ * Administrator, the Reviewing Officer, and the Service Provider.
+ * Idempotent: an already-delayed file is never re-notified. The delay
+ * clock starts when acceptance is recorded (§19).
+ */
+Artisan::command('cip:flag-delayed', function () {
+    if (! CipAccess::enabled()) {
+        $this->info('CIP is disabled (FEATURE_CIP).');
+
+        return;
+    }
+
+    $flagged = Delay::run();
+    $this->info("Flagged {$flagged} delayed application(s).");
+})->purpose('Mark CIP applications delayed after 180 days with no decision');
+
+Schedule::command('cip:flag-delayed')->dailyAt('04:00')->withoutOverlapping();
+
+/*
  * Drop file-presence rows whose tab stopped renewing. Staleness is already
  * derived on read, so this is only about keeping the table small — the roster
  * is correct with or without it.
  */
 Artisan::command('files:prune-presence', function () {
-    $this->info('Removed '.App\Support\Files\Presence::prune().' stale presence session(s).');
+    $this->info('Removed '.Presence::prune().' stale presence session(s).');
 })->purpose('Remove file presence sessions that stopped sending heartbeats');
 
 Schedule::command('files:prune-presence')->everyThirtyMinutes();
@@ -125,7 +175,7 @@ Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping(
  * scheduler that was down must catch up, not skip.
  */
 Artisan::command('reports:run {--all : Recompute every recurring report, due or not}', function () {
-    $due = App\Models\Report::query()
+    $due = Report::query()
         ->whereNotNull('frequency')
         ->when(! $this->option('all'), fn ($q) => $q->where(function ($w) {
             $w->whereNull('next_run_at')->orWhere('next_run_at', '<=', now());
@@ -134,8 +184,8 @@ Artisan::command('reports:run {--all : Recompute every recurring report, due or 
         ->get();
 
     foreach ($due as $report) {
-        App\Support\Reports\ReportRunner::run(
-            App\Support\Reports\ReportRunner::rollWindow($report)
+        ReportRunner::run(
+            ReportRunner::rollWindow($report)
         );
         $this->info("{$report->status}: {$report->name}");
     }
@@ -158,7 +208,6 @@ Schedule::command('reports:run')->hourly()->withoutOverlapping();
 Schedule::command('sharepoint:sync --queue')
     ->everyFiveMinutes()
     ->withoutOverlapping();
-
 
 /*
  * Message attachments are uploaded and staged the moment they are chosen, so a
@@ -237,7 +286,7 @@ Schedule::command('mail:sync-all')
  * notification pipeline.
  */
 Artisan::command('mail:wake-snoozed', function () {
-    $due = \App\Models\MailMessage::query()
+    $due = MailMessage::query()
         ->whereNotNull('snoozed_until')
         ->where('snoozed_until', '<=', now())
         ->orderBy('snoozed_until')
@@ -247,7 +296,7 @@ Artisan::command('mail:wake-snoozed', function () {
     foreach ($due as $message) {
         $message->forceFill(['snoozed_until' => null])->save();
 
-        \App\Support\Notifications\Notifier::send([
+        Notifier::send([
             'user' => $message->user_id,
             'type' => 'email.snooze_due',
             'title' => 'Reminder: '.($message->subject ?: 'a snoozed email'),
@@ -255,7 +304,7 @@ Artisan::command('mail:wake-snoozed', function () {
             // Deep-link so the toast / panel click opens this exact message.
             'action_url' => '/email?message='.$message->uuid,
             'subject' => $message,
-            'image' => \App\Models\MailSenderPhoto::urlFor((string) ($message->from_email ?? '')),
+            'image' => MailSenderPhoto::urlFor((string) ($message->from_email ?? '')),
             'metadata' => [
                 'from_email' => mb_strtolower((string) ($message->from_email ?? '')),
                 'from_name' => (string) ($message->from_name ?: $message->from_email ?: 'Sender'),
@@ -356,8 +405,8 @@ Schedule::command('calendar:sync-providers')
  * being picked up twice.
  */
 Artisan::command('feed:publish-scheduled', function () {
-    $due = \App\Models\FeedPost::query()
-        ->where('status', \App\Models\FeedPost::STATUS_SCHEDULED)
+    $due = FeedPost::query()
+        ->where('status', FeedPost::STATUS_SCHEDULED)
         ->whereNotNull('scheduled_for')
         ->where('scheduled_for', '<=', now())
         ->orderBy('scheduled_for')
@@ -365,7 +414,7 @@ Artisan::command('feed:publish-scheduled', function () {
         ->pluck('id');
 
     foreach ($due as $id) {
-        \App\Jobs\PublishScheduledFeedPost::dispatch($id);
+        PublishScheduledFeedPost::dispatch($id);
     }
 
     $this->info("Queued {$due->count()} scheduled post(s) for publication.");
@@ -386,18 +435,18 @@ Schedule::command('feed:publish-scheduled')
 Artisan::command('feed:prune-attachments {--hours=24}', function () {
     $hours = max(1, (int) $this->option('hours'));
 
-    $stale = \App\Models\FeedAttachment::query()
-        ->where('status', \App\Models\FeedAttachment::STATUS_STAGED)
+    $stale = FeedAttachment::query()
+        ->where('status', FeedAttachment::STATUS_STAGED)
         ->where('created_at', '<', now()->subHours($hours))
         ->get();
 
     foreach ($stale as $attachment) {
         try {
-            \Illuminate\Support\Facades\Storage::disk($attachment->disk)->delete(array_filter([
+            Storage::disk($attachment->disk)->delete(array_filter([
                 $attachment->path,
                 $attachment->thumb_path,
             ]));
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // The row goes either way; bytes left behind are cheaper than a
             // prune that aborts halfway through on one unreachable file.
         }
@@ -428,24 +477,24 @@ Artisan::command('smartsheet:sync
 
         return;
     }
-    if (\App\Support\Imports\ImportPause::smartsheet()) {
+    if (ImportPause::smartsheet()) {
         $this->warn('Smartsheet imports are paused (Settings → Background Operations).');
 
         return;
     }
-    if (! \App\Support\Smartsheet\Client::configured()) {
+    if (! Client::configured()) {
         $this->warn('Smartsheet token or workspace id missing.');
 
         return;
     }
 
-    $runId = (string) \Illuminate\Support\Str::uuid();
-    $due = \App\Support\Smartsheet\Synchroniser::refreshWorkspace($runId);
+    $runId = (string) Str::uuid();
+    $due = Synchroniser::refreshWorkspace($runId);
 
     if ($this->option('full')) {
-        $due = \App\Models\SmartsheetSheet::query()
+        $due = SmartsheetSheet::query()
             ->where('sync_enabled', true)
-            ->where('status', '!=', \App\Models\SmartsheetSheet::STATUS_GONE)
+            ->where('status', '!=', SmartsheetSheet::STATUS_GONE)
             ->get()
             ->all();
     }
@@ -458,7 +507,7 @@ Artisan::command('smartsheet:sync
      */
     if ($this->option('queue')) {
         foreach ($due as $sheet) {
-            \App\Jobs\SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
+            SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
         }
         $this->info('Queued '.count($due).' sheet sync(s).');
 
@@ -468,7 +517,7 @@ Artisan::command('smartsheet:sync
     $done = 0;
     foreach ($due as $sheet) {
         attempt:
-        $result = \App\Support\Smartsheet\Synchroniser::syncSheet($sheet, $runId, (bool) $this->option('full'));
+        $result = Synchroniser::syncSheet($sheet, $runId, (bool) $this->option('full'));
         if ($result['status'] === 'throttled') {
             $wait = max(1, (int) ($result['retryAfter'] ?? 30));
             $this->warn("Throttled; waiting {$wait}s…");
@@ -478,7 +527,7 @@ Artisan::command('smartsheet:sync
         // 'unchanged' maps too: a pass that mirrored but died mid-mapping
         // reports unchanged on retry, and mapping again is nearly free.
         if (in_array($result['status'], ['synced', 'unchanged'], true)) {
-            \App\Support\Cbi\Mapper::mapSheet($sheet->fresh());
+            Mapper::mapSheet($sheet->fresh());
         }
         $done++;
         $this->info("[{$done}/".count($due)."] {$result['status']}: {$sheet->name}");
@@ -506,10 +555,10 @@ Schedule::call(function () {
     if (! config('services.smartsheet.cbi_enabled')) {
         return;
     }
-    if (\App\Support\Imports\ImportPause::smartsheet()) {
+    if (ImportPause::smartsheet()) {
         return;
     }
-    \App\Jobs\SyncCbiHub::dispatch();
+    SyncCbiHub::dispatch();
 })->name('cbi:sync-hub')->everyTenMinutes()->withoutOverlapping();
 
 /*
@@ -518,10 +567,10 @@ Schedule::call(function () {
  * remap, never a re-walk. Safe to run any time; it upserts.
  */
 Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', function () {
-    $query = \App\Models\SmartsheetSheet::query()
+    $query = SmartsheetSheet::query()
         ->whereIn('category', array_merge(
-            \App\Models\SmartsheetSheet::APPLICATION_CATEGORIES,
-            [\App\Models\SmartsheetSheet::CATEGORY_ASSESSMENT],
+            SmartsheetSheet::APPLICATION_CATEGORIES,
+            [SmartsheetSheet::CATEGORY_ASSESSMENT],
         ));
 
     if ($this->option('sheet')) {
@@ -531,13 +580,13 @@ Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', functi
     // Application sheets first so assessment matching has applications to
     // link against on a cold start.
     $sheets = $query->get()->sortBy(
-        fn ($s) => $s->category === \App\Models\SmartsheetSheet::CATEGORY_ASSESSMENT ? 1 : 0
+        fn ($s) => $s->category === SmartsheetSheet::CATEGORY_ASSESSMENT ? 1 : 0
     );
 
     foreach ($sheets as $sheet) {
         // force: without it the per-row unchanged-skip makes a remap a
         // silent no-op — the whole point here is re-extracting everything.
-        \App\Support\Cbi\Mapper::mapSheet($sheet, force: true);
+        Mapper::mapSheet($sheet, force: true);
         $this->info("Mapped: {$sheet->name}");
     }
 
@@ -563,11 +612,11 @@ Artisan::command('security:monthly-summary {--user= : Send to one user id, for a
         ->when($this->option('user'), fn ($q) => $q->where('id', (int) $this->option('user')))
         ->get()
         ->filter(fn (User $user) => $user->email
-            && \App\Support\Security\SecurityAlerts::enabled($user, 'monthly_summary'));
+            && SecurityAlerts::enabled($user, 'monthly_summary'));
 
     $sent = 0;
     foreach ($users as $user) {
-        $events = \App\Models\AuthEvent::where('user_id', $user->id)
+        $events = AuthEvent::where('user_id', $user->id)
             ->whereBetween('created_at', [$start, $end])
             ->get();
 
@@ -582,8 +631,8 @@ Artisan::command('security:monthly-summary {--user= : Send to one user id, for a
             ['Two-factor authentication', $user->two_factor_confirmed_at ? 'On' : 'Off'],
         ];
 
-        \App\Support\Mail\Deliveries::send(
-            \App\Support\Mail\Postcards::securitySummary($period, $details, url('/security-settings'), $user->first_name ?: null),
+        Deliveries::send(
+            Postcards::securitySummary($period, $details, url('/security-settings'), $user->first_name ?: null),
             $user->email,
             $user,
             'securitySummary',

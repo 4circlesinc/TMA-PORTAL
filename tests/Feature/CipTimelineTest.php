@@ -205,6 +205,53 @@ class CipTimelineTest extends TestCase
         $this->assertSame('Ada Admin recorded the decision: Approved', $entry['what']);
     }
 
+    public function test_a_recorded_query_reads_as_the_day_the_unit_asked(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_QUERY_RECEIVED, $admin, [
+            'queryReceivedAt' => '2026-08-18',
+        ]);
+
+        $entry = Timeline::for($application, $admin)[0];
+
+        $this->assertSame(CipEvent::ACTION_QUERY_RECEIVED, $entry['action']);
+        $this->assertSame('Ada Admin recorded a query received on 2026-08-18', $entry['what']);
+    }
+
+    public function test_acceptance_for_processing_reads_as_the_day_the_unit_took_the_file(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_ACCEPTED_FOR_PROCESSING, $admin, [
+            'acceptedAt' => '2026-08-18',
+        ]);
+
+        $entry = Timeline::for($application, $admin)[0];
+
+        $this->assertSame(CipEvent::ACTION_ACCEPTED_FOR_PROCESSING, $entry['action']);
+        $this->assertSame('Ada Admin recorded acceptance for processing on 2026-08-18', $entry['what']);
+    }
+
+    public function test_a_delayed_file_reads_as_how_long_the_clock_ran(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_DELAYED, null, [
+            'acceptedAt' => '2026-02-18',
+            'days' => 181,
+        ]);
+
+        $entry = Timeline::for($application, $admin)[0];
+
+        $this->assertSame(CipEvent::ACTION_DELAYED, $entry['action']);
+        $this->assertSame('the system', $entry['who']['name']);
+        $this->assertSame('The system marked it delayed after 181 days with no decision', $entry['what']);
+    }
+
     public function test_a_null_actor_reads_as_the_system(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

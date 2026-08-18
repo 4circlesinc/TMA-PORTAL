@@ -9,12 +9,12 @@ use App\Models\CompanyStaffAssignment;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
-use App\Models\SharePointConnection;
 use App\Models\Share;
+use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
-use App\Support\Cip\Confirmation;
+use App\Support\Cip\Package;
 use App\Support\Companies\CompanyAccess;
 use Illuminate\Support\Collection;
 
@@ -439,17 +439,22 @@ class FileAccess
         }
 
         /*
-         * §15: a confirmed original package is view-only.
+         * §17: a confirmed original package is view-only.
          *
          * Checked after the role (so view/download/comment still pass) and
-         * after the admin/owner short-circuit inside fileRole() (so neither
-         * full rights nor owning the bytes can rewrite a package the Unit
-         * is about to be handed). View, preview, download and comment stay.
+         * after the admin/owner short-circuit inside fileRole()/folderRole()
+         * (so neither full rights nor owning the bytes can rewrite a package
+         * the Unit is about to be handed). Person folders freeze; Additional
+         * Documents does not. View, preview, download and comment stay.
          */
-        if ($item instanceof FileItem
-            && in_array($ability, self::PACKAGE_LOCKED, true)
-            && Confirmation::locksFile($item)) {
-            return false;
+        if (in_array($ability, self::PACKAGE_LOCKED, true)) {
+            $frozen = $item instanceof FileItem
+                ? Package::locksFile($item)
+                : Package::locksFolder($item);
+
+            if ($frozen) {
+                return false;
+            }
         }
 
         /* A client's right to re-share is the firm's to decide, not the item
@@ -680,6 +685,8 @@ class FileAccess
      */
     public static function forgetFolders(): void
     {
+        Package::forget();
+
         self::$folders = [];
 
         /*

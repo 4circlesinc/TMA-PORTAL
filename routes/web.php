@@ -22,9 +22,9 @@ use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipTransitionController;
 use App\Http\Controllers\ClientAssignmentController;
+use App\Http\Controllers\ClientConversationController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
-use App\Http\Controllers\ClientConversationController;
 use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
@@ -378,6 +378,20 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::post('/applications/{uuid}/decision', [CipTransitionController::class, 'decide'])
             ->name('applications.decision');
+        /*
+         * §18: the Unit asked for more. Its own verb because it writes
+         * `query_received_at` and then moves the file to Non-compliant — a
+         * bare status change would leave the date empty.
+         */
+        Route::post('/applications/{uuid}/query', [CipTransitionController::class, 'query'])
+            ->name('applications.query');
+        /*
+         * §19: the Unit accepted the file. Its own verb because it writes
+         * `accepted_at` and then moves the file to Background check — a
+         * bare status change would leave the delay clock with no start.
+         */
+        Route::post('/applications/{uuid}/acceptance', [CipTransitionController::class, 'accept'])
+            ->name('applications.acceptance');
 
         /*
          * §10: who is working on this application.

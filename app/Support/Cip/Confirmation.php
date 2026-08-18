@@ -21,8 +21,9 @@ use Illuminate\Support\Facades\DB;
  * auto-flips here (see {@see Review::settle()}). The submitting party — the
  * service provider contact, or the private client on a PRI file — is told,
  * and must press Confirm submission. That press freezes the original package:
- * the status stays Ready to submit until staff record the CIP number (§16),
- * but the documents themselves cannot be replaced, renamed or deleted.
+ * person folders become view-only (§17), outstanding upload links into them
+ * are withdrawn, and Additional Documents stays writable. The status stays
+ * Ready to submit until staff record the CIP number (§16).
  */
 class Confirmation
 {
@@ -92,6 +93,9 @@ class Confirmation
 
         return DB::transaction(function () use ($application, $actor) {
             $application->forceFill(['locked_at' => now()])->save();
+
+            Package::forget();
+            Package::revokeOutstandingLinks($application);
 
             Engine::record($application, CipEvent::ACTION_PACKAGE_CONFIRMED, $actor, [
                 'reason' => 'confirm_submission',
@@ -164,17 +168,7 @@ class Confirmation
     /** Is this library file part of a confirmed original package? */
     public static function locksFile(FileItem $file): bool
     {
-        $slot = $file->relationLoaded('cipDocument')
-            ? $file->cipDocument
-            : $file->cipDocument()->first();
-
-        if ($slot === null) {
-            return false;
-        }
-
-        $slot->loadMissing('application');
-
-        return $slot->application?->isLocked() === true;
+        return Package::locksFile($file);
     }
 
     /**

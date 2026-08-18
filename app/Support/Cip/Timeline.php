@@ -132,6 +132,9 @@ class Timeline
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
             CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
             CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
+            CipEvent::ACTION_QUERY_RECEIVED => self::querySentence($meta, $who),
+            CipEvent::ACTION_ACCEPTED_FOR_PROCESSING => self::acceptedSentence($meta, $who),
+            CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.
@@ -202,6 +205,46 @@ class Timeline
         }
 
         return "{$who} recorded the decision: ".Status::label($decision);
+    }
+
+    /**
+     * The Unit's query, named by the day it arrived.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function querySentence(array $meta, string $who): string
+    {
+        $date = $meta['queryReceivedAt'] ?? null;
+
+        return $date
+            ? "{$who} recorded a query received on {$date}"
+            : "{$who} recorded a query received from the Unit";
+    }
+
+    /**
+     * The Unit accepted the file, named by the day it did.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function acceptedSentence(array $meta, string $who): string
+    {
+        $date = $meta['acceptedAt'] ?? null;
+
+        return $date
+            ? "{$who} recorded acceptance for processing on {$date}"
+            : "{$who} recorded acceptance for processing";
+    }
+
+    /**
+     * The delay clock running out — usually the system, named by how long.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function delayedSentence(array $meta, string $who): string
+    {
+        $days = $meta['days'] ?? Delay::DAYS;
+
+        return "{$who} marked it delayed after {$days} days with no decision";
     }
 
     /**

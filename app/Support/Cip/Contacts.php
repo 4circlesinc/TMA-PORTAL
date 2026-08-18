@@ -5,11 +5,12 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CompanyMember;
+use App\Models\User;
+use App\Support\Access\Role;
 
 /**
- * Who "the Service Provider" is for one application — the people §14 and §15
- * write to when the file needs the firm, or when it is ready for them to
- * confirm.
+ * Who a CIP notice writes to — the provider side for §14, §15 and §18, and
+ * the staff classes §20 and §21 name beside them.
  *
  * Deduplicated by address: a member whose mailbox is also the registry contact
  * is one recipient, not two, and a private client with no firm behind them is
@@ -17,6 +18,86 @@ use App\Models\CompanyMember;
  */
 class Contacts
 {
+    /**
+     * Every approved Administrator account — the brief's "Administrator" as a
+     * class, not the person who last touched the file.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function administrators(): array
+    {
+        $recipients = [];
+
+        User::query()
+            ->where('account_type', Role::ADMINISTRATOR)
+            ->where('status', User::STATUS_APPROVED)
+            ->whereNotNull('email')
+            ->get(['id', 'name', 'email'])
+            ->each(function (User $admin) use (&$recipients) {
+                if ($admin->email === '') {
+                    return;
+                }
+
+                $recipients[mb_strtolower($admin->email)] = [
+                    'email' => $admin->email,
+                    'name' => $admin->name,
+                    'userId' => $admin->id,
+                ];
+            });
+
+        return array_values($recipients);
+    }
+
+    /**
+     * Administrator + Reviewing Officer + Service Provider, unique by mailbox.
+     *
+     * §20 names these three; §21's decision notice uses the same set. A person
+     * in two classes is one recipient. An application with no reviewing
+     * officer still writes to the other two.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function parties(CipApplication $application): array
+    {
+        $recipients = [];
+
+        foreach ([
+            ...self::administrators(),
+            ...self::reviewingOfficer($application),
+            ...self::providerSide($application),
+        ] as $recipient) {
+            $recipients[mb_strtolower($recipient['email'])] = $recipient;
+        }
+
+        return array_values($recipients);
+    }
+
+    /**
+     * The reviewing officer holding this file, if anybody is.
+     *
+     * Live assignments are the authority; the cache column is only what the
+     * table draws. An application nobody holds contributes nobody — the other
+     * classes still get the notice.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function reviewingOfficer(CipApplication $application): array
+    {
+        $holder = Assignments::live($application)
+            ->firstWhere('role', CipAccess::REVIEWING_OFFICER);
+        $officer = $holder?->user;
+
+        if ($officer === null || ! $officer->email) {
+            return [];
+        }
+
+        return [[
+            'email' => $officer->email,
+            'name' => $officer->name,
+            'userId' => $officer->id,
+        ]];
+    }
+
     /**
      * @return list<array{email:string, name:?string, userId:?int}>
      */

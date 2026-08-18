@@ -5176,10 +5176,18 @@
   function renderApplicationBar(state, app) {
     if (!app) return '';
 
-    var action = renderSubmissionAction(state, app);
-    if (!action) return '';
+    var parts = [];
+    var submission = renderSubmissionAction(state, app);
+    if (submission) parts.push(submission);
+    var query = renderQueryAction(app);
+    if (query) parts.push(query);
+    var accepted = renderAcceptanceAction(app);
+    if (accepted) parts.push(accepted);
+    var decision = renderDecisionAction(app);
+    if (decision) parts.push(decision);
+    if (!parts.length) return '';
 
-    return '<div class="tma-dash__clients-appbar">' + action + '</div>';
+    return '<div class="tma-dash__clients-appbar">' + parts.join('') + '</div>';
   }
 
   /*
@@ -5218,6 +5226,53 @@
     var access = window.TMAPortalAccess;
 
     return !!(access && access.can && access.can('cip.compliance'));
+  }
+
+  /*
+   * §18: the Unit asked for more. Offered from the statuses a query can
+   * actually land on — Pending review, Background check, Delayed — because
+   * that is the edge the server accepts. Pressing it from anywhere else and
+   * then being refused would be the interface hiding a rule it could have
+   * simply not shown.
+   */
+  function renderQueryAction(app) {
+    if (!canRecordSubmission()) return '';
+    if (['pending_review', 'background_check', 'delayed'].indexOf(app.status) === -1) return '';
+
+    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-query>' +
+      'Query received</button>';
+  }
+
+  /*
+   * §19: the Unit accepted the file. Offered from Pending review and
+   * Non-compliant — the two edges the server accepts into Background check.
+   */
+  function renderAcceptanceAction(app) {
+    if (!canRecordSubmission()) return '';
+    if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
+
+    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-accept>' +
+      'Accepted for processing</button>';
+  }
+
+  /*
+   * §21: the Unit decided. Offered from Background check and Delayed — the
+   * two edges the server accepts into Approved or Denied. Date and type
+   * are both asked for; either one without the other would leave a terminal
+   * file whose reports cannot say when, or which way.
+   */
+  function canRecordDecision() {
+    var access = window.TMAPortalAccess;
+
+    return !!(access && access.can && access.can('cip.decide'));
+  }
+
+  function renderDecisionAction(app) {
+    if (!canRecordDecision()) return '';
+    if (['background_check', 'delayed'].indexOf(app.status) === -1) return '';
+
+    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-decide>' +
+      'Record decision</button>';
   }
 
   /*
@@ -5419,8 +5474,10 @@
    */
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
-    var status = d.statusLabel || (filed ? 'Filed' : 'Outstanding');
-    var tone = d.statusTone || (filed ? 'success' : 'neutral');
+    var status = filed
+      ? (d.statusLabel || 'Filed')
+      : 'Pending upload';
+    var tone = filed ? (d.statusTone || 'success') : 'neutral';
     var opens = filed && d.fileId;
     var name =
       '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
@@ -8033,7 +8090,19 @@
     }
 
     if (to === 'granted' || to === 'denied') {
-      openDecisionDialog(applicationId, to, clientUid);
+      openDecisionDialog(applicationId, clientUid, to);
+
+      return;
+    }
+
+    if (to === 'non_compliant') {
+      openQueryDialog(applicationId, clientUid);
+
+      return;
+    }
+
+    if (to === 'background_check') {
+      openAcceptanceDialog(applicationId, clientUid);
 
       return;
     }
@@ -8052,30 +8121,170 @@
       });
   }
 
-  function openDecisionDialog(applicationId, decision, clientUid) {
+  /*
+   * §18: the day the Unit asked, which is what moves the file to Non-compliant.
+   *
+   * The date is asked for rather than assumed. Staff record a query after the
+   * fact as often as on the day, and quietly stamping today would put the
+   * wrong date on an audit trail nobody would think to check.
+   */
+  function openQueryDialog(applicationId, clientUid) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
 
-    var approved = decision === 'granted';
     var today = new Date().toISOString().slice(0, 10);
 
     ui.openModal({
-      title: approved ? 'Record approval' : 'Record denial',
+      title: 'Record query received',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-query-received">Query received date</label>' +
+        '<input type="date" id="cip-query-received" class="tma-dash__clients-field-input"' +
+        ' data-cip-query-received value="' + esc(today) + '">' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-query>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-query>Record query</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-query]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-query]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-query-received]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the query received date.', 'negative');
+            return;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Recording…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/query', {
+            method: 'POST',
+            json: { queryReceivedAt: date },
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast('Query recorded — the file is non-compliant.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = 'Record query';
+              clientsToast((err && err.message) || 'Could not record this query.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * §19: the day the Unit accepted the file, which is what moves it to
+   * Background check. Asked for rather than assumed — staff record it after
+   * the fact as often as on the day.
+   */
+  function openAcceptanceDialog(applicationId, clientUid) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: 'Record accepted for processing',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-accepted">Accepted for processing date</label>' +
+        '<input type="date" id="cip-accepted" class="tma-dash__clients-field-input"' +
+        ' data-cip-accepted value="' + esc(today) + '">' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The application will move to Background check.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-accept>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-accept>Record acceptance</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-accept]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-accept]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-accepted]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the accepted for processing date.', 'negative');
+            return;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Recording…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/acceptance', {
+            method: 'POST',
+            json: { acceptedAt: date },
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast('Accepted for processing — the file is in background check.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = 'Record acceptance';
+              clientsToast((err && err.message) || 'Could not record this acceptance.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  function openDecisionDialog(applicationId, clientUid, decision) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+    var chosen = decision === 'granted' || decision === 'denied' ? decision : '';
+    var picking = !chosen;
+
+    var typeField = picking
+      ?         '<div class="tma-dash__clients-field">' +
+        '<span class="tma-dash__clients-field-label">Decision type</span>' +
+        '<div class="tma-portal-radio-row">' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="granted" data-cip-decision-type>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Approved</label>' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="denied" data-cip-decision-type>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Denied</label>' +
+        '</div></div>'
+      : '';
+
+    ui.openModal({
+      title: picking ? 'Record decision' : (chosen === 'granted' ? 'Record approval' : 'Record denial'),
       body:
         '<div class="tma-dash__clients-field">' +
         '<label class="tma-dash__clients-field-label" for="cip-decided">Decision date</label>' +
         '<input type="date" id="cip-decided" class="tma-dash__clients-field-input"' +
         ' data-cip-decided value="' + esc(today) + '">' +
         '</div>' +
+        typeField +
         '<p class="tma-portal-modal__text">' +
-        (approved
-          ? 'The application will move to Approved. This cannot be undone from here.'
-          : 'The application will move to Denied. This cannot be undone from here.') +
+        (picking
+          ? 'The application will move to Approved or Denied. This cannot be undone from here.'
+          : (chosen === 'granted'
+            ? 'The application will move to Approved. This cannot be undone from here.'
+            : 'The application will move to Denied. This cannot be undone from here.')) +
         '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-decision>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-save-decision>' +
-        (approved ? 'Record approval' : 'Record denial') + '</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-decision>Record decision</button>' +
         '</div>',
       onMount: function (el) {
         var cancel = el.querySelector('[data-cip-cancel-decision]');
@@ -8086,24 +8295,37 @@
 
         save.addEventListener('click', function () {
           var dateEl = el.querySelector('[data-cip-decided]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the decision date.', 'negative');
+            return;
+          }
+
+          var picked = chosen;
+          if (picking) {
+            var typeEl = el.querySelector('[data-cip-decision-type]:checked');
+            picked = typeEl ? typeEl.value : '';
+          }
+          if (picked !== 'granted' && picked !== 'denied') {
+            clientsToast('Choose Approved or Denied.', 'negative');
+            return;
+          }
+
           save.disabled = true;
-          save.textContent = 'Saving…';
+          save.textContent = 'Recording…';
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
             method: 'POST',
-            json: {
-              decision: decision,
-              decidedAt: dateEl ? dateEl.value : today,
-            },
+            json: { decision: picked, decidedAt: date },
           })
             .then(function () {
               ui.closeModal();
-              clientsToast(approved ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
+              clientsToast(picked === 'granted' ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
               save.disabled = false;
-              save.textContent = approved ? 'Record approval' : 'Record denial';
+              save.textContent = 'Record decision';
               clientsToast((err && err.message) || 'Could not record the decision.', 'negative');
             });
         });
@@ -9548,6 +9770,30 @@
 
     MORPH.unwired(root, '[data-cip-submit]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () { openSubmissionDialog(state, render, false); });
+    });
+
+    MORPH.unwired(root, '[data-cip-query]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openQueryDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-accept]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openAcceptanceDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-decide]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openDecisionDialog(app.id, app.clientUid);
+      });
     });
 
     MORPH.unwired(root, '[data-cip-fix-number]').forEach(function (btn) {

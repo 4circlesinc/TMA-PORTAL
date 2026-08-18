@@ -42,9 +42,11 @@ class CipTransitionTest extends TestCase
     /**
      * Targets the generic endpoint refuses because a dedicated verb owns them:
      * filing a draft checks the checklist, recording a submission carries the
-     * CIP number, recording a decision stores the outcome and its date.
+     * CIP number, recording a query stores the date the Unit asked, recording
+     * acceptance stores the date the Unit took the file, recording a decision
+     * stores the outcome and its date.
      */
-    private const OWNED_ELSEWHERE = ['new', 'pending_review', 'granted', 'denied'];
+    private const OWNED_ELSEWHERE = ['new', 'pending_review', 'non_compliant', 'background_check', 'granted', 'denied'];
 
     private const EDGES = [
         [Status::DRAFT, Status::NEW],
@@ -151,7 +153,7 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
 
         foreach (self::EDGES as [$from, $to]) {
-            // Four targets carry work the state alone does not — see
+            // Targets that carry work the state alone does not — see
             // refuseIfItHasItsOwnVerb. They are walked by the tests that own
             // them, and refused here on purpose.
             if (in_array($to, self::OWNED_ELSEWHERE, true)) {
@@ -204,7 +206,7 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $reviewer = $this->user(Role::REVIEWING_OFFICER);
 
-        $application = $this->at($this->application($admin), Status::PENDING_REVIEW);
+        $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
         Assignments::assign($application->fresh(), $reviewer, $admin);
         $application = $application->fresh();
         $events = CipEvent::count();
@@ -212,12 +214,13 @@ class CipTransitionTest extends TestCase
         // On the file, so the refusal under test is the CAPABILITY's and not
         // the scope's 404: a Reviewing Officer may hold this application and
         // assess its documents; moving it through compliance is somebody
-        // else's work.
+        // else's work. Delayed is still a bare status edge; Background check
+        // and Non-compliant each have a date verb of their own.
         $this->actingAs($reviewer)
-            ->postJson($this->statusUrl($application), ['status' => Status::BACKGROUND_CHECK])
+            ->postJson($this->statusUrl($application), ['status' => Status::DELAYED])
             ->assertForbidden();
 
-        $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
         $this->assertSame($events, CipEvent::count());
     }
 
@@ -399,6 +402,19 @@ class CipTransitionTest extends TestCase
 
         $this->assertSame(Status::READY_TO_SUBMIT, $ready->refresh()->status);
 
+        $pending = $this->at($this->application($staff), Status::PENDING_REVIEW);
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$pending->uuid.'/status', ['status' => 'non_compliant'])
+            ->assertStatus(422);
+        $this->assertSame(Status::PENDING_REVIEW, $pending->refresh()->status);
+        $this->assertNull($pending->refresh()->query_received_at);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$pending->uuid.'/status', ['status' => 'background_check'])
+            ->assertStatus(422);
+        $this->assertSame(Status::PENDING_REVIEW, $pending->refresh()->status);
+        $this->assertNull($pending->refresh()->accepted_at);
+
         foreach (['granted', 'denied'] as $owned) {
             $this->actingAs($staff)
                 ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => $owned])
@@ -421,7 +437,9 @@ class CipTransitionTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::GRANTED)
-            ->assertJsonPath('application.statusLabel', 'Approved');
+            ->assertJsonPath('application.statusLabel', 'Approved')
+            ->assertJsonPath('application.decidedAt', '2026-08-10')
+            ->assertJsonPath('application.decision', Status::GRANTED);
 
         $fresh = $application->fresh();
         $this->assertSame(Status::GRANTED, $fresh->status);
@@ -454,6 +472,7 @@ class CipTransitionTest extends TestCase
         $this->actingAs($reviewer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
                 'decision' => Status::DENIED,
+                'decidedAt' => '2026-08-10',
             ])
             ->assertForbidden();
 

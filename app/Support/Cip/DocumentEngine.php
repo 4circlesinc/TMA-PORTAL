@@ -200,11 +200,11 @@ class DocumentEngine
      * not READY_FOR_SUBMISSION — a document the reviewer accepted stays accepted
      * even if someone later deletes it from the library, so the history is clear).
      */
-    public static function resetAfterFileDeletion(CipDocument $slot, ?User $actor): void
+    public static function resetAfterFileDeletion(CipDocument $slot, ?User $actor, bool $broadcast = true): void
     {
         $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
 
-        DB::transaction(function () use ($slot, $from, $actor) {
+        DB::transaction(function () use ($slot, $from, $actor, $broadcast) {
             $slot->forceFill([
                 'file_id' => null,
                 'uploaded_by' => null,
@@ -230,7 +230,9 @@ class DocumentEngine
                 'new' => ['status' => DocumentStatus::PENDING_UPLOAD],
             ]);
 
-            Live::staff(Live::CIP);
+            if ($broadcast) {
+                Live::staff(Live::CIP);
+            }
         });
     }
 }

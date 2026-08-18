@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Files;
 
 use App\Jobs\GenerateFileThumbnail;
+use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\UploadSession;
 use App\Support\Files\ChunkedUpload;
 use App\Support\Files\FileAccess;
-use App\Support\Files\Versions;
 use App\Support\Files\Thumbnail;
+use App\Support\Files\Versions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -111,6 +113,21 @@ class UploadController extends BaseFilesController
         ]);
 
         $session = $this->session($request, $uuid);
+        $user = $this->user($request);
+
+        // Re-check at complete: a session opened against a person folder
+        // before confirm submission must not land after the package freezes.
+        if ($session->version_of_file_id) {
+            $target = FileItem::find($session->version_of_file_id);
+            abort_unless(
+                $target && Versions::canAddVersion($user, $target),
+                403,
+                'You can’t add a version to that file.',
+            );
+        } else {
+            $folder = $session->folder_id ? Folder::find($session->folder_id) : null;
+            abort_unless(FileAccess::canUploadTo($user, $folder), 403, 'Permission denied.');
+        }
 
         $file = ChunkedUpload::complete(
             $session,

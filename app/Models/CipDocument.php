@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Cip\DocumentStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -115,13 +116,25 @@ class CipDocument extends Model
             return false;
         }
 
-        // If the relation is already loaded (eager or lazy), trust it.
         if ($this->relationLoaded('file')) {
             return $this->file !== null && $this->file->deleted_at === null;
         }
 
-        // Raw key present but relation not loaded — fast path, rely on key.
-        // The observer clears the key on deletion so this only races in tests.
-        return true;
+        return FileItem::whereKey($this->file_id)->whereNull('deleted_at')->exists();
+    }
+
+    /**
+     * The status the checklist should show right now.
+     *
+     * A slot with no live file is always Pending upload, even if the row still
+     * says Application review from before the file was removed.
+     */
+    public function displayStatus(): string
+    {
+        if (! $this->isFilled()) {
+            return DocumentStatus::PENDING_UPLOAD;
+        }
+
+        return $this->status ?? DocumentStatus::PENDING_UPLOAD;
     }
 }

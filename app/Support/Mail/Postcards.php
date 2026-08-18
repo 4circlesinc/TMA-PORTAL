@@ -4,6 +4,7 @@ namespace App\Support\Mail;
 
 use App\Mail\Postcard;
 use App\Models\User;
+use App\Support\Cip\Status;
 // The portal's one initials helper; it lives with signatures because they
 // needed it first, not because it is about signatures.
 use App\Support\Signatures\Presenter as SignaturePresenter;
@@ -815,6 +816,148 @@ class Postcards
                 ['Service provider', $facts['provider']],
             ],
             'button' => ['label' => 'Confirm submission', 'url' => $url],
+        ]);
+    }
+
+    /**
+     * §18's notice to the provider side: the Unit has asked for more.
+     *
+     * Fired when staff record the Query received date and the file moves to
+     * Non-compliant. The body names Additional Documents, because that is the
+     * only drawer still writable after confirm submission.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipNonCompliant(
+        array $facts,
+        string $url,
+        ?string $queryReceivedAt = null,
+        ?string $recipientName = null,
+        ?User $actor = null,
+    ): Postcard {
+        $initials = $actor ? SignaturePresenter::initials($actor->name) : null;
+
+        $subject = implode(' - ', array_filter([
+            $initials,
+            'NON-COMPLIANT',
+            $facts['number'],
+            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+        ];
+        if ($queryReceivedAt) {
+            $details[] = ['Query received', $queryReceivedAt];
+        }
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' is non-compliant — the Unit has requested additional information.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => $facts['number'].' is non-compliant',
+            'lead' => 'The Unit has requested additional information on '.$facts['applicant'].'’s file. Upload the required documents through Additional Documents.',
+            'details' => $details,
+            'button' => ['label' => 'Open Additional Documents', 'url' => $url],
+        ]);
+    }
+
+    /**
+     * §20's notice: 180 days after acceptance, still no decision.
+     *
+     * Fired by the daily job, not by a person, so the subject has no initials
+     * — DELAYED is the first token. The three named classes (Administrator,
+     * Reviewing Officer, Service Provider) share this copy.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipDelayed(
+        array $facts,
+        string $url,
+        ?string $acceptedAt = null,
+        int $days = 180,
+        ?string $recipientName = null,
+    ): Postcard {
+        $subject = implode(' - ', array_filter([
+            'DELAYED',
+            $facts['number'],
+            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+        ];
+        if ($acceptedAt) {
+            $details[] = ['Accepted for processing', $acceptedAt];
+        }
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' is delayed — '.$days.' days with no decision.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => $facts['number'].' is delayed',
+            'lead' => $days.' days have passed since '.$facts['applicant'].'’s file was accepted for processing, and no decision has been recorded.',
+            'details' => $details,
+            'button' => ['label' => 'Open the application', 'url' => $url],
+        ]);
+    }
+
+    /**
+     * §21's notice: the Unit decided. Approved or Denied.
+     *
+     * The per-investment-type letters (§23) are a later door; this is the
+     * decision itself — outcome, date, and a link to the file. Subject uses
+     * the chip's word (APPROVED / DENIED) so the email and the status cannot
+     * disagree.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipDecision(
+        array $facts,
+        string $url,
+        string $decision,
+        ?string $decidedAt = null,
+        ?string $recipientName = null,
+        ?User $actor = null,
+    ): Postcard {
+        $initials = $actor ? SignaturePresenter::initials($actor->name) : null;
+        $outcome = Status::subjectLabel($decision);
+        $granted = $decision === Status::GRANTED;
+
+        $subject = implode(' - ', array_filter([
+            $initials,
+            $outcome,
+            $facts['number'],
+            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+            ['Decision', Status::label($decision)],
+        ];
+        if ($decidedAt) {
+            $details[] = ['Decision date', $decidedAt];
+        }
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' was '.strtolower(Status::label($decision)).'.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => $facts['number'].' was '.strtolower(Status::label($decision)),
+            'lead' => $granted
+                ? 'The Unit has granted '.$facts['applicant'].'’s application.'
+                : 'The Unit has denied '.$facts['applicant'].'’s application.',
+            'details' => $details,
+            'button' => ['label' => 'Open the application', 'url' => $url],
         ]);
     }
 

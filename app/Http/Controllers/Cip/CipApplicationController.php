@@ -956,6 +956,10 @@ class CipApplicationController extends Controller
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
             'submittedAt' => $application->submitted_at?->toDateString(),
+            'queryReceivedAt' => $application->query_received_at?->toDateString(),
+            'acceptedAt' => $application->accepted_at?->toDateString(),
+            'decision' => $application->decision,
+            'decidedAt' => $application->decided_at?->toDateString(),
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
@@ -1129,27 +1133,36 @@ class CipApplicationController extends Controller
                     $slot->id,
                 ])
                 ->values()
-                ->map(fn ($slot) => [
-                    'id' => $slot->uuid,
-                    'type' => $slot->type,
-                    'label' => $slot->label,
-                    'required' => (bool) $slot->required,
-                    'uploaded' => $slot->isFilled(),
-                    /*
+                ->map(function ($slot) {
+                    DocumentSlots::reconcile($slot, null, false);
+                    $slot->refresh();
+                    $slot->loadMissing('file');
+                    $status = $slot->displayStatus();
+
+                    return [
+                        'id' => $slot->uuid,
+                        'type' => $slot->type,
+                        'label' => $slot->label,
+                        'required' => (bool) $slot->required,
+                        'uploaded' => $slot->isFilled(),
+                        /*
                      * §12's own status, not the file library's review_status.
                      * They are different vocabularies with different rules — a
                      * document waiting for a reviewer is not the same idea as a
                      * library file marked "pending review", and conflating them
                      * would let either one overwrite the other.
                      */
-                    'status' => $slot->status,
-                    'statusLabel' => DocumentStatus::label($slot->status ?? DocumentStatus::PENDING_UPLOAD),
-                    'statusTone' => DocumentStatus::tone($slot->status ?? DocumentStatus::PENDING_UPLOAD),
-                    'fileId' => $slot->file?->uuid,
-                    'fileName' => $slot->file?->name,
-                    'fileSize' => $slot->file?->size,
-                    'fileExt' => $slot->file ? strtolower(pathinfo($slot->file->name, PATHINFO_EXTENSION)) : null,
-                ])->values()->all(),
+                        'status' => $status,
+                        'statusLabel' => DocumentStatus::label($status),
+                        'statusTone' => DocumentStatus::tone($status),
+                        'fileId' => $slot->isFilled() ? $slot->file?->uuid : null,
+                        'fileName' => $slot->isFilled() ? $slot->file?->name : null,
+                        'fileSize' => $slot->isFilled() ? $slot->file?->size : null,
+                        'fileExt' => $slot->isFilled() && $slot->file
+                            ? strtolower(pathinfo($slot->file->name, PATHINFO_EXTENSION))
+                            : null,
+                    ];
+                })->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
         ];
     }

@@ -148,6 +148,29 @@ class DocumentSlots
         });
     }
 
+    /**
+     * A slot whose file is gone or in the recycle bin is reset to Pending upload.
+     *
+     * Library deletes sometimes bypass model observers (folder-tree bulk delete),
+     * so this is called on read as well as from {@see CipFileObserver}.
+     */
+    public static function reconcile(CipDocument $slot, ?User $actor = null, bool $broadcast = true): bool
+    {
+        if ($slot->isFilled()) {
+            return false;
+        }
+
+        $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+
+        if ($slot->file_id === null && $status === DocumentStatus::PENDING_UPLOAD) {
+            return false;
+        }
+
+        DocumentEngine::resetAfterFileDeletion($slot, $actor, $broadcast);
+
+        return true;
+    }
+
     /** Which empty checklist row a loose library upload is naming itself after. */
     private static function slotForOrphanFilename(CipPerson $person, string $filename): ?CipDocument
     {
@@ -308,14 +331,15 @@ class DocumentSlots
          */
         if ($person->relationLoaded('documents')) {
             return $person->documents
-                ->filter(fn (CipDocument $slot) => $slot->file_id === null && $slot->required)
+                ->filter(fn (CipDocument $slot) => ! $slot->isFilled() && $slot->required)
                 ->pluck('label')
                 ->values()
                 ->all();
         }
 
         return $person->documents()
-            ->whereNull('file_id')->where('required', true)
+            ->where('required', true)
+            ->whereDoesntHave('file', fn ($query) => $query->whereNull('deleted_at'))
             ->pluck('label')->all();
     }
 
