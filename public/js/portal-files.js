@@ -1482,22 +1482,41 @@
 
   // Panel choice, activity filter and panel visibility outlive a single file:
   // stepping through a folder keeps the reader where they were.
-  var viewerPrefs = { panel: true, tab: 'details', filter: 'all' };
+  // Details stay closed until asked for; comments live in their own floating
+  // column (not a tab) and are likewise opt-in.
+  var viewerPrefs = { panel: false, tab: 'details', filter: 'all', comments: false };
 
   /*
    * `count` names the key in the details payload's `counts` block that this
    * tab should show. Tabs without one are never numbered: Activity is a log
    * that only grows, so a number on it measures the file's age rather than
    * anything to attend to, and Access counts people rather than work.
+   *
+   * Comments are not a tab — they float beside the document.
    */
   var VIEWER_TABS = [
     { id: 'details', label: 'Details' },
-    { id: 'comments', label: 'Comments', count: 'comments' },
     { id: 'versions', label: 'Versions', count: 'versions' },
     { id: 'approvals', label: 'Approvals', count: 'approvals' },
     { id: 'activity', label: 'Activity' },
     { id: 'access', label: 'Access' },
   ];
+
+  /* pdf.js is ESM (~1.7 MB with worker) — load on first PDF open only. */
+  var pdfjsPromise = null;
+
+  function loadPdfjs() {
+    if (pdfjsPromise) return pdfjsPromise;
+    var root = window.__TMA_SITE_ROOT || '';
+    pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      return lib;
+    }).catch(function (err) {
+      pdfjsPromise = null;
+      throw err;
+    });
+    return pdfjsPromise;
+  }
 
   function openLightbox(file) {
     // Quietly: the close is an implementation detail of reopening, and letting
@@ -1542,7 +1561,8 @@
     function current() { return gallery[idx] || file; }
     function entry(f) {
       if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null, approvals: null,
-        expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null };
+        expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null,
+        pdfDoc: null, pdfUrl: null, pdfPage: 1 };
       return cache[f.id];
     }
 
@@ -1555,11 +1575,15 @@
         '<div class="tma-portal-viewer__frame">' +
           viewerHead(f) +
           '<div class="tma-portal-viewer__body">' +
-            (gallery.length > 1 ? '<div class="tma-portal-viewer__rail" data-lb-rail>' + railHtml() + '</div>' : '') +
+            leftRailHtml(f) +
             '<div class="tma-portal-viewer__main">' +
               '<div class="tma-portal-viewer__stage" data-lb-stage>' + lightboxBody(f) + '</div>' +
               '<div class="tma-portal-viewer__foot" data-lb-foot>' + footHtml(f) + '</div>' +
             '</div>' +
+            '<aside class="tma-portal-viewer__comments" data-lb-comments-panel' +
+              (viewerPrefs.comments ? '' : ' hidden') + ' aria-label="Comments">' +
+              '<div class="tma-portal-viewer__comments-body" data-lb-comments-body></div>' +
+            '</aside>' +
             '<aside class="tma-portal-viewer__panel" data-lb-panel' + (viewerPrefs.panel ? '' : ' hidden') + '>' +
               panelChromeHtml() +
               '<div class="tma-portal-viewer__panel-body" data-lb-panel-body></div>' +
@@ -1572,6 +1596,8 @@
       bindVersionDrop();
 
       paintPanel();
+      if (viewerPrefs.comments) paintCommentsPanel();
+      mountPdf(f);
       subscribeToFile(f);
       startPresence(f);
       // Same reasoning as the approval badge below: the tab counts say what is
@@ -1581,6 +1607,20 @@
       // header, which must not wait for the reader to open a tab.
       if (!entry(f).approvals) loadApprovals(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
+    }
+
+    /**
+     * Left column: PDF page thumbs when a PDF is open; otherwise the other
+     * files in this folder when there is more than one.
+     */
+    function leftRailHtml(f) {
+      if (f.category === 'pdf' && f.previewUrl && perm(f, 'preview')) {
+        return '<div class="tma-portal-viewer__pages" data-lb-pages aria-label="Pages"></div>';
+      }
+      if (gallery.length > 1) {
+        return '<div class="tma-portal-viewer__rail" data-lb-rail>' + railHtml() + '</div>';
+      }
+      return '';
     }
 
     /* ── active viewers (presence) ───────────────────── */
@@ -1771,7 +1811,7 @@
       if (perm(f, 'share')) html += toolBtnHtml('ShareNetwork', 'share', 'Share');
       if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
       html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
-        { active: viewerPrefs.panel && viewerPrefs.tab === 'comments' });
+        { active: viewerPrefs.comments });
       html += toolBtnHtml('Clipboard', 'approvals', 'Reviews and approvals',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'approvals' });
       html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
@@ -1813,9 +1853,15 @@
     }
 
     function footHtml(f) {
-      var pos = gallery.length > 1 ? (idx + 1) + ' of ' + gallery.length : '';
-      return (pos ? '<span>' + pos + '</span>' : '') +
-        (f.sizeLabel ? '<span>' + esc(f.sizeLabel) + '</span>' : '');
+      var bits = [];
+      if (f.category === 'pdf') {
+        var e = entry(f);
+        if (e.pdfDoc) bits.push(e.pdfPage + ' / ' + e.pdfDoc.numPages);
+      } else if (gallery.length > 1) {
+        bits.push((idx + 1) + ' of ' + gallery.length);
+      }
+      if (f.sizeLabel) bits.push(esc(f.sizeLabel));
+      return bits.map(function (b) { return '<span>' + b + '</span>'; }).join('');
     }
 
     /* ── right panel ─────────────────────────────────── */
@@ -1865,11 +1911,28 @@
       if (tabs) tabs.innerHTML = tabsHtml();
 
       if (viewerPrefs.tab === 'details') return paintDetails(host);
-      if (viewerPrefs.tab === 'comments') return paintComments(host);
       if (viewerPrefs.tab === 'versions') return paintVersions(host);
       if (viewerPrefs.tab === 'approvals') return paintApprovals(host);
       if (viewerPrefs.tab === 'activity') return paintActivity(host);
       return paintAccess(host);
+    }
+
+    /* Floating comments column (not a panel tab) ------------------------ */
+
+    function paintCommentsPanel() {
+      var panel = lb.querySelector('[data-lb-comments-panel]');
+      if (!panel) return;
+      // Persist the composer before we hide or rebuild it.
+      if (!viewerPrefs.comments) {
+        var openInput = lb.querySelector('[data-lb-input]');
+        if (openInput) entry(current()).draft = openInput.value;
+      }
+      panel.hidden = !viewerPrefs.comments;
+      var head = lb.querySelector('.tma-portal-viewer__head');
+      if (head) head.outerHTML = viewerHead(current());
+      if (!viewerPrefs.comments) return;
+      var host = panel.querySelector('[data-lb-comments-body]');
+      if (host) paintComments(host);
     }
 
     /* Details -------------------------------------------------------- */
@@ -2017,7 +2080,7 @@
       var counts = (data && data.counts) || {};
 
       var chips = [
-        { tab: 'comments', n: counts.comments, one: 'comment', many: 'comments' },
+        { act: 'comments', n: counts.comments, one: 'comment', many: 'comments' },
         { tab: 'versions', n: counts.versions, one: 'version', many: 'versions' },
         // "1 approval" counted requests still waiting, but reads as one having
         // been given — the opposite of what the number means.
@@ -2028,7 +2091,8 @@
 
       return '<div class="tma-portal-viewer__counts">' +
         chips.map(function (c) {
-          return '<button type="button" class="tma-portal-viewer__count" data-lb-tab="' + c.tab + '">' +
+          var attr = c.act ? ('data-lb-act="' + c.act + '"') : ('data-lb-tab="' + c.tab + '"');
+          return '<button type="button" class="tma-portal-viewer__count" ' + attr + '>' +
             c.n + ' ' + (c.n === 1 ? c.one : c.many) +
           '</button>';
         }).join('') +
@@ -2209,7 +2273,7 @@
         if (!lb || !payload || payload.fileId !== current().id) return;
         var e = entry(current());
         e.comments = null;
-        if (viewerPrefs.tab === 'comments') loadComments(current());
+        if (viewerPrefs.comments) loadComments(current());
         else refreshOpenCountOnly(current());
       });
 
@@ -2263,7 +2327,9 @@
       var stale = e.comments;
 
       host.innerHTML =
-        '<div data-lb-comments>' + (stale ? commentsHtml(stale, e) : ui().loading({ count: 3 })) + '</div>' +
+        '<div class="tma-portal-viewer__comments-feed" data-lb-comments>' +
+          (stale ? commentsHtml(stale, e) : ui().loading({ count: 3 })) +
+        '</div>' +
         composerHtml(f, e);
 
       // Always refetch: someone else may have commented since this was cached.
@@ -2283,10 +2349,11 @@
           // would undo whatever the newer request already showed.
           if (seq !== e.commentsSeq) return;
           if (append && e.comments) {
-            data.threads = data.threads.concat(e.comments.threads);
+            // Newest-first feed: older pages append below what is already shown.
+            data.threads = e.comments.threads.concat(data.threads);
           }
           e.comments = data;
-          if (current().id !== f.id || viewerPrefs.tab !== 'comments') return;
+          if (current().id !== f.id || !viewerPrefs.comments) return;
           var slot = lb.querySelector('[data-lb-comments]');
           if (slot) slot.innerHTML = commentsHtml(data, e);
           refreshCommentCount(data);
@@ -2294,27 +2361,23 @@
         .catch(function (err) { panelError('[data-lb-comments]', err, 'comments'); });
     }
 
-    // The tab label carries the open-thread count, so an unread discussion is
-    // visible without opening the panel.
+    // Open-thread count for the details chips and any badge that needs it.
     function refreshCommentCount(data) {
       var n = (data && data.openCount) || 0;
 
       /*
        * Into the cache as well as onto the label.
        *
-       * The tab row is rebuilt from the cached counts on every panel repaint,
-       * so a count written only to the DOM survives until the reader switches
-       * tabs and then silently reverts to whatever the details request last
-       * said — which, after posting a comment, is one short.
+       * The details chips are rebuilt from the cached counts on every panel
+       * repaint, so a count written only to the DOM survives until the reader
+       * switches tabs and then silently reverts to whatever the details
+       * request last said — which, after posting a comment, is one short.
        */
       var e = entry(current());
       if (e.details && e.details.counts) e.details.counts.comments = n;
 
-      // The label span, not the button: the underline tab keeps its indicator
-      // as a sibling, and writing to the button's textContent removes it.
-      var label = lb.querySelector('[data-lb-tab="comments"] .tma-tab__label');
-      if (!label) return;
-      label.textContent = n ? 'Comments (' + n + ')' : 'Comments';
+      var counts = lb.querySelector('[data-lb-counts]');
+      if (counts && e.details) counts.innerHTML = countsHtml(e.details);
     }
 
     function commentsHtml(data, e) {
@@ -2323,11 +2386,12 @@
         return '<p class="tma-portal-viewer__empty">No comments yet. Start the discussion below.</p>';
       }
 
-      var html = data.nextCursor
-        ? '<button type="button" class="tma-portal-viewer__more-btn" data-lb-more-comments>Show earlier comments</button>'
-        : '';
+      // Latest on top; "earlier" loads older threads underneath.
+      var html = threads.map(function (t) { return threadHtml(t, e); }).join('');
 
-      html += threads.map(function (t) { return threadHtml(t, e); }).join('');
+      if (data.nextCursor) {
+        html += '<button type="button" class="tma-portal-viewer__more-btn" data-lb-more-comments>Show earlier comments</button>';
+      }
 
       return html;
     }
@@ -2451,7 +2515,7 @@
         // convention every messaging surface in the portal already uses, sat
         // in front of an empty box on every single file.
         '<textarea class="tma-portal-viewer__input" data-lb-input rows="3" ' +
-          'placeholder="Add a comment"></textarea>' +
+          'placeholder="Comment or add others with @"></textarea>' +
         '<div class="tma-portal-viewer__mention-pop" data-lb-mentions hidden></div>' +
         '<div class="tma-portal-viewer__composer-actions">' +
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-emoji title="Insert emoji" aria-label="Insert emoji">🙂</button>' +
@@ -3676,14 +3740,26 @@
       // tab and the reader keeps their place in the shell.
       var head = lb.querySelector('.tma-portal-viewer__head');
       if (head) head.outerHTML = viewerHead(f);
+
+      // Left rail can switch between page thumbs (PDF) and file thumbs.
+      var body = lb.querySelector('.tma-portal-viewer__body');
+      var oldRail = lb.querySelector('[data-lb-rail], [data-lb-pages]');
+      var railMarkup = leftRailHtml(f);
+      if (oldRail && railMarkup) {
+        oldRail.outerHTML = railMarkup;
+      } else if (oldRail && !railMarkup) {
+        oldRail.remove();
+      } else if (!oldRail && railMarkup && body) {
+        body.insertAdjacentHTML('afterbegin', railMarkup);
+      }
+
       repaintStage(f);
       startPresence(f);
       var foot = lb.querySelector('[data-lb-foot]');
       if (foot) foot.innerHTML = footHtml(f);
-      var rail = lb.querySelector('[data-lb-rail]');
-      if (rail) rail.innerHTML = railHtml();
 
       paintPanel();
+      if (viewerPrefs.comments) paintCommentsPanel();
       subscribeToFile(f);
       // Stepping to the next file needs its counts, not the last file's.
       loadTabCounts(f);
@@ -3698,6 +3774,140 @@
       if (!stage) return;
       stage.innerHTML = lightboxBody(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
+      mountPdf(f);
+    }
+
+    /* ── PDF via pdf.js (works on Mac/Safari where iframe PDF often fails) ── */
+
+    function mountPdf(f) {
+      if (!f || f.category !== 'pdf' || !f.previewUrl || !perm(f, 'preview')) return;
+      var host = lb.querySelector('[data-lb-pdf]');
+      if (!host) return;
+
+      var e = entry(f);
+      var loading = host.querySelector('[data-lb-pdf-loading]');
+
+      loadPdfjs()
+        .then(function (pdfjs) {
+          if (current().id !== f.id) return null;
+          if (e.pdfDoc && e.pdfUrl === f.previewUrl) return e.pdfDoc;
+          if (e.pdfDoc && e.pdfDoc.destroy) {
+            try { e.pdfDoc.destroy(); } catch (err) { /* ignore */ }
+          }
+          e.pdfDoc = null;
+          return pdfjs.getDocument({ url: f.previewUrl, withCredentials: true }).promise
+            .then(function (pdf) {
+              e.pdfDoc = pdf;
+              e.pdfUrl = f.previewUrl;
+              if (!e.pdfPage || e.pdfPage < 1) e.pdfPage = 1;
+              return pdf;
+            });
+        })
+        .then(function (pdf) {
+          if (!pdf || current().id !== f.id) return;
+          if (loading) loading.hidden = true;
+          if (e.pdfPage > pdf.numPages) e.pdfPage = 1;
+          paintPdfThumbs(f, pdf);
+          renderPdfPage(f, e.pdfPage);
+        })
+        .catch(function () {
+          if (current().id !== f.id) return;
+          if (loading) {
+            loading.hidden = false;
+            loading.textContent = 'Could not load this PDF.';
+          }
+        });
+    }
+
+    function paintPdfThumbs(f, pdf) {
+      var rail = lb.querySelector('[data-lb-pages]');
+      if (!rail) return;
+      var e = entry(f);
+      var html = '';
+      for (var i = 1; i <= pdf.numPages; i++) {
+        html += '<button type="button" class="tma-portal-viewer__page' +
+          (i === e.pdfPage ? ' is-current' : '') + '" data-lb-pdf-page="' + i + '"' +
+          ' aria-label="Page ' + i + '" aria-current="' + (i === e.pdfPage) + '">' +
+          '<canvas class="tma-portal-viewer__page-canvas" data-lb-pdf-thumb="' + i + '"></canvas>' +
+          '<span class="tma-portal-viewer__page-num">' + i + '</span>' +
+        '</button>';
+      }
+      rail.innerHTML = html;
+
+      for (var p = 1; p <= pdf.numPages; p++) {
+        (function (pageNum) {
+          pdf.getPage(pageNum).then(function (page) {
+            if (current().id !== f.id) return;
+            var canvas = rail.querySelector('[data-lb-pdf-thumb="' + pageNum + '"]');
+            if (!canvas) return;
+            var cssWidth = 72;
+            var unscaled = page.getViewport({ scale: 1 });
+            var scale = cssWidth / unscaled.width;
+            var viewport = page.getViewport({ scale: scale });
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+          }).catch(function () { /* thumb best-effort */ });
+        })(p);
+      }
+    }
+
+    function renderPdfPage(f, pageNum) {
+      var e = entry(f);
+      var pdf = e.pdfDoc;
+      var canvas = lb.querySelector('[data-lb-pdf-canvas]');
+      var host = lb.querySelector('[data-lb-pdf]');
+      if (!pdf || !canvas || !host) return Promise.resolve();
+
+      e.pdfPage = pageNum;
+      var prev = host.querySelector('[data-lb-pdf-prev]');
+      var next = host.querySelector('[data-lb-pdf-next]');
+      if (prev) { prev.hidden = pdf.numPages < 2; prev.disabled = pageNum <= 1; }
+      if (next) { next.hidden = pdf.numPages < 2; next.disabled = pageNum >= pdf.numPages; }
+
+      lb.querySelectorAll('[data-lb-pdf-page]').forEach(function (btn) {
+        var n = parseInt(btn.getAttribute('data-lb-pdf-page'), 10);
+        btn.classList.toggle('is-current', n === pageNum);
+        btn.setAttribute('aria-current', n === pageNum ? 'true' : 'false');
+      });
+
+      var foot = lb.querySelector('[data-lb-foot]');
+      if (foot) foot.innerHTML = footHtml(f);
+
+      return pdf.getPage(pageNum).then(function (page) {
+        if (current().id !== f.id) return;
+        var cssWidth = Math.min(host.clientWidth || 800, 960);
+        var dpr = window.devicePixelRatio || 1;
+        var unscaled = page.getViewport({ scale: 1 });
+        var viewport = page.getViewport({ scale: (cssWidth * dpr) / unscaled.width });
+        canvas.hidden = false;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
+        canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
+        if (canvas._pdfTask) canvas._pdfTask.cancel();
+        var task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
+        canvas._pdfTask = task;
+        return task.promise.then(
+          function () { canvas._pdfTask = null; },
+          function (err) {
+            canvas._pdfTask = null;
+            if (!err || err.name !== 'RenderingCancelledException') throw err;
+          }
+        );
+      }).catch(function () { /* cancelled or gone */ });
+    }
+
+    /** @returns {boolean} true when the key was consumed as a PDF page turn */
+    function pdfNav(delta) {
+      var f = current();
+      if (!f || f.category !== 'pdf') return false;
+      var e = entry(f);
+      if (!e.pdfDoc || e.pdfDoc.numPages < 2) return false;
+      var next = e.pdfPage + delta;
+      if (next < 1 || next > e.pdfDoc.numPages) return false;
+      renderPdfPage(f, next);
+      return true;
     }
 
     function loadText(f) {
@@ -3716,6 +3926,14 @@
 
       var goBtn = e.target.closest('[data-lb-go]');
       if (goBtn) { showAt(parseInt(goBtn.getAttribute('data-lb-go'), 10) || 0); return; }
+
+      var pdfPageBtn = e.target.closest('[data-lb-pdf-page]');
+      if (pdfPageBtn) {
+        renderPdfPage(current(), parseInt(pdfPageBtn.getAttribute('data-lb-pdf-page'), 10) || 1);
+        return;
+      }
+      if (e.target.closest('[data-lb-pdf-prev]')) { pdfNav(-1); return; }
+      if (e.target.closest('[data-lb-pdf-next]')) { pdfNav(1); return; }
 
       var tab = e.target.closest('[data-lb-tab]');
       if (tab) { viewerPrefs.tab = tab.getAttribute('data-lb-tab'); paintPanel(); return; }
@@ -3838,13 +4056,13 @@
           paintPanel();
           return;
         case 'comments':
-          viewerPrefs.tab = 'comments';
-          viewerPrefs.panel = true;
-          var cpanel = lb.querySelector('[data-lb-panel]');
-          if (cpanel) cpanel.hidden = false;
-          var chead = lb.querySelector('.tma-portal-viewer__head');
-          if (chead) chead.outerHTML = viewerHead(current());
-          paintPanel();
+          // Details chips always open the feed; the toolbar button toggles it.
+          if (act.classList.contains('tma-portal-viewer__count')) {
+            viewerPrefs.comments = true;
+          } else {
+            viewerPrefs.comments = !viewerPrefs.comments;
+          }
+          paintCommentsPanel();
           return;
         case 'more': return openViewerMenu(act, f);
       }
@@ -3887,8 +4105,8 @@
       if (document.querySelector('.tma-portal-modal')) return;
       if (document.querySelector('.tma-portal-context-menu')) return;
       if (e.key === 'Escape') closeLightbox();
-      else if (e.key === 'ArrowLeft') go(-1);
-      else if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'ArrowLeft') { if (!pdfNav(-1)) go(-1); }
+      else if (e.key === 'ArrowRight') { if (!pdfNav(1)) go(1); }
     };
     document.addEventListener('keydown', lb._key);
 
@@ -3988,7 +4206,16 @@
         case 'image':
           return '<img class="tma-portal-viewer__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
         case 'pdf':
-          return '<iframe class="tma-portal-viewer__frame-doc" src="' + esc(f.previewUrl) + '" title="' + esc(f.name) + '"></iframe>';
+          return '<div class="tma-portal-viewer__pdf" data-lb-pdf>' +
+            '<p class="tma-portal-viewer__pdf-loading" data-lb-pdf-loading>Loading PDF…</p>' +
+            '<canvas class="tma-portal-viewer__pdf-canvas" data-lb-pdf-canvas hidden></canvas>' +
+            '<button type="button" class="tma-portal-viewer__pdf-nav tma-portal-viewer__pdf-nav--prev" data-lb-pdf-prev hidden aria-label="Previous page">' +
+              '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="20" height="20">' +
+            '</button>' +
+            '<button type="button" class="tma-portal-viewer__pdf-nav tma-portal-viewer__pdf-nav--next" data-lb-pdf-next hidden aria-label="Next page">' +
+              '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="20" height="20">' +
+            '</button>' +
+          '</div>';
         case 'video':
           return '<video class="tma-portal-viewer__media" src="' + esc(f.previewUrl) + '" controls autoplay playsinline></video>';
         case 'audio':
@@ -4021,6 +4248,11 @@
     if (lb._channel && window.TMAMessagingRealtime) {
       window.TMAMessagingRealtime.leave(lb._channel);
     }
+    // Drop any in-flight pdf.js document so closing the viewer frees memory.
+    try {
+      var pdfHost = lb.querySelector('[data-lb-pdf-canvas]');
+      if (pdfHost && pdfHost._pdfTask) pdfHost._pdfTask.cancel();
+    } catch (err) { /* ignore */ }
     lb.remove();
     lb = null;
     document.body.style.overflow = '';

@@ -197,7 +197,7 @@ try {
   check(/version/i.test(activity), 'the Versions activity filter shows version events');
 
   step(12, 'Comments survive a version change');
-  await page.click('[data-lb-tab="comments"]');
+  await page.click('[data-lb-act="comments"]');
   await page.waitForTimeout(1400);
   await page.fill('[data-lb-input]', 'Comment that must outlive a version ' + stamp);
   await page.click('[data-lb-send]');
@@ -216,9 +216,12 @@ try {
 
   await page.click('[data-lb-tab="versions"]');
   await page.waitForTimeout(1400);
-  await page.click('[data-lb-tab="comments"]');
+  // Comments may already be open; ensure the floating feed is visible.
+  if (await page.$eval('[data-lb-comments-panel]', (e) => e.hidden)) {
+    await page.click('[data-lb-act="comments"]');
+  }
   await page.waitForTimeout(1800);
-  const comments = await page.textContent('.tma-portal-viewer__panel-body');
+  const comments = await page.textContent('[data-lb-comments-body]');
   check(comments.includes('Comment that must outlive a version ' + stamp),
     'the discussion is about the file, not one revision of it');
 } catch (e) {

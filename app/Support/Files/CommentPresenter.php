@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
 class CommentPresenter
 {
     /**
-     * One page of threads for a file, oldest first (reading order), with each
+     * One page of threads for a file, newest first (latest on top), with each
      * thread's replies attached.
      *
      * Paged by thread, not by comment: cutting a page mid-thread would show
@@ -54,9 +54,6 @@ class CommentPresenter
         $mentions = self::mentionMap($roots->pluck('id')->merge($replies->flatten()->pluck('id')));
 
         $threads = $roots
-            // Query order is newest-first for the cursor; reading order is
-            // oldest-first, so flip after paging rather than before.
-            ->sortBy('id')
             ->values()
             ->map(fn (FileComment $root) => self::comment($root, $viewer, $file, $mentions) + [
                 'replies' => ($replies[$root->id] ?? collect())

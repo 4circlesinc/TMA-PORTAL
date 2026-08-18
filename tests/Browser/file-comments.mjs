@@ -121,10 +121,12 @@ try {
 
   await openFile(page);
 
-  step(2, 'The Comments tab exists and starts honest');
+  step(2, 'Floating comments open from the toolbar and start honest');
   await page.click('[data-lb-act="comments"]');
   await page.waitForTimeout(1500);
-  let panel = await page.textContent('.tma-portal-viewer__panel-body');
+  check((await page.$eval('[data-lb-comments-panel]', (e) => e.hidden)) === false, 'comments column is open');
+  check(!(await page.$('[data-lb-tab="comments"]')), 'Comments is not a details tab');
+  let panel = await page.textContent('[data-lb-comments-body]');
   check(/No comments yet|Phase two comment/.test(panel), 'empty state or real comments — never invented ones');
   check(!!(await page.$('[data-lb-input]')), 'the composer is present inside the viewer');
 
@@ -132,14 +134,14 @@ try {
   await page.fill('[data-lb-input]', BODY);
   await page.click('[data-lb-send]');
   await page.waitForTimeout(1800);
-  panel = await page.textContent('.tma-portal-viewer__panel-body');
+  panel = await page.textContent('[data-lb-comments-body]');
   check(panel.includes(BODY), 'the comment appears in the thread');
   check(!!(await page.$('.tma-portal-viewer')), 'the viewer never closed');
   check((await page.$eval('[data-lb-input]', (e) => e.value)) === '', 'the composer cleared');
 
-  step(4, 'The tab badge counts open threads');
-  const tabText = await page.textContent('[data-lb-tab="comments"]');
-  check(/Comments \(\d+\)/.test(tabText), `tab shows an open count (${tabText})`);
+  step(4, 'The latest comment sits at the top of the feed');
+  const firstThread = await page.textContent('.tma-portal-viewer__thread');
+  check(firstThread.includes(BODY), 'newest thread is first in the floating feed');
 
   step(5, 'Mention autocomplete offers only people who can open the file');
   await page.fill('[data-lb-input]', 'Hello @Ben');
@@ -158,22 +160,22 @@ try {
   }
 
   step(6, 'Reply threads under the comment');
-  await page.click('.tma-portal-viewer__reply-open');
+  await page.locator('.tma-portal-viewer__thread', { hasText: BODY }).locator('.tma-portal-viewer__reply-open').click();
   await page.waitForTimeout(400);
   await page.fill('[data-lb-replyinput]', REPLY);
   await page.click('[data-lb-replysend]');
   await page.waitForTimeout(1800);
-  panel = await page.textContent('.tma-portal-viewer__panel-body');
+  panel = await page.textContent('[data-lb-comments-body]');
   check(panel.includes(REPLY), 'the reply appears');
   check(!!(await page.$('.tma-portal-viewer__reply')), 'it is rendered as a reply, indented under its thread');
 
   step(7, 'Edit marks the comment as edited');
-  await page.click('[data-lb-edit]');
+  await page.locator('.tma-portal-viewer__thread', { hasText: BODY }).locator('[data-lb-edit]').first().click();
   await page.waitForTimeout(400);
   await page.fill('[data-lb-editinput]', BODY + ' (edited)');
   await page.click('[data-lb-editsave]');
   await page.waitForTimeout(1800);
-  panel = await page.textContent('.tma-portal-viewer__panel-body');
+  panel = await page.textContent('[data-lb-comments-body]');
   check(panel.includes(BODY + ' (edited)'), 'the edited text is shown');
   check(/edited/.test(panel), 'it is flagged as edited');
 
@@ -221,18 +223,20 @@ try {
         mineClass: mine ? mine.className : null,
         resolveButtons: mine ? [...mine.querySelectorAll('[data-lb-resolve]')]
           .map((b) => b.textContent + '/' + b.getAttribute('data-resolved')) : [],
-        panelHead: document.querySelector('.tma-portal-viewer__panel-body')?.textContent.slice(0, 120),
+        panelHead: document.querySelector('[data-lb-comments-body]')?.textContent.slice(0, 120),
       };
     }, BODY);
     log('    diagnostic: ' + JSON.stringify(diag));
   }
   check(isResolved, 'the thread this run created is marked resolved');
-  check(/Resolved/.test(await page.textContent('.tma-portal-viewer__panel-body')),
+  check(/Resolved/.test(await page.textContent('[data-lb-comments-body]')),
     'it is labelled Resolved');
   check((await resolvedThread.textContent()).includes(BODY),
     'the resolved thread is still readable, not hidden');
 
   step(10, 'Comments show up in the activity timeline');
+  await page.click('[data-lb-act="panel"]');
+  await page.waitForTimeout(600);
   await page.click('[data-lb-tab="activity"]');
   await page.waitForTimeout(1600);
   await page.selectOption('[data-lb-filter]', 'comments');
@@ -240,13 +244,16 @@ try {
   const activity = await page.textContent('.tma-portal-viewer__panel-body');
   check(/comment/i.test(activity), 'the Comments activity filter shows the comment events');
 
-  step(11, '§29 — the draft survives a tab switch');
-  await page.click('[data-lb-tab="comments"]');
-  await page.waitForTimeout(1400);
+  step(11, '§29 — the draft survives closing and reopening comments');
+  // Ensure the floating comments column is open (activity opened the details panel).
+  if (await page.$eval('[data-lb-comments-panel]', (e) => e.hidden)) {
+    await page.click('[data-lb-act="comments"]');
+    await page.waitForTimeout(800);
+  }
   await page.fill('[data-lb-input]', 'half-typed thought');
-  await page.click('[data-lb-tab="details"]');
+  await page.click('[data-lb-act="comments"]'); // close
   await page.waitForTimeout(500);
-  await page.click('[data-lb-tab="comments"]');
+  await page.click('[data-lb-act="comments"]'); // reopen
   await page.waitForTimeout(1400);
   const draft = await page.$eval('[data-lb-input]', (e) => e.value);
   check(draft === 'half-typed thought', `the half-typed comment survived (“${draft}”)`);
@@ -271,7 +278,7 @@ try {
   await openSharedFile(page2);
   await page2.click('[data-lb-act="comments"]');
   await page2.waitForTimeout(1800);
-  const seen = await page2.textContent('.tma-portal-viewer__panel-body');
+  const seen = await page2.textContent('[data-lb-comments-body]');
   check(seen.includes(BODY + ' (edited)'), 'the other person sees the comment');
   check(seen.includes(REPLY), 'and the reply');
 
@@ -279,15 +286,17 @@ try {
   // A sentinel proves the page never navigated: any reload wipes it.
   await page2.evaluate(() => { window.__tmaSentinel = 'alive'; });
   const LIVE = 'Live comment ' + stamp;
-  await page.click('[data-lb-tab="comments"]');
-  await page.waitForTimeout(1000);
+  if (await page.$eval('[data-lb-comments-panel]', (e) => e.hidden)) {
+    await page.click('[data-lb-act="comments"]');
+    await page.waitForTimeout(1000);
+  }
   await page.fill('[data-lb-input]', LIVE);
   await page.click('[data-lb-send]');
 
   let arrived = false;
   for (let i = 0; i < 20 && !arrived; i++) {
     await page2.waitForTimeout(500);
-    arrived = (await page2.textContent('.tma-portal-viewer__panel-body')).includes(LIVE);
+    arrived = (await page2.textContent('[data-lb-comments-body]')).includes(LIVE);
   }
   check(arrived, 'the new comment appeared in the other browser without a reload');
   check(await page2.evaluate(() => window.__tmaSentinel === 'alive'),
@@ -295,7 +304,7 @@ try {
 
   step(14, 'The author does not see their own comment twice');
   await page.waitForTimeout(1500);
-  const mine = await page.textContent('.tma-portal-viewer__panel-body');
+  const mine = await page.textContent('[data-lb-comments-body]');
   const occurrences = mine.split(LIVE).length - 1;
   check(occurrences === 1, `the author's own comment renders exactly once (found ${occurrences})`);
 

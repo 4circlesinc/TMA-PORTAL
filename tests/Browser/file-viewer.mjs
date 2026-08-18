@@ -71,19 +71,24 @@ try {
   await page.waitForSelector('.tma-portal-viewer', { timeout: 8000 });
   await page.waitForTimeout(1200);
 
-  step(2, 'Three regions exist, and the panel is one of them');
+  step(2, 'Three regions exist; details panel starts closed');
   check(!!(await page.$('.tma-portal-viewer__stage')), 'centre preview stage');
-  check(!!(await page.$('.tma-portal-viewer__panel')), 'right details panel');
+  check(!!(await page.$('.tma-portal-viewer__panel')), 'right details panel exists in the shell');
+  const panelHidden = await page.$eval('.tma-portal-viewer__panel', (e) => e.hidden);
+  check(panelHidden === true, 'details panel is closed until the reader opens it');
   check(!!(await page.$('.tma-portal-viewer__head')), 'header with file identity');
   const name = await page.textContent('.tma-portal-viewer__name');
   check(name.trim() === 'TMA Contract.pdf', `header names the file (got "${name.trim()}")`);
   const sub = await page.textContent('.tma-portal-viewer__sub');
   check(/Pdf|PDF/.test(sub) && /Modified/.test(sub), `header shows type + modified (got "${sub.trim()}")`);
 
-  step(3, 'The preview really renders the PDF (not an icon fallback)');
-  check(!!(await page.$('.tma-portal-viewer__frame-doc')), 'PDF renders in a document frame');
+  step(3, 'The preview really renders the PDF via pdf.js (not an icon fallback)');
+  await page.waitForSelector('.tma-portal-viewer__pdf-canvas:not([hidden])', { timeout: 12000 });
+  check(!!(await page.$('.tma-portal-viewer__pdf-canvas')), 'PDF renders on a canvas');
+  check(!!(await page.$('[data-lb-pages]')), 'PDF page thumbnails are on the left');
 
   step(4, 'Details tab shows real metadata from the server');
+  await page.click('[data-lb-act="panel"]');
   await page.waitForTimeout(1200);
   let panel = await page.textContent('.tma-portal-viewer__panel-body');
   check(/TMA Contract\.pdf/.test(panel), 'panel shows the real file name');
