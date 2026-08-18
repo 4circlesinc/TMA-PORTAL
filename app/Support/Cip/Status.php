@@ -74,20 +74,26 @@ class Status
     ];
 
     /**
-     * The 5-tone chip vocabulary the design system already has — there is no
-     * sixth tone to invent.
+     * One colour per listed status, so a filter row, a table chip and a
+     * dashboard dot can tell the queues apart without reading the label.
+     *
+     * The portal's five generic chip tones (action, pending, success, danger,
+     * neutral) still colour files and everything else. CIP does not borrow
+     * them across eleven different queues — that is how five blues sat next
+     * to each other. Approved and Denied keep success and danger so a
+     * decision still reads as a decision. Draft is leftover and stays grey.
      */
     private const TONES = [
         self::DRAFT => 'neutral',
-        self::NEW => 'action',
-        self::REVIEW_APPLICATION => 'action',
-        self::ASSESSMENT_FEEDBACK => 'action',
-        self::UPDATE_REQUIRED => 'action',
-        self::READY_TO_SUBMIT => 'action',
-        self::PENDING_REVIEW => 'pending',
-        self::NON_COMPLIANT => 'danger',
-        self::BACKGROUND_CHECK => 'pending',
-        self::DELAYED => 'pending',
+        self::NEW => 'sky',
+        self::REVIEW_APPLICATION => 'indigo',
+        self::ASSESSMENT_FEEDBACK => 'violet',
+        self::UPDATE_REQUIRED => 'amber',
+        self::READY_TO_SUBMIT => 'teal',
+        self::PENDING_REVIEW => 'orange',
+        self::NON_COMPLIANT => 'rose',
+        self::BACKGROUND_CHECK => 'cyan',
+        self::DELAYED => 'copper',
         self::GRANTED => 'success',
         self::DENIED => 'danger',
     ];

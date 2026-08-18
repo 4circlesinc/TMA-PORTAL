@@ -349,10 +349,10 @@ class Buckets
      * non-compliant would be reporting a single row's state as the whole
      * queue's, on a number whose entire job is to say how much there is.
      *
-     * Nothing is being papered over yet. UNDER_REVIEW is unanimously 'action'
-     * today, so the rule settles no live disagreement; it is written down here
-     * to decide the first one, rather than leaving it to whichever status a
-     * later edit happens to put first.
+     * The three statuses in UNDER_REVIEW now wear three colours, so this
+     * rule is the one that settles the disagreement: Assigned Reviews is
+     * indigo because it is named for REVIEW APPLICATION, not because the
+     * files inside it have stopped being different colours.
      *
      * @param  list<string>  $statuses
      */

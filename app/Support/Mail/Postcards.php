@@ -786,6 +786,39 @@ class Postcards
     }
 
     /**
+     * §15's notice to the provider side: the file is ready, confirm it.
+     *
+     * Fired when the APPLICATION reaches Ready to submit — every required
+     * document accepted, nothing sent back. The body is the ask: press Confirm
+     * submission, after which the original package cannot be modified.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipReadyToSubmit(array $facts, string $url, ?string $recipientName = null): Postcard
+    {
+        $subject = implode(' - ', array_filter([
+            'READY TO SUBMIT',
+            $facts['number'],
+            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            now()->format('d.m.Y'),
+        ]));
+
+        return new Postcard($subject, [
+            'preheader' => $facts['number'].' is ready to submit — confirm to lock the original package.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'title' => $facts['number'].' is ready to submit',
+            'lead' => 'Assessment feedback is complete — '.$facts['applicant'].'’s file is ready to submit. Confirm submission to lock the original package.',
+            'details' => [
+                ['Application', $facts['number']],
+                ['Applicant', $facts['applicant']],
+                ['Service provider', $facts['provider']],
+            ],
+            'button' => ['label' => 'Confirm submission', 'url' => $url],
+        ]);
+    }
+
+    /**
      * The email twin of a portal notification, for accounts that switched the
      * email channel on for that module. Kept deliberately spare: the subject
      * and body ARE the notification; the button deep-links to whatever the

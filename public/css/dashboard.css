@@ -18002,6 +18002,12 @@ button.tma-cip-status-chip:focus-visible {
   color: var(--color-text-secondary);
 }
 
+.tma-dash__clients-appbar-note {
+  margin: 0 0 0 auto;
+  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__clients-sync-notice {
   flex-shrink: 0;
   margin-top: calc(var(--space-24) * -1 + var(--space-4));
@@ -35794,13 +35800,10 @@ span.tma-dash__messages-profile-avatar {
 /*
  * The tone dot.
  *
- * Colour here is not decoration: it is the same question the status chips
- * answer — whose move is it — so it has to be the same five answers, in the
- * same five colours. The values below are lifted from .tma-portal-status--*
- * in portal-files.css, which is where the vocabulary is defined and where any
- * change to it belongs; they are held as a custom property per tone so the dot
- * has one place to read a colour from and an unknown tone still paints
- * something rather than a hole in the row.
+ * Colour here is the same answer the status chips give, read off
+ * .tma-portal-status--* in portal-files.css. CIP statuses each have their
+ * own tone so eleven queues are not five colours; an unknown tone still
+ * paints the fallback rather than a hole in the row.
  */
 .tma-portal-cip__dot {
   flex: 0 0 auto;
@@ -35815,6 +35818,15 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--pending { --tma-cip-tone: #d97706; }
 .tma-portal-cip__dot--action  { --tma-cip-tone: #2563eb; }
 .tma-portal-cip__dot--neutral { --tma-cip-tone: #6b7280; }
+.tma-portal-cip__dot--sky    { --tma-cip-tone: var(--tma-status-sky, #2563eb); }
+.tma-portal-cip__dot--indigo { --tma-cip-tone: var(--tma-status-indigo, #6d28d9); }
+.tma-portal-cip__dot--violet { --tma-cip-tone: var(--tma-status-violet, #c026d3); }
+.tma-portal-cip__dot--amber  { --tma-cip-tone: var(--tma-status-amber, #ca8a04); }
+.tma-portal-cip__dot--teal   { --tma-cip-tone: var(--tma-status-teal, #0d9488); }
+.tma-portal-cip__dot--orange { --tma-cip-tone: var(--tma-status-orange, #ea580c); }
+.tma-portal-cip__dot--rose   { --tma-cip-tone: var(--tma-status-rose, #e11d48); }
+.tma-portal-cip__dot--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
+.tma-portal-cip__dot--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
 
 /* The label names the queue; it is the count beside it that is being read, so
    the name sits back the way the old bucket chips had it. One line always —

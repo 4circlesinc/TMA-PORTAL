@@ -598,7 +598,7 @@
   outline-offset: -2px;
 }
 
-/* The status dot, coloured from the same five tones the status chips use
+/* The status dot, coloured from the same tones the status chips use
    (.tma-portal-status--*), so a bucket wears one colour wherever it appears. */
 .tma-filter-popover__dot {
   flex: 0 0 auto;
@@ -614,6 +614,15 @@
 .tma-filter-popover__dot--pending { background: #d97706; }
 .tma-filter-popover__dot--action  { background: #2563eb; }
 .tma-filter-popover__dot--neutral { background: #6b7280; }
+.tma-filter-popover__dot--sky    { background: var(--tma-status-sky, #2563eb); }
+.tma-filter-popover__dot--indigo { background: var(--tma-status-indigo, #6d28d9); }
+.tma-filter-popover__dot--violet { background: var(--tma-status-violet, #c026d3); }
+.tma-filter-popover__dot--amber  { background: var(--tma-status-amber, #ca8a04); }
+.tma-filter-popover__dot--teal   { background: var(--tma-status-teal, #0d9488); }
+.tma-filter-popover__dot--orange { background: var(--tma-status-orange, #ea580c); }
+.tma-filter-popover__dot--rose   { background: var(--tma-status-rose, #e11d48); }
+.tma-filter-popover__dot--cyan   { background: var(--tma-status-cyan, #0891b2); }
+.tma-filter-popover__dot--copper { background: var(--tma-status-copper, #9a3412); }
 
 .tma-filter-popover__item--clear {
   color: var(--color-primary, #2563eb);

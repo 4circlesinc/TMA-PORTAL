@@ -111,6 +111,10 @@ final class NotificationType
         'client.account_activity' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,     'icon' => 'AddressBook', 'priority' => 'low',    'pref' => 'clients', 'action_label' => 'Review client'],
         'client.approval_needed' => ['module' => 'clients', 'level' => Notification::LEVEL_APPROVAL, 'icon' => 'SealQuestion', 'priority' => 'high',   'pref' => 'approvals', 'action_label' => 'Review client'],
 
+        // ── CIP Applications ───────────────────────────────────
+        'cip.updates-required' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
+        'cip.ready-to-submit' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
+
         // ── Account & Security ─────────────────────────────────
         'account.pending' => ['module' => 'account',  'level' => Notification::LEVEL_APPROVAL, 'icon' => 'UserCirclePlus', 'priority' => 'high',   'pref' => 'approvals', 'action_label' => 'Review Account'],
         'account.approved' => ['module' => 'account',  'level' => Notification::LEVEL_SUCCESS,  'icon' => 'CheckCircle',    'priority' => 'normal', 'pref' => 'approvals', 'action_label' => null],

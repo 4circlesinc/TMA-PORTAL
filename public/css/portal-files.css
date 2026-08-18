@@ -444,41 +444,71 @@
   flex: 1; min-height: 0; overflow: auto; position: relative;
   display: flex; align-items: center; justify-content: center; padding: 0 var(--space-16) var(--space-8);
 }
+.tma-portal-viewer__stage--pdf {
+  align-items: stretch; justify-content: stretch;
+  padding: 0; overflow: hidden;
+}
 .tma-portal-viewer__img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5); }
 .tma-portal-viewer__frame-doc { width: 100%; height: 100%; min-height: 60vh; border: 0; border-radius: var(--radius-8); background: #fff; }
 
 /* pdf.js canvas viewer — avoids Mac/Safari iframe PDF failures ------------ */
 .tma-portal-viewer__pdf {
-  position: relative; width: 100%; height: 100%; min-height: 60vh;
-  display: flex; align-items: center; justify-content: center;
+  position: relative; width: 100%; height: 100%; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.tma-portal-viewer__pdf-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: var(--space-16);
 }
 .tma-portal-viewer__pdf-loading {
-  position: absolute; margin: 0; z-index: 1;
-  color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0; color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
+  pointer-events: none;
 }
 .tma-portal-viewer__pdf-canvas {
-  max-width: 100%; max-height: 100%; display: block;
+  display: block; flex: 0 0 auto;
   border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   background: #fff;
 }
+.tma-portal-viewer__pdf-toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: var(--space-4);
+  margin: 0 var(--space-16) var(--space-12); padding: var(--space-6) var(--space-10);
+  border-radius: var(--radius-12);
+  background: rgba(0, 0, 0, 0.58); backdrop-filter: blur(10px);
+}
+.tma-portal-viewer__pdf-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 34px; padding: 0 var(--space-6);
+  border: 0; border-radius: var(--radius-8); background: transparent;
+  color: rgba(255, 255, 255, 0.9); cursor: pointer;
+  font-size: var(--text-size-12); font-weight: 600;
+}
+.tma-portal-viewer__pdf-tool--text { padding: 0 var(--space-10); }
+.tma-portal-viewer__pdf-tool:hover { background: rgba(255, 255, 255, 0.14); }
+.tma-portal-viewer__pdf-tool[disabled] { opacity: 0.28; cursor: default; }
+.tma-portal-viewer__pdf-tool img { filter: brightness(0) invert(1); opacity: 0.9; }
+.tma-portal-viewer__pdf-tool-sep {
+  width: 1px; height: 20px; margin: 0 var(--space-2);
+  background: rgba(255, 255, 255, 0.22);
+}
+.tma-portal-viewer__pdf-zoom-label,
+.tma-portal-viewer__pdf-page-label {
+  min-width: 3.5rem; text-align: center;
+  font-size: var(--text-size-12); font-weight: 600; color: rgba(255, 255, 255, 0.88);
+  user-select: none;
+}
+.tma-portal-viewer__pdf-page-label { min-width: 4rem; }
 /* display:block/inline-flex on the canvas and nav beat the UA [hidden] rule,
  * which is why an empty white sheet sat next to "Loading PDF…" forever. */
 .tma-portal-viewer__pdf-canvas[hidden],
-.tma-portal-viewer__pdf-nav[hidden],
+.tma-portal-viewer__pdf-tool[hidden],
+.tma-portal-viewer__pdf-toolbar[hidden],
 .tma-portal-viewer__pdf-loading[hidden] {
   display: none !important;
 }
-.tma-portal-viewer__pdf-nav {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  width: 40px; height: 40px; border: 0; border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5); color: #fff; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.tma-portal-viewer__pdf-nav:hover { background: rgba(0, 0, 0, 0.68); }
-.tma-portal-viewer__pdf-nav[disabled] { opacity: 0.28; cursor: default; }
-.tma-portal-viewer__pdf-nav img { filter: brightness(0) invert(1); }
-.tma-portal-viewer__pdf-nav--prev { left: var(--space-8); }
-.tma-portal-viewer__pdf-nav--next { right: var(--space-8); }
 
 .tma-portal-viewer__media { max-width: 100%; max-height: 100%; border-radius: var(--radius-8); background: #000; }
 .tma-portal-viewer__audio { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); color: #fff; }
@@ -936,6 +966,29 @@
 .tma-portal-status--pending { background: #d97706; }
 .tma-portal-status--action  { background: #2563eb; }
 .tma-portal-status--neutral { background: #6b7280; }
+
+/* CIP application statuses — one colour each, so eleven queues are not
+   drawn from the five tones above. Named to match Status::tone(). */
+:root {
+  --tma-status-sky: #2563eb;
+  --tma-status-indigo: #6d28d9;
+  --tma-status-violet: #c026d3;
+  --tma-status-amber: #ca8a04;
+  --tma-status-teal: #0d9488;
+  --tma-status-orange: #ea580c;
+  --tma-status-rose: #e11d48;
+  --tma-status-cyan: #0891b2;
+  --tma-status-copper: #9a3412;
+}
+.tma-portal-status--sky    { background: var(--tma-status-sky); }
+.tma-portal-status--indigo { background: var(--tma-status-indigo); }
+.tma-portal-status--violet { background: var(--tma-status-violet); }
+.tma-portal-status--amber  { background: var(--tma-status-amber); }
+.tma-portal-status--teal   { background: var(--tma-status-teal); }
+.tma-portal-status--orange { background: var(--tma-status-orange); }
+.tma-portal-status--rose   { background: var(--tma-status-rose); }
+.tma-portal-status--cyan   { background: var(--tma-status-cyan); }
+.tma-portal-status--copper { background: var(--tma-status-copper); }
 
 /* Send-for-review dialog */
 .tma-portal-wf-form { display: block; }

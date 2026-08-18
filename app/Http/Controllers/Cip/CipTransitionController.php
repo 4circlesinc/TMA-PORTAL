@@ -7,6 +7,7 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
@@ -159,6 +160,31 @@ class CipTransitionController extends Controller
     }
 
     /**
+     * Confirm submission: freeze the original package (§15).
+     *
+     * Its own verb because it is not a status change. Ready to submit is
+     * reached automatically once every document is accepted; this is the
+     * service provider (or private client) locking that package so it cannot
+     * be modified. Staff record the CIP number afterwards, through
+     * {@see Submission::record()}.
+     */
+    public function confirm(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        try {
+            $application = Confirmation::confirm($application, $user);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
      * Record the Unit's decision: Approved or Denied (§21).
      *
      * Its own endpoint because of the columns below, and open only to
@@ -273,6 +299,7 @@ class CipTransitionController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            ...Confirmation::payload($application, $actor),
             'availableTransitions' => collect(Engine::availableTransitions($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,

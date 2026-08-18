@@ -48,6 +48,17 @@ class CipEvent extends Model
      */
     public const ACTION_DECISION_RECORDED = 'decision_recorded';
 
+    /**
+     * The service provider confirmed the original package (§15).
+     *
+     * Its own action rather than a detail of Ready to submit: the status
+     * arrives when every document is accepted, and the lock arrives when the
+     * firm presses Confirm submission. Those are different moments, and which
+     * day the package froze is an audit question the status event alone does
+     * not answer.
+     */
+    public const ACTION_PACKAGE_CONFIRMED = 'package_confirmed';
+
     protected function casts(): array
     {
         return [

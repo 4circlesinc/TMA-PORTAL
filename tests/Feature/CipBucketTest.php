@@ -316,20 +316,31 @@ class CipBucketTest extends TestCase
         [, $contact] = $this->providerWithContact('GAL');
 
         /*
-         * The five the portal has, and there is no sixth to invent.
+         * Every word Status::tone() may answer, including the CIP-only colours
+         * that let eleven queues sit next to each other without sharing a dot.
          *
          * They are rendered as `.tma-portal-status--<tone>`, so a bucket that
          * answered with a word outside this list would not be drawn in some
          * other colour — it would be drawn in none, and the dot beside a count
          * would silently disappear on whichever dashboard grew the new word.
          */
-        $vocabulary = ['success', 'danger', 'pending', 'action', 'neutral'];
+        $vocabulary = [
+            'success', 'danger', 'pending', 'action', 'neutral',
+            'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper',
+        ];
 
         foreach ([$admin, $rita, $contact] as $reader) {
             foreach ($this->tones($reader) as $key => $tone) {
                 $this->assertContains($tone, $vocabulary, $key.' must wear a tone the portal styles.');
             }
         }
+
+        $listed = array_map(fn (string $status) => Status::tone($status), Status::listed());
+        $this->assertCount(
+            count($listed),
+            array_unique($listed),
+            'each listed status must have its own colour',
+        );
     }
 
     public function test_a_bucket_wears_the_tone_of_the_status_it_is_named_for(): void
@@ -343,8 +354,8 @@ class CipBucketTest extends TestCase
         // Status::tone() what Status::tone() answered would pass however the
         // mapping was rewritten, and these are the four the whole vocabulary
         // hangs off — work to pick up, a wait, and the two decisions.
-        $this->assertSame('action', $tones['new']);
-        $this->assertSame('pending', $tones['pending_review']);
+        $this->assertSame('sky', $tones['new']);
+        $this->assertSame('orange', $tones['pending_review']);
         $this->assertSame('success', $tones['approved']);
         $this->assertSame('danger', $tones['denied']);
 

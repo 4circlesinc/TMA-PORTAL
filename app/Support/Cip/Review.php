@@ -4,8 +4,6 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipDocument;
-use App\Models\CipPerson;
-use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -24,10 +22,11 @@ use Illuminate\Validation\ValidationException;
  *
  * What is new here is the roll-up. An application's status is not typed in by
  * whoever is working the checklist — it is read OFF the checklist, every time
- * one of these verbs lands. One document sent back means the provider side has
- * work to do, so the file reads Update required and turns up in §9's bucket;
- * every required document accepted means the assessment is finished, so it
- * reads Assessment feedback (§14).
+ * one of these verbs lands. After every required document has been assessed
+ * the file reads Assessment feedback (§14). One document sent back then means
+ * the provider side has work to do, so it moves to Update required and they
+ * are told; every required document accepted means there is nothing to send
+ * back, so it proceeds to Ready to submit (§15).
  *
  * {@see settle()} is that inference, and it is deliberately an inference. It
  * drives {@see Engine} only along edges the lifecycle already allows and leaves
@@ -125,36 +124,49 @@ class Review
      */
     public static function settle(CipApplication $application, ?User $actor = null): CipApplication
     {
-        $target = self::target($application);
-
-        // Legality is asked of the engine, never assumed. An application in
-        // its first read has no edge to Update required, so a document sent
-        // back during that read moves the slot and leaves the file alone
-        // rather than forcing a transition the lifecycle does not have.
-        if ($target === null || ! Engine::canTransition($application, $target)) {
-            return $application;
-        }
-
-        $application = Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
-
         /*
-         * §14's notice, at §14's moment.
+         * A plan rather than a single hop, because §14 and §15 are two
+         * sentences of one moment. After every required document has been
+         * assessed the file always passes through Assessment feedback; then
+         * either Updates required (and the firm is told) or Ready to submit
+         * (and the firm is told to confirm). Walking both edges in one settle
+         * is what "moves toward submission" means — leaving the file parked
+         * at Assessment feedback would make the all-clear a status somebody
+         * still had to type.
          *
-         * The provider side is told when the APPLICATION reaches Updates
-         * required — once per episode, not once per document, because an
-         * officer working through a checklist in a sitting must not put five
-         * emails in the firm's inbox saying pieces of one fact. Documents
-         * sent back while the file already stands here join the same open
-         * episode: the checklist names each of them, and the notice already
-         * said there is work. Entering ASSESSMENT FEEDBACK sends nothing —
-         * §14 promises a notification for updates, and news that everything
-         * was fine is the status screen's to show, not the inbox's to carry.
-         *
-         * Announced after the transition has committed, and never allowed to
-         * undo it: the state change is the workflow's, the telling is not.
+         * Legality is asked of the engine, never assumed. An application
+         * whose next hop is not on the map is left where it is rather than
+         * forcing a transition the lifecycle does not have.
          */
-        if ($target === Status::UPDATE_REQUIRED && $actor !== null) {
-            self::announceUpdatesRequired($application, $actor);
+        foreach (self::plan($application) as $target) {
+            if (! Engine::canTransition($application, $target)) {
+                break;
+            }
+
+            $application = Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
+
+            /*
+             * §14 / §15 notices, at the moment the APPLICATION arrives.
+             *
+             * The provider side is told once per episode, not once per
+             * document: an officer working through a checklist in a sitting
+             * must not put five emails in the firm's inbox saying pieces of
+             * one fact. Documents sent back while the file already stands at
+             * Updates required join the same open episode. Ready to submit
+             * is the all-clear, and it carries its own copy because the firm
+             * must press Confirm submission.
+             *
+             * Announced after the transition has committed, and never allowed
+             * to undo it: the state change is the workflow's, the telling is
+             * not.
+             */
+            if ($target === Status::UPDATE_REQUIRED && $actor !== null) {
+                self::announceUpdatesRequired($application, $actor);
+            }
+
+            if ($target === Status::READY_TO_SUBMIT) {
+                Confirmation::announce($application, $actor);
+            }
         }
 
         return $application;
@@ -172,8 +184,6 @@ class Review
      */
     private static function announceUpdatesRequired(CipApplication $application, User $actor): void
     {
-        $application->loadMissing(['provider.company', 'client', 'people']);
-
         $sentBack = CipDocument::query()
             ->where('application_id', $application->id)
             ->where('status', DocumentStatus::UPDATE_REQUIRED)
@@ -190,21 +200,11 @@ class Review
             return;
         }
 
-        $applicant = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $facts = Contacts::facts($application);
+        $path = Contacts::path($application);
+        $url = Contacts::url($application);
 
-        $facts = [
-            'number' => $application->displayNumber(),
-            'applicant' => $applicant?->fullName() ?: ($application->client?->name ?? 'Unnamed applicant'),
-            'provider' => $application->provider?->name ?? 'Private client',
-            'familySize' => $application->familySize(),
-        ];
-
-        $path = $application->client
-            ? '/clients/'.$application->client->uid.'?tab=folders'
-            : '/clients?q='.urlencode($application->displayNumber());
-        $url = rtrim(config('app.url'), '/').$path;
-
-        foreach (self::providerRecipients($application) as $recipient) {
+        foreach (Contacts::providerSide($application) as $recipient) {
             Deliveries::send(
                 Postcards::cipUpdatesRequired($facts, $sentBack, $actor, $url, $recipient['name']),
                 $recipient['email'],
@@ -226,60 +226,6 @@ class Review
                 ]);
             }
         }
-    }
-
-    /**
-     * Who "the Service Provider" is for one application, deduplicated by
-     * address.
-     *
-     * @return list<array{email:string, name:?string, userId:?int}>
-     */
-    private static function providerRecipients(CipApplication $application): array
-    {
-        $recipients = [];
-
-        $company = $application->provider?->company;
-
-        if ($company) {
-            foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->get() as $member) {
-                $email = $member->email ?: $member->user?->email;
-
-                if ($email) {
-                    $recipients[mb_strtolower($email)] = [
-                        'email' => $email,
-                        'name' => $member->name,
-                        'userId' => $member->user_id,
-                    ];
-                }
-            }
-        }
-
-        // The registry's own contact address, where it is nobody already on
-        // the list — a firm may route notices to a mailbox no member owns.
-        $contact = $application->provider?->contact_email;
-
-        if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
-            $recipients[mb_strtolower($contact)] = [
-                'email' => $contact,
-                'name' => $application->provider->contact_name,
-                'userId' => null,
-            ];
-        }
-
-        // A private client is their own provider side.
-        if ($recipients === [] && $application->client) {
-            $email = $application->client->user?->email ?: $application->client->email;
-
-            if ($email) {
-                $recipients[mb_strtolower($email)] = [
-                    'email' => $email,
-                    'name' => $application->client->name,
-                    'userId' => $application->client->user_id,
-                ];
-            }
-        }
-
-        return array_values($recipients);
     }
 
     /**
@@ -313,25 +259,18 @@ class Review
     }
 
     /**
-     * Where the checklist says the application belongs, or null for "leave it
-     * where it is".
+     * The statuses the checklist says to walk, in order, or empty for "leave
+     * it where it is".
+     *
+     * @return list<string>
      */
-    private static function target(CipApplication $application): ?string
+    private static function plan(CipApplication $application): array
     {
         $tally = self::tally($application);
-
-        // One document sent back is enough. Whatever else is settled, the
-        // provider side has work to do, and saying so is what puts the file in
-        // front of them instead of in front of the officer.
-        if ($tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0) {
-            return Status::UPDATE_REQUIRED;
-        }
-
         $required = array_sum(array_column($tally, 'required'));
-        $ready = $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'];
 
         /*
-         * §14: every document assessed.
+         * §14: after review of ALL documents.
          *
          * "Every" over an empty checklist is vacuously true, which is why the
          * count has to be positive as well as met. An application nobody has
@@ -342,8 +281,42 @@ class Review
          * Optional documents are counted in neither number. A translation the
          * firm would like but does not demand cannot hold an assessment open,
          * or "optional" would mean nothing at all.
+         *
+         * A required slot still in Pending upload or Application review has
+         * not been assessed, so the file waits — even if another slot has
+         * already been sent back.
          */
-        return $required > 0 && $ready === $required ? Status::ASSESSMENT_FEEDBACK : null;
+        $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
+            + $tally[DocumentStatus::APPLICATION_REVIEW]['required'];
+
+        if ($required === 0 || $unassessed > 0) {
+            return [];
+        }
+
+        $from = $application->status;
+        $needsUpdates = $tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
+        $allReady = $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
+
+        if ($needsUpdates) {
+            return match ($from) {
+                Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK, Status::UPDATE_REQUIRED],
+                Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT => [Status::UPDATE_REQUIRED],
+                default => [],
+            };
+        }
+
+        if ($allReady) {
+            return match ($from) {
+                Status::REVIEW_APPLICATION, Status::UPDATE_REQUIRED => [
+                    Status::ASSESSMENT_FEEDBACK,
+                    Status::READY_TO_SUBMIT,
+                ],
+                Status::ASSESSMENT_FEEDBACK => [Status::READY_TO_SUBMIT],
+                default => [],
+            };
+        }
+
+        return [];
     }
 
     /**

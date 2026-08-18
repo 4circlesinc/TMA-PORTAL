@@ -6,6 +6,7 @@ use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
+use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -165,7 +166,7 @@ class CipReviewTest extends TestCase
         $this->assertFalse($body['progress']['complete']);
     }
 
-    public function test_approving_the_last_required_document_reaches_assessment_feedback(): void
+    public function test_approving_the_last_required_document_reaches_ready_to_submit(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
@@ -181,12 +182,22 @@ class CipReviewTest extends TestCase
             ->postJson('/portal/cip/documents/'.$birth->uuid.'/approve')
             ->assertOk()->json();
 
-        // §14: every document assessed, so the file goes back to the side that
-        // has to act on the assessment.
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $body['application']['status']);
+        // §14 then §15: every document assessed, so Assessment feedback, and
+        // nothing sent back, so the file proceeds to Ready to submit.
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+        $this->assertSame(Status::READY_TO_SUBMIT, $body['application']['status']);
         $this->assertTrue($body['progress']['complete']);
         $this->assertSame(0, $body['progress']['outstanding']);
+
+        $this->assertEquals(
+            [Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT],
+            CipEvent::query()
+                ->where('application_id', $application->id)
+                ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+                ->orderBy('id')
+                ->pluck('to_status')
+                ->all(),
+        );
     }
 
     public function test_an_optional_document_outstanding_does_not_hold_the_assessment_open(): void
@@ -202,10 +213,7 @@ class CipReviewTest extends TestCase
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()->json();
 
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
-
-        // The optional slot is still counted and still shown — it is simply
-        // not what the assessment was waiting for.
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
         $this->assertSame(2, $body['progress']['total']);
         $this->assertSame(1, $body['progress']['required']);
         $this->assertSame(1, $body['progress']['counts'][DocumentStatus::PENDING_UPLOAD]);
@@ -238,11 +246,12 @@ class CipReviewTest extends TestCase
         );
     }
 
-    public function test_a_document_sent_back_during_the_first_read_leaves_the_application_where_it_is(): void
+    public function test_a_document_sent_back_before_the_rest_are_read_leaves_the_application_where_it_is(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $this->slot($application, 'birth_certificate', 'Birth certificate');
 
         $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes', [
@@ -252,11 +261,9 @@ class CipReviewTest extends TestCase
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $passport->fresh()->status);
 
         /*
-         * The lifecycle has no edge from Review application to Update
-         * required, and the roll-up never forces one. The slot carries the
-         * verdict, the reason is on the thread, and the application waits for
-         * an edge it actually has — see the note in the report about this gap
-         * in the transitions map.
+         * §14 waits until every required document has been assessed. One
+         * slot sent back while another is still unread is not an assessment
+         * finished, so the application stays in the officer's first read.
          */
         $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
     }
@@ -318,7 +325,7 @@ class CipReviewTest extends TestCase
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()
             ->assertJsonPath('document.status', DocumentStatus::READY_FOR_SUBMISSION)
-            ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);
+            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
     }
 
     public function test_a_provider_contact_cannot_approve_their_own_document(): void
@@ -382,9 +389,9 @@ class CipReviewTest extends TestCase
         $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk()
-            ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);
+            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
 
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
     }
 
     public function test_progress_counts_every_status_whether_or_not_anything_sits_in_it(): void
@@ -413,7 +420,7 @@ class CipReviewTest extends TestCase
 
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $company = null;
-        $application = $this->application($staff, Status::ASSESSMENT_FEEDBACK, $company);
+        $application = $this->application($staff, Status::REVIEW_APPLICATION, $company);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
         $birth = $this->slot($application, 'birth_certificate', 'Birth certificate');
         $officer = $this->officer($application);
@@ -429,9 +436,14 @@ class CipReviewTest extends TestCase
         $application->provider->forceFill(['contact_email' => 'notices@galaxy.example', 'contact_name' => 'Galaxy Notices'])->save();
 
         $this->actingAs($officer)
+            ->postJson('/portal/cip/documents/'.$birth->uuid.'/approve')->assertOk();
+
+        $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/request-changes', [
                 'comment' => 'The bottom edge of the scan is cut off.',
             ])->assertOk();
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
 
         /*
          * §14: the provider is told, in §22's filing format, with the reason
@@ -472,24 +484,42 @@ class CipReviewTest extends TestCase
         Mail::assertSentCount(2);
     }
 
-    public function test_reaching_assessment_feedback_sends_nothing(): void
+    public function test_reaching_ready_to_submit_notifies_the_provider_side(): void
     {
         Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
-        $application = $this->application($staff, Status::REVIEW_APPLICATION);
+        $company = null;
+        $application = $this->application($staff, Status::REVIEW_APPLICATION, $company);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
         $officer = $this->officer($application);
 
-        // The one required document approved: every document assessed, the
-        // application moves to Assessment feedback (§14) — and the inbox
-        // stays quiet, because §14 promises a notification for updates and
-        // good news is the status screen's to show.
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
         $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
             ->assertOk();
 
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
-        Mail::assertNothingSent();
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        $expected = 'READY TO SUBMIT - '.$application->fresh()->displayNumber()
+            .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
+
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
+            return $mail->subjectLine === $expected
+                && $mail->hasTo('gil@galaxy.example')
+                && str_contains($mail->payload['lead'] ?? '', 'ready to submit');
+        });
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'gil@galaxy.example', 'template' => 'cip-ready-to-submit',
+        ]);
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id, 'type' => 'cip.ready-to-submit',
+        ]);
     }
 }

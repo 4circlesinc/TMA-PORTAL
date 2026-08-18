@@ -49,6 +49,9 @@ class AppServiceProvider extends ServiceProvider
         // whichever of the seven upload paths put it there.
         \App\Models\FileItem::observe(\App\Observers\ClientDocumentObserver::class);
 
+        // A CIP checklist upload through the library must land in its slot.
+        \App\Models\FileItem::observe(\App\Observers\CipFileObserver::class);
+
         // …and tell any open File Library to refetch itself.
         \App\Models\FileItem::observe(\App\Observers\FileLibraryObserver::class);
         \App\Models\Folder::observe(\App\Observers\FileLibraryObserver::class);

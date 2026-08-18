@@ -107,7 +107,7 @@ class CipApplicationTableTest extends TestCase
             [[
                 'value' => Status::REVIEW_APPLICATION,
                 'label' => 'Review Applications',
-                'tone' => 'action',
+                'tone' => 'indigo',
             ]],
             $row['availableTransitions'],
             'the row menu’s Change status list is the edges this reader may drive',

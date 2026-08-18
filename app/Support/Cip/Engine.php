@@ -28,7 +28,7 @@ class Engine
         Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK],
         Status::ASSESSMENT_FEEDBACK => [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
         Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK],
-        Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW],
+        Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
         Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK],
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],

@@ -124,6 +124,9 @@
        is already filed is answered — the control asks for a replacement, and
        the check below stops demanding one. */
     filed: {},
+    /* Per-slot status from the server — whether a filed answer may be replaced
+       here or only through Upload new version in the file viewer. */
+    filedMeta: {},
     /* The application being edited, or null when this is a new one. */
     applicationId: null,
     /* The filed record the form was opened on. Kept so a save that has to be
@@ -386,6 +389,23 @@
    */
   function documentField(path) {
     var files = state.documents[path] || [];
+    var meta = state.filedMeta[path];
+    var locked = meta && meta.uploaded && meta.status !== 'update_required';
+
+    if (locked) {
+      return '<div class="tma-portal-drop is-filled is-locked' +
+        (state.errors[path] ? ' is-invalid' : '') + '">' +
+        fieldLabel(path, labelFor(path)) +
+        '<p class="tma-portal-drop__meta">Already filed and in ' +
+        esc(meta.statusLabel || 'application review') +
+        '. Use <strong>Upload new version</strong> in the file viewer to replace it.</p>' +
+        (meta.fileId
+          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-open-file="' +
+            esc(meta.fileId) + '">Open filed document</button>'
+          : '') +
+        fieldError(path) +
+        '</div>';
+    }
 
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
       (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
@@ -774,6 +794,14 @@
       });
     });
 
+    MORPH.unwired(root, '[data-cip-open-file]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var fileId = btn.getAttribute('data-cip-open-file');
+        if (!fileId || !window.TMAFileActions || !window.TMAFileActions.open) return;
+        window.TMAFileActions.open({ id: fileId });
+      });
+    });
+
     wireDrops(root);
   }
 
@@ -824,6 +852,12 @@
    * fire the second time.
    */
   function takeDocuments(root, path, chosen, input) {
+    var meta = state.filedMeta[path];
+    if (meta && meta.uploaded && meta.status !== 'update_required') {
+      if (input) input.value = '';
+      return;
+    }
+
     var files = Array.prototype.slice.call(chosen || []);
     var list = state.documents[path] || [];
     var tooBig = [];
@@ -1282,6 +1316,12 @@
           return d.type === doc.key;
         })[0];
         state.filed[prefix + doc.field] = !!(slot && slot.uploaded);
+        state.filedMeta[prefix + doc.field] = slot ? {
+          uploaded: !!slot.uploaded,
+          status: slot.status || 'pending_upload',
+          statusLabel: slot.statusLabel || '',
+          fileId: slot.fileId || null,
+        } : null;
       });
     };
 
@@ -1315,6 +1355,7 @@
     state.previews = {};
     state.documents = {};
     state.filed = {};
+    state.filedMeta = {};
     state.dependents = 0;
     state.errors = {};
     state.saving = false;

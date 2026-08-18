@@ -6,8 +6,11 @@ use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\FileVersion;
 use App\Models\User;
+use App\Support\Cip\Confirmation;
+use App\Support\Cip\DocumentSlots;
 use App\Support\Files\Workflow\Engine;
 use App\Support\Notifications\Notifier;
+use App\Support\Realtime\Live;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -71,6 +74,12 @@ class Versions
         ?string $note = null,
         ?FileVersion $restoredFrom = null,
     ): FileVersion {
+        if (Confirmation::locksFile($file)) {
+            throw new \InvalidArgumentException(
+                'This application’s original submission package is locked and cannot be modified.',
+            );
+        }
+
         // A file created before versioning existed has no history yet; give it
         // one before adding on top, or v1 would be silently lost.
         self::recordInitial($file);
@@ -125,6 +134,13 @@ class Versions
         ]);
 
         self::notify($file, $author, $version, $restoredFrom);
+
+        $file->loadMissing('cipDocument');
+
+        if ($file->cipDocument) {
+            DocumentSlots::advanceAfterUpload($file->cipDocument, $author);
+            Live::staff(Live::CIP);
+        }
 
         return $version;
     }
@@ -181,6 +197,10 @@ class Versions
         // A workflow that locked the file refuses new content outright — that
         // is what "lock during review" means. Reported separately from
         // permission so the UI can explain which one applies.
+        if (Confirmation::locksFile($file)) {
+            return false;
+        }
+
         if (Engine::isLocked($file)) {
             return false;
         }
@@ -191,6 +211,10 @@ class Versions
     /** Why versions are refused right now, for the message the user sees. */
     public static function lockReason(FileItem $file): ?string
     {
+        if (Confirmation::locksFile($file)) {
+            return 'This file is part of a confirmed submission package and cannot be modified.';
+        }
+
         $lock = Engine::isLocked($file);
 
         if (! $lock) {

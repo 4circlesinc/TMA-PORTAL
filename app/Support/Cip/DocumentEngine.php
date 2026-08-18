@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipDocument;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Realtime\Live;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
@@ -127,6 +128,8 @@ class DocumentEngine
      */
     public static function apply(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
     {
+        Confirmation::guard($document->loadMissing('application')->application);
+
         if (! self::canTransition($document, $to)) {
             throw new \InvalidArgumentException(sprintf(
                 'A CIP document cannot move from %s to %s.',
@@ -173,6 +176,8 @@ class DocumentEngine
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],
             ]);
+
+            Live::staff(Live::CIP);
 
             return $document;
         });

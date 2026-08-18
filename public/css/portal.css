@@ -905,6 +905,19 @@
   border-color: var(--color-border-medium);
 }
 
+.tma-portal-drop.is-locked {
+  padding: var(--space-12);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: var(--color-overlay-2);
+}
+
+.tma-portal-drop.is-locked .tma-portal-drop__meta {
+  margin: var(--space-8) 0;
+  font-size: var(--text-size-13);
+  color: var(--color-text-secondary);
+}
+
 .tma-portal-drop.is-invalid .tma-portal-drop__zone { border-color: var(--color-red); }
 
 /*

@@ -58,6 +58,12 @@ class Submission
         $number = self::clean($cipNumber);
         self::assertFree($number, $application);
 
+        if (! $application->isLocked()) {
+            throw ValidationException::withMessages([
+                'cipNumber' => 'The service provider must confirm submission before the package can be sent to the Unit.',
+            ]);
+        }
+
         $submittedAt ??= Carbon::now();
 
         return DB::transaction(function () use ($application, $actor, $number, $submittedAt) {

@@ -363,6 +363,15 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/submit', [CipTransitionController::class, 'submit'])
             ->name('applications.submit-draft');
         /*
+         * §15: the service provider confirms, and the original package freezes.
+         *
+         * Not a status change — Ready to submit is reached automatically —
+         * so it cannot ride the generic status route. Staff record the CIP
+         * number afterwards through applications.submit.
+         */
+        Route::post('/applications/{uuid}/confirm', [CipTransitionController::class, 'confirm'])
+            ->name('applications.confirm');
+        /*
          * §21: the Unit decided. Its own verb because it writes `decision`
          * and `decided_at` — a bare status change would leave both null on a
          * terminal file, and there is no edge back to fill them.

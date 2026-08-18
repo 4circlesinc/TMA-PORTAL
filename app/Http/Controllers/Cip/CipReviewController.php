@@ -7,6 +7,7 @@ use App\Models\CipDocument;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Review;
@@ -122,6 +123,7 @@ class CipReviewController extends Controller
                 'status' => $application->status,
                 'statusLabel' => Status::label($application->status),
                 'statusTone' => Status::tone($application->status),
+                ...Confirmation::payload($application, $user),
             ],
             // Counted on the server rather than in the browser: the checklist
             // in front of the officer is one person's, and an application's

@@ -84,7 +84,7 @@ class CipMilestoneTest extends TestCase
         $this->assertTrue($milestones['filed']['reached']);
         $this->assertSame(now()->toDateString(), $milestones['filed']['date']);
 
-        foreach (['submitted', 'query_received', 'accepted', 'decision'] as $ahead) {
+        foreach (['submitted', 'query_received', 'accepted', 'decision', 'locked'] as $ahead) {
             $this->assertArrayHasKey($ahead, $milestones, $ahead.' is what the file has left to do, not something to hide.');
             $this->assertNull($milestones[$ahead]['date']);
             $this->assertFalse($milestones[$ahead]['reached']);
@@ -174,7 +174,7 @@ class CipMilestoneTest extends TestCase
             [[
                 'value' => Status::REVIEW_APPLICATION,
                 'label' => 'Review Applications',
-                'tone' => 'action',
+                'tone' => 'indigo',
             ]],
             $body['availableTransitions'],
             'the status chip on the file offers the edges this reader may drive',

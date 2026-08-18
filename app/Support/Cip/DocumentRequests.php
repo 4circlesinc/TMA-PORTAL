@@ -50,6 +50,7 @@ class DocumentRequests
     public static function for(CipDocument $slot, User $creator, array $options = []): FileRequest
     {
         $slot->loadMissing(['person', 'application.client']);
+        Confirmation::guard($slot->application);
 
         $request = new FileRequest(array_merge([
             'uuid' => (string) Str::uuid(),
@@ -102,6 +103,9 @@ class DocumentRequests
         ?string $uploaderEmail = null,
         ?string $ip = null,
     ): FileItem {
+        $slot->loadMissing('application');
+        Confirmation::guard($slot->application);
+
         $ownerId = (int) $request->created_by;
         $owner = User::findOrFail($ownerId);
 

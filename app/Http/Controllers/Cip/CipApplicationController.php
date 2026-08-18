@@ -14,6 +14,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
@@ -817,6 +818,11 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
         abort_unless(CipAccess::canCreate($user), 404);
+        abort_if(
+            $application->isLocked(),
+            422,
+            'This application’s original submission package is locked and cannot be modified.',
+        );
 
         Intake::normaliseDocuments($request);
         $data = $request->validate(Intake::rules(editing: true), Intake::messages());
@@ -947,6 +953,7 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            ...Confirmation::payload($application, $viewer),
             'availableTransitions' => $this->transitions($application, $viewer),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,

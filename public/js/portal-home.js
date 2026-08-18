@@ -867,7 +867,10 @@
    * and an empty queue is the answer an administrator opened the card hoping
    * for, not a fault to draw the eye to. It is not emitted any more.
    */
-  var CIP_TONES = ['success', 'danger', 'pending', 'action', 'neutral'];
+  var CIP_TONES = [
+    'success', 'danger', 'pending', 'action', 'neutral',
+    'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper',
+  ];
 
   function cipCardVisible(payload) {
     if (!payload || payload.cip === false) return false;

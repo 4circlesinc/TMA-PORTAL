@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -456,6 +457,7 @@ class Intake
     public static function update(CipApplication $application, User $actor, array $data): CipApplication
     {
         return DB::transaction(function () use ($application, $actor, $data) {
+            Confirmation::guard($application);
             $application->forceFill([
                 'investment_type' => $data['investmentType'],
                 'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
@@ -680,6 +682,16 @@ class Intake
         foreach (self::documentFields(ApplicantType::for($person))
             ->mapWithKeys(fn ($doc) => [$doc['key'] => $data[$doc['field']] ?? []])
             ->all() as $type => $uploads) {
+            $existing = CipDocument::query()
+                ->where('person_id', $person->id)
+                ->where('type', $type)
+                ->first();
+
+            if ($existing?->file_id
+                && ($existing->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
+                continue;
+            }
+
             $filed = 0;
 
             foreach (Arr::wrap($uploads) as $upload) {

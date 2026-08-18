@@ -14,6 +14,7 @@ use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
+use App\Support\Cip\Confirmation;
 use App\Support\Companies\CompanyAccess;
 use Illuminate\Support\Collection;
 
@@ -40,6 +41,9 @@ class FileAccess
         'full' => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy',
             'delete', 'restore', 'share', 'assign', 'link', 'comment'],
     ];
+
+    /** Writes against a confirmed original package (§15 / §17). */
+    private const PACKAGE_LOCKED = ['upload', 'rename', 'move', 'copy', 'delete', 'restore'];
 
     public static function isAdmin(User $user): bool
     {
@@ -431,6 +435,20 @@ class FileAccess
         }
 
         if (! in_array($ability, self::CAPS[$role] ?? [], true)) {
+            return false;
+        }
+
+        /*
+         * §15: a confirmed original package is view-only.
+         *
+         * Checked after the role (so view/download/comment still pass) and
+         * after the admin/owner short-circuit inside fileRole() (so neither
+         * full rights nor owning the bytes can rewrite a package the Unit
+         * is about to be handed). View, preview, download and comment stay.
+         */
+        if ($item instanceof FileItem
+            && in_array($ability, self::PACKAGE_LOCKED, true)
+            && Confirmation::locksFile($item)) {
             return false;
         }
 

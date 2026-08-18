@@ -133,6 +133,8 @@ class CipTimelineTest extends TestCase
             Engine::apply($application, $to, $admin);
         }
 
+        $application->forceFill(['locked_at' => now()])->save();
+
         Submission::record($application, $admin, '10T1G12661P');
 
         $this->assertContains(

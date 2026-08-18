@@ -131,6 +131,7 @@ class Timeline
             CipEvent::ACTION_UNASSIGNED => "{$who} ended ".($meta['officer'] ?? 'an officer').'’s assignment',
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
             CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
+            CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.

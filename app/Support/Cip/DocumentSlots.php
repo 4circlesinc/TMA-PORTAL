@@ -58,13 +58,25 @@ class DocumentSlots
      * A second upload against a filled slot adds a version to the file that
      * is already there rather than orphaning it: the checklist keeps one
      * answer per requirement, and the history of that answer stays with it.
+     *
+     * Intake may not replace a filed answer unless a reviewer sent it back —
+     * that is what forces the Upload new version path in the file viewer.
      */
     public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor): CipDocument
     {
+        $person->loadMissing('application');
+        Confirmation::guard($person->application);
+
         // Resolved once, for the slot AND the destination — the same single
         // query slotFor always ran, not a second one beside it.
         $template = self::template($person, $type);
         $slot = self::slotFor($person, $type, $template);
+
+        if ($slot->file_id && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
+            throw new \InvalidArgumentException(
+                DocumentTypes::label($type).' is already filed. Upload a new version from the file viewer.',
+            );
+        }
 
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
@@ -77,7 +89,7 @@ class DocumentSlots
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
                 $slot->forceFill(['uploaded_by' => $actor->id, 'uploaded_at' => now()])->save();
-                self::advanceOnUpload($slot, $actor);
+                self::advanceAfterUpload($slot, $actor);
 
                 return $slot;
             }
@@ -89,10 +101,112 @@ class DocumentSlots
                 'uploaded_by' => $actor->id,
                 'uploaded_at' => now(),
             ])->save();
-            self::advanceOnUpload($slot, $actor);
+            self::advanceAfterUpload($slot, $actor);
 
             return $slot;
         });
+    }
+
+    /**
+     * A library upload that names a checklist row lands in the slot, not
+     * beside it as a second file wearing the slot's review chip.
+     *
+     * Intake and request links fill slots directly; the Documents tab and the
+     * File Library do not, unless the filename matches what {@see fill()}
+     * would have given it — "{person} — {requirement label}.pdf".
+     */
+    public static function adoptOrphan(FileItem $file, ?User $actor): bool
+    {
+        if ($file->cipDocument()->exists()) {
+            return false;
+        }
+
+        $person = self::personForFolder($file->folder_id);
+
+        if ($person === null) {
+            return false;
+        }
+
+        $person->loadMissing('documents');
+
+        $slot = self::slotForOrphanFilename($person, $file->name);
+
+        if ($slot === null || $slot->file_id !== null) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($slot, $file, $actor) {
+            $slot->forceFill([
+                'file_id' => $file->id,
+                'uploaded_by' => $actor?->id,
+                'uploaded_at' => now(),
+            ])->save();
+
+            self::advanceAfterUpload($slot, $actor);
+
+            return true;
+        });
+    }
+
+    /** Which empty checklist row a loose library upload is naming itself after. */
+    private static function slotForOrphanFilename(CipPerson $person, string $filename): ?CipDocument
+    {
+        $label = self::labelFromFilename($filename);
+
+        if ($label !== null) {
+            $slot = $person->documents->first(
+                fn (CipDocument $slot) => strcasecmp($slot->label, $label) === 0,
+            ) ?? $person->documents->first(
+                fn (CipDocument $slot) => strcasecmp(DocumentTypes::label($slot->type), $label) === 0,
+            );
+
+            if ($slot !== null) {
+                return $slot;
+            }
+        }
+
+        $normalized = self::normalizeFilename($filename);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $best = null;
+        $bestLen = 0;
+
+        foreach ($person->documents as $slot) {
+            if ($slot->file_id !== null) {
+                continue;
+            }
+
+            foreach (array_filter([$slot->label, DocumentTypes::label($slot->type)]) as $candidate) {
+                $norm = self::normalizeFilename($candidate);
+
+                if ($norm === '' || mb_strlen($norm) < 4) {
+                    continue;
+                }
+
+                if (! str_contains($normalized, $norm) && ! str_contains($norm, $normalized)) {
+                    continue;
+                }
+
+                if (mb_strlen($norm) > $bestLen) {
+                    $best = $slot;
+                    $bestLen = mb_strlen($norm);
+                }
+            }
+        }
+
+        return $best;
+    }
+
+    private static function normalizeFilename(string $name): string
+    {
+        $name = preg_replace('/\.[^.]+$/', '', $name) ?? $name;
+        $name = mb_strtolower($name);
+        $name = preg_replace('/[^a-z0-9]+/u', ' ', $name) ?? $name;
+
+        return trim($name);
     }
 
     /**
@@ -108,7 +222,7 @@ class DocumentSlots
      * better scan of an approved document does not un-approve it, and nothing
      * here should quietly undo a reviewer's decision.
      */
-    private static function advanceOnUpload(CipDocument $slot, User $actor): void
+    public static function advanceAfterUpload(CipDocument $slot, ?User $actor): void
     {
         $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
 
@@ -133,6 +247,9 @@ class DocumentSlots
      */
     public static function attach(CipPerson $person, string $type, UploadedFile $upload, User $actor, int $number): FileItem
     {
+        $person->loadMissing('application');
+        Confirmation::guard($person->application);
+
         // The same drawer the slot's first file went into: a bio page's back
         // sheet filed outside its requirement's folder would split one answer
         // across two places.
@@ -283,5 +400,43 @@ class DocumentSlots
                 'required' => $requirement?->required ?? true,
             ],
         );
+    }
+
+    private static function personForFolder(?int $folderId): ?CipPerson
+    {
+        if ($folderId === null) {
+            return null;
+        }
+
+        $folder = Folder::find($folderId);
+
+        while ($folder !== null) {
+            $person = CipPerson::where('folder_id', $folder->id)->first();
+
+            if ($person !== null) {
+                return $person;
+            }
+
+            $folder = $folder->parent_id ? Folder::find($folder->parent_id) : null;
+        }
+
+        return null;
+    }
+
+    /** "{person} — {label}.pdf" → the label half, which is what the slot stores. */
+    private static function labelFromFilename(string $name): ?string
+    {
+        $pos = mb_strpos($name, ' — ');
+
+        if ($pos === false) {
+            return null;
+        }
+
+        $tail = mb_substr($name, $pos + 3);
+        $tail = preg_replace('/ \(\d+\)(?=\.[^.]+$)/', '', $tail) ?? $tail;
+        $tail = preg_replace('/\.[^.]+$/', '', $tail) ?? $tail;
+        $tail = trim($tail);
+
+        return $tail !== '' ? $tail : null;
     }
 }

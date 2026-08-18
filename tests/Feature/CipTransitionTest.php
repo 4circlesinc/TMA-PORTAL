@@ -54,6 +54,7 @@ class CipTransitionTest extends TestCase
         [Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT],
         [Status::UPDATE_REQUIRED, Status::ASSESSMENT_FEEDBACK],
         [Status::READY_TO_SUBMIT, Status::PENDING_REVIEW],
+        [Status::READY_TO_SUBMIT, Status::UPDATE_REQUIRED],
         [Status::PENDING_REVIEW, Status::NON_COMPLIANT],
         [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         [Status::NON_COMPLIANT, Status::PENDING_REVIEW],
@@ -305,7 +306,7 @@ class CipTransitionTest extends TestCase
 
         $ready = $this->at($this->application($admin), Status::READY_TO_SUBMIT);
         $this->assertSame([Status::PENDING_REVIEW], Engine::availableTransitions($ready, $compliance));
-        $this->assertSame([], Engine::availableTransitions($ready, $reviewer));
+        $this->assertSame([Status::UPDATE_REQUIRED], Engine::availableTransitions($ready, $reviewer));
 
         // Nothing leaves a decision, whoever is asking.
         $granted = $this->at($this->application($admin), Status::GRANTED);

@@ -2361,17 +2361,17 @@
    * there was nothing to change to.
    */
   var CIP_STATUSES = [
-    { value: 'new', label: 'New Applications' },
-    { value: 'review_application', label: 'Review Applications' },
-    { value: 'assessment_feedback', label: 'Assessment Feedback' },
-    { value: 'update_required', label: 'Updates Required' },
-    { value: 'ready_to_submit', label: 'Ready to Submit' },
-    { value: 'pending_review', label: 'Pending Review' },
-    { value: 'non_compliant', label: 'Non-compliant' },
-    { value: 'background_check', label: 'Background Check' },
-    { value: 'delayed', label: 'Delayed' },
-    { value: 'granted', label: 'Approved' },
-    { value: 'denied', label: 'Denied' },
+    { value: 'new', label: 'New Applications', tone: 'sky' },
+    { value: 'review_application', label: 'Review Applications', tone: 'indigo' },
+    { value: 'assessment_feedback', label: 'Assessment Feedback', tone: 'violet' },
+    { value: 'update_required', label: 'Updates Required', tone: 'amber' },
+    { value: 'ready_to_submit', label: 'Ready to Submit', tone: 'teal' },
+    { value: 'pending_review', label: 'Pending Review', tone: 'orange' },
+    { value: 'non_compliant', label: 'Non-compliant', tone: 'rose' },
+    { value: 'background_check', label: 'Background Check', tone: 'cyan' },
+    { value: 'delayed', label: 'Delayed', tone: 'copper' },
+    { value: 'granted', label: 'Approved', tone: 'success' },
+    { value: 'denied', label: 'Denied', tone: 'danger' },
   ];
 
   /*
@@ -5192,9 +5192,18 @@
    * not move the status.
    */
   function renderSubmissionAction(state, app) {
-    if (app.status === 'ready_to_submit') {
+    if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
+      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-confirm>' +
+        'Confirm submission</button>';
+    }
+
+    if (app.status === 'ready_to_submit' && app.locked && canRecordSubmission()) {
       return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-submit>' +
         'Record submission</button>';
+    }
+
+    if (app.status === 'ready_to_submit' && !app.locked && !app.canConfirm) {
+      return '<p class="tma-dash__clients-appbar-note">Waiting for the service provider to confirm submission.</p>';
     }
 
     if (app.cipNumber && canRecordSubmission()) {
@@ -6122,11 +6131,20 @@
     document.addEventListener('tma:upload-complete', function (e) {
       if (!clientsMountRoot) return;
       var wrap = clientsMountRoot.querySelector('[data-clients-folder-drop]');
-      if (!wrap) return;
-      var done = e.detail && e.detail.folderId;
-      if (!done || done === wrap.getAttribute('data-folder-uuid')) {
-        loadClientFolder(clientsMountRoot, { changed: true });
+      if (wrap) {
+        var done = e.detail && e.detail.folderId;
+        if (!done || done === wrap.getAttribute('data-folder-uuid')) {
+          loadClientFolder(clientsMountRoot, { changed: true });
+        }
       }
+
+      var ctrl = clientsMountRoot._clientsController;
+      if (!ctrl || !ctrl.state) return;
+      var st = ctrl.state;
+      if (!st.selectedId || !applicationFor(st.selectedId)) return;
+      forgetApplication(st.selectedId);
+      st.applicationFreshFor = null;
+      ensureApplicationLoaded(st, ctrl.render);
     });
   }
 
@@ -7504,6 +7522,64 @@
   }
 
   /*
+   * §15: the service provider locks the original package.
+   *
+   * Said before they commit, because this is the moment documents stop being
+   * editable — staff recording the CIP number afterwards is a different verb.
+   */
+  function openConfirmSubmissionDialog(state, render) {
+    var ui = window.TMAPortalUI;
+    var app = applicationFor(state.selectedId);
+    if (!app || !ui || !ui.openModal) return;
+
+    ui.openModal({
+      title: 'Confirm submission',
+      body:
+        '<p class="tma-portal-modal__text">' +
+        'Confirming locks the original submission package. Documents cannot be changed after this.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-confirm>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-confirm>Confirm submission</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-confirm]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-confirm]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          save.disabled = true;
+          save.textContent = 'Confirming…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/confirm', {
+            method: 'POST',
+            json: {},
+          })
+            .then(function (json) {
+              ui.closeModal();
+              var uid = state.selectedId;
+              if (uid) forgetApplication(uid);
+              forgetApplicationTable();
+              forgetBuckets();
+              clientsToast('Submission confirmed — the original package is locked.', 'positive');
+              if (typeof render === 'function') {
+                render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
+              } else {
+                repaintClients();
+              }
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = 'Confirm submission';
+              clientsToast((err && err.message) || 'Could not confirm this submission.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
    * Entering the CIP number (§7, §16).
    *
    * Two jobs, one dialog, because they are the same field: recording the
@@ -7852,11 +7928,13 @@
   function renderCipStatusSub(list, current) {
     return list.map(function (status) {
       var on = status.value === current;
+      var tone = status.tone || 'neutral';
 
       return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
         (on ? ' aria-current="true"' : '') +
         ' data-cip-status-to="' + esc(status.value) + '"' +
         ' data-cip-status-label="' + esc(status.label) + '">' +
+        '<i class="tma-portal-cip__dot tma-portal-cip__dot--' + esc(tone) + '" aria-hidden="true"></i>' +
         '<span class="tma-portal-context-menu__label">' + esc(status.label) + '</span></button>';
     }).join('');
   }
@@ -9455,6 +9533,10 @@
         }
         openClientRecording(rec);
       });
+    });
+
+    MORPH.unwired(root, '[data-cip-confirm]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () { openConfirmSubmissionDialog(state, render); });
     });
 
     MORPH.unwired(root, '[data-cip-submit]').forEach(function (btn) {

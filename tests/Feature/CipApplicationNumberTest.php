@@ -63,6 +63,10 @@ class CipApplicationNumberTest extends TestCase
             Engine::apply($application, $to, $staff);
         }
 
+        // §16 begins after the provider has confirmed: the original package
+        // is frozen, and staff then record the CIP number.
+        $application->forceFill(['locked_at' => now()])->save();
+
         return $application->refresh();
     }
 
@@ -200,8 +204,10 @@ class CipApplicationNumberTest extends TestCase
         $staff = $this->staff();
         $application = Applications::create($this->provider($staff), $staff);
 
-        // Straight from New Applications. §16 begins at Ready to Submit and
-        // the engine owns that edge — recording a number is not a way around it.
+        // Straight from New Applications. §16 begins at Ready to Submit after
+        // the provider has confirmed, and the engine owns that edge — recording
+        // a number is not a way around it.
+        $application->forceFill(['locked_at' => now()])->save();
         $this->expectException(\InvalidArgumentException::class);
         Submission::record($application, $staff, '10T1G12661P');
     }

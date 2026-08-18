@@ -1632,6 +1632,14 @@
       // binding on render would stack a listener every time.
       bindVersionDrop();
 
+      var stage = lb.querySelector('[data-lb-stage]');
+      if (stage) {
+        stage.classList.toggle(
+          'tma-portal-viewer__stage--pdf',
+          f.category === 'pdf' && f.previewUrl && perm(f, 'preview')
+        );
+      }
+
       paintPanel();
       if (viewerPrefs.comments) paintCommentsPanel();
       mountPdf(f);
@@ -3943,6 +3951,11 @@
           if (e.pdfPage > pdf.numPages) e.pdfPage = 1;
           paintPdfThumbs(f, pdf);
           renderPdfPage(f, e.pdfPage);
+          // First paint can run before the scroll area has its height — one
+          // frame later the fit-width / fit-page math has real dimensions.
+          requestAnimationFrame(function () {
+            if (current().id === f.id && entry(f).pdfDoc) renderPdfPage(f, e.pdfPage);
+          });
         })
         .catch(function (err) {
           if (current().id !== f.id) return;
@@ -3994,15 +4007,11 @@
     function renderPdfPage(f, pageNum) {
       var e = entry(f);
       var pdf = e.pdfDoc;
-      var canvas = lb.querySelector('[data-lb-pdf-canvas]');
       var host = lb.querySelector('[data-lb-pdf]');
+      var canvas = host && host.querySelector('[data-lb-pdf-canvas]');
       if (!pdf || !canvas || !host) return Promise.resolve();
 
       e.pdfPage = pageNum;
-      var prev = host.querySelector('[data-lb-pdf-prev]');
-      var next = host.querySelector('[data-lb-pdf-next]');
-      if (prev) { prev.hidden = pdf.numPages < 2; prev.disabled = pageNum <= 1; }
-      if (next) { next.hidden = pdf.numPages < 2; next.disabled = pageNum >= pdf.numPages; }
 
       lb.querySelectorAll('[data-lb-pdf-page]').forEach(function (btn) {
         var n = parseInt(btn.getAttribute('data-lb-pdf-page'), 10);
@@ -4015,15 +4024,17 @@
 
       return pdf.getPage(pageNum).then(function (page) {
         if (current().id !== f.id) return;
-        var cssWidth = Math.min(host.clientWidth || 800, 960);
+        var scrollEl = pdfScrollEl(host);
+        var bases = pdfBases(page, scrollEl);
+        var scale = pdfScaleFor(e, bases);
         var dpr = window.devicePixelRatio || 1;
-        var unscaled = page.getViewport({ scale: 1 });
-        var viewport = page.getViewport({ scale: (cssWidth * dpr) / unscaled.width });
+        var viewport = page.getViewport({ scale: scale * dpr });
         canvas.hidden = false;
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
         canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
         canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
+        updatePdfToolbar(f, e, pdf, pageNum, bases, scale);
         if (canvas._pdfTask) canvas._pdfTask.cancel();
         var task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
         canvas._pdfTask = task;
@@ -4073,6 +4084,10 @@
       }
       if (e.target.closest('[data-lb-pdf-prev]')) { pdfNav(-1); return; }
       if (e.target.closest('[data-lb-pdf-next]')) { pdfNav(1); return; }
+      if (e.target.closest('[data-lb-pdf-zoom-in]')) { pdfZoomIn(current()); return; }
+      if (e.target.closest('[data-lb-pdf-zoom-out]')) { pdfZoomOut(current()); return; }
+      if (e.target.closest('[data-lb-pdf-fit-width]')) { pdfFitWidth(current()); return; }
+      if (e.target.closest('[data-lb-pdf-fit-page]')) { pdfFitPage(current()); return; }
 
       var tab = e.target.closest('[data-lb-tab]');
       if (tab) { viewerPrefs.tab = tab.getAttribute('data-lb-tab'); paintPanel(); return; }
@@ -4246,8 +4261,41 @@
       if (e.key === 'Escape') closeLightbox();
       else if (e.key === 'ArrowLeft') { if (!pdfNav(-1)) go(-1); }
       else if (e.key === 'ArrowRight') { if (!pdfNav(1)) go(1); }
+      else if (e.key === '+' || e.key === '=') {
+        if (current().category === 'pdf') { e.preventDefault(); pdfZoomIn(current()); }
+      } else if (e.key === '-') {
+        if (current().category === 'pdf') { e.preventDefault(); pdfZoomOut(current()); }
+      }
     };
     document.addEventListener('keydown', lb._key);
+
+    var pdfResizeTimer = null;
+    function onPdfResize() {
+      clearTimeout(pdfResizeTimer);
+      pdfResizeTimer = setTimeout(function () {
+        var cf = current();
+        if (!cf || cf.category !== 'pdf' || !entry(cf).pdfDoc) return;
+        renderPdfPage(cf, entry(cf).pdfPage);
+      }, 150);
+    }
+    window.addEventListener('resize', onPdfResize);
+    lb._pdfResize = function () {
+      clearTimeout(pdfResizeTimer);
+      window.removeEventListener('resize', onPdfResize);
+    };
+
+    function onPdfWheel(e) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      var host = lb.querySelector('[data-lb-pdf]');
+      if (!host || !host.contains(e.target)) return;
+      e.preventDefault();
+      var cf = current();
+      if (!cf || cf.category !== 'pdf') return;
+      if (e.deltaY < 0) pdfZoomIn(cf);
+      else pdfZoomOut(cf);
+    }
+    lb.addEventListener('wheel', onPdfWheel, { passive: false });
+    lb._pdfWheel = function () { lb.removeEventListener('wheel', onPdfWheel); };
 
     /* ── toolbar actions that need the viewer's own state ── */
 
@@ -4346,14 +4394,30 @@
           return '<img class="tma-portal-viewer__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
         case 'pdf':
           return '<div class="tma-portal-viewer__pdf" data-lb-pdf>' +
+            '<div class="tma-portal-viewer__pdf-scroll" data-lb-pdf-scroll>' +
+              '<canvas class="tma-portal-viewer__pdf-canvas" data-lb-pdf-canvas hidden></canvas>' +
+            '</div>' +
+            '<div class="tma-portal-viewer__pdf-toolbar" data-lb-pdf-toolbar hidden role="toolbar" aria-label="PDF controls">' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-zoom-out aria-label="Zoom out">' +
+                '<img src="images/icons/phosphor/MagnifyingGlassMinus.svg" alt="" width="18" height="18">' +
+              '</button>' +
+              '<span class="tma-portal-viewer__pdf-zoom-label" data-lb-pdf-zoom-label>100%</span>' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-zoom-in aria-label="Zoom in">' +
+                '<img src="images/icons/phosphor/MagnifyingGlassPlus.svg" alt="" width="18" height="18">' +
+              '</button>' +
+              '<span class="tma-portal-viewer__pdf-tool-sep" aria-hidden="true"></span>' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool tma-portal-viewer__pdf-tool--text" data-lb-pdf-fit-width>Fit width</button>' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool tma-portal-viewer__pdf-tool--text" data-lb-pdf-fit-page>Fit page</button>' +
+              '<span class="tma-portal-viewer__pdf-tool-sep" aria-hidden="true"></span>' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-prev hidden aria-label="Previous page">' +
+                '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="18" height="18">' +
+              '</button>' +
+              '<span class="tma-portal-viewer__pdf-page-label" data-lb-pdf-page-label>1 / 1</span>' +
+              '<button type="button" class="tma-portal-viewer__pdf-tool" data-lb-pdf-next hidden aria-label="Next page">' +
+                '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="18" height="18">' +
+              '</button>' +
+            '</div>' +
             '<p class="tma-portal-viewer__pdf-loading" data-lb-pdf-loading>Loading PDF…</p>' +
-            '<canvas class="tma-portal-viewer__pdf-canvas" data-lb-pdf-canvas hidden></canvas>' +
-            '<button type="button" class="tma-portal-viewer__pdf-nav tma-portal-viewer__pdf-nav--prev" data-lb-pdf-prev hidden aria-label="Previous page">' +
-              '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="20" height="20">' +
-            '</button>' +
-            '<button type="button" class="tma-portal-viewer__pdf-nav tma-portal-viewer__pdf-nav--next" data-lb-pdf-next hidden aria-label="Next page">' +
-              '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="20" height="20">' +
-            '</button>' +
           '</div>';
         case 'video':
           return '<video class="tma-portal-viewer__media" src="' + esc(f.previewUrl) + '" controls autoplay playsinline></video>';
@@ -4381,6 +4445,8 @@
       syncUrl();
     }
     if (lb._key) document.removeEventListener('keydown', lb._key);
+    if (lb._pdfResize) lb._pdfResize();
+    if (lb._pdfWheel) lb._pdfWheel();
     if (lb._leave) lb._leave();
     // Leave the file's channel, or every file opened this session keeps a
     // subscription alive for the rest of the page's life.
