@@ -1729,12 +1729,32 @@
       return line;
     }
 
+    // Instant labels: native `title` waits ~1s, and icon-only tools need a name
+    // the moment the pointer lands. Same type across the bar so sliding from
+    // Download to Print swaps with no second delay.
+    function toolTipHtml(id, label) {
+      return '<div id="' + esc(id) + '" class="tma-tooltip tma-tooltip--compact tma-tooltip--bottom tma-tooltip-trigger__tip" role="tooltip" aria-hidden="true">' +
+        '<div class="tma-tooltip__surface"><div class="tma-tooltip__content tma-tooltip__content--inline"><span class="tma-tooltip__text">' + esc(label) + '</span></div></div>' +
+        '<span class="tma-tooltip__arrow" aria-hidden="true"></span>' +
+        '</div>';
+    }
+
+    function toolBtnAttrs(action, label, tipId) {
+      return ' data-lb-act="' + action + '"' +
+        ' aria-label="' + esc(label) + '"' +
+        ' aria-describedby="' + esc(tipId) + '"' +
+        ' data-tooltip-trigger data-tooltip-type="viewer-tool" data-tooltip-position="bottom"' +
+        ' data-tooltip-initial-delay="0" data-tooltip-rehover-delay="0" data-tooltip-rehover-window="30000"';
+    }
+
     function toolBtnHtml(icon, action, label, opts) {
       opts = opts || {};
-      return '<button type="button" class="tma-portal-viewer__tool' + (opts.active ? ' is-active' : '') + '"' +
-        ' data-lb-act="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
+      var tipId = 'lb-tip-' + action;
+      return '<button type="button" class="tma-portal-viewer__tool tma-tooltip-trigger' + (opts.active ? ' is-active' : '') + '"' +
+        toolBtnAttrs(action, label, tipId) +
         (opts.pressed !== undefined ? ' aria-pressed="' + opts.pressed + '"' : '') + '>' +
         '<img src="images/icons/phosphor/' + icon + '.svg" alt="" width="18" height="18">' +
+        toolTipHtml(tipId, label) +
         '</button>';
     }
 
@@ -1769,11 +1789,14 @@
       var on = !!f.favorite;
       var path = 'M10 1.6l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.2l-4.94 2.6.94-5.5-4-3.9 5.53-.8z';
       var label = on ? 'Remove from favourites' : 'Add to favourites';
-      return '<button type="button" class="tma-portal-viewer__tool' + (on ? ' is-active' : '') + '"' +
-        ' data-lb-act="favorite" aria-label="' + esc(label) + '" title="' + esc(label) + '" aria-pressed="' + on + '">' +
+      var tipId = 'lb-tip-favorite';
+      return '<button type="button" class="tma-portal-viewer__tool tma-tooltip-trigger' + (on ? ' is-active' : '') + '"' +
+        toolBtnAttrs('favorite', label, tipId) + ' aria-pressed="' + on + '">' +
         '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">' +
         '<path d="' + path + '" ' + (on ? 'fill="#ffcc00" stroke="#e0ac00"' : 'fill="none" stroke="currentColor"') +
-        ' stroke-width="1.3" stroke-linejoin="round"/></svg></button>';
+        ' stroke-width="1.3" stroke-linejoin="round"/></svg>' +
+        toolTipHtml(tipId, label) +
+        '</button>';
     }
 
     /* ── left rail: the other files in this view ─────── */

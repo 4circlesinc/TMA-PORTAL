@@ -386,6 +386,8 @@
   width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-8);
   background: transparent; color: rgba(255, 255, 255, 0.85); cursor: pointer;
 }
+.tma-portal-viewer__tool.tma-tooltip-trigger { cursor: pointer; }
+.tma-portal-viewer__tool.tma-tooltip-trigger.is-tooltip-pending { outline: none; }
 .tma-portal-viewer__tool:hover { background: rgba(255, 255, 255, 0.14); }
 .tma-portal-viewer__tool img { filter: brightness(0) invert(1); opacity: 0.82; }
 .tma-portal-viewer__tool:hover img,
