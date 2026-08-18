@@ -178,6 +178,19 @@ window.TMAI18nDict = {
     "Turn on two-factor authentication": "Activez l'authentification à deux facteurs",
     "Connect Google": "Connecter Google", "Connect Microsoft": "Connecter Microsoft",
     "Connect Google or Microsoft": "Connecter Google ou Microsoft",
+
+    // CIP reporting
+    "All dates": "Toutes les dates", "Preset": "Préréglage", "Any": "Tous",
+    "Custom": "Personnalisé", "Assigned officer": "Agent assigné",
+    "Submitted from": "Déposée du", "Submitted to": "Déposée au",
+    "Decision from": "Décision du", "Decision to": "Décision au",
+    "Applications Pending Review": "Demandes en attente d'examen",
+    "Applications in Background Check": "Demandes en vérification des antécédents",
+    "Delayed Applications": "Demandes retardées",
+    "Granted Applications": "Demandes accordées",
+    "Denied Applications": "Demandes refusées",
+    "Applications by Service Provider": "Demandes par prestataire",
+    "Applications by Investment Type": "Demandes par type d'investissement",
   },
   patterns: [
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) messages$", "$1 sur $2 messages"],

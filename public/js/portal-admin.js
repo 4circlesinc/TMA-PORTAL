@@ -401,7 +401,9 @@
         }).join('');
 
         root.innerHTML =
-          '<p class="tma-portal-subtitle">To see how your account is being used, you can create recurring and non-recurring reports that track usage, access, messaging and storage. Every report is measured from the portal\'s own records at the moment you create it.</p>' +
+          '<p class="tma-portal-subtitle">' + (payload.cip
+            ? 'To see how the account is being used, you can create reports that track usage, access, messaging, storage and CIP applications. Every report is measured from the portal\'s own records at the moment you create it.'
+            : 'To see how your account is being used, you can create recurring and non-recurring reports that track usage, access, messaging and storage. Every report is measured from the portal\'s own records at the moment you create it.') + '</p>' +
           '<div class="tma-portal-toolbar">' +
           ui().tabs([{ key: 'recent', label: 'Recent Reports' }, { key: 'recurring', label: 'Recurring Reports' }], self.tab) +
           ui().btn({ label: 'Create Report', attrs: 'data-rep-create' }) +
@@ -507,10 +509,26 @@
       /* ── create ───────────────────────────────────── */
       function createDialog() {
         var today = new Date().toISOString().slice(0, 10);
+        var cip = payload.cip || null;
+        var any = [{ value: '', label: 'Any' }];
         ui().openModal({
           title: 'Create Report',
           body:
             ui().field('Report type', ui().select(payload.types || [], 'usage', 'data-rep-type', 'Report type')) +
+            '<div data-rep-cip hidden>' +
+            (cip
+              ? ui().field('Preset', ui().select([{ value: '', label: 'Custom' }].concat(cip.presets || []), '', 'data-rep-preset', 'Preset')) +
+                ui().field('Status', ui().select(any.concat(cip.statuses || []), '', 'data-rep-status', 'Status')) +
+                ui().field('Service provider', ui().select(any.concat(cip.providers || []), '', 'data-rep-provider', 'Service provider')) +
+                ui().field('Investment type', ui().select(any.concat(cip.investmentTypes || []), '', 'data-rep-investment', 'Investment type')) +
+                ui().field('Applicant', ui().input({ attrs: 'data-rep-applicant', placeholder: 'Name', ariaLabel: 'Applicant' })) +
+                ui().field('Assigned officer', ui().select(any.concat(cip.officers || []), '', 'data-rep-officer', 'Assigned officer')) +
+                ui().field('Submitted from', ui().input({ type: 'date', attrs: 'data-rep-submitted-from' })) +
+                ui().field('Submitted to', ui().input({ type: 'date', attrs: 'data-rep-submitted-to' })) +
+                ui().field('Decision from', ui().input({ type: 'date', attrs: 'data-rep-decided-from' })) +
+                ui().field('Decision to', ui().input({ type: 'date', attrs: 'data-rep-decided-to' }))
+              : '') +
+            '</div>' +
             ui().field('Date range', ui().select(payload.ranges || [], 'last_30', 'data-rep-range', 'Date range')) +
             '<div data-rep-custom hidden>' +
             ui().field('From', ui().input({ type: 'date', attrs: 'data-rep-from', value: today })) +
@@ -522,25 +540,55 @@
             '</div>' +
             '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create Report', attrs: 'data-rep-save' }) + '</div>',
           onMount: function (host) {
+            var type = host.querySelector('[data-rep-type]');
             var range = host.querySelector('[data-rep-range]');
             var custom = host.querySelector('[data-rep-custom]');
+            var cipBox = host.querySelector('[data-rep-cip]');
             var recurring = host.querySelector('[data-rep-recurring]');
             var freq = host.querySelector('[data-rep-freq]');
 
+            function syncType() {
+              var isCip = type.value === 'cip';
+              if (cipBox) cipBox.hidden = !isCip;
+              if (isCip && range.value === 'last_30') range.value = 'all';
+            }
+
             range.addEventListener('change', function () { custom.hidden = range.value !== 'custom'; });
             recurring.addEventListener('change', function () { freq.hidden = !recurring.checked; });
+            if (type) type.addEventListener('change', syncType);
+            syncType();
+
+            function val(attr) {
+              var el = host.querySelector('[' + attr + ']');
+              return el && el.value ? el.value : '';
+            }
 
             var save = host.querySelector('[data-rep-save]');
             save.addEventListener('click', function () {
               save.disabled = true;
-              secApi('POST', '/admin/reports', {
-                type: host.querySelector('[data-rep-type]').value,
+              var body = {
+                type: type.value,
                 range: range.value,
                 startsOn: range.value === 'custom' ? host.querySelector('[data-rep-from]').value : null,
                 endsOn: range.value === 'custom' ? host.querySelector('[data-rep-to]').value : null,
                 recurring: recurring.checked,
                 frequency: recurring.checked ? host.querySelector('[data-rep-frequency]').value : null,
-              }).then(function (res) {
+              };
+              if (type.value === 'cip') {
+                body.filters = {
+                  preset: val('data-rep-preset'),
+                  status: val('data-rep-status'),
+                  providerId: val('data-rep-provider'),
+                  investmentType: val('data-rep-investment'),
+                  applicant: val('data-rep-applicant'),
+                  officerId: val('data-rep-officer'),
+                  submittedFrom: val('data-rep-submitted-from'),
+                  submittedTo: val('data-rep-submitted-to'),
+                  decidedFrom: val('data-rep-decided-from'),
+                  decidedTo: val('data-rep-decided-to'),
+                };
+              }
+              secApi('POST', '/admin/reports', body).then(function (res) {
                 return res.json().catch(function () { return {}; }).then(function (j) {
                   if (!res.ok) {
                     save.disabled = false;

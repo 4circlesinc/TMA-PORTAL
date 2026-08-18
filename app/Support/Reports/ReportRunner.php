@@ -46,16 +46,16 @@ final class ReportRunner
      * Roll a recurring report's window forward so it ends today.
      *
      * A one-off keeps the dates it was created with — re-running it is a
-     * retry, not a new question — and so does a custom window, which is a
-     * period somebody deliberately picked.
+     * retry, not a new question — and so do a custom window and "All dates",
+     * which are periods somebody deliberately picked.
      */
     public static function rollWindow(Report $report): Report
     {
-        if (! $report->isRecurring() || $report->range_key === 'custom') {
+        $days = Report::RANGES[$report->range_key] ?? null;
+
+        if (! $report->isRecurring() || $days === null) {
             return $report;
         }
-
-        $days = Report::RANGES[$report->range_key];
 
         $report->ends_on = now()->toDateString();
         $report->starts_on = now()->copy()->subDays($days - 1)->toDateString();

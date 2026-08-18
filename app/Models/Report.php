@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * See {@see App\Support\Reports\ReportBuilder} for where `data` comes from.
  */
 #[Fillable([
-    'uid', 'name', 'type', 'range_key', 'starts_on', 'ends_on', 'frequency',
+    'uid', 'name', 'type', 'filters', 'range_key', 'starts_on', 'ends_on', 'frequency',
     'next_run_at', 'generated_at', 'status', 'data', 'error', 'created_by',
 ])]
 class Report extends Model
@@ -27,14 +27,19 @@ class Report extends Model
 
     public const TYPE_STORAGE = 'storage';
 
-    public const TYPES = [self::TYPE_USAGE, self::TYPE_ACCESS, self::TYPE_MESSAGING, self::TYPE_STORAGE];
+    public const TYPE_CIP = 'cip';
 
-    /** Range key => how many days back the window starts. `custom` has none. */
+    public const TYPES = [
+        self::TYPE_USAGE, self::TYPE_ACCESS, self::TYPE_MESSAGING, self::TYPE_STORAGE, self::TYPE_CIP,
+    ];
+
+    /** Range key => how many days back the window starts. `custom` and `all` have none. */
     public const RANGES = [
         'last_7' => 7,
         'last_30' => 30,
         'last_90' => 90,
         'custom' => null,
+        'all' => null,
     ];
 
     public const FREQUENCIES = ['weekly', 'monthly'];
@@ -53,6 +58,7 @@ class Report extends Model
             'next_run_at' => 'datetime',
             'generated_at' => 'datetime',
             'data' => 'array',
+            'filters' => 'array',
         ];
     }
 
@@ -80,6 +86,7 @@ class Report extends Model
             'last_7' => 'Last 7 days',
             'last_30' => 'Last 30 days',
             'last_90' => 'Last 90 days',
+            'all' => 'All dates',
             default => $this->starts_on->format('j M').' – '.$this->ends_on->format('j M Y'),
         };
     }
@@ -117,6 +124,7 @@ class Report extends Model
             'created' => $this->created_at?->toIso8601String(),
             'generatedAt' => $this->generated_at?->toIso8601String(),
             'nextRunAt' => $this->next_run_at?->toIso8601String(),
+            'filters' => $this->filters ?: null,
             'data' => $withData ? ($this->data ?: null) : null,
         ], fn ($v) => $v !== null);
     }

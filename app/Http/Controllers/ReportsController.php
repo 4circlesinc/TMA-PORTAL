@@ -4,12 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Status;
+use App\Support\Reports\CipReport;
 use App\Support\Reports\ReportBuilder;
 use App\Support\Reports\ReportRunner;
 use App\Support\UserTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -36,25 +41,33 @@ class ReportsController extends Controller
 
         $reports = Report::with('creator')->orderByDesc('created_at')->get();
 
+        $types = [
+            ['value' => Report::TYPE_USAGE, 'label' => 'Usage'],
+            ['value' => Report::TYPE_ACCESS, 'label' => 'Access'],
+            ['value' => Report::TYPE_MESSAGING, 'label' => 'Messaging'],
+            ['value' => Report::TYPE_STORAGE, 'label' => 'Storage'],
+        ];
+
+        if (CipAccess::enabled()) {
+            $types[] = ['value' => Report::TYPE_CIP, 'label' => 'CIP Applications'];
+        }
+
         return response()->json([
             'recent' => $reports->whereNull('frequency')->take(self::RECENT_LIMIT)->map->toRecord()->values(),
             'recurring' => $reports->whereNotNull('frequency')->map->toRecord()->values(),
-            'types' => [
-                ['value' => Report::TYPE_USAGE, 'label' => 'Usage'],
-                ['value' => Report::TYPE_ACCESS, 'label' => 'Access'],
-                ['value' => Report::TYPE_MESSAGING, 'label' => 'Messaging'],
-                ['value' => Report::TYPE_STORAGE, 'label' => 'Storage'],
-            ],
+            'types' => $types,
             'ranges' => [
                 ['value' => 'last_7', 'label' => 'Last 7 days'],
                 ['value' => 'last_30', 'label' => 'Last 30 days'],
                 ['value' => 'last_90', 'label' => 'Last 90 days'],
                 ['value' => 'custom', 'label' => 'Custom'],
+                ['value' => 'all', 'label' => 'All dates'],
             ],
             'frequencies' => [
                 ['value' => 'weekly', 'label' => 'Every week'],
                 ['value' => 'monthly', 'label' => 'Every month'],
             ],
+            'cip' => CipAccess::enabled() ? $this->cipOptions() : null,
         ]);
     }
 
@@ -72,7 +85,25 @@ class ReportsController extends Controller
             'recurring' => ['sometimes', 'boolean'],
             'frequency' => ['nullable', Rule::in(Report::FREQUENCIES)],
             'name' => ['nullable', 'string', 'max:120'],
+            'filters' => ['nullable', 'array'],
+            'filters.preset' => ['nullable', 'string', Rule::in(array_keys(CipReport::PRESETS))],
+            'filters.status' => ['nullable', 'string', Rule::in(Status::ALL)],
+            'filters.providerId' => ['nullable', 'integer'],
+            'filters.investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
+            'filters.applicant' => ['nullable', 'string', 'max:191'],
+            'filters.officerId' => ['nullable', 'integer'],
+            'filters.submittedFrom' => ['nullable', 'date'],
+            'filters.submittedTo' => ['nullable', 'date', 'after_or_equal:filters.submittedFrom'],
+            'filters.decidedFrom' => ['nullable', 'date'],
+            'filters.decidedTo' => ['nullable', 'date', 'after_or_equal:filters.decidedFrom'],
         ]);
+
+        if ($data['type'] === Report::TYPE_CIP) {
+            abort_unless(CipAccess::enabled(), 422, 'CIP reporting is not available.');
+            abort_unless(Role::can($request->user(), 'cip.report'), 403);
+        }
+
+        $filters = $data['type'] === Report::TYPE_CIP ? $this->cipFilters($data['filters'] ?? []) : null;
 
         [$startsOn, $endsOn] = $this->window($data, $request->user());
 
@@ -83,6 +114,7 @@ class ReportsController extends Controller
 
         $report = new Report([
             'type' => $data['type'],
+            'filters' => $filters,
             'range_key' => $data['range'],
             'starts_on' => $startsOn,
             'ends_on' => $endsOn,
@@ -91,7 +123,7 @@ class ReportsController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        $report->name = ($data['name'] ?? null) ?: ReportBuilder::name($data['type'], $report->rangeLabel());
+        $report->name = ($data['name'] ?? null) ?: ReportBuilder::name($data['type'], $report->rangeLabel(), $filters ?? []);
         $report->save();
 
         ReportRunner::run($report);
@@ -146,7 +178,10 @@ class ReportsController extends Controller
             $line = fn (array $cells) => fputcsv($out, $cells, ',', '"', '');
 
             $line([$report->name]);
-            $line(['Period', ($data['window']['from'] ?? '').' to '.($data['window']['to'] ?? '')]);
+            $period = ($data['window']['from'] ?? null) && ($data['window']['to'] ?? null)
+                ? $data['window']['from'].' to '.$data['window']['to']
+                : 'All dates';
+            $line(['Period', $period]);
             $line(['Generated', UserTime::format($report->generated_at, $user, 'j M Y, H:i')]);
             $line([]);
 
@@ -181,6 +216,10 @@ class ReportsController extends Controller
     {
         $today = Carbon::now(UserTime::zone($user));
 
+        if ($data['range'] === 'all') {
+            return ['1970-01-01', $today->toDateString()];
+        }
+
         if ($data['range'] === 'custom') {
             $starts = isset($data['startsOn']) ? Carbon::parse($data['startsOn']) : $today->copy()->subDays(29);
             $ends = isset($data['endsOn']) ? Carbon::parse($data['endsOn']) : $today;
@@ -196,6 +235,90 @@ class ReportsController extends Controller
     private function find(string $uid): Report
     {
         return Report::with('creator')->where('uid', $uid)->firstOrFail();
+    }
+
+    /**
+     * Dropdowns the CIP create dialog needs, so a filter is a pick from the
+     * live caseload rather than a string somebody has to remember.
+     *
+     * @return array<string, mixed>
+     */
+    private function cipOptions(): array
+    {
+        $providers = DB::table('cip_providers')
+            ->orderBy('name')
+            ->get(['id', 'name', 'code'])
+            ->map(fn ($row) => [
+                'value' => (int) $row->id,
+                'label' => $row->name.($row->code ? ' ('.$row->code.')' : ''),
+            ])
+            ->all();
+
+        $officerIds = DB::table('cip_applications')
+            ->whereNotNull('assigned_officer_id')
+            ->distinct()
+            ->pluck('assigned_officer_id')
+            ->merge(DB::table('cip_application_assignments')->distinct()->pluck('user_id'))
+            ->unique()
+            ->filter()
+            ->all();
+
+        $officers = $officerIds === []
+            ? []
+            : DB::table('users')
+                ->whereIn('id', $officerIds)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn ($row) => ['value' => (int) $row->id, 'label' => $row->name])
+                ->all();
+
+        return [
+            'presets' => collect(CipReport::PRESET_LABELS)
+                ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                ->values()
+                ->all(),
+            'statuses' => collect(Status::listed())
+                ->map(fn (string $status) => ['value' => $status, 'label' => Status::label($status)])
+                ->all(),
+            'providers' => $providers,
+            'investmentTypes' => InvestmentType::options(),
+            'officers' => $officers,
+        ];
+    }
+
+    /**
+     * Drop empty CIP filters so a stored report does not carry noise that
+     * later looks like a constraint.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>|null
+     */
+    private function cipFilters(array $filters): ?array
+    {
+        $clean = [];
+
+        foreach ([
+            'preset', 'status', 'providerId', 'investmentType', 'applicant',
+            'officerId', 'submittedFrom', 'submittedTo', 'decidedFrom', 'decidedTo',
+        ] as $key) {
+            $value = $filters[$key] ?? null;
+
+            if (is_string($value)) {
+                $value = trim($value);
+            }
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (in_array($key, ['providerId', 'officerId'], true)) {
+                $value = (int) $value;
+            }
+
+            $clean[$key] = $value;
+        }
+
+        return $clean === [] ? null : $clean;
     }
 
     private function authorizeReporting(Request $request): void

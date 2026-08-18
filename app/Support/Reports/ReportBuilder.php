@@ -39,18 +39,27 @@ final class ReportBuilder
             Report::TYPE_ACCESS => self::access($from, $to),
             Report::TYPE_MESSAGING => self::messaging($from, $to),
             Report::TYPE_STORAGE => self::storage($from, $to),
+            Report::TYPE_CIP => CipReport::build($report, $from, $to),
             default => ['metrics' => [], 'table' => null],
         };
 
+        $window = $report->range_key === 'all'
+            ? ['from' => null, 'to' => null]
+            : ['from' => $from->toDateString(), 'to' => $to->toDateString()];
+
         return [
             'generatedAt' => now()->toIso8601String(),
-            'window' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'window' => $window,
         ] + $body;
     }
 
     /** A one-line title for a report of this type over this window. */
-    public static function name(string $type, string $rangeLabel): string
+    public static function name(string $type, string $rangeLabel, array $filters = []): string
     {
+        if ($type === Report::TYPE_CIP) {
+            return CipReport::title($filters, $rangeLabel);
+        }
+
         return match ($type) {
             Report::TYPE_USAGE => 'Usage report',
             Report::TYPE_ACCESS => 'Access report',
