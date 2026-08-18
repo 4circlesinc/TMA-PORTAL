@@ -4504,10 +4504,18 @@
 
   function closeAttachmentLightbox() {
     if (!mailLightbox) return;
+    if (mailLightbox._stageCleanup) { mailLightbox._stageCleanup(); mailLightbox._stageCleanup = null; }
     document.removeEventListener('keydown', mailLightbox._key);
     mailLightbox.remove();
     mailLightbox = null;
     document.body.style.overflow = '';
+  }
+
+  /* Text-y attachments (txt, csv, json…) preview on a fetched sheet via the
+   * shared lightbox helpers; detection lives there so both viewers agree. */
+  function attachmentIsText(a) {
+    return !!(window.TMAPortalLightbox && window.TMAPortalLightbox.isTextItem &&
+      window.TMAPortalLightbox.isTextItem({ mime: a.mime, name: a.name }));
   }
 
   function attachmentLightboxStage(a) {
@@ -4515,6 +4523,11 @@
       return '<img class="tma-portal-lightbox__img tma-dash__email-lightbox-img" src="' + esc(attachmentUrl(a, true)) + '" alt="' + esc(a.name) + '" data-email-lightbox-zoom>';
     }
     if (attachmentIsPdf(a)) {
+      // Painted by the shared pdf.js mounter after paint() — an iframe here
+      // used to work on Chrome but Mac Safari drops iframe PDFs entirely.
+      if (window.TMAPortalLightbox && window.TMAPortalLightbox.pdfInto) {
+        return '<div class="tma-lightbox__doc" data-mail-lb-doc="pdf"></div>';
+      }
       return '<iframe class="tma-portal-lightbox__frame" src="' + esc(attachmentUrl(a, true)) + '" title="' + esc(a.name) + '"></iframe>';
     }
     if (/^audio\//.test(a.mime || '')) {
@@ -4523,6 +4536,9 @@
     }
     if (/^video\//.test(a.mime || '')) {
       return '<video class="tma-portal-lightbox__media" src="' + esc(attachmentUrl(a, true)) + '" controls autoplay playsinline></video>';
+    }
+    if (attachmentIsText(a)) {
+      return '<div class="tma-lightbox__doc" data-mail-lb-doc="text"></div>';
     }
     // Office documents, archives, and anything else a browser cannot render
     // safely inline: an honest "here's what it is" card, not a fake viewer.
@@ -4549,6 +4565,7 @@
     mailLightbox = lb;
 
     function paint() {
+      if (lb._stageCleanup) { lb._stageCleanup(); lb._stageCleanup = null; }
       var a = items[idx];
       var many = items.length > 1;
       lb.innerHTML =
@@ -4566,6 +4583,13 @@
         (many ? '<button type="button" class="tma-portal-lightbox__nav tma-portal-lightbox__nav--next" data-lb-next aria-label="Next"><img src="' + ICONS.CaretRight + '" alt="" width="24" height="24"></button>' : '') +
         '<div class="tma-portal-lightbox__stage" data-lb-stage>' + attachmentLightboxStage(a) + '</div>' +
         '<div class="tma-portal-lightbox__foot">' + (many ? (idx + 1) + ' of ' + items.length + ' &middot; ' : '') + esc(formatBytes(a.size)) + '</div>';
+
+      var doc = lb.querySelector('[data-mail-lb-doc]');
+      if (doc && window.TMAPortalLightbox) {
+        lb._stageCleanup = doc.getAttribute('data-mail-lb-doc') === 'pdf'
+          ? window.TMAPortalLightbox.pdfInto(doc, attachmentUrl(a, true))
+          : window.TMAPortalLightbox.textInto(doc, attachmentUrl(a, true), a.size);
+      }
     }
 
     function go(delta) {
@@ -4586,7 +4610,7 @@
       // Clicking the dim stage around the attachment (not the media itself)
       // closes the lightbox — same expectation as clicking the backdrop.
       var stage = e.target.closest('[data-lb-stage]');
-      if (stage && !e.target.closest('img, iframe, video, audio, .tma-portal-lightbox__nopreview, .tma-portal-lightbox__audio, a, button')) {
+      if (stage && !e.target.closest('img, iframe, video, audio, .tma-portal-lightbox__nopreview, .tma-portal-lightbox__audio, .tma-lightbox__doc, a, button')) {
         closeAttachmentLightbox();
       }
     });

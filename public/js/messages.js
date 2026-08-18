@@ -7605,7 +7605,8 @@
       });
   }
 
-  /* Open a gallery item: media in the lightbox, a document downloaded. */
+  /* Open a gallery item in the lightbox — media, and documents too now that
+   * the lightbox previews PDFs and text itself. */
   function openGalleryItem(state, attachmentId) {
     var shelf = state.profileShelf || 'media';
     var items = (state.profileGallery && state.profileGallery[shelf]) || [];

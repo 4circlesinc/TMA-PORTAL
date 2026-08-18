@@ -1292,6 +1292,8 @@ img.tma-dash__feed-badge {
 
 .tma-dash__feed-files--sm { padding: var(--space-6) 0 0; }
 
+/* A chip that opens the file in the lightbox. In posts it is a div holding a
+ * download anchor in its corner; in comments, a plain button. */
 .tma-dash__feed-file {
   display: flex;
   align-items: center;
@@ -1302,6 +1304,9 @@ img.tma-dash__feed-badge {
   background: var(--color-bg-card);
   text-decoration: none;
   color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .tma-dash__feed-file:hover { background: var(--color-hover); }
@@ -1333,7 +1338,18 @@ img.tma-dash__feed-badge {
 }
 
 .tma-dash__feed-file-size { font-size: 11px; color: var(--color-text-muted); }
-.tma-dash__feed-file-download { opacity: 0.5; flex-shrink: 0; }
+
+.tma-dash__feed-file-download {
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  margin: calc(-1 * var(--space-6));
+  border-radius: var(--radius-8);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-file-download:hover { opacity: 1; background: var(--color-hover); }
 
 .tma-dash__feed-video,
 .tma-dash__feed-audio {

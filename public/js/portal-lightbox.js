@@ -4,11 +4,20 @@
  * A modern, dark, full-screen media viewer: a slim top bar with the file's
  * name and a download/close, big centered media, prev/next arrows, and a
  * thumbnail filmstrip along the bottom for stepping through a set. Used by
- * Messages, the Overview media strip and the File Library gallery.
+ * Messages, the Overview media strip, the Feed and the File Library gallery.
  *
  * The older `.tma-portal-lightbox` chrome (still used by email.js and
  * portal-files.js's own copies) is left untouched; this viewer uses its own
  * `.tma-lightbox` namespace so restyling it here does not disturb those.
+ *
+ * Documents render client-side: PDFs are painted page by page with pdf.js and
+ * text files are fetched and shown on a white sheet. Both fetch the bytes
+ * themselves, so they work against attachment routes that serve documents
+ * download-only (an iframe there would trigger a download instead of a
+ * preview — and Mac Safari can't be trusted to paint a PDF into an iframe at
+ * all, which is why the File Library viewer moved to pdf.js too). The two
+ * mounters are exported (pdfInto / textInto) so email.js's older chrome can
+ * reuse them instead of keeping its iframe.
  *
  * Items are plain objects: { name, mime, size, url, downloadUrl, thumbUrl,
  *                            canDownload }
@@ -47,12 +56,41 @@
     return String((item && item.mime) || '').indexOf(prefix) === 0;
   }
 
+  function extOf(item) {
+    var name = String((item && item.name) || '');
+    var dot = name.lastIndexOf('.');
+    return dot > -1 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : '';
+  }
+
+  function mimeOf(item) {
+    return String((item && item.mime) || '').split(';')[0].trim().toLowerCase();
+  }
+
   function isImage(item) {
     return is(item, 'image/') && (item && item.mime) !== 'image/svg+xml';
   }
 
+  /* Uploads from mail clients and older tooling often arrive as
+   * application/octet-stream, so the extension is the tiebreak there. */
   function isPdf(item) {
-    return ((item && item.mime) || '') === 'application/pdf';
+    var mime = mimeOf(item);
+    if (mime === 'application/pdf') return true;
+    if (!mime || mime === 'application/octet-stream') return extOf(item) === 'pdf';
+    return false;
+  }
+
+  var TEXT_EXT = /^(txt|text|csv|tsv|md|markdown|json|log|ini|yml|yaml)$/;
+
+  /* Previewed as fetched text on a sheet, never handed to the browser to
+   * interpret — which is also why HTML and SVG stay out: shown as source
+   * they'd only confuse, rendered they'd execute in our origin. */
+  function isText(item) {
+    var mime = mimeOf(item);
+    if (mime === 'text/html' || mime === 'image/svg+xml') return false;
+    if (mime.indexOf('text/') === 0) return true;
+    if (mime === 'application/json' || mime === 'application/xml') return true;
+    if (!mime || mime === 'application/octet-stream') return TEXT_EXT.test(extOf(item));
+    return false;
   }
 
   /* Short human label for the subtitle line. */
@@ -61,10 +99,8 @@
     if (is(item, 'video/')) return 'Video';
     if (is(item, 'audio/')) return 'Audio';
     if (isPdf(item)) return 'PDF';
-    var name = String((item && item.name) || '');
-    var dot = name.lastIndexOf('.');
-    if (dot > -1 && dot < name.length - 1) return name.slice(dot + 1).toUpperCase();
-    return 'File';
+    var ext = extOf(item);
+    return ext ? ext.toUpperCase() : 'File';
   }
 
   var SVG = {
@@ -74,6 +110,168 @@
     next: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
   };
+
+  /* pdf.js is ~1.7 MB with its worker, so it loads on first use — the same
+   * lazy ESM import email.js and portal-files.js use for their viewers. */
+  var pdfjsPromise = null;
+  function loadPdfjs() {
+    if (pdfjsPromise) return pdfjsPromise;
+    var root = window.__TMA_SITE_ROOT || '';
+    pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      return lib;
+    }).catch(function (err) {
+      pdfjsPromise = null; // let a later attempt retry
+      throw err;
+    });
+    return pdfjsPromise;
+  }
+
+  function docStatus(host, message) {
+    host.innerHTML = '<p class="tma-lightbox__doc-status">' + esc(message) + '</p>';
+  }
+
+  /*
+   * Paint a PDF into `host` as a scrollable stack of white pages.
+   *
+   * Pages are laid out immediately (page 1's aspect ratio stands in for the
+   * rest so the scrollbar is honest) but only painted as they come into view,
+   * which keeps a 200-page scan from melting the tab. Returns a cleanup
+   * function; callers MUST run it before repainting or closing, or renders
+   * land in detached DOM and the worker keeps the document alive.
+   */
+  function mountPdfInto(host, url) {
+    var dead = false;
+    var doc = null;
+    var io = null;
+
+    host.classList.add('tma-lightbox__doc');
+    docStatus(host, 'Loading preview…');
+
+    function renderPage(num, wrap) {
+      if (dead || !doc) return;
+      doc.getPage(num).then(function (page) {
+        if (dead) return;
+        var cssWidth = Math.min(host.clientWidth || 820, 900);
+        var dpr = window.devicePixelRatio || 1;
+        var unscaled = page.getViewport({ scale: 1 });
+        var viewport = page.getViewport({ scale: Math.max(1, cssWidth * dpr) / unscaled.width });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise
+          .then(function () {
+            if (dead) return;
+            wrap.style.aspectRatio = '';
+            wrap.innerHTML = '';
+            wrap.appendChild(canvas);
+          });
+      }).catch(function () { /* page paint is best-effort */ });
+    }
+
+    loadPdfjs()
+      .then(function (pdfjs) {
+        if (dead) return null;
+        return pdfjs.getDocument({ url: url, withCredentials: true }).promise;
+      })
+      .then(function (pdf) {
+        if (!pdf) return;
+        if (dead) {
+          try { pdf.destroy(); } catch (e) { /* ignore */ }
+          return;
+        }
+        doc = pdf;
+        return pdf.getPage(1).then(function (first) {
+          if (dead) return;
+          var unscaled = first.getViewport({ scale: 1 });
+          var ratio = unscaled.width + ' / ' + unscaled.height;
+
+          host.innerHTML = '';
+          var wrappers = [];
+          for (var i = 1; i <= pdf.numPages; i++) {
+            var wrap = document.createElement('div');
+            wrap.className = 'tma-lightbox__doc-page';
+            wrap.setAttribute('data-lb-doc-page', String(i));
+            wrap.style.aspectRatio = ratio;
+            host.appendChild(wrap);
+            wrappers.push(wrap);
+          }
+
+          if (typeof IntersectionObserver === 'function') {
+            io = new IntersectionObserver(function (entries) {
+              entries.forEach(function (en) {
+                if (!en.isIntersecting) return;
+                io.unobserve(en.target);
+                renderPage(parseInt(en.target.getAttribute('data-lb-doc-page'), 10), en.target);
+              });
+            }, { root: host, rootMargin: '900px 0px' });
+            wrappers.forEach(function (w) { io.observe(w); });
+          } else {
+            wrappers.forEach(function (w, n) { renderPage(n + 1, w); });
+          }
+        });
+      })
+      .catch(function () {
+        if (dead) return;
+        docStatus(host, 'Could not load this PDF — download it instead.');
+      });
+
+    return function () {
+      dead = true;
+      if (io) {
+        try { io.disconnect(); } catch (e) { /* ignore */ }
+        io = null;
+      }
+      if (doc) {
+        try { doc.destroy(); } catch (e) { /* ignore */ }
+        doc = null;
+      }
+    };
+  }
+
+  /* Text sheets stay honest about size: past 2 MB the preview is refused
+   * outright, and what does load is clipped at 200k characters — the same
+   * ceiling the File Library viewer uses. Returns a cleanup function. */
+  var TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
+  var TEXT_PREVIEW_MAX_CHARS = 200000;
+
+  function mountTextInto(host, url, size) {
+    var dead = false;
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+
+    host.classList.add('tma-lightbox__doc');
+
+    if (size && size > TEXT_PREVIEW_MAX_BYTES) {
+      docStatus(host, 'Too large to preview — download it instead.');
+      return function () { dead = true; };
+    }
+
+    docStatus(host, 'Loading preview…');
+
+    fetch(url, { credentials: 'same-origin', signal: controller ? controller.signal : undefined })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); })
+      .then(function (text) {
+        if (dead) return;
+        var pre = document.createElement('pre');
+        pre.className = 'tma-lightbox__doc-pre';
+        pre.textContent = text.length > TEXT_PREVIEW_MAX_CHARS
+          ? text.slice(0, TEXT_PREVIEW_MAX_CHARS) + '\n…'
+          : text;
+        host.innerHTML = '';
+        host.appendChild(pre);
+      })
+      .catch(function () {
+        if (dead) return;
+        docStatus(host, 'Could not load this file — download it instead.');
+      });
+
+    return function () {
+      dead = true;
+      if (controller) {
+        try { controller.abort(); } catch (e) { /* ignore */ }
+      }
+    };
+  }
 
   /*
    * What to show for one item in the main stage.
@@ -91,12 +289,9 @@
       );
     }
 
-    if (isPdf(item)) {
-      return (
-        '<iframe class="tma-lightbox__frame" src="' + esc(item.url) +
-        '" title="' + esc(item.name) + '"></iframe>'
-      );
-    }
+    // Filled in after paint by mountPdfInto / mountTextInto — building a
+    // string can't render a canvas.
+    if (isPdf(item)) return '<div class="tma-lightbox__doc" data-lb-doc="pdf"></div>';
 
     if (is(item, 'audio/')) {
       return (
@@ -112,6 +307,8 @@
         '" controls autoplay playsinline></video>'
       );
     }
+
+    if (isText(item)) return '<div class="tma-lightbox__doc" data-lb-doc="text"></div>';
 
     return (
       '<div class="tma-lightbox__nopreview">' +
@@ -140,8 +337,16 @@
     );
   }
 
+  function cleanupStage() {
+    if (current && current.stageCleanup) {
+      current.stageCleanup();
+      current.stageCleanup = null;
+    }
+  }
+
   function close() {
     if (!current) return;
+    cleanupStage();
     if (current.el.parentNode) current.el.parentNode.removeChild(current.el);
     document.body.style.overflow = current.overflow || '';
     document.removeEventListener('keydown', current.onKey);
@@ -160,6 +365,8 @@
     el.setAttribute('aria-modal', 'true');
 
     function paint() {
+      cleanupStage();
+
       var item = items[idx];
       var many = items.length > 1;
       // Downloading is a separate URL only when the caller distinguishes them;
@@ -198,6 +405,13 @@
           : '') +
         '<div class="tma-lightbox__stage" data-lb-stage>' + stage(item) + '</div>' +
         strip;
+
+      var docHost = el.querySelector('[data-lb-doc]');
+      if (docHost && current) {
+        current.stageCleanup = docHost.getAttribute('data-lb-doc') === 'pdf'
+          ? mountPdfInto(docHost, item.url)
+          : mountTextInto(docHost, item.url, item.size);
+      }
     }
 
     function go(delta) {
@@ -224,7 +438,7 @@
       if (zoom) { zoom.classList.toggle('is-zoomed'); return; }
       if (e.target.closest('[data-lb-close]')) return close();
       // A click on the empty backdrop (the stage margins) also closes.
-      if (e.target.closest('.tma-lightbox__stage') && !e.target.closest('img,video,iframe,audio,.tma-lightbox__nopreview')) {
+      if (e.target.closest('.tma-lightbox__stage') && !e.target.closest('img,video,iframe,audio,.tma-lightbox__nopreview,.tma-lightbox__doc')) {
         return close();
       }
     });
@@ -240,7 +454,7 @@
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKey);
 
-    current = { el: el, onKey: onKey, overflow: overflow };
+    current = { el: el, onKey: onKey, overflow: overflow, stageCleanup: null };
     paint();
 
     // Entrance transition — added on the next frame so it animates in.
@@ -249,5 +463,13 @@
     });
   }
 
-  window.TMAPortalLightbox = { open: open, close: close, formatBytes: formatBytes };
+  window.TMAPortalLightbox = {
+    open: open,
+    close: close,
+    formatBytes: formatBytes,
+    pdfInto: mountPdfInto,
+    textInto: mountTextInto,
+    isPdfItem: isPdf,
+    isTextItem: isText
+  };
 })();

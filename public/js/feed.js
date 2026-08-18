@@ -1518,15 +1518,21 @@
             return '<audio class="tma-dash__feed-audio" controls preload="metadata"' +
               ' src="' + esc(file.url) + '"></audio>';
           }
-          return '<a class="tma-dash__feed-file" href="' + esc(file.url) + '" download>' +
+          // The chip opens the lightbox (PDFs and text preview right there);
+          // the corner arrow keeps one-click download. A div rather than a
+          // button because a button may not contain the download anchor.
+          return '<div class="tma-dash__feed-file" role="button" tabindex="0"' +
+            ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '"' +
+            ' aria-label="Preview ' + esc(file.name) + '">' +
             '<span class="tma-dash__feed-file-icon">' +
             '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="16" height="16"></span>' +
             '<span class="tma-dash__feed-file-meta">' +
             '<span class="tma-dash__feed-file-name">' + esc(file.name) + '</span>' +
             '<span class="tma-dash__feed-file-size">' + esc(bytes(file.size)) + '</span>' +
             '</span>' +
-            '<img class="tma-dash__feed-file-download" src="' + ICON + 'DownloadSimple.svg" alt=""' +
-            ' width="16" height="16"></a>';
+            '<a class="tma-dash__feed-file-download" data-feed-file-download href="' + esc(file.url) +
+            '" download aria-label="Download ' + esc(file.name) + '">' +
+            '<img src="' + ICON + 'DownloadSimple.svg" alt="" width="16" height="16"></a></div>';
         }).join('') +
         '</div>'
       : '';
@@ -1754,10 +1760,11 @@
       (comment.attachments && comment.attachments.length
         ? '<div class="tma-dash__feed-files tma-dash__feed-files--sm">' +
           comment.attachments.map(function (file) {
-            return '<a class="tma-dash__feed-file" href="' + esc(file.url) + '" download>' +
+            return '<button type="button" class="tma-dash__feed-file"' +
+              ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '">' +
               '<span class="tma-dash__feed-file-icon"><img src="' + ICON + fileIcon(file) +
               '.svg" alt="" width="14" height="14"></span>' +
-              '<span class="tma-dash__feed-file-name">' + esc(file.name) + '</span></a>';
+              '<span class="tma-dash__feed-file-name">' + esc(file.name) + '</span></button>';
           }).join('') +
           '</div>'
         : '') +
@@ -3445,6 +3452,19 @@
     });
 
     each(root, M, '[data-feed-lightbox]', 'click', function (e) {
+      // The chip's corner download arrow keeps its own meaning.
+      if (e.target.closest('[data-feed-file-download]')) return;
+      openLightbox(
+        e.currentTarget.getAttribute('data-feed-post-ref'),
+        e.currentTarget.getAttribute('data-feed-lightbox')
+      );
+    });
+
+    // The document chips are divs (they hold a download anchor, which a
+    // button may not), so Enter/Space has to be wired by hand.
+    each(root, M, '[data-feed-lightbox][role="button"]', 'keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
       openLightbox(
         e.currentTarget.getAttribute('data-feed-post-ref'),
         e.currentTarget.getAttribute('data-feed-lightbox')
@@ -3577,17 +3597,40 @@
     toast(url, 'neutral');
   }
 
+  /* The set is whichever list the clicked file lives in — the post's
+   * attachments, or one comment's — so prev/next stays within that context. */
+  function lightboxSetFor(post, attachmentId) {
+    var has = function (files) {
+      return (files || []).some(function (f) { return f.id === attachmentId; });
+    };
+
+    if (has(post.attachments)) return post.attachments;
+
+    var thread = state.comments[post.id];
+    var items = (thread && thread.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (has(items[i].attachments)) return items[i].attachments;
+      var replies = items[i].replies || [];
+      for (var j = 0; j < replies.length; j++) {
+        if (has(replies[j].attachments)) return replies[j].attachments;
+      }
+    }
+    return null;
+  }
+
   function openLightbox(postId, attachmentId) {
     var post = findPost(postId);
     if (!post || !window.TMAPortalLightbox) return;
 
-    var images = post.attachments.filter(function (file) { return file.kind === 'image'; });
+    var files = lightboxSetFor(post, attachmentId);
+    if (!files || !files.length) return;
+
     var index = 0;
-    images.forEach(function (file, i) { if (file.id === attachmentId) index = i; });
+    files.forEach(function (file, i) { if (file.id === attachmentId) index = i; });
 
     window.TMAPortalLightbox.open(
-      images.map(function (file) {
-        return { url: file.url, name: file.name, size: file.size, mime: file.mime };
+      files.map(function (file) {
+        return { url: file.url, name: file.name, size: file.size, mime: file.mime, thumbUrl: file.thumbUrl };
       }),
       index
     );

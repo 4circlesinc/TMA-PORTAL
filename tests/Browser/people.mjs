@@ -45,7 +45,7 @@ async function signIn(page, email) {
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('button[name="stay"][value="yes"]'),
+      page.click('form:has(input[name="stay"][value="yes"]) button[type="submit"]'),
     ]);
     await page.waitForTimeout(400);
   }
