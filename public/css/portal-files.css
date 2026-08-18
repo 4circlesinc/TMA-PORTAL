@@ -453,12 +453,20 @@
   display: flex; align-items: center; justify-content: center;
 }
 .tma-portal-viewer__pdf-loading {
-  margin: 0; color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
+  position: absolute; margin: 0; z-index: 1;
+  color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
 }
 .tma-portal-viewer__pdf-canvas {
   max-width: 100%; max-height: 100%; display: block;
   border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   background: #fff;
+}
+/* display:block/inline-flex on the canvas and nav beat the UA [hidden] rule,
+ * which is why an empty white sheet sat next to "Loading PDF…" forever. */
+.tma-portal-viewer__pdf-canvas[hidden],
+.tma-portal-viewer__pdf-nav[hidden],
+.tma-portal-viewer__pdf-loading[hidden] {
+  display: none !important;
 }
 .tma-portal-viewer__pdf-nav {
   position: absolute; top: 50%; transform: translateY(-50%);

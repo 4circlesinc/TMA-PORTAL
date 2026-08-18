@@ -118,13 +118,65 @@
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
     pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
-      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      // An absolute worker URL: a path-only src is resolved against the
+      // module, not the page, and that 404 leaves getDocument hanging forever.
+      try {
+        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf.worker.min.mjs', window.location.href).href;
+      } catch (e) {
+        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      }
       return lib;
     }).catch(function (err) {
       pdfjsPromise = null; // let a later attempt retry
       throw err;
     });
     return pdfjsPromise;
+  }
+
+  /*
+   * Fetch the PDF on the page, then hand the bytes to pdf.js.
+   *
+   * getDocument({ url }) lets the worker request the file (range probes
+   * included). Laravel's stream does not speak Range, and a Content-Length
+   * that does not match the body makes that fetch wait forever — which is
+   * the blank white sheet with "Loading PDF…" stuck beside it. The page
+   * fetch uses the session cookie; rewriting to a same-origin path also
+   * survives APP_URL disagreeing with the host in the address bar.
+   */
+  function pdfRequestUrl(url) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      return parsed.pathname + parsed.search;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  function loadPdfDocument(url) {
+    return loadPdfjs().then(function (pdfjs) {
+      return fetch(pdfRequestUrl(url), {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/pdf' }
+      }).then(function (res) {
+        if (!res.ok) {
+          throw new Error('Could not load this PDF.');
+        }
+        return res.arrayBuffer();
+      }).then(function (buf) {
+        if (!buf || !buf.byteLength) {
+          var empty = new Error('This file is not a valid PDF.');
+          empty.name = 'InvalidPDFException';
+          throw empty;
+        }
+        return pdfjs.getDocument({
+          data: new Uint8Array(buf),
+          disableRange: true,
+          disableStream: true,
+          useWorkerFetch: false,
+          isEvalSupported: false
+        }).promise;
+      });
+    });
   }
 
   function docStatus(host, message) {
@@ -169,11 +221,7 @@
       }).catch(function () { /* page paint is best-effort */ });
     }
 
-    loadPdfjs()
-      .then(function (pdfjs) {
-        if (dead) return null;
-        return pdfjs.getDocument({ url: url, withCredentials: true }).promise;
-      })
+    loadPdfDocument(url)
       .then(function (pdf) {
         if (!pdf) return;
         if (dead) {
@@ -472,6 +520,7 @@
     close: close,
     formatBytes: formatBytes,
     pdfInto: mountPdfInto,
+    pdfDocument: loadPdfDocument,
     textInto: mountTextInto,
     isPdfItem: isPdf,
     isTextItem: isText

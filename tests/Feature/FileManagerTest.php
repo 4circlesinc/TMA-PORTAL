@@ -96,6 +96,31 @@ class FileManagerTest extends TestCase
         $this->assertStringNotContainsString('vault/', json_encode($browse->json()));
     }
 
+    public function test_pdf_preview_length_matches_bytes_on_disk_not_a_stale_size(): void
+    {
+        $user = $this->approvedUser();
+        $bytes = file_get_contents(base_path('tests/Browser/fixtures/contract.pdf'));
+        $this->assertNotFalse($bytes);
+
+        $id = $this->actingAs($user)
+            ->post('/portal/files/files', [
+                'file' => UploadedFile::fake()->createWithContent('contract.pdf', $bytes),
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $row = FileItem::where('uuid', $id)->first();
+        $this->assertNotNull($row);
+        // A recorded size larger than the file is what made pdf.js hang on
+        // "Loading PDF…" — it waited for bytes that were never coming.
+        $row->forceFill(['size' => $row->size + 50_000])->save();
+
+        $res = $this->actingAs($user)->get("/portal/files/files/{$id}/preview")->assertOk();
+        $res->assertHeader('content-type', 'application/pdf');
+        $this->assertSame((string) strlen($bytes), $res->headers->get('content-length'));
+        $this->assertSame($bytes, $res->streamedContent());
+    }
+
     public function test_recent_includes_file_box_files_not_only_foldered_ones(): void
     {
         $user = $this->approvedUser();

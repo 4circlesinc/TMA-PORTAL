@@ -206,13 +206,13 @@ class Vault
             if (is_resource($stream)) {
                 fclose($stream);
             }
-        }, 200, [
+        }, 200, array_filter([
             'Content-Type' => $version->mime_type ?: 'application/octet-stream',
-            'Content-Length' => (string) $version->size,
+            'Content-Length' => self::byteLength($disk, $version->storage_path, $version->size),
             'Content-Disposition' => $disposition.'; filename="'.addslashes($name).'"',
             // A version is immutable once written, so it can be cached hard.
             'Cache-Control' => 'private, max-age=3600',
-        ]);
+        ]));
     }
 
     /** Permanently remove the physical bytes for a file. */
@@ -261,18 +261,44 @@ class Vault
             if ($stream === false || $stream === null) {
                 return;
             }
-            while (! feof($stream)) {
-                echo fread($stream, 8192);
-                flush();
+            // fpassthru, not a flushed loop: flush() plus Content-Length
+            // makes PHP chunk the body, and pdf.js waits for bytes that
+            // never arrive under that mix.
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
             }
-            fclose($stream);
         }, 200, array_filter([
             'Content-Type' => $mime,
-            'Content-Length' => $file->size ? (string) $file->size : null,
+            'Content-Length' => self::byteLength($disk, $file->storage_path, $file->size),
             'Content-Disposition' => $disposition.'; filename="'.addslashes($name).'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=0, no-cache',
         ]));
+    }
+
+    /**
+     * Bytes on disk, not the column.
+     *
+     * pdf.js (and fetch) wait until Content-Length bytes arrive. A recorded
+     * size that is larger than the file — a SharePoint placeholder, a failed
+     * write — leaves the viewer on "Loading PDF…" forever. Prefer the real
+     * length; omit the header if we cannot know it.
+     */
+    private static function byteLength(Filesystem $disk, string $path, mixed $recorded): ?string
+    {
+        try {
+            $n = (int) $disk->size($path);
+            if ($n > 0) {
+                return (string) $n;
+            }
+        } catch (\Throwable) {
+            // fall through to the recorded size
+        }
+
+        $n = (int) $recorded;
+
+        return $n > 0 ? (string) $n : null;
     }
 
     /**
