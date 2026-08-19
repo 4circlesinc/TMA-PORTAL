@@ -8965,7 +8965,7 @@
       navId: 'account-settings',
       view: 'admin',
       title: meta.title,
-      crumb: 'Account settings / CIP Applications management / ' + meta.title,
+      crumb: 'Account settings / CIP Console / ' + meta.title,
       adminPage: adminPage,
     });
   }

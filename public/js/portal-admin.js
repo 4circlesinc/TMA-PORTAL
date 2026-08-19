@@ -52,7 +52,7 @@
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
-    { group: 'clienthub-group', label: 'CIP Applications management', icon: 'UsersThree', items: [
+    { group: 'clienthub-group', label: 'CIP Console', icon: 'UsersThree', items: [
       { id: 'clienthub-access', label: 'Access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
