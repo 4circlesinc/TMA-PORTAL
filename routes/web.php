@@ -103,7 +103,6 @@ use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\StaySignedInController;
 use App\Http\Controllers\StorageUsageController;
-use App\Http\Controllers\WorkPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -919,11 +918,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/sync/{uuid}', [CalendarSyncController::class, 'disconnect'])->name('sync.disconnect');
         Route::get('/sync/{uuid}/conflicts', [CalendarSyncController::class, 'conflicts'])->name('sync.conflicts');
         Route::post('/events/{uuid}/resolve-conflict', [CalendarSyncController::class, 'resolveConflict'])->name('sync.resolve');
-
-        Route::get('/work-plan', [WorkPlanController::class, 'index'])->name('work-plan.index');
-        Route::get('/work-plan/{date}', [WorkPlanController::class, 'show'])->name('work-plan.show');
-        Route::put('/work-plan', [WorkPlanController::class, 'upsert'])->name('work-plan.upsert');
-        Route::delete('/work-plan/{date}', [WorkPlanController::class, 'destroy'])->name('work-plan.destroy');
 
         Route::get('/calendars/{uuid}/history', [CalendarController::class, 'history'])->name('calendars.history');
         Route::get('/calendars/{uuid}/members', [CalendarController::class, 'members'])->name('calendars.members');

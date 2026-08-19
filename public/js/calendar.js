@@ -209,8 +209,6 @@
     selectedDay: null,
     // { date: 'YYYY-MM-DD', rect: DOMRect-like } when the quick-add menu is open
     quickAddFor: null,
-    workDays: {},         // dateKey -> work plan record
-    workStatuses: [],
     syncPollTimer: null,
     panel: null,          // { mode:'view'|'create'|'edit'|'calendar', ... }
     menuFor: null,        // calendar uuid whose actions menu is open
@@ -323,29 +321,6 @@
     });
   }
 
-  function loadWorkPlan() {
-    // Keep this under the API's 62-day ceiling. Event fetches use a wider
-    // padded window; work-plan only needs the on-screen month (+ one week).
-    var anchor = state.view === 'month' ? state.monthDate : state.weekStart;
-    var fromDate = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-    fromDate.setDate(fromDate.getDate() - 7);
-    var toDate = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 7);
-    var from = dateKeyOf(fromDate);
-    var to = dateKeyOf(toDate);
-    return net(BASE + '/work-plan?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to))
-      .then(function (data) {
-        var map = {};
-        ((data && data.days) || []).forEach(function (d) {
-          if (d && d.date) map[d.date] = d;
-        });
-        state.workDays = map;
-        state.workStatuses = (data && data.statuses) || state.workStatuses;
-      })
-      .catch(function () {
-        // Work plan is optional chrome — calendar still works without it.
-      });
-  }
-
   /*
    * A full reload. `background` keeps whatever is already rendered on screen
    * while it runs, which is what stops the grid flashing on every save.
@@ -373,14 +348,12 @@
         if (!snap || state.real) return;
         state.calendars = snap.calendars || state.calendars;
         state.events = snap.events || state.events;
-        state.workDays = snap.workDays || state.workDays;
-        state.workStatuses = snap.workStatuses || state.workStatuses;
         state.loading = false;
         render();
       });
     }
 
-    return Promise.all([loadCalendars(), loadEvents(), loadWorkPlan()])
+    return Promise.all([loadCalendars(), loadEvents()])
       .then(function () {
         state.loading = false;
         state.refreshing = false;
@@ -389,8 +362,6 @@
           window.TMAStore.put('calendar:warm', {
             calendars: state.calendars,
             events: state.events,
-            workDays: state.workDays,
-            workStatuses: state.workStatuses,
           });
         }
         render();
@@ -409,7 +380,7 @@
   function refreshEvents() {
     state.refreshing = true;
     render();
-    return Promise.all([loadEvents(), loadWorkPlan()])
+    return loadEvents()
       .then(function () {
         state.refreshing = false;
         render();
@@ -767,11 +738,6 @@
     );
   }
 
-  function workPlanFor(dateKey) {
-    var map = state.workDays || {};
-    return map[dateKey] || null;
-  }
-
   function renderMonthView() {
     var gridStart = SCHED.startOfWeek(startOfMonth(state.monthDate));
 
@@ -799,10 +765,6 @@
       var isSelected = state.selectedDay === key;
       var visible = dayEvents.slice(0, 3);
       var hidden = Math.max(0, dayEvents.length - 3);
-      var plan = workPlanFor(key);
-      var planLabel = plan && plan.status !== 'not_working'
-        ? (plan.statusLabel || 'Work plan')
-        : '';
 
       cells.push(
         '<div class="tma-dash__calendar-month-day' +
@@ -816,10 +778,6 @@
         esc(key) + '" aria-label="Quick add on ' + esc(key) + '">' +
         '<img src="' + ICONS.Plus + '" alt=""></button>' +
         '</div>' +
-        (planLabel
-          ? '<button type="button" class="tma-dash__calendar-month-workplan" data-calendar-workplan="' +
-            esc(key) + '" title="' + esc(planLabel) + '">' + esc(planLabel) + '</button>'
-          : '') +
         '<div class="tma-dash__calendar-month-events">' +
         visible.map(renderMonthEventChip).join('') +
         (hidden > 0
@@ -849,7 +807,7 @@
       '<div class="tma-dash__calendar-month-grid">' + cells.join('') + '</div>' +
       (state.quickAddFor && state.quickAddFor.date
         ? '<div class="tma-dash__calendar-quick-add" data-calendar-quick-add>' +
-          ['Event', 'Meeting', 'Reminder', 'Work status', 'Leave', 'Note'].map(function (label) {
+          ['Event', 'Meeting', 'Reminder', 'Note'].map(function (label) {
             var kind = label.toLowerCase().replace(/\s+/g, '-');
             return '<button type="button" class="tma-dash__calendar-quick-add-item" data-quick-add-kind="' +
               esc(kind) + '" data-quick-add-date="' + esc(state.quickAddFor.date) + '">' + esc(label) + '</button>';
@@ -1981,27 +1939,11 @@
       var d = toLocalDate(event.startsAt);
       return d && dateKeyOf(d) === key;
     }).sort(function (a, b) { return new Date(a.startsAt) - new Date(b.startsAt); });
-    var plan = workPlanFor(key) || {};
     var parts = key.split('-');
     var labelDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     var heading = labelDate.toLocaleDateString(undefined, {
       weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
     });
-
-    var planBody =
-      '<div class="tma-dash__calendar-day-workplan">' +
-      '<div class="tma-dash__calendar-day-workplan-head">' +
-      '<strong>Your work plan</strong>' +
-      '<button type="button" class="tma-dash__clients-icon-btn" data-workplan-edit="' + esc(key) +
-      '" aria-label="Edit work plan"><img src="' + ICONS.PencilSimpleLine + '" alt=""></button></div>' +
-      '<p class="tma-dash__calendar-share-meta">' + esc(heading) + '</p>' +
-      '<p>' + esc(plan.statusLabel || 'Not set') + '</p>' +
-      (plan.startsAt || plan.endsAt
-        ? '<p>' + esc((plan.startsAt || '—') + ' – ' + (plan.endsAt || '—')) + '</p>'
-        : '') +
-      (plan.location ? '<p>' + esc(plan.location) + '</p>' : '') +
-      (plan.note ? '<p class="tma-dash__calendar-share-meta">' + esc(plan.note) + '</p>' : '') +
-      '</div>';
 
     var eventsBody = dayEvents.length
       ? '<ul class="tma-dash__calendar-share-list">' + dayEvents.map(function (e) {
@@ -2021,51 +1963,10 @@
       : '<p class="tma-dash__calendar-empty">Nothing scheduled.</p>';
 
     return panelShell(heading,
-      planBody + '<p class="tma-dash__clients-form-label">Events</p>' + eventsBody,
+      eventsBody,
       '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-calendar-day-create="' +
       esc(key) + '">New event</button>' +
       '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Close</button>');
-  }
-
-  function renderWorkPlanEditor() {
-    var panel = state.panel || {};
-    var draft = panel.draft || {};
-    var statuses = panel.statuses || [];
-    var body =
-      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
-      '<span class="tma-dash__clients-form-label">Status</span>' +
-      '<select class="tma-dash__clients-field-select" data-workplan-field="status">' +
-      statuses.map(function (s) {
-        return '<option value="' + esc(s.id) + '"' + (draft.status === s.id ? ' selected' : '') + '>' +
-          esc(s.label) + '</option>';
-      }).join('') +
-      '</select></label>' +
-      '<div class="tma-dash__clients-form-row">' +
-      '<label class="tma-dash__clients-form-field"><span class="tma-dash__clients-form-label">Start</span>' +
-      '<input type="time" class="tma-dash__clients-field-input" data-workplan-field="startsAt" value="' +
-      esc(draft.startsAt || '') + '"></label>' +
-      '<label class="tma-dash__clients-form-field"><span class="tma-dash__clients-form-label">End</span>' +
-      '<input type="time" class="tma-dash__clients-field-input" data-workplan-field="endsAt" value="' +
-      esc(draft.endsAt || '') + '"></label></div>' +
-      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
-      '<span class="tma-dash__clients-form-label">Location</span>' +
-      '<input type="text" class="tma-dash__clients-field-input" data-workplan-field="location" value="' +
-      esc(draft.location || '') + '"></label>' +
-      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
-      '<span class="tma-dash__clients-form-label">Note</span>' +
-      '<textarea class="tma-dash__clients-field-input" rows="3" data-workplan-field="note">' +
-      esc(draft.note || '') + '</textarea></label>' +
-      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
-      '<span class="tma-dash__clients-form-label">Visibility</span>' +
-      '<select class="tma-dash__clients-field-select" data-workplan-field="visibility">' +
-      '<option value="colleagues"' + (draft.visibility !== 'private' ? ' selected' : '') + '>Visible to colleagues</option>' +
-      '<option value="private"' + (draft.visibility === 'private' ? ' selected' : '') + '>Private</option>' +
-      '</select></label>';
-
-    return panelShell('Edit work plan', body,
-      '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-workplan-save' +
-      (panel.busy ? ' disabled' : '') + '>' + (panel.busy ? 'Saving…' : 'Save') + '</button>' +
-      '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Cancel</button>');
   }
 
   var SYNC_STATUS_LABELS = {
@@ -2187,7 +2088,6 @@
     if (state.panel.mode === 'connect') return renderConnectPanel();
     if (state.panel.mode === 'sync-progress') return renderSyncProgressPanel();
     if (state.panel.mode === 'day') return renderDayPanel();
-    if (state.panel.mode === 'work-plan') return renderWorkPlanEditor();
     if (state.panel.mode === 'sync-settings') return renderSyncSettingsPanel();
     if (state.panel.mode === 'conflicts') return renderConflictsPanel();
     if (state.panel.mode === 'history') return renderHistoryPanel();
@@ -3230,66 +3130,6 @@
     render();
   }
 
-  function openWorkPlanEditor(dateKey) {
-    var plan = workPlanFor(dateKey) || {};
-    state.panel = {
-      mode: 'work-plan',
-      dateKey: dateKey,
-      draft: {
-        date: dateKey,
-        status: plan.status || 'in_office',
-        startsAt: plan.startsAt || '08:00',
-        endsAt: plan.endsAt || '17:00',
-        location: plan.location || '',
-        note: plan.note || '',
-        visibility: plan.visibility || 'colleagues',
-      },
-      statuses: state.workStatuses.length
-        ? state.workStatuses
-        : [
-            { id: 'in_office', label: 'In office' },
-            { id: 'remote', label: 'Working remotely' },
-            { id: 'out_of_office', label: 'Out of office' },
-            { id: 'on_leave', label: 'On leave' },
-            { id: 'not_working', label: 'Not working' },
-          ],
-    };
-    render();
-  }
-
-  function saveWorkPlan() {
-    var panel = state.panel;
-    if (!panel || panel.mode !== 'work-plan' || !panel.draft) return;
-    panel.busy = true;
-    render();
-    var draft = panel.draft;
-    net(BASE + '/work-plan', {
-      method: 'PUT',
-      json: {
-        date: draft.date,
-        status: draft.status,
-        startsAt: draft.startsAt || null,
-        endsAt: draft.endsAt || null,
-        location: draft.location || null,
-        note: draft.note || null,
-        visibility: draft.visibility || 'colleagues',
-      },
-    })
-      .then(function (data) {
-        if (data && data.day && data.day.date) {
-          state.workDays[data.day.date] = data.day;
-        }
-        showToast('Work plan saved');
-        state.panel = { mode: 'day', dateKey: draft.date };
-        render();
-      })
-      .catch(function (err) {
-        panel.busy = false;
-        showToast(errorMessage(err, 'Couldn’t save work plan'), { state: 'failure' });
-        render();
-      });
-  }
-
   function openSyncSettings(calendarId) {
     state.menuFor = null;
     state.panel = { mode: 'sync-settings', calendarId: calendarId };
@@ -4124,7 +3964,7 @@
 
     M.unwired(root, '[data-calendar-day]').forEach(function (cell) {
       cell.addEventListener('click', function (e) {
-        if (e.target.closest('[data-calendar-month-event], [data-calendar-day-more], [data-calendar-day-add], [data-calendar-workplan], [data-quick-add-kind]')) {
+        if (e.target.closest('[data-calendar-month-event], [data-calendar-day-more], [data-calendar-day-add], [data-quick-add-kind]')) {
           return;
         }
         var dateKey = cell.getAttribute('data-calendar-day');
@@ -4207,14 +4047,6 @@
         var kind = btn.getAttribute('data-quick-add-kind');
         var dateKey = btn.getAttribute('data-quick-add-date');
         state.quickAddFor = null;
-        if (kind === 'work-status' || kind === 'leave') {
-          openWorkPlanEditor(dateKey);
-          if (kind === 'leave' && state.panel && state.panel.draft) {
-            state.panel.draft.status = 'on_leave';
-            render();
-          }
-          return;
-        }
         if (!writableCalendars().length && kind !== 'note') {
           showToast('No writable calendar to add to', { state: 'failure' });
           return;
@@ -4226,31 +4058,6 @@
         state.panel = { mode: 'create', draft: draft };
         state.selectedEventId = null;
         render();
-      });
-    });
-
-    M.unwired(root, '[data-calendar-workplan]').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        openDayPanel(btn.getAttribute('data-calendar-workplan'));
-      });
-    });
-
-    M.unwired(root, '[data-workplan-edit]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        openWorkPlanEditor(btn.getAttribute('data-workplan-edit'));
-      });
-    });
-
-    M.unwired(root, '[data-workplan-save]').forEach(function (btn) {
-      btn.addEventListener('click', saveWorkPlan);
-    });
-
-    M.unwired(root, '[data-workplan-field]').forEach(function (field) {
-      var evName = field.tagName === 'SELECT' || field.type === 'time' ? 'change' : 'input';
-      field.addEventListener(evName, function () {
-        if (!state.panel || !state.panel.draft) return;
-        state.panel.draft[field.getAttribute('data-workplan-field')] = field.value;
       });
     });
 
@@ -4361,12 +4168,6 @@
 
   function consumePendingOpens() {
     if (!state.el) return false;
-    if (window.__TMA_OPEN_WORKPLAN) {
-      var planKey = window.__TMA_OPEN_WORKPLAN;
-      window.__TMA_OPEN_WORKPLAN = null;
-      openWorkPlanEditor(planKey);
-      return true;
-    }
     if (window.__TMA_OPEN_EVENT) {
       var eventId = window.__TMA_OPEN_EVENT;
       window.__TMA_OPEN_EVENT = null;
@@ -4382,17 +4183,6 @@
       return true;
     }
     return false;
-  }
-
-  function openWorkPlan(dateKey) {
-    var key = dateKey || dateKeyOf(new Date()) || window.__TMA_OPEN_WORKPLAN;
-    if (!key) return;
-    if (!state.el) {
-      window.__TMA_OPEN_WORKPLAN = key;
-      return;
-    }
-    window.__TMA_OPEN_WORKPLAN = null;
-    openWorkPlanEditor(key);
   }
 
   function openEvent(eventId) {
@@ -4519,7 +4309,6 @@
     mount: mount,
     activate: activate,
     getTodayEventCount: getTodayEventCount,
-    openWorkPlan: openWorkPlan,
     openEvent: openEvent,
     openDay: openDay,
   };
