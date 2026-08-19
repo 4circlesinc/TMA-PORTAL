@@ -66,7 +66,7 @@ try {
 
   await page.screenshot({ path: path.join(__dirname, 'calendar-month-final.png'), fullPage: false });
 
-  step(3, 'Overview workspace metrics + work plan + latest files');
+  step(3, 'Overview workspace metrics + latest files');
   await page.goto(`${BASE}/overview`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.tma-dash__overview', { timeout: 15000 });
   await page.waitForTimeout(800);
@@ -75,9 +75,7 @@ try {
   check(/Workspace metrics/i.test(heroTitle || ''), `metrics widget renamed (got "${(heroTitle || '').trim()}")`);
 
   const workPlan = page.locator('[data-overview-workplan]');
-  check(await workPlan.count() > 0, 'Your work plan card is present');
-  const workText = (await workPlan.first().textContent() || '').replace(/\s+/g, ' ');
-  check(/Working remotely|In office|Home|–|—/i.test(workText), `work plan shows real schedule (got "${workText.slice(0, 80)}")`);
+  check(await workPlan.count() === 0, 'Your work plan card is not on Overview');
 
   const addUser = page.locator('[data-overview-add-user]');
   check(await addUser.count() > 0, 'Add User button is wired');

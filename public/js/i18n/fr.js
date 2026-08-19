@@ -112,7 +112,7 @@ window.TMAI18nDict = {
     "Import into": "Importer dans", "Import finished": "Importation terminée",
     "No clients found": "Aucun client trouvé", "Website": "Site web",
     "Work": "Travail", "Mobile": "Mobile", "Overdue": "En retard",
-    "Your work plan": "Votre plan de travail", "Members": "Membres",
+    "Members": "Membres",
 
     // Settings
     "My profile": "Mon profil", "Theme": "Thème", "Time and language": "Heure et langue",

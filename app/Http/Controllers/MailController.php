@@ -18,6 +18,7 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
+use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
 use Illuminate\Database\Eloquent\Builder;
@@ -1473,7 +1474,10 @@ class MailController extends Controller
             'cc' => $data['cc'] ?? [],
             'bcc' => $data['bcc'] ?? [],
             'subject' => $data['subject'] ?? '',
-            'bodyHtml' => $data['bodyHtml'] ?? '',
+            // A reply quoting an opened message carries authenticated
+            // /portal/mail/attachments/ URLs only this session can load;
+            // re-embed the bytes so they leave as real inline images.
+            'bodyHtml' => OutboundImages::embed($account, $data['bodyHtml'] ?? ''),
             'mode' => $mode,
         ];
 

@@ -1338,7 +1338,7 @@
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
     { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
-    { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
+    { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events for the selected day.', preview: 'road' },
     /*
      * staffOnly keeps Employees out of the Edit Dashboard list for a client
      * account. CIP is a different question: a Service Provider contact is a

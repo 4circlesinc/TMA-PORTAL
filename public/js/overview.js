@@ -77,7 +77,6 @@
   var ROAD_WEEK_START = startOfWeek(new Date());
   var FILES = [];
   var METRICS = null;
-  var WORK_PLAN = null;
   var SIGNINS = [];
   var SIGNINS_STATE = 'loading';
   var ROOT = window.__TMA_SITE_ROOT || '';
@@ -92,10 +91,10 @@
   /*
    * ── Warm boot ────────────────────────────────────────────────────
    * Overview paints its last-known panels and lets refreshOverviewData —
-   * which was always going to run — correct them silently. The road and the
-   * work plan are day-keyed, so they only hydrate onto the same day they
-   * were kept for: yesterday's road under today's date is a wrong screen,
-   * not a warm one. Post-DCL for the account scope; 'complete' guard for
+   * which was always going to run — correct them silently. The road is
+   * day-keyed, so it only hydrates onto the same day it was kept for:
+   * yesterday's road under today's date is a wrong screen, not a warm one.
+   * Post-DCL for the account scope; 'complete' guard for
    * the deferred-readyState trap. Desktop-persistent, browser-memory.
    */
   function keepOverviewWarm() {
@@ -106,7 +105,6 @@
       roadEvents: ROAD_EVENTS,
       files: FILES,
       metrics: METRICS,
-      workPlan: WORK_PLAN,
       signIns: SIGNINS,
     });
   }
@@ -122,7 +120,6 @@
       if (snap.day === dateKeyOf(new Date())) {
         ROAD = snap.road || [];
         ROAD_EVENTS = snap.roadEvents || [];
-        WORK_PLAN = snap.workPlan || null;
       }
       if (OVERVIEW_CONTAINER && OVERVIEW_CONTAINER.isConnected && !OVERVIEW_REAL) {
         remountOverviewGrid(OVERVIEW_CONTAINER, 'Overview');
@@ -182,18 +179,8 @@
     return String(iso).slice(0, 10);
   }
 
-  function buildRoadItems(events, workDay) {
+  function buildRoadItems(events) {
     var items = [];
-    if (workDay && workDay.status && workDay.status !== 'not_working') {
-      items.push({
-        kind: 'workplan',
-        id: 'workplan:' + (workDay.date || SELECTED_ROAD_DATE),
-        text: workDay.statusLabel || 'Work plan',
-        time: formatPlanHours(workDay) || formatRoadTime(SELECTED_ROAD_DATE + 'T09:00:00'),
-        avatarUrl: avatarSrc(null, 'Work plan'),
-        dateKey: workDay.date || SELECTED_ROAD_DATE,
-      });
-    }
     (events || []).forEach(function (ev) {
       items.push({
         kind: 'event',
@@ -210,19 +197,14 @@
   function loadRoadFromCalendar() {
     var range = weekRangeIso(ROAD_WEEK_START);
     var dayKey = SELECTED_ROAD_DATE;
-    return Promise.all([
-      apiGet('/portal/calendar/events?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to)),
-      apiGet('/portal/calendar/work-plan/' + encodeURIComponent(dayKey)),
-    ]).then(function (results) {
-      var j = results[0];
-      var plan = results[1];
-      ROAD_EVENTS = (j && j.events) || [];
-      var dayEvents = ROAD_EVENTS.filter(function (ev) {
-        return eventDateKey(ev) === dayKey;
+    return apiGet('/portal/calendar/events?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to))
+      .then(function (j) {
+        ROAD_EVENTS = (j && j.events) || [];
+        var dayEvents = ROAD_EVENTS.filter(function (ev) {
+          return eventDateKey(ev) === dayKey;
+        });
+        ROAD = buildRoadItems(dayEvents);
       });
-      var workDay = (plan && plan.day) || null;
-      ROAD = buildRoadItems(dayEvents, workDay);
-    });
   }
 
   function setSelectedRoadDate(key) {
@@ -315,16 +297,6 @@
     });
   }
 
-  function loadWorkPlan() {
-    var today = new Date();
-    var key = today.getFullYear() + '-' +
-      String(today.getMonth() + 1).padStart(2, '0') + '-' +
-      String(today.getDate()).padStart(2, '0');
-    return apiGet('/portal/calendar/work-plan/' + encodeURIComponent(key)).then(function (j) {
-      WORK_PLAN = (j && j.day) || null;
-    });
-  }
-
   var TAB_PANELS = {
     Overview: '.tma-dash__overview-grid',
     Employees: '.tma-dash__overview-employees-tab',
@@ -382,24 +354,6 @@
     });
   }
 
-  function formatPlanHours(plan) {
-    if (!plan) return '';
-    if (plan.startsAt && plan.endsAt) {
-      return formatClock(plan.startsAt) + ' – ' + formatClock(plan.endsAt);
-    }
-    return plan.statusLabel || '';
-  }
-
-  function formatClock(hm) {
-    try {
-      var parts = String(hm || '').split(':');
-      if (parts.length < 2) return String(hm || '');
-      var d = new Date();
-      d.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
-      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    } catch (e) { return String(hm || ''); }
-  }
-
   /* Your profile, the same cards the account page shows, borrowed from
      TMAAccount so the two never drift apart. */
   function renderProfile() {
@@ -414,31 +368,6 @@
 
   function renderHero() {
     var cards = metricCardsFromApi(METRICS);
-    var plan = WORK_PLAN;
-    var when = '';
-    if (plan && plan.date) {
-      try {
-        when = new Date(plan.date + 'T12:00:00').toLocaleDateString(undefined, {
-          weekday: 'short', month: 'short', day: 'numeric',
-        });
-      } catch (e) { when = plan.date; }
-    }
-
-    var planHtml =
-      '<aside class="tma-dash__overview-workplan" data-overview-workplan>' +
-      '<div class="tma-dash__overview-workplan-head">' +
-      '<span class="tma-dash__overview-metric-label">Your work plan</span>' +
-      '<button type="button" class="tma-dash__overview-btn tma-dash__overview-btn--icon" data-overview-workplan-edit aria-label="Edit work plan">' +
-      '<img src="' + ICON + 'Gear.svg" alt=""></button></div>' +
-      '<p class="tma-dash__overview-workplan-date">' + esc(when || 'Today') + '</p>' +
-      '<p class="tma-dash__overview-metric-value"><strong>' + esc(formatPlanHours(plan) || '—') + '</strong></p>' +
-      (plan && plan.location
-        ? '<p class="tma-dash__overview-workplan-loc">' + esc(plan.location) + '</p>'
-        : '') +
-      (plan && plan.statusLabel
-        ? '<p class="tma-dash__overview-workplan-status">' + esc(plan.statusLabel) + '</p>'
-        : '') +
-      '</aside>';
 
     var metricsHtml;
     if (!cards) {
@@ -468,7 +397,6 @@
       '<h3 class="tma-dash__overview-block-title">Workspace metrics</h3>' +
       metricsHtml +
       '</div>' +
-      '<div class="tma-dash__overview-hero-side">' + planHtml + '</div>' +
       '</section>';
   }
 
@@ -775,14 +703,6 @@
     }
   }
 
-  function openCalendarWorkPlan(key) {
-    window.__TMA_OPEN_WORKPLAN = key;
-    navigateToCalendar();
-    if (window.TMACalendar && typeof TMACalendar.openWorkPlan === 'function') {
-      TMACalendar.openWorkPlan(key);
-    }
-  }
-
   function openCalendarEvent(eventId, dateKey) {
     if (eventId) window.__TMA_OPEN_EVENT = eventId;
     else if (dateKey) window.__TMA_OPEN_DAY = dateKey;
@@ -879,13 +799,6 @@
         return;
       }
 
-      var workEdit = e.target.closest('[data-overview-workplan-edit]');
-      if (workEdit && container.contains(workEdit)) {
-        e.preventDefault();
-        openCalendarWorkPlan(dateKeyOf(new Date()));
-        return;
-      }
-
       var weekNav = e.target.closest('[data-overview-week-nav]');
       if (weekNav && container.contains(weekNav)) {
         e.preventDefault();
@@ -905,11 +818,9 @@
       var roadItem = e.target.closest('[data-overview-road-item]');
       if (roadItem && container.contains(roadItem)) {
         e.preventDefault();
-        var kind = roadItem.getAttribute('data-overview-road-kind');
         var rid = roadItem.getAttribute('data-overview-road-item');
         var rdate = roadItem.getAttribute('data-overview-road-date') || SELECTED_ROAD_DATE;
-        if (kind === 'workplan') openCalendarWorkPlan(rdate);
-        else openCalendarEvent(rid, rdate);
+        openCalendarEvent(rid, rdate);
         return;
       }
 
@@ -988,7 +899,6 @@
       loadRoadFromCalendar(),
       loadLatestFiles(),
       loadMetrics(),
-      loadWorkPlan(),
       loadSignIns(),
     ]).then(function () {
       // Metrics answering is the tell that the server, not a dead network,
@@ -1026,11 +936,9 @@
       var roadItem = e.target.closest('[data-overview-road-item]');
       if (roadItem && root.contains(roadItem)) {
         e.preventDefault();
-        var kind = roadItem.getAttribute('data-overview-road-kind');
         var rid = roadItem.getAttribute('data-overview-road-item');
         var rdate = roadItem.getAttribute('data-overview-road-date') || SELECTED_ROAD_DATE;
-        if (kind === 'workplan') openCalendarWorkPlan(rdate);
-        else openCalendarEvent(rid, rdate);
+        openCalendarEvent(rid, rdate);
       }
     });
     bindRoadWheel(root);

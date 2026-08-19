@@ -112,7 +112,7 @@ window.TMAI18nDict = {
     "Import into": "导入到", "Import finished": "导入完成",
     "No clients found": "未找到客户", "Website": "网站",
     "Work": "工作", "Mobile": "手机", "Overdue": "已逾期",
-    "Your work plan": "你的工作计划", "Members": "成员",
+    "Members": "成员",
 
     // Settings
     "My profile": "我的资料", "Theme": "主题", "Time and language": "时间与语言",

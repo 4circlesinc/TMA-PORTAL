@@ -981,6 +981,18 @@ field placement and drawing, and computed CSS only exist in a browser.
   the end would flag the noise. The three failures the environment *does*
   produce (the fake OAuth token's 409, the stubbed 422, the websocket origin
   refusal) are filtered by shape; anything else in the console fails the run.
+- **`email-reply-quote.mjs`** — a reply must answer the *exact HTML* of the
+  original, not its snippet. The quote block used to be built from escaped
+  plain text, which looked right in the composer (its CSS said `pre-wrap`)
+  and arrived at the receiver as one flattened paragraph — no portal
+  stylesheet travels with the mail, so every newline collapsed. This opens
+  the fixture's rich-bodied message, hits Reply, and checks the on-screen
+  quote keeps the original's bold/list/link markup unescaped; then it
+  intercepts `/portal/mail/send` and inspects the exact `bodyHtml` the
+  client produced: typed reply present, original markup intact, and the
+  blockquote carrying *inline* styles (classes mean nothing to a receiver).
+  Uses the same fixture as `email-import-signature.mjs` (its first inbox
+  message carries the rich body) and can run on the same seeded database.
 - **`mail-sync-progress.mjs`** — the mailbox sync progress panel and the
   mailbox-only sign-out. Seeds a running `mail_sync_progress` row and then
   mutates it via sqlite the way the queue jobs would (importing → stalled →

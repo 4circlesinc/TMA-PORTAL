@@ -397,6 +397,125 @@ class MailSendTest extends TestCase
             && ! str_contains($request['body']['content'] ?? '', 'data:image/png'));
     }
 
+    public function test_a_reply_quoting_a_mirrored_image_re_embeds_it_as_an_inline_part(): void
+    {
+        $user = $this->user();
+        $account = $this->googleAccount($user);
+        $original = $this->message($user, $account, ['remote_id' => 'gmail-1']);
+
+        $attachment = \App\Models\MailAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $original->id,
+            'remote_id' => 'att-logo',
+            'filename' => 'logo.png',
+            'mime_type' => 'image/png',
+            'size' => 68,
+            'is_inline' => true,
+            'content_id' => 'logo001',
+        ]);
+
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/messages/gmail-1/attachments/att-logo*' => Http::response([
+                'data' => rtrim(strtr(base64_encode($png), '+/', '-_'), '='),
+            ]),
+            'gmail.googleapis.com/*' => Http::response(['id' => 'sent-123']),
+        ]);
+
+        // What the composer actually sends: the reading pane rewrote the
+        // original's cid: image to an authenticated portal URL, and the reply
+        // quote drags that URL along.
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Re: Quarterly review',
+                'bodyHtml' => '<p>Sounds good.</p><blockquote>'
+                    .'<b>Original</b><img src="http://localhost/portal/mail/attachments/'
+                    .$attachment->uuid.'?inline=1"></blockquote>',
+                'mode' => 'new',
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/messages/send')) {
+                return false;
+            }
+
+            $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
+            $this->assertStringContainsString('multipart/related', $raw);
+            $this->assertStringContainsString('Content-ID: <tma-inline-1-', $raw);
+            // The receiver cannot load a portal-session URL.
+            $this->assertStringNotContainsString('/portal/mail/attachments/', $raw);
+
+            return true;
+        });
+    }
+
+    public function test_a_foreign_attachment_url_is_not_embedded(): void
+    {
+        $user = $this->user();
+        $this->googleAccount($user);
+
+        // Someone else's mirrored attachment: same table, different account.
+        $stranger = $this->user();
+        $strangerAccount = $this->googleAccount($stranger);
+        $strangerMessage = $this->message($stranger, $strangerAccount, ['remote_id' => 'other-1']);
+        $foreign = \App\Models\MailAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $strangerMessage->id,
+            'remote_id' => 'att-secret',
+            'filename' => 'secret.png',
+            'mime_type' => 'image/png',
+            'size' => 68,
+            'is_inline' => true,
+            'content_id' => 'secret001',
+        ]);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/*' => Http::response(['id' => 'sent-123']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Hello',
+                'bodyHtml' => '<img src="/portal/mail/attachments/'.$foreign->uuid.'?inline=1">',
+            ])
+            ->assertOk();
+
+        // The url passes through untouched — no bytes fetched, nothing inlined.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'att-secret'));
+        Http::assertSent(function ($request) use ($foreign) {
+            if (! str_contains($request->url(), '/messages/send')) {
+                return false;
+            }
+
+            $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
+            $this->assertStringNotContainsString('multipart/related', $raw);
+            $this->assertStringNotContainsString('Content-ID:', $raw);
+
+            [, $body] = explode("\r\n\r\n", $raw, 2);
+            $html = base64_decode(preg_replace('/\s+/', '', $body), true);
+            $this->assertStringContainsString($foreign->uuid, $html);
+
+            return true;
+        });
+    }
+
     public function test_an_outlook_forward_uses_create_forward(): void
     {
         $user = $this->user();

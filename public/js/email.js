@@ -645,20 +645,72 @@
     );
   }
 
-  function renderReplyQuote(row, metaEmail, metaDate, bodyText) {
+  /* The original message's markup, made safe to sit in the page DOM.
+   *
+   * The reading pane shows bodies inside a sandboxed iframe; the reply quote
+   * cannot (it has to travel with the reply), so active content is stripped
+   * here instead. Formatting — inline styles, tables, images, links — is
+   * exactly what quoting exists to keep, so everything else stays.
+   */
+  function sanitizeQuotedEmailHtml(html) {
+    var doc;
+    try {
+      doc = new DOMParser().parseFromString('<div id="q">' + html + '</div>', 'text/html');
+    } catch (e) {
+      return '';
+    }
+    var rootEl = doc.getElementById('q');
+    if (!rootEl) return '';
+
+    rootEl.querySelectorAll(
+      'script, style, iframe, object, embed, form, input, button, textarea, select, link, meta, base'
+    ).forEach(function (el) { el.remove(); });
+
+    rootEl.querySelectorAll('*').forEach(function (el) {
+      Array.prototype.slice.call(el.attributes).forEach(function (attr) {
+        var name = attr.name.toLowerCase();
+        if (name.indexOf('on') === 0) el.removeAttribute(attr.name);
+        if ((name === 'href' || name === 'src') && /^\s*(javascript|vbscript|data:text)/i.test(attr.value)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+
+    return rootEl.innerHTML;
+  }
+
+  /* What the quote block carries: the exact HTML when we have it, the plain
+   * text only as a fallback. Escaped text loses every line break the moment
+   * it renders as HTML — replies used to arrive as one flattened paragraph. */
+  function quoteBodyBlock(bodyHtml, bodyText) {
+    // The inline style is what the *receiver* sees — the sent quote travels
+    // as this exact markup and no portal stylesheet goes with it.
+    var quoteStyle = ' style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex"';
+    var html = sanitizeQuotedEmailHtml((bodyHtml || '').trim());
+    if (html) {
+      return '<blockquote class="tma-dash__email-inline-quote-body tma-dash__email-inline-quote-body--html"' +
+        quoteStyle + '>' + html + '</blockquote>';
+    }
     var text = (bodyText || '').trim();
     if (!text) return '';
+    return '<blockquote class="tma-dash__email-inline-quote-body"' + quoteStyle + '>' +
+      esc(text).replace(/\r?\n/g, '<br>') + '</blockquote>';
+  }
+
+  function renderReplyQuote(row, metaEmail, metaDate, bodyText, bodyHtml) {
+    var block = quoteBodyBlock(bodyHtml, bodyText);
+    if (!block) return '';
     return (
       '<div class="tma-dash__email-inline-quote">' +
       '<p class="tma-dash__email-inline-quote-lead">On ' + esc(metaDate) + ', ' + esc(row.sender) +
       ' &lt;' + esc(metaEmail) + '&gt; wrote:</p>' +
-      '<blockquote class="tma-dash__email-inline-quote-body">' + esc(text) + '</blockquote>' +
+      block +
       '</div>'
     );
   }
 
-  function renderForwardQuote(row, metaEmail, metaDate, subject, bodyText) {
-    var text = (bodyText || '').trim();
+  function renderForwardQuote(row, metaEmail, metaDate, subject, bodyText, bodyHtml) {
+    var block = quoteBodyBlock(bodyHtml, bodyText);
     var originalTo = formatAddressList(addressList(row && row.to)) || mailboxAddress();
     return (
       '<div class="tma-dash__email-inline-quote tma-dash__email-inline-quote--forward">' +
@@ -667,7 +719,7 @@
       '<p class="tma-dash__email-inline-quote-meta"><strong>Date:</strong> ' + esc(metaDate) + '</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>Subject:</strong> ' + esc(subject) + '</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>To:</strong> ' + esc(originalTo) + '</p>' +
-      (text ? '<blockquote class="tma-dash__email-inline-quote-body">' + esc(text) + '</blockquote>' : '') +
+      block +
       '</div>'
     );
   }
@@ -676,6 +728,11 @@
     var isReply = mode === 'reply';
     var isForward = mode === 'forward';
     var isReplyAll = mode === 'reply-all';
+    // The message being answered, with its lazily-loaded body — the list row
+    // alone only knows the snippet, and quoting the snippet is how replies
+    // used to go out as one flattened paragraph.
+    var quotedSource = threadMessage(state, row.id) || row;
+    var quotedBodyHtml = quotedSource.bodyHtml || '';
     var composeSubject = isForward ? getForwardSubject(subject) : getReplySubject(subject);
     var ic = state.inlineCompose || {};
 
@@ -721,8 +778,8 @@
       renderImageTransformOverlay() +
       '</div>' +
       (isForward
-        ? renderForwardQuote(row, metaEmail, metaDate, subject, bodyText)
-        : renderReplyQuote(row, metaEmail, metaDate, bodyText)) +
+        ? renderForwardQuote(row, metaEmail, metaDate, subject, bodyText, quotedBodyHtml)
+        : renderReplyQuote(row, metaEmail, metaDate, bodyText, quotedBodyHtml)) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-bar">' +
       renderComposeToolbar({ expand: false, image: true }) +

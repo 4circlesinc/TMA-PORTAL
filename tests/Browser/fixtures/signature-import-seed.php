@@ -32,9 +32,16 @@ $a = ConnectedAccount::create([
 // A cursor stops the page seeding a full sync against a token that cannot work.
 $a->forceFill(['mail_cursor' => '100', 'mail_synced_at' => now()])->save();
 
-// Inbox rows so the mailbox page has something to draw.
-foreach ([['m1', 'Quarterly review', 'Dana Reed', 'dana@example.com'],
-    ['m2', 'Invoice #1042', 'Ana Ruiz', 'ana@example.com']] as $i => $m) {
+// Inbox rows so the mailbox page has something to draw. The first carries a
+// rich HTML body — what email-reply-quote.mjs quotes and inspects.
+$richBody = '<div dir="ltr"><p>Hi Vernon,</p>'
+    .'<p>The <b>quarterly figures</b> are ready:</p>'
+    .'<ul><li>Revenue up <i>12%</i></li><li>Costs flat</li></ul>'
+    .'<p>Full detail at <a href="https://reports.example.com/q3">reports.example.com/q3</a>.</p>'
+    .'<p>— Dana</p></div>';
+
+foreach ([['m1', 'Quarterly review', 'Dana Reed', 'dana@example.com', $richBody],
+    ['m2', 'Invoice #1042', 'Ana Ruiz', 'ana@example.com', null]] as $i => $m) {
     MailMessage::create([
         'uuid' => (string) Str::uuid(),
         'user_id' => $u->id,
@@ -44,6 +51,7 @@ foreach ([['m1', 'Quarterly review', 'Dana Reed', 'dana@example.com'],
         'folder' => 'inbox',
         'subject' => $m[1],
         'snippet' => 'Preview for '.$m[1],
+        'body_html' => $m[4],
         'from_name' => $m[2],
         'from_email' => $m[3],
         'is_read' => false,
