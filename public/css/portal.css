@@ -65,7 +65,8 @@
 }
 
 /* toolbar actions - compact size (legacy no-data CTA buttons) */
-.tma-portal-head__actions .tma-no-data__btn {
+.tma-portal-head__actions .tma-no-data__btn,
+.tma-portal-toolbar .tma-no-data__btn {
   min-height: 28px;
   min-width: 0;
   padding: var(--space-4) var(--space-12);
