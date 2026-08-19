@@ -256,6 +256,147 @@ class MailSendTest extends TestCase
         });
     }
 
+    /** Minimal valid 1x1 PNG, as the signature editor stores its logo. */
+    private function signatureBody(): string
+    {
+        return '<p>Regards,</p><div><img src="data:image/png;base64,'
+            .'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+            .'" width="120" alt="Logo"></div>';
+    }
+
+    public function test_a_gmail_signature_image_is_sent_as_a_cid_inline_part(): void
+    {
+        $user = $this->user();
+        $this->googleAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/*' => Http::response(['id' => 'sent-123']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'client@example.com']],
+                'subject' => 'Hello',
+                'bodyHtml' => $this->signatureBody(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/messages/send')) {
+                return false;
+            }
+
+            $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
+            $this->assertStringContainsString('multipart/related', $raw);
+            $this->assertStringContainsString('Content-ID: <tma-inline-1-', $raw);
+            $this->assertStringContainsString('Content-Disposition: inline', $raw);
+            // The receiver renders cid: images; a data: URI arrives broken.
+            $this->assertStringNotContainsString('data:image/png', $raw);
+
+            return true;
+        });
+    }
+
+    public function test_an_outlook_signature_image_is_sent_as_an_inline_attachment(): void
+    {
+        $user = $this->user();
+        $this->microsoftAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages' => Http::response(['id' => 'draft-new']),
+            'graph.microsoft.com/v1.0/me/messages/draft-new/send' => Http::response(null, 202),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'client@example.com']],
+                'subject' => 'Hello',
+                'bodyHtml' => $this->signatureBody(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST'
+                || ! preg_match('#/me/messages$#', parse_url($request->url(), PHP_URL_PATH) ?: '')) {
+                return false;
+            }
+
+            $attachment = $request['attachments'][0] ?? [];
+            $this->assertSame('#microsoft.graph.fileAttachment', $attachment['@odata.type'] ?? null);
+            $this->assertTrue($attachment['isInline'] ?? false);
+            $this->assertSame('image/png', $attachment['contentType'] ?? null);
+            $this->assertNotEmpty($attachment['contentBytes'] ?? '');
+
+            $body = $request['body']['content'] ?? '';
+            $this->assertStringContainsString('src="cid:'.($attachment['contentId'] ?? ''), $body);
+            $this->assertStringNotContainsString('data:image/png', $body);
+
+            return true;
+        });
+    }
+
+    public function test_an_outlook_reply_posts_the_signature_image_to_the_draft_attachments(): void
+    {
+        $user = $this->user();
+        $this->microsoftAccount($user);
+        $original = $this->message($user, ConnectedAccount::query()->first());
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/remote-1/createReply' => Http::response(['id' => 'draft-reply']),
+            'graph.microsoft.com/v1.0/me/messages/draft-reply/attachments' => Http::response(['id' => 'att-1']),
+            'graph.microsoft.com/v1.0/me/messages/draft-reply/send' => Http::response(null, 202),
+            'graph.microsoft.com/v1.0/me/messages/draft-reply' => Http::response(['id' => 'draft-reply']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Re: Quarterly review',
+                'bodyHtml' => '<p>Sounds good.</p>'.$this->signatureBody(),
+                'mode' => 'reply',
+                'inReplyTo' => $original->uuid,
+            ])
+            ->assertOk();
+
+        // The overlay PATCH cannot carry attachments, so the image must land
+        // on the draft's attachments collection before the send.
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST'
+                || ! str_ends_with(parse_url($request->url(), PHP_URL_PATH) ?: '', '/messages/draft-reply/attachments')) {
+                return false;
+            }
+
+            $this->assertTrue($request['isInline'] ?? false);
+            $this->assertNotEmpty($request['contentId'] ?? '');
+
+            return true;
+        });
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_contains($request->url(), '/messages/draft-reply')
+            && str_contains($request['body']['content'] ?? '', 'src="cid:')
+            && ! str_contains($request['body']['content'] ?? '', 'data:image/png'));
+    }
+
     public function test_an_outlook_forward_uses_create_forward(): void
     {
         $user = $this->user();

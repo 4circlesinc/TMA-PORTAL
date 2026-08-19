@@ -39,10 +39,40 @@ class MimeBuilder
             $lines[] = 'References: '.($references !== '' ? $references : $inReplyTo);
         }
 
+        // data:-URI images (the signature logo above all) must travel as cid:
+        // inline parts — Gmail and Outlook render those and refuse data: URIs,
+        // which otherwise arrive as a broken-image icon.
+        [$bodyHtml, $inline] = InlineImages::extract((string) ($message['bodyHtml'] ?? ''));
+
+        if ($inline === []) {
+            $lines[] = 'Content-Type: text/html; charset=UTF-8';
+            $lines[] = 'Content-Transfer-Encoding: base64';
+            $lines[] = '';
+            $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+
+            return implode("\r\n", $lines);
+        }
+
+        $boundary = '=_tma_'.bin2hex(random_bytes(12));
+        $lines[] = 'Content-Type: multipart/related; boundary="'.$boundary.'"';
+        $lines[] = '';
+        $lines[] = '--'.$boundary;
         $lines[] = 'Content-Type: text/html; charset=UTF-8';
         $lines[] = 'Content-Transfer-Encoding: base64';
         $lines[] = '';
-        $lines[] = chunk_split(base64_encode((string) ($message['bodyHtml'] ?? '')), 76, "\r\n");
+        $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+
+        foreach ($inline as $part) {
+            $lines[] = '--'.$boundary;
+            $lines[] = 'Content-Type: '.$part['mime'];
+            $lines[] = 'Content-Transfer-Encoding: base64';
+            $lines[] = 'Content-ID: <'.$part['cid'].'>';
+            $lines[] = 'Content-Disposition: inline; filename="'.$part['name'].'"';
+            $lines[] = '';
+            $lines[] = chunk_split(base64_encode($part['bytes']), 76, "\r\n");
+        }
+
+        $lines[] = '--'.$boundary.'--';
 
         return implode("\r\n", $lines);
     }

@@ -435,22 +435,62 @@ class GraphProvider implements MailProvider
 
     public function saveDraft(array $draft, ?string $remoteId = null): string
     {
+        // data:-URI images (the signature logo above all) must travel as cid:
+        // inline attachments — Outlook and Gmail render those and refuse
+        // data: URIs, which otherwise arrive as a broken-image icon.
+        [$bodyHtml, $inline] = InlineImages::extract((string) ($draft['bodyHtml'] ?? ''));
+
         $payload = [
             'subject' => (string) ($draft['subject'] ?? ''),
             'body' => [
                 'contentType' => 'HTML',
-                'content' => (string) ($draft['bodyHtml'] ?? ''),
+                'content' => $bodyHtml,
             ],
             'toRecipients' => self::recipients($draft['to'] ?? []),
             'ccRecipients' => self::recipients($draft['cc'] ?? []),
             'bccRecipients' => self::recipients($draft['bcc'] ?? []),
         ];
 
+        // A create accepts attachments in the payload; a PATCH does not, so
+        // an existing draft (the createReply/createForward overlay) gets them
+        // POSTed to its attachments collection instead. That draft is always
+        // freshly minted by Graph, so nothing can double up.
+        if ($remoteId === null && $inline !== []) {
+            $payload['attachments'] = array_map(self::inlineAttachment(...), $inline);
+        }
+
         $response = $remoteId
             ? $this->request()->patch(self::BASE.'/messages/'.$remoteId, $payload)
             : $this->request()->post(self::BASE.'/messages', $payload);
 
-        return (string) ($this->json($response)['id'] ?? '');
+        $id = (string) ($this->json($response)['id'] ?? '');
+
+        if ($remoteId !== null && $inline !== []) {
+            foreach ($inline as $part) {
+                $this->json($this->request()->post(
+                    self::BASE.'/messages/'.$remoteId.'/attachments',
+                    self::inlineAttachment($part),
+                ));
+            }
+        }
+
+        return $id;
+    }
+
+    /**
+     * @param  array{cid: string, mime: string, name: string, bytes: string}  $part
+     * @return array<string, mixed>
+     */
+    private static function inlineAttachment(array $part): array
+    {
+        return [
+            '@odata.type' => '#microsoft.graph.fileAttachment',
+            'name' => $part['name'],
+            'contentType' => $part['mime'],
+            'contentBytes' => base64_encode($part['bytes']),
+            'contentId' => $part['cid'],
+            'isInline' => true,
+        ];
     }
 
     public function deleteDraft(string $remoteId): void

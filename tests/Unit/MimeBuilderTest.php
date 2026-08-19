@@ -59,4 +59,86 @@ class MimeBuilderTest extends TestCase
         $this->assertStringNotContainsString('References:', $mime);
         $this->assertStringContainsString('client@example.com', $mime);
     }
+
+    public function test_a_plain_body_stays_a_single_part(): void
+    {
+        $mime = MimeBuilder::build([
+            'to' => [['email' => 'client@example.com']],
+            'subject' => 'Hello',
+            'bodyHtml' => '<p>No images here.</p>',
+        ]);
+
+        $this->assertStringNotContainsString('multipart/related', $mime);
+        $this->assertStringNotContainsString('Content-ID:', $mime);
+    }
+
+    public function test_a_data_uri_image_becomes_a_cid_inline_part(): void
+    {
+        // Minimal valid 1x1 PNG.
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        $mime = MimeBuilder::build([
+            'to' => [['email' => 'client@example.com']],
+            'subject' => 'With signature',
+            'bodyHtml' => '<p>Regards</p><img src="data:image/png;base64,'
+                .base64_encode($png).'" width="120" alt="Logo">',
+        ]);
+
+        $this->assertStringContainsString('multipart/related', $mime);
+        $this->assertStringContainsString('Content-ID: <tma-inline-1-', $mime);
+        $this->assertStringContainsString('Content-Disposition: inline; filename="inline-1.png"', $mime);
+        $this->assertStringNotContainsString('data:image/png', $mime);
+
+        // The HTML part must reference the attachment it now travels beside.
+        $html = $this->htmlPart($mime);
+        $this->assertStringContainsString('src="cid:tma-inline-1-', $html);
+        $this->assertStringNotContainsString('data:image/png', $html);
+
+        // And the image part must carry the original bytes.
+        $this->assertStringContainsString(chunk_split(base64_encode($png), 76, "\r\n"), $mime);
+    }
+
+    public function test_repeated_images_collapse_to_one_inline_part(): void
+    {
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+        $img = '<img src="data:image/png;base64,'.base64_encode($png).'">';
+
+        $mime = MimeBuilder::build([
+            'to' => [['email' => 'client@example.com']],
+            'subject' => 'Reply carrying the quoted signature too',
+            'bodyHtml' => '<p>Top</p>'.$img.'<blockquote>'.$img.'</blockquote>',
+        ]);
+
+        $this->assertSame(1, substr_count($mime, 'Content-ID:'));
+        $this->assertSame(2, substr_count($this->htmlPart($mime), 'src="cid:tma-inline-1-'));
+    }
+
+    public function test_an_undecodable_data_uri_is_left_alone(): void
+    {
+        $mime = MimeBuilder::build([
+            'to' => [['email' => 'client@example.com']],
+            'subject' => 'Broken image',
+            'bodyHtml' => '<img src="data:image/png;base64,@@not-base64@@">',
+        ]);
+
+        $this->assertStringNotContainsString('multipart/related', $mime);
+        $this->assertStringNotContainsString('Content-ID:', $mime);
+    }
+
+    /** Decoded HTML part of a multipart/related message. */
+    private function htmlPart(string $mime): string
+    {
+        preg_match('/boundary="([^"]+)"/', $mime, $match);
+        $this->assertNotEmpty($match[1] ?? '', 'expected a multipart boundary');
+
+        foreach (explode('--'.$match[1], $mime) as $part) {
+            if (str_contains($part, 'Content-Type: text/html')) {
+                [, $body] = explode("\r\n\r\n", $part, 2);
+
+                return base64_decode(preg_replace('/\s+/', '', $body), true) ?: '';
+            }
+        }
+
+        $this->fail('no text/html part found');
+    }
 }
