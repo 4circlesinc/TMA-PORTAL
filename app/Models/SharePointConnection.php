@@ -36,6 +36,12 @@ class SharePointConnection extends Model
     public const STATUS_ERROR = 'error';
     public const STATUS_DISCONNECTED = 'disconnected';
 
+    /**
+     * A run that stops heartbeating is dead — even if the row still says
+     * `syncing` because the worker was killed mid-pass.
+     */
+    public const HEARTBEAT_STALE_MINUTES = 5;
+
     protected function casts(): array
     {
         return [
@@ -60,5 +66,26 @@ class SharePointConnection extends Model
     public function pushesBack(): bool
     {
         return $this->direction === 'both' && $this->sync_enabled;
+    }
+
+    /**
+     * What the UI should read — `syncing` only while the run is still alive.
+     *
+     * Queue timeouts and worker restarts leave `status = syncing` with nothing
+     * behind it; without this the progress toast sits at "155,259 of 155,259"
+     * for the full 30-minute lock window even though the job died in a minute.
+     */
+    public function effectiveStatus(): string
+    {
+        if ($this->status !== self::STATUS_SYNCING) {
+            return $this->status;
+        }
+
+        if ($this->last_synced_at === null
+            || $this->last_synced_at->lte(now()->subMinutes(self::HEARTBEAT_STALE_MINUTES))) {
+            return self::STATUS_IDLE;
+        }
+
+        return self::STATUS_SYNCING;
     }
 }

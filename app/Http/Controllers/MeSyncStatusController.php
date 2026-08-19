@@ -227,9 +227,7 @@ class MeSyncStatusController extends Controller
          * abandoned; the status has to read it the same way or the UI keeps
          * reporting a run that no longer exists.
          */
-        $running = $connection->status === SharePointConnection::STATUS_SYNCING
-            && $connection->last_synced_at
-            && $connection->last_synced_at->gt(now()->subMinutes(Synchroniser::LOCK_MINUTES));
+        $running = $connection->effectiveStatus() === SharePointConnection::STATUS_SYNCING;
 
         // Initial walk still in progress, or a run actively holding the lock.
         if ($running || self::initialImportPending($connection)) {

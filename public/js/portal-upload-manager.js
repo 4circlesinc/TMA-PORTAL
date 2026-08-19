@@ -190,20 +190,44 @@
       var c = busy[0];
       title = (c.initialImport ? 'Importing ' : 'Syncing ') + c.name;
       /*
-       * Show a total when we have one.
+       * Two-phase progress: structure first, then content bytes.
        *
-       * The total is summed from folder child counts as folders are
-       * discovered, so early on it can be lower than the number already
-       * imported. Clamping keeps it from reading "780 of 500" — better a
-       * conservative total that catches up than an impossible one.
+       * Phase 1 — structure: folders and file records are created from Graph's
+       * delta feed. done == items mapped so far, total == folder child-count
+       * sum (Graph's own figure). This finishes quickly even for 150k files.
+       *
+       * Phase 2 — content: bytes are fetched from SharePoint on demand. When
+       * structure is 100% done but contentPending > 0 the library is already
+       * fully browsable; files just download on first open (or via warm-content).
+       * Showing "155,629 of 155,629 items" at 100% while 140k files have no
+       * bytes yet is misleading, so we surface the content phase separately.
+       *
+       * itemsTotal is summed from folder child counts as folders arrive, so
+       * early on it can be below the items already recorded — clamp to avoid
+       * "780 of 500". Once structure is complete itemsTotal converges to items.
        */
-      var done = c.items || 0;
-      var total = c.itemsTotal ? Math.max(c.itemsTotal, done) : 0;
-      detail = total
-        ? num(done) + ' of ' + num(total) + ' items'
-        : num(done) + ' items so far';
+      var structureDone = c.items || 0;
+      var structureTotal = c.itemsTotal ? Math.max(c.itemsTotal, structureDone) : 0;
+      var contentPending = c.contentPending || 0;
+
+      var structureComplete = structureTotal > 0 && structureDone >= structureTotal;
+
+      if (structureComplete && contentPending > 0) {
+        // Phase 2: structure is in, bytes are coming.
+        detail = num(structureDone) + ' items · ' + num(contentPending) + ' files still downloading';
+        // Progress bar reflects content: full structure = content at 0%, so
+        // show an indeterminate bar — we don't know total bytes, only count.
+        pct = null;
+      } else {
+        // Phase 1: still building the record structure.
+        var done = structureDone;
+        var total = structureTotal;
+        detail = total
+          ? num(done) + ' of ' + num(total) + ' items'
+          : num(done) + ' items so far';
+        if (total) pct = Math.max(2, Math.min(100, Math.round((done / total) * 100)));
+      }
       detail += (busy.length > 1 ? ' · ' + (busy.length - 1) + ' more queued' : '');
-      if (total) pct = Math.max(2, Math.min(100, Math.round((done / total) * 100)));
     } else {
       isError = true;
       var f = failed[0];

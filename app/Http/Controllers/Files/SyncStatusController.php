@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\FileItem;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Support\Access\Role;
 use App\Support\Imports\ImportPause;
+use App\Support\SharePoint\RemoteContent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,6 +39,13 @@ class SyncStatusController extends BaseFilesController
             ->get();
 
         $rows = $connections->map(function (SharePointConnection $c) {
+            // A dead worker leaves `status = syncing` — settle it on read so
+            // the toast does not pin itself at "155,259 of 155,259" for ever.
+            if ($c->status === SharePointConnection::STATUS_SYNCING
+                && $c->effectiveStatus() === SharePointConnection::STATUS_IDLE) {
+                $c->update(['status' => SharePointConnection::STATUS_IDLE]);
+            }
+
             $failed = SharePointItem::where('connection_id', $c->id)
                 ->where('sync_status', SharePointItem::FAILED)->count();
             $conflicts = SharePointItem::where('connection_id', $c->id)
@@ -49,7 +58,7 @@ class SyncStatusController extends BaseFilesController
                 // folder is what the reader actually recognises.
                 'name' => $c->folder?->name ?: ($c->site_name ?: $c->drive_name),
                 'folder' => $c->folder ? ['id' => $c->folder->uuid, 'name' => $c->folder->name] : null,
-                'status' => $c->status,
+                'status' => $c->effectiveStatus(),
                 'enabled' => (bool) $c->sync_enabled,
                 'importsPaused' => ImportPause::connection($c),
                 'items' => SharePointItem::where('connection_id', $c->id)->count(),
@@ -72,6 +81,19 @@ class SyncStatusController extends BaseFilesController
                 // A connection that has never finished is "importing", which
                 // reads very differently from "syncing" on an established one.
                 'initialImport' => $c->last_success_at === null,
+                /*
+                 * Files whose structure is imported but whose bytes have not
+                 * been fetched yet. Structure-complete + content_pending > 0
+                 * means the library is browsable but files will download on
+                 * first open. Exposed so the toast can say "140,926 files still
+                 * downloading" rather than "155,629 of 155,629 items" (done).
+                 */
+                'contentPending' => FileItem::whereIn(
+                    'id',
+                    SharePointItem::where('connection_id', $c->id)
+                        ->whereNotNull('file_id')
+                        ->select('file_id')
+                )->where('content_state', RemoteContent::PENDING)->count(),
             ];
         });
 

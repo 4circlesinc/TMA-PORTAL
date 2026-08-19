@@ -209,6 +209,10 @@ class Synchroniser
                 // Remember where we got to, so a run that hits the page cap
                 // resumes from there instead of starting over.
                 $connection->update(['delta_link' => $link]);
+
+                // Heartbeat: a worker killed mid-run stops updating this, so
+                // the UI can tell a dead lock from a live one within minutes.
+                $connection->update(['last_synced_at' => now()]);
             }
 
             self::reconcileDeletions($connection, $changedFolders, $stats);

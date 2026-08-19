@@ -6,6 +6,7 @@ use App\Models\SharePointConnection;
 use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Bus\Queueable;
+use Illuminate\Support\Str;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,6 +28,9 @@ class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
     public int $tries = 3;
 
     public array $backoff = [30, 120, 300];
+
+    /** Large libraries (150k+ items) need room for delta + reconciliation. */
+    public int $timeout = 1800;
 
     /** Seconds before a chained follow-up run starts. */
     private const CHAIN_DELAY = 2;
@@ -69,5 +73,27 @@ class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
         if (isset($result['complete']) && $result['complete'] === false) {
             self::dispatch($this->connectionId)->delay(now()->addSeconds(self::CHAIN_DELAY));
         }
+    }
+
+    /**
+     * Worker timeout / SIGKILL never reaches Synchroniser's catch — release the
+     * lock here or the library reads as "syncing" until the 30-minute window
+     * expires and the next run takes over.
+     */
+    public function failed(\Throwable $e): void
+    {
+        $connection = SharePointConnection::find($this->connectionId);
+
+        if (! $connection || $connection->status !== SharePointConnection::STATUS_SYNCING) {
+            return;
+        }
+
+        $connection->update([
+            'status' => SharePointConnection::STATUS_IDLE,
+            'last_error' => Str::limit($e->getMessage(), 500),
+            'error_count' => $connection->error_count + 1,
+        ]);
+
+        Synchroniser::log($connection, 'sync-failed', 'error', null, $e->getMessage());
     }
 }
