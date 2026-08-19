@@ -129,7 +129,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=4';
+    link.href = (ROOT || '') + 'css/presence.css?v=5';
     document.head.appendChild(link);
   }
 
@@ -138,7 +138,6 @@
     var p = primary();
     var label = p.label || meta(p.status).label;
     var slug = p.status || 'online';
-    var desktopBar = document.documentElement.classList.contains('tma-desktop-has-shell');
 
     var pillHtml =
       iconHtml(p.icon || meta(slug).icon, 8) +
@@ -152,11 +151,8 @@
       el.setAttribute('aria-label', 'Status: ' + label + '. Click to change.');
     });
 
-    document.querySelectorAll('[data-presence-header]').forEach(function (wrap) {
-      wrap.hidden = desktopBar;
-    });
     document.querySelectorAll('[data-presence-titlebar]').forEach(function (wrap) {
-      wrap.hidden = !desktopBar;
+      wrap.hidden = true;
     });
   }
 
@@ -174,33 +170,38 @@
   }
 
   function ensureSlots() {
-    /* Browser / web: beside the page title (breadcrumb) in header-left. */
-    document.querySelectorAll('.tma-dash__header-left').forEach(function (left) {
-      var crumb = left.querySelector('[data-breadcrumb]');
-      if (!crumb) return;
-      var wrap = left.querySelector('[data-presence-header]');
+    /* Browser / desktop shell: right side of header, beside toolbar icons. */
+    document.querySelectorAll('.tma-dash__header-right').forEach(function (right) {
+      var icons = right.querySelector('.tma-dash__header-icons');
+      if (!icons) return;
+      var wrap = right.querySelector('[data-presence-header]');
       if (!wrap) {
         wrap = document.createElement('div');
         wrap.className = 'tma-dash__header-presence';
         wrap.setAttribute('data-presence-header', '');
         wrap.appendChild(makePresenceButton());
-        crumb.insertAdjacentElement('afterend', wrap);
-      } else if (!wrap.querySelector('[data-presence-indicator]')) {
-        wrap.appendChild(makePresenceButton());
+        icons.insertAdjacentElement('beforebegin', wrap);
+      } else {
+        if (!wrap.querySelector('[data-presence-indicator]')) {
+          wrap.appendChild(makePresenceButton());
+        }
+        if (wrap.parentElement !== right || wrap.nextElementSibling !== icons) {
+          icons.insertAdjacentElement('beforebegin', wrap);
+        }
       }
       wrap.querySelectorAll('[data-presence-user-name]').forEach(function (el) { el.remove(); });
     });
 
-    /* Desktop app: beside the window title in the blue title bar. */
-    var tbWrap = document.querySelector('[data-presence-titlebar]');
-    if (tbWrap && !tbWrap.querySelector('[data-presence-indicator]')) {
-      tbWrap.appendChild(makePresenceButton());
-    }
-
-    /* Legacy placements — sidebar and header-right from earlier builds. */
-    document.querySelectorAll('.tma-dash__profile-meta [data-presence-indicator], .tma-dash__header-right [data-presence-header]').forEach(function (el) {
-      var block = el.closest('[data-presence-header]') || el;
-      block.remove();
+    /* Legacy placements — title area, sidebar, duplicate slots. */
+    document.querySelectorAll(
+      '.tma-dash__header-left [data-presence-header], .tma-dash__profile-meta [data-presence-indicator], [data-presence-titlebar] [data-presence-indicator]'
+    ).forEach(function (el) {
+      var block = el.closest('[data-presence-header]') || el.closest('[data-presence-titlebar]') || el;
+      if (block.matches('[data-presence-titlebar]')) {
+        el.remove();
+      } else {
+        block.remove();
+      }
     });
   }
 
@@ -580,11 +581,12 @@
     ensureSlots();
     paintHeader();
 
-    /* Desktop title bar rebuilds its innerHTML on navigation — re-mount the pill. */
-    if (!document.documentElement.dataset.tmaPresenceTbWatch) {
-      document.documentElement.dataset.tmaPresenceTbWatch = '1';
+    /* Portal morph may rebuild the header — re-mount the pill beside icons. */
+    if (!document.documentElement.dataset.tmaPresenceHeaderWatch) {
+      document.documentElement.dataset.tmaPresenceHeaderWatch = '1';
       new MutationObserver(function () {
-        if (document.querySelector('[data-presence-titlebar]') && !document.querySelector('[data-presence-titlebar] [data-presence-indicator]')) {
+        var right = document.querySelector('.tma-dash__header-right');
+        if (right && right.querySelector('.tma-dash__header-icons') && !right.querySelector('[data-presence-header] [data-presence-indicator]')) {
           ensureSlots();
           paintHeader();
         }

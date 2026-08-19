@@ -536,8 +536,7 @@ function script({ canGoBack, canGoForward }) {
       + button('reload', 'Reload', true).trim()
       + '</div>'
       + '<span class="tma-tb-sep">|</span>'
-      + '<span class="tma-tb-title"></span>'
-      + '<span class="tma-tb-presence-wrap" data-presence-titlebar></span>',
+      + '<span class="tma-tb-title"></span>',
   )};
 
     const nav = bar.querySelector('.tma-tb-nav');

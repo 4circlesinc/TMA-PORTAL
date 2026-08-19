@@ -1,11 +1,16 @@
-/* TMA — presence pill beside the window / page title */
+/* TMA — presence pill in the header toolbar (right, beside icons) */
 
 .tma-dash__header-presence,
 .tma-tb-presence-wrap {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  margin-left: var(--space-10, 10px);
+  margin: 0;
+}
+
+/* Match .tma-dash__header-icons internal gap when the pill sits beside icons */
+.tma-dash__header-right:has([data-presence-header]) {
+  gap: var(--space-8);
 }
 
 .tma-presence-pill {
@@ -276,10 +281,6 @@
 }
 
 @media (max-width: 767px) {
-  .tma-dash__header-presence {
-    margin-left: var(--space-6, 6px);
-  }
-
   .tma-presence-pill {
     max-width: min(180px, 44vw);
   }
