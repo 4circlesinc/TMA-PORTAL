@@ -8,6 +8,7 @@ use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Files\FileAccess;
 
 /**
  * "People with access", expressed as the *reasons* people have access rather
@@ -55,22 +56,28 @@ class AccessSources
         }
 
         // 2. Administrators hold every capability by definition (Role::MATRIX),
-        //    so they always have access whether or not anything is shared.
-        $admins = User::query()
-            ->where('account_type', Role::ADMINISTRATOR)
-            ->where('status', User::STATUS_APPROVED)
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url']);
+        //    so they always have access — UNLESS the file sits inside a personal
+        //    OneDrive. FileAccess bypasses the admin short-circuit for personal
+        //    drives (the firm's rule: a personal drive is the owner's alone), so
+        //    the panel must mirror that and not advertise admin access that the
+        //    server would actually refuse.
+        if (! FileAccess::isInPersonalDrive($file)) {
+            $admins = User::query()
+                ->where('account_type', Role::ADMINISTRATOR)
+                ->where('status', User::STATUS_APPROVED)
+                ->orderBy('name')
+                ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url']);
 
-        if ($admins->isNotEmpty()) {
-            $sources[] = self::source(
-                key: 'administrators',
-                label: 'Administrators',
-                detail: self::count($admins->count(), 'administrator'),
-                role: 'full',
-                icon: 'ShieldCheck',
-                members: $admins->map(fn (User $u) => self::person($u))->all(),
-            );
+            if ($admins->isNotEmpty()) {
+                $sources[] = self::source(
+                    key: 'administrators',
+                    label: 'Administrators',
+                    detail: self::count($admins->count(), 'administrator'),
+                    role: 'full',
+                    icon: 'ShieldCheck',
+                    members: $admins->map(fn (User $u) => self::person($u))->all(),
+                );
+            }
         }
 
         // 3. Whatever the containing folder chain grants on its own — the
@@ -229,10 +236,20 @@ class AccessSources
         return $total === 1 ? 'Only you' : $total.' people';
     }
 
-    /** Mirrors FileAccess::organizationDefaultRole — client folders only. */
+    /**
+     * Mirrors FileAccess::organizationDefaultRole exactly.
+     *
+     * Two exclusions kept in step with the authorization layer:
+     *  - anything under a client folder (never firm-wide by design)
+     *  - anything in a personal OneDrive (owner decides, not the firm default)
+     */
     private static function orgDefaultApplies(FileItem $file): bool
     {
         if (! \App\Models\FileLibrarySetting::defaultOrgAccess()) {
+            return false;
+        }
+
+        if (FileAccess::isInPersonalDrive($file)) {
             return false;
         }
 

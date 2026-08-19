@@ -195,11 +195,15 @@ class BrowserController extends BaseFilesController
     /** @return array{0: ?Builder, 1: ?Builder} [folderQuery, fileQuery] */
     private function queriesFor(string $section, User $user, ?Folder $current, Request $request): array
     {
-        // When browsing inside a folder, list that folder's direct children.
+        // When browsing inside a folder, list that folder's direct children,
+        // scoped to what this user may actually see. Without the visibility
+        // scope an admin browsing a client folder returns every subfolder and
+        // file even if they have no access, and a large client folder returns
+        // the whole unindexed table for non-admin users.
         if ($current) {
             return [
-                Folder::query()->where('parent_id', $current->id),
-                FileItem::query()->where('folder_id', $current->id),
+                $this->visibleFolders($user)->where('parent_id', $current->id),
+                $this->visibleFiles($user)->where('folder_id', $current->id),
             ];
         }
 

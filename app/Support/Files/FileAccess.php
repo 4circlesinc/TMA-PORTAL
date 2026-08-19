@@ -50,6 +50,18 @@ class FileAccess
         return Role::isAdmin($user);
     }
 
+    /**
+     * Whether this file sits inside a personal OneDrive space.
+     *
+     * Used by AccessSources to decide whether to include the administrators
+     * source in the "Shared with" panel. Admin access is bypassed for personal
+     * drives, so the panel must not advertise it.
+     */
+    public static function isInPersonalDrive(FileItem $file): bool
+    {
+        return self::personalSpaceOwner($file->folder_id, $file->owner_id) !== null;
+    }
+
     /** Staff = internal users (never clients). Drives org/client/staff access. */
     public static function isStaff(User $user): bool
     {
