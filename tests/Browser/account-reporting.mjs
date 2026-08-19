@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 
+// Reporting is a main page; Notification History and Branding stay under
 // Account settings → Account and Reporting. PHPUnit covers the endpoints
 // (ReportingTest, NotificationHistoryTest, BrandingTest); what only a browser
 // can check is that the three pages are *wired* to them at all.
@@ -54,6 +55,11 @@ async function openSettings(page, section) {
   await page.waitForTimeout(1200);
 }
 
+async function openReporting(page) {
+  await page.goto(`${BASE}/reporting`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+}
+
 const text = (page) => page.evaluate(() => document.querySelector('.tma-portal-admin__content')?.innerText || '');
 
 const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
@@ -64,7 +70,7 @@ try {
 
   /* ── Reporting ────────────────────────────────────────────────── */
   step(1, 'Reporting opens against the server, not a localStorage list');
-  await openSettings(page, 'reporting');
+  await openReporting(page);
 
   check(await page.locator('[data-rep-create]').count() > 0, 'Create Report button rendered');
   check((await text(page)).includes('No reports have been created yet'), 'starts with a real empty state');
@@ -111,7 +117,7 @@ try {
 
   step(5, 'The page does not come from localStorage');
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-  await openSettings(page, 'reporting');
+  await openReporting(page);
   const afterWipe = await page.locator('[data-rep-open]').count();
   check(afterWipe === 2, `reports still listed with storage wiped (saw ${afterWipe})`);
 

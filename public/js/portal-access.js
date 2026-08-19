@@ -29,6 +29,7 @@
     'email': 'mail.use',
     'so-feed': 'feed.view',
     'users': 'users.view',
+    'reporting': 'settings.reporting',
     'templates': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
@@ -70,7 +71,6 @@
      together. */
   var SETTINGS_CAPABILITIES = {
     'background-ops': 'settings.operations',
-    'reporting': 'settings.reporting',
     'notification-history': 'settings.reporting',
     'branding': 'settings.branding',
     'clienthub-access': 'settings.clientHub',

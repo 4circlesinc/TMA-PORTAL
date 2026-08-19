@@ -145,6 +145,11 @@
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
           <span>Users</span>
         </a>
+        <a class="tma-dash__nav-item" href="/reporting" data-nav="reporting" data-title="Reporting" data-crumb="Reporting" data-view="reporting">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--chartbar" aria-hidden="true"></span>
+          <span>Reporting</span>
+        </a>
         <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
@@ -393,6 +398,10 @@
         <div class="tma-dash__users" data-users></div>
       </div>
 
+      <div class="tma-dash__view" data-view="reporting" hidden>
+        <div data-portal-mount></div>
+      </div>
+
       <div class="tma-dash__view" data-view="email" hidden>
         <div class="tma-dash__email" data-email></div>
       </div>
@@ -530,6 +539,9 @@
       <div class="tma-dash__mmenu-card">
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>Users</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="reporting" data-title="Reporting" data-crumb="Reporting" data-view="reporting">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChartBar.svg" alt=""><span>Reporting</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Templates</span>

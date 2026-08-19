@@ -158,7 +158,7 @@ class PortalAccessTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $administration = [
-            'background-ops', 'reporting', 'notification-history',
+            'background-ops', 'notification-history',
             'branding', 'clienthub-access',
             'service-teams', 'custom-fields', 'security-policy', 'signin-policy',
             'alert-settings', 'storage-usage',

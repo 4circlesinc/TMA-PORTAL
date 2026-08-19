@@ -66,6 +66,7 @@ class LegacyPageController extends Controller
         'projects/all',
         'projects/closed',
         'projects/recently_deleted',
+        'reporting',
         'settings',
         'settings/change-email',
         'signatures',
@@ -125,6 +126,12 @@ class LegacyPageController extends Controller
             // concerned — 404, not 403, so the portal never advertises the
             // staff tooling a client can't reach.
             abort_unless(Role::canViewPage($request->user(), $page), 404);
+
+            // Reporting used to live under Account settings. Bookmarks and
+            // search results still carry that query; send them to the page.
+            if ($page === 'account-settings' && $request->query('settings-page') === 'reporting') {
+                return redirect('/reporting');
+            }
 
             // Hard-refreshing a portal URL gets the same shell the dashboard
             // does, capabilities and no-store headers included — otherwise the

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-15-cip-applications';
+  var NAV_SHELL_VERSION = '2026-08-18-reporting';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -33,6 +33,7 @@
   ];
   var APPROVED_PAGES_NAV = [
     'users',
+    'reporting',
     'templates',
     'projects',
     'workflows',
@@ -45,6 +46,7 @@
   });
   var APPROVED_MOBILE_PAGES = [
     'users',
+    'reporting',
     'templates',
     'projects-all',
     'workflows-automated',
@@ -297,6 +299,14 @@
           crumb: 'Users',
         };
       }
+      if (p === '/reporting') {
+        return {
+          navId: 'reporting',
+          view: 'reporting',
+          title: 'Reporting',
+          crumb: 'Reporting',
+        };
+      }
       if (p === '/projects') {
         return {
           navId: 'dash-projects',
@@ -520,6 +530,7 @@
         return clientsPathFor(extra.clientsScreen || 'list', extra.contactId);
       }
       if (view === 'users' || navId === 'users') return '/users';
+      if (view === 'reporting' || navId === 'reporting') return '/reporting';
       if (view === 'add-data') return '/users/new';
       if (view === 'overview' || navId === 'dash-project-overview') return '/overview';
       if (view === 'settings' || navId === 'settings' || navId === 'ac-settings') {
@@ -1348,6 +1359,13 @@
             crumb: 'Messages',
             openConversationId: params.conversation || null,
           });
+          return true;
+        }
+      }
+
+      if (base === '/reporting' || (base === '/account-settings' && params['settings-page'] === 'reporting')) {
+        if (root.querySelector('.tma-dash__view[data-view="reporting"]')) {
+          activate('reporting', { view: 'reporting', title: 'Reporting', crumb: 'Reporting' });
           return true;
         }
       }
@@ -2626,6 +2644,15 @@
         });
         return;
       }
+      if (item.adminPage === 'reporting' || item.navId === 'reporting') {
+        activate('reporting', {
+          view: 'reporting',
+          title: 'Reporting',
+          crumb: 'Reporting',
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
       if (item.adminPage) {
         activate('account-settings', {
           view: 'admin',
@@ -3058,7 +3085,14 @@
       root.classList.remove('tma-dash--signatures-wizard');
       document.documentElement.classList.remove('tma-dash--signatures-wizard');
     }
-    if (bootSettingsPage) {
+    if (bootSettingsPage === 'reporting') {
+      activate('reporting', {
+        view: 'reporting',
+        title: 'Reporting',
+        crumb: 'Reporting',
+        keepDrawer: true,
+      });
+    } else if (bootSettingsPage) {
       activate('account-settings', {
         view: 'admin',
         adminPage: bootSettingsPage,

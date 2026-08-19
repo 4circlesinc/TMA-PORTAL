@@ -4418,6 +4418,15 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+.tma-portal-admin--page {
+  display: block;
+  overflow: auto;
+}
+
+.tma-portal-admin--page .tma-portal-admin__content {
+  width: 100%;
+}
+
 /*
  * Tables keep their height; the pane is what scrolls.
  *

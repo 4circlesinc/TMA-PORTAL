@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\LegacyPageController;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,8 +46,8 @@ class EmployeeReachTest extends TestCase
     private function pages(): array
     {
         $pages = array_values(array_diff(array_merge(
-            \App\Http\Controllers\LegacyPageController::SPA_PAGES,
-            \App\Http\Controllers\LegacyPageController::STANDALONE_PAGES,
+            LegacyPageController::SPA_PAGES,
+            LegacyPageController::STANDALONE_PAGES,
         ), ['settings']));
 
         sort($pages);
@@ -58,7 +59,7 @@ class EmployeeReachTest extends TestCase
     {
         $officer = $this->user(Role::REVIEWING_OFFICER);
 
-        foreach (['users', 'users/new', 'people',
+        foreach (['users', 'users/new', 'reporting', 'people',
             'people/employees', 'people/clients', 'people/prospects',
             'people/shared-address-book', 'people/personal-address-book',
             'people/distribution-groups', 'people/resend-welcome-emails'] as $page) {

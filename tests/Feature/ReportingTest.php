@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Settings → Account and Reporting → Reporting.
+ * Reporting — a main page for administrators.
  *
  * The page used to file a name and a date into localStorage, so the things
  * worth pinning here are the ones that make a report a report: that the
@@ -140,6 +140,20 @@ class ReportingTest extends TestCase
 
         // And nothing was created on the way to being refused.
         $this->assertSame(0, Report::count());
+    }
+
+    public function test_reporting_is_a_main_page_for_administrators(): void
+    {
+        $admin = $this->user();
+
+        $this->actingAs($admin)->get('/reporting')->assertOk();
+        $this->actingAs($this->user('Reviewing Officer', 'rita@example.com'))
+            ->get('/reporting')->assertNotFound();
+        $this->actingAs($this->user('Client', 'pat@example.com'))
+            ->get('/reporting')->assertNotFound();
+
+        $this->actingAs($admin)->get('/account-settings?settings-page=reporting')
+            ->assertRedirect('/reporting');
     }
 
     /* ── the numbers are real ──────────────────────────────────────── */

@@ -26,6 +26,7 @@
   function access() { return window.TMAPortalAccess; }
 
   function allowed(pageId) {
+    if (pageId === 'reporting') return false;
     var a = access();
     return !a || !a.canSettingsPage || a.canSettingsPage(pageId);
   }
@@ -48,7 +49,6 @@
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
     { id: 'background-ops', label: 'Background Operations', icon: 'ArrowsClockwise' },
     { group: 'reporting-group', label: 'Account and Reporting', icon: 'ChartBar', items: [
-      { id: 'reporting', label: 'Reporting' },
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
@@ -3665,5 +3665,17 @@
   }
 
   window.TMAPortalAdmin = { setPage: setPage };
-  if (window.TMAPortalViews) window.TMAPortalViews.register('admin', mount);
+  function mountReporting(el) {
+    el.innerHTML =
+      '<div class="tma-portal-page"><div class="tma-portal-admin tma-portal-admin--page">' +
+      '<div class="tma-portal-admin__content">' +
+      '<h2 class="tma-portal-admin__page-title">Reporting</h2>' +
+      PAGES['reporting'].render() +
+      '</div></div></div>';
+    PAGES['reporting'].wire(el.querySelector('.tma-portal-admin__content'));
+  }
+  if (window.TMAPortalViews) {
+    window.TMAPortalViews.register('admin', mount);
+    window.TMAPortalViews.register('reporting', mountReporting);
+  }
 })();

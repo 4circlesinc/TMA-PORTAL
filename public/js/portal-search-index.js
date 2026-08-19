@@ -29,7 +29,6 @@
     { id: 'plugins', label: 'Plugins', group: 'Settings' },
     { id: 'admin-overview', label: 'Admin Overview', group: 'Settings' },
     { id: 'background-ops', label: 'Background Operations', group: 'Settings' },
-    { id: 'reporting', label: 'Reporting', group: 'Account and Reporting' },
     { id: 'notification-history', label: 'Notification History', group: 'Account and Reporting' },
     { id: 'branding', label: 'Edit Company Branding', group: 'Account and Reporting' },
     { id: 'clienthub-access', label: 'Client hub access', group: 'Client hub management' },

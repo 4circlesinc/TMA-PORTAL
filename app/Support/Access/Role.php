@@ -271,7 +271,7 @@ class Role
         'settings.security' => [],
         // The queue of long-running jobs for the whole firm.
         'settings.operations' => [],
-        // Usage reports and the firm-wide notification history.
+        // Usage reports, CIP reports, and the firm-wide notification history.
         'settings.reporting' => [],
         // The company name, logo and colours every account sees.
         'settings.branding' => [],
@@ -308,6 +308,9 @@ class Role
         'folders/all' => 'files.viewOrg',
         'folders/shared' => 'files.viewOrg',
         'overview' => 'overview.view',
+        // Firm-wide reports — usage, access, messaging, storage, and CIP.
+        // Lives as a main page, not a settings rail section.
+        'reporting' => 'settings.reporting',
         // The People section, screen by screen. These mirror portal-access.js
         // exactly: the sidebar hides what the server would refuse. A screen
         // may list several capabilities, and then *all* of them are required —
@@ -346,7 +349,6 @@ class Role
      */
     private const SETTINGS_PAGE_CAPABILITIES = [
         'background-ops' => 'settings.operations',
-        'reporting' => 'settings.reporting',
         'notification-history' => 'settings.reporting',
         'branding' => 'settings.branding',
         'clienthub-access' => 'settings.clientHub',

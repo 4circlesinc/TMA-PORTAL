@@ -19,7 +19,7 @@ use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Settings → Account and Reporting → Reporting.
+ * The Reporting page — a main sidebar page for administrators.
  *
  * The page offered "Create Report" and then filed a name and a date into
  * localStorage — no numbers, nothing to open, gone with the browser cache.
