@@ -71,11 +71,10 @@
   position: fixed;
   left: 50%;
   bottom: calc(48px + env(safe-area-inset-bottom, 0px));
-  /* Above full-screen overlays (the signature wizard is 280, modals 260, the
-     file context menu 500). A toast is the app talking to you: at 150 it was
-     painted underneath the wizard's footer, so errors raised from inside it
-     were invisible and the page looked like it had simply ignored the click. */
-  z-index: 600;
+  /* Above portal modals (620) and context menus (640). Feedback toasts must
+     remain visible while a modal is open — e.g. "Locations saved" from
+     presence settings. Popovers/menus above this band use 1000+. */
+  z-index: 650;
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -108,7 +107,7 @@
 
 .tma-notify-toast-host {
   position: fixed;
-  z-index: 600;
+  z-index: 650;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -557,7 +556,7 @@
 
 .tma-sync-toast-host {
   position: fixed;
-  z-index: 600;
+  z-index: 650;
   display: flex;
   flex-direction: column; /* vertical list: one card per row */
   align-items: stretch;   /* full-width rows — never side-by-side chips */
