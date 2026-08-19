@@ -2161,11 +2161,12 @@
   border-radius: var(--radius-16);
   padding: var(--space-8);
 }
-.tma-dash__toolbar-start {
+.tma-dash__toolbar-end {
   display: flex;
   align-items: center;
   gap: var(--space-8);
   min-width: 0;
+  margin-left: auto;
 }
 .tma-dash__users .tma-dash__toolbar .tma-dash__view-toggle {
   flex-shrink: 0;

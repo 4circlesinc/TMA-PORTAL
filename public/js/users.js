@@ -508,10 +508,6 @@ if (state.filters.user) {
     var selectionLabel = count === 1 ? '1 Selected' : count + ' Selected';
 
     return '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
-        '<div class="tma-dash__toolbar-start">' +
-          renderSearchBar(state) +
-          (state.isOverview ? '' : renderViewToggle(state)) +
-        '</div>' +
         '<div class="tma-dash__toolbar-actions">' +
           (state.canManage
             ? '<button type="button" class="tma-dash__tool-btn" aria-label="Add row" data-users-add><img src="' + ICONS.Plus + '" alt=""></button>'
@@ -523,6 +519,10 @@ if (state.filters.user) {
             '<span class="tma-dash__toolbar-selection" data-users-selection-count aria-live="polite">' + selectionLabel + '</span>' +
             renderBulkToolBtn('delete', ICONS.Trash, 'Delete selected users') +
           '</div>' +
+        '</div>' +
+        '<div class="tma-dash__toolbar-end">' +
+          renderSearchBar(state) +
+          (state.isOverview ? '' : renderViewToggle(state)) +
         '</div>' +
       '</div>';
   }
