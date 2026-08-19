@@ -4,6 +4,8 @@
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   border-radius: 16px;
   background: rgba(0, 0, 0, 0.8);
   background-image:
@@ -49,6 +51,7 @@
 .tma-toast__text {
   margin: 0;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .tma-toast--big .tma-toast__text {
@@ -59,10 +62,6 @@
 .tma-toast--small .tma-toast__text {
   font-size: 12px;
   line-height: 16px;
-}
-
-.tma-toast--failure.tma-toast--big {
-  width: 174px;
 }
 
 /* Floating toast - viewport placement (toast.js showFloatingToast) */
@@ -77,12 +76,15 @@
   z-index: 650;
   transform: translateX(-50%);
   pointer-events: none;
+  width: max-content;
+  max-width: calc(100vw - 32px);
 }
 
 .tma-toast-floating-host .tma-toast {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.28s ease, transform 0.28s ease;
+  white-space: normal;
 }
 
 .tma-toast-floating-host[data-visible] .tma-toast {

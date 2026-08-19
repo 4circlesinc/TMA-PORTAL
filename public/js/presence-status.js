@@ -172,11 +172,27 @@
     });
   }
 
+  function writeLocCoords(root, prefix, lat, lng, updateMap) {
+    var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
+    var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
+    var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
+    if (latEl) latEl.value = lat;
+    if (lngEl) lngEl.value = lng;
+    if (coordsEl) {
+      coordsEl.textContent = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
+      coordsEl.hidden = false;
+    }
+    if (updateMap) {
+      var entry = locationMaps[prefix];
+      if (entry && entry.setPosition) entry.setPosition(lat, lng, locRadius(root, prefix));
+    }
+  }
+
   function syncCoordsFromMap(root, prefix) {
     var entry = locationMaps[prefix];
     if (!entry || !entry.marker) return;
     var p = entry.marker.getLatLng();
-    setLocCoords(root, prefix, p.lat, p.lng);
+    writeLocCoords(root, prefix, p.lat, p.lng, false);
   }
 
   function syncAllCoordsFromMaps(root) {
@@ -187,10 +203,27 @@
 
   function locCoords(root, prefix) {
     syncCoordsFromMap(root, prefix);
-    var lat = parseFloat(root.querySelector('[data-loc-' + prefix + '-lat]').value);
-    var lng = parseFloat(root.querySelector('[data-loc-' + prefix + '-lng]').value);
-    if (isNaN(lat) || isNaN(lng)) return null;
-    return { lat: lat, lng: lng };
+    var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
+    var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
+    if (!latEl || !lngEl) return null;
+    var lat = parseFloat(latEl.value);
+    var lng = parseFloat(lngEl.value);
+    if (!isNaN(lat) && !isNaN(lng)) return { lat: lat, lng: lng };
+
+    /* Visible coords can be set while hidden inputs are still catching up. */
+    var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
+    if (coordsEl && !coordsEl.hidden && coordsEl.textContent.trim()) {
+      var parts = coordsEl.textContent.trim().split(',');
+      if (parts.length >= 2) {
+        lat = parseFloat(parts[0]);
+        lng = parseFloat(parts[1]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          writeLocCoords(root, prefix, lat, lng, false);
+          return { lat: lat, lng: lng };
+        }
+      }
+    }
+    return null;
   }
 
   function locRadius(root, prefix) {
@@ -198,21 +231,11 @@
   }
 
   function setLocCoords(root, prefix, lat, lng) {
-    var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
-    var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
-    var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
-    if (latEl) latEl.value = lat;
-    if (lngEl) lngEl.value = lng;
-    if (coordsEl) {
-      coordsEl.textContent = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
-      coordsEl.hidden = false;
-    }
-    var entry = locationMaps[prefix];
-    if (entry && entry.setPosition) entry.setPosition(lat, lng, locRadius(root, prefix));
+    writeLocCoords(root, prefix, lat, lng, true);
   }
 
   function applyLocationOnMap(root, prefix, lat, lng, addressLabel) {
-    setLocCoords(root, prefix, lat, lng);
+    writeLocCoords(root, prefix, lat, lng, true);
     var entry = locationMaps[prefix];
     if (entry && entry.map) {
       entry.map.setView([lat, lng], 16, { animate: true });
@@ -220,6 +243,18 @@
     }
     var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
     if (addressEl && addressLabel) addressEl.value = addressLabel;
+  }
+
+  function fillAddressLabel(root, prefix, lat, lng, fallback) {
+    reverseGeocodeAddress(lat, lng)
+      .then(function (res) {
+        var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
+        if (addressEl) addressEl.value = (res && res.label) ? res.label : fallback;
+      })
+      .catch(function () {
+        var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
+        if (addressEl && fallback) addressEl.value = fallback;
+      });
   }
 
   function useCurrentLocation(root, prefix, mapsReady) {
@@ -247,19 +282,17 @@
         var lng = pos.coords.longitude;
         var fallbackAddress = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
 
-        function finish(label) {
-          var apply = function () {
-            applyLocationOnMap(root, prefix, lat, lng, label || fallbackAddress);
-            toast('Location set on map.', true);
-            done();
-          };
-          if (mapsReady && typeof mapsReady.then === 'function') mapsReady.then(apply).catch(apply);
-          else apply();
+        function placeOnMap() {
+          applyLocationOnMap(root, prefix, lat, lng, fallbackAddress);
+          fillAddressLabel(root, prefix, lat, lng, fallbackAddress);
+          toast('Location set on map.', true);
+          done();
         }
 
-        reverseGeocodeAddress(lat, lng)
-          .then(function (res) { finish(res && res.label ? res.label : fallbackAddress); })
-          .catch(function () { finish(fallbackAddress); });
+        writeLocCoords(root, prefix, lat, lng, false);
+        fillAddressLabel(root, prefix, lat, lng, fallbackAddress);
+        if (mapsReady && typeof mapsReady.then === 'function') mapsReady.then(placeOnMap).catch(placeOnMap);
+        else placeOnMap();
       },
       function (err) {
         var msg = 'Location permission denied.';
@@ -322,11 +355,8 @@
           }).addTo(map);
           marker.on('dragend', function () {
             var p = marker.getLatLng();
-            reverseGeocodeAddress(p.lat, p.lng).then(function (res) {
-              applyLocationOnMap(root, prefix, p.lat, p.lng, res && res.label ? res.label : null);
-            }).catch(function () {
-              applyLocationOnMap(root, prefix, p.lat, p.lng, null);
-            });
+            applyLocationOnMap(root, prefix, p.lat, p.lng, null);
+            fillAddressLabel(root, prefix, p.lat, p.lng, null);
           });
         }
         return marker;
@@ -338,15 +368,7 @@
         circle.setLatLng([lat, lng]);
         circle.setRadius(radius || locRadius(root, prefix));
         map.panTo([lat, lng], { animate: true });
-        var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
-        var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
-        var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
-        if (latEl) latEl.value = lat;
-        if (lngEl) lngEl.value = lng;
-        if (coordsEl) {
-          coordsEl.textContent = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
-          coordsEl.hidden = false;
-        }
+        writeLocCoords(root, prefix, lat, lng, false);
       }
 
       if (hasPin) {
@@ -354,11 +376,8 @@
       }
 
       map.on('click', function (e) {
-        reverseGeocodeAddress(e.latlng.lat, e.latlng.lng).then(function (res) {
-          applyLocationOnMap(root, prefix, e.latlng.lat, e.latlng.lng, res && res.label ? res.label : null);
-        }).catch(function () {
-          applyLocationOnMap(root, prefix, e.latlng.lat, e.latlng.lng, null);
-        });
+        applyLocationOnMap(root, prefix, e.latlng.lat, e.latlng.lng, null);
+        fillAddressLabel(root, prefix, e.latlng.lat, e.latlng.lng, null);
       });
 
       var radiusEl = root.querySelector('[data-loc-' + prefix + '-radius]');
@@ -647,7 +666,8 @@
       (lat && lng ? esc(Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6)) : '') + '</p>' +
       '<label>Detection radius (metres)</label>' +
       '<input data-loc-' + prefix + '-radius type="number" min="25" max="5000" step="25" value="' + esc(loc.radiusM || 100) + '">' +
-      '<label class="tma-presence-settings__check"><input type="checkbox" data-loc-' + prefix + '-enabled ' + (loc.enabled !== false ? 'checked' : '') + '><span>Enable automatic detection</span></label>' +
+      '<label class="tma-presence-settings__check"><input type="checkbox" data-loc-' + prefix + '-enabled ' +
+      (lat && lng && loc.enabled !== false ? 'checked' : '') + '><span>Enable automatic detection</span></label>' +
       '<div class="tma-presence-loc__actions">' +
       '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-current>Use current location</button>' +
       '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-reset>Reset</button></div>' +
@@ -850,15 +870,22 @@
     });
   }
 
+  function hasLocationData(root, prefix) {
+    if (locCoords(root, prefix)) return true;
+    var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
+    return !!(addressEl && addressEl.value.trim());
+  }
+
   function saveLocation(type, wrap) {
     var prefix = type === 'office' ? 'office' : 'remote';
     var title = type === 'office' ? 'Office' : 'Remote';
     syncCoordsFromMap(wrap, prefix);
-    var enabled = !!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked;
-    var lat = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lat]').value);
-    var lng = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lng]').value);
-    var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
-    var hasCoords = !isNaN(lat) && !isNaN(lng);
+    var enabledEl = wrap.querySelector('[data-loc-' + prefix + '-enabled]');
+    var enabled = !!(enabledEl && enabledEl.checked);
+    var coords = locCoords(wrap, prefix);
+    var addressEl = wrap.querySelector('[data-loc-' + prefix + '-address]');
+    var address = addressEl ? addressEl.value.trim() : '';
+    var hasCoords = !!coords;
 
     function persist(latitude, longitude) {
       return api('PUT', '/me/availability/locations', {
@@ -883,7 +910,7 @@
     }
 
     if (hasCoords) {
-      return persist(lat, lng);
+      return persist(coords.lat, coords.lng);
     }
 
     if (!address) {
@@ -906,12 +933,12 @@
     ['office', 'remote'].forEach(function (type) {
       var prefix = type;
       var title = type === 'office' ? 'Office' : 'Remote';
-      var enabled = wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked;
-      var coords = locCoords(wrap, prefix);
-      var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
-      if (coords || address) hasAny = true;
+      var enabledEl = wrap.querySelector('[data-loc-' + prefix + '-enabled]');
+      var enabled = !!(enabledEl && enabledEl.checked);
+      var hasData = hasLocationData(wrap, prefix);
+      if (hasData) hasAny = true;
       if (!enabled) return;
-      if (!coords && !address) {
+      if (!hasData) {
         errors.push(title + ': set a location on the map, search an address, or use current location.');
       }
     });
