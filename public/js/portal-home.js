@@ -2238,7 +2238,14 @@
   }
 
   function mount(el, opts) {
+    if (!el) return;
     opts = opts || {};
+    if (el._homeMounting) {
+      el._homeMountQueued = true;
+      return;
+    }
+    el._homeMounting = true;
+    try {
     var s = data().state();
     var show = tiles();
     // Local re-render only. Toggling a tile or ticking a tutorial is a change to
@@ -2521,6 +2528,13 @@
       loadHomeStaff(el);
     } else {
       bindStaffUserListener();
+    }
+    } finally {
+      el._homeMounting = false;
+      if (el._homeMountQueued) {
+        el._homeMountQueued = false;
+        mount(el, { fromLoad: true });
+      }
     }
   }
 
