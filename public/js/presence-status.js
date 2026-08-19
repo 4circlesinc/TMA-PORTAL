@@ -129,32 +129,62 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=1';
+    link.href = (ROOT || '') + 'css/presence.css?v=2';
     document.head.appendChild(link);
   }
 
-  function paintProfile() {
+  function paintHeader() {
+    ensureHeaderSlot();
     var p = primary();
-    var text = p.label || meta(p.status).label;
-    if (p.message) text = text + ' — ' + p.message;
+    var label = p.label || meta(p.status).label;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    var name = (me && me.name) || '';
+
+    document.querySelectorAll('[data-presence-user-name]').forEach(function (el) {
+      el.textContent = name;
+      el.hidden = !name;
+    });
+
     document.querySelectorAll('[data-presence-indicator]').forEach(function (el) {
-      el.innerHTML = iconHtml(p.icon || meta(p.status).icon, 8) +
-        '<span class="tma-presence__label">' + esc(text) + '</span>';
-      el.setAttribute('data-presence-status', p.status || '');
-      el.title = text;
+      var slug = p.status || 'online';
+      el.className = 'tma-presence-pill' + (slug ? ' tma-presence-pill--' + slug : '');
+      el.innerHTML =
+        iconHtml(p.icon || meta(slug).icon, 8) +
+        '<span class="tma-presence-pill__label">' + esc(label) + '</span>';
+      el.setAttribute('data-presence-status', slug);
+      el.title = p.message ? label + ' — ' + p.message : label;
+      el.setAttribute('aria-label', 'Status: ' + label + '. Click to change.');
+    });
+
+    document.querySelectorAll('[data-presence-header]').forEach(function (wrap) {
+      wrap.hidden = !name;
     });
   }
 
-  function ensureProfileSlot() {
-    document.querySelectorAll('.tma-dash__profile-meta').forEach(function (metaEl) {
-      if (metaEl.querySelector('[data-presence-indicator]')) return;
-      var row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'tma-presence tma-presence--profile';
-      row.setAttribute('data-presence-indicator', '');
-      row.setAttribute('aria-haspopup', 'dialog');
-      row.setAttribute('aria-expanded', 'false');
-      metaEl.appendChild(row);
+  /** @deprecated alias */
+  function paintProfile() { paintHeader(); }
+
+  function ensureHeaderSlot() {
+    document.querySelectorAll('.tma-dash__header-right').forEach(function (right) {
+      if (right.querySelector('[data-presence-header]')) return;
+      var icons = right.querySelector('.tma-dash__header-icons');
+      if (!icons) return;
+
+      var wrap = document.createElement('div');
+      wrap.className = 'tma-dash__header-presence';
+      wrap.setAttribute('data-presence-header', '');
+      wrap.hidden = true;
+      wrap.innerHTML =
+        '<span class="tma-dash__header-presence-name" data-presence-user-name></span>' +
+        '<button type="button" class="tma-presence-pill" data-presence-indicator ' +
+        'aria-haspopup="dialog" aria-expanded="false"></button>';
+
+      right.insertBefore(wrap, icons);
+    });
+
+    /* Remove legacy sidebar placement if present from an earlier build. */
+    document.querySelectorAll('.tma-dash__profile-meta [data-presence-indicator]').forEach(function (el) {
+      el.remove();
     });
   }
 
@@ -433,7 +463,7 @@
 
   function applyPayload(j) {
     state = j;
-    paintProfile();
+    paintHeader();
     listeners.forEach(function (fn) { fn(state); });
     scheduleExpiry();
     return state;
@@ -528,8 +558,8 @@
     if (wired) return;
     wired = true;
     loadCss();
-    ensureProfileSlot();
-    paintProfile();
+    ensureHeaderSlot();
+    paintHeader();
     document.addEventListener('click', function (e) {
       var ind = e.target.closest('[data-presence-indicator]');
       if (ind) {
@@ -554,7 +584,7 @@
     setStatus: setStatus,
     reportCall: reportCall,
     onChange: function (fn) { listeners.push(fn); if (state) fn(state); },
-    paint: paintProfile,
+    paint: paintHeader,
     iconHtml: iconHtml,
     meta: meta,
     wire: wire,

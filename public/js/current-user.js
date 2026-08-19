@@ -209,6 +209,7 @@
     });
 
     markProfileClickable();
+    if (window.TMAPresence && window.TMAPresence.paint) window.TMAPresence.paint();
     listeners.forEach(function (fn) { fn(me); });
   }
 
