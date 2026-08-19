@@ -116,4 +116,11 @@ return [
         'enabled' => (bool) env('FEATURE_CIP', false),
     ],
 
+    'sharepoint' => [
+        // Delta page size and per-run page cap — larger values import faster
+        // but each job holds the worker longer. 500 × 150 ≈ 75k items/run.
+        'delta_page_size' => max(200, (int) env('SHAREPOINT_DELTA_PAGE_SIZE', 500)),
+        'max_pages' => max(10, (int) env('SHAREPOINT_SYNC_MAX_PAGES', 150)),
+    ],
+
 ];

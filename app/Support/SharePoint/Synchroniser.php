@@ -40,7 +40,10 @@ use Illuminate\Support\Str;
 class Synchroniser
 {
     /** Safety valve: pages per run, so one job cannot walk forever. */
-    private const MAX_PAGES = 50;
+    private static function maxPages(): int
+    {
+        return (int) config('services.sharepoint.max_pages', 150);
+    }
 
     /** How long a run may hold the lock before another may take over. */
     public const LOCK_MINUTES = 30;
@@ -63,12 +66,15 @@ class Synchroniser
      * 85,404" was that: a run dying on the first breath, the lock going stale
      * half an hour later, and the next run dying in exactly the same place.
      *
-     * A page is 200 items, so this is one query for at most a few hundred rows
+     * A page is 500 items, so this is one query for at most a few hundred rows
      * and the cost stops growing with the library.
      *
      * @var array<string, SharePointItem|null>
      */
     private static array $mappings = [];
+
+    /** Resolved once per connection run — every create asked the same query. */
+    private static ?int $ownerId = null;
 
     /**
      * Fetch the mappings this page will ask for, in one query.
@@ -127,6 +133,7 @@ class Synchroniser
 
         // Fresh per run — a long-lived worker syncs many connections.
         self::$mappings = [];
+        self::$ownerId = null;
 
         /*
          * One run at a time per connection.
@@ -156,11 +163,12 @@ class Synchroniser
         $stats = ['created' => 0, 'updated' => 0, 'deleted' => 0, 'failed' => 0, 'pages' => 0];
         $link = $connection->delta_link;
         $changedFolders = [];
+        $caughtUp = false;
 
         try {
             // Inbound writes must never bounce back out as outbound pushes.
-            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats) {
-            for ($page = 0; $page < self::MAX_PAGES; $page++) {
+            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp) {
+            for ($page = 0; $page < self::maxPages(); $page++) {
                 $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
                 $stats['pages']++;
 
@@ -189,6 +197,7 @@ class Synchroniser
                 if ($batch['delta']) {
                     // Caught up. Store the cursor for next time.
                     $connection->update(['delta_link' => $batch['delta']]);
+                    $caughtUp = true;
                     break;
                 }
 
@@ -206,16 +215,12 @@ class Synchroniser
             });
 
             /*
-             * A pass only counts as SUCCESS if it ended holding a delta cursor.
-             *
-             * Without this the walk could stop early — page cap reached, or the
-             * process killed — and still stamp last_success_at while leaving
-             * delta_link null. That reads as "synced" in the UI, and because
-             * there is no cursor the next run restarts from item one. The
-             * library never converges and nothing looks wrong. Observed on
-             * three real connections stuck at ~205 items for a day.
+             * A pass only counts as SUCCESS if Graph handed back a deltaLink —
+             * meaning the walk reached the end. A mid-walk resume point stored
+             * in delta_link is not the same thing; treating it as complete
+             * made large OneDrive imports look finished after the first chunk.
              */
-            $complete = $connection->fresh()->delta_link !== null;
+            $complete = $caughtUp;
 
             $connection->update([
                 'status' => SharePointConnection::STATUS_IDLE,
@@ -468,20 +473,24 @@ class Synchroniser
      */
     private static function ownerIdFor(SharePointConnection $connection): int
     {
+        if (self::$ownerId !== null) {
+            return self::$ownerId;
+        }
+
         if ($connection->drive_kind === 'onedrive' && $connection->owner_upn) {
             $driveOwner = User::whereRaw('LOWER(email) = ?', [mb_strtolower($connection->owner_upn)])->value('id');
             if ($driveOwner) {
-                return (int) $driveOwner;
+                return self::$ownerId = (int) $driveOwner;
             }
 
             // A drive whose person has no portal account yet: the account that
             // connected it is a better guess than handing it to the firm.
             if ($connection->created_by) {
-                return (int) $connection->created_by;
+                return self::$ownerId = (int) $connection->created_by;
             }
         }
 
-        return FolderProvisioner::systemOwnerId();
+        return self::$ownerId = FolderProvisioner::systemOwnerId();
     }
 
     private static function applyCreate(SharePointConnection $connection, array $item, bool $isFolder, array &$stats): void

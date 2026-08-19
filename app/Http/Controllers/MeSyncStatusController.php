@@ -161,6 +161,27 @@ class MeSyncStatusController extends Controller
         ];
     }
 
+    /**
+     * Is the first full walk of this drive still underway?
+     *
+     * `last_success_at` is the authoritative stamp, but a worker killed after
+     * Graph returned a deltaLink can leave that null while the cursor already
+     * points at `token=…` (done) rather than `$skiptoken=…` (mid-walk resume).
+     */
+    private static function initialImportPending(SharePointConnection $connection): bool
+    {
+        if ($connection->last_success_at !== null) {
+            return false;
+        }
+
+        $cursor = (string) $connection->delta_link;
+        if ($cursor === '') {
+            return true;
+        }
+
+        return str_contains($cursor, '$skiptoken=') || str_contains($cursor, '%24skiptoken=');
+    }
+
     private function onedrive($user): array
     {
         $account = $user->connectedAccount('microsoft');
@@ -210,8 +231,8 @@ class MeSyncStatusController extends Controller
             && $connection->last_synced_at
             && $connection->last_synced_at->gt(now()->subMinutes(Synchroniser::LOCK_MINUTES));
 
-        // No delta cursor yet = the initial walk has not finished.
-        if ($connection->delta_link === null || $running) {
+        // Initial walk still in progress, or a run actively holding the lock.
+        if ($running || self::initialImportPending($connection)) {
             return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
         }
 

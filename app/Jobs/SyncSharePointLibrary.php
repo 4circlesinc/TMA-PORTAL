@@ -6,6 +6,7 @@ use App\Models\SharePointConnection;
 use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -19,13 +20,16 @@ use Illuminate\Queue\SerializesModels;
  * abandoned, because most sync failures are transient (throttling, a token
  * expiring mid-run, a blip).
  */
-class SyncSharePointLibrary implements ShouldQueue
+class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
 
     public array $backoff = [30, 120, 300];
+
+    /** Seconds before a chained follow-up run starts. */
+    private const CHAIN_DELAY = 2;
 
     public function __construct(public int $connectionId) {}
 
@@ -52,6 +56,18 @@ class SyncSharePointLibrary implements ShouldQueue
         // Graph asked us to back off: reschedule rather than burning a retry.
         if (! empty($result['throttled'])) {
             self::dispatch($this->connectionId)->delay(now()->addSeconds($result['retryAfter'] ?? 30));
+
+            return;
+        }
+
+        /*
+         * The page cap stops one job from walking forever, but an initial
+         * OneDrive import can be tens of thousands of items — waiting for the
+         * five-minute scheduler between each chunk made first connect feel
+         * stuck for hours. Chain immediately until the delta cursor is held.
+         */
+        if (isset($result['complete']) && $result['complete'] === false) {
+            self::dispatch($this->connectionId)->delay(now()->addSeconds(self::CHAIN_DELAY));
         }
     }
 }

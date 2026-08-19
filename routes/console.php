@@ -206,7 +206,7 @@ Schedule::command('reports:run')->hourly()->withoutOverlapping();
  * because two runs would process the same delta cursor twice.
  */
 Schedule::command('sharepoint:sync --queue')
-    ->everyFiveMinutes()
+    ->everyMinute()
     ->withoutOverlapping();
 
 /*

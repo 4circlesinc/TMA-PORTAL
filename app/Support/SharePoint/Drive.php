@@ -14,8 +14,11 @@ use Illuminate\Support\Facades\Http;
  */
 class Drive
 {
-    /** Page size for delta. Graph caps this; asking for more is not an error. */
-    private const PAGE = 200;
+    /** Page size for delta. Graph accepts up to 999; larger pages mean fewer round trips. */
+    private static function pageSize(): int
+    {
+        return (int) config('services.sharepoint.delta_page_size', 500);
+    }
 
     /** @return array<int, array<string, mixed>> */
     public static function libraries(string $siteId): array
@@ -43,7 +46,7 @@ class Drive
 
         $response = $link
             ? GraphClient::get($link)
-            : GraphClient::get($start, ['$top' => self::PAGE]);
+            : GraphClient::get($start, ['$top' => self::pageSize()]);
 
         return [
             'items' => $response['value'] ?? [],
@@ -75,7 +78,7 @@ class Drive
         // Only the id is needed, and asking for less is materially faster on a
         // folder of thousands.
         $url = "/drives/{$driveId}/items/{$itemId}/children";
-        $query = ['$select' => 'id', '$top' => self::PAGE];
+        $query = ['$select' => 'id', '$top' => self::pageSize()];
 
         // A folder cannot be walked forever; 200 pages is 40,000 children.
         for ($page = 0; $page < 200; $page++) {

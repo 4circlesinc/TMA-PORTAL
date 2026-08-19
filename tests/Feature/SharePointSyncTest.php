@@ -916,4 +916,48 @@ class SharePointSyncTest extends TestCase
         $this->assertSame($this->owner->id, \App\Support\Files\FolderProvisioner::systemOwnerId());
         $this->assertNull(\App\Support\Files\FolderProvisioner::systemAccountId());
     }
+
+    /** Hitting the page cap must not stamp success — more pages remain. */
+    public function test_hitting_the_page_cap_is_not_treated_as_complete(): void
+    {
+        config(['services.sharepoint.max_pages' => 2]);
+        $this->connection->update(['last_success_at' => null]);
+
+        $this->deltaPages = [
+            [$this->fileItem('i-1', 'One.txt', 'c:1')],
+            [$this->fileItem('i-2', 'Two.txt', 'c:1')],
+            [$this->fileItem('i-3', 'Three.txt', 'c:1')],
+        ];
+        $this->children = [['id' => 'i-1'], ['id' => 'i-2'], ['id' => 'i-3']];
+
+        $stats = Synchroniser::sync($this->connection);
+
+        $this->assertFalse($stats['complete']);
+        $this->assertSame(2, $stats['pages']);
+        $this->assertSame(2, $stats['created']);
+        $this->assertNull($this->connection->fresh()->last_success_at);
+        $this->assertNotNull($this->connection->fresh()->delta_link);
+    }
+
+    /** An incomplete pass chains another job instead of waiting for the scheduler. */
+    public function test_an_incomplete_pass_chains_another_sync_job(): void
+    {
+        config(['services.sharepoint.max_pages' => 2]);
+        $this->connection->update(['last_success_at' => null]);
+        $this->deltaPages = [
+            [$this->fileItem('i-1', 'One.txt', 'c:1')],
+            [$this->fileItem('i-2', 'Two.txt', 'c:1')],
+            [$this->fileItem('i-3', 'Three.txt', 'c:1')],
+        ];
+        $this->children = [['id' => 'i-1'], ['id' => 'i-2'], ['id' => 'i-3']];
+
+        \Illuminate\Support\Facades\Queue::fake();
+
+        (new \App\Jobs\SyncSharePointLibrary($this->connection->id))->handle();
+
+        \Illuminate\Support\Facades\Queue::assertPushed(
+            \App\Jobs\SyncSharePointLibrary::class,
+            fn ($job) => $job->connectionId === $this->connection->id
+        );
+    }
 }
