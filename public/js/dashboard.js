@@ -964,6 +964,11 @@
         clientsPageActions.hidden = true;
         clientsPageActions.innerHTML = '';
       }
+      var clientsHeadTabs = root.querySelector('[data-page-head-tabs]');
+      if (clientsHeadTabs && name !== 'clients') {
+        clientsHeadTabs.hidden = true;
+        clientsHeadTabs.innerHTML = '';
+      }
       if (name === 'users' && window.TMAUsers && window.TMAUsers.setActiveContext) {
         window.TMAUsers.setActiveContext('page');
       }

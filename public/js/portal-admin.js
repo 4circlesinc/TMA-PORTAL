@@ -3666,7 +3666,6 @@
     el.innerHTML =
       '<div class="tma-portal-page"><div class="tma-portal-admin tma-portal-admin--page">' +
       '<div class="tma-portal-admin__content">' +
-      '<h2 class="tma-portal-admin__page-title">Reporting</h2>' +
       PAGES['reporting'].render() +
       '</div></div></div>';
     PAGES['reporting'].wire(el.querySelector('.tma-portal-admin__content'));
