@@ -226,6 +226,7 @@ class FileAccess
     public static function forgetPersonalDrives(): void
     {
         self::$personalDrives = [];
+        self::$personalRootOwnerIds = null;
     }
 
     /**
@@ -268,25 +269,39 @@ class FileAccess
         return ($treeOwner !== null && self::hasPersonalRootConnection($treeOwner)) ? $treeOwner : null;
     }
 
+    /** Per-request cache of user ids that have a root-mirrored OneDrive. */
+    private static ?array $personalRootOwnerIds = null;
+
+    /**
+     * Whether a user has a root-mirrored OneDrive connection.
+     *
+     * Previously ran a live DB query on every call — one per unique user id
+     * encountered while walking file/folder chains, which on a busy listing
+     * could mean dozens of identical queries. We now resolve the full set once
+     * per request and answer from that set.
+     *
+     * Failure mode is identical to isPersonalDriveFolder: clearing
+     * forgetPersonalDrives() drops this cache too, so a connection added or
+     * removed mid-request is seen by the next call.
+     */
     private static function hasPersonalRootConnection(int $userId): bool
     {
-        // Same deliberate non-memoisation as isPersonalDriveFolder: a stale
-        // answer here fails OPEN.
-        return SharePointConnection::where('drive_kind', 'onedrive')
-            ->whereNull('folder_id')
-            ->where('created_by', $userId)
-            ->exists();
+        return in_array($userId, self::personalRootOwnerIds(), true);
     }
 
     /** Users whose OneDrive mirrors into the root of their own library. */
     public static function personalRootOwnerIds(): array
     {
-        return SharePointConnection::where('drive_kind', 'onedrive')
-            ->whereNull('folder_id')
-            ->whereNotNull('created_by')
-            ->pluck('created_by')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        if (self::$personalRootOwnerIds === null) {
+            self::$personalRootOwnerIds = SharePointConnection::where('drive_kind', 'onedrive')
+                ->whereNull('folder_id')
+                ->whereNotNull('created_by')
+                ->pluck('created_by')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return self::$personalRootOwnerIds;
     }
 
     /** Effective role a user holds over a folder (null = no access). */
@@ -710,6 +725,7 @@ class FileAccess
          * files before this line existed.
          */
         self::$personalDrives = [];
+        self::$personalRootOwnerIds = null;
     }
 
     private static function highest(array $roles): ?string

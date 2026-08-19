@@ -31,6 +31,7 @@
 
   /* Live Overview → Files only. Never seed sample uploaders/filenames. */
   var DEFAULT_ROWS = [];
+  var LOAD_ERROR = false;
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -394,6 +395,8 @@
       rows: DEFAULT_ROWS.map(function (r) { return Object.assign({}, r); }),
       section: 'recent',
       cache: { recent: null, shared: null },
+      loading: false,
+      loadError: false,
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -450,17 +453,23 @@
       var start = (state.page - 1) * state.pageSize;
       var pageRows = filtered.slice(start, start + state.pageSize);
 
-      var emptyMsg = state.search || state.filterType
-        ? 'Try a different search or filter.'
-        : (state.section === 'shared'
-          ? 'Items other people share with you will show up here.'
-          : 'Files you open or upload will show up here.');
+      var emptyMsg = state.loadError
+        ? 'Could not load files. Please refresh the page to try again.'
+        : state.loading
+          ? 'Loading…'
+          : state.search || state.filterType
+            ? 'Try a different search or filter.'
+            : (state.section === 'shared'
+              ? 'Items other people share with you will show up here.'
+              : 'Files you open or upload will show up here.');
+      var emptyTitle = state.loadError ? 'Failed to load files'
+        : state.loading ? 'Loading files'
+        : state.search || state.filterType ? 'No matching files'
+        : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files');
       var emptyHtml = window.TMANoData
         ? window.TMANoData.render({
             illustrationName: 'Illustration07',
-            title: state.search || state.filterType
-              ? 'No matching files'
-              : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files'),
+            title: emptyTitle,
             subtitle: emptyMsg,
             showButton: false,
           })
@@ -686,13 +695,15 @@
       var siteRoot = window.__TMA_SITE_ROOT || '';
       var section = state.section === 'shared' ? 'shared' : 'recent';
       var only = section === 'recent' ? '&only=files' : '';
+      state.loading = true;
+      state.loadError = false;
       fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50' + only, {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })
-        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
         .then(function (j) {
-          if (!j) return;
+          state.loading = false;
           // Shared with me can include folders; keep both, files first for this table.
           var mappedFiles = (j.files || []).map(mapApiFile);
           var mappedFolders = (j.folders || []).map(function (f) {
@@ -722,9 +733,14 @@
             render();
           }
         })
-        .catch(function () { /* keep current rows */ });
+        .catch(function () {
+          state.loading = false;
+          state.loadError = true;
+          render();
+        });
     }
 
+    state.loading = true;
     render();
     reloadFiles();
 

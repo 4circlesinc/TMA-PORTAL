@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -469,6 +471,65 @@ class FileManagerTest extends TestCase
 
         // One grouped file query for every child, not a COUNT+SUM per row.
         $this->assertSame(1, $aggregateQueries);
+    }
+
+    public function test_assigned_staff_can_browse_the_contents_of_a_client_folder(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        $staff = $this->approvedUser(['account_type' => 'Reviewing Officer']);
+        $client = Client::create([
+            'uid' => 'acme-co',
+            'name' => 'Acme Co',
+            'email' => 'owner@acme.test',
+            'initial' => 'A',
+            'initial_color' => 'blue',
+            'data' => [],
+        ]);
+
+        $clientFolder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Acme Co',
+            'folder_type' => Folder::TYPE_CLIENT,
+            'client_id' => $client->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        $child = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passports',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $clientFolder->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $clientFolder->id,
+            'name' => 'welcome.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'tests/welcome.pdf',
+            'owner_id' => $admin->id,
+            'uploaded_by' => $admin->id,
+        ]);
+
+        ClientAssignment::create([
+            'client_id' => $client->id,
+            'user_id' => $staff->id,
+            'role' => 'general',
+            'permission_level' => 'editor',
+            'is_primary' => true,
+            'status' => ClientAssignment::STATUS_ACTIVE,
+            'assigned_by' => $admin->id,
+        ]);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/?folder='.$clientFolder->uuid.'&perPage=0')
+            ->assertOk()
+            ->assertJsonPath('folders.0.name', 'Passports')
+            ->assertJsonPath('files.0.name', 'welcome.pdf');
     }
 
     private function folder(User $user, string $name, ?Folder $parent = null): Folder

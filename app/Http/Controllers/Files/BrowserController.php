@@ -7,6 +7,7 @@ use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Files\FileAccess;
+use App\Support\Files\SyncScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -266,13 +267,13 @@ class BrowserController extends BaseFilesController
     private function visibleFolders(User $user): Builder
     {
         return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
-            // Owned, shared to them, or reachable through a system rule
-            // (organization folders, their staff folder, assigned clients).
-            $ids = array_merge(
-                FileAccess::sharedFolderIds($user),
-                FileAccess::systemVisibleFolderIds($user),
-            );
-            $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
+            // Non-admin access flows downward from visible roots (assigned
+            // client folders, org folders, their own staff folder). Using only
+            // those root ids made "Client Files" open to an empty listing for
+            // assigned staff because the contents live beneath the granted
+            // folder, not at the root id itself.
+            $ids = SyncScope::folderIds($user);
+            $q->whereIn('id', $ids ?: [0]);
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
             // Administrators see the whole library EXCEPT other people's
             // root-mirrored OneDrive space: FileAccess denies opening it, so
@@ -289,8 +290,11 @@ class BrowserController extends BaseFilesController
     private function visibleFiles(User $user): Builder
     {
         return FileItem::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
+            $folderIds = SyncScope::folderIds($user);
             $ids = FileAccess::sharedFileIds($user);
-            $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
+            $q->where(fn ($w) => $w->where('owner_id', $user->id)
+                ->orWhereIn('id', $ids ?: [0])
+                ->orWhereIn('folder_id', $folderIds ?: [0]));
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
             // Mirror of the folder rule, at ANY depth — Recent and search list
             // nested files, so "top level only" here leaked the inside of
