@@ -5057,7 +5057,6 @@ label.tma-portal-check-row:hover {
  * elsewhere (toolbar, table, tones, pagination, modal). */
 
 .call-recordings {
-  padding: var(--space-24);
   display: flex;
   flex-direction: column;
   gap: var(--space-16);

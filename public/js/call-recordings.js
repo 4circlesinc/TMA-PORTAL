@@ -165,7 +165,9 @@
       '<div class="tma-dash__toolbar-actions">' +
       toolBtn(TMA_ICON + 'FunnelSimple-16.svg', 'Filter', false, ' data-recordings-filter aria-expanded="false"') +
       '</div>' +
+      '<div class="tma-dash__toolbar-end">' +
       ui().searchInput('Search by client', 'data-recordings-search', state.q) +
+      '</div>' +
       '</div>' +
       '<div data-recordings-chips></div>' +
       '<div data-recordings-body></div>' +
@@ -225,7 +227,7 @@
     if (!rows.length) {
       host.innerHTML = ui().emptyState({
         title: 'No recordings yet',
-        subtitle: 'Calls with clients and with service providers about an applicant are recorded automatically and appear here.',
+        subtitle: 'Recordings appear here after a call is captured.',
       });
       renderChips(root);
       return;
