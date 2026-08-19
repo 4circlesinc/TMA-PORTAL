@@ -48,8 +48,22 @@ class Presenter
      */
     private array $cipFile = [];
 
-    /** Whether {@see self::prime()} has loaded $cipFile for this page of files. */
-    private bool $cipPrimed = false;
+    /**
+     * Whether {@see self::prime()} has run for this page of items.
+     *
+     * Every map above is *sparse*: it holds only the rows that exist, because
+     * that is what a `whereIn` returns. So `$map[$id] ?? <lazy lookup>` reads
+     * "not primed" out of "primed, and this item genuinely has none" — and
+     * since most files have no share and most folders no colour preference,
+     * the fallback fired on nearly every row. Against the remote database
+     * that was one ~280ms round trip per row: 50 rows of Recent cost 14s of
+     * shares lookups alone, and a folder with 11k children never finished.
+     *
+     * The flag is the missing bit: once primed, an absent key IS the answer.
+     * Single-item callers (store/show/move/copy/restore) never prime and keep
+     * the lazy path.
+     */
+    private bool $primed = false;
 
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
@@ -121,19 +135,26 @@ class Presenter
         $this->sharedFile = $this->sharedWithMap('file', $fileIds);
         $this->statusFile = $this->statusMap($fileIds);
         $this->cipFile = $this->cipMap($fileIds);
-        $this->cipPrimed = true;
+        $this->primed = true;
+        $this->attachCipSlots($files);
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
         $this->primeFolderIndex($files, $folders);
         $this->folderStats = FolderTree::aggregateMany($folders);
+
+        // Every row's permission block walks its folder chain through
+        // FileAccess. Warming them together turns one round trip per level
+        // per row into one per level for the whole page.
+        FileAccess::warmChains(array_merge(
+            array_map(fn (Folder $f) => $f->id, $folders),
+            array_map(fn (FileItem $f) => (int) $f->folder_id, $files),
+        ));
     }
 
     public function file(FileItem $file): array
     {
         $ext = (string) $file->extension;
-        $sharedWith = $this->sharedFile[$file->id]
-            ?? $this->sharedWithMap('file', [$file->id])[$file->id]
-            ?? [];
+        $sharedWith = $this->sharedWith('file', $this->sharedFile, $file->id);
         $assignees = array_column($sharedWith, 'name');
         $fileAudience = $this->audienceFor($file->folder);
         // Computed once: the review block reads from it rather than asking
@@ -196,9 +217,7 @@ class Presenter
 
     public function folder(Folder $folder, bool $withStats = true): array
     {
-        $sharedWith = $this->sharedFolder[$folder->id]
-            ?? $this->sharedWithMap('folder', [$folder->id])[$folder->id]
-            ?? [];
+        $sharedWith = $this->sharedWith('folder', $this->sharedFolder, $folder->id);
         $assignees = array_column($sharedWith, 'name');
         $folderAudience = $this->audienceFor($folder);
 
@@ -467,6 +486,12 @@ class Presenter
             return $this->prefRows[$folder->id];
         }
 
+        // Primed and absent means the viewer has set nothing here. Only the
+        // one-folder callers below get to ask the database.
+        if ($this->primed) {
+            return ['colour' => null, 'iconName' => null];
+        }
+
         $row = FolderColourPreference::where('user_id', $this->viewer->id)
             ->where('folder_id', $folder->id)->first(['colour', 'icon_name']);
 
@@ -545,6 +570,21 @@ class Presenter
      * @param  array<int, int>  $ids
      * @return array<int, array<int, array<string, mixed>>>
      */
+    /**
+     * One item's people, from the primed map when there is one.
+     *
+     * @param  array<int, array<int, array<string, mixed>>>  $map
+     * @return array<int, array<string, mixed>>
+     */
+    private function sharedWith(string $type, array $map, int $id): array
+    {
+        if ($this->primed) {
+            return $map[$id] ?? [];
+        }
+
+        return $this->sharedWithMap($type, [$id])[$id] ?? [];
+    }
+
     private function sharedWithMap(string $type, array $ids): array
     {
         if (! $ids) {
@@ -770,14 +810,39 @@ class Presenter
 
         return CipDocument::query()
             ->whereIn('file_id', $fileIds)
+            // Package::locksFile reads the slot's application to decide
+            // whether §17 has frozen it; without this each slot loads its own.
+            ->with('application')
             ->get()
             ->keyBy('file_id')
             ->all();
     }
 
+    /**
+     * Hand the slot map to the models themselves.
+     *
+     * `Package::locksFile` — reached five times per row, once per ability the
+     * §17 freeze covers — reads `cipDocument` off the file and falls back to
+     * a query when the relation is not loaded. It has no presenter to ask, so
+     * priming our own map left it querying: 250 round trips to draw 50 rows,
+     * 70 of the 104 seconds Recent took. Setting the relation is exactly what
+     * `with('cipDocument')` would have done, and doing it here covers every
+     * caller that primes rather than each listing query in turn.
+     *
+     * @param  FileItem[]  $files
+     */
+    private function attachCipSlots(array $files): void
+    {
+        foreach ($files as $file) {
+            if (! $file->relationLoaded('cipDocument')) {
+                $file->setRelation('cipDocument', $this->cipFile[$file->id] ?? null);
+            }
+        }
+    }
+
     private function cipSlot(FileItem $file): ?CipDocument
     {
-        if ($this->cipPrimed) {
+        if ($this->primed) {
             return $this->cipFile[$file->id] ?? null;
         }
 

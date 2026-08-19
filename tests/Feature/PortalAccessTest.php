@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -248,6 +251,26 @@ class PortalAccessTest extends TestCase
         foreach (['calendar', 'signatures', 'social/messages', 'account-settings'] as $page) {
             $this->actingAs($client)->get('/'.$page)->assertOk();
         }
+    }
+
+    public function test_a_service_provider_contact_can_open_the_cip_shell_page(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($contact)->get('/clients')->assertOk();
+        $this->actingAs($contact)->get('/clients/applications')->assertOk();
     }
 
     public function test_staff_still_reach_the_staff_pages(): void

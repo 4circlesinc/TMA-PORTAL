@@ -75,6 +75,20 @@
     // whatever the last listing reported, so it follows the folder.
     filterOwner: '',
     owners: [],
+    /*
+     * One page of the folder, not the whole of it.
+     *
+     * This used to ask for everything (perPage=0) on the reasoning that a
+     * library shows whole folders. That holds at a few hundred rows and
+     * breaks completely at eleven thousand: "Client Files" answered with a
+     * 19MB payload the browser then reconciled into eleven thousand rows, and
+     * the folder simply never opened. Sorting, searching and filtering all
+     * already run in the database, so a page is a window on the same ordered
+     * listing rather than a smaller version of it.
+     */
+    page: 1,
+    pageSize: 100,
+    total: 0,
     selected: {},        // uuid -> { type, name, perms, favorite }
     data: { folders: [], files: [] },
     loading: false,
@@ -213,8 +227,61 @@
     if (state.filterOwner) params.set('owner', state.filterOwner);
     params.set('sort', state.sort);
     params.set('dir', state.dir);
-    params.set('perPage', '0');
+    params.set('perPage', String(state.pageSize));
+    params.set('page', String(state.page));
     return params;
+  }
+
+  /*
+   * Sizes the server will actually honour. BrowserController clamps perPage
+   * to 200 as a runaway guard, so offering 250 or 500 (as the Clients
+   * directory does — it pages in the browser) produced a pager that counted
+   * in pages of 250 while the server answered in pages of 200: the labels
+   * lied and the last eleven pages could not be reached.
+   */
+  var PAGE_SIZES = [100, 25, 50, 200];
+
+  function totalPages() {
+    return Math.max(1, Math.ceil((state.total || 0) / state.pageSize));
+  }
+
+  /*
+   * Anything that changes WHICH rows the listing holds puts the reader back
+   * on page one. Staying on page 40 of a folder after searching it lands on
+   * an empty page and reads as "no results".
+   */
+  function reload(silent) {
+    state.page = 1;
+    return load(silent);
+  }
+
+  function goToPage(page) {
+    var next = Math.min(Math.max(1, page), totalPages());
+    if (next === state.page) return;
+    state.page = next;
+    return load().then(scrollListingToTop);
+  }
+
+  /*
+   * A page turn starts at the top of the new page.
+   *
+   * The pager sits at the foot of the list, so by the time it is clicked the
+   * reader is scrolled to the bottom — and the next page arrived showing its
+   * last rows, which reads as the button having done nothing.
+   */
+  function scrollListingToTop() {
+    if (!state.el) return;
+    // Every scrolling ancestor, not just the first: the table scrolls inside
+    // its own container AND that container sits in the scrolling <main>, so
+    // resetting one of the two still leaves the reader down the page.
+    var node = state.el.querySelector('[data-files-body]') || state.el;
+    while (node && node !== document.documentElement) {
+      if (node.scrollTop > 0) {
+        var overflow = window.getComputedStyle(node).overflowY;
+        if (overflow === 'auto' || overflow === 'scroll') node.scrollTop = 0;
+      }
+      node = node.parentElement;
+    }
   }
 
   /*
@@ -252,6 +319,19 @@
       state.loading = false;
       state.error = null;
       state.data = { folders: res.folders || [], files: res.files || [] };
+      state.total = typeof res.total === 'number'
+        ? res.total
+        : (res.folders || []).length + (res.files || []).length;
+      // The server has the last word on the window it served; believing our
+      // own request instead is how a clamped perPage desynchronised the pager.
+      if (typeof res.perPage === 'number' && res.perPage > 0) state.pageSize = res.perPage;
+      // A page beyond the end (rows deleted underneath us, a filter narrowing
+      // the set) shows nothing at all; step back rather than leave a blank.
+      if (state.page > 1 && !state.data.folders.length && !state.data.files.length && state.total > 0) {
+        state.page = totalPages();
+        load();
+        return;
+      }
       state.owners = res.owners || [];
       state.breadcrumb = res.breadcrumb || [];
       if (res.folder) state.folderName = res.folder.name;
@@ -382,7 +462,16 @@
 
       state.loading = false;
       state.error = null;
-      state.data = { folders: shownFolders, files: shownFiles };
+      // Windowed the same way the server windows it — folders first, then
+      // files — so the pager below reads the same offline as online.
+      state.total = shownFolders.length + shownFiles.length;
+      var offset = (state.page - 1) * state.pageSize;
+      var pageFolders = shownFolders.slice(offset, offset + state.pageSize);
+      var fileOffset = Math.max(0, offset - shownFolders.length);
+      state.data = {
+        folders: pageFolders,
+        files: shownFiles.slice(fileOffset, fileOffset + (state.pageSize - pageFolders.length)),
+      };
       state.owners = [];
       state.breadcrumb = crumb;
       pruneSelection();
@@ -579,7 +668,9 @@
     else if (state.error) html += ui().banner('warning', esc(state.error));
     else if (!items().length) html += renderEmpty(meta);
     else html += (state.view === 'grid' ? renderGrid() : renderTable());
-    html += '</div></div>';
+    html += '</div>';
+    html += renderPagination();
+    html += '</div>';
 
     /*
      * Reconciled, not replaced. Rebuilding this subtree threw away every file
@@ -767,6 +858,71 @@
 
   /* ── table view ─────────────────────────────────────── */
 
+  /*
+   * The footer pager, in the portal's documented pagination component — the
+   * same `tma-pagination-bar--footer` the Clients directory uses, for the
+   * same reason it got one: eleven thousand rows are not a listing anyone
+   * scrolls, and shipping them all is what stopped the folder opening.
+   *
+   * Hidden entirely when a folder fits on one page, so the ordinary small
+   * folder looks exactly as it did.
+   */
+  function renderPagination() {
+    var pages = totalPages();
+    if (state.loading || state.error || (pages <= 1 && state.total <= state.pageSize)) return '';
+
+    var windowSize = 5;
+    var start = Math.max(1, Math.min(state.page - Math.floor(windowSize / 2), pages - windowSize + 1));
+    var end = Math.min(pages, start + windowSize - 1);
+
+    function pageBtn(p) {
+      var active = p === state.page;
+      return '<button type="button" class="tma-pagination__button' + (active ? ' is-active' : '') + '"' +
+        ' data-files-page="' + p + '"' + (active ? ' aria-current="page"' : '') +
+        ' aria-label="Page ' + p + '">' + p.toLocaleString() + '</button>';
+    }
+
+    var buttons = '';
+    // Keep page 1 reachable once the window has moved past it.
+    if (start > 1) {
+      buttons += pageBtn(1);
+      if (start > 2) buttons += '<span class="tma-pagination__gap" aria-hidden="true">…</span>';
+    }
+    for (var p = start; p <= end; p++) buttons += pageBtn(p);
+    if (end < pages) {
+      if (end < pages - 1) buttons += '<span class="tma-pagination__gap" aria-hidden="true">…</span>';
+      buttons += pageBtn(pages);
+    }
+
+    var prevDisabled = state.page <= 1 ? ' disabled' : '';
+    var nextDisabled = state.page >= pages ? ' disabled' : '';
+    var results = state.total.toLocaleString() + (state.total === 1 ? ' item' : ' items') +
+      ' · page ' + state.page.toLocaleString() + ' of ' + pages.toLocaleString();
+
+    function iconBtn(direction, label, icon, disabled, extra) {
+      return '<button type="button" class="tma-pagination__button tma-pagination__button--icon' +
+        (extra || '') + '" aria-label="' + label + '" data-files-direction="' + direction + '"' + disabled + '>' +
+        '<img src="images/icons/phosphor/' + icon + '.svg" class="tma-pagination__icon" width="16" height="16" alt=""></button>';
+    }
+
+    return '<div class="tma-pagination-bar tma-pagination-bar--footer" data-files-pagination>' +
+      '<div class="tma-pagination-bar__meta">' +
+      '<button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"' +
+      ' aria-haspopup="listbox" aria-expanded="false" data-files-page-size>' +
+      '<span class="tma-pagination__label">' + state.pageSize + '</span>' +
+      '<img src="images/icons/phosphor/ArrowLineDown.svg" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true">' +
+      '</button>' +
+      '<span class="tma-pagination-bar__results">' + esc(results) + '</span>' +
+      '</div>' +
+      '<nav class="tma-pagination" aria-label="Pagination">' +
+      iconBtn('first', 'First page', 'ArrowLineLeft', prevDisabled) +
+      iconBtn('prev', 'Previous page', 'CaretLeft', prevDisabled) +
+      buttons +
+      iconBtn('next', 'Next page', 'CaretRight', nextDisabled) +
+      iconBtn('last', 'Last page', 'ArrowLineRight', nextDisabled, ' tma-pagination__button--next') +
+      '</nav></div>';
+  }
+
   function renderTable() {
     var showStar = !isRecycle();
     var all = items();
@@ -887,6 +1043,7 @@
     // search
     ui().wireToolbarSearch(el, '[data-files-search]', function (v) {
       state.search = v.trim();
+      state.page = 1;
       debouncedLoad();
     });
 
@@ -900,9 +1057,11 @@
     viewBtns.forEach(function (b) {
       b.addEventListener('click', function () { state.view = b.getAttribute('data-files-view'); render(); });
     });
-    ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; load(); });
-    ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; load(); });
-    ui().wireHeadDropdownAll(el, '[data-files-owner-menu]', function (sel) { state.filterOwner = sel.action; load(); });
+    ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; reload(); });
+    ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; reload(); });
+    ui().wireHeadDropdownAll(el, '[data-files-owner-menu]', function (sel) { state.filterOwner = sel.action; reload(); });
+
+    wirePagination(el);
 
     // toolbar + selection-bar + generic actions (delegated)
     el.addEventListener('click', onClick);
@@ -914,6 +1073,64 @@
     if (!isRecycle()) {
       el.querySelectorAll('[data-files-row]').forEach(function (r) { r.setAttribute('draggable', 'true'); });
     }
+  }
+
+  /*
+   * The pager's buttons, bound the way every morphed control here has to be:
+   * through TMAMorph.unwired, or a handler is added again on each render and
+   * one click turns three pages.
+   */
+  function wirePagination(el) {
+    var bar = el.querySelector('[data-files-pagination]');
+    if (!bar) return;
+
+    var fresh = function (selector) {
+      return window.TMAMorph
+        ? window.TMAMorph.unwired(bar, selector)
+        : Array.prototype.slice.call(bar.querySelectorAll(selector));
+    };
+
+    fresh('[data-files-page]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        goToPage(parseInt(btn.getAttribute('data-files-page'), 10) || 1);
+      });
+    });
+
+    fresh('[data-files-direction]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        switch (btn.getAttribute('data-files-direction')) {
+          case 'first': return goToPage(1);
+          case 'prev': return goToPage(state.page - 1);
+          case 'next': return goToPage(state.page + 1);
+          case 'last': return goToPage(totalPages());
+        }
+      });
+    });
+
+    fresh('[data-files-page-size]').forEach(function (btn) {
+      // Cycles rather than opening a listbox — the same interaction the
+      // Clients directory's page-size control has.
+      btn.addEventListener('click', function () {
+        var idx = PAGE_SIZES.indexOf(state.pageSize);
+        state.pageSize = PAGE_SIZES[(idx + 1) % PAGE_SIZES.length];
+        savePageSize(state.pageSize);
+        reload();
+      });
+    });
+  }
+
+  var PAGE_SIZE_KEY = 'tma:files:pageSize';
+
+  function savePageSize(size) {
+    try { window.localStorage.setItem(PAGE_SIZE_KEY, String(size)); } catch (e) {}
+  }
+
+  function restorePageSize() {
+    try {
+      var saved = parseInt(window.localStorage.getItem(PAGE_SIZE_KEY), 10);
+      if (PAGE_SIZES.indexOf(saved) !== -1) state.pageSize = saved;
+    } catch (e) {}
   }
 
   var loadTimer = null;
@@ -1407,6 +1624,7 @@
   function openFolder(uuid) {
     state.folder = uuid;
     state.selected = {};
+    state.page = 1;
     syncUrl();
 
     return load();
@@ -4864,7 +5082,7 @@
       case 'request-files': return requestFilesHere();
       case 'paste': return pasteClipboard();
       case 'refresh': return load();
-      case 'sortdir': state.dir = state.dir === 'asc' ? 'desc' : 'asc'; return load();
+      case 'sortdir': state.dir = state.dir === 'asc' ? 'desc' : 'asc'; return reload();
       case 'empty-bin': return emptyBin();
       case 'clear-selection': return clearSelection();
       case 'bulk-download': return bulkDownload();
@@ -6385,6 +6603,8 @@
      */
     state.folder = opts.folderId || urlParam('folder') || null;
     state.selected = {};
+    state.page = 1;
+    restorePageSize();
     state.error = null;
 
     /*
@@ -6479,6 +6699,7 @@
     if (folder !== state.folder) {
       state.folder = folder;
       state.selected = {};
+      state.page = 1;
       load().then(function () { restoreViewer(file); });
 
       return;

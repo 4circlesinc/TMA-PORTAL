@@ -645,19 +645,17 @@ class FileAccess
             ->values();
     }
 
-    /** Ancestor folder ids for a folder id, walking up to the root (cycle-safe). */
-    private static function folderChainIds(?int $folderId): array
+    /**
+     * Ancestor folder ids for a folder id, self first, walking up to the root.
+     *
+     * Reads the same cached rows {@see self::chainFolders} walks, so a caller
+     * that only wants ids does not re-query the chain a level at a time.
+     *
+     * @return list<int>
+     */
+    public static function chainIds(?int $folderId): array
     {
-        $ids = [];
-        $seen = [];
-
-        while ($folderId !== null && ! isset($seen[$folderId])) {
-            $seen[$folderId] = true;
-            $ids[] = $folderId;
-            $folderId = Folder::withTrashed()->where('id', $folderId)->value('parent_id');
-        }
-
-        return $ids;
+        return self::chainFolders($folderId)->map(fn (Folder $f) => (int) $f->id)->all();
     }
 
     /**
@@ -677,6 +675,75 @@ class FileAccess
      * written, from the observer that already watches them.
      */
     private static array $folders = [];
+
+    /**
+     * Fetch whole ancestor chains up front, one query per depth level.
+     *
+     * chainFolders below caches a row once it has seen it, but it can only
+     * discover the next ancestor after fetching the current one — so a cold
+     * cache costs one round trip per level, per chain. A listing asks about
+     * dozens of chains and pays that serially: 11 folder lookups and 11
+     * personal-drive checks, ~6s of a 19s response, purely in latency.
+     *
+     * Given the whole page's folder ids at once, the walk goes level by level
+     * across every chain together, and the personal-drive flags they will all
+     * be asked for resolve in one more query. Rows that do not exist are
+     * cached as null so a missing parent is not re-asked either.
+     *
+     * @param  iterable<int|null>  $folderIds
+     */
+    public static function warmChains(iterable $folderIds): void
+    {
+        $queue = [];
+        foreach ($folderIds as $id) {
+            $id = (int) $id;
+            if ($id && ! array_key_exists($id, self::$folders)) {
+                $queue[$id] = true;
+            }
+        }
+
+        $warmed = [];
+
+        while ($queue) {
+            $ids = array_keys($queue);
+            $rows = Folder::withTrashed()->whereIn('id', $ids)->get();
+            // Seed every id asked for as absent first; the rows that came
+            // back overwrite it. Without this a folder whose parent_id points
+            // nowhere would be re-queried on every chain that reaches it.
+            foreach ($ids as $id) {
+                self::$folders[$id] = null;
+            }
+
+            $queue = [];
+            foreach ($rows as $row) {
+                self::$folders[$row->id] = $row;
+                $warmed[] = (int) $row->id;
+                $parent = (int) $row->parent_id;
+                if ($parent && ! array_key_exists($parent, self::$folders)) {
+                    $queue[$parent] = true;
+                }
+            }
+        }
+
+        $unknown = array_values(array_filter(
+            $warmed,
+            fn (int $id) => ! array_key_exists($id, self::$personalDrives),
+        ));
+
+        if ($unknown === []) {
+            return;
+        }
+
+        $connected = SharePointConnection::where('drive_kind', 'onedrive')
+            ->whereIn('folder_id', $unknown)
+            ->pluck('folder_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        foreach ($unknown as $id) {
+            self::$personalDrives[$id] = $connected->has($id);
+        }
+    }
 
     /** Every caller here walks the same few chains; this fetches each once. */
     private static function chainFolders(?int $folderId): Collection

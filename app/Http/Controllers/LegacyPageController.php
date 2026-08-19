@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
 use App\Support\PortalShell;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -112,7 +113,7 @@ class LegacyPageController extends Controller
      */
     public function clients(Request $request): Response
     {
-        abort_unless(Role::canViewPage($request->user(), 'clients'), 404);
+        abort_unless($this->canViewClientsPage($request), 404);
 
         return PortalShell::respond(self::spaShellPath(), $request->user());
     }
@@ -125,7 +126,11 @@ class LegacyPageController extends Controller
             // A page the account may not use does not exist as far as it is
             // concerned — 404, not 403, so the portal never advertises the
             // staff tooling a client can't reach.
-            abort_unless(Role::canViewPage($request->user(), $page), 404);
+            if ($page === 'clients') {
+                abort_unless($this->canViewClientsPage($request), 404);
+            } else {
+                abort_unless(Role::canViewPage($request->user(), $page), 404);
+            }
 
             // Reporting used to live under Account settings. Bookmarks and
             // search results still carry that query; send them to the page.
@@ -150,5 +155,19 @@ class LegacyPageController extends Controller
         // Only the public and standalone pages reach here; the SPA shell went
         // out above, where its no-store headers live with the rest of it.
         return response()->file($path);
+    }
+
+    /**
+     * /clients is both the staff client hub and the CIP workspace shell.
+     *
+     * Staff still need `clients.view`. External CIP users (service-provider
+     * contacts and private clients) hold no matrix capabilities by design, so
+     * they are admitted by CIP reach instead.
+     */
+    private function canViewClientsPage(Request $request): bool
+    {
+        $user = $request->user();
+
+        return Role::canViewPage($user, 'clients') || CipAccess::canReach($user);
     }
 }

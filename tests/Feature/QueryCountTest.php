@@ -188,6 +188,106 @@ class QueryCountTest extends TestCase
         );
     }
 
+    /*
+     * The two above list a folder from OUTSIDE it, which in a folder-first
+     * listing means they measure the folder row and never its contents — so
+     * both stayed green through the worst N+1 the File Library has had. These
+     * two open the folder, which is what a person actually does.
+     *
+     * What was wrong, measured against the firm's real library (Aug 2026):
+     * every primed map is sparse, holding only the rows that HAVE a share, a
+     * colour preference, a CIP slot. `$map[$id] ?? <lazy lookup>` read a
+     * missing key as "not primed" rather than "primed, and this row has none",
+     * so the fallback fired on nearly every row; the §17 package check
+     * lazy-loaded a CIP slot five more times per row on top. Fifty files cost
+     * 364 queries and 104 seconds, and the folder with eleven thousand clients
+     * in it never returned at all.
+     */
+    public function test_browsing_inside_a_folder_does_not_scale_with_file_count(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Inside',
+            'owner_id' => $me->id,
+            'created_by' => $me->id,
+        ]);
+
+        $addFiles = function (int $n, string $prefix) use ($me, $folder) {
+            for ($i = 0; $i < $n; $i++) {
+                FileItem::create([
+                    'uuid' => (string) Str::uuid(),
+                    'name' => "$prefix-$i.pdf",
+                    'extension' => 'pdf',
+                    'mime_type' => 'application/pdf',
+                    'size' => 100,
+                    'disk' => 'local',
+                    'storage_path' => 'vault/x.pdf',
+                    'folder_id' => $folder->id,
+                    'owner_id' => $me->id,
+                    'uploaded_by' => $me->id,
+                ]);
+            }
+        };
+
+        $browse = fn () => $this->get("/portal/files/?section=all&folder={$folder->uuid}")->assertOk();
+
+        $addFiles(3, 'small');
+        $small = $this->countQueries($browse);
+
+        $addFiles(25, 'large');
+        $large = $this->countQueries($browse);
+
+        $this->assertLessThanOrEqual(
+            $small + 2,
+            $large,
+            "Browsing a folder is N+1: $small queries for 3 files, $large for 28."
+        );
+    }
+
+    public function test_browsing_inside_a_folder_does_not_scale_with_subfolder_count(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $root = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Client Files',
+            'owner_id' => $me->id,
+            'created_by' => $me->id,
+            'folder_type' => Folder::TYPE_ROOT,
+        ]);
+
+        $addFolders = function (int $n, string $prefix) use ($me, $root) {
+            for ($i = 0; $i < $n; $i++) {
+                Folder::create([
+                    'uuid' => (string) Str::uuid(),
+                    'name' => "$prefix Client $i",
+                    'parent_id' => $root->id,
+                    'owner_id' => $me->id,
+                    'created_by' => $me->id,
+                    'folder_type' => Folder::TYPE_CLIENT,
+                ]);
+            }
+        };
+
+        $browse = fn () => $this->get("/portal/files/?section=all&folder={$root->uuid}")->assertOk();
+
+        $addFolders(3, 'small');
+        $small = $this->countQueries($browse);
+
+        $addFolders(25, 'large');
+        $large = $this->countQueries($browse);
+
+        $this->assertLessThanOrEqual(
+            $small + 2,
+            $large,
+            "Listing subfolders is N+1: $small queries for 3 folders, $large for 28."
+        );
+    }
+
     public function test_client_directory_does_not_scale_with_client_count(): void
     {
         $me = $this->staff();

@@ -8,6 +8,7 @@ use App\Models\CipPerson;
 use App\Models\FileItem;
 use App\Models\FileRequest;
 use App\Models\Folder;
+use App\Support\Files\FileAccess;
 use App\Support\Files\FolderTree;
 
 /**
@@ -223,20 +224,18 @@ class Package
         return array_values(array_unique($ids));
     }
 
-    /** @return list<int> */
+    /**
+     * The folder and its ancestors, self first.
+     *
+     * Reads FileAccess's chain cache rather than keeping a second one: the
+     * §17 check runs inside FileAccess::can, so by the time we are here that
+     * chain has usually been fetched already — and when it has not, a listing
+     * has warmed it for the whole page in one pass.
+     *
+     * @return list<int>
+     */
     private static function ancestorIds(Folder $folder): array
     {
-        $ids = [(int) $folder->id];
-        $parentId = $folder->parent_id;
-        $seen = [$folder->id => true];
-
-        while ($parentId && ! isset($seen[$parentId])) {
-            $seen[$parentId] = true;
-            $ids[] = (int) $parentId;
-            $parent = Folder::withTrashed()->find($parentId);
-            $parentId = $parent?->parent_id;
-        }
-
-        return $ids;
+        return $folder->id ? FileAccess::chainIds((int) $folder->id) : [];
     }
 }
