@@ -154,7 +154,7 @@ try {
   step(2, 'A deep link into an admin section opens it for an administrator');
   await openSettings(admin, 'security-policy');
   check(
-    (await admin.locator('.tma-portal-admin__page-title').innerText()).includes('Security policy'),
+    (await admin.locator('[data-pol-root]').count()) > 0,
     'a hard refresh at ?settings-page=security-policy lands on the policy page, not the profile',
   );
 

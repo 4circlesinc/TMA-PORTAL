@@ -141,9 +141,6 @@
 
     var html =
       '<div class="tma-portal-page tma-portal-page--workflows">' +
-      '<div class="tma-portal-head">' +
-      '<h2 class="tma-portal-head__title">' + (isComments ? 'Feedback and Comments' : 'Requests') + '</h2>' +
-      '</div>' +
       '<div data-wfh-tabs>' + ui().tabs(wfTabs().map(function (t) {
         return { key: t.key, label: wfTabLabel(t) };
       }), wfActiveTab()) + '</div>' +
@@ -742,9 +739,6 @@
     tpl.el = el;
     el.innerHTML =
       '<div class="tma-portal-page">' +
-      '<div class="tma-portal-head">' +
-      '<h2 class="tma-portal-head__title">Templates</h2>' +
-      '</div>' +
       ui().emptyState({
         illustration: 'Illustration05',
         title: 'No templates yet',
@@ -2590,12 +2584,9 @@
     el.innerHTML =
       '<div class="tma-portal-page tma-portal-page--signatures">' +
       '<div class="tma-portal-head">' +
-      '<div class="tma-portal-head__title-wrap">' +
-      '<h2 class="tma-portal-head__title">Signature requests</h2>' +
-      '<button type="button" class="tma-portal-icon-btn" data-sig-head-menu title="More options" aria-label="More options">' +
-      '<img src="images/icons/phosphor/DotsThree.svg" alt=""></button>' +
-      '</div>' +
       '<div class="tma-portal-head__actions">' +
+      ui().btn({ label: 'Export list', variant: 'ghost', attrs: ' data-sig-export-list' }) +
+      ui().btn({ label: 'Signature settings', variant: 'ghost', attrs: ' data-sig-settings' }) +
       sigNewDropdown() +
       '</div></div>' +
       '<div class="tma-portal-toolbar">' +
@@ -2738,15 +2729,11 @@
       });
     });
 
-    var headMenu = el.querySelector('[data-sig-head-menu]');
-    if (headMenu) {
-      ui().wireMenu(headMenu, [
-        { label: 'Export list' },
-        { label: 'Signature settings' },
-      ], function () {
-        ui().toast('Coming soon');
-      });
-    }
+    function sigComingSoon() { ui().toast('Coming soon'); }
+    var exportList = el.querySelector('[data-sig-export-list]');
+    if (exportList) exportList.addEventListener('click', sigComingSoon);
+    var sigSettings = el.querySelector('[data-sig-settings]');
+    if (sigSettings) sigSettings.addEventListener('click', sigComingSoon);
 
     ui().wireHeadDropdownAll(el, '[data-sig-new-dropdown]', function (pick) {
       if (pick.action === 'self') {

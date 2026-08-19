@@ -26,6 +26,11 @@
   z-index: 2;
 }
 
+/* Action-only heads (no page title) sit like Overview: tools on the right. */
+.tma-portal-head:not(:has(.tma-portal-head__title)):not(:has(.tma-portal-subtitle)) {
+  justify-content: flex-end;
+}
+
 /* Page titles match the app-shell page title (.tma-dash__page-title) */
 .tma-portal-head__title {
   margin: 0;

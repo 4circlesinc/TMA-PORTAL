@@ -18,6 +18,7 @@ window.TMAI18nDict = {
     "Close": "Fermer", "Back": "Retour", "Next": "Suivant", "Continue": "Continuer",
     "Done": "Terminé", "Open": "Ouvrir", "Add": "Ajouter", "Create": "Créer",
     "Create new": "Créer", "Upload": "Téléverser", "Download": "Télécharger",
+    "Export list": "Exporter la liste", "Signature settings": "Paramètres de signature",
     "Share": "Partager", "Rename": "Renommer", "Move": "Déplacer", "Copy": "Copier",
     "Remove": "Retirer", "Send": "Envoyer", "Sending": "Envoi en cours", "Reply": "Répondre",
     "Reply all": "Répondre à tous", "Forward": "Transférer", "Archive": "Archiver",

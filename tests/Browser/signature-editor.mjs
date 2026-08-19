@@ -43,8 +43,8 @@ try {
   await page.goto(`${BASE}/signatures`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
 
-  const head = await page.textContent('.tma-portal-head__title').catch(() => null);
-  log('    page title:', JSON.stringify(head));
+  await page.waitForSelector('.tma-portal-page--signatures', { timeout: 15000 });
+  log('    signatures list:', await page.locator('[data-sig-export-list]').count());
 
   const empty = await page.textContent('.tma-portal-empty__title').catch(() => null);
   log('    empty state:', JSON.stringify(empty));

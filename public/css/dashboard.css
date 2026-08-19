@@ -1293,6 +1293,7 @@
 .tma-dash__view-toggle-btn--active img { opacity: 1; }
 
 .tma-dash__page-title {
+  display: none !important;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: var(--font-weight-semibold);
@@ -2159,6 +2160,9 @@
   background: var(--dash-panel-bg);
   border-radius: var(--radius-16);
   padding: var(--space-8);
+}
+.tma-dash__users .tma-dash__toolbar .tma-dash__view-toggle {
+  flex-shrink: 0;
 }
 .tma-dash__toolbar-actions { display: flex; align-items: center; gap: var(--space-8); }
 .tma-dash__toolbar-bulk {

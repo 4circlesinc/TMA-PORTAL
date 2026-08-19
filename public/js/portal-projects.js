@@ -105,7 +105,6 @@
     var open = projects('open');
     var head =
       '<div class="tma-portal-head">' +
-      '<h2 class="tma-portal-head__title">Projects</h2>' +
       '<div class="tma-portal-head__actions">' +
       ui().btn({ label: 'Create Project', icon: 'Plus', attrs: 'data-proj-new' }) +
       ui().btn({ label: 'Start from template', icon: 'Table', variant: 'ghost', attrs: 'data-proj-from-tpl' }) +
@@ -148,7 +147,7 @@
 
   function renderClosed() {
     var closed = projects('closed');
-    var head = '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Closed</h2></div>';
+    var head = '';
     if (!closed.length) {
       return head + ui().emptyState({
         illustration: 'Illustration09',
@@ -168,10 +167,7 @@
   function renderDeleted() {
     data().purgeExpiredProjects();
     var deleted = projects('deleted');
-    var head = '<div class="tma-portal-head"><div>' +
-      '<h2 class="tma-portal-head__title">Deleted</h2>' +
-      '<p class="tma-portal-subtitle">We’ll store recently deleted projects here for ' + data().DELETED_RETENTION_DAYS + ' days.</p>' +
-      '</div></div>';
+    var head = '<div class="tma-portal-head"><p class="tma-portal-subtitle">We’ll store recently deleted projects here for ' + data().DELETED_RETENTION_DAYS + ' days.</p></div>';
     if (!deleted.length) {
       return head + ui().emptyState({
         illustration: 'Illustration12',

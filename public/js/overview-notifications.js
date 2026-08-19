@@ -79,7 +79,6 @@
     function head() {
       var unread = Store().state.unread || 0;
       return '<div class="tma-dash__notifpage-head">' +
-        '<h2 class="tma-dash__notifpage-title">Notifications</h2>' +
         '<span class="tma-dash__notifpage-count' + (unread ? '' : ' is-empty') + '" data-notifpage-count ' +
           'aria-live="polite">' + esc(countLabel()) + '</span>' +
       '</div>';

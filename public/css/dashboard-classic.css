@@ -712,6 +712,7 @@
 .tma-dash__view-toggle-btn--active img { opacity: 1; }
 
 .tma-dash__page-title {
+  display: none !important;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: var(--font-weight-semibold);

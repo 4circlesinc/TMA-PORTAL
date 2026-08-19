@@ -82,11 +82,11 @@ try {
   await admin.waitForTimeout(1500);
 
   check(
-    await admin.locator('.tma-portal-head__title', { hasText: 'Groups' }).first().isVisible(),
+    await admin.locator('[data-people-group-new]').first().isVisible(),
     'the Groups screen renders',
   );
 
-  await admin.click('[data-people-new-group]');
+  await admin.click('[data-people-group-new]');
   await admin.waitForSelector('[data-group-name]', { timeout: 8000 });
   await admin.fill('[data-group-name]', groupName);
 

@@ -570,9 +570,6 @@
     var meta = SECTIONS[state.section] || SECTIONS.all;
 
     var html = '<div class="tma-portal-page tma-portal-page--files">';
-    html += '<div class="tma-portal-page__head">' +
-      '<div><h2 class="tma-portal-page__title">' + esc(meta.title) + '</h2></div></div>';
-
     html += renderBreadcrumb();
     html += '<div data-sync-host>' + syncStatusHtml() + '</div>';
     html += renderToolbar();

@@ -91,15 +91,6 @@
     return found;
   }
 
-  function pageTitle(pageId) {
-    var title = pageId;
-    NAV.forEach(function (n) {
-      if (n.id === pageId) title = n.label;
-      if (n.items) n.items.forEach(function (it) { if (it.id === pageId) title = it.label; });
-    });
-    return title;
-  }
-
   /* ── helpers ────────────────────────────────────── */
   function saveBtn(attr) {
     return '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: attr }) + '</div>';
@@ -3599,7 +3590,6 @@
       '<div class="tma-portal-page"><div class="tma-portal-admin">' +
       '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav(pageId) + '</nav>' +
       '<div class="tma-portal-admin__content">' +
-      (page.hideTitle ? '' : '<h2 class="tma-portal-admin__page-title">' + ui().esc(pageTitle(pageId)) + '</h2>') +
       page.render(s) +
       '</div></div></div>';
 

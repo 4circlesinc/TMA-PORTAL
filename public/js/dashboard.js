@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-18-reporting';
+  var NAV_SHELL_VERSION = '2026-08-18-titleless';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -853,7 +853,7 @@
         window.TMAPortalHome.restoreTodayToShell();
         todayWrap = root.querySelector('[data-today-dropdown]');
       }
-      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting'];
+      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';

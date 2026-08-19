@@ -18,6 +18,7 @@ window.TMAI18nDict = {
     "Close": "关闭", "Back": "返回", "Next": "下一步", "Continue": "继续",
     "Done": "完成", "Open": "打开", "Add": "添加", "Create": "创建",
     "Create new": "新建", "Upload": "上传", "Download": "下载",
+    "Export list": "导出列表", "Signature settings": "签名设置",
     "Share": "共享", "Rename": "重命名", "Move": "移动", "Copy": "复制",
     "Remove": "移除", "Send": "发送", "Sending": "发送中", "Reply": "回复",
     "Reply all": "回复全部", "Forward": "转发", "Archive": "归档",

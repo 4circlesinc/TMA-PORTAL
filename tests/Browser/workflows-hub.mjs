@@ -183,9 +183,7 @@ try {
   await parkPointer(beaPage);
   await beaPage.goto(`${BASE}/workflows/feedback`, { waitUntil: 'domcontentloaded' });
   await beaPage.waitForSelector('.tma-portal-page--workflows', { timeout: 15000 });
-
-  const heading = await beaPage.textContent('.tma-portal-head__title');
-  check(/Feedback and Comments/.test(heading), `the page names itself (got: ${heading})`);
+  check(/\/workflows\/feedback/.test(beaPage.url()), 'Feedback and Comments is open');
 
   body = await waitForBody(beaPage, new RegExp(QUESTION));
   check(body.includes(QUESTION), 'the comment is shown in full');

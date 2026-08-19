@@ -483,10 +483,7 @@
     var items = fileboxList(s);
     var section = SECTIONS['folders-filebox'];
 
-    return '<div class="tma-portal-head">' +
-      '<div><h2 class="tma-portal-head__title">File Box</h2></div>' +
-      '</div>' +
-      '<div class="tma-portal-section__card">' +
+    return '<div class="tma-portal-section__card">' +
       '<p>You can temporarily store your files in the File Box when sending or requesting files. ' +
       // The retention constant, not the old File Settings blob: that page was
       // removed (it configured versioning, watermarking and cloud rendering
@@ -522,11 +519,9 @@
         ui().btn({ label: 'Upload', icon: 'UploadSimple', attrs: 'data-folders-upload' })
       : '';
 
-    var head =
-      '<div class="tma-portal-head">' +
-      '<div><h2 class="tma-portal-head__title">' + ui().esc(section.title) + '</h2></div>' +
-      (headActions ? '<div class="tma-portal-head__actions">' + headActions + '</div>' : '') +
-      '</div>';
+    var head = headActions
+      ? '<div class="tma-portal-head"><div class="tma-portal-head__actions">' + headActions + '</div></div>'
+      : '';
 
     if (!items.length) {
       var emptyCopy = {
@@ -796,10 +791,9 @@
     var contacts = s.clientContacts.length;
     el.innerHTML =
       '<div class="tma-portal-page">' +
-      '<div class="tma-portal-head"><div>' +
-      '<h2 class="tma-portal-head__title">Client hub</h2>' +
+      '<div class="tma-portal-head">' +
       '<p class="tma-portal-subtitle">A dedicated space where each client sees their shared files, requests, and projects.</p>' +
-      '</div></div>' +
+      '</div>' +
       (s.clientHubAccess.enabled
         ? ui().banner('info', 'Client hub is <strong>enabled</strong> for this account. Manage access under Account settings &rsaquo; Client hub management.')
         : ui().banner('warning', 'Client hub is currently <strong>disabled</strong>. Enable it under Account settings &rsaquo; Client hub management.')) +

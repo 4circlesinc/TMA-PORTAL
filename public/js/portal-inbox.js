@@ -18,8 +18,6 @@
     'inbox-archived': 'archived',
   };
 
-  var TITLES = { received: 'Received', sent: 'Sent', archived: 'Archived' };
-
   function composeModal() {
     ui().openModal({
       title: 'Compose message',
@@ -106,7 +104,6 @@
     el.innerHTML =
       '<div class="tma-portal-page">' +
       '<div class="tma-portal-head">' +
-      '<h2 class="tma-portal-head__title">' + TITLES[state.folder] + '</h2>' +
       '<div class="tma-portal-head__actions">' + ui().btn({ label: 'Compose', icon: 'NotePencil', variant: 'ghost', attrs: 'data-inbox-compose' }) + '</div>' +
       '</div>' +
       (list.length

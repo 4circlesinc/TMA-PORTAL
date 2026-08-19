@@ -490,6 +490,18 @@ if (state.filters.user) {
       '<img src="' + icon + '" alt=""></button>';
   }
 
+  function renderViewToggle(state) {
+    var listOn = state.viewMode !== 'grid';
+    return '<div class="tma-dash__view-toggle" role="group" aria-label="View mode">' +
+      '<button type="button" class="tma-dash__view-toggle-btn' + (listOn ? ' tma-dash__view-toggle-btn--active' : '') + '" data-users-view-mode="list" aria-label="List view" aria-pressed="' + (listOn ? 'true' : 'false') + '">' +
+        '<img src="images/icons/phosphor/ListDashes.svg" alt="">' +
+      '</button>' +
+      '<button type="button" class="tma-dash__view-toggle-btn' + (!listOn ? ' tma-dash__view-toggle-btn--active' : '') + '" data-users-view-mode="grid" aria-label="Grid view" aria-pressed="' + (!listOn ? 'true' : 'false') + '">' +
+        '<img src="images/icons/phosphor/SquaresFour.svg" alt="">' +
+      '</button>' +
+    '</div>';
+  }
+
   function renderToolbar(state) {
     var count = selectedCount(state);
     var bulkHidden = count === 0 ? ' hidden' : '';
@@ -509,6 +521,7 @@ if (state.filters.user) {
           '</div>' +
         '</div>' +
         renderSearchBar(state) +
+        (state.isOverview ? '' : renderViewToggle(state)) +
       '</div>';
   }
 
@@ -1420,6 +1433,16 @@ if (state.filters.user) {
         if (window.TMATableAddData && window.TMATableAddData.openAddData) {
           window.TMATableAddData.openAddData({ navId: 'users' });
         }
+      });
+
+      container.querySelectorAll('[data-users-view-mode]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var mode = btn.getAttribute('data-users-view-mode');
+          if (!mode || state.viewMode === mode) return;
+          state.viewMode = mode;
+          state.page = 1;
+          render();
+        });
       });
 
       var filterBtn = container.querySelector('[data-users-filter-trigger]');

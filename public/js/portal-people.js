@@ -284,10 +284,9 @@
   }
 
   function head(title, subtitle, actions) {
-    return '<div class="tma-portal-head"><div>' +
-      '<h2 class="tma-portal-head__title">' + esc(title) + '</h2>' +
+    if (!subtitle && !actions) return '';
+    return '<div class="tma-portal-head">' +
       (subtitle ? '<p class="tma-portal-subtitle">' + esc(subtitle) + '</p>' : '') +
-      '</div>' +
       (actions ? '<div class="tma-portal-head__actions">' + actions + '</div>' : '') +
       '</div>';
   }
