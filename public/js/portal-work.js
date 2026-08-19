@@ -2583,12 +2583,6 @@
 
     el.innerHTML =
       '<div class="tma-portal-page tma-portal-page--signatures">' +
-      '<div class="tma-portal-head">' +
-      '<div class="tma-portal-head__actions">' +
-      ui().btn({ label: 'Export list', variant: 'ghost', attrs: ' data-sig-export-list' }) +
-      ui().btn({ label: 'Signature settings', variant: 'ghost', attrs: ' data-sig-settings' }) +
-      sigNewDropdown() +
-      '</div></div>' +
       '<div class="tma-portal-toolbar">' +
       '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
       ui().searchInput('Search', 'data-sig-search', sig.search, { focused: restoreSearch }) +
@@ -2607,6 +2601,9 @@
           '<span class="tma-portal-help" title="Show signature requests from all users on this account">&#9432;</span>' +
           '</label>'
         : '') +
+      ui().btn({ label: 'Export list', variant: 'ghost', attrs: ' data-sig-export-list' }) +
+      ui().btn({ label: 'Signature settings', variant: 'ghost', attrs: ' data-sig-settings' }) +
+      sigNewDropdown() +
       '</div></div>' +
       sigListBody(list) +
       '</div>';

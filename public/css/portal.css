@@ -14,6 +14,16 @@
   min-width: 0;
 }
 
+/* Empty leftovers (sync host, dropped title slots) must not eat the page gap. */
+.tma-portal-page > :empty,
+.tma-portal-page > [data-sync-host]:empty {
+  display: none;
+}
+
+.tma-portal-page > :first-child {
+  margin-top: 0;
+}
+
 .tma-portal-head {
   display: flex;
   align-items: center;
@@ -2884,7 +2894,7 @@
 }
 
 .tma-portal-page--signatures .tma-portal-toolbar {
-  margin-top: var(--space-4);
+  margin-top: 0;
 }
 
 /* ── signature request wizard (fullscreen) ────────── */
@@ -3920,7 +3930,7 @@ label.tma-portal-check-row:hover {
 }
 
 .tma-portal-page--signatures .tma-portal-toolbar {
-  margin-top: var(--space-4);
+  margin-top: 0;
 }
 
 /* ── plan cards (convert free trial) ──────────────── */
@@ -4430,6 +4440,7 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-admin--page .tma-portal-admin__content {
   width: 100%;
+  padding: 0;
 }
 
 /*
@@ -4786,11 +4797,11 @@ label.tma-portal-check-row:hover {
  * one meaning: this row is waiting on you.
  */
 .tma-portal-page--workflows .tma-tab-group {
-  margin-top: var(--space-4);
+  margin-top: 0;
 }
 
 .tma-portal-wf-body {
-  margin-top: var(--space-4);
+  margin-top: 0;
 }
 
 .tma-portal-wf-list {

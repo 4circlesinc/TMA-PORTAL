@@ -791,9 +791,6 @@
     var contacts = s.clientContacts.length;
     el.innerHTML =
       '<div class="tma-portal-page">' +
-      '<div class="tma-portal-head">' +
-      '<p class="tma-portal-subtitle">A dedicated space where each client sees their shared files, requests, and projects.</p>' +
-      '</div>' +
       (s.clientHubAccess.enabled
         ? ui().banner('info', 'Client hub is <strong>enabled</strong> for this account. Manage access under Account settings &rsaquo; Client hub management.')
         : ui().banner('warning', 'Client hub is currently <strong>disabled</strong>. Enable it under Account settings &rsaquo; Client hub management.')) +

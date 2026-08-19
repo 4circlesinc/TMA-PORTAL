@@ -14,7 +14,7 @@
   color: var(--color-text-secondary);
 }
 
-.tma-portal-files__body { margin-top: var(--space-12); }
+.tma-portal-files__body { margin-top: 0; }
 
 .tma-portal-files__loading {
   display: flex; align-items: center; gap: var(--space-8);
@@ -27,7 +27,7 @@
 /* ── breadcrumb ────────────────────────────────────── */
 .tma-portal-breadcrumb {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4);
-  margin-top: var(--space-12); font-size: var(--text-size-14);
+  margin-top: 0; font-size: var(--text-size-14);
 }
 .tma-portal-breadcrumb__item {
   background: none; border: 0; padding: 2px var(--space-4); cursor: pointer;
