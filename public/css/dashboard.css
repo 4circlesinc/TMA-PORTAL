@@ -2161,6 +2161,12 @@
   border-radius: var(--radius-16);
   padding: var(--space-8);
 }
+.tma-dash__toolbar-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
 .tma-dash__users .tma-dash__toolbar .tma-dash__view-toggle {
   flex-shrink: 0;
 }
