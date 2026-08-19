@@ -14,6 +14,9 @@
   var popoverOpen = false;
   var realtimeBound = false;
   var pendingStatus = null;
+  var locationMaps = {};
+  var leafletPromise = null;
+  var DEFAULT_MAP = { lat: 45.5017, lng: -73.5673, zoom: 12 };
 
   var STATUS = {
     online: { label: 'Online', icon: 'green' },
@@ -59,8 +62,10 @@
       headers: headers,
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (r) {
-      if (!r.ok) throw new Error('Request failed');
-      return r.json();
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) throw new Error((data && data.message) || 'Request failed');
+        return data;
+      });
     });
   }
 
@@ -129,8 +134,237 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=6';
+    link.href = (ROOT || '') + 'css/presence.css?v=10';
     document.head.appendChild(link);
+  }
+
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve(window.L);
+    if (leafletPromise) return leafletPromise;
+    leafletPromise = new Promise(function (resolve, reject) {
+      if (!document.getElementById('tma-leaflet-css')) {
+        var css = document.createElement('link');
+        css.id = 'tma-leaflet-css';
+        css.rel = 'stylesheet';
+        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(css);
+      }
+      var script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = function () { resolve(window.L); };
+      script.onerror = function () { reject(new Error('Map library failed to load')); };
+      document.head.appendChild(script);
+    });
+    return leafletPromise;
+  }
+
+  function destroyLocationMaps() {
+    Object.keys(locationMaps).forEach(function (key) {
+      if (locationMaps[key] && locationMaps[key].map) locationMaps[key].map.remove();
+      delete locationMaps[key];
+    });
+  }
+
+  function locCoords(root, prefix) {
+    var lat = parseFloat(root.querySelector('[data-loc-' + prefix + '-lat]').value);
+    var lng = parseFloat(root.querySelector('[data-loc-' + prefix + '-lng]').value);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat: lat, lng: lng };
+  }
+
+  function locRadius(root, prefix) {
+    return parseInt(root.querySelector('[data-loc-' + prefix + '-radius]').value, 10) || 100;
+  }
+
+  function setLocCoords(root, prefix, lat, lng) {
+    var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
+    var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
+    var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
+    if (latEl) latEl.value = lat;
+    if (lngEl) lngEl.value = lng;
+    if (coordsEl) {
+      coordsEl.textContent = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
+      coordsEl.hidden = false;
+    }
+    var entry = locationMaps[prefix];
+    if (entry && entry.setPosition) entry.setPosition(lat, lng, locRadius(root, prefix));
+  }
+
+  function applyLocationOnMap(root, prefix, lat, lng, addressLabel) {
+    setLocCoords(root, prefix, lat, lng);
+    var entry = locationMaps[prefix];
+    if (entry && entry.map) {
+      entry.map.setView([lat, lng], 16, { animate: true });
+      setTimeout(function () { entry.map.invalidateSize(); }, 80);
+    }
+    var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
+    if (addressEl && addressLabel) addressEl.value = addressLabel;
+  }
+
+  function useCurrentLocation(root, prefix, mapsReady) {
+    if (!navigator.geolocation) {
+      toast('Location is not supported in this browser.', false);
+      return;
+    }
+    var btn = root.querySelector('[data-loc-' + prefix + '-current]');
+    var btnLabel = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Getting location…';
+    }
+
+    function done() {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = btnLabel || 'Use current location';
+      }
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        var lat = pos.coords.latitude;
+        var lng = pos.coords.longitude;
+        var fallbackAddress = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
+
+        function finish(label) {
+          var apply = function () {
+            applyLocationOnMap(root, prefix, lat, lng, label || fallbackAddress);
+            toast('Location set on map.', true);
+            done();
+          };
+          if (mapsReady && typeof mapsReady.then === 'function') mapsReady.then(apply).catch(apply);
+          else apply();
+        }
+
+        reverseGeocodeAddress(lat, lng)
+          .then(function (res) { finish(res && res.label ? res.label : fallbackAddress); })
+          .catch(function () { finish(fallbackAddress); });
+      },
+      function (err) {
+        var msg = 'Location permission denied.';
+        if (err && err.code === 2) msg = 'Location unavailable. Check your device settings.';
+        if (err && err.code === 3) msg = 'Location request timed out. Try again.';
+        toast(msg, false);
+        done();
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
+  }
+
+  function geocodeAddress(q) {
+    return api('GET', '/me/availability/geocode?q=' + encodeURIComponent(q));
+  }
+
+  function reverseGeocodeAddress(lat, lng) {
+    return api('GET', '/me/availability/reverse-geocode?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng));
+  }
+
+  function initLocationMap(root, prefix, loc) {
+    var mapEl = root.querySelector('[data-loc-' + prefix + '-map]');
+    if (!mapEl || locationMaps[prefix]) return Promise.resolve();
+
+    return loadLeaflet().then(function (L) {
+      if (locationMaps[prefix]) return;
+
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      var coords = loc && loc.latitude != null && loc.longitude != null
+        ? { lat: loc.latitude, lng: loc.longitude }
+        : locCoords(root, prefix);
+      var center = coords || DEFAULT_MAP;
+      var zoom = coords ? 15 : DEFAULT_MAP.zoom;
+
+      var map = L.map(mapEl, { scrollWheelZoom: true }).setView([center.lat, center.lng], zoom);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+
+      var marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
+      var circle = L.circle([center.lat, center.lng], {
+        radius: loc && loc.radiusM ? loc.radiusM : locRadius(root, prefix),
+        color: '#03a5e9',
+        fillColor: '#03a5e9',
+        fillOpacity: 0.12,
+        weight: 2,
+      }).addTo(map);
+
+      function setPosition(lat, lng, radius) {
+        marker.setLatLng([lat, lng]);
+        circle.setLatLng([lat, lng]);
+        circle.setRadius(radius || locRadius(root, prefix));
+        map.panTo([lat, lng], { animate: true });
+        var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
+        var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
+        var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
+        if (latEl) latEl.value = lat;
+        if (lngEl) lngEl.value = lng;
+        if (coordsEl) {
+          coordsEl.textContent = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
+          coordsEl.hidden = false;
+        }
+      }
+
+      marker.on('dragend', function () {
+        var p = marker.getLatLng();
+        reverseGeocodeAddress(p.lat, p.lng).then(function (res) {
+          applyLocationOnMap(root, prefix, p.lat, p.lng, res && res.label ? res.label : null);
+        }).catch(function () {
+          applyLocationOnMap(root, prefix, p.lat, p.lng, null);
+        });
+      });
+
+      map.on('click', function (e) {
+        reverseGeocodeAddress(e.latlng.lat, e.latlng.lng).then(function (res) {
+          applyLocationOnMap(root, prefix, e.latlng.lat, e.latlng.lng, res && res.label ? res.label : null);
+        }).catch(function () {
+          applyLocationOnMap(root, prefix, e.latlng.lat, e.latlng.lng, null);
+        });
+      });
+
+      var radiusEl = root.querySelector('[data-loc-' + prefix + '-radius]');
+      if (radiusEl) {
+        radiusEl.addEventListener('input', function () {
+          circle.setRadius(locRadius(root, prefix));
+        });
+      }
+
+      locationMaps[prefix] = { map: map, marker: marker, circle: circle, setPosition: setPosition };
+      setTimeout(function () { map.invalidateSize(); }, 80);
+    }).catch(function () {
+      if (mapEl) mapEl.innerHTML = '<p class="tma-presence-loc__map-fallback">Map unavailable. Use address search or current location.</p>';
+    });
+  }
+
+  function refreshLocationMaps(root) {
+    ['office', 'remote'].forEach(function (prefix) {
+      if (locationMaps[prefix] && locationMaps[prefix].map) {
+        locationMaps[prefix].map.invalidateSize();
+      }
+    });
+  }
+
+  function initAllLocationMaps(root, office, remote) {
+    destroyLocationMaps();
+    return Promise.all([
+      initLocationMap(root, 'office', office),
+      initLocationMap(root, 'remote', remote),
+    ]).then(function () { refreshLocationMaps(root); });
+  }
+
+  function searchLocationAddress(root, prefix) {
+    var q = root.querySelector('[data-loc-' + prefix + '-address]').value.trim();
+    if (!q) { toast('Enter an address to search.', false); return Promise.resolve(); }
+    return geocodeAddress(q).then(function (res) {
+      applyLocationOnMap(root, prefix, res.lat, res.lng, res.label || q);
+    }).catch(function (err) {
+      toast(err.message || 'Could not find that address.', false);
+    });
   }
 
   function paintHeader() {
@@ -238,7 +472,6 @@
       return '<button type="button" class="tma-presence-popover__pill" data-presence-duration="' + d.key + '">' + esc(d.label) + '</button>';
     }).join('');
     return '<div class="tma-presence-popover__duration" data-presence-duration-panel hidden>' +
-      '<div class="tma-presence-popover__head">Duration</div>' +
       '<div class="tma-presence-popover__duration-row">' + pills + '</div>' +
       '<div style="padding:8px 0 0;display:none" data-presence-custom-range>' +
       '<input type="datetime-local" data-presence-starts style="margin-bottom:6px">' +
@@ -266,21 +499,18 @@
     }).join('');
 
     host.innerHTML =
-      '<div class="tma-presence-popover__section">' +
-      '<div class="tma-presence-popover__head">Current status</div>' +
-      '<div class="tma-presence-popover__current">' + iconHtml(p.icon, 12) +
+      '<div class="tma-presence-popover__section tma-presence-popover__section--now">' +
+      '<div class="tma-presence-popover__current"><span class="tma-presence-popover__current-icon">' + iconHtml(p.icon, 12) + '</span>' +
       '<div class="tma-presence-popover__current-meta">' +
       '<div class="tma-presence-popover__current-title">' + esc(p.label || meta(p.status).label) + '</div>' +
       '<div class="tma-presence-popover__current-sub">' + esc(sourceLabel(p.source)) +
       (p.expiresAt ? ' · until ' + esc(new Date(p.expiresAt).toLocaleString()) : '') +
-      '</div></div></div></div>' +
-      '<div class="tma-presence-popover__section">' +
-      '<div class="tma-presence-popover__head">Status message <span style="font-weight:400;text-transform:none">(optional)</span></div>' +
-      '<div class="tma-presence-popover__message"><input type="text" maxlength="140" placeholder="Focused on client work…" data-presence-message value="' + esc(p.message || '') + '"></div>' +
+      '</div></div></div>' +
+      '<div class="tma-presence-popover__message"><input type="text" maxlength="140" placeholder="Add a status message…" data-presence-message aria-label="Status message" value="' + esc(p.message || '') + '"></div>' +
       '</div>' +
-      '<div class="tma-presence-popover__section"><div class="tma-presence-popover__head">Set status</div>' + items +
+      '<div class="tma-presence-popover__section tma-presence-popover__section--pick">' + items +
       durationSectionHtml('at_meeting') + '</div>' +
-      '<div class="tma-presence-popover__section">' +
+      '<div class="tma-presence-popover__section tma-presence-popover__section--foot">' +
       '<button type="button" class="tma-presence-popover__item" data-presence-settings><img src="images/icons/phosphor/Gear.svg" alt="" width="14" height="14"><span>Status settings…</span></button>' +
       '</div>';
 
@@ -344,6 +574,7 @@
   }
 
   function closeSettingsModal() {
+    destroyLocationMaps();
     if (window.TMAPortalUI && window.TMAPortalUI.closeModal) {
       window.TMAPortalUI.closeModal();
       return;
@@ -356,6 +587,33 @@
     return (host && host.querySelector('.tma-portal-modal__body')) || host || document;
   }
 
+  function locationBlockHtml(prefix, title, loc) {
+    loc = loc || {};
+    var ghostBtn = 'tma-no-data__btn tma-portal-btn--ghost';
+    var lat = loc.latitude != null && loc.latitude !== '' ? loc.latitude : '';
+    var lng = loc.longitude != null && loc.longitude !== '' ? loc.longitude : '';
+    return (
+      '<section class="tma-presence-loc" data-loc-block="' + prefix + '">' +
+      '<h3 class="tma-presence-loc__title">' + esc(title) + '</h3>' +
+      '<label>Label</label><input data-loc-' + prefix + '-label value="' + esc(loc.label || title) + '">' +
+      '<label>Address</label>' +
+      '<div class="tma-presence-loc__search">' +
+      '<input type="text" data-loc-' + prefix + '-address value="' + esc(loc.address || '') + '" placeholder="Search for an address…">' +
+      '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-search>Find on map</button></div>' +
+      '<div class="tma-presence-loc__map" data-loc-' + prefix + '-map role="application" aria-label="' + esc(title) + ' map"></div>' +
+      '<p class="tma-presence-loc__hint">Click the map or drag the pin to set the location. The circle shows the detection radius.</p>' +
+      '<input type="hidden" data-loc-' + prefix + '-lat value="' + esc(lat) + '">' +
+      '<input type="hidden" data-loc-' + prefix + '-lng value="' + esc(lng) + '">' +
+      '<p class="tma-presence-loc__coords" data-loc-' + prefix + '-coords' + (lat && lng ? '' : ' hidden') + '>' +
+      (lat && lng ? esc(Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6)) : '') + '</p>' +
+      '<label>Detection radius (metres)</label>' +
+      '<input data-loc-' + prefix + '-radius type="number" min="25" max="5000" step="25" value="' + esc(loc.radiusM || 100) + '">' +
+      '<label class="tma-presence-settings__check"><input type="checkbox" data-loc-' + prefix + '-enabled ' + (loc.enabled !== false ? 'checked' : '') + '><span>Enable automatic detection</span></label>' +
+      '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-current>Use current location</button>' +
+      '</section>'
+    );
+  }
+
   function settingsModalBodyHtml(office, remote, scheduleRows) {
     var ghostBtn = 'tma-no-data__btn tma-portal-btn--ghost';
     var primaryBtn = 'tma-no-data__btn';
@@ -365,23 +623,9 @@
       '<button type="button" class="tma-presence-settings__tab" data-tab="schedules">Scheduled statuses</button></div>' +
       '<div class="tma-presence-settings">' +
       '<div class="tma-presence-settings__panel" data-panel="locations">' +
-      '<p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 12px">Allow location access to automatically detect whether you\'re working from the office or remotely. Your exact location is never shown to others.</p>' +
-      '<h3 style="font-size:14px;margin:16px 0 8px">Office location</h3>' +
-      '<label>Label</label><input data-loc-office-label value="' + esc(office.label || 'Office') + '">' +
-      '<label>Address</label><input data-loc-office-address value="' + esc(office.address || '') + '" placeholder="123 Example Street">' +
-      '<div class="tma-presence-settings__row"><div><label>Latitude</label><input data-loc-office-lat type="number" step="any" value="' + esc(office.latitude || '') + '"></div>' +
-      '<div><label>Longitude</label><input data-loc-office-lng type="number" step="any" value="' + esc(office.longitude || '') + '"></div></div>' +
-      '<label>Radius (metres)</label><input data-loc-office-radius type="number" min="25" max="5000" value="' + esc(office.radiusM || 100) + '">' +
-      '<label><input type="checkbox" data-loc-office-enabled ' + (office.enabled !== false ? 'checked' : '') + '> Enable automatic detection</label>' +
-      '<button type="button" class="' + ghostBtn + '" data-loc-office-current style="margin-top:8px">Use current location</button>' +
-      '<h3 style="font-size:14px;margin:20px 0 8px">Remote location</h3>' +
-      '<label>Label</label><input data-loc-remote-label value="' + esc(remote.label || 'Home') + '">' +
-      '<label>Address</label><input data-loc-remote-address value="' + esc(remote.address || '') + '">' +
-      '<div class="tma-presence-settings__row"><div><label>Latitude</label><input data-loc-remote-lat type="number" step="any" value="' + esc(remote.latitude || '') + '"></div>' +
-      '<div><label>Longitude</label><input data-loc-remote-lng type="number" step="any" value="' + esc(remote.longitude || '') + '"></div></div>' +
-      '<label>Radius (metres)</label><input data-loc-remote-radius type="number" min="25" max="5000" value="' + esc(remote.radiusM || 100) + '">' +
-      '<label><input type="checkbox" data-loc-remote-enabled ' + (remote.enabled !== false ? 'checked' : '') + '> Enable automatic detection</label>' +
-      '<button type="button" class="' + ghostBtn + '" data-loc-remote-current style="margin-top:8px">Use current location</button>' +
+      '<p class="tma-presence-loc__intro">Allow location access to automatically detect whether you\'re working from the office or remotely. Your exact location is never shown to others.</p>' +
+      locationBlockHtml('office', 'Office location', office) +
+      locationBlockHtml('remote', 'Remote location', remote) +
       '</div>' +
       '<div class="tma-presence-settings__panel" data-panel="schedules" hidden>' +
       '<p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 12px">Schedule Away, meetings, or focus time with start and end dates.</p>' +
@@ -398,8 +642,10 @@
     );
   }
 
-  function wireSettingsModal(host) {
+  function wireSettingsModal(host, office, remote) {
     var root = settingsModalRoot(host);
+    office = office || {};
+    remote = remote || {};
 
     root.querySelectorAll('[data-tab]').forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -409,22 +655,27 @@
         root.querySelectorAll('[data-panel]').forEach(function (p) {
           p.hidden = p.getAttribute('data-panel') !== id;
         });
+        if (id === 'locations') setTimeout(function () { refreshLocationMaps(root); }, 60);
       });
     });
 
-    function useCurrent(prefix) {
-      if (!navigator.geolocation) { toast('Location is not supported in this browser.', false); return; }
-      navigator.geolocation.getCurrentPosition(function (pos) {
-        root.querySelector('[data-loc-' + prefix + '-lat]').value = pos.coords.latitude;
-        root.querySelector('[data-loc-' + prefix + '-lng]').value = pos.coords.longitude;
-      }, function () { toast('Location permission denied.', false); },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
-    }
+    var mapsReady = initAllLocationMaps(root, office, remote);
+
+    root.querySelectorAll('[data-loc-office-address], [data-loc-remote-address]').forEach(function (input) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var prefix = input.hasAttribute('data-loc-office-address') ? 'office' : 'remote';
+        searchLocationAddress(root, prefix);
+      });
+    });
 
     host.addEventListener('click', function (e) {
       if (e.target.closest('[data-presence-close]')) { closeSettingsModal(); return; }
-      if (e.target.closest('[data-loc-office-current]')) { useCurrent('office'); return; }
-      if (e.target.closest('[data-loc-remote-current]')) { useCurrent('remote'); return; }
+      if (e.target.closest('[data-loc-office-search]')) { searchLocationAddress(root, 'office'); return; }
+      if (e.target.closest('[data-loc-remote-search]')) { searchLocationAddress(root, 'remote'); return; }
+      if (e.target.closest('[data-loc-office-current]')) { useCurrentLocation(root, 'office', mapsReady); return; }
+      if (e.target.closest('[data-loc-remote-current]')) { useCurrentLocation(root, 'remote', mapsReady); return; }
       var del = e.target.closest('[data-schedule-del]');
       if (del) {
         api('DELETE', '/me/availability/schedules/' + del.getAttribute('data-schedule-del'))
@@ -446,9 +697,13 @@
         return;
       }
       if (e.target.closest('[data-presence-save-locations]')) {
-        saveLocation('office', root).then(function () { return saveLocation('remote', root); })
-          .then(function () { requestLocationIfEnabled(); startLocationChecks(); toast('Locations saved.', true); })
-          .catch(function () { toast('Could not save locations.', false); });
+        saveAllLocations(root)
+          .then(function () {
+            requestLocationIfEnabled();
+            startLocationChecks();
+            toast('Locations saved.', true);
+          })
+          .catch(function (err) { toast(err.message || 'Could not save locations.', false); });
       }
     });
   }
@@ -477,7 +732,7 @@
       var host = ui.openModal({
         title: 'Presence settings',
         body: body,
-        onMount: function (modalHost) { wireSettingsModal(modalHost); },
+        onMount: function (modalHost) { wireSettingsModal(modalHost, office, remote); },
       });
       if (host) host.setAttribute('data-presence-settings-modal', '');
       return;
@@ -494,7 +749,7 @@
       body +
       '</div>';
     document.body.appendChild(wrap);
-    wireSettingsModal(wrap);
+    wireSettingsModal(wrap, office, remote);
   }
 
   function openSettingsModal() {
@@ -509,25 +764,58 @@
 
   function saveLocation(type, wrap) {
     var prefix = type === 'office' ? 'office' : 'remote';
+    var title = type === 'office' ? 'Office' : 'Remote';
+    var enabled = !!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked;
     var lat = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lat]').value);
     var lng = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lng]').value);
-    if (isNaN(lat) || isNaN(lng)) return Promise.resolve();
-    return api('PUT', '/me/availability/locations', {
-      type: type,
-      label: wrap.querySelector('[data-loc-' + prefix + '-label]').value,
-      address: wrap.querySelector('[data-loc-' + prefix + '-address]').value,
-      latitude: lat,
-      longitude: lng,
-      radiusM: parseInt(wrap.querySelector('[data-loc-' + prefix + '-radius]').value, 10) || 100,
-      enabled: !!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked,
-    }).then(applyPayload);
+    var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
+
+    function persist(latitude, longitude) {
+      return api('PUT', '/me/availability/locations', {
+        type: type,
+        label: wrap.querySelector('[data-loc-' + prefix + '-label]').value,
+        address: wrap.querySelector('[data-loc-' + prefix + '-address]').value,
+        latitude: latitude,
+        longitude: longitude,
+        radiusM: parseInt(wrap.querySelector('[data-loc-' + prefix + '-radius]').value, 10) || 100,
+        enabled: enabled,
+      }).then(applyPayload);
+    }
+
+    if (!enabled && isNaN(lat) && isNaN(lng) && !address) {
+      return Promise.resolve();
+    }
+
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return persist(lat, lng);
+    }
+
+    if (!address) {
+      if (enabled) {
+        return Promise.reject(new Error(title + ': set a location on the map, search an address, or use current location.'));
+      }
+      return Promise.resolve();
+    }
+
+    return geocodeAddress(address).then(function (res) {
+      setLocCoords(wrap, prefix, res.lat, res.lng);
+      if (res.label) wrap.querySelector('[data-loc-' + prefix + '-address]').value = res.label;
+      return persist(res.lat, res.lng);
+    });
+  }
+
+  function saveAllLocations(wrap) {
+    return saveLocation('office', wrap).then(function () { return saveLocation('remote', wrap); });
   }
 
   function requestLocationIfEnabled() {
     var locs = (state && state.locations) || [];
-    if (!locs.some(function (l) { return l.enabled; }) || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(function () { startLocationChecks(); }, function () { /* denied */ },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+    if (!locs.some(function (l) { return l.enabled && l.latitude != null; }) || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      api('POST', '/me/availability/location', { lat: pos.coords.latitude, lng: pos.coords.longitude })
+        .then(applyPayload).catch(function () {});
+    }, function () { /* denied */ },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 });
   }
 
   function toast(msg, ok) {
@@ -540,6 +828,9 @@
     paintHeader();
     listeners.forEach(function (fn) { fn(state); });
     scheduleExpiry();
+    if ((state.locations || []).some(function (l) { return l.enabled && l.latitude != null; })) {
+      startLocationChecks();
+    }
     return state;
   }
 
@@ -581,7 +872,7 @@
       navigator.geolocation.getCurrentPosition(function (pos) {
         api('POST', '/me/availability/location', { lat: pos.coords.latitude, lng: pos.coords.longitude })
           .then(applyPayload).catch(function () {});
-      }, function () {}, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+      }, function () {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 });
     }
     tick();
     locationTimer = setInterval(tick, 300000);

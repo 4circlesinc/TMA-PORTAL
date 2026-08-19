@@ -206,6 +206,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/status', [AvailabilityController::class, 'clearStatus'])->name('status.clear');
         Route::put('/message', [AvailabilityController::class, 'updateMessage'])->name('message');
         Route::post('/location', [AvailabilityController::class, 'reportLocation'])->name('location.report');
+        Route::get('/geocode', [AvailabilityController::class, 'geocode'])->name('geocode');
+        Route::get('/reverse-geocode', [AvailabilityController::class, 'reverseGeocode'])->name('reverse-geocode');
         Route::put('/locations', [AvailabilityController::class, 'upsertLocation'])->name('locations.upsert');
         Route::delete('/locations/{type}', [AvailabilityController::class, 'deleteLocation'])->name('locations.delete');
         Route::post('/schedules', [AvailabilityController::class, 'storeSchedule'])->name('schedules.store');

@@ -8,6 +8,7 @@ use App\Support\Presence\AvailabilityService;
 use App\Support\Presence\AvailabilityStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 
 class AvailabilityController extends Controller
@@ -85,6 +86,88 @@ class AvailabilityController extends Controller
         AvailabilityService::applyLocation($user, $data);
 
         return response()->json(AvailabilityService::selfPayload($user));
+    }
+
+    /** Resolve an address to coordinates (Nominatim proxy — not stored). */
+    public function geocode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'max:255'],
+        ]);
+
+        $results = self::nominatimSearch($data['q']);
+
+        if ($results === null) {
+            return response()->json(['message' => 'Geocoding is temporarily unavailable.'], 503);
+        }
+
+        if ($results === []) {
+            return response()->json(['message' => 'No results for that address.'], 422);
+        }
+
+        $hit = $results[0];
+
+        return response()->json([
+            'lat' => (float) $hit['lat'],
+            'lng' => (float) $hit['lon'],
+            'label' => $hit['display_name'] ?? $data['q'],
+        ]);
+    }
+
+    /** Resolve coordinates to a readable address (not stored). */
+    public function reverseGeocode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $response = Http::timeout(8)
+            ->withHeaders(['User-Agent' => self::nominatimUserAgent()])
+            ->get('https://nominatim.openstreetmap.org/reverse', [
+                'lat' => $data['lat'],
+                'lon' => $data['lng'],
+                'format' => 'json',
+            ]);
+
+        if (! $response->successful()) {
+            return response()->json(['message' => 'Reverse geocoding is temporarily unavailable.'], 503);
+        }
+
+        $body = $response->json();
+
+        return response()->json([
+            'lat' => (float) $data['lat'],
+            'lng' => (float) $data['lng'],
+            'label' => $body['display_name'] ?? null,
+        ]);
+    }
+
+    /**
+     * @return list<array<string, mixed>>|null null when the upstream service fails
+     */
+    private static function nominatimSearch(string $query): ?array
+    {
+        $response = Http::timeout(8)
+            ->withHeaders(['User-Agent' => self::nominatimUserAgent()])
+            ->get('https://nominatim.openstreetmap.org/search', [
+                'q' => $query,
+                'format' => 'json',
+                'limit' => 1,
+            ]);
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $json = $response->json();
+
+        return is_array($json) ? $json : [];
+    }
+
+    private static function nominatimUserAgent(): string
+    {
+        return config('app.name', 'TMA Portal').' (availability geocode; '.config('app.url', 'localhost').')';
     }
 
     /** Save office or remote work location. */

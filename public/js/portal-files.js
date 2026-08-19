@@ -4308,13 +4308,15 @@
       }
       rail.innerHTML = html;
 
+      var thumbWidth = Math.max(120, rail.clientWidth - 32);
+
       for (var p = 1; p <= pdf.numPages; p++) {
         (function (pageNum) {
           pdf.getPage(pageNum).then(function (page) {
             if (current().id !== f.id) return;
             var canvas = rail.querySelector('[data-lb-pdf-thumb="' + pageNum + '"]');
             if (!canvas) return;
-            var cssWidth = 72;
+            var cssWidth = thumbWidth;
             var unscaled = page.getViewport({ scale: 1 });
             var scale = cssWidth / unscaled.width;
             var viewport = page.getViewport({ scale: scale });
