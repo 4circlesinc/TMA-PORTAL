@@ -60,6 +60,9 @@ class Calendar extends Model
 
     public const VISIBILITIES = ['private', 'shared', 'all_staff'];
 
+    /** Minutes after which an untouched 'syncing' flag reads as an abandoned run. */
+    public const SYNC_STALE_MINUTES = 30;
+
     protected function casts(): array
     {
         return [
@@ -72,6 +75,29 @@ class Calendar extends Model
             'sync_cancelled' => 'boolean',
             'remote_can_write' => 'boolean',
         ];
+    }
+
+    /*
+     * `subscription_status` with abandoned runs settled. 'syncing' is a lock,
+     * not a fact: every connect/queue path stamps it and only the sync job's
+     * completion clears it, so a run that never starts (no queue worker) or
+     * dies mid-pass leaves it set for ever — which pinned a "Syncing
+     * calendar…" toast on every page load for every user with a connected
+     * calendar. A row nothing has touched for SYNC_STALE_MINUTES is not a
+     * live run: fall back to the last completed outcome, or 'error' if no
+     * run ever completed.
+     */
+    public function effectiveSubscriptionStatus(): ?string
+    {
+        if ($this->subscription_status !== 'syncing') {
+            return $this->subscription_status;
+        }
+
+        if ($this->updated_at && $this->updated_at->gt(now()->subMinutes(self::SYNC_STALE_MINUTES))) {
+            return 'syncing';
+        }
+
+        return $this->subscription_synced_at ? 'ok' : 'error';
     }
 
     public function owner(): BelongsTo
@@ -229,7 +255,7 @@ class Calendar extends Model
             // provider connection against that one row rather than as a
             // page-level error.
             'sync' => $this->isSynced() ? [
-                'status' => $this->subscription_status ?: 'ok',
+                'status' => $this->effectiveSubscriptionStatus() ?: 'ok',
                 'error' => $this->subscription_error,
                 'syncedAt' => $this->subscription_synced_at?->toIso8601String(),
                 'frequency' => $this->subscription_frequency,

@@ -238,7 +238,7 @@ class CalendarSyncController extends Controller
             return [
                 'id' => $c->uuid,
                 'name' => $c->name,
-                'status' => $c->subscription_status ?: 'ok',
+                'status' => $c->effectiveSubscriptionStatus() ?: 'ok',
                 'error' => $c->subscription_error,
                 'eventCount' => (int) $c->events_count,
                 'syncedAt' => $c->subscription_synced_at?->toIso8601String(),

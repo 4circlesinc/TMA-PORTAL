@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Calendar;
 use App\Models\ConnectedAccount;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
@@ -121,6 +122,89 @@ class MeSyncStatusTest extends TestCase
         $this->actingAs($user)->getJson('/me/sync-status')
             ->assertOk()
             ->assertJsonPath('email.state', 'done');
+    }
+
+    private function calendarAccount(User $user): ConnectedAccount
+    {
+        return ConnectedAccount::create([
+            'user_id' => $user->id, 'provider' => 'microsoft', 'provider_id' => 'p2',
+            'email' => $user->email, 'name' => $user->name, 'token' => 'token',
+            'scopes' => ['Calendars.ReadWrite'], 'sync_calendar' => true,
+        ]);
+    }
+
+    private function connectedCalendar(ConnectedAccount $account, array $attributes = []): Calendar
+    {
+        return Calendar::create(array_merge([
+            'uuid' => (string) Str::uuid(), 'name' => 'Calendar',
+            'calendar_type' => Calendar::TYPE_PERSONAL,
+            'owner_id' => $account->user_id, 'created_by' => $account->user_id,
+            'source' => $account->provider, 'connected_account_id' => $account->id,
+            'external_id' => 'ext-'.Str::random(6),
+            'subscription_status' => 'syncing',
+        ], $attributes));
+    }
+
+    public function test_a_calendar_run_recently_stamped_reports_syncing(): void
+    {
+        $user = $this->user();
+        $account = $this->calendarAccount($user);
+        $this->connectedCalendar($account);
+        $this->connectedCalendar($account, [
+            'subscription_status' => 'ok', 'subscription_synced_at' => now(),
+        ]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('calendar.state', 'syncing')
+            ->assertJsonPath('calendar.count', 2)
+            ->assertJsonPath('calendar.synced', 1);
+    }
+
+    /*
+     * The calendar side of the abandoned-lock bug: every connect/queue path
+     * stamps subscription_status = 'syncing' and only the sync job's
+     * completion clears it, so with no worker the flag stayed set for ever —
+     * "Syncing calendar… 1 of 2 calendars" on every page load, for everyone.
+     */
+    public function test_a_stale_calendar_flag_does_not_pin_the_toast(): void
+    {
+        $user = $this->user();
+        $account = $this->calendarAccount($user);
+        $calendar = $this->connectedCalendar($account, [
+            'subscription_synced_at' => now()->subDay(),
+        ]);
+        DB::table('calendars')->where('id', $calendar->id)
+            ->update(['updated_at' => now()->subMinutes(Calendar::SYNC_STALE_MINUTES + 5)]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('calendar.state', 'done');
+    }
+
+    public function test_a_calendar_import_that_never_ran_reports_error(): void
+    {
+        $user = $this->user();
+        $account = $this->calendarAccount($user);
+        $calendar = $this->connectedCalendar($account);
+        DB::table('calendars')->where('id', $calendar->id)
+            ->update(['updated_at' => now()->subMinutes(Calendar::SYNC_STALE_MINUTES + 5)]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('calendar.state', 'error');
+    }
+
+    public function test_discovery_that_never_produced_calendars_goes_quiet(): void
+    {
+        $user = $this->user();
+        $account = $this->calendarAccount($user);
+        DB::table('connected_accounts')->where('id', $account->id)
+            ->update(['updated_at' => now()->subHour()]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('calendar.state', 'off');
     }
 
     public function test_an_unreadable_token_reports_error_instead_of_failing_the_poll(): void

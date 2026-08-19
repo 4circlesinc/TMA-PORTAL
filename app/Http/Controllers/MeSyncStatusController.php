@@ -124,17 +124,27 @@ class MeSyncStatusController extends Controller
 
         $calendars = Calendar::where('owner_id', $user->id)
             ->whereNotNull('connected_account_id')
-            ->get(['id', 'subscription_status']);
+            ->get(['id', 'subscription_status', 'subscription_synced_at', 'updated_at']);
 
         if ($calendars->isEmpty()) {
-            // The post-connect import is still discovering calendars.
-            return $account->canReadCalendar()
+            if (! $account->canReadCalendar()) {
+                return ['state' => 'error', 'count' => 0];
+            }
+
+            // The post-connect import is still discovering calendars — but only
+            // a recent connect counts. If discovery never runs (no worker), this
+            // state used to pin a "Finding your calendars…" toast for ever.
+            return $account->updated_at
+                && $account->updated_at->gt(now()->subMinutes(Calendar::SYNC_STALE_MINUTES))
                 ? ['state' => 'syncing', 'count' => 0]
-                : ['state' => 'error', 'count' => 0];
+                : ['state' => 'off'];
         }
 
-        $syncing = $calendars->where('subscription_status', 'syncing')->count();
-        $errors = $calendars->where('subscription_status', 'error')->count();
+        // effectiveSubscriptionStatus() settles abandoned runs — a stale
+        // 'syncing' row must not pin the toast (same trap as OneDrive below).
+        $statuses = $calendars->map(fn (Calendar $c) => $c->effectiveSubscriptionStatus());
+        $syncing = $statuses->filter(fn ($s) => $s === 'syncing')->count();
+        $errors = $statuses->filter(fn ($s) => $s === 'error')->count();
 
         if ($syncing > 0) {
             return [
