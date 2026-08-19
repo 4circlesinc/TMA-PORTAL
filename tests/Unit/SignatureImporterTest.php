@@ -134,6 +134,67 @@ class SignatureImporterTest extends TestCase
         $this->assertNull(SignatureImporter::for($account)->import());
     }
 
+    public function test_it_reads_the_configured_gmail_signature_when_the_scope_allows(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'scopes' => [
+                'https://www.googleapis.com/auth/gmail.modify',
+                'https://www.googleapis.com/auth/gmail.settings.basic',
+            ],
+        ])->save();
+
+        // Sent mail carries a different block — the configured one must win.
+        $this->sent($account, '<div class="gmail_signature"><div>Sent-mail Sig</div></div>');
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/settings/sendAs' => Http::response([
+                'sendAs' => [
+                    ['isPrimary' => false, 'signature' => '<div>Alias Sig</div>'],
+                    ['isPrimary' => true, 'signature' => '<div><b>Configured Sig</b><script>x()</script></div>'],
+                ],
+            ]),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Configured Sig', $signature);
+        $this->assertStringNotContainsString('Alias Sig', $signature);
+        $this->assertStringNotContainsString('Sent-mail Sig', $signature);
+        $this->assertStringNotContainsString('<script', $signature);
+    }
+
+    public function test_it_falls_back_to_sent_mail_when_the_gmail_settings_call_fails(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'scopes' => [
+                'https://www.googleapis.com/auth/gmail.modify',
+                'https://www.googleapis.com/auth/gmail.settings.basic',
+            ],
+        ])->save();
+
+        $this->sent($account, '<div class="gmail_signature"><div>Sent-mail Sig</div></div>');
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/settings/sendAs' => Http::response(null, 403),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Sent-mail Sig', $signature);
+    }
+
     public function test_it_embeds_cid_signature_images_as_data_uris(): void
     {
         $account = $this->account();

@@ -954,6 +954,33 @@ field placement and drawing, and computed CSS only exist in a browser.
   pins the failure case that matters — a dead OAuth grant degrades to a
   reconnect banner over an intact list rather than blanking the mailbox. Needs
   a user with a connected account row (see the mailbox fixture below).
+- **`email-import-signature.mjs`** — the "Import from Gmail / Outlook" button
+  in Email settings → Sending. PHPUnit pins the importer and the endpoint
+  (`SignatureImporterTest`, `MailboxTest`); what only a browser can check is
+  the round trip the user sees: the click fills the contenteditable editor
+  with the block lifted from Sent mail, the library gains exactly one active
+  "Default From Gmail" entry, the button's label recovers after the morph
+  (both on success and on a stubbed 422 — a button stuck on "Importing…" is
+  the regression it guards), re-importing reuses the slot instead of stacking
+  duplicates, and a fresh compose opens carrying the imported block.
+
+  Wants a **fresh** database — the flow writes the imported signature into the
+  user's preferences, so a re-run against yesterday's file starts from a dirty
+  library. Its fixture seeds the standard admin plus a connected Google
+  account and Sent mail where one `gmail_signature` block repeats and a
+  one-off footer appears once (the repeat-wins rule is asserted):
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
+    php artisan tinker tests/Browser/fixtures/signature-import-seed.php
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/email-import-signature.mjs
+  ```
+
+  The seed's logo is a `data:` URI on purpose: an `https:` logo in the seeded
+  signature would fail to fetch in the harness and the console-error check at
+  the end would flag the noise. The three failures the environment *does*
+  produce (the fake OAuth token's 409, the stubbed 422, the websocket origin
+  refusal) are filtered by shape; anything else in the console fails the run.
 - **`mail-sync-progress.mjs`** — the mailbox sync progress panel and the
   mailbox-only sign-out. Seeds a running `mail_sync_progress` row and then
   mutates it via sqlite the way the queue jobs would (importing → stalled →
