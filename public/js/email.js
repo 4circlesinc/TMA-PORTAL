@@ -977,15 +977,8 @@
 
   function renderDetailTopbar(state) {
     if (isEmailMobile()) return '';
-    // Archive / delete / unread / prev-next live in the page toolbar —
-    // this strip only keeps the back control for single-pane reading.
-    var back = renderDetailBack(state, true);
-    if (!back) return '';
-    return (
-      '<div class="tma-dash__email-detail-topbar">' +
-      '<div class="tma-dash__email-detail-topbar-start">' + back + '</div>' +
-      '</div>'
-    );
+    // Back sits on the subject row now, so this strip is unused.
+    return '';
   }
 
   function renderEmailTooltipMarkup(tipId, label) {
@@ -1541,19 +1534,19 @@
    * rather than being baked in here. */
   var FOLDERS = [
     { id: 'compose', label: 'New Email', icon: 'Plus', compose: true },
-    { id: 'inbox', label: 'Inbox', icon: 'TrayFill' },
+    { id: 'inbox', label: 'Inbox', icon: 'Tray' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
-    { id: 'important', label: 'Important', icon: 'FlagFill' },
+    { id: 'important', label: 'Important', icon: 'Flag' },
     // Same idea: everything starred, wherever it really lives.
-    { id: 'starred', label: 'Starred', icon: 'StarFill' },
+    { id: 'starred', label: 'Starred', icon: 'Star' },
     // Also virtual: everything with a snooze set, wherever it really lives.
-    { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill' },
-    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill' },
-    { id: 'draft', label: 'Draft', icon: 'FileTextFill' },
-    { id: 'spam', label: 'Spam', icon: 'WarningOctagonFill' },
-    { id: 'trash', label: 'Trash', icon: 'TrashFill' },
-    { id: 'archive', label: 'Archive', icon: 'ArchiveFill' },
+    { id: 'snoozed', label: 'Snoozed', icon: 'Clock' },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
+    { id: 'draft', label: 'Draft', icon: 'FileText' },
+    { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+    { id: 'trash', label: 'Trash', icon: 'Trash' },
+    { id: 'archive', label: 'Archive', icon: 'Archive' },
     { id: 'templates', label: 'Templates', icon: 'SquaresFour', countKey: 'templates' },
   ];
 
@@ -5342,6 +5335,7 @@
       '<div class="tma-dash__email-detail' + (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
       renderDetailTopbar(state) +
       '<div class="tma-dash__email-detail-subject-bar">' +
+      (!mobile ? renderDetailBack(state, true) : '') +
       renderDetailSubject(subject, row, state) +
       '</div>' +
       '<div class="tma-dash__email-detail-scroll">' + body + '</div>' +

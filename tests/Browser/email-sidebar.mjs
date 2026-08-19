@@ -84,9 +84,9 @@ try {
 
   const sidebar = await styleOf(page, '.tma-dash__email-sidebar');
   check(!!sidebar, 'the sidebar renders');
-  // 232px is the Feed's sidebar width. Anything else means a later stylesheet
+  // 180px is the open mailbox card. Anything else means a later stylesheet
   // is winning — see the class comment.
-  check(sidebar.width === '232px', `it is 232px wide, like the Feed's (got ${sidebar && sidebar.width})`);
+  check(sidebar.width === '180px', `it is 180px wide when opened (got ${sidebar && sidebar.width})`);
   check(sidebar.radius === '16px', 'it has the card radius');
   check(sidebar.borderWidth === '1px', 'it has the card border');
 
@@ -167,7 +167,7 @@ try {
 
   await page.click('[data-email-sidebar-toggle]');
   await page.waitForTimeout(700);
-  check((await styleOf(page, '.tma-dash__email-sidebar')).width === '232px',
+  check((await styleOf(page, '.tma-dash__email-sidebar')).width === '180px',
     'expanding restores the card width');
 
   step(6, 'Dark theme gives the card a dark surface');

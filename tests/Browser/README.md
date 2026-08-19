@@ -330,7 +330,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```
 
 - **`email-sidebar.mjs`** — the mailbox sidebar after it was restyled to match
-  the Feed's: a card at 232px with collapsible Mailboxes and Labels groups,
+  the Feed's: a card at 180px with collapsible Mailboxes and Labels groups,
   rather than the bare 72px icon rail that sat flush against the main menu.
 
   It asserts **computed** style, not markup, because every bug in this area has

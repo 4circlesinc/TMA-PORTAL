@@ -1213,8 +1213,8 @@ a.tma-dash__tab-btn:visited {
  * The hard 152px width and the nav padding that used to live here are gone.
  *
  * This file loads last, so those unconditional declarations silently beat the
- * sidebar's own rules in dashboard.css — the sidebar is a 232px card now (see
- * .tma-dash__email-sidebar there, which matches the Feed's) and it was being
+ * sidebar's own rules in dashboard.css — the sidebar is a 180px card now (see
+ * .tma-dash__email-sidebar there) and it was being
  * squeezed to 152px with no way to tell from the rule that set it. The card
  * supplies its own padding.
  */
