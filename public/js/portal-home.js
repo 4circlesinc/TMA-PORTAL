@@ -1196,6 +1196,28 @@
     }).join('|');
   }
 
+  if (!window._tmaHomePresenceBound) {
+    window._tmaHomePresenceBound = true;
+    document.addEventListener('tma:presence-status', function (ev) {
+      var p = ev.detail;
+      if (!p || !homeStaff || !homeStaff.employees) return;
+      var before = staffSignature(homeStaff);
+      homeStaff.employees = homeStaff.employees.map(function (person) {
+        if (person.id !== p.userId) return person;
+        if (window.TMAPresence && window.TMAPresence.applyRemoteToPerson) {
+          return window.TMAPresence.applyRemoteToPerson(person, p);
+        }
+        person.online = p.status !== 'offline';
+        person.statusLabel = p.label;
+        return person;
+      });
+      if (staffSignature(homeStaff) !== before) {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (mountEl && mountEl.isConnected) mount(mountEl, { fromLoad: true });
+      }
+    });
+  }
+
   function loadHomeStaff(el, opts) {
     opts = opts || {};
     bindStaffUserListener();

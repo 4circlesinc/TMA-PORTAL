@@ -6,6 +6,7 @@ use App\Events\PresenceChanged;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Models\UserPresence;
+use App\Support\Presence\AvailabilityService;
 use App\Support\Presence\LastSeen;
 use Illuminate\Support\Carbon;
 
@@ -44,6 +45,8 @@ class PresenceService
         $presence->online_until = now()->addSeconds(UserPresence::ONLINE_TTL_SECONDS);
         $presence->save();
 
+        AvailabilityService::recompute($user, $presence);
+
         if (! $wasOnline) {
             self::announce($user, true);
         }
@@ -58,6 +61,11 @@ class PresenceService
             'last_seen_at' => now(),
             'online_until' => null,
         ]);
+
+        $presence = UserPresence::where('user_id', $user->id)->first();
+        if ($presence) {
+            AvailabilityService::recompute($user, $presence);
+        }
 
         self::announce($user, false, self::label(now()));
     }

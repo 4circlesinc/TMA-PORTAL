@@ -148,6 +148,24 @@
     }
 
     reload();
+
+    document.addEventListener('tma:presence-status', function (ev) {
+      var p = ev.detail;
+      if (!p || !state.employees) return;
+      var changed = false;
+      state.employees = state.employees.map(function (person) {
+        if (person.id !== p.userId) return person;
+        changed = true;
+        if (window.TMAPresence && window.TMAPresence.applyRemoteToPerson) {
+          return window.TMAPresence.applyRemoteToPerson(person, p);
+        }
+        person.online = p.status !== 'offline';
+        person.statusLabel = p.label;
+        return person;
+      });
+      if (changed) paint();
+    });
+
     // Soft refresh while the tab stays open.
     var timer = setInterval(function () {
       if (!container.isConnected) {

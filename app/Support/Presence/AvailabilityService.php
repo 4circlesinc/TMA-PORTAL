@@ -270,7 +270,15 @@ class AvailabilityService
         $primary = self::payloadFromPresence($presence, $presence->isOnline());
 
         return [
-            'primary' => $primary,
+            'primary' => [
+                'status' => $primary['status'],
+                'source' => $primary['source'],
+                'message' => $primary['message'],
+                'label' => $primary['label'],
+                'icon' => $primary['icon'],
+                'startedAt' => $primary['startedAt']?->toIso8601String(),
+                'expiresAt' => $primary['expiresAt']?->toIso8601String(),
+            ],
             'states' => $states,
             'locations' => $locations,
             'schedules' => $schedules,
