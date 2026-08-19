@@ -129,7 +129,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=5';
+    link.href = (ROOT || '') + 'css/presence.css?v=6';
     document.head.appendChild(link);
   }
 
@@ -313,6 +313,8 @@
         return;
       }
       if (e.target.closest('[data-presence-settings]')) {
+        e.preventDefault();
+        e.stopPropagation();
         closePopover();
         openSettingsModal();
       }
@@ -341,28 +343,23 @@
     }).then(function () { closePopover(); }).catch(function () { toast('Could not update status.', false); });
   }
 
-  function openSettingsModal() {
-    loadCss();
-    var locs = (state && state.locations) || [];
-    var schedules = (state && state.schedules) || [];
-    var office = locs.find(function (l) { return l.type === 'office'; }) || {};
-    var remote = locs.find(function (l) { return l.type === 'remote'; }) || {};
+  function closeSettingsModal() {
+    if (window.TMAPortalUI && window.TMAPortalUI.closeModal) {
+      window.TMAPortalUI.closeModal();
+      return;
+    }
+    var el = document.querySelector('[data-presence-settings-modal]');
+    if (el) el.remove();
+  }
 
-    var scheduleRows = schedules.length
-      ? schedules.map(function (s) {
-          return '<div class="tma-presence-settings__schedule-row">' +
-            '<span>' + esc(meta(s.status).label) + '<br><small>' + esc(new Date(s.startsAt).toLocaleString()) + ' – ' + esc(new Date(s.endsAt).toLocaleString()) + '</small></span>' +
-            '<button type="button" class="tma-btn tma-btn--secondary" data-schedule-del="' + s.id + '">Remove</button></div>';
-        }).join('')
-      : '<p style="font-size:13px;color:var(--color-text-secondary)">No scheduled statuses yet.</p>';
+  function settingsModalRoot(host) {
+    return (host && host.querySelector('.tma-portal-modal__body')) || host || document;
+  }
 
-    var wrap = document.createElement('div');
-    wrap.className = 'tma-modal-overlay';
-    wrap.setAttribute('data-presence-settings-modal', '');
-    wrap.innerHTML =
-      '<div class="tma-modal" role="dialog" aria-label="Status settings" style="max-width:520px;width:calc(100% - 32px)">' +
-      '<div class="tma-modal__head"><h2 class="tma-modal__title">Presence settings</h2>' +
-      '<button type="button" class="tma-modal__close" data-presence-close aria-label="Close">&times;</button></div>' +
+  function settingsModalBodyHtml(office, remote, scheduleRows) {
+    var ghostBtn = 'tma-no-data__btn tma-portal-btn--ghost';
+    var primaryBtn = 'tma-no-data__btn';
+    return (
       '<div class="tma-presence-settings__tabs">' +
       '<button type="button" class="tma-presence-settings__tab is-active" data-tab="locations">Work locations</button>' +
       '<button type="button" class="tma-presence-settings__tab" data-tab="schedules">Scheduled statuses</button></div>' +
@@ -376,7 +373,7 @@
       '<div><label>Longitude</label><input data-loc-office-lng type="number" step="any" value="' + esc(office.longitude || '') + '"></div></div>' +
       '<label>Radius (metres)</label><input data-loc-office-radius type="number" min="25" max="5000" value="' + esc(office.radiusM || 100) + '">' +
       '<label><input type="checkbox" data-loc-office-enabled ' + (office.enabled !== false ? 'checked' : '') + '> Enable automatic detection</label>' +
-      '<button type="button" class="tma-btn tma-btn--secondary" data-loc-office-current style="margin-top:8px">Use current location</button>' +
+      '<button type="button" class="' + ghostBtn + '" data-loc-office-current style="margin-top:8px">Use current location</button>' +
       '<h3 style="font-size:14px;margin:20px 0 8px">Remote location</h3>' +
       '<label>Label</label><input data-loc-remote-label value="' + esc(remote.label || 'Home') + '">' +
       '<label>Address</label><input data-loc-remote-address value="' + esc(remote.address || '') + '">' +
@@ -384,7 +381,7 @@
       '<div><label>Longitude</label><input data-loc-remote-lng type="number" step="any" value="' + esc(remote.longitude || '') + '"></div></div>' +
       '<label>Radius (metres)</label><input data-loc-remote-radius type="number" min="25" max="5000" value="' + esc(remote.radiusM || 100) + '">' +
       '<label><input type="checkbox" data-loc-remote-enabled ' + (remote.enabled !== false ? 'checked' : '') + '> Enable automatic detection</label>' +
-      '<button type="button" class="tma-btn tma-btn--secondary" data-loc-remote-current style="margin-top:8px">Use current location</button>' +
+      '<button type="button" class="' + ghostBtn + '" data-loc-remote-current style="margin-top:8px">Use current location</button>' +
       '</div>' +
       '<div class="tma-presence-settings__panel" data-panel="schedules" hidden>' +
       '<p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 12px">Schedule Away, meetings, or focus time with start and end dates.</p>' +
@@ -394,19 +391,22 @@
       '<div class="tma-presence-settings__row"><div><label>Starts</label><input type="datetime-local" data-schedule-starts></div>' +
       '<div><label>Ends</label><input type="datetime-local" data-schedule-ends></div></div>' +
       '<label>Message (optional)</label><input data-schedule-message maxlength="140">' +
-      '<button type="button" class="tma-btn tma-btn--secondary" data-schedule-add style="margin-top:10px">Add schedule</button></div>' +
-      '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">' +
-      '<button type="button" class="tma-btn tma-btn--secondary" data-presence-close>Close</button>' +
-      '<button type="button" class="tma-btn tma-btn--primary" data-presence-save-locations>Save locations</button></div></div></div>';
+      '<button type="button" class="' + ghostBtn + '" data-schedule-add style="margin-top:10px">Add schedule</button></div>' +
+      '<div class="tma-portal-modal__foot">' +
+      '<button type="button" class="' + ghostBtn + '" data-presence-close>Close</button>' +
+      '<button type="button" class="' + primaryBtn + '" data-presence-save-locations>Save locations</button></div></div>'
+    );
+  }
 
-    document.body.appendChild(wrap);
+  function wireSettingsModal(host) {
+    var root = settingsModalRoot(host);
 
-    wrap.querySelectorAll('[data-tab]').forEach(function (tab) {
+    root.querySelectorAll('[data-tab]').forEach(function (tab) {
       tab.addEventListener('click', function () {
-        wrap.querySelectorAll('[data-tab]').forEach(function (t) { t.classList.remove('is-active'); });
+        root.querySelectorAll('[data-tab]').forEach(function (t) { t.classList.remove('is-active'); });
         tab.classList.add('is-active');
         var id = tab.getAttribute('data-tab');
-        wrap.querySelectorAll('[data-panel]').forEach(function (p) {
+        root.querySelectorAll('[data-panel]').forEach(function (p) {
           p.hidden = p.getAttribute('data-panel') !== id;
         });
       });
@@ -415,41 +415,95 @@
     function useCurrent(prefix) {
       if (!navigator.geolocation) { toast('Location is not supported in this browser.', false); return; }
       navigator.geolocation.getCurrentPosition(function (pos) {
-        wrap.querySelector('[data-loc-' + prefix + '-lat]').value = pos.coords.latitude;
-        wrap.querySelector('[data-loc-' + prefix + '-lng]').value = pos.coords.longitude;
+        root.querySelector('[data-loc-' + prefix + '-lat]').value = pos.coords.latitude;
+        root.querySelector('[data-loc-' + prefix + '-lng]').value = pos.coords.longitude;
       }, function () { toast('Location permission denied.', false); },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
     }
 
-    wrap.addEventListener('click', function (e) {
-      if (e.target.closest('[data-presence-close]')) { wrap.remove(); return; }
+    host.addEventListener('click', function (e) {
+      if (e.target.closest('[data-presence-close]')) { closeSettingsModal(); return; }
       if (e.target.closest('[data-loc-office-current]')) { useCurrent('office'); return; }
       if (e.target.closest('[data-loc-remote-current]')) { useCurrent('remote'); return; }
       var del = e.target.closest('[data-schedule-del]');
       if (del) {
         api('DELETE', '/me/availability/schedules/' + del.getAttribute('data-schedule-del'))
-          .then(applyPayload).then(function () { wrap.remove(); openSettingsModal(); })
+          .then(applyPayload).then(function () { closeSettingsModal(); openSettingsModal(); })
           .catch(function () { toast('Could not remove schedule.', false); });
         return;
       }
       if (e.target.closest('[data-schedule-add]')) {
-        var starts = wrap.querySelector('[data-schedule-starts]').value;
-        var ends = wrap.querySelector('[data-schedule-ends]').value;
+        var starts = root.querySelector('[data-schedule-starts]').value;
+        var ends = root.querySelector('[data-schedule-ends]').value;
         if (!starts || !ends) { toast('Choose start and end times.', false); return; }
         api('POST', '/me/availability/schedules', {
-          status: wrap.querySelector('[data-schedule-status]').value,
-          message: wrap.querySelector('[data-schedule-message]').value || null,
+          status: root.querySelector('[data-schedule-status]').value,
+          message: root.querySelector('[data-schedule-message]').value || null,
           startsAt: new Date(starts).toISOString(),
           endsAt: new Date(ends).toISOString(),
-        }).then(applyPayload).then(function () { wrap.remove(); openSettingsModal(); toast('Schedule added.', true); })
+        }).then(applyPayload).then(function () { closeSettingsModal(); openSettingsModal(); toast('Schedule added.', true); })
           .catch(function () { toast('Could not add schedule.', false); });
         return;
       }
       if (e.target.closest('[data-presence-save-locations]')) {
-        saveLocation('office', wrap).then(function () { return saveLocation('remote', wrap); })
+        saveLocation('office', root).then(function () { return saveLocation('remote', root); })
           .then(function () { requestLocationIfEnabled(); startLocationChecks(); toast('Locations saved.', true); })
           .catch(function () { toast('Could not save locations.', false); });
       }
+    });
+  }
+
+  function renderSettingsModal() {
+    loadCss();
+    var locs = (state && state.locations) || [];
+    var schedules = (state && state.schedules) || [];
+    var office = locs.find(function (l) { return l.type === 'office'; }) || {};
+    var remote = locs.find(function (l) { return l.type === 'remote'; }) || {};
+
+    var scheduleRows = schedules.length
+      ? schedules.map(function (s) {
+          return '<div class="tma-presence-settings__schedule-row">' +
+            '<span>' + esc(meta(s.status).label) + '<br><small>' + esc(new Date(s.startsAt).toLocaleString()) + ' – ' + esc(new Date(s.endsAt).toLocaleString()) + '</small></span>' +
+            '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-schedule-del="' + s.id + '">Remove</button></div>';
+        }).join('')
+      : '<p style="font-size:13px;color:var(--color-text-secondary)">No scheduled statuses yet.</p>';
+
+    var body = settingsModalBodyHtml(office, remote, scheduleRows);
+    var ui = window.TMAPortalUI;
+
+    closeSettingsModal();
+
+    if (ui && ui.openModal) {
+      var host = ui.openModal({
+        title: 'Presence settings',
+        body: body,
+        onMount: function (modalHost) { wireSettingsModal(modalHost); },
+      });
+      if (host) host.setAttribute('data-presence-settings-modal', '');
+      return;
+    }
+
+    /* Fallback when portal-views.js is not on the page. */
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-presence-settings-modal';
+    wrap.setAttribute('data-presence-settings-modal', '');
+    wrap.innerHTML =
+      '<div class="tma-dash__settings-change-card tma-presence-settings-modal__card" role="dialog" aria-label="Status settings">' +
+      '<div class="tma-presence-settings-modal__head"><h2>Presence settings</h2>' +
+      '<button type="button" class="tma-dash__settings-change-close" data-presence-close aria-label="Close">&times;</button></div>' +
+      body +
+      '</div>';
+    document.body.appendChild(wrap);
+    wireSettingsModal(wrap);
+  }
+
+  function openSettingsModal() {
+    if (state) {
+      renderSettingsModal();
+      return;
+    }
+    load().then(renderSettingsModal).catch(function () {
+      toast('Could not load status settings.', false);
     });
   }
 
