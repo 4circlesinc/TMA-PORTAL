@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\AvailabilityController;
+use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BackgroundOperationsController;
 use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\CalendarController;
