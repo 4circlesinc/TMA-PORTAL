@@ -109,6 +109,7 @@
   border-right: 0.5px solid var(--dash-border);
   overflow: hidden;
   min-height: 0;
+  background: var(--color-bg-page);
 }
 
 .tma-dash__resize-handle {
@@ -2555,6 +2556,7 @@
   overflow-y: auto;
   scrollbar-width: none;
   min-width: 0;
+  background: var(--color-bg-page);
 }
 .tma-dash__rightbar::-webkit-scrollbar { display: none; }
 
