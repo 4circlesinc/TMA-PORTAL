@@ -4,7 +4,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
-use App\Http\Controllers\AvatarController;
+use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\BackgroundOperationsController;
 use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\CalendarController;
@@ -198,6 +198,19 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
     Route::get('/me/sync-status', [MeSyncStatusController::class, 'show'])->name('me.sync-status');
+
+    Route::prefix('me/availability')->name('me.availability.')->group(function () {
+        Route::get('/', [AvailabilityController::class, 'show'])->name('show');
+        Route::put('/status', [AvailabilityController::class, 'updateStatus'])->name('status');
+        Route::delete('/status', [AvailabilityController::class, 'clearStatus'])->name('status.clear');
+        Route::put('/message', [AvailabilityController::class, 'updateMessage'])->name('message');
+        Route::post('/location', [AvailabilityController::class, 'reportLocation'])->name('location.report');
+        Route::put('/locations', [AvailabilityController::class, 'upsertLocation'])->name('locations.upsert');
+        Route::delete('/locations/{type}', [AvailabilityController::class, 'deleteLocation'])->name('locations.delete');
+        Route::post('/schedules', [AvailabilityController::class, 'storeSchedule'])->name('schedules.store');
+        Route::delete('/schedules/{id}', [AvailabilityController::class, 'destroySchedule'])->name('schedules.destroy');
+        Route::post('/call', [AvailabilityController::class, 'reportCall'])->name('call');
+    });
 
     // Notifications: the bell popup, the right-sidebar section, and the badge.
     Route::prefix('portal/notifications')->name('notifications.')->group(function () {

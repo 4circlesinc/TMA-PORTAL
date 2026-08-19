@@ -463,6 +463,10 @@
     if (el.getAttribute('data-tma-call') === phase) return;
     if (phase) el.setAttribute('data-tma-call', phase);
     else el.removeAttribute('data-tma-call');
+
+    if (window.TMAPresence && window.TMAPresence.reportCall) {
+      window.TMAPresence.reportCall(phase === 'active' || phase === 'ringing');
+    }
   }
 
   function closeOverlay() {

@@ -7,6 +7,7 @@ use App\Support\Access\Role;
 use App\Support\AvatarService;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
+use App\Support\Presence\AvailabilityService;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,8 @@ class MeController extends Controller
             ],
             // Today's work plan (public fields only) for Messages / profiles.
             'workStatus' => WorkDay::publicStatusFor($user),
+            // Availability status for the header dropdown and self presence.
+            'availability' => AvailabilityService::selfPayload($user),
         ]);
     }
 

@@ -23,10 +23,14 @@
 
   /* Presence chips are Online / Offline only — same as portal-home.js. */
   function presenceTone(p) {
+    if (p.statusLabel) return p.status === 'offline' ? 'offline' : 'online';
     return p.online ? 'online' : 'offline';
   }
 
   function lastSeen(p) {
+    if (window.TMAPresence && (p.statusLabel || p.status)) {
+      return window.TMAPresence.labelFor(p);
+    }
     if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
     return p.online ? 'Online' : (p.lastSeen || 'Last seen recently');
   }
@@ -38,7 +42,8 @@
   function renderRow(p) {
     var work = p.workStatus || null;
     var tone = presenceTone(p);
-    var workLabel = work && work.label ? work.label : (p.online ? 'Available' : 'Away');
+    var badgeLabel = p.statusLabel || (p.online ? 'Online' : 'Offline');
+    var workLabel = work && work.label ? work.label : '';
     return '<div class="tma-dash__overview-employee" data-employee-id="' + esc(p.id) + '">' +
       '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
       '<img src="' + esc(avatarSrc(p)) + '" alt="" width="40" height="40" loading="lazy">' +
@@ -50,7 +55,7 @@
       '</span>' +
       '<span class="tma-dash__overview-employee__status">' +
       '<span class="tma-portal-employee__badge tma-portal-employee__badge--' + tone + '">' +
-      esc(p.online ? 'Online' : 'Offline') +
+      esc(badgeLabel) +
       '</span>' +
       '<span class="tma-dash__overview-employee__work">' + esc(workLabel) + '</span>' +
       '</span></div>';

@@ -10,6 +10,7 @@ use App\Models\MessageReaction;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Models\WorkDay;
+use App\Support\Presence\AvailabilityService;
 use App\Support\UserTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -182,7 +183,7 @@ class MessagingPresenter
             'draft' => $participant?->draft,
             'role' => $participant?->role,
             'presence' => $counterpart
-                ? PresenceService::forViewer($counterpart, $viewer)
+                ? AvailabilityService::forViewer($counterpart, $viewer)
                 : self::groupPresence($others, $conversation->activeParticipants->count()),
             'workStatus' => $counterpart
                 ? WorkDay::publicStatusFor($counterpart)

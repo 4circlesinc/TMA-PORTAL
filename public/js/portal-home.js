@@ -364,6 +364,11 @@
   /* Presence chips are Online / Offline only — the work plan (in office,
      remote, leave) lives on the row subtitle, not on the badge. */
   function presenceBadge(p) {
+    if (p.statusLabel) {
+      var tone = p.status === 'offline' ? 'offline' : 'online';
+      if (p.status === 'on_call' || p.status === 'do_not_disturb') tone = 'busy';
+      return { tone: tone, label: p.statusLabel };
+    }
     if (!p.online) return { tone: 'offline', label: 'Offline' };
     return { tone: 'online', label: 'Online' };
   }
@@ -372,6 +377,9 @@
      between the 30-second polls. Falls back to the server's sentence for
      anyone who hides their last-seen (they send no timestamp). */
   function lastSeenLabel(p) {
+    if (window.TMAPresence && (p.statusLabel || p.status)) {
+      return window.TMAPresence.labelFor(p);
+    }
     if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
     return p.online ? 'Online' : (p.lastSeen || 'Last seen recently');
   }
@@ -1182,6 +1190,7 @@
       var work = p.workStatus || {};
       return [
         p.id, p.online ? 1 : 0, p.lastSeen || '', p.lastSeenAt || '',
+        p.status || '', p.statusLabel || '', p.statusSource || '',
         p.name || '', p.avatar || '', work.status || '', work.label || '',
       ].join(':');
     }).join('|');

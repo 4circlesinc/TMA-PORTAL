@@ -144,6 +144,9 @@
    */
   function forPresence(p) {
     if (!p) return 'Last seen recently';
+    if (window.TMAPresence && (p.statusLabel || p.status)) {
+      return window.TMAPresence.labelFor(p);
+    }
     if (p.online) return 'Online';
     var at = p.lastSeenAt || p.last_seen_at || null;
     if (at) return label(at);

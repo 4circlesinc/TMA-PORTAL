@@ -304,6 +304,15 @@
         : '';
     }
 
+    if (presence.statusLabel && window.TMAPresence) {
+      var statusHtml = window.TMAPresence.iconHtml(presence.statusIcon || presence.status, 8);
+      return (
+        '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--status">' +
+        statusHtml +
+        '<span>' + esc(window.TMAPresence.labelFor(presence)) + '</span></span>'
+      );
+    }
+
     if (presence.online) {
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
@@ -5993,15 +6002,26 @@
     (STORE.threads || []).forEach(function (row) {
       if (!row.counterpartId || row.counterpartId !== payload.userId) return;
 
-      row.presence = payload.online
-        ? { online: true }
-        : { online: false, lastSeen: payload.lastSeenLabel || 'Last seen recently' };
+      if (payload.status) {
+        row.presence = {
+          online: payload.status !== 'offline',
+          status: payload.status,
+          statusLabel: payload.label,
+          statusSource: payload.source,
+          statusMessage: payload.message,
+          statusIcon: payload.icon,
+        };
+      } else {
+        row.presence = payload.online
+          ? { online: true, status: 'online', statusLabel: 'Online' }
+          : { online: false, status: 'offline', statusLabel: 'Offline', lastSeen: payload.lastSeenLabel || 'Last seen recently' };
+      }
 
       changed = true;
     });
 
     // A typing indicator cannot outlive its typist's connection.
-    if (!payload.online) {
+    if (payload.online === false || payload.status === 'offline') {
       Object.keys(typingBy).forEach(function (conversationId) {
         if (typingBy[conversationId][payload.userId]) {
           delete typingBy[conversationId][payload.userId];
@@ -6074,6 +6094,11 @@
       // already covers them for every thread, open or not.
       syncTabBarBadges();
       render();
+    });
+
+    window.TMAMessagingRealtime.listen('private-portal.staff', 'presence.status', function (payload) {
+      if (STORE.me && payload.userId === STORE.me.id) return;
+      applyPresence(payload, render);
     });
   }
 

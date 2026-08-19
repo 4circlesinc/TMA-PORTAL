@@ -252,6 +252,12 @@
     if (j && j.desktopNotifications && window.TMADesktopNotify) {
       window.TMADesktopNotify.applyPrefs(j.desktopNotifications);
     }
+    if (window.TMAPresence) {
+      window.TMAPresence.load(j);
+      window.TMAPresence.bindRealtime(j.id);
+      window.TMAPresence.bindCallIntegration();
+      window.TMAPresence.startLocationChecks();
+    }
     paint();
     return j;
   }

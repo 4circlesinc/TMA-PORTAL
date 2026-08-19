@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\Messaging\PresenceService;
+use App\Support\Presence\AvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -36,7 +37,7 @@ class StaffPresenceController extends Controller
         $workStatuses = WorkDay::publicStatusesForUsers($users);
 
         $employees = $users->map(function (User $user) use ($viewer, $workStatuses) {
-            $presence = PresenceService::forViewer($user, $viewer);
+            $presence = AvailabilityService::forViewer($user, $viewer);
 
             return [
                 'id' => $user->id,
@@ -48,10 +49,12 @@ class StaffPresenceController extends Controller
                 'self' => $user->id === $viewer->id,
                 'online' => (bool) ($presence['online'] ?? false),
                 'lastSeen' => $presence['lastSeen'] ?? null,
-                // The instant as well as the sentence: the board polls every
-                // 30s, so the browser re-derives "5 minutes ago" between polls
-                // rather than letting the label go stale on screen.
                 'lastSeenAt' => $presence['lastSeenAt'] ?? null,
+                'status' => $presence['status'] ?? null,
+                'statusLabel' => $presence['statusLabel'] ?? null,
+                'statusSource' => $presence['statusSource'] ?? null,
+                'statusMessage' => $presence['statusMessage'] ?? null,
+                'statusIcon' => $presence['statusIcon'] ?? null,
                 'workStatus' => $workStatuses[(int) $user->id] ?? null,
             ];
         })->sortBy([
