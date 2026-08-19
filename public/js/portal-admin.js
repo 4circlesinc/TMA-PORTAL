@@ -401,9 +401,6 @@
         }).join('');
 
         root.innerHTML =
-          '<p class="tma-portal-subtitle">' + (payload.cip
-            ? 'To see how the account is being used, you can create reports that track usage, access, messaging, storage and CIP applications. Every report is measured from the portal\'s own records at the moment you create it.'
-            : 'To see how your account is being used, you can create recurring and non-recurring reports that track usage, access, messaging and storage. Every report is measured from the portal\'s own records at the moment you create it.') + '</p>' +
           '<div class="tma-portal-toolbar">' +
           ui().tabs([{ key: 'recent', label: 'Recent Reports' }, { key: 'recurring', label: 'Recurring Reports' }], self.tab) +
           ui().btn({ label: 'Create Report', attrs: 'data-rep-create' }) +
