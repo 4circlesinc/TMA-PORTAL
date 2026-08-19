@@ -29,11 +29,14 @@ class MimeBuilder
 
         $lines[] = 'Subject: '.self::encodeHeader((string) ($message['subject'] ?? ''));
 
-        // Threading. Without these two headers a reply starts a new
-        // conversation in every client that receives it.
-        if (! empty($message['messageId'])) {
-            $lines[] = 'In-Reply-To: '.$message['messageId'];
-            $lines[] = 'References: '.$message['messageId'];
+        // Threading. Other mailboxes group by In-Reply-To / References matching
+        // the original RFC Message-ID — a Gmail/Graph internal id here would
+        // land as a brand-new conversation on every client that receives it.
+        $inReplyTo = self::rfcMessageId($message['inReplyTo'] ?? '');
+        if ($inReplyTo !== '') {
+            $lines[] = 'In-Reply-To: '.$inReplyTo;
+            $references = trim((string) ($message['references'] ?? ''));
+            $lines[] = 'References: '.($references !== '' ? $references : $inReplyTo);
         }
 
         $lines[] = 'Content-Type: text/html; charset=UTF-8';
@@ -48,6 +51,27 @@ class MimeBuilder
     public static function encode(string $mime): string
     {
         return rtrim(strtr(base64_encode($mime), '+/', '-_'), '=');
+    }
+
+    /**
+     * Angle-bracketed RFC 5322 Message-ID, or empty when the value is not one
+     * (Gmail's hex id, a Graph item id, a blank string).
+     */
+    public static function rfcMessageId(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || ! str_contains($value, '@')) {
+            return '';
+        }
+
+        if (! str_starts_with($value, '<')) {
+            $value = '<'.$value;
+        }
+        if (! str_ends_with($value, '>')) {
+            $value .= '>';
+        }
+
+        return $value;
     }
 
     /**

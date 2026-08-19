@@ -85,9 +85,10 @@ check(
   (await page.locator('[data-email-thread-toggle-all]').count()) === 0,
   'and no expand-all control competing with it'
 );
-
-const note = await page.locator('.tma-dash__email-thread-note').innerText().catch(() => '');
-check(/3 messages/.test(note), `the pane still says how big the conversation is ("${note}")`);
+check(
+  (await page.locator('.tma-dash__email-thread-note').count()) === 0,
+  'no conversation-size note in the reading pane'
+);
 
 step(3, 'The open message is identified by sender and time');
 const names = await page.locator('.tma-dash__email-message-head-name').allTextContents();

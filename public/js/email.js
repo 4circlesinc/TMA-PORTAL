@@ -51,6 +51,7 @@
     DotsThree: ICON + 'DotsThree.svg',
     Prohibit: ICON + 'Prohibit.svg',
     Star: ICON + 'Star.svg',
+    StarFill: ICON + 'StarFill.svg',
     StarFilled: ICON + 'StarFilled.svg',
     ArrowUUpLeft: ICON + 'ArrowUUpLeft.svg',
     ArrowUUpRight: ICON + 'ArrowUUpRight.svg',
@@ -85,10 +86,10 @@
     PushPinSlash: ICON + 'PushPinSlash.svg',
     ArchiveTray: ICON + 'ArchiveTray.svg',
     Sidebar: ICON + 'SidebarSimple.svg',
-    // A proper flag, not a price-tag shape — TagChevron's notched silhouette
-    // read as "two icons overlapping" at toolbar size, and a tag was never
-    // the right shape for "mark as important" to begin with.
-    Important: ICON + 'FlagFill.svg',
+    // Pennant, not the waving FlagFill: at sidebar size that banner reads as
+    // an empty square. Same filled weight as TrayFill / ClockFill beside it.
+    Important: ICON + 'FlagPennant.svg',
+    FlagPennant: ICON + 'FlagPennant.svg',
     FlagFill: ICON + 'FlagFill.svg',
     // Red filled flag for the active "important" state (pair to StarFilled).
     FlagFilled: ICON + 'FlagFilled.svg',
@@ -186,8 +187,8 @@
    */
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
-    { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
-    { id: 'starred', label: 'Starred', icon: 'StarFilled', fixed: true },
+    { id: 'important', label: 'Important', icon: 'FlagPennant', fixed: true },
+    { id: 'starred', label: 'Starred', icon: 'StarFill', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
     { id: 'draft', label: 'Drafts', icon: 'FileTextFill', fixed: true },
@@ -550,13 +551,72 @@
 
   function getForwardSubject(subject) {
     var trimmed = (subject || '').trim();
-    if (/^fwd:/i.test(trimmed)) return trimmed;
+    if (/^fwd?:/i.test(trimmed) || /^fw:/i.test(trimmed)) return trimmed;
     return 'Fwd: ' + trimmed;
   }
 
+  function mailboxAddress() {
+    return String(MAILBOX_EMAIL || PROFILE.email || '').toLowerCase();
+  }
+
+  function addressEmailOf(address) {
+    if (!address) return '';
+    if (typeof address === 'string') return address.toLowerCase();
+    return String(address.email || '').toLowerCase();
+  }
+
   function isSelfAddress(address) {
-    var email = typeof address === 'string' ? address : address && address.email;
-    return !!email && email.toLowerCase() === (PROFILE.email || '').toLowerCase();
+    var email = addressEmailOf(address);
+    if (!email) return false;
+    var mailbox = mailboxAddress();
+    var profile = String(PROFILE.email || '').toLowerCase();
+    return (mailbox && email === mailbox) || (profile && email === profile);
+  }
+
+  function uniqueAddresses(list) {
+    var seen = {};
+    return (list || []).filter(function (address) {
+      var email = addressEmailOf(address);
+      if (!email || seen[email]) return false;
+      seen[email] = true;
+      return true;
+    });
+  }
+
+  function replyToAddress(row) {
+    if (row && row.replyTo) {
+      var parsed = parseAddresses(row.replyTo);
+      if (parsed.length) return parsed[0];
+      return { email: row.replyTo };
+    }
+    return { name: row && row.sender, email: rowSenderEmail(row) };
+  }
+
+  function isFromSelf(row) {
+    return isSelfAddress({ email: rowSenderEmail(row) });
+  }
+
+  /* Reply goes to Reply-To (or From). Replying to mail you sent goes back to
+   * the people you wrote to — the same as Gmail and Outlook. */
+  function replyRecipients(row) {
+    if (isFromSelf(row)) {
+      return uniqueAddresses((row.to || []).filter(function (a) { return !isSelfAddress(a); }));
+    }
+    return [replyToAddress(row)];
+  }
+
+  function replyAllRecipients(row) {
+    var to = [];
+    if (!isFromSelf(row)) to.push(replyToAddress(row));
+    to = uniqueAddresses(to.concat(Array.isArray(row.to) ? row.to : []).filter(function (a) {
+      return !isSelfAddress(a);
+    }));
+    var inTo = {};
+    to.forEach(function (a) { inTo[addressEmailOf(a)] = true; });
+    var cc = uniqueAddresses((Array.isArray(row.cc) ? row.cc : []).filter(function (a) {
+      return !isSelfAddress(a) && !inTo[addressEmailOf(a)];
+    }));
+    return { to: to, cc: cc };
   }
 
   /* {name, email}[] -> "Name <a@b.com>, c@d.com" for an editable address field. */
@@ -599,13 +659,14 @@
 
   function renderForwardQuote(row, metaEmail, metaDate, subject, bodyText) {
     var text = (bodyText || '').trim();
+    var originalTo = formatAddressList(addressList(row && row.to)) || mailboxAddress();
     return (
       '<div class="tma-dash__email-inline-quote tma-dash__email-inline-quote--forward">' +
       '<p class="tma-dash__email-inline-quote-lead">---------- Forwarded message ---------</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>From:</strong> ' + esc(row.sender) + ' &lt;' + esc(metaEmail) + '&gt;</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>Date:</strong> ' + esc(metaDate) + '</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>Subject:</strong> ' + esc(subject) + '</p>' +
-      '<p class="tma-dash__email-inline-quote-meta"><strong>To:</strong> ' + esc(PROFILE.email) + '</p>' +
+      '<p class="tma-dash__email-inline-quote-meta"><strong>To:</strong> ' + esc(originalTo) + '</p>' +
       (text ? '<blockquote class="tma-dash__email-inline-quote-body">' + esc(text) + '</blockquote>' : '') +
       '</div>'
     );
@@ -618,10 +679,11 @@
     var composeSubject = isForward ? getForwardSubject(subject) : getReplySubject(subject);
     var ic = state.inlineCompose || {};
 
+    var replyToLabel = ic.to || (row.sender + ' <' + metaEmail + '>');
     var toRow = isReply
       ? '<div class="tma-dash__email-inline-compose-row">' +
         '<span class="tma-dash__email-inline-compose-label">To</span>' +
-        '<span class="tma-dash__email-inline-compose-value">' + esc(row.sender) + ' &lt;' + esc(metaEmail) + '&gt;</span>' +
+        '<span class="tma-dash__email-inline-compose-value">' + esc(replyToLabel) + '</span>' +
         '</div>'
       : '<div class="tma-dash__email-inline-compose-row">' +
         '<span class="tma-dash__email-inline-compose-label">To</span>' +
@@ -712,14 +774,12 @@
     var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
     var to = '';
     var cc = '';
-    if (row && mode === 'reply-all') {
-      var toList = [{ name: row.sender, email: rowSenderEmail(row) }].concat(
-        (Array.isArray(row.to) ? row.to : []).filter(function (address) { return !isSelfAddress(address); })
-      );
-      to = formatAddressList(toList);
-      cc = formatAddressList(
-        (Array.isArray(row.cc) ? row.cc : []).filter(function (address) { return !isSelfAddress(address); })
-      );
+    if (row && mode === 'reply') {
+      to = formatAddressList(replyRecipients(row));
+    } else if (row && mode === 'reply-all') {
+      var all = replyAllRecipients(row);
+      to = formatAddressList(all.to);
+      cc = formatAddressList(all.cc);
     }
     state.inlineCompose = { mode: mode, messageId: state.selectedId, to: to, cc: cc, bodyHtml: '', sending: false };
   }
@@ -811,7 +871,8 @@
       return;
     }
 
-    var to = ic.mode === 'reply' ? [{ name: row.sender, email: rowSenderEmail(row) }] : parseAddresses(ic.to);
+    var to = parseAddresses(ic.to);
+    if (!to.length && ic.mode === 'reply') to = replyRecipients(row);
     if (!to.length) {
       showEmailToast(root, 'Add at least one recipient');
       return;
@@ -832,7 +893,8 @@
       cc: ic.mode === 'reply-all' ? parseAddresses(ic.cc) : [],
       subject: subject,
       bodyHtml: bodyHtml,
-      inReplyTo: ic.messageId,
+      mode: ic.mode,
+      inReplyTo: ic.mode === 'new' ? null : ic.messageId,
     }).then(function () {
       closeInlineCompose(state);
       showEmailToast(root, 'Message sent');
@@ -1482,9 +1544,9 @@
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
-    { id: 'important', label: 'Important', icon: 'FlagFill' },
+    { id: 'important', label: 'Important', icon: 'FlagPennant' },
     // Same idea: everything starred, wherever it really lives.
-    { id: 'starred', label: 'Starred', icon: 'StarFilled' },
+    { id: 'starred', label: 'Starred', icon: 'StarFill' },
     // Also virtual: everything with a snooze set, wherever it really lives.
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill' },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill' },
@@ -2460,6 +2522,7 @@
 
     state.connected = cached.connected;
     state.account = cached.account || null;
+    rememberMailboxAccount(state.account);
     state.folderCounts = cached.folders || {};
     state.labels = cached.labels || [];
     state.rows = cached.rows || [];
@@ -2487,6 +2550,7 @@
       state.loadError = null;
       state.connected = !!(data && data.connected);
       state.account = (data && data.account) || null;
+      rememberMailboxAccount(state.account);
       state.folderCounts = (data && data.folders) || {};
       state.labels = ((data && data.labels) || []).filter(function (label) {
         return !!(label && label.localOnly);
@@ -3443,6 +3507,14 @@
     email: '',
     avatar: null,
   };
+
+  /* The connected mailbox, which is who "me" is when replying — often
+   * different from the portal login on PROFILE. */
+  var MAILBOX_EMAIL = '';
+
+  function rememberMailboxAccount(account) {
+    MAILBOX_EMAIL = (account && account.email) || '';
+  }
 
   /* current-user.js owns photo-or-initials resolution, so the mailbox chrome
    * draws exactly what the rest of the shell draws. */
@@ -5077,10 +5149,6 @@
 
     return (
       '<div class="tma-dash__email-thread" data-email-thread>' +
-      (thread.messages.length > 1
-        ? '<p class="tma-dash__email-thread-note">' + thread.messages.length +
-          ' messages in this conversation — open the arrow in the list to see the rest.</p>'
-        : '') +
       renderThreadMessage(message, state, {
         showQuoted: !!thread.showQuoted[message.id],
       }) +
@@ -6233,6 +6301,7 @@
       subject: draft.subject || '',
       bodyHtml: draft.bodyHtml || '',
       draftId: draft.serverId,
+      mode: draft.mode || 'new',
       inReplyTo: draft.inReplyTo,
     }).then(function () {
       closeCompose(state, id);

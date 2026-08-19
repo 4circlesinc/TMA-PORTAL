@@ -14,13 +14,16 @@ use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\MailSyncProgress;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -438,7 +441,7 @@ class MailController extends Controller
 
         $account->forceFill(['sync_email' => false])->save();
 
-        \App\Support\Activity\ActivityLogger::log([
+        ActivityLogger::log([
             'actor' => $request->user(),
             'type' => 'email.disconnected',
             'description' => $request->user()->name.' signed out of their '.ucfirst($account->provider).' mailbox',
@@ -577,7 +580,7 @@ class MailController extends Controller
      * query as the listing does to its outer one — otherwise a thread whose
      * newest message happens to sit in Sent would drop out of the Inbox.
      *
-     * @param  \Illuminate\Contracts\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
+     * @param  \Illuminate\Contracts\Database\Query\Builder|Builder  $query
      */
     private function scopeToFolder($query, string $folder, string $table): void
     {
@@ -618,7 +621,7 @@ class MailController extends Controller
      * them to return fifty rows does not scale.
      */
     private function onlyNewestInThread(
-        \Illuminate\Database\Eloquent\Builder $query,
+        Builder $query,
         int $userId,
         string $folder,
         ?string $labelUuid,
@@ -1125,7 +1128,7 @@ class MailController extends Controller
         // Snooze is portal-only too. The scheduled wake pass clears it when
         // due and raises the reminder notification (mail:wake-snoozed).
         if (array_key_exists('snooze', $data)) {
-            $message->snoozed_until = $data['snooze'] ? \Illuminate\Support\Carbon::parse($data['snooze']) : null;
+            $message->snoozed_until = $data['snooze'] ? Carbon::parse($data['snooze']) : null;
         }
 
         $message->save();
@@ -1451,10 +1454,19 @@ class MailController extends Controller
             'bodyHtml' => ['sometimes', 'nullable', 'string'],
             'draftId' => ['sometimes', 'nullable', 'string', 'uuid'],
             'inReplyTo' => ['sometimes', 'nullable', 'string', 'uuid'],
+            'mode' => ['sometimes', 'string', 'in:new,reply,reply-all,forward'],
         ]);
 
         $account = Mailbox::requireAccountFor($request->user());
         $provider = Mailbox::provider($account);
+
+        $mode = $data['mode'] ?? 'new';
+        $replyUuid = $data['inReplyTo'] ?? null;
+
+        // Older clients sent inReplyTo without a mode; that is a reply.
+        if ($replyUuid && $mode === 'new') {
+            $mode = 'reply';
+        }
 
         $payload = [
             'to' => $data['to'],
@@ -1462,14 +1474,18 @@ class MailController extends Controller
             'bcc' => $data['bcc'] ?? [],
             'subject' => $data['subject'] ?? '',
             'bodyHtml' => $data['bodyHtml'] ?? '',
+            'mode' => $mode,
         ];
 
-        // Threading: a reply must carry the original's provider ids or it
-        // arrives as a new conversation.
-        if ($replyUuid = $data['inReplyTo'] ?? null) {
+        // The original's provider id is what Gmail/Graph need to stamp
+        // In-Reply-To / conversationIndex. Putting that id *in* those headers
+        // (the previous behaviour) made every reply look like a new email.
+        if ($replyUuid) {
             $original = $this->findMessage($request, $replyUuid);
-            $payload['threadId'] = $original->thread_id;
-            $payload['messageId'] = $original->remote_id;
+            $payload['inReplyToRemoteId'] = $original->remote_id;
+            if (in_array($mode, ['reply', 'reply-all'], true)) {
+                $payload['threadId'] = $original->thread_id;
+            }
         }
 
         $provider->send($payload);

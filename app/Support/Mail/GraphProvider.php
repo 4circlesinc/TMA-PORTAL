@@ -377,9 +377,56 @@ class GraphProvider implements MailProvider
 
     public function send(array $message): string
     {
+        $mode = $message['mode'] ?? 'new';
+        $replyToId = $message['inReplyToRemoteId'] ?? null;
+
+        // createReply / createReplyAll / createForward is what Outlook itself
+        // uses: it stamps conversationId, conversationIndex, In-Reply-To and
+        // References. A fresh POST /messages is a brand-new conversation, which
+        // is why a "reply" used to land as a whole new email in every mailbox.
+        if ($replyToId && in_array($mode, ['reply', 'reply-all', 'forward'], true)) {
+            return $this->sendInConversation($message, $replyToId, $mode);
+        }
+
         // Create-then-send rather than /sendMail, because /sendMail returns no
         // id and the sent message has to be findable afterwards.
         $draftId = $this->saveDraft($message);
+
+        $this->json($this->request()->post(self::BASE."/messages/{$draftId}/send"));
+
+        return $draftId;
+    }
+
+    /**
+     * Reply, reply-all or forward via Graph's conversation-aware endpoints.
+     *
+     * @param  array<string, mixed>  $message
+     */
+    private function sendInConversation(array $message, string $remoteId, string $mode): string
+    {
+        $action = match ($mode) {
+            'reply-all' => 'createReplyAll',
+            'forward' => 'createForward',
+            default => 'createReply',
+        };
+
+        $body = $mode === 'forward'
+            ? ['toRecipients' => self::recipients($message['to'] ?? [])]
+            : new \stdClass;
+
+        $created = $this->json(
+            $this->request()->post(self::BASE."/messages/{$remoteId}/{$action}", $body)
+        );
+        $draftId = (string) ($created['id'] ?? '');
+
+        if ($draftId === '') {
+            throw new RuntimeException('Graph did not return a draft id for '.$action.'.');
+        }
+
+        // Overlay the user's body and (possibly edited) recipients so the
+        // quoted original from the composer is what goes out, not a second
+        // copy of Outlook's default quote.
+        $this->saveDraft($message, $draftId);
 
         $this->json($this->request()->post(self::BASE."/messages/{$draftId}/send"));
 

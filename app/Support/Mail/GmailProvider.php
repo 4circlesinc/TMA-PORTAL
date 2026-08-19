@@ -159,9 +159,11 @@ class GmailProvider implements MailProvider
 
     public function send(array $message): string
     {
+        $message = $this->withThreading($message);
         $payload = ['raw' => MimeBuilder::encode(MimeBuilder::build($message))];
 
-        // Keeping the reply in its conversation.
+        // Gmail's own conversation view keys off threadId as well as the
+        // RFC headers; a reply without it still shows as a new thread there.
         if (! empty($message['threadId'])) {
             $payload['threadId'] = $message['threadId'];
         }
@@ -173,6 +175,7 @@ class GmailProvider implements MailProvider
 
     public function saveDraft(array $draft, ?string $remoteId = null): string
     {
+        $draft = $this->withThreading($draft);
         $payload = [
             'message' => ['raw' => MimeBuilder::encode(MimeBuilder::build($draft))],
         ];
@@ -324,6 +327,66 @@ class GmailProvider implements MailProvider
         }
 
         return $messages;
+    }
+
+    /**
+     * Attach RFC In-Reply-To / References so a reply threads in every mailbox,
+     * not just Gmail. Forwards start a new conversation, matching Gmail's UI.
+     *
+     * @param  array<string, mixed>  $message
+     * @return array<string, mixed>
+     */
+    private function withThreading(array $message): array
+    {
+        $mode = $message['mode'] ?? 'new';
+        $replyToId = $message['inReplyToRemoteId'] ?? null;
+
+        if ($mode === 'forward') {
+            unset($message['threadId']);
+
+            return $message;
+        }
+
+        if (! $replyToId || ! in_array($mode, ['reply', 'reply-all'], true)) {
+            return $message;
+        }
+
+        try {
+            $headers = $this->rfcThreadingHeaders($replyToId);
+            $message['inReplyTo'] = $headers['inReplyTo'];
+            $message['references'] = $headers['references'];
+        } catch (\Throwable $e) {
+            // threadId still keeps the reply in Gmail's own conversation.
+            report($e);
+        }
+
+        return $message;
+    }
+
+    /**
+     * The original's RFC Message-ID and References chain — not Gmail's hex id.
+     *
+     * @return array{inReplyTo: string, references: string}
+     */
+    private function rfcThreadingHeaders(string $remoteId): array
+    {
+        $response = $this->request()->get(self::BASE.'/messages/'.$remoteId, [
+            'format' => 'metadata',
+            'metadataHeaders' => ['Message-ID', 'References'],
+        ]);
+
+        $headers = $this->headers($this->json($response)['payload']['headers'] ?? []);
+        $messageId = MimeBuilder::rfcMessageId($headers['message-id'] ?? '');
+        $references = trim((string) ($headers['references'] ?? ''));
+
+        if ($messageId !== '' && ! str_contains($references, $messageId)) {
+            $references = trim($references.' '.$messageId);
+        }
+
+        return [
+            'inReplyTo' => $messageId,
+            'references' => $references,
+        ];
     }
 
     /**

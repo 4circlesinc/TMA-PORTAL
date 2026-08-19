@@ -10681,6 +10681,8 @@
   height: var(--dash-icon-md, 16px);
   flex: 0 0 var(--dash-icon-md, 16px);
   opacity: 0.72;
+  /* Folder glyphs must match: flatten brand tints (yellow StarFilled, etc.). */
+  filter: brightness(0);
 }
 
 .tma-dash__email-folder:hover {
@@ -12143,13 +12145,6 @@
   justify-content: center;
   min-height: 320px;
   padding: var(--space-32) var(--space-20);
-}
-
-/* A note, not a control: the conversation is navigated from the list now. */
-.tma-dash__email-thread-note {
-  margin: 0 0 var(--space-12);
-  font-size: var(--text-size-12);
-  color: var(--color-text-secondary);
 }
 
 /* ── row / message context menu ────────────────────────────────────── */
