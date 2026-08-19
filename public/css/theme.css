@@ -17,9 +17,16 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-gutter: auto;
 }
 
-/* ─── Page shell defaults ─── */
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 body {
   font-family: var(--font-family);
@@ -32,9 +39,26 @@ body {
   text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   letter-spacing: var(--letter-spacing);
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-/* ─── Button component slots ─── */
+/* App-wide: no visible scrollbars (Chrome/Safari/Edge + Firefox + legacy IE/Edge). */
+html {
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* ─── Page shell defaults ─── */
 
 :root {
   --btn-font-family:      var(--font-family);

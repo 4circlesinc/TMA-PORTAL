@@ -1315,3 +1315,62 @@ a.tma-dash__tab-btn:visited {
 .tma-rup__event span { color: var(--color-text-secondary); }
 .tma-rup__footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-top: 0.5px solid var(--color-border-soft); background: var(--color-white); }
 .tma-dash[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }
+
+/* ── Global scroll policy: hidden scrollbars, no widget horizontal scroll ──
+ * Loaded last so it wins over per-component scrollbar-width: thin/auto.
+ * Covers Chrome/Safari/Edge (::-webkit-scrollbar), Firefox (scrollbar-width),
+ * and legacy Windows Edge/IE (-ms-overflow-style). */
+
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+html,
+body,
+.tma-dash,
+.tma-dash * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.tma-dash::-webkit-scrollbar,
+.tma-dash *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Home tiles + overview blocks + schedule widgets must never scroll sideways. */
+.tma-portal-home-grid,
+.tma-portal-home-grid > [data-tile-id],
+.tma-portal-tile,
+.tma-portal-panel,
+.tma-portal-panel__body,
+.tma-portal-employees,
+.tma-portal-email-list,
+.tma-portal-chat-list,
+.tma-dash__overview-block,
+.tma-dash__overview-block-head,
+.tma-dash__overview-week,
+.tma-dash__overview-hero-main,
+.tma-dash__overview-road,
+.tma-dash__overview-road-list,
+.tma-dash__overview-metrics,
+.tma-dash__clients-schedule,
+.tma-dash__clients-schedule-body,
+.tma-dash__clients-schedule-scroll,
+.tma-dash__clients-schedule-grid-wrap,
+.tma-dash__clients-schedule-days,
+.tma-dash__clients-schedule-grid {
+  overflow-x: hidden !important;
+  max-width: 100%;
+}
+
+.tma-portal-tile {
+  min-width: 0;
+}

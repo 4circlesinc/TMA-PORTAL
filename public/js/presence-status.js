@@ -63,7 +63,14 @@
       body: body ? JSON.stringify(body) : undefined,
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
-        if (!r.ok) throw new Error((data && data.message) || 'Request failed');
+        if (!r.ok) {
+          var msg = (data && data.message) || 'Request failed';
+          if (data && data.errors) {
+            var key = Object.keys(data.errors)[0];
+            if (key && data.errors[key] && data.errors[key][0]) msg = data.errors[key][0];
+          }
+          throw new Error(msg);
+        }
         return data;
       });
     });
@@ -134,7 +141,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=10';
+    link.href = (ROOT || '') + 'css/presence.css?v=11';
     document.head.appendChild(link);
   }
 
@@ -609,9 +616,47 @@
       '<label>Detection radius (metres)</label>' +
       '<input data-loc-' + prefix + '-radius type="number" min="25" max="5000" step="25" value="' + esc(loc.radiusM || 100) + '">' +
       '<label class="tma-presence-settings__check"><input type="checkbox" data-loc-' + prefix + '-enabled ' + (loc.enabled !== false ? 'checked' : '') + '><span>Enable automatic detection</span></label>' +
+      '<div class="tma-presence-loc__actions">' +
       '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-current>Use current location</button>' +
+      '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-reset>Reset</button></div>' +
       '</section>'
     );
+  }
+
+  function clearLocationBlock(root, prefix) {
+    var title = prefix === 'office' ? 'Office location' : 'Remote location';
+    var labelEl = root.querySelector('[data-loc-' + prefix + '-label]');
+    var addressEl = root.querySelector('[data-loc-' + prefix + '-address]');
+    var latEl = root.querySelector('[data-loc-' + prefix + '-lat]');
+    var lngEl = root.querySelector('[data-loc-' + prefix + '-lng]');
+    var radiusEl = root.querySelector('[data-loc-' + prefix + '-radius]');
+    var enabledEl = root.querySelector('[data-loc-' + prefix + '-enabled]');
+    var coordsEl = root.querySelector('[data-loc-' + prefix + '-coords]');
+    if (labelEl) labelEl.value = title;
+    if (addressEl) addressEl.value = '';
+    if (latEl) latEl.value = '';
+    if (lngEl) lngEl.value = '';
+    if (radiusEl) radiusEl.value = '100';
+    if (enabledEl) enabledEl.checked = false;
+    if (coordsEl) { coordsEl.textContent = ''; coordsEl.hidden = true; }
+    if (locationMaps[prefix] && locationMaps[prefix].setPosition) {
+      locationMaps[prefix].setPosition(DEFAULT_MAP.lat, DEFAULT_MAP.lng, 100);
+      locationMaps[prefix].map.setView([DEFAULT_MAP.lat, DEFAULT_MAP.lng], DEFAULT_MAP.zoom);
+    }
+  }
+
+  function resetLocation(type, root) {
+    var prefix = type === 'office' ? 'office' : 'remote';
+    var title = type === 'office' ? 'Office' : 'Remote';
+    return api('DELETE', '/me/availability/locations/' + type)
+      .then(applyPayload)
+      .then(function () {
+        clearLocationBlock(root, prefix);
+        toast(title + ' location reset.', true);
+      })
+      .catch(function (err) {
+        toast(err.message || 'Could not reset location.', false);
+      });
   }
 
   function settingsModalBodyHtml(office, remote, scheduleRows) {
@@ -676,6 +721,8 @@
       if (e.target.closest('[data-loc-remote-search]')) { searchLocationAddress(root, 'remote'); return; }
       if (e.target.closest('[data-loc-office-current]')) { useCurrentLocation(root, 'office', mapsReady); return; }
       if (e.target.closest('[data-loc-remote-current]')) { useCurrentLocation(root, 'remote', mapsReady); return; }
+      if (e.target.closest('[data-loc-office-reset]')) { resetLocation('office', root); return; }
+      if (e.target.closest('[data-loc-remote-reset]')) { resetLocation('remote', root); return; }
       var del = e.target.closest('[data-schedule-del]');
       if (del) {
         api('DELETE', '/me/availability/schedules/' + del.getAttribute('data-schedule-del'))
@@ -697,13 +744,22 @@
         return;
       }
       if (e.target.closest('[data-presence-save-locations]')) {
+        e.preventDefault();
+        e.stopPropagation();
+        var saveBtn = e.target.closest('[data-presence-save-locations]');
+        if (saveBtn && saveBtn.disabled) return;
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
         saveAllLocations(root)
           .then(function () {
             requestLocationIfEnabled();
             startLocationChecks();
             toast('Locations saved.', true);
           })
-          .catch(function (err) { toast(err.message || 'Could not save locations.', false); });
+          .catch(function (err) { toast(err.message || 'Could not save locations.', false); })
+          .finally(function () {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save locations'; }
+          });
+        return;
       }
     });
   }
@@ -769,6 +825,7 @@
     var lat = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lat]').value);
     var lng = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lng]').value);
     var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
+    var hasCoords = !isNaN(lat) && !isNaN(lng);
 
     function persist(latitude, longitude) {
       return api('PUT', '/me/availability/locations', {
@@ -779,14 +836,20 @@
         longitude: longitude,
         radiusM: parseInt(wrap.querySelector('[data-loc-' + prefix + '-radius]').value, 10) || 100,
         enabled: enabled,
-      }).then(applyPayload);
+      }).then(function (data) {
+        applyPayload(data);
+        return true;
+      });
     }
 
-    if (!enabled && isNaN(lat) && isNaN(lng) && !address) {
-      return Promise.resolve();
+    /* Nothing entered — skip unless we need to turn off a previously saved location. */
+    if (!enabled && !hasCoords && !address) {
+      var existing = (state && state.locations || []).find(function (l) { return l.type === type; });
+      if (existing) return persist(existing.latitude, existing.longitude).then(function () { return true; });
+      return Promise.resolve(false);
     }
 
-    if (!isNaN(lat) && !isNaN(lng)) {
+    if (hasCoords) {
       return persist(lat, lng);
     }
 
@@ -794,18 +857,39 @@
       if (enabled) {
         return Promise.reject(new Error(title + ': set a location on the map, search an address, or use current location.'));
       }
-      return Promise.resolve();
+      return Promise.resolve(false);
     }
 
     return geocodeAddress(address).then(function (res) {
-      setLocCoords(wrap, prefix, res.lat, res.lng);
-      if (res.label) wrap.querySelector('[data-loc-' + prefix + '-address]').value = res.label;
+      applyLocationOnMap(wrap, prefix, res.lat, res.lng, res.label || address);
       return persist(res.lat, res.lng);
     });
   }
 
   function saveAllLocations(wrap) {
-    return saveLocation('office', wrap).then(function () { return saveLocation('remote', wrap); });
+    var errors = [];
+    ['office', 'remote'].forEach(function (type) {
+      var prefix = type;
+      var title = type === 'office' ? 'Office' : 'Remote';
+      if (!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked) return;
+      var coords = locCoords(wrap, prefix);
+      var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
+      if (!coords && !address) {
+        errors.push(title + ': set a location on the map, search an address, or use current location.');
+      }
+    });
+    if (errors.length) return Promise.reject(new Error(errors[0]));
+
+    var saved = false;
+    return saveLocation('office', wrap).then(function (did) {
+      if (did) saved = true;
+      return saveLocation('remote', wrap);
+    }).then(function (did) {
+      if (did) saved = true;
+      if (!saved) {
+        return Promise.reject(new Error('Set a location on the map or enter an address before saving.'));
+      }
+    });
   }
 
   function requestLocationIfEnabled() {
@@ -819,8 +903,14 @@
   }
 
   function toast(msg, ok) {
-    if (window.TMAToast && window.TMAToast.show) window.TMAToast.show(msg, ok !== false);
-    else if (window.TMAPortalUI && window.TMAPortalUI.toast) window.TMAPortalUI.toast(msg);
+    if (window.TMAToast && window.TMAToast.showFloatingToast) {
+      window.TMAToast.showFloatingToast(msg, { state: ok !== false ? 'successful' : 'failure' });
+      return;
+    }
+    if (window.TMAPortalUI) {
+      if (ok === false && window.TMAPortalUI.toastError) window.TMAPortalUI.toastError(msg);
+      else if (window.TMAPortalUI.toast) window.TMAPortalUI.toast(msg);
+    }
   }
 
   function applyPayload(j) {

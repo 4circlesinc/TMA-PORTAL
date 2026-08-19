@@ -434,6 +434,13 @@
   display: none;
 }
 
+.tma-presence-loc__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8, 8px);
+  margin-top: 10px;
+}
+
 .tma-presence-loc__map-fallback {
   margin: 0;
   padding: 16px;

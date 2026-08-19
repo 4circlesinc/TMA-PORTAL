@@ -5005,10 +5005,8 @@
   gap: var(--space-12);
   padding: var(--dash-surface-inset);
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
 .tma-dash__overview-block--hero .tma-dash__avatars--project {
@@ -5292,11 +5290,9 @@
   gap: var(--space-8);
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
+  overscroll-behavior-x: none;
 }
 
 .tma-dash__overview-block-head {
@@ -5640,9 +5636,7 @@
 
 @container (max-width: 360px) {
   .tma-dash__overview-block--road .tma-dash__overview-week {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    overflow-x: hidden;
     justify-content: flex-start;
   }
 }
@@ -19520,12 +19514,22 @@ a.tma-dash__clients-edit-btn--accent:visited {
   min-height: 0;
   min-width: 0;
   width: 100%;
+  max-width: 100%;
   display: flex;
   gap: var(--space-16);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scroll-padding-inline: var(--space-8);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tma-dash__clients-schedule-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .tma-dash__clients-schedule-times {
@@ -19545,11 +19549,13 @@ a.tma-dash__clients-edit-btn--accent:visited {
 }
 
 .tma-dash__clients-schedule-grid-wrap {
-  flex: 1 0 auto;
-  min-width: 640px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 .tma-dash__clients-schedule-days {
