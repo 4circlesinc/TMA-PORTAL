@@ -196,7 +196,7 @@
   padding: var(--space-12) var(--space-8) var(--space-16);
   border-radius: var(--radius-8);
   flex-shrink: 0;
-  background: var(--color-white);
+  background: transparent;
   border-top: 0.5px solid var(--dash-border);
 }
 .tma-dash__profile-avatar {
@@ -12405,9 +12405,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-overlay-4);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -12422,7 +12422,7 @@
   align-items: center;
   gap: var(--space-16);
   padding: var(--space-16);
-  border-bottom: 1px solid var(--color-overlay-4);
+  border-bottom: none;
 }
 
 .tma-dash__messages-chat-contact {
@@ -12859,9 +12859,9 @@
   gap: var(--space-12);
   margin: var(--space-16) var(--space-24);
   padding: var(--space-16) var(--space-20);
-  background: var(--color-bg-input);
-  border: 0.5px solid var(--color-border-medium);
-  border-radius: var(--radius-16);
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .tma-dash__messages-composer--reply {

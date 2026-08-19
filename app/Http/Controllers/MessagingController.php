@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Events\CallSignal;
-use App\Support\UserTime;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\InboxUpdated;
@@ -17,10 +16,11 @@ use App\Models\ConversationParticipant;
 use App\Models\LinkPreview;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageReaction;
 use App\Models\MessageStar;
 use App\Models\User;
-use App\Models\WorkDay;
 use App\Models\UserBlock;
+use App\Models\WorkDay;
 use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
 use App\Support\Messaging\AttachmentIntake;
@@ -33,12 +33,11 @@ use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
 use App\Support\Messaging\TabCounts;
+use App\Support\UserTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use App\Models\MessageReaction;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -74,7 +73,7 @@ class MessagingController extends Controller
                 'client:id,uid,name',
                 'company:id,uid,name',
                 // Only the newest message is needed for the list preview.
-                'messages' => fn ($q) => $q->latest('id')->limit(1),
+                'messages' => fn ($q) => $q->latest('id')->limit(1)->with(['sender', 'attachments']),
             ])
             ->orderByDesc('last_message_at')
             ->get();
@@ -444,7 +443,7 @@ class MessagingController extends Controller
         $conversation = $this->conversationFor($request, $uuid);
         $participant = $conversation->participantFor($user);
         $counterpart = $conversation->counterpartFor($user);
-        $conversation->loadMissing(['client:id,uid,name', 'company:id,uid,name']);
+        $conversation->loadMissing(['client:id,uid,name', 'company:id,uid,name', 'activeParticipants.user.presence']);
 
         $attachments = MessageAttachment::query()
             ->where('conversation_id', $conversation->id)
@@ -466,9 +465,7 @@ class MessagingController extends Controller
         return response()->json([
             'conversation' => MessagingPresenter::conversation($conversation, $user, $participant),
             'profile' => [
-                'name' => $conversation->isGroup()
-                    ? ($conversation->name ?: 'Group')
-                    : ($counterpart?->name ?? 'Unknown'),
+                'name' => MessagingPresenter::title($conversation, $user),
                 'photo' => $conversation->isGroup()
                     ? ($conversation->photo_path ? route('messaging.conversations.photo', $conversation->uuid) : null)
                     : $counterpart?->avatar_url,
@@ -479,7 +476,11 @@ class MessagingController extends Controller
                 'jobTitle' => $conversation->isGroup() ? null : $counterpart?->job_title,
                 'presence' => $counterpart
                     ? PresenceService::forViewer($counterpart, $user)
-                    : ['label' => 'Group chat'],
+                    : [
+                        'label' => $conversation->activeParticipants->count() === 1
+                            ? '1 member'
+                            : $conversation->activeParticipants->count().' members',
+                    ],
                 'workStatus' => $counterpart
                     ? ($workStatuses[(int) $counterpart->id] ?? null)
                     : null,
@@ -1102,6 +1103,11 @@ class MessagingController extends Controller
             // missed call; only a call that actually connected counts as ended.
             $answered = $data['type'] !== 'reject' && ! empty($data['answered']);
             $event = $answered ? 'call_ended' : 'call_missed';
+            // An unanswered hangup is the caller giving up. If the client
+            // never learned its own id (so initiatorId never left the
+            // browser), the person sending hangup is that caller.
+            $initiatorId = $data['initiatorId']
+                ?? ($data['type'] === 'hangup' && ! $answered ? $user->id : null);
 
             $system = $conversation->messages()->create([
                 'user_id' => null,
@@ -1109,10 +1115,11 @@ class MessagingController extends Controller
                 'system_event' => [
                     'event' => $event,
                     'actorName' => $user->name,
+                    'actorId' => $user->id,
                     'label' => $label,
                     'media' => $media,
                     'answered' => $answered,
-                    'initiatorId' => $data['initiatorId'] ?? null,
+                    'initiatorId' => $initiatorId,
                 ],
             ]);
             $conversation->forceFill(['last_message_at' => $system->created_at])->save();
@@ -1127,7 +1134,7 @@ class MessagingController extends Controller
                 MessageNotifier::announceMissedCall(
                     $conversation,
                     $user,
-                    $data['initiatorId'] ?? null,
+                    $initiatorId,
                     $label,
                 );
             }
@@ -1216,6 +1223,8 @@ class MessagingController extends Controller
                     'media' => $event['media'] ?? 'audio',
                     'answered' => (bool) ($event['answered'] ?? false),
                     'initiatorId' => $event['initiatorId'] ?? null,
+                    'actorId' => $event['actorId'] ?? null,
+                    'actorName' => $event['actorName'] ?? null,
                     'time' => MessagingPresenter::listTime($m->created_at, $user),
                 ];
             })

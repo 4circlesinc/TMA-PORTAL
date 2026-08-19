@@ -204,7 +204,7 @@
      (fitNavSpacing) grows it to whatever the window's height can afford, so a
      tall window spreads the menu instead of ending in dead space above the
      profile block. */
-  --dash-nav-gap: var(--space-8);
+  --dash-nav-gap: var(--space-10);
   /* Slightly under the old 21px / 16px rail — readable, not oversized. */
   --dash-icon-md: 20px;
   --dash-nav-icon-inset: calc(var(--space-2) + 16px + var(--space-4));
@@ -223,7 +223,7 @@
 .tma-dash__nav-section {
   display: flex;
   flex-direction: column;
-  gap: var(--dash-nav-gap, var(--space-8));
+  gap: var(--dash-nav-gap, var(--space-10));
   padding-bottom: var(--space-4);
   width: 100%;
   flex-shrink: 0;
@@ -239,7 +239,7 @@
 .tma-dash__nav-section--divided {
   /* Tracks the row gap so the group break keeps growing with it — otherwise a
      spread-out rail reads as one long list again. */
-  margin-top: var(--dash-nav-gap, var(--space-8));
+  margin-top: var(--dash-nav-gap, var(--space-10));
   padding-top: var(--space-4);
 }
 
@@ -250,7 +250,7 @@
   padding: var(--space-12) var(--space-8) var(--space-16);
   border-radius: var(--radius-8);
   flex-shrink: 0;
-  background: var(--color-white);
+  background: transparent;
   border-top: 0;
 }
 .tma-dash__profile-avatar {
@@ -394,7 +394,7 @@
 /* Sidebar rail: clearer row height so labels aren’t cramped. */
 .tma-dash__sidebar-nav .tma-dash__nav-item {
   gap: var(--space-10, 10px);
-  padding: var(--space-8) var(--space-4) var(--space-8) var(--space-2);
+  padding: var(--space-10) var(--space-4) var(--space-10) var(--space-2);
   border-radius: var(--radius-10, 10px);
   font-size: 14px;
   line-height: 20px;
@@ -674,7 +674,7 @@
 /* Sidebar submenus need more air between nested rows. */
 .tma-dash__sidebar-nav .tma-dash__subnav,
 .tma-dash__sidebar-nav .tma-dash__list {
-  gap: var(--space-6);
+  gap: var(--space-8);
   margin-top: var(--space-4);
   padding-bottom: var(--space-4);
 }
@@ -697,8 +697,8 @@
 }
 
 .tma-dash__sidebar-nav .tma-dash__nav-item--nested {
-  padding-top: var(--space-6);
-  padding-bottom: var(--space-6);
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
   /* Must be restated here: `.tma-dash__sidebar-nav .tma-dash__nav-item` above
      sets the `padding` shorthand at this same specificity, so the single-class
      --nested rules (here and in dashboard-tma-overrides.css) lose and the row
@@ -15649,7 +15649,14 @@
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.tma-dash__messages-row-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tma-dash__messages-row-pin,
@@ -15732,9 +15739,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-overlay-4);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -15749,7 +15756,7 @@
   align-items: center;
   gap: var(--space-16);
   padding: var(--space-16);
-  border-bottom: 1px solid var(--color-overlay-4);
+  border-bottom: none;
 }
 
 .tma-dash__messages-chat-contact {
@@ -15915,13 +15922,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  /* The default surface: near-white rather than stark white, with a faint
-   * brand wash fading out at the top so it never reads as a flat block.
-   * Both layers are tokens, so the dark theme re-points them on its own.
-   * The optional --bg-* variants further down override this wholesale. */
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 4%, transparent), transparent 240px),
-    var(--color-bg-card);
+  /* Flat on the page shell — optional --bg-* variants override below. */
+  background: transparent;
 }
 
 .tma-dash__messages-divider {
@@ -16210,9 +16212,9 @@
   gap: var(--space-12);
   margin: var(--space-16) var(--space-24);
   padding: var(--space-16) var(--space-20);
-  background: var(--color-bg-input);
-  border: 0.5px solid var(--color-border-medium);
-  border-radius: var(--radius-16);
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .tma-dash__messages-composer--reply {

@@ -488,7 +488,7 @@
     stopRecording();
     if (sendHangup) signal('hangup', {
       media: session.media,
-      initiatorId: session.initiatorId || null,
+      initiatorId: session.initiatorId || meId || null,
       answered: !!session.connected,
     });
     stopTimer();
@@ -2959,7 +2959,8 @@
     beginOutgoing();
   }
 
-  function startCall(conversationId, media, peerName, peerAvatar) {
+  function startCall(conversationId, media, peerName, peerAvatar, viewerId) {
+    if (viewerId != null) meId = viewerId;
     if (session) endSession(true);
     media = media === 'video' ? 'video' : 'audio';
 
@@ -3108,7 +3109,7 @@
     stopMeter();
     signal('reject', {
       media: session.media,
-      initiatorId: session.initiatorId || null,
+      initiatorId: session.initiatorId || meId || null,
       answered: false,
     });
     stopTimer();
@@ -3371,6 +3372,7 @@
 
   window.TMAMessagingCalls = {
     start: startCall,
+    setViewer: function (id) { if (id != null) meId = id; },
     end: function () { endSession(true); },
     onSignal: onSignal,
     bindConversation: bindConversation,

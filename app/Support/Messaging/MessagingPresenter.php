@@ -3,15 +3,16 @@
 namespace App\Support\Messaging;
 
 use App\Models\Conversation;
-use App\Support\UserTime;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\MessageReaction;
 use App\Models\User;
-use App\Models\WorkDay;
 use App\Models\UserBlock;
+use App\Models\WorkDay;
+use App\Support\UserTime;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -39,7 +40,18 @@ class MessagingPresenter
                 return $conversation->client->name;
             }
 
-            return $conversation->name ?: 'Group';
+            if ($conversation->name) {
+                return $conversation->name;
+            }
+
+            $names = $conversation->activeParticipants
+                ->where('user_id', '!=', $viewer->id)
+                ->map(fn (ConversationParticipant $p) => $p->user?->name)
+                ->filter()
+                ->take(3)
+                ->values();
+
+            return $names->isEmpty() ? 'Group' : $names->join(', ');
         }
 
         return $conversation->activeParticipants
@@ -87,16 +99,44 @@ class MessagingPresenter
     }
 
     /**
-     * @param  ?\Illuminate\Support\Collection  $latestReactions  Newest reaction
-     *   per conversation id, when the caller has already batched them. Passing
-     *   null keeps the single-conversation behaviour of looking one up.
+     * Group header/list presence: how many people, and how many are actually here.
+     *
+     * @param  Collection<int, User>  $others
+     * @return array{label: string, onlineCount: int}
+     */
+    private static function groupPresence(Collection $others, int $memberCount): array
+    {
+        $online = $others->filter(fn (User $u) => $u->presence?->isOnline())->count();
+
+        return [
+            'label' => $online > 0
+                ? self::onlineCountLabel($online)
+                : self::memberCountLabel($memberCount),
+            'onlineCount' => $online,
+        ];
+    }
+
+    private static function memberCountLabel(int $count): string
+    {
+        return $count === 1 ? '1 member' : $count.' members';
+    }
+
+    private static function onlineCountLabel(int $count): string
+    {
+        return $count === 1 ? '1 online' : $count.' online';
+    }
+
+    /**
+     * @param  ?Collection  $latestReactions  Newest reaction
+     *                                        per conversation id, when the caller has already batched them. Passing
+     *                                        null keeps the single-conversation behaviour of looking one up.
      */
     public static function conversation(
         Conversation $conversation,
         User $viewer,
         ?ConversationParticipant $participant = null,
         ?int $unread = null,
-        ?\Illuminate\Support\Collection $latestReactions = null,
+        ?Collection $latestReactions = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
         $others = $conversation->activeParticipants
@@ -124,6 +164,7 @@ class MessagingPresenter
                     'id' => $u->id,
                     'name' => $u->name,
                     'photo' => $u->avatar_url,
+                    'online' => (bool) $u->presence?->isOnline(),
                 ])->values()
                 : [],
             'memberCount' => $conversation->activeParticipants->count(),
@@ -142,7 +183,7 @@ class MessagingPresenter
             'role' => $participant?->role,
             'presence' => $counterpart
                 ? PresenceService::forViewer($counterpart, $viewer)
-                : ['label' => 'Group chat'],
+                : self::groupPresence($others, $conversation->activeParticipants->count()),
             'workStatus' => $counterpart
                 ? WorkDay::publicStatusFor($counterpart)
                 : null,
@@ -391,7 +432,7 @@ class MessagingPresenter
         Conversation $conversation,
         User $viewer,
         ?Message $last,
-        ?\Illuminate\Support\Collection $latestReactions = null,
+        ?Collection $latestReactions = null,
     ): ?string {
         /*
          * Presenting a list means asking this for every row. Left to itself

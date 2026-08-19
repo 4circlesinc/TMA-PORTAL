@@ -780,7 +780,7 @@
     /*
      * Every column is named, because the table lays out fixed: a filename is
      * arbitrarily long, and letting the browser size the Name column to fit
-     * one pushed Owner, Modified and Sharing off to the right — the columns
+     * one pushed Owner and Modified off to the right — the columns
      * moved about as you browsed from folder to folder. Widths come from the
      * class on each header now, and a long name is clipped with an ellipsis.
      *
@@ -792,7 +792,6 @@
       { html: 'Type', attrs: ' class="tma-portal-cell--type"' },
       { html: 'Size', attrs: ' class="tma-portal-cell--size"' },
       { html: 'Shared with', attrs: ' class="tma-portal-cell--owner"' },
-      { html: 'Sharing', attrs: ' class="tma-portal-cell--sharing"' },
       { html: isRecycle() ? 'Deleted' : 'Modified', attrs: ' class="tma-portal-cell--when"' },
       { html: '', attrs: ' class="tma-portal-cell--menu"' }
     );
@@ -820,7 +819,6 @@
         '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '—') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
-        '<td class="tma-portal-cell--sharing">' + sharingCell(it) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
         '<td class="tma-portal-cell--menu"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';
@@ -5488,7 +5486,6 @@
    *
    * A column of identical names is hard to scan; a face is recognised before
    * it is read. It used to draw the owner alone, which split the answer to
-   * "who has this file" between this column naming one person and the Sharing
    * column saying the word "Shared". The faces put it in one place.
    *
    * Drawn by TMAPersonCard — the same component as CBI's Assigned column — so
@@ -5514,37 +5511,6 @@
       total: item && item.peopleTotal,
       emptyLabel: '\u2014',
     });
-  }
-
-  /*
-   * Who else can reach it.
-   *
-   * Almost nothing here is shared person to person: the firm's libraries are
-   * granted to all staff at once by the folder they sit in, a client's folder
-   * to the staff assigned to them, a personal drive to nobody. A group is
-   * named rather than drawn as a row of identical faces, which would repeat
-   * the same thirteen colleagues down thirty thousand rows.
-   *
-   * This sat inline beside the names for one commit and read as a mess — two
-   * different kinds of answer crowding one cell. It has its own column.
-   */
-  function sharingCell(item) {
-    var audience = item && item.audience;
-    var people = (item && item.people) || [];
-
-    // How many can reach it — the same sentence the file's own access panel
-    // gives, so the table and the panel never disagree about one file. Plain
-    // text, not a chip: colour marks an exception, and every firm file carries
-    // the same answer, so a badge on every row is noise.
-    var count = item && item.peopleTotal != null ? item.peopleTotal : people.length;
-    var text = count === 1 ? 'Only you' : count + ' people';
-    if (audience && audience.count == null) text = audience.label;
-
-    var title = audience
-      ? audience.label + (audience.role ? ' \u00b7 ' + audience.role + ' access' : '')
-      : 'Nobody else has access';
-
-    return '<span class="tma-portal-table__muted" title="' + esc(title) + '">' + esc(text) + '</span>';
   }
 
   function personAvatar(person) {

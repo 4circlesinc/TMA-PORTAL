@@ -94,7 +94,8 @@ window.TMAI18nDict = {
     "Client documents": "客户文档", "Save link settings": "保存链接设置",
 
     // Messaging
-    "Online": "在线", "Seen": "已读", "This message was deleted": "此消息已被删除",
+    "Online": "在线", "1 member": "1 位成员", "1 online": "1 人在线",
+    "Seen": "已读", "This message was deleted": "此消息已被删除",
     "No archived chats": "没有已归档的聊天", "No recent calls": "暂无通话记录",
     "No recent emoji yet": "暂无最近使用的表情", "Conversation info": "对话信息",
     "Favorite conversation": "收藏对话", "Chat background": "聊天背景",

@@ -24,7 +24,6 @@
      messages, projects and settings. Names match Role::MATRIX exactly. */
   var NAV_CAPABILITIES = {
     'dash-project-overview': 'overview.view',
-    'cbi': 'cbi.view',
     'clients': 'clients.view',
     'email': 'mail.use',
     'so-feed': 'feed.view',

@@ -21,34 +21,17 @@
     return person.avatar || 'images/avatars/Avatar3d01.png';
   }
 
-  function workStatusTone(status) {
-    if (!status) return 'neutral';
-    if (status === 'in_office' || status === 'field_work') return 'office';
-    if (status === 'remote' || status === 'flexible') return 'remote';
-    if (status === 'sick_leave' || status === 'on_leave' || status === 'personal_leave') return 'leave';
-    if (status === 'out_of_office' || status === 'travelling' || status === 'not_working') return 'away';
-    return 'neutral';
-  }
-
-  /* Presence decides the badge colour; the work plan only tints somebody who
-     is actually here. See presenceBadge() in portal-home.js — the two boards
-     read the same payload and must agree on what green means. */
+  /* Presence chips are Online / Offline only — same as portal-home.js. */
   function presenceTone(p) {
-    if (!p.online) return 'offline';
-    var work = p.workStatus || null;
-    return work ? workStatusTone(work.status) : 'online';
+    return p.online ? 'online' : 'offline';
   }
 
   function lastSeen(p) {
     if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
-    return p.online ? 'Online' : (p.lastSeen || 'Offline');
+    return p.online ? 'Online' : (p.lastSeen || 'Last seen recently');
   }
 
   function subtitle(p) {
-    var work = p.workStatus || null;
-    if (p.online && work && work.label) return work.label;
-    if (!p.online && work && work.label) return work.label + ' · ' + lastSeen(p);
-    if (p.online) return 'Online';
     return lastSeen(p);
   }
 

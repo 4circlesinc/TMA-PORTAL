@@ -131,13 +131,13 @@ try {
   await page.waitForSelector('.cbi-table tbody tr', { timeout: 10000 });
   check(!page.url().includes('#/app/'), 'back returns to the list');
 
-  step(8, 'The SPA shell: admin sees CBI in the sidebar and /cbi mounts the module');
+  step(8, 'The SPA shell: /cbi mounts the module without a sidebar row');
   // domcontentloaded + explicit selector waits: the shell boots a dozen
   // modules whose requests all queue behind the dev server's single PHP
   // worker, so networkidle/fixed waits are flaky here.
   await page.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.tma-dash__view[data-view="cbi"] .tma-portal-head__title', { timeout: 20000 });
-  check(await page.locator('.tma-dash__nav-item[data-nav="cbi"]').count() >= 1, 'sidebar CBI row present for admin');
+  check(await page.locator('.tma-dash__nav-item[data-nav="cbi"]').count() === 0, 'sidebar has no CBI row (direct URL only)');
   check(await page.locator('.tma-dash__view[data-view="cbi"] .tma-portal-head__title').count() === 1, 'module mounted inside the shell view');
   const shellRows = await page.waitForSelector('tr[data-cbi-open]', { timeout: 20000 }).then(() => true).catch(() => false);
   check(shellRows, 'shell-mounted table paints rows');

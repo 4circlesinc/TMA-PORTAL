@@ -361,30 +361,10 @@
     return person.avatar || 'images/avatars/Avatar3d01.png';
   }
 
-  function workStatusTone(status) {
-    if (!status) return 'neutral';
-    if (status === 'in_office' || status === 'field_work') return 'office';
-    if (status === 'remote' || status === 'flexible') return 'remote';
-    if (status === 'sick_leave' || status === 'on_leave' || status === 'personal_leave') return 'leave';
-    if (status === 'out_of_office' || status === 'travelling' || status === 'not_working') return 'away';
-    return 'neutral';
-  }
-
-  /*
-   * The colour of a presence badge is decided by presence, and only then by
-   * what somebody's work plan says.
-   *
-   * This used to read the work plan first, so anyone whose plan said "in
-   * office" wore the green badge whether or not they were actually signed in —
-   * a badge reading "Offline" in the green reserved for online. Green now means
-   * one thing. An offline person is grey no matter what today's plan says; an
-   * online one may be tinted by their status (remote is blue, leave is amber),
-   * because that colour is describing a person who is genuinely there.
-   */
+  /* Presence chips are Online / Offline only — the work plan (in office,
+     remote, leave) lives on the row subtitle, not on the badge. */
   function presenceBadge(p) {
     if (!p.online) return { tone: 'offline', label: 'Offline' };
-    var work = p.workStatus || null;
-    if (work && work.label) return { tone: workStatusTone(work.status), label: work.label };
     return { tone: 'online', label: 'Online' };
   }
 
@@ -393,7 +373,7 @@
      anyone who hides their last-seen (they send no timestamp). */
   function lastSeenLabel(p) {
     if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
-    return p.online ? 'Online' : (p.lastSeen || 'Offline');
+    return p.online ? 'Online' : (p.lastSeen || 'Last seen recently');
   }
 
   /*
@@ -479,13 +459,8 @@
     var people = homeStaff.employees || [];
     var onlineCount = people.filter(function (p) { return p.online; }).length;
     var rows = people.map(function (p) {
-      var work = p.workStatus || null;
       var badge = presenceBadge(p);
-      var sub;
-      if (p.online && work && work.label) sub = work.label;
-      else if (!p.online && work && work.label) sub = work.label + ' · ' + lastSeenLabel(p);
-      else if (p.online) sub = 'Online';
-      else sub = lastSeenLabel(p);
+      var sub = lastSeenLabel(p);
 
       return '<div class="tma-portal-employee" data-key="employee-' + ui().esc(p.id) + '">' +
         '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
@@ -677,6 +652,48 @@
     return '';
   }
 
+  function chatMemberSrc(member) {
+    if (member && member.photo) return member.photo;
+    var name = (member && member.name) || '?';
+    if (window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
+      return window.TMACurrentUser.initialsFor(name, name);
+    }
+    return '';
+  }
+
+  function chatAvatarHtml(c) {
+    var online = !!(c.presence && c.presence.online);
+    if (c.type === 'group' && !c.photo) {
+      var members = (c.members || []).slice(0, 2);
+      if (members.length) {
+        return '<span class="tma-portal-chat-row__avatar tma-portal-chat-row__avatar--group">' +
+          members.map(function (member, i) {
+            return '<img class="tma-portal-chat-row__avatar-part tma-portal-chat-row__avatar-part--' +
+              (i + 1) + '" src="' + ui().esc(chatMemberSrc(member)) + '" alt="" width="20" height="20" loading="lazy">';
+          }).join('') +
+          '</span>';
+      }
+    }
+    return '<span class="tma-portal-chat-row__avatar' + (online ? ' is-online' : '') + '">' +
+      '<img src="' + ui().esc(chatAvatarSrc(c)) + '" alt="" width="32" height="32" loading="lazy">' +
+      '</span>';
+  }
+
+  function chatName(c) {
+    if (c.name && c.name !== 'Group') return c.name;
+    var names = (c.members || []).map(function (m) { return m.name; }).filter(Boolean);
+    if (names.length) return names.join(', ');
+    return c.name || 'Chat';
+  }
+
+  function chatCountLabel(c) {
+    var label = c.presence && c.presence.label;
+    if (label && !/^group chat$/i.test(String(label).trim())) return label;
+    var n = parseInt(c.memberCount, 10) || 0;
+    if (!n) return '';
+    return n === 1 ? '1 member' : n + ' members';
+  }
+
   // What the row says under the name, in the order the Messages list uses:
   // an unsent draft, then a reaction, then the last message itself.
   function chatPreview(c) {
@@ -700,20 +717,18 @@
 
     var rows = chats.map(function (c) {
       var unread = Math.max(0, parseInt(c.unread, 10) || 0);
-      var online = !!(c.presence && c.presence.online);
+      var preview = chatPreview(c) || (c.type === 'group' ? chatCountLabel(c) : '');
       return '<button type="button" class="tma-portal-chat-row' +
         (unread || c.markedUnread ? ' is-unread' : '') + '"' +
         ' data-key="chat-' + ui().esc(c.id) + '"' +
         ' data-home-chat="' + ui().esc(c.id) + '">' +
-        '<span class="tma-portal-chat-row__avatar' + (online ? ' is-online' : '') + '">' +
-        '<img src="' + ui().esc(chatAvatarSrc(c)) + '" alt="" width="32" height="32" loading="lazy">' +
-        '</span>' +
+        chatAvatarHtml(c) +
         '<span class="tma-portal-chat-row__meta">' +
         '<span class="tma-portal-chat-row__top">' +
-        '<span class="tma-portal-chat-row__name">' + ui().esc(c.name || 'Chat') + '</span>' +
+        '<span class="tma-portal-chat-row__name">' + ui().esc(chatName(c)) + '</span>' +
         '<span class="tma-portal-chat-row__time">' + ui().esc(c.time || '') + '</span>' +
         '</span>' +
-        '<span class="tma-portal-chat-row__preview">' + ui().esc(chatPreview(c)) + '</span>' +
+        '<span class="tma-portal-chat-row__preview">' + ui().esc(preview) + '</span>' +
         '</span>' +
         (unread
           ? '<span class="tma-portal-chat-row__unread">' + (unread > 99 ? '99+' : unread) + '</span>'

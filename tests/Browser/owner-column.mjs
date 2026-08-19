@@ -164,7 +164,7 @@ try {
   // else is its own column beside it — crowded into one cell it read as a mess.
   const headers = await page.locator('.tma-portal-files-table thead th').allTextContents();
   check(headers.some((h) => /Shared with/.test(h)), `there is a "Shared with" column (${headers.filter(Boolean).join(', ')})`);
-  check(headers.some((h) => h.trim() === 'Sharing'), 'and a separate "Sharing" column');
+  check(!headers.some((h) => h.trim() === 'Sharing'), 'there is no separate "Sharing" column');
   check(
     !(await sharedRow.locator('.tma-portal-cell--owner .tma-portal-chip').count()),
     'the grant does not sit inside the names cell',
@@ -178,15 +178,6 @@ try {
    */
   const orgRow = page.locator('[data-files-row]', { hasText: 'Citizenship Applications' }).first();
   if (await orgRow.count()) {
-    const chip = orgRow.locator('.tma-portal-cell--sharing');
-    check(await chip.count() > 0, 'an all-staff folder reports its reach');
-    const said = (await chip.textContent()).trim();
-    check(/^(Only you|\d+ people)$/.test(said), `as a count of people ("${said}")`);
-    check(
-      /Everyone in/.test(await chip.locator('span').getAttribute('title') || ''),
-      'with the grant itself on its title',
-    );
-
     /*
      * The grant reaches every member of staff, and those are the people it is
      * shared with — so they are drawn, owner first, then administrators, then
@@ -202,7 +193,9 @@ try {
     check(/Owner/.test(first), `the owner is the first face (${first})`);
 
     const more = await orgRow.locator('.tma-people__face--more').textContent().catch(() => '');
-    const total = Number((await chip.textContent()).replace(/[^0-9]/g, ''));
+    const ownerCell = orgRow.locator('.tma-portal-cell--owner');
+    const totalAttr = await ownerCell.locator('[data-tma-people]').getAttribute('data-tma-people').catch(() => null);
+    const total = totalAttr ? JSON.parse(totalAttr).length : faceCount;
     if (total > 4) {
       check(/^\+\d+$/.test(more), `a fifth circle counts the rest ("${more}")`);
       check(Number(more.slice(1)) === total - 4, `and counts up to everyone (${more} of ${total})`);
@@ -210,16 +203,6 @@ try {
   } else {
     log('      (no all-staff folder in this database)');
   }
-
-  // The Sharing column counts the people who can reach it — the same answer
-  // the file's own access panel gives, in plain text rather than a badge.
-  const privateRow = page.locator('[data-files-row]', { hasText: 'Shared with Bea' }).first();
-  const privateText = (await privateRow.locator('.tma-portal-cell--sharing').textContent()).trim();
-  check(/^(Only you|\d+ people)$/.test(privateText), `it counts who can reach it ("${privateText}")`);
-  check(
-    !(await privateRow.locator('.tma-portal-cell--sharing .tma-portal-chip').count()),
-    'and does it as plain text, not a chip',
-  );
 
   step(5, 'Hovering a face opens the person card');
   await restMouse();
@@ -277,7 +260,7 @@ try {
   step(8, 'The columns do not move with the length of a name');
   /*
    * The table used to size itself to its content, so one long filename widened
-   * the Name column and shoved Owner, Modified and Sharing rightwards — the
+   * the Name column and shoved Owner and Modified rightwards — the
    * columns landed somewhere different in every folder.
    */
   const cols = await page.evaluate(() => {

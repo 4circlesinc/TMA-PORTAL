@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-18-titleless';
+  var NAV_SHELL_VERSION = '2026-08-18-no-cbi-nav';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -23,7 +23,6 @@
     'dash-dashboard',
     'dash-project-overview',
     'clients',
-    'cbi',
     'email',
     'so-messages',
     'so-feed',
@@ -486,6 +485,14 @@
           crumb: 'Calendar',
         };
       }
+      if (p === '/cbi') {
+        return {
+          navId: 'cbi',
+          view: 'cbi',
+          title: 'CBI',
+          crumb: 'CBI',
+        };
+      }
       if (p === '/pricing') {
         return {
           navId: 'pricing',
@@ -545,6 +552,7 @@
       if (view === 'messages' || navId === 'so-messages') return '/social/messages';
       if (view === 'feed' || navId === 'so-feed') return '/social/feed';
       if (view === 'calendar' || navId === 'calendar') return '/calendar';
+      if (view === 'cbi' || navId === 'cbi') return '/cbi';
       if (view === 'pricing' || navId === 'pricing') return '/pricing';
       /* Generic fallback: use the sidebar leaf's href for this nav id */
       var leafForNav = leaves.filter(function (l) { return l.getAttribute('data-nav') === navId; })[0];
@@ -1676,8 +1684,8 @@
        eats height) rather than scrolling. Measured, not a vh formula, so role
        pruning, an expanded submenu and the shortcuts tab all re-fit. */
     var navEl = root.querySelector('.tma-dash__sidebar-nav');
-    var NAV_GAP_BASE = 8;   // --space-8, the resting rhythm
-    var NAV_GAP_TIGHT = 4;  // short window: tighten before making the rail scroll
+    var NAV_GAP_BASE = 10;  // --space-10, the resting rhythm
+    var NAV_GAP_TIGHT = 8;  // long menu: keep a readable gap; the rail scrolls instead
     var NAV_GAP_MAX = 18;   // past this the rows stop reading as one list
     var navFitQueued = false;
 
@@ -1761,9 +1769,8 @@
        * longer fit together.
        */
       free += openSubnavHeight(sections, NAV_GAP_BASE);
-      // Negative free space means the rows already overflow, so the same sum
-      // tightens them — a short window (or the desktop app's title bar taking
-      // its cut) buys a few more rows back before the rail has to scroll.
+      // Negative free space means the rows already overflow. Keep a readable
+      // floor and let the rail scroll rather than packing the long admin list.
       var gap = NAV_GAP_BASE + Math.floor(free / units);
       gap = Math.max(NAV_GAP_TIGHT, Math.min(NAV_GAP_MAX, gap));
       navEl.style.setProperty('--dash-nav-gap', gap + 'px');

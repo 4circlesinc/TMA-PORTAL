@@ -2139,6 +2139,30 @@
   background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
 }
 
+.tma-portal-chat-row__avatar--group {
+  background: transparent;
+}
+
+.tma-portal-chat-row__avatar-part {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-bg-page, #f5f5f7);
+  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+}
+
+.tma-portal-chat-row__avatar-part--1 {
+  top: 0;
+  left: 0;
+}
+
+.tma-portal-chat-row__avatar-part--2 {
+  right: 0;
+  bottom: 0;
+}
+
 .tma-portal-chat-row__avatar.is-online::after {
   content: "";
   position: absolute;
@@ -2187,6 +2211,7 @@
 
 .tma-portal-email-row__sender,
 .tma-portal-chat-row__name {
+  flex: 1;
   font-size: var(--text-size-13, 13px);
   font-weight: 600;
   color: var(--color-black);

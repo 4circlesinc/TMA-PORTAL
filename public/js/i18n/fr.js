@@ -94,7 +94,8 @@ window.TMAI18nDict = {
     "Client documents": "Documents du client", "Save link settings": "Enregistrer les paramètres du lien",
 
     // Messaging
-    "Online": "En ligne", "Seen": "Vu", "This message was deleted": "Ce message a été supprimé",
+    "Online": "En ligne", "1 member": "1 membre", "1 online": "1 en ligne",
+    "Seen": "Vu", "This message was deleted": "Ce message a été supprimé",
     "No archived chats": "Aucune discussion archivée", "No recent calls": "Aucun appel récent",
     "No recent emoji yet": "Aucun émoji récent", "Conversation info": "Infos de la conversation",
     "Favorite conversation": "Conversation favorite", "Chat background": "Fond de discussion",

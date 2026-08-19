@@ -364,7 +364,7 @@
         attrs: ' class="tma-portal-cell--tight"',
       },
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
-      'Name', 'Type', 'Size', 'Owner', 'Modified', 'Sharing',
+      'Name', 'Type', 'Size', 'Owner', 'Modified',
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
     ];
 
@@ -372,9 +372,6 @@
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
       var size = it.type === 'folder' ? (it.sizeLabel || '—') : (it.sizeLabel || '—');
       var when = fmtDate(it.modifiedAt || it.createdAt || it.uploadedAt);
-      var sharing = (it.assignedTo && it.assignedTo.length) || it.shared
-        ? '<span class="tma-portal-chip tma-portal-chip--shared">Shared</span>'
-        : '<span class="tma-portal-table__muted">Private</span>';
 
       return '<tr data-home-lib-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '"' +
         (picked[it.id] ? ' class="is-selected"' : '') + '>' +
@@ -388,7 +385,6 @@
         '<td class="tma-portal-table__muted">' + esc(size) + '</td>' +
         '<td class="tma-portal-table__muted">' + ownerCell(it.owner || it.uploadedBy) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
-        '<td>' + sharing + '</td>' +
         '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-home-lib-menu="' + esc(it.id) + '" aria-label="More actions">' +
         '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';

@@ -1228,20 +1228,48 @@
 .tma-portal-lightbox__nav--next { right: var(--space-16); }
 .tma-portal-lightbox__foot { position: relative; z-index: 2; text-align: center; color: rgba(255, 255, 255, 0.75); font-size: var(--text-size-12); padding: 0 0 var(--space-16); }
 
-/* ── library sync strip ────────────────────────────── */
-.tma-portal-sync {
-  display: flex; align-items: center; gap: var(--space-8);
-  margin-top: var(--space-10); padding: var(--space-6) var(--space-10);
-  border-radius: var(--radius-8); background: var(--color-hover);
-  font-size: var(--text-size-13); color: var(--color-text-secondary);
+/* ── library sync strip ──────────────────────────────
+ * Tiny status pill fixed to the bottom — out of the way while imports run. */
+[data-sync-host] {
+  position: fixed;
+  z-index: 550;
+  left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
 }
-.tma-portal-sync b { color: var(--color-text-primary); }
+[data-sync-host]:empty { display: none; }
+
+.tma-portal-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--color-hover);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  pointer-events: auto;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+.tma-portal-sync > span:not(.tma-portal-sync__spinner):not(.tma-portal-sync__close-glyph) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tma-portal-sync img { width: 12px; height: 12px; flex: 0 0 auto; }
+.tma-portal-sync b { color: var(--color-text-primary); font-weight: 600; }
 /* Close sits at the far end, pushed there rather than floated so the strip
    keeps its single flex row. */
 .tma-portal-sync__close {
-  margin-left: auto; flex: 0 0 auto;
+  margin-left: 4px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; padding: 0;
+  width: 16px; height: 16px; padding: 0;
   border: 0; border-radius: var(--radius-6); background: none;
   color: var(--color-text-secondary); cursor: pointer;
 }
@@ -1249,7 +1277,7 @@
 /* Masked, so the glyph takes the button's colour like every other tinted
    icon — an <img> would paint its own black. */
 .tma-portal-sync__close-glyph {
-  display: block; width: 10px; height: 10px; background: currentColor;
+  display: block; width: 8px; height: 8px; background: currentColor;
   mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/X.svg */
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/X.svg */
   mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
@@ -1259,19 +1287,19 @@
 .tma-portal-sync--busy { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 .tma-portal-sync--error { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
 .tma-portal-sync__spinner {
-  width: 14px; height: 14px; flex: 0 0 auto; border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
   border-top-color: var(--color-primary);
   animation: tma-files-spin 0.8s linear infinite;
 }
 .tma-portal-sync__btn {
-  margin-left: auto; padding: 2px var(--space-10);
+  margin-left: 4px; padding: 1px 6px;
   border: 1px solid currentColor; border-radius: var(--radius-pill);
-  background: transparent; color: inherit; font-size: var(--text-size-12); cursor: pointer;
+  background: transparent; color: inherit; font-size: 9px; line-height: 12px; cursor: pointer;
 }
 .tma-portal-sync__flag {
-  margin-left: auto; padding: 1px var(--space-8); border-radius: 999px;
-  background: color-mix(in srgb, #f59e0b 22%, transparent); color: #b45309; font-size: 11px;
+  margin-left: 4px; padding: 0 5px; border-radius: 999px;
+  background: color-mix(in srgb, #f59e0b 22%, transparent); color: #b45309; font-size: 9px; line-height: 12px;
 }
 
 /* Library sync panel — mounts into .tma-sync-toast-host with the other sync
@@ -1589,7 +1617,7 @@
 /* ── File table: fixed columns, clipped names ──────────
  *
  * The table sized itself to its content, so one long filename widened the Name
- * column and shoved Owner, Modified and Sharing to the right — the columns
+ * column and shoved Owner and Modified to the right — the columns
  * landed somewhere different in every folder, and on a deep name the last of
  * them left the viewport entirely.
  *
@@ -1600,24 +1628,15 @@
  */
 .tma-portal-files-table { table-layout: fixed; }
 
-.tma-portal-files-table { min-width: 860px; }
+.tma-portal-files-table { min-width: 720px; }
 
 /*
  * Widths.
  *
  * A fixed layout hands every spare pixel to whichever column has no width, so
- * one of them has to volunteer. It was Name, which then ran half the table;
- * then Shared with, which left its people stranded a screen away from the
- * Sharing column beside them.
- *
- * It is Sharing that holds the slack now. Its text is left-aligned, so it
- * starts hard against the names whatever the window is doing, and the empty
- * space lands at the quiet end of the row instead of inside a sentence.
+ * Name volunteers: it grows with the window while Type, Size, Shared with,
+ * Modified and the row menu stay predictable.
  */
-/* A flat width, not a share of the table: a percentage still grows with the
-   window, and this column has no need of the room. max-width does not bind a
-   column under a fixed layout, so the width itself has to be the limit. */
-.tma-portal-files-table .tma-portal-cell--name { width: 340px; }
 .tma-portal-files-table .tma-portal-cell--type { width: 88px; }
 .tma-portal-files-table .tma-portal-cell--size { width: 84px; }
 /* Enough for four faces, or one face and a name; a name longer than that

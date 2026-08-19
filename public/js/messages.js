@@ -126,6 +126,32 @@
     real: false,
   };
 
+  function rememberMe() {
+    if (window.TMAMessagingCalls && window.TMAMessagingCalls.setViewer && STORE.me) {
+      window.TMAMessagingCalls.setViewer(STORE.me.id);
+    }
+  }
+
+  function sameUserId(a, b) {
+    return a != null && b != null && Number(a) === Number(b);
+  }
+
+  /* Who placed this call, from the viewer's point of view. initiatorId is
+     the source of truth; actorId/actorName cover older rows that never
+     recorded one (so a call you placed stopped reading as a missed incoming). */
+  function isOutgoingCall(event) {
+    if (!STORE.me) return false;
+    var initiator = event && (event.initiatorId != null ? event.initiatorId : event.initiator_id);
+    if (initiator != null) return sameUserId(initiator, STORE.me.id);
+    if (event && event.event === 'call_missed' && event.actorId != null) {
+      return sameUserId(event.actorId, STORE.me.id);
+    }
+    if (event && event.event === 'call_missed' && event.actorName && STORE.me.name) {
+      return event.actorName === STORE.me.name;
+    }
+    return false;
+  }
+
   /* Set by mount, so a warm snapshot landing after the view is up repaints
      it. Before mount there is nothing to repaint — the first render reads
      the hydrated STORE by itself. */
@@ -146,6 +172,7 @@
       if (!snap || STORE.real || STORE.loaded) return;
       STORE.threads = snap.threads || [];
       STORE.me = snap.me || null;
+      rememberMe();
       STORE.settings = snap.settings || {};
       STORE.tabCounts = snap.tabCounts || {};
       STORE.loaded = true;
@@ -247,17 +274,11 @@
 
   function threadPresence(row) {
     if (row.presence) return row.presence;
-    return isDirectThread(row) ? { lastSeen: 'Last seen recently' } : { label: 'Group chat' };
-  }
-
-  function workStatusLabel(row) {
-    var ws = row && row.workStatus;
-    return (ws && ws.label) ? String(ws.label) : '';
+    return isDirectThread(row) ? { lastSeen: 'Last seen recently' } : {};
   }
 
   function renderPresence(row) {
     var presence = threadPresence(row);
-    var workLabel = workStatusLabel(row);
 
     // A live typing / recording indicator outranks online-or-last-seen.
     // Live typing is not part of `row.presence` — it is transient socket
@@ -273,25 +294,30 @@
       );
     }
 
+    if (!isDirectThread(row)) {
+      // Case chats already name the firm on the line below. Don't stack a
+      // generic "Group chat" (or a member count) on top of that.
+      if (row.subtitle) return '';
+      var groupLabel = groupCountLabel(row);
+      return groupLabel
+        ? '<span class="tma-dash__messages-chat-presence">' + esc(groupLabel) + '</span>'
+        : '';
+    }
+
     if (presence.online) {
-      // Office/Teams style: a green dot + "Online" sitting right under the
-      // name. Kept to a single line — the subtitle carries any extra detail.
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
         '<span class="tma-dash__messages-chat-presence-dot" aria-hidden="true"></span>' +
         '<span>Online</span></span>'
       );
     }
-    // Prefer a visible work status over a generic offline label when present.
-    if (workLabel) {
-      return '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-workstatus">' +
-        esc(workLabel) + '</span>';
+
+    var label = window.TMALastSeen
+      ? window.TMALastSeen.forPresence(presence)
+      : (presence.lastSeen || 'Last seen recently');
+    if (!label || /^offline$/i.test(String(label).trim()) || /^group chat$/i.test(String(label).trim())) {
+      label = 'Last seen recently';
     }
-    // Re-derived from the instant where the server sent one, so the header
-    // does not still read "5 minutes ago" an hour into a conversation.
-    var label = presence.label ||
-      (window.TMALastSeen && presence.lastSeenAt ? window.TMALastSeen.label(presence.lastSeenAt) : null) ||
-      presence.lastSeen || 'Offline';
     return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
   }
 
@@ -432,7 +458,15 @@
   }
 
   function threadDisplayName(row) {
-    return String(row.name || '').split(',')[0];
+    return String(row.name || 'Chat');
+  }
+
+  function groupCountLabel(row) {
+    var label = row.presence && row.presence.label;
+    if (label && !/^group chat$/i.test(String(label).trim())) return label;
+    var n = parseInt(row.memberCount, 10) || 0;
+    if (!n) return '';
+    return n === 1 ? '1 member' : n + ' members';
   }
 
   function renderContactName(row) {
@@ -516,6 +550,9 @@
 
     if (row.type === 'group') {
       var members = (row.members || []).slice(0, 2);
+      if (members.length < 2 && STORE.me && STORE.me.name) {
+        members = members.concat([{ name: STORE.me.name, photo: STORE.me.photo || STORE.me.avatar }]);
+      }
       if (!members.length) return renderInitialAvatar(row.name, 'tma-dash__messages-row-avatar--group');
 
       return (
@@ -960,10 +997,12 @@
       renderInboxThreadIcon(row) +
       '<span class="tma-dash__messages-row-text">' +
       '<span class="tma-dash__messages-row-name">' +
-      esc(item.name) +
+      '<span class="tma-dash__messages-row-name-text">' + esc(item.name) + '</span>' +
       (item.subtitle
         ? '<span class="tma-dash__messages-row-about">' + esc(item.subtitle) + '</span>'
-        : '') +
+        : (item.type === 'group' && item.memberCount
+          ? '<span class="tma-dash__messages-row-about">' + esc(groupCountLabel(item)) + '</span>'
+          : '')) +
       (pinned
         ? '<img class="tma-dash__messages-row-pin" src="' + ICONS.StarFilled + '" alt="" width="12" height="12" aria-hidden="true">'
         : '') +
@@ -982,7 +1021,7 @@
           ? '<span class="tma-dash__messages-row-draft">Draft: </span>' + esc(row.draft)
           : row.reactionNote
             ? '<span class="tma-dash__messages-row-reaction">' + esc(row.reactionNote) + '</span>'
-            : esc(row.preview || '')) +
+            : esc(row.preview || groupCountLabel(row) || '')) +
       '</span>' +
       '</span>' +
       '<span class="tma-dash__messages-row-time">' +
@@ -1713,7 +1752,7 @@
    * back should not mean opening the conversation first.
    */
   function renderCallRow(call) {
-    var outgoing = call.initiatorId != null && STORE.me && call.initiatorId === STORE.me.id;
+    var outgoing = isOutgoingCall(call);
     var kind = call.media === 'video' ? 'Video' : 'Voice';
     var missed = call.event === 'call_missed';
     var dir, stateLabel;
@@ -2691,7 +2730,7 @@
    */
   function renderCallMessage(msg, row) {
     var event = msg.systemEvent || {};
-    var outgoing = event.initiatorId != null && STORE.me && event.initiatorId === STORE.me.id;
+    var outgoing = isOutgoingCall(event);
     var missed = event.event === 'call_missed';
     var video = event.media === 'video';
     var side = outgoing ? 'out' : 'in';
@@ -3986,6 +4025,9 @@
     var presence = window.TMALastSeen
       ? window.TMALastSeen.forPresence(p.presence)
       : (p.presence.online ? 'Online' : (p.presence.lastSeen || p.presence.label || ''));
+    if (/^group chat$/i.test(String(presence).trim()) || /^offline$/i.test(String(presence).trim())) {
+      presence = row.type === 'group' ? groupCountLabel(row) : (p.presence && p.presence.online ? 'Online' : 'Last seen recently');
+    }
 
     return (
       '<div class="tma-dash__messages-chat tma-dash__messages-chat--profile">' +
@@ -4012,9 +4054,6 @@
       '<h2 class="tma-dash__messages-profile-name">' + esc(p.name) + '</h2>' +
       (presence
         ? '<p class="tma-dash__messages-profile-presence">' + esc(presence) + '</p>'
-        : '') +
-      (p.workStatus && p.workStatus.label
-        ? '<p class="tma-dash__messages-profile-workstatus">' + esc(p.workStatus.label) + '</p>'
         : '') +
       '</div>' +
 
@@ -4708,7 +4747,7 @@
       if (start) {
         var kind = start.getAttribute('data-callask-start') || 'audio';
         closeCallChooser();
-        window.TMAMessagingCalls.start(row.id, kind, name, row.photo || null);
+        window.TMAMessagingCalls.start(row.id, kind, name, row.photo || null, (STORE.me || {}).id);
         return;
       }
       if (e.target.closest('[data-callask-cancel]')) closeCallChooser();
@@ -5381,6 +5420,7 @@
       .then(function (data) {
         STORE.threads = data.conversations || [];
         STORE.me = data.me || null;
+        rememberMe();
         STORE.settings = data.settings || {};
         STORE.tabCounts = data.tabCounts || STORE.tabCounts || {};
         publishCallSettings();
@@ -6612,7 +6652,8 @@
             conversation.id,
             media === 'video' ? 'video' : 'audio',
             row.name || 'Contact',
-            row.photo || null
+            row.photo || null,
+            (STORE.me || {}).id
           );
         }
       })
@@ -8510,7 +8551,8 @@
           id,
           btn.getAttribute('data-calls-media') || 'audio',
           (row && row.name) || (nameEl && nameEl.textContent) || 'Contact',
-          (row && row.photo) || null
+          (row && row.photo) || null,
+          (STORE.me || {}).id
         );
       });
     });
