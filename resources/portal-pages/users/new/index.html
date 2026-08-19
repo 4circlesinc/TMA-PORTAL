@@ -196,7 +196,11 @@
         <button type="button" class="tma-dash__icon-btn" data-action="toggle-sidebar" aria-label="Toggle sidebar"><img src="images/icons/phosphor/Sidebar.svg" alt=""></button>
         <nav class="tma-dash__breadcrumb" data-breadcrumb aria-label="Breadcrumb">
           <span class="tma-dash__crumb--current">Dashboard</span>
+        
         </nav>
+        <div class="tma-dash__header-presence" data-presence-header>
+          <button type="button" class="tma-presence-pill" data-presence-indicator aria-haspopup="dialog" aria-expanded="false" aria-label="Status"></button>
+        </div>
       </div>
       <div class="tma-dash__header-center">
         <button type="button" class="tma-dash__search" data-action="open-search" aria-label="Search (press /)">
@@ -206,10 +210,6 @@
         </button>
       </div>
       <div class="tma-dash__header-right">
-        <div class="tma-dash__header-presence" data-presence-header hidden>
-          <span class="tma-dash__header-presence-name" data-presence-user-name></span>
-          <button type="button" class="tma-presence-pill" data-presence-indicator aria-haspopup="dialog" aria-expanded="false" aria-label="Status"></button>
-        </div>
         <div class="tma-dash__header-icons">
           <button type="button" class="tma-dash__icon-btn" data-action="toggle-theme" aria-label="Toggle theme"><img src="images/icons/phosphor/Sun.svg" alt=""></button>
           <button type="button" class="tma-dash__icon-btn" data-action="toggle-activities-popup" aria-label="Activities" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt=""></button>
@@ -552,7 +552,7 @@
   <script src="js/portal-store.js?v=3" defer></script>
   <script src="js/portal-queue.js?v=1" defer></script>
   <script src="js/portal-sync-status.js?v=2" defer></script>
-  <script src="js/presence-status.js?v=2"></script>
+  <script src="js/presence-status.js?v=3"></script>
   <script src="js/current-user.js?v=13"></script>
   <script src="js/sign-out.js?v=2"></script>
 </body>

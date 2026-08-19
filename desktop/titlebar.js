@@ -254,6 +254,13 @@ function buildCss(platform = process.platform) {
     text-overflow: ellipsis;
   }
 
+  #tma-desktop-titlebar .tma-tb-presence-wrap {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    -webkit-app-region: no-drag;
+  }
+
   /* Centred on the window, not on what is left over beside the controls, so it
      does not drift as the title changes length. */
   #tma-desktop-titlebar .tma-tb-center,
@@ -529,7 +536,8 @@ function script({ canGoBack, canGoForward }) {
       + button('reload', 'Reload', true).trim()
       + '</div>'
       + '<span class="tma-tb-sep">|</span>'
-      + '<span class="tma-tb-title"></span>',
+      + '<span class="tma-tb-title"></span>'
+      + '<span class="tma-tb-presence-wrap" data-presence-titlebar></span>',
   )};
 
     const nav = bar.querySelector('.tma-tb-nav');

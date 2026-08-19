@@ -129,64 +129,83 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=2';
+    link.href = (ROOT || '') + 'css/presence.css?v=4';
     document.head.appendChild(link);
   }
 
   function paintHeader() {
-    ensureHeaderSlot();
+    ensureSlots();
     var p = primary();
     var label = p.label || meta(p.status).label;
-    var me = window.TMACurrentUser && window.TMACurrentUser.get();
-    var name = (me && me.name) || '';
+    var slug = p.status || 'online';
+    var desktopBar = document.documentElement.classList.contains('tma-desktop-has-shell');
 
-    document.querySelectorAll('[data-presence-user-name]').forEach(function (el) {
-      el.textContent = name;
-      el.hidden = !name;
-    });
+    var pillHtml =
+      iconHtml(p.icon || meta(slug).icon, 8) +
+      '<span class="tma-presence-pill__label">' + esc(label) + '</span>';
 
     document.querySelectorAll('[data-presence-indicator]').forEach(function (el) {
-      var slug = p.status || 'online';
-      el.className = 'tma-presence-pill' + (slug ? ' tma-presence-pill--' + slug : '');
-      el.innerHTML =
-        iconHtml(p.icon || meta(slug).icon, 8) +
-        '<span class="tma-presence-pill__label">' + esc(label) + '</span>';
+      el.className = 'tma-presence-pill tma-presence-pill--' + slug;
+      el.innerHTML = pillHtml;
       el.setAttribute('data-presence-status', slug);
       el.title = p.message ? label + ' — ' + p.message : label;
       el.setAttribute('aria-label', 'Status: ' + label + '. Click to change.');
     });
 
     document.querySelectorAll('[data-presence-header]').forEach(function (wrap) {
-      wrap.hidden = !name;
+      wrap.hidden = desktopBar;
+    });
+    document.querySelectorAll('[data-presence-titlebar]').forEach(function (wrap) {
+      wrap.hidden = !desktopBar;
     });
   }
 
   /** @deprecated alias */
   function paintProfile() { paintHeader(); }
 
-  function ensureHeaderSlot() {
-    document.querySelectorAll('.tma-dash__header-right').forEach(function (right) {
-      if (right.querySelector('[data-presence-header]')) return;
-      var icons = right.querySelector('.tma-dash__header-icons');
-      if (!icons) return;
+  function makePresenceButton() {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tma-presence-pill';
+    btn.setAttribute('data-presence-indicator', '');
+    btn.setAttribute('aria-haspopup', 'dialog');
+    btn.setAttribute('aria-expanded', 'false');
+    return btn;
+  }
 
-      var wrap = document.createElement('div');
-      wrap.className = 'tma-dash__header-presence';
-      wrap.setAttribute('data-presence-header', '');
-      wrap.hidden = true;
-      wrap.innerHTML =
-        '<span class="tma-dash__header-presence-name" data-presence-user-name></span>' +
-        '<button type="button" class="tma-presence-pill" data-presence-indicator ' +
-        'aria-haspopup="dialog" aria-expanded="false"></button>';
-
-      right.insertBefore(wrap, icons);
+  function ensureSlots() {
+    /* Browser / web: beside the page title (breadcrumb) in header-left. */
+    document.querySelectorAll('.tma-dash__header-left').forEach(function (left) {
+      var crumb = left.querySelector('[data-breadcrumb]');
+      if (!crumb) return;
+      var wrap = left.querySelector('[data-presence-header]');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.className = 'tma-dash__header-presence';
+        wrap.setAttribute('data-presence-header', '');
+        wrap.appendChild(makePresenceButton());
+        crumb.insertAdjacentElement('afterend', wrap);
+      } else if (!wrap.querySelector('[data-presence-indicator]')) {
+        wrap.appendChild(makePresenceButton());
+      }
+      wrap.querySelectorAll('[data-presence-user-name]').forEach(function (el) { el.remove(); });
     });
 
-    /* Remove legacy sidebar placement if present from an earlier build. */
-    document.querySelectorAll('.tma-dash__profile-meta [data-presence-indicator]').forEach(function (el) {
-      el.remove();
+    /* Desktop app: beside the window title in the blue title bar. */
+    var tbWrap = document.querySelector('[data-presence-titlebar]');
+    if (tbWrap && !tbWrap.querySelector('[data-presence-indicator]')) {
+      tbWrap.appendChild(makePresenceButton());
+    }
+
+    /* Legacy placements — sidebar and header-right from earlier builds. */
+    document.querySelectorAll('.tma-dash__profile-meta [data-presence-indicator], .tma-dash__header-right [data-presence-header]').forEach(function (el) {
+      var block = el.closest('[data-presence-header]') || el;
+      block.remove();
     });
   }
+
+  /** @deprecated */
+  function ensureHeaderSlot() { ensureSlots(); }
 
   function closePopover() {
     popoverOpen = false;
@@ -558,8 +577,19 @@
     if (wired) return;
     wired = true;
     loadCss();
-    ensureHeaderSlot();
+    ensureSlots();
     paintHeader();
+
+    /* Desktop title bar rebuilds its innerHTML on navigation — re-mount the pill. */
+    if (!document.documentElement.dataset.tmaPresenceTbWatch) {
+      document.documentElement.dataset.tmaPresenceTbWatch = '1';
+      new MutationObserver(function () {
+        if (document.querySelector('[data-presence-titlebar]') && !document.querySelector('[data-presence-titlebar] [data-presence-indicator]')) {
+          ensureSlots();
+          paintHeader();
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    }
     document.addEventListener('click', function (e) {
       var ind = e.target.closest('[data-presence-indicator]');
       if (ind) {

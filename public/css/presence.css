@@ -1,23 +1,11 @@
-/* TMA — header presence pill (beside user name in top bar) */
+/* TMA — presence pill beside the window / page title */
 
-.tma-dash__header-presence {
-  display: flex;
+.tma-dash__header-presence,
+.tma-tb-presence-wrap {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-10, 10px);
-  min-width: 0;
-  flex-shrink: 1;
-  margin-right: var(--space-4, 4px);
-}
-
-.tma-dash__header-presence-name {
-  font-size: var(--text-size-14, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  line-height: 1.25;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(180px, 28vw);
+  flex-shrink: 0;
+  margin-left: var(--space-10, 10px);
 }
 
 .tma-presence-pill {
@@ -32,13 +20,13 @@
   border-radius: var(--radius-16, 16px);
   background: var(--color-bg-card, #fff);
   color: var(--color-text-primary);
-  box-shadow: inset 0 0 0 1px var(--color-border, #e2e8f0);
+  box-shadow: inset 0 0 0 1px var(--presence-pill-border, var(--color-border, #e2e8f0));
   font: inherit;
   font-size: var(--text-size-12, 12px);
   line-height: 16px;
   cursor: pointer;
   white-space: nowrap;
-  max-width: min(220px, 42vw);
+  max-width: min(240px, 40vw);
 }
 
 .tma-presence-pill:hover {
@@ -61,32 +49,59 @@
   opacity: 0.9;
 }
 
+.tma-presence-pill--offline {
+  color: var(--color-text-secondary, #64748b);
+  --presence-pill-border: var(--color-border, #e2e8f0);
+}
+
 /* Status tint on the pill edge — subtle, not a new visual language */
 .tma-presence-pill--on_call,
 .tma-presence-pill--do_not_disturb {
-  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.35);
+  --presence-pill-border: rgba(239, 68, 68, 0.55);
 }
 
 .tma-presence-pill--in_office,
 .tma-presence-pill--available,
 .tma-presence-pill--online {
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+  --presence-pill-border: rgba(34, 197, 94, 0.55);
 }
 
 .tma-presence-pill--working_remote {
-  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.35);
+  --presence-pill-border: rgba(14, 165, 233, 0.55);
 }
 
 .tma-presence-pill--at_meeting {
-  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.35);
+  --presence-pill-border: rgba(99, 102, 241, 0.55);
 }
 
 .tma-presence-pill--away {
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.35);
+  --presence-pill-border: rgba(245, 158, 11, 0.55);
 }
 
-.tma-presence-pill--offline {
-  color: var(--color-text-secondary, #64748b);
+/* Desktop title bar — white pill on brand blue */
+#tma-desktop-titlebar .tma-tb-presence-wrap {
+  margin-left: 10px;
+  -webkit-app-region: no-drag;
+}
+
+#tma-desktop-titlebar .tma-presence-pill {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 0 1px var(--presence-pill-border, var(--color-border, #e2e8f0));
+}
+
+#tma-desktop-titlebar .tma-presence-pill:hover {
+  background: #fff;
+}
+
+/* Blue bar header (desktop shell restyles portal header) */
+.tma-dash--desktop-bar .tma-dash__header-presence .tma-presence-pill {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 0 1px var(--presence-pill-border, var(--color-border, #e2e8f0));
+  color: var(--color-text-primary);
+}
+
+.tma-dash--desktop-bar .tma-dash__header-presence .tma-presence__icon-img {
+  filter: none;
 }
 
 .tma-presence-popover {
@@ -262,18 +277,10 @@
 
 @media (max-width: 767px) {
   .tma-dash__header-presence {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-    max-width: min(160px, 38vw);
-  }
-
-  .tma-dash__header-presence-name {
-    font-size: var(--text-size-12, 12px);
-    max-width: 100%;
+    margin-left: var(--space-6, 6px);
   }
 
   .tma-presence-pill {
-    max-width: 100%;
+    max-width: min(180px, 44vw);
   }
 }
