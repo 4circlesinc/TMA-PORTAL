@@ -144,8 +144,14 @@
    */
   function forPresence(p) {
     if (!p) return 'Last seen recently';
-    if (window.TMAPresence && (p.statusLabel || p.status)) {
-      return window.TMAPresence.labelFor(p);
+    if (p.statusLabel || p.status) {
+      if (p.status === 'offline') {
+        var offlineAt = p.lastSeenAt || p.last_seen_at || null;
+        if (offlineAt) return label(offlineAt);
+        return p.lastSeen || p.label || 'Last seen recently';
+      }
+      var statusLabel = p.statusLabel || p.label || String(p.status || '').replace(/_/g, ' ');
+      return p.statusMessage ? (statusLabel + ' — ' + p.statusMessage) : statusLabel;
     }
     if (p.online) return 'Online';
     var at = p.lastSeenAt || p.last_seen_at || null;
