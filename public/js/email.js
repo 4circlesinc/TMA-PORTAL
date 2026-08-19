@@ -86,10 +86,10 @@
     PushPinSlash: ICON + 'PushPinSlash.svg',
     ArchiveTray: ICON + 'ArchiveTray.svg',
     Sidebar: ICON + 'SidebarSimple.svg',
-    // Pennant, not the waving FlagFill: at sidebar size that banner reads as
-    // an empty square. Same filled weight as TrayFill / ClockFill beside it.
-    Important: ICON + 'FlagPennant.svg',
-    FlagPennant: ICON + 'FlagPennant.svg',
+    // A proper flag, not a price-tag shape — TagChevron's notched silhouette
+    // read as "two icons overlapping" at toolbar size, and a tag was never
+    // the right shape for "mark as important" to begin with.
+    Important: ICON + 'FlagFill.svg',
     FlagFill: ICON + 'FlagFill.svg',
     // Red filled flag for the active "important" state (pair to StarFilled).
     FlagFilled: ICON + 'FlagFilled.svg',
@@ -187,7 +187,7 @@
    */
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
-    { id: 'important', label: 'Important', icon: 'FlagPennant', fixed: true },
+    { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
     { id: 'starred', label: 'Starred', icon: 'StarFill', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
@@ -1544,7 +1544,7 @@
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
-    { id: 'important', label: 'Important', icon: 'FlagPennant' },
+    { id: 'important', label: 'Important', icon: 'FlagFill' },
     // Same idea: everything starred, wherever it really lives.
     { id: 'starred', label: 'Starred', icon: 'StarFill' },
     // Also virtual: everything with a snooze set, wherever it really lives.
