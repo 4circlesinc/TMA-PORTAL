@@ -80,6 +80,7 @@ class AvailabilityController extends Controller
         $data = $request->validate([
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
+            'accuracyM' => ['nullable', 'numeric', 'min:0', 'max:5000'],
         ]);
 
         $user = $request->user();
@@ -193,7 +194,9 @@ class AvailabilityController extends Controller
                 'latitude' => $data['latitude'],
                 'longitude' => $data['longitude'],
                 'radius_m' => $data['radiusM'] ?? 100,
-                'enabled' => $data['enabled'] ?? true,
+                'enabled' => array_key_exists('enabled', $data)
+                    ? $request->boolean('enabled')
+                    : true,
             ]
         );
 

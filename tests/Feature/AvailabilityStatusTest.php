@@ -102,4 +102,105 @@ class AvailabilityStatusTest extends TestCase
             ->assertOk()
             ->assertJsonPath('primary.status', AvailabilityStatus::DO_NOT_DISTURB);
     }
+
+    public function test_upsert_location_via_api(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)
+            ->putJson('/me/availability/locations', [
+                'type' => UserLocation::TYPE_OFFICE,
+                'label' => 'HQ',
+                'address' => '123 Main St',
+                'latitude' => 45.5017,
+                'longitude' => -73.5673,
+                'radiusM' => 200,
+                'enabled' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('locations.0.type', UserLocation::TYPE_OFFICE)
+            ->assertJsonPath('locations.0.latitude', 45.5017)
+            ->assertJsonPath('locations.0.enabled', true);
+
+        $this->assertDatabaseHas('user_locations', [
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'enabled' => true,
+        ]);
+    }
+
+    public function test_upsert_location_can_disable_detection(): void
+    {
+        $user = $this->user();
+
+        UserLocation::create([
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'latitude' => 45.5017,
+            'longitude' => -73.5673,
+            'radius_m' => 200,
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->putJson('/me/availability/locations', [
+                'type' => UserLocation::TYPE_OFFICE,
+                'latitude' => 45.5017,
+                'longitude' => -73.5673,
+                'enabled' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('locations.0.enabled', false);
+
+        $this->assertDatabaseHas('user_locations', [
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'enabled' => false,
+        ]);
+    }
+
+    public function test_report_location_applies_geofence_via_api(): void
+    {
+        $user = $this->user();
+
+        UserLocation::create([
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'latitude' => 45.5017,
+            'longitude' => -73.5673,
+            'radius_m' => 200,
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/me/availability/location', [
+                'lat' => 45.5018,
+                'lng' => -73.5674,
+            ])
+            ->assertOk()
+            ->assertJsonPath('primary.status', AvailabilityStatus::IN_OFFICE);
+    }
+
+    public function test_report_location_uses_gps_accuracy_buffer(): void
+    {
+        $user = $this->user();
+
+        UserLocation::create([
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'latitude' => 45.5017,
+            'longitude' => -73.5673,
+            'radius_m' => 100,
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/me/availability/location', [
+                'lat' => 45.5030,
+                'lng' => -73.5674,
+                'accuracyM' => 200,
+            ])
+            ->assertOk()
+            ->assertJsonPath('primary.status', AvailabilityStatus::IN_OFFICE);
+    }
 }

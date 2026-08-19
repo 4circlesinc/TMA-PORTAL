@@ -172,7 +172,21 @@
     });
   }
 
+  function syncCoordsFromMap(root, prefix) {
+    var entry = locationMaps[prefix];
+    if (!entry || !entry.marker) return;
+    var p = entry.marker.getLatLng();
+    setLocCoords(root, prefix, p.lat, p.lng);
+  }
+
+  function syncAllCoordsFromMaps(root) {
+    ['office', 'remote'].forEach(function (prefix) {
+      syncCoordsFromMap(root, prefix);
+    });
+  }
+
   function locCoords(root, prefix) {
+    syncCoordsFromMap(root, prefix);
     var lat = parseFloat(root.querySelector('[data-loc-' + prefix + '-lat]').value);
     var lng = parseFloat(root.querySelector('[data-loc-' + prefix + '-lng]').value);
     if (isNaN(lat) || isNaN(lng)) return null;
@@ -280,11 +294,12 @@
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
 
-      var coords = loc && loc.latitude != null && loc.longitude != null
+      var savedCoords = loc && loc.latitude != null && loc.longitude != null
         ? { lat: loc.latitude, lng: loc.longitude }
         : locCoords(root, prefix);
-      var center = coords || DEFAULT_MAP;
-      var zoom = coords ? 15 : DEFAULT_MAP.zoom;
+      var center = savedCoords || DEFAULT_MAP;
+      var zoom = savedCoords ? 15 : DEFAULT_MAP.zoom;
+      var hasPin = !!savedCoords;
 
       var map = L.map(mapEl, { scrollWheelZoom: true }).setView([center.lat, center.lng], zoom);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -292,16 +307,33 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
 
-      var marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
-      var circle = L.circle([center.lat, center.lng], {
-        radius: loc && loc.radiusM ? loc.radiusM : locRadius(root, prefix),
-        color: '#03a5e9',
-        fillColor: '#03a5e9',
-        fillOpacity: 0.12,
-        weight: 2,
-      }).addTo(map);
+      var marker = null;
+      var circle = null;
+
+      function ensurePin(lat, lng, radius) {
+        if (!marker) {
+          marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+          circle = L.circle([lat, lng], {
+            radius: radius || locRadius(root, prefix),
+            color: '#03a5e9',
+            fillColor: '#03a5e9',
+            fillOpacity: 0.12,
+            weight: 2,
+          }).addTo(map);
+          marker.on('dragend', function () {
+            var p = marker.getLatLng();
+            reverseGeocodeAddress(p.lat, p.lng).then(function (res) {
+              applyLocationOnMap(root, prefix, p.lat, p.lng, res && res.label ? res.label : null);
+            }).catch(function () {
+              applyLocationOnMap(root, prefix, p.lat, p.lng, null);
+            });
+          });
+        }
+        return marker;
+      }
 
       function setPosition(lat, lng, radius) {
+        ensurePin(lat, lng, radius);
         marker.setLatLng([lat, lng]);
         circle.setLatLng([lat, lng]);
         circle.setRadius(radius || locRadius(root, prefix));
@@ -317,14 +349,9 @@
         }
       }
 
-      marker.on('dragend', function () {
-        var p = marker.getLatLng();
-        reverseGeocodeAddress(p.lat, p.lng).then(function (res) {
-          applyLocationOnMap(root, prefix, p.lat, p.lng, res && res.label ? res.label : null);
-        }).catch(function () {
-          applyLocationOnMap(root, prefix, p.lat, p.lng, null);
-        });
-      });
+      if (hasPin) {
+        setPosition(center.lat, center.lng, loc && loc.radiusM ? loc.radiusM : locRadius(root, prefix));
+      }
 
       map.on('click', function (e) {
         reverseGeocodeAddress(e.latlng.lat, e.latlng.lng).then(function (res) {
@@ -337,11 +364,16 @@
       var radiusEl = root.querySelector('[data-loc-' + prefix + '-radius]');
       if (radiusEl) {
         radiusEl.addEventListener('input', function () {
-          circle.setRadius(locRadius(root, prefix));
+          if (circle) circle.setRadius(locRadius(root, prefix));
         });
       }
 
-      locationMaps[prefix] = { map: map, marker: marker, circle: circle, setPosition: setPosition };
+      locationMaps[prefix] = {
+        map: map,
+        get marker() { return marker; },
+        get circle() { return circle; },
+        setPosition: setPosition,
+      };
       setTimeout(function () { map.invalidateSize(); }, 80);
     }).catch(function () {
       if (mapEl) mapEl.innerHTML = '<p class="tma-presence-loc__map-fallback">Map unavailable. Use address search or current location.</p>';
@@ -608,7 +640,7 @@
       '<input type="text" data-loc-' + prefix + '-address value="' + esc(loc.address || '') + '" placeholder="Search for an address…">' +
       '<button type="button" class="' + ghostBtn + '" data-loc-' + prefix + '-search>Find on map</button></div>' +
       '<div class="tma-presence-loc__map" data-loc-' + prefix + '-map role="application" aria-label="' + esc(title) + ' map"></div>' +
-      '<p class="tma-presence-loc__hint">Click the map or drag the pin to set the location. The circle shows the detection radius.</p>' +
+      '<p class="tma-presence-loc__hint">Click the map, search an address, or use current location to set a pin. The circle shows the detection radius.</p>' +
       '<input type="hidden" data-loc-' + prefix + '-lat value="' + esc(lat) + '">' +
       '<input type="hidden" data-loc-' + prefix + '-lng value="' + esc(lng) + '">' +
       '<p class="tma-presence-loc__coords" data-loc-' + prefix + '-coords' + (lat && lng ? '' : ' hidden') + '>' +
@@ -821,6 +853,7 @@
   function saveLocation(type, wrap) {
     var prefix = type === 'office' ? 'office' : 'remote';
     var title = type === 'office' ? 'Office' : 'Remote';
+    syncCoordsFromMap(wrap, prefix);
     var enabled = !!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked;
     var lat = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lat]').value);
     var lng = parseFloat(wrap.querySelector('[data-loc-' + prefix + '-lng]').value);
@@ -867,39 +900,35 @@
   }
 
   function saveAllLocations(wrap) {
+    syncAllCoordsFromMaps(wrap);
     var errors = [];
+    var hasAny = false;
     ['office', 'remote'].forEach(function (type) {
       var prefix = type;
       var title = type === 'office' ? 'Office' : 'Remote';
-      if (!wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked) return;
+      var enabled = wrap.querySelector('[data-loc-' + prefix + '-enabled]').checked;
       var coords = locCoords(wrap, prefix);
       var address = wrap.querySelector('[data-loc-' + prefix + '-address]').value.trim();
+      if (coords || address) hasAny = true;
+      if (!enabled) return;
       if (!coords && !address) {
         errors.push(title + ': set a location on the map, search an address, or use current location.');
       }
     });
     if (errors.length) return Promise.reject(new Error(errors[0]));
+    if (!hasAny) {
+      return Promise.reject(new Error('Set a location on the map or enter an address before saving.'));
+    }
 
-    var saved = false;
-    return saveLocation('office', wrap).then(function (did) {
-      if (did) saved = true;
+    return saveLocation('office', wrap).then(function () {
       return saveLocation('remote', wrap);
-    }).then(function (did) {
-      if (did) saved = true;
-      if (!saved) {
-        return Promise.reject(new Error('Set a location on the map or enter an address before saving.'));
-      }
     });
   }
 
   function requestLocationIfEnabled() {
     var locs = (state && state.locations) || [];
     if (!locs.some(function (l) { return l.enabled && l.latitude != null; }) || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      api('POST', '/me/availability/location', { lat: pos.coords.latitude, lng: pos.coords.longitude })
-        .then(applyPayload).catch(function () {});
-    }, function () { /* denied */ },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 });
+    reportCurrentPosition();
   }
 
   function toast(msg, ok) {
@@ -952,6 +981,23 @@
     expiryTimer = setTimeout(function () { load(); }, Math.min(ms + 500, 86400000));
   }
 
+  var locationVisibilityBound = false;
+
+  function reportCurrentPosition() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        api('POST', '/me/availability/location', {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracyM: pos.coords.accuracy,
+        }).then(applyPayload).catch(function () {});
+      },
+      function () {},
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+    );
+  }
+
   function startLocationChecks() {
     if (locationTimer) clearInterval(locationTimer);
     var locs = (state && state.locations) || [];
@@ -959,13 +1005,17 @@
 
     function tick() {
       if (document.visibilityState === 'hidden') return;
-      navigator.geolocation.getCurrentPosition(function (pos) {
-        api('POST', '/me/availability/location', { lat: pos.coords.latitude, lng: pos.coords.longitude })
-          .then(applyPayload).catch(function () {});
-      }, function () {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 });
+      reportCurrentPosition();
     }
     tick();
     locationTimer = setInterval(tick, 300000);
+
+    if (!locationVisibilityBound) {
+      locationVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') tick();
+      });
+    }
   }
 
   function bindCallIntegration() {

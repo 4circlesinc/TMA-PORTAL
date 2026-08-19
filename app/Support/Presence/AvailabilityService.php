@@ -153,9 +153,10 @@ class AvailabilityService
 
         $lat = (float) ($coords['lat'] ?? 0);
         $lng = (float) ($coords['lng'] ?? 0);
+        $accuracyM = isset($coords['accuracyM']) ? max(0.0, (float) $coords['accuracyM']) : 0.0;
 
-        $inOffice = $office && $office->contains($lat, $lng);
-        $inRemote = ! $inOffice && $remote && $remote->contains($lat, $lng);
+        $inOffice = $office && self::withinGeofence($office, $lat, $lng, $accuracyM);
+        $inRemote = ! $inOffice && $remote && self::withinGeofence($remote, $lat, $lng, $accuracyM);
 
         if ($inOffice) {
             self::setState(
@@ -177,6 +178,13 @@ class AvailabilityService
             self::clearState($user, AvailabilityStatus::IN_OFFICE);
             self::clearState($user, AvailabilityStatus::WORKING_REMOTE);
         }
+    }
+
+    private static function withinGeofence(UserLocation $location, float $lat, float $lng, float $accuracyM = 0): bool
+    {
+        $buffer = min(max(0.0, $accuracyM), 150.0);
+
+        return $location->distanceTo($lat, $lng) <= (float) ($location->radius_m ?: 100) + $buffer;
     }
 
     /** Optional custom status message without changing primary status. */
