@@ -17,6 +17,16 @@ use ZipArchive;
  */
 class FolderTree
 {
+    /**
+     * How far {@see self::aggregateMany} will descend.
+     *
+     * A stop condition, not a limit anyone should reach: the deepest tree in
+     * the firm's library is eleven levels, and SharePoint itself will not
+     * serve a path much past this. Its job is to make a `parent_id` cycle
+     * terminate — the recursion has no other reason to stop.
+     */
+    private const MAX_DEPTH = 64;
+
     public static function create(User $user, string $name, ?Folder $parent): Folder
     {
         $name = Naming::assertValid($name);
@@ -155,12 +165,24 @@ class FolderTree
     }
 
     /**
-     * Recursive counts for many folders in a few queries, not one walk each.
+     * Recursive counts for many folders, in one query.
      *
      * A listing of twenty subfolders used to run twenty descendant walks plus
      * a COUNT and a SUM per folder — that is what made opening a client's
-     * Documents tab stall against Cloud Postgres. One BFS of the combined
-     * subtree and one grouped file query replace that.
+     * Documents tab stall against Cloud Postgres. A combined breadth-first
+     * walk replaced that, and was itself the largest remaining cost once the
+     * N+1s went: one round trip per level of the tree (eleven, here), then
+     * every folder id in the library — forty-two thousand of them — carried
+     * back out to the database inside a single IN list to sum the files.
+     *
+     * The database can walk its own tree. One recursive CTE descends from all
+     * the roots at once and joins the files as it goes, so the whole thing is
+     * a single statement whose result is already the answer, and no id list
+     * ever crosses the wire.
+     *
+     * Bounded by MAX_DEPTH: a cycle in parent_id would otherwise recurse for
+     * ever, where the PHP walk it replaces merely stopped. A tree that deep is
+     * already broken, and a wrong count is a better failure than a hung page.
      *
      * @param  Folder[]  $folders
      * @return array<int, array{fileCount: int, folderCount: int, size: int}>
@@ -173,63 +195,43 @@ class FolderTree
 
         $rootIds = [];
         foreach ($folders as $folder) {
-            $rootIds[$folder->id] = true;
+            $rootIds[(int) $folder->id] = true;
         }
         $rootIds = array_keys($rootIds);
 
-        $childrenByParent = [];
-        $queue = $rootIds;
-        $seen = array_fill_keys($rootIds, true);
+        $empty = ['fileCount' => 0, 'folderCount' => 0, 'size' => 0];
+        $out = array_fill_keys($rootIds, $empty);
 
-        while ($queue) {
-            $childRows = Folder::query()
-                ->whereIn('parent_id', $queue)
-                ->get(['id', 'parent_id']);
-            $queue = [];
-            foreach ($childRows as $row) {
-                if (isset($seen[$row->id])) {
-                    continue;
-                }
-                $seen[$row->id] = true;
-                $childrenByParent[$row->parent_id][] = $row->id;
-                $queue[] = $row->id;
-            }
-        }
+        $placeholders = implode(',', array_fill(0, count($rootIds), '?'));
+        $rows = DB::select(
+            "with recursive tree(root_id, id, depth) as (
+                 -- The roots are whatever the caller handed us, trashed or
+                 -- not (a folder in the recycle bin still reports what is
+                 -- inside it); their descendants are the live ones only,
+                 -- which is what the walk this replaces counted.
+                 select id, id, 0 from folders
+                  where id in ($placeholders)
+                 union all
+                 select t.root_id, f.id, t.depth + 1
+                   from folders f
+                   join tree t on f.parent_id = t.id
+                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH."
+             )
+             select t.root_id as root_id,
+                    count(distinct case when t.id <> t.root_id then t.id end) as folder_count,
+                    count(f.id) as file_count,
+                    coalesce(sum(f.size), 0) as total_size
+               from tree t
+               left join files f on f.folder_id = t.id and f.deleted_at is null
+              group by t.root_id",
+            $rootIds,
+        );
 
-        $fileStats = FileItem::query()
-            ->whereIn('folder_id', array_keys($seen))
-            ->selectRaw('folder_id, count(*) as file_count, coalesce(sum(size), 0) as total_size')
-            ->groupBy('folder_id')
-            ->get()
-            ->keyBy('folder_id');
-
-        $out = [];
-        foreach ($rootIds as $id) {
-            $descendants = [];
-            $walk = $childrenByParent[$id] ?? [];
-            while ($walk) {
-                $childId = array_shift($walk);
-                $descendants[] = $childId;
-                foreach ($childrenByParent[$childId] ?? [] as $grandchild) {
-                    $walk[] = $grandchild;
-                }
-            }
-
-            $fileCount = 0;
-            $size = 0;
-            foreach (array_merge([$id], $descendants) as $folderId) {
-                $row = $fileStats->get($folderId);
-                if (! $row) {
-                    continue;
-                }
-                $fileCount += (int) $row->file_count;
-                $size += (int) $row->total_size;
-            }
-
-            $out[$id] = [
-                'fileCount' => $fileCount,
-                'folderCount' => count($descendants),
-                'size' => $size,
+        foreach ($rows as $row) {
+            $out[(int) $row->root_id] = [
+                'fileCount' => (int) $row->file_count,
+                'folderCount' => (int) $row->folder_count,
+                'size' => (int) $row->total_size,
             ];
         }
 

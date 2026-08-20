@@ -138,6 +138,7 @@ class MessagingPresenter
         ?ConversationParticipant $participant = null,
         ?int $unread = null,
         ?Collection $latestReactions = null,
+        ?array $workStatuses = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
         $others = $conversation->activeParticipants
@@ -185,8 +186,15 @@ class MessagingPresenter
             'presence' => $counterpart
                 ? AvailabilityService::forViewer($counterpart, $viewer)
                 : self::groupPresence($others, $conversation->activeParticipants->count()),
+            /*
+             * From the listing's batch when it has one. Asked per row this is
+             * a query per conversation, on the same page load as everything
+             * else the Dashboard opens with.
+             */
             'workStatus' => $counterpart
-                ? WorkDay::publicStatusFor($counterpart)
+                ? ($workStatuses !== null
+                    ? ($workStatuses[(int) $counterpart->id] ?? null)
+                    : WorkDay::publicStatusFor($counterpart))
                 : null,
             'counterpartId' => $counterpart?->id,
             'description' => $conversation->description,

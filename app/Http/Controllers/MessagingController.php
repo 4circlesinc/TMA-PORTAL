@@ -28,6 +28,7 @@ use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
+use App\Support\Presence\AvailabilityService;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\OrganizationChat;
@@ -88,10 +89,27 @@ class MessagingController extends Controller
 
         $latestReactions = $this->latestReactionsFor($conversations->pluck('id'));
 
+        /*
+         * Everyone on the list, resolved once.
+         *
+         * Each row shows the other person's availability and work plan, and
+         * asked one row at a time that is five queries a conversation — four
+         * for availability, one for the work day. Thirteen seconds for the
+         * Dashboard's Messages card against the firm's database.
+         */
+        $people = $conversations
+            ->flatMap(fn (Conversation $c) => $c->activeParticipants->map(fn ($p) => $p->user))
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        AvailabilityService::primeStates($people->pluck('id'));
+        $workStatuses = WorkDay::publicStatusesForUsers($people);
+
         $rows = $conversations
             ->map(fn (Conversation $c) => MessagingPresenter::conversation(
                 $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
-                $latestReactions
+                $latestReactions, $workStatuses
             ))
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.

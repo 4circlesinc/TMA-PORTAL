@@ -48,9 +48,21 @@ class QueryCountTest extends TestCase
         return $u;
     }
 
-    /** Run $fn with a clean query log and return how many queries it issued. */
+    /**
+     * Run $fn with a clean query log and return how many queries it issued.
+     *
+     * The per-request static caches are dropped first, because a real request
+     * begins with all of them empty. PHPUnit runs the whole suite in one
+     * process, so without this a listing measured here can be answered partly
+     * from rows a completely unrelated test happened to warm — which is not a
+     * smaller number, it is a wrong one. Two of the tests below silently
+     * stopped detecting a live N+1 that way.
+     */
     private function countQueries(callable $fn): int
     {
+        \App\Support\Files\FileAccess::forgetFolders();
+        \App\Support\Presence\AvailabilityService::forgetPrimedStates();
+
         DB::flushQueryLog();
         DB::enableQueryLog();
 
@@ -285,6 +297,70 @@ class QueryCountTest extends TestCase
             $small + 2,
             $large,
             "Listing subfolders is N+1: $small queries for 3 folders, $large for 28."
+        );
+    }
+
+    /*
+     * The Dashboard's Employees card.
+     *
+     * Availability was resolved one person at a time, and resolving it cost
+     * four queries a head: two purge deletes, the layered states, and a
+     * re-read of the presence row we had just written. Thirteen colleagues
+     * meant fifty-two round trips and ten seconds — for a card of faces.
+     */
+    public function test_staff_presence_does_not_scale_with_staff_count(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $addStaff = function (int $n, string $prefix) {
+            for ($i = 0; $i < $n; $i++) {
+                $u = User::create([
+                    'name' => "$prefix Colleague $i",
+                    'email' => "$prefix-staff-$i@example.com",
+                    'password' => Hash::make('password12345'),
+                ]);
+                $u->forceFill([
+                    'status' => 'approved',
+                    'account_type' => 'Employee',
+                    'email_verified_at' => now(),
+                ])->save();
+                /*
+                 * The presence row is what makes this test bite. Availability
+                 * is only resolved for somebody who has one, and anyone who
+                 * has ever loaded the portal does — so without this the card
+                 * takes the cheap path here and the expensive one in real life,
+                 * which is exactly how the N+1 shipped.
+                 */
+                \App\Models\UserPresence::create([
+                    'user_id' => $u->id,
+                    'last_seen_at' => now()->subMinutes(5),
+                ]);
+            }
+        };
+
+        /*
+         * Read once before counting. The first read of a brand-new presence
+         * row settles its primary status and writes it back — a real cost, but
+         * a one-off, and in the firm's database every row settled long ago.
+         * Counting the first read would measure the seed, not the card.
+         */
+        $read = function () {
+            $this->get('/portal/dashboard/staff')->assertOk();
+        };
+
+        $addStaff(3, 'small');
+        $read();
+        $small = $this->countQueries($read);
+
+        $addStaff(25, 'large');
+        $read();
+        $large = $this->countQueries($read);
+
+        $this->assertLessThanOrEqual(
+            $small + 2,
+            $large,
+            "Staff presence is N+1: $small queries for 4 people, $large for 29."
         );
     }
 

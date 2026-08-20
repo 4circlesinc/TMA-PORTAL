@@ -35,6 +35,8 @@ class StaffPresenceController extends Controller
             ->get();
 
         $workStatuses = WorkDay::publicStatusesForUsers($users);
+        // Availability costs four queries a head when asked one at a time.
+        AvailabilityService::primeStates($users->pluck('id'));
 
         $employees = $users->map(function (User $user) use ($viewer, $workStatuses) {
             $presence = AvailabilityService::forViewer($user, $viewer);

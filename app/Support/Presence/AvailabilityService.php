@@ -22,6 +22,73 @@ use Illuminate\Support\Carbon;
 class AvailabilityService
 {
     /**
+     * user_id => their layered states, for a listing that reads many people.
+     *
+     * Null means "not primed": every caller then behaves exactly as it did.
+     *
+     * Reading one person's availability costs four queries — two purge
+     * deletes, the states themselves, and a re-read of the presence row — and
+     * the Dashboard's Employees card reads every member of staff. That is 4n
+     * round trips for a card showing thirteen faces: ten seconds against the
+     * remote database, on the same page load as everything else.
+     *
+     * Almost nobody has a layered state at all (they are set by a call, a
+     * geofence, a manual pick), so the whole 4n is usually spent establishing
+     * that there is nothing to establish. One query answers it for the entire
+     * page, and the three per-person queries fall away for anyone with none.
+     *
+     * @var array<int, list<UserPresenceState>>|null
+     */
+    private static ?array $primedStates = null;
+
+    /**
+     * Load the layered states of a set of people in one query.
+     *
+     * Per-request and advisory: a state written after this runs is still seen,
+     * because every write path goes through setState/clearState, which drop
+     * the priming.
+     *
+     * @param  iterable<int|string|User>  $users
+     */
+    public static function primeStates(iterable $users): void
+    {
+        $ids = [];
+        foreach ($users as $user) {
+            $id = (int) ($user instanceof User ? $user->id : $user);
+            if ($id) {
+                $ids[$id] = true;
+            }
+        }
+
+        if ($ids === []) {
+            self::$primedStates = [];
+
+            return;
+        }
+
+        $rows = UserPresenceState::whereIn('user_id', array_keys($ids))->get();
+
+        // Seed every id asked for, so "primed and empty" is distinguishable
+        // from "not primed" — that difference is the whole saving.
+        self::$primedStates = array_fill_keys(array_keys($ids), []);
+        foreach ($rows as $row) {
+            self::$primedStates[(int) $row->user_id][] = $row;
+        }
+    }
+
+    /** Forget the primed states. Any write to a state calls this. */
+    public static function forgetPrimedStates(): void
+    {
+        self::$primedStates = null;
+    }
+
+    /** @return list<UserPresenceState>|null */
+    private static function primed(User $user): ?array
+    {
+        return self::$primedStates[$user->id] ?? null;
+    }
+
+    /**
      * Upsert an active layered state for a user.
      *
      * @param  array<string, mixed>|null  $meta
@@ -46,6 +113,7 @@ class AvailabilityService
             ]
         );
 
+        self::forgetPrimedStates();
         self::recompute($user);
 
         return $row;
@@ -55,6 +123,7 @@ class AvailabilityService
     public static function clearState(User $user, string $status): void
     {
         UserPresenceState::where('user_id', $user->id)->where('status', $status)->delete();
+        self::forgetPrimedStates();
         self::recompute($user);
     }
 
@@ -113,6 +182,8 @@ class AvailabilityService
                     AvailabilityStatus::SOURCE_SCHEDULED,
                 ])
                 ->delete();
+
+            self::forgetPrimedStates();
 
             return self::recompute($user);
         }
@@ -218,8 +289,11 @@ class AvailabilityService
         }
 
         if ($presence) {
-            self::syncPrimary($subject, $presence);
-            $presence->refresh();
+            // syncPrimary force-fills and saves THIS instance, so it is already
+            // current. The refresh that used to stand here re-read the row from
+            // the database for every person in a listing — a whole extra query
+            // each to fetch back what we had just written.
+            $presence = self::syncPrimary($subject, $presence);
         }
 
         $online = (bool) ($base['online'] ?? false);
@@ -297,6 +371,14 @@ class AvailabilityService
 
     private static function purgeExpired(User $user): void
     {
+        $primed = self::primed($user);
+
+        // Nothing of theirs to purge — established for the whole page in one
+        // query rather than two deletes each.
+        if ($primed !== null && $primed === []) {
+            return;
+        }
+
         UserPresenceState::where('user_id', $user->id)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
@@ -332,7 +414,15 @@ class AvailabilityService
     /** @return array{status: string, source: ?string, message: ?string, label: string, icon: string, startedAt: ?Carbon, expiresAt: ?Carbon} */
     private static function resolvePrimary(User $user, bool $online): array
     {
-        $states = UserPresenceState::where('user_id', $user->id)->get()
+        /*
+         * The primed rows answer this without a query. They are pre-purge,
+         * which changes nothing: isActive() below rejects exactly what
+         * purgeExpired deletes, so the surviving set is the same either way.
+         */
+        $primed = self::primed($user);
+        $rows = $primed !== null ? collect($primed) : UserPresenceState::where('user_id', $user->id)->get();
+
+        $states = $rows
             ->filter(fn ($s) => $s->isActive())
             ->sortBy(fn ($s) => AvailabilityStatus::priorityOf($s->status));
 
