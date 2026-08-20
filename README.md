@@ -225,7 +225,7 @@ Three files, and they do not overwrite each other:
 
 | File | Role |
 |------|------|
-| `.env` | **Not used by any container.** It points at the live Laravel Cloud database. Compose mounts an empty file over it inside the container so it cannot be read by accident |
+| `.env` | **Not used by any container.** It points at the live Laravel Cloud database. Compose mounts an empty file over it inside the container so it cannot be read by accident. `.env.backup` and `.env.production` are masked the same way — the first carries the same production credentials, and the bind mount would otherwise hand a readable copy to every container |
 | `.env.docker.example` | Committed, complete, safe defaults. Compose reads this first. Editing it is not required |
 | `.env.docker` | Yours, gitignored, optional. Compose reads it second, so anything in it wins |
 
@@ -402,6 +402,7 @@ its links from it.
 | Jobs never run | `docker compose ps queue`. Also check `docker compose exec app php artisan queue:failed` |
 | Websocket will not connect | `curl -i --max-time 5 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' 'http://localhost:8001/app/tma-local-key?protocol=7&client=js&version=8.4.0'` should return `101` |
 | Calls or screen share silently fail | You are not on `localhost` or HTTPS. Browsers only grant camera/microphone/screen capture in a secure context |
+| Reaching the stack from a phone on the LAN | `TMA_APP_BIND=0.0.0.0 TMA_APP_HOST=<your-lan-ip> docker compose up`. Both are needed: the bind opens the port, and the host is what the browser is told to use for the websocket |
 | Slow on macOS | Expected for bind mounts. `vendor/` and `node_modules/` are already container-managed volumes for this reason. Make sure VirtioFS is selected in Docker Desktop |
 | Permission denied writing to `storage/` on Linux | Your host uid is not 1000. Rebuild with `TMA_UID=$(id -u) TMA_GID=$(id -g) docker compose build` |
 | Want a debugger | `XDEBUG_MODE=debug docker compose up app`, then connect your IDE to port 9003 |

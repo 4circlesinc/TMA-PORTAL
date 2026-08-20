@@ -59,6 +59,12 @@ x-php: &php
     # Forced here so a stale line in .env.production cannot weaken them.
     APP_ENV: production
     APP_DEBUG: "false"
+    # Reverb by service name is the correct default for every container except
+    # the web one, which is the only one with an nginx to proxy the websocket.
+    # `app` overrides these; anything added later inherits something that works.
+    REVERB_HOST: reverb
+    REVERB_PORT: "8080"
+    REVERB_SCHEME: http
   restart: unless-stopped
   logging: *logging
   <<: *security
@@ -235,11 +241,9 @@ services:
       --max-time=3600
       --rest=0.2
     environment:
+      # Inherits REVERB_HOST=reverb from the anchor — server-side only, never
+      # rendered into a page.
       <<: *php-env
-      # Server-side only; never rendered into a page.
-      REVERB_HOST: reverb
-      REVERB_PORT: "8080"
-      REVERB_SCHEME: http
     volumes:
       # Shared with app: the worker writes thumbnails that the web container
       # serves by path, and assembles chunked uploads across many requests.
@@ -283,9 +287,6 @@ services:
       --rest=0.5
     environment:
       <<: *php-env
-      REVERB_HOST: reverb
-      REVERB_PORT: "8080"
-      REVERB_SCHEME: http
     volumes:
       - storage_private:/var/www/html/storage/app/private
       - storage_public:/var/www/html/storage/app/public
@@ -307,9 +308,6 @@ services:
     command: php artisan schedule:work
     environment:
       <<: *php-env
-      REVERB_HOST: reverb
-      REVERB_PORT: "8080"
-      REVERB_SCHEME: http
     volumes:
       - storage_private:/var/www/html/storage/app/private
       - storage_public:/var/www/html/storage/app/public

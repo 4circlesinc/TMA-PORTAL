@@ -53,12 +53,29 @@ x-php: &php
     # environment variables already win, but only for keys we happen to set;
     # masking the file removes the question entirely.
     - ./docker/empty.env:/var/www/html/.env:ro
+    # .env is not the only one. .env.backup sits in the working tree carrying
+    # the same production credentials (APP_KEY, DB_PASSWORD, AWS secret,
+    # Microsoft client secret), and the bind mount hands it to every container.
+    # Laravel never loads it, so it is not a config leak — but it is a readable
+    # copy of the firm's live secrets inside four containers, which is reason
+    # enough. Compose cannot glob a bind mount, so the risky names are listed.
+    - ./docker/empty.env:/var/www/html/.env.backup:ro
+    - ./docker/empty.env:/var/www/html/.env.production:ro
   environment: &app-env
     # APP_URL has to follow the published port, not sit pinned at 8001 in the
     # env template. Laravel builds absolute links from it in anything with no
     # request context — the scheduler's reminder emails, queued notifications —
     # so a stale port here sends people to a URL nothing is serving.
-    APP_URL: "http://localhost:${TMA_APP_PORT:-8001}"
+    APP_URL: "http://${TMA_APP_HOST:-localhost}:${TMA_APP_PORT:-8001}"
+    # Reverb, addressed by service name. This is the right answer for EVERY
+    # container except the web one, because only the web container has an nginx
+    # to proxy the websocket — a worker, the scheduler or the one-shot migrate
+    # pointed at localhost:8001 would be broadcasting into nothing. `app`
+    # overrides these; the default is the safe one, so a service added later
+    # inherits something that works.
+    REVERB_HOST: reverb
+    REVERB_PORT: "8080"
+    REVERB_SCHEME: http
   restart: unless-stopped
   depends_on:
     postgres:
@@ -178,7 +195,12 @@ services:
       # The browser gets these, so they must be host-addressable — and
       # because the container listens on that same number, PHP reaches its
       # own nginx at the identical URL.
-      REVERB_HOST: localhost
+      #
+      # The host follows TMA_APP_HOST for the same reason the port follows
+      # TMA_APP_PORT: compose.yaml documents TMA_APP_BIND=0.0.0.0 for reaching
+      # the stack from a phone on the LAN, and a hardcoded "localhost" here
+      # would hand that phone a websocket URL pointing at itself.
+      REVERB_HOST: ${TMA_APP_HOST:-localhost}
       REVERB_PORT: "${TMA_APP_PORT:-8001}"
       REVERB_SCHEME: http
       XDEBUG_MODE: ${TMA_XDEBUG_MODE:-off}
@@ -218,11 +240,9 @@ services:
       --max-time=3600
       --rest=0.2
     environment:
+      # Inherits REVERB_HOST=reverb from the anchor: never renders a page, so
+      # it addresses the websocket server directly.
       <<: *app-env
-      # Never renders a page, so it can talk to Reverb by service name.
-      REVERB_HOST: reverb
-      REVERB_PORT: "8080"
-      REVERB_SCHEME: http
     # SyncSharePointLibrary documents that a SIGKILL bypasses its cleanup and
     # strands a library in the 'syncing' state.
     stop_grace_period: 120s
@@ -243,9 +263,6 @@ services:
     command: php artisan schedule:work
     environment:
       <<: *app-env
-      REVERB_HOST: reverb
-      REVERB_PORT: "8080"
-      REVERB_SCHEME: http
     stop_grace_period: 60s
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' >/dev/null || exit 1"]
@@ -307,10 +324,18 @@ services:
       - npm_cache:/home/node/.npm
     environment:
       npm_config_cache: /home/node/.npm
-    user: "${TMA_UID:-1000}:${TMA_GID:-1000}"
+    # Runs as root on purpose. node_modules and npm_cache are named volumes
+    # whose paths do not exist in the node image, so Docker creates them
+    # root-owned; a container started as uid 1000 then fails on the first write
+    # with EACCES. Running as root and handing the build output back afterwards
+    # is simpler and more reliable than trying to pre-create the mountpoints.
+    #
     # --ignore-scripts mirrors `composer setup`, and keeps the playwright
     # dependency from pulling ~400 MB of browsers the build does not use.
-    command: sh -c "npm ci --ignore-scripts --no-audit --no-fund && npm run build"
+    command: >
+      sh -c "npm ci --ignore-scripts --no-audit --no-fund
+      && npm run build
+      && chown -R ${TMA_UID:-1000}:${TMA_GID:-1000} public/build"
 
 volumes:
   pgdata:

@@ -104,11 +104,35 @@ server {
     }
 
     # -----------------------------------------------------------------------
+    # The public disk.
+    #
+    # public/storage is a symlink created by `artisan storage:link`, and in
+    # development the repository is bind-mounted from the host, where that link
+    # points at an absolute /Users/... path that does not exist inside the
+    # container. Recreating it would fix the container and break the host, so
+    # nginx resolves the URL directly instead and the symlink is left alone.
+    #
+    # ^~ so this wins over the regex locations below — a plain prefix would
+    # lose to `~* \.(png|jpe?g|...)$` for exactly the files this serves.
+    # -----------------------------------------------------------------------
+    location ^~ /storage/ {
+        alias /var/www/html/storage/app/public/;
+        add_header Cache-Control "public, max-age=3600, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # -----------------------------------------------------------------------
     # Things that must never be served
     # -----------------------------------------------------------------------
     # public/ contains committed *.corrupt.bak files. .dockerignore keeps them
     # out of the image; this makes it true regardless of how the image is built.
-    location ~ \.bak$ {
+    # ~* not ~. The regex must be case-insensitive because the filesystem
+    # underneath may not be: on a macOS or Windows bind mount, /FOO.BAK opens
+    # the very same inode as /foo.bak, so a case-sensitive rule is simply
+    # bypassed by changing the case of the request.
+    location ~* \.bak$ {
         deny all;
         access_log off;
     }
@@ -156,11 +180,17 @@ server {
         internal;
     }
 
-    # Anything else ending in .php. This MUST come after the block above:
-    # nginx tests regex locations in the order they appear, so placing it
+    # Anything else ending in .php, in ANY case. This MUST come after the block
+    # above: nginx tests regex locations in the order they appear, so placing it
     # first would match /index.php and answer 404 for every dynamic request —
     # the whole site, with no PHP error anywhere to explain it.
-    location ~ \.php$ {
+    #
+    # ~* is load-bearing, not tidiness. With a case-sensitive rule, /INDEX.PHP
+    # matches no regex location at all and falls through to `location /`, where
+    # try_files $uri finds public/index.php on a case-insensitive bind mount and
+    # nginx serves it as a static file — the application's PHP source, verbatim,
+    # as application/octet-stream. Verified reproducible before this change.
+    location ~* \.php$ {
         return 404;
     }
 
@@ -173,17 +203,17 @@ server {
     # public/build/* is content-hashed by scripts/build-assets.mjs, so it is
     # safe to cache immutably. Everything else under these extensions is
     # hand-maintained and gets a short, revalidating cache instead.
+    # max-age is folded into add_header rather than set with `expires`, because
+    # using both makes nginx emit two Cache-Control headers on every response.
     location ^~ /build/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
         add_header X-Content-Type-Options "nosniff" always;
         access_log off;
         try_files $uri =404;
     }
 
     location ~* \.(?:css|js|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|eot|mp3|wav|mp4|webm)$ {
-        expires 1h;
-        add_header Cache-Control "public, must-revalidate" always;
+        add_header Cache-Control "public, max-age=3600, must-revalidate" always;
         add_header X-Content-Type-Options "nosniff" always;
         access_log off;
 
