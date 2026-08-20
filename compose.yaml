@@ -53,6 +53,12 @@ x-php: &php
     # environment variables already win, but only for keys we happen to set;
     # masking the file removes the question entirely.
     - ./docker/empty.env:/var/www/html/.env:ro
+  environment: &app-env
+    # APP_URL has to follow the published port, not sit pinned at 8001 in the
+    # env template. Laravel builds absolute links from it in anything with no
+    # request context — the scheduler's reminder emails, queued notifications —
+    # so a stale port here sends people to a URL nothing is serving.
+    APP_URL: "http://localhost:${TMA_APP_PORT:-8001}"
   restart: unless-stopped
   depends_on:
     postgres:
@@ -165,6 +171,7 @@ services:
       # value mean the same thing to the browser and to PHP.
       - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:${TMA_APP_PORT:-8001}"
     environment:
+      <<: *app-env
       # nginx listens on this inside the container; the entrypoint renders
       # the vhost from it.
       TMA_NGINX_PORT: "${TMA_APP_PORT:-8001}"
@@ -211,6 +218,7 @@ services:
       --max-time=3600
       --rest=0.2
     environment:
+      <<: *app-env
       # Never renders a page, so it can talk to Reverb by service name.
       REVERB_HOST: reverb
       REVERB_PORT: "8080"
@@ -234,6 +242,7 @@ services:
     <<: *php
     command: php artisan schedule:work
     environment:
+      <<: *app-env
       REVERB_HOST: reverb
       REVERB_PORT: "8080"
       REVERB_SCHEME: http
@@ -258,6 +267,7 @@ services:
     <<: *php
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     environment:
+      <<: *app-env
       REVERB_SERVER_HOST: 0.0.0.0
       REVERB_SERVER_PORT: "8080"
       REVERB_HOST: reverb

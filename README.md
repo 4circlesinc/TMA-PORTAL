@@ -241,6 +241,15 @@ deployment. A worker container that read it would not merely *see* production �
 it would pop and execute real jobs, sending real mail and writing to real
 SharePoint. The empty-file mount removes that possibility entirely.
 
+> **Never write `${SOMETHING}` in `.env.docker.example` or `.env.docker`.**
+> Compose expands `${...}` in an env file *on the host*, before the container
+> exists, and it resolves those names against the project's `.env` — the
+> production one. Masking `.env` inside the container does not help, because
+> the substitution already happened. This is not hypothetical: the template
+> once carried `VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"`, and every container
+> was handed the live Laravel Cloud Reverb key instead of the local one. Write
+> literal values only.
+
 The values that must differ inside Docker, and why:
 
 | Key | Docker value | Reason |
@@ -351,9 +360,31 @@ must stay at exactly one replica — no scheduled task uses `->onOneServer()`, a
 Reverb's scaling backplane is off by default, so a second instance would
 silently split clients into groups that cannot see each other.
 
-**Persistent data.** `pgdata`, `uploads`, `thumbs` and `logs` are named volumes.
-Everything else in a container is disposable. Back up `pgdata` and, if
-`FILES_DISK` is not `s3`, the file storage too.
+**Persistent data.** `pgdata`, `storage_private`, `storage_public` and `logs`
+are named volumes. The two `storage_*` volumes are the roots of the `local` and
+`public` disks, and they are shared by the web, worker and scheduler containers
+because a worker writes files the web container has to serve — mail sender
+photos, generated thumbnails, messaging attachments. Without that sharing those
+images 404 forever, and anything left in a container's own writable layer is
+discarded on the next redeploy, which silently loses every uploaded avatar.
+
+Those volumes start empty, which would hide the content committed to the
+repository — 285 vault documents that `files` rows with `disk='local'` resolve
+against, plus messaging attachments and avatars. The image carries a seed copy
+at `/opt/tma/seed`, and the entrypoint copies anything missing into place on
+every start (`cp -rn`, so it never overwrites what users have uploaded).
+
+Back up `pgdata`, and the `storage_*` volumes too unless `FILES_DISK=s3`:
+
+```bash
+docker run --rm -v tma-portal-prod_storage_private:/data -v "$PWD:/backup" \
+  alpine tar czf /backup/storage-private.tar.gz -C /data .
+```
+
+**`APP_URL` in production** is your real public URL and is not derived from
+`TMA_APP_PORT`; set it in `.env.production`. Anything Laravel renders without a
+request context — the scheduler's reminder emails, queued notifications — builds
+its links from it.
 
 ### 12. Troubleshooting
 

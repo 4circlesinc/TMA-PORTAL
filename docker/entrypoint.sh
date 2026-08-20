@@ -90,6 +90,38 @@ do
     [ -w "$dir" ] || log "WARNING: $dir is not writable by $(id -un)"
 done
 
+# ---------------------------------------------------------------------------
+# Restore baked storage content into the volumes that shadow it.
+#
+# The production image mounts named volumes over storage/app/private and
+# storage/app/public — the roots of the 'local' and 'public' disks — so that
+# files written by a worker are visible to the web container and survive a
+# redeploy. A fresh volume arrives empty and would otherwise hide the content
+# committed to the repository: the vault documents that every files row with
+# disk='local' resolves against, plus messaging attachments and avatars.
+#
+# `cp -rn` copies only what is missing and never overwrites, so this is safe to
+# run on every start: it fills a new volume, adds files a later image gained,
+# and leaves everything users have uploaded alone. The seed only exists in the
+# production image, so development skips this entirely.
+# ---------------------------------------------------------------------------
+seed_storage() {
+    [ -d /opt/tma/seed ] || return 0
+
+    for pair in "private:storage/app/private" "public:storage/app/public"; do
+        src="/opt/tma/seed/${pair%%:*}"
+        dst="${pair#*:}"
+
+        [ -d "$src" ] || continue
+        mkdir -p "$dst" 2>/dev/null || true
+        [ -w "$dst" ] || { log "WARNING: $dst is not writable; skipping seed"; continue; }
+
+        cp -rn "$src/." "$dst/" 2>/dev/null || true
+    done
+}
+
+seed_storage
+
 # config/logging.php pins the emergency logger to storage/logs/laravel.log
 # regardless of LOG_CHANNEL, so this file must exist and be writable even
 # though everything else goes to stderr.

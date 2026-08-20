@@ -190,11 +190,22 @@ services:
       REVERB_PORT: ${TMA_REVERB_PUBLIC_PORT:-8001}
       REVERB_SCHEME: ${TMA_REVERB_PUBLIC_SCHEME:-http}
     volumes:
-      # Leaf directories only. A volume at storage/ or storage/app/private
-      # would mask the 285 committed documents under storage/app/private/vault
-      # that every files row with disk='local' still resolves against.
-      - uploads:/var/www/html/storage/app/private/uploads
-      - thumbs:/var/www/html/storage/app/private/thumbs
+      # The two local-disk roots: config/filesystems.php puts 'local' at
+      # storage/app/private and 'public' at storage/app/public.
+      #
+      # These have to be shared volumes, not container-local paths. queue-photos
+      # writes mail-sender-photos/ that the web container serves; the queue
+      # writes thumbnails the web container serves; and anything left in a
+      # container's writable layer is discarded on the next redeploy, which
+      # would silently lose every uploaded avatar.
+      #
+      # A fresh volume starts empty and would hide the content committed to the
+      # repository (285 vault documents, messaging attachments, avatars), so the
+      # entrypoint copies the baked seed back in — see seed_storage() in
+      # docker/entrypoint.sh. With FILES_DISK=s3 and AVATAR_DISK=s3 these hold
+      # only scratch, but they must still be shared and durable.
+      - storage_private:/var/www/html/storage/app/private
+      - storage_public:/var/www/html/storage/app/public
       - logs:/var/www/html/storage/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${TMA_NGINX_PORT}/up || exit 1"]
@@ -232,8 +243,8 @@ services:
     volumes:
       # Shared with app: the worker writes thumbnails that the web container
       # serves by path, and assembles chunked uploads across many requests.
-      - uploads:/var/www/html/storage/app/private/uploads
-      - thumbs:/var/www/html/storage/app/private/thumbs
+      - storage_private:/var/www/html/storage/app/private
+      - storage_public:/var/www/html/storage/app/public
       - logs:/var/www/html/storage/logs
     # Not long enough for SyncSharePointLibrary's full 1800s timeout — nothing
     # reasonable would be, and a 30-minute shutdown is its own outage. 120s
@@ -276,7 +287,8 @@ services:
       REVERB_PORT: "8080"
       REVERB_SCHEME: http
     volumes:
-      - thumbs:/var/www/html/storage/app/private/thumbs
+      - storage_private:/var/www/html/storage/app/private
+      - storage_public:/var/www/html/storage/app/public
       - logs:/var/www/html/storage/logs
     stop_grace_period: 90s
     healthcheck:
@@ -299,8 +311,8 @@ services:
       REVERB_PORT: "8080"
       REVERB_SCHEME: http
     volumes:
-      - uploads:/var/www/html/storage/app/private/uploads
-      - thumbs:/var/www/html/storage/app/private/thumbs
+      - storage_private:/var/www/html/storage/app/private
+      - storage_public:/var/www/html/storage/app/public
       - logs:/var/www/html/storage/logs
     stop_grace_period: 60s
     healthcheck:
@@ -342,11 +354,12 @@ services:
 volumes:
   # The only copy of the database unless you point DB_HOST elsewhere.
   pgdata:
-  # Chunked-upload parts. They live across dozens of separate HTTP requests,
-  # so a per-container path would break resumable uploads permanently.
-  uploads:
-  # Worker writes them, web serves them by path.
-  thumbs:
+  # Root of the 'local' disk. Vault documents, chunked-upload parts (which live
+  # across dozens of separate requests), generated thumbnails, messaging
+  # attachments, signature scratch. Seeded from the image on first start.
+  storage_private:
+  # Root of the 'public' disk: avatars and mail sender photos.
+  storage_public:
   # config/logging.php pins the emergency logger to storage/logs/laravel.log
   # whatever LOG_CHANNEL says, so this must exist and persist.
   logs:

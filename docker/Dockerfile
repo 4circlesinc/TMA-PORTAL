@@ -331,12 +331,20 @@ COPY --from=deps --chown=www-data:www-data ${APP_HOME}/vendor ${APP_HOME}/vendor
 
 # --exclude keeps the build context honest even when .dockerignore is bypassed
 # by a caller building from a different context root.
+# The two local-disk roots are excluded here and copied to /opt/tma/seed below
+# instead, so their ~45 MB of committed content exists in exactly one place in
+# the image. The entrypoint restores it into the running tree.
 COPY --chown=www-data:www-data \
      --exclude=docker \
      --exclude=desktop \
      --exclude=tests \
      --exclude=phpunit.xml \
+     --exclude=storage/app/private \
+     --exclude=storage/app/public \
      . ${APP_HOME}
+
+COPY --chown=www-data:www-data storage/app/private /opt/tma/seed/private
+COPY --chown=www-data:www-data storage/app/public  /opt/tma/seed/public
 
 # Built bundles replace whatever public/build the context may have held.
 COPY --from=assets --chown=www-data:www-data /build/public/build ${APP_HOME}/public/build
@@ -355,7 +363,15 @@ RUN set -eux; \
     composer dump-autoload --optimize --classmap-authoritative --no-dev; \
     php artisan package:discover --ansi; \
     php artisan view:cache; \
+    # storage/app/private and storage/app/public must EXIST here, owned by
+    # www-data. compose.prod.yaml mounts a named volume at each; Docker
+    # initialises a fresh volume from whatever the image has at that path —
+    # including its ownership — and creates it root-owned if the path is
+    # missing. A root-owned volume is silent: the container starts, serves
+    # pages, and only fails when something first tries to write an avatar.
     mkdir -p \
+        storage/app/private \
+        storage/app/public/avatars \
         storage/app/private/uploads \
         storage/app/private/thumbs \
         storage/app/private/tmp \
@@ -369,6 +385,23 @@ RUN set -eux; \
     ; \
     chown -R www-data:www-data storage bootstrap/cache; \
     chmod -R u+rwX storage bootstrap/cache
+
+# Seed copies of the two local-disk roots.
+#
+# In production those roots are named volumes (see compose.prod.yaml), because
+# a worker writes files the web container has to serve — sender photos,
+# messaging thumbnails, generated thumbnails — and because anything written to
+# a container's own writable layer is discarded on the next redeploy.
+#
+# But both roots also carry content committed to git: 285 vault documents that
+# rows with disk='local' resolve against, plus messaging attachments and
+# avatars. An empty volume mounted over them would hide every one of those.
+# So the baked content is duplicated here, and the entrypoint copies anything
+# missing back in after the volume is mounted.
+#
+# Nothing further to do: the seed arrived via its own COPY above, and the
+# entrypoint copies it into place on every start — whether the target is an
+# empty named volume or the image's own writable layer.
 
 ENV APP_ENV=production \
     APP_DEBUG=false
