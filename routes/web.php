@@ -1202,9 +1202,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // and an account with none of them waits here until an administrator
     // assigns one. Deliberately inside the same pre-approval group so the
     // account.approved gate that sends people here cannot loop.
-    Route::get('/auth/role-pending', fn (Request $request) => view('auth.role-pending', [
-        'user' => $request->user(),
-    ]))->name('role-pending');
+    //
+    // Once a real role is assigned, this URL must release them: a browser
+    // refresh lands back on the same path, and without the check below the
+    // holding screen would keep rendering forever even though the gate that
+    // sent them here would now let them through.
+    Route::get('/auth/role-pending', function (Request $request) {
+        $user = $request->user();
+
+        if ($user && ! $user->isApproved()) {
+            return redirect('/auth/pending');
+        }
+
+        if (! $user || $user->account_type !== \App\Support\Access\Role::EMPLOYEE) {
+            return redirect('/');
+        }
+
+        return view('auth.role-pending', ['user' => $user]);
+    })->name('role-pending');
 });
 
 /*

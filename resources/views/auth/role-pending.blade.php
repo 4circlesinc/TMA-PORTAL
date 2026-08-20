@@ -54,3 +54,11 @@
     <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
   </main>
 @endsection
+
+@push('scripts')
+<script>
+  // When an administrator assigns a role, this page's next load redirects to
+  // the portal. Poll so the person does not have to know to refresh.
+  setInterval(function () { window.location.reload(); }, 20000);
+</script>
+@endpush

@@ -1,0 +1,221 @@
+# ---------------------------------------------------------------------------
+# Forwarded headers.
+#
+# bootstrap/app.php calls trustProxies(at: '*'), so the application always runs
+# in Symfony's "behind a proxy" mode and derives the request's real scheme, host
+# and port from X-Forwarded-*. On Laravel Cloud a load balancer supplies them.
+# Inside this container nothing did, and Symfony's trusted-proxy path then
+# resolves the port to the scheme default: every generated URL and redirect came
+# out as http://localhost/... with the port silently dropped, which breaks every
+# absolute link and every OAuth callback the moment the app is not on port 80.
+#
+# So nginx supplies them. Each map passes an upstream proxy's value through
+# untouched when there is one, and synthesises nginx's own view of the request
+# when there is not.
+#
+# X-Forwarded-Port is deliberately not set: Symfony reads the port out of
+# X-Forwarded-Host, and one header that cannot disagree with itself beats two
+# that can.
+#
+# SECURITY: because the app trusts every proxy, a client that can reach this
+# port directly can spoof these headers. Bind the published port to loopback
+# and put a proxy that overwrites X-Forwarded-* in front of it — which is what
+# compose.prod.yaml does by default.
+# ---------------------------------------------------------------------------
+map $http_x_forwarded_proto $tma_forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
+map $http_x_forwarded_host $tma_forwarded_host {
+    default $http_x_forwarded_host;
+    # $http_host is the Host header verbatim, port included — which is exactly
+    # what Symfony needs to recover both the host and the port.
+    ""      $http_host;
+}
+
+# The portal's virtual host.
+#
+# Port 8001 is not arbitrary: .env pins
+# MICROSOFT_REDIRECT_URI=http://localhost:8001/auth/social/microsoft/callback,
+# and Google's callback is derived from APP_URL. Serving anywhere else means
+# re-registering redirect URIs in both provider consoles.
+#
+# Use http://localhost:8001, never http://127.0.0.1:8001 — Entra only accepts
+# the literal "localhost" for loopback callbacks, and "localhost" is a secure
+# context, which getUserMedia/getDisplayMedia/RTCPeerConnection require. On
+# any other plain-http origin, calling and screen share fail silently.
+
+server {
+    # Rendered by docker/entrypoint.sh via envsubst from TMA_NGINX_PORT.
+    #
+    # This has to follow the published host port. PHP broadcasts server-side to
+    # REVERB_HOST:REVERB_PORT, which compose sets to localhost:<published port>
+    # so that the browser and PHP agree on one URL. If nginx listened on a fixed
+    # 8001 while the stack were published on, say, 8080, PHP would POST to
+    # localhost:8080 inside the container, find nothing listening, and every
+    # broadcast would fail — silently, because Live.php swallows the error.
+    listen      ${TMA_NGINX_PORT} default_server;
+    listen      [::]:${TMA_NGINX_PORT} default_server;
+    server_name _;
+
+    root  /var/www/html/public;
+    index index.php index.html;
+
+    charset      utf-8;
+    absolute_redirect off;
+
+    # App\Support\Files\FileType::MAX_BYTES is 2 GiB. The chunked uploader
+    # sends 8 MiB parts, but direct uploads and file-request links go through
+    # this path at full size.
+    client_max_body_size 2g;
+
+    # -----------------------------------------------------------------------
+    # Reverb, served on this origin.
+    #
+    # One env triple (REVERB_HOST/REVERB_PORT/REVERB_SCHEME) feeds both the
+    # server-side Pusher REST client in config/broadcasting.php AND the JSON
+    # the browser receives from GET /me, via App\Support\RealtimeConfig. Those
+    # are two different network vantage points: PHP would want "reverb:8080",
+    # the browser needs a host-reachable address. Proxying the websocket on
+    # this same origin collapses them — http://localhost:8001 means the same
+    # thing from inside the container and from the browser.
+    #
+    # Verified: no Laravel route registers an /app/ or /apps/ prefix.
+    # ^~ so a path like /apple-touch-icon.png cannot fall in here.
+    # -----------------------------------------------------------------------
+    # Docker's embedded DNS. Resolving through a variable rather than a literal
+    # upstream means nginx starts even if the reverb container is not up yet,
+    # and picks up its new address after a restart without a reload — a literal
+    # `proxy_pass http://reverb:8080` fails hard at startup with "host not
+    # found in upstream" and caches the first resolution forever.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    location ^~ /app/ {
+        set $reverb_upstream reverb;
+        proxy_pass http://$reverb_upstream:8080;
+        include /etc/nginx/conf.d/reverb-proxy.inc;
+    }
+
+    location ^~ /apps/ {
+        set $reverb_upstream reverb;
+        proxy_pass http://$reverb_upstream:8080;
+        include /etc/nginx/conf.d/reverb-proxy.inc;
+    }
+
+    # -----------------------------------------------------------------------
+    # Things that must never be served
+    # -----------------------------------------------------------------------
+    # public/ contains committed *.corrupt.bak files. .dockerignore keeps them
+    # out of the image; this makes it true regardless of how the image is built.
+    location ~ \.bak$ {
+        deny all;
+        access_log off;
+    }
+
+    # Dotfiles, except ACME challenges.
+    location ~ /\.(?!well-known).* {
+        deny all;
+        access_log off;
+    }
+
+
+    location ~ ^/index\.php(/|$) {
+        fastcgi_pass  unix:/run/php/php-fpm.sock;
+        fastcgi_index index.php;
+
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO       $fastcgi_path_info;
+        fastcgi_param DOCUMENT_ROOT   $document_root;
+
+        # httpoxy (CVE-2016-5385): a client-supplied Proxy header must never
+        # become an environment variable the HTTP clients in app/ would honour.
+        fastcgi_param HTTP_PROXY "";
+
+        # See the map block at the top of this file.
+        fastcgi_param HTTP_X_FORWARDED_PROTO $tma_forwarded_proto;
+        fastcgi_param HTTP_X_FORWARDED_HOST  $tma_forwarded_host;
+        # Appends this hop's client address to any existing chain. Without it
+        # every request looks like it came from the Docker bridge gateway and
+        # the login, signing, invitation and upload rate limiters all collapse
+        # into a single shared bucket.
+        fastcgi_param HTTP_X_FORWARDED_FOR   $proxy_add_x_forwarded_for;
+
+        fastcgi_hide_header X-Powered-By;
+
+        # Long enough for a SharePoint-backed folder ZIP or a large export.
+        fastcgi_read_timeout    300s;
+        fastcgi_send_timeout    300s;
+        fastcgi_buffers         16 16k;
+        fastcgi_buffer_size     32k;
+
+        # Uploads are streamed to php-fpm rather than fully buffered first.
+        fastcgi_request_buffering off;
+
+        internal;
+    }
+
+    # Anything else ending in .php. This MUST come after the block above:
+    # nginx tests regex locations in the order they appear, so placing it
+    # first would match /index.php and answer 404 for every dynamic request —
+    # the whole site, with no PHP error anywhere to explain it.
+    location ~ \.php$ {
+        return 404;
+    }
+
+    location = /favicon.png { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    # -----------------------------------------------------------------------
+    # Static assets
+    # -----------------------------------------------------------------------
+    # public/build/* is content-hashed by scripts/build-assets.mjs, so it is
+    # safe to cache immutably. Everything else under these extensions is
+    # hand-maintained and gets a short, revalidating cache instead.
+    location ^~ /build/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    location ~* \.(?:css|js|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|eot|mp3|wav|mp4|webm)$ {
+        expires 1h;
+        add_header Cache-Control "public, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        access_log off;
+
+        # Falls through to PHP, NOT =404. Several live routes end in a file
+        # extension without being files — /media/avatars/{name},
+        # /media/branding/{name}, /portal/mail/sender-photo/{hash},
+        # /portal/files/{uuid}. A `try_files $uri =404` here answers 404 for
+        # every avatar and the firm's logo before the request ever reaches
+        # Laravel. This mirrors Apache's `RewriteCond %{REQUEST_FILENAME} !-f`:
+        # serve the file if it exists, otherwise let the app decide.
+        try_files $uri @front;
+    }
+
+    # -----------------------------------------------------------------------
+    # Application
+    # -----------------------------------------------------------------------
+    # $uri/ is kept deliberately: public/ holds a dozen directories with their
+    # own index.html (sign-in/, pricing/, 404/, …) and Apache's DirectoryIndex,
+    # the PHP built-in server used by `artisan serve`, and Laravel's own nginx
+    # template all serve those in preference to a route. Dropping $uri/ here
+    # would change behaviour rather than preserve it.
+    location / {
+        try_files $uri $uri/ @front;
+    }
+
+    # Reached only when neither a file nor a directory matched, which is the
+    # same condition Apache's `RewriteCond %{REQUEST_FILENAME} !-d/-f` guards.
+    location @front {
+        # public/.htaccess: "Redirect Trailing Slashes If Not A Folder"
+        if ($request_uri ~ "^([^?]*[^/])/+(\?.*)?$") {
+            return 301 $1$2;
+        }
+        rewrite ^ /index.php last;
+    }
+}

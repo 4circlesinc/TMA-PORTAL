@@ -716,7 +716,8 @@
 
   /* ── modals ─────────────────────────────────────── */
 
-  var ACCOUNT_TYPES = ['Employee', 'Administrator'];
+  // Same working roles the Users page offers — never the parked Employee type.
+  var ACCOUNT_TYPES = ['Reviewing Officer', 'Compliance Officer', 'Administrator'];
 
   /* Create an account (employee or client contact) through /admin/users. */
   function accountModal(kind) {
@@ -727,7 +728,7 @@
         ui().field('First name', ui().input({ attrs: ' data-acct-first' })) +
         ui().field('Last name', ui().input({ attrs: ' data-acct-last' })) +
         ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email' })) +
-        (isClient ? '' : ui().field('Account type', ui().select(ACCOUNT_TYPES, 'Employee', 'data-acct-type', 'Account type'))) +
+        (isClient ? '' : ui().field('Account type', ui().select(ACCOUNT_TYPES, 'Reviewing Officer', 'data-acct-type', 'Account type'))) +
         ui().field('Phone (optional)', ui().input({ attrs: ' data-acct-phone' })) +
         ui().banner('info', 'They get an email with a link to set their own password.') +
         '<div class="tma-portal-form-actions">' + ui().btn({ label: isClient ? 'Add contact' : 'Create employee', attrs: ' data-acct-save' }) + '</div>',
@@ -745,7 +746,7 @@
             json: {
               name: (first + ' ' + last).trim(),
               email: email,
-              account_type: isClient ? 'Client' : (typeEl ? typeEl.value : 'Employee'),
+              account_type: isClient ? 'Client' : (typeEl ? typeEl.value : 'Reviewing Officer'),
               phone: host.querySelector('[data-acct-phone]').value.trim() || null,
             },
           }).then(function () {
@@ -770,7 +771,12 @@
         ui().field('Last name', ui().input({ attrs: ' data-acct-last', value: person.lastName || '' })) +
         ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email', value: person.email || '' })) +
         ui().field('Account type', ui().select(
-          ['Client', 'Employee', 'Administrator'], person.accountType, 'data-acct-type', 'Account type'
+          (person.accountType === 'Client'
+            ? ['Client']
+            : (ACCOUNT_TYPES.indexOf(person.accountType) !== -1
+              ? ACCOUNT_TYPES
+              : [person.accountType].concat(ACCOUNT_TYPES))),
+          person.accountType, 'data-acct-type', 'Account type'
         )) +
         ui().field('Job title', ui().input({ attrs: ' data-acct-job', value: person.jobTitle || '' })) +
         ui().field('Phone', ui().input({ attrs: ' data-acct-phone', value: person.phone || '' })) +
@@ -782,16 +788,23 @@
           if (!first) { host.querySelector('[data-acct-first]').focus(); return; }
           if (!last) { host.querySelector('[data-acct-last]').focus(); return; }
 
+          var type = host.querySelector('[data-acct-type]').value;
+          var payload = {
+            first_name: first,
+            last_name: last,
+            email: host.querySelector('[data-acct-email]').value.trim(),
+            job_title: host.querySelector('[data-acct-job]').value.trim() || null,
+            phone: host.querySelector('[data-acct-phone]').value.trim() || null,
+          };
+          // Only send a type the Users API accepts — a parked Employee label
+          // is display-only and must not block an unrelated profile save.
+          if (ACCOUNT_TYPES.indexOf(type) !== -1) {
+            payload.account_type = type;
+          }
+
           net('/admin/users/' + person.id, {
             method: 'PATCH',
-            json: {
-              first_name: first,
-              last_name: last,
-              email: host.querySelector('[data-acct-email]').value.trim(),
-              account_type: host.querySelector('[data-acct-type]').value,
-              job_title: host.querySelector('[data-acct-job]').value.trim() || null,
-              phone: host.querySelector('[data-acct-phone]').value.trim() || null,
-            },
+            json: payload,
           }).then(function () {
             ui().closeModal();
             ui().toast('Changes saved');

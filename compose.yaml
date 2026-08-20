@@ -1,0 +1,306 @@
+# =============================================================================
+# TMA-PORTAL — development stack
+# =============================================================================
+#
+#   docker compose up
+#
+# starts Postgres, Redis, the web app, a queue worker, the scheduler and the
+# Reverb websocket server. Nothing needs to be installed on the host but Docker
+# — no PHP, no Node, no composer, no Postgres, no Redis.
+#
+# Production is compose.prod.yaml, a separate file rather than an override, so
+# a development bind mount or a debug flag cannot leak into it by inheritance.
+# =============================================================================
+
+name: tma-portal
+
+# -----------------------------------------------------------------------------
+# Shared by every PHP service. Same image, different command.
+# -----------------------------------------------------------------------------
+x-php: &php
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    target: dev
+    args:
+      # Match the container user to yours so bind-mounted files stay writable
+      # on a Linux host. Docker Desktop maps ownership on macOS and Windows,
+      # where these are ignored.
+      UID: ${TMA_UID:-1000}
+      GID: ${TMA_GID:-1000}
+  image: tma-portal:dev
+  env_file:
+    - path: .env.docker.example
+      required: true
+    # Your overrides. Optional, so `docker compose up` works on a fresh clone.
+    - path: .env.docker
+      required: false
+  volumes:
+    # The whole repository, live-edited. PHP has no build step, so this is the
+    # hot reload.
+    - .:/var/www/html
+    # Container-managed vendor/. Shadowing the host directory keeps macOS
+    # filesystem traffic off the ~145 MB dependency tree and guarantees the
+    # dependencies were resolved by the container's PHP, not the host's. The
+    # entrypoint reinstalls whenever composer.lock changes.
+    - vendor:/var/www/html/vendor
+    # An empty file over the repository's .env.
+    #
+    # This is the guard that makes the whole setup safe. That file points at
+    # the live Laravel Cloud Postgres, and its `jobs` table is shared with the
+    # running production deployment — a worker that read it would pop and
+    # execute real jobs. Laravel's env repository is immutable, so real
+    # environment variables already win, but only for keys we happen to set;
+    # masking the file removes the question entirely.
+    - ./docker/empty.env:/var/www/html/.env:ro
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Postgres 18 — matches the managed Postgres 18 production runs on.
+  # bookworm rather than alpine so glibc collation (and therefore LOWER()/ILIKE
+  # ordering in the directory search paths) matches the application image.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    # Same env files as the app, so POSTGRES_USER/PASSWORD/DB and the app's
+    # DB_USERNAME/DB_PASSWORD/DB_DATABASE cannot drift apart.
+    env_file:
+      - path: .env.docker.example
+        required: true
+      - path: .env.docker
+        required: false
+    environment:
+      # Deterministic collation regardless of the host's locale.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      # /var/lib/postgresql, NOT /var/lib/postgresql/data. The Postgres 18
+      # images store data in a major-version subdirectory so that
+      # `pg_upgrade --link` can work across a single mount point; mounting the
+      # old 17-and-earlier path makes the image refuse to start with
+      # "there appears to be PostgreSQL data in /var/lib/postgresql/data
+      # (unused mount/volume)".
+      - pgdata:/var/lib/postgresql
+    ports:
+      # Loopback only — for psql/TablePlus, never reachable off this machine.
+      # 5433 by default because a Homebrew/Postgres.app install already owns
+      # 5432 on many developer machines. Inside the network it is still 5432,
+      # which is what DB_PORT refers to.
+      - "127.0.0.1:${TMA_DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis — cache and, more importantly, the lock store.
+  # Not optional: 11 job classes use ShouldBeUnique and 13 schedule entries use
+  # withoutOverlapping(). With a per-container file cache those locks stop
+  # working the moment web and worker are separate processes.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Cache and locks only; sessions and the queue live in Postgres. Losing
+    # this on restart is harmless, so persistence is off and memory is bounded.
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    # No ports: nothing outside the compose network has any business here.
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Schema. A one-shot service rather than a step inside the app's entrypoint,
+  # so that N app containers cannot race 155 migrations against each other.
+  # Everything else waits on it completing successfully.
+  # ---------------------------------------------------------------------------
+  migrate:
+    <<: *php
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # --isolated takes its lock from the cache store, which is why CACHE_STORE
+    # must be redis. --seed adds one approved administrator (idempotent); the
+    # seeder deliberately creates no demo data.
+    command: php artisan migrate --force --isolated --seed
+
+  # ---------------------------------------------------------------------------
+  # Web: nginx + php-fpm under supervisor.
+  #
+  # nginx is in this container rather than its own so that the websocket is
+  # served from the same origin as the app. One environment triple
+  # (REVERB_HOST/PORT/SCHEME) is read both by PHP, which broadcasts server-side,
+  # and by the browser, which receives it from GET /me — two different network
+  # vantage points that only collapse into one if both can use the same URL.
+  # ---------------------------------------------------------------------------
+  app:
+    <<: *php
+    ports:
+      # Loopback by default. The app calls trustProxies(at: '*'), so anything
+      # that can reach this port can spoof its own IP, host and scheme; that is
+      # fine over the loopback interface and not fine on a cafe network.
+      # Set TMA_APP_BIND=0.0.0.0 to reach it from a phone on the same LAN.
+      - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:8001"
+    environment:
+      # The browser gets these, so they must be host-addressable.
+      REVERB_HOST: localhost
+      REVERB_PORT: "${TMA_APP_PORT:-8001}"
+      REVERB_SCHEME: http
+      XDEBUG_MODE: ${TMA_XDEBUG_MODE:-off}
+    extra_hosts:
+      # So Xdebug can reach the IDE on a Linux host too.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/up || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Queue worker.
+  #
+  # Development runs one worker across all three queues. Production splits
+  # mail-photos onto its own — see compose.prod.yaml and the note in
+  # app/Jobs/ResolveSenderPhoto.php.
+  #
+  # `cbi` is included because the repository's own `composer dev` script omits
+  # it, which means SyncCbiHub and ImportCbiDocuments never drain there.
+  #
+  # --timeout=300, not the 60s default: ImportProviderCalendars,
+  # PublishScheduledFeedPost and PushFileToSharePoint declare no $timeout and
+  # would be SIGKILLed mid-flight.
+  # --max-time recycles the process hourly so a slow leak cannot accumulate.
+  # ---------------------------------------------------------------------------
+  queue:
+    <<: *php
+    command: >
+      php artisan queue:work
+      --queue=default,mail-photos,cbi
+      --tries=3
+      --backoff=10
+      --timeout=300
+      --max-time=3600
+      --rest=0.2
+    environment:
+      # Never renders a page, so it can talk to Reverb by service name.
+      REVERB_HOST: reverb
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
+    # SyncSharePointLibrary documents that a SIGKILL bypasses its cleanup and
+    # strands a library in the 'syncing' state.
+    stop_grace_period: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Scheduler. 18 tasks; five of them fire every minute. Exactly one replica —
+  # no schedule entry uses ->onOneServer(). It is also the only thing that
+  # reaps expired chunked uploads, so without it that directory grows forever.
+  # ---------------------------------------------------------------------------
+  scheduler:
+    <<: *php
+    command: php artisan schedule:work
+    environment:
+      REVERB_HOST: reverb
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Reverb websocket server. Not published to the host: nginx proxies /app/ and
+  # /apps/ to it on the app's own origin, which keeps the hard-coded
+  # allowed_origins: ['*'] in config/reverb.php off any public interface.
+  #
+  # Exactly one replica — REVERB_SCALING_ENABLED defaults to false, so a second
+  # instance would silently partition clients into two islands that cannot see
+  # each other's messages.
+  # ---------------------------------------------------------------------------
+  reverb:
+    <<: *php
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: "8080"
+      REVERB_HOST: reverb
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
+    # React falls back to a select()-based event loop with a ~1024 descriptor
+    # ceiling, and messaging-realtime.js loads on 15 different shells, so open
+    # connections scale with open tabs rather than with Messages usage.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/up || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Asset build. A tool, not a service: it is behind a profile so it never
+  # starts with `docker compose up`.
+  #
+  #   docker compose run --rm assets
+  #
+  # Assets are optional in development — with no public/build manifest,
+  # App\Support\AssetBundle serves the shell's raw tags exactly as it always
+  # has. This exists so rebuilding them never requires Node on the host.
+  # ---------------------------------------------------------------------------
+  assets:
+    image: node:22-bookworm-slim
+    profiles: ["tools"]
+    working_dir: /build
+    volumes:
+      - .:/build
+      - node_modules:/build/node_modules
+      - npm_cache:/home/node/.npm
+    environment:
+      npm_config_cache: /home/node/.npm
+    user: "${TMA_UID:-1000}:${TMA_GID:-1000}"
+    # --ignore-scripts mirrors `composer setup`, and keeps the playwright
+    # dependency from pulling ~400 MB of browsers the build does not use.
+    command: sh -c "npm ci --ignore-scripts --no-audit --no-fund && npm run build"
+
+volumes:
+  pgdata:
+  vendor:
+  node_modules:
+  npm_cache:
+
+networks:
+  default:
+    name: tma-portal

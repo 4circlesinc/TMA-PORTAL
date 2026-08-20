@@ -57,6 +57,12 @@ class RolePendingTest extends TestCase
         $employee->forceFill(['account_type' => Role::REVIEWING_OFFICER])->save();
 
         $this->actingAs($employee->fresh())->get('/')->assertOk();
+
+        // Refreshing the holding URL itself must also release them — that is
+        // the path a parked browser tab lands on when the person hits reload.
+        $this->actingAs($employee->fresh())
+            ->get('/auth/role-pending')
+            ->assertRedirect('/');
     }
 
     public function test_approval_still_comes_first(): void

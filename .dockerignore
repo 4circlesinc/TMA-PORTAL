@@ -1,0 +1,107 @@
+# Build context hygiene.
+#
+# The working tree is ~3.3 GB and almost none of it belongs in an image.
+# Everything listed here is either rebuilt inside the image, host-specific,
+# or a secret. Docker layers are immutable: a file COPY'd once and deleted
+# later is still in the image, so this file is the only real defence.
+
+# ---------------------------------------------------------------------------
+# Secrets. Never, under any circumstances, into a layer.
+# .env points at the live Laravel Cloud Postgres and carries nine real
+# credentials. The container gets its configuration from compose env_file.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.docker.example
+auth.json
+storage/*.key
+
+# ---------------------------------------------------------------------------
+# VCS, editors, OS cruft
+# ---------------------------------------------------------------------------
+.git
+.gitignore
+.gitattributes
+.github
+.editorconfig
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.idea
+.vscode
+.zed
+.nova
+.cursor
+.codex
+.phpactor.json
+_ide_helper.php
+
+# ---------------------------------------------------------------------------
+# Rebuilt inside the image — never copied from the host
+# ---------------------------------------------------------------------------
+vendor
+node_modules
+**/node_modules
+public/build
+bootstrap/cache/*.php
+
+# ---------------------------------------------------------------------------
+# Host-specific or dangling
+#   public/storage is an absolute symlink into /Users/... — dangling in Linux.
+#   The entrypoint recreates it with `artisan storage:link`.
+# ---------------------------------------------------------------------------
+public/storage
+database/database.sqlite
+composer.phar
+.phpunit.result.cache
+.phpunit.cache
+.dev-server.log
+.dev-server.pid
+
+# ---------------------------------------------------------------------------
+# Not part of the server. desktop/ is a 2.7 GB Electron *client* whose build
+# is macOS-only (sips, iconutil, codesign, PlistBuddy); wine-docker is an
+# unrelated Wine rig for smoke-testing a prebuilt .exe.
+# ---------------------------------------------------------------------------
+desktop
+
+# ---------------------------------------------------------------------------
+# Tracked but generated, and referenced by zero application code (verified:
+# no hit for "dist-pages" or base_path('tmp') anywhere in app/ config/ routes/).
+# ---------------------------------------------------------------------------
+dist-pages
+tmp
+
+# ---------------------------------------------------------------------------
+# Corrupt/backup files that would otherwise be publicly fetchable under /public
+# ---------------------------------------------------------------------------
+**/*.bak
+
+# ---------------------------------------------------------------------------
+# Runtime state. The directories themselves are recreated by the Dockerfile;
+# only their contents are excluded so a stale local log or session cannot be
+# baked in. storage/app/private/vault is deliberately NOT excluded — it holds
+# 285 committed documents that rows with disk='local' still resolve against.
+# ---------------------------------------------------------------------------
+storage/logs/*.log
+storage/pail
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+storage/app/public/cip
+
+# ---------------------------------------------------------------------------
+# Test artefacts
+# ---------------------------------------------------------------------------
+tests/Browser/*.png
+tests/Browser/screenshots
+
+# ---------------------------------------------------------------------------
+# Docker's own files — changing compose must not invalidate the image cache
+# ---------------------------------------------------------------------------
+compose.yaml
+compose.prod.yaml
+docker-compose*.yml
+.dockerignore

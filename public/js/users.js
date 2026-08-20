@@ -898,11 +898,15 @@ if (state.filters.user) {
           statusAction('/admin/users/' + row._id + '/approve', { account_type: type });
         } else {
           // The endpoint validates the whole identity, not just the field
-          // being changed — send the row's own values back unaltered.
+          // being changed — send the row's own values back unaltered. Fall
+          // back to splitting the display name when first/last were never
+          // filled in, so a role assignment is not refused for a missing
+          // last name on an otherwise fine account.
+          var parts = String(row.user || '').trim().split(/\s+/).filter(Boolean);
           usersApi('PATCH', '/admin/users/' + row._id, {
-            first_name: row.firstName || row.user || '',
+            first_name: row.firstName || parts[0] || 'User',
             middle_name: row.middleName || null,
-            last_name: row.lastName || '',
+            last_name: row.lastName || parts.slice(1).join(' ') || 'Account',
             email: row.email,
             account_type: type,
           })
