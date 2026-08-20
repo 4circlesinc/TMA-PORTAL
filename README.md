@@ -77,8 +77,11 @@ Open **<http://localhost:8001>** and sign in with `admin@localhost` / `password`
 first — Docker replaces it. To use a different port:
 
 ```bash
-TMA_APP_PORT=8080 docker compose up      # the Reverb URL follows automatically
+TMA_APP_PORT=8080 docker compose up
 ```
+
+nginx inside the container listens on that same number, so the app, the browser
+and PHP's own broadcaster all keep agreeing on one URL,
 
 but note that the Microsoft app registration pins its redirect URI to
 `http://localhost:8001/auth/social/microsoft/callback`, so social sign-in only
@@ -317,6 +320,27 @@ The proxy must also forward websocket upgrades for `/app/` and `/apps/`, and
 `TMA_REVERB_PUBLIC_HOST` / `_PORT` / `_SCHEME` must describe the *public* URL
 (e.g. `portal.example.com` / `443` / `https`) — that is what the browser is told
 to connect to.
+
+> **That same URL must also be reachable from inside the `app` container.**
+> `config/broadcasting.php` reads one `REVERB_HOST`/`PORT`/`SCHEME` triple for
+> *both* the browser and PHP's own broadcaster, and the broadcast events are
+> `ShouldBroadcastNow` — sent synchronously during a web request. In development
+> that costs nothing, because the container listens on the same port it is
+> published on and the hop is a loopback call to its own nginx. Behind a public
+> TLS proxy it would otherwise leave the container, cross the internet and come
+> back. Pin the public hostname to the proxy on the Docker network so the hop
+> stays local:
+>
+> ```yaml
+> app:
+>   extra_hosts:
+>     - "portal.example.com:172.18.0.9"   # the TLS proxy on this network
+> ```
+>
+> Without it, broadcasts still work but pay a full internet round trip per
+> event — and if the container cannot resolve the public name at all, they fail
+> *silently*, because `Live.php` swallows broadcast errors. The symptom is "the
+> portal feels stale", never an error.
 
 Set `APP_ENV=production` only when TLS is actually terminated in front:
 `AppServiceProvider` forces `https://` on every generated URL when it sees that

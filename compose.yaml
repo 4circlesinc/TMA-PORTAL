@@ -161,9 +161,16 @@ services:
       # that can reach this port can spoof its own IP, host and scheme; that is
       # fine over the loopback interface and not fine on a cafe network.
       # Set TMA_APP_BIND=0.0.0.0 to reach it from a phone on the same LAN.
-      - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:8001"
+      # Same port inside and out. That equality is what lets one REVERB_HOST
+      # value mean the same thing to the browser and to PHP.
+      - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:${TMA_APP_PORT:-8001}"
     environment:
-      # The browser gets these, so they must be host-addressable.
+      # nginx listens on this inside the container; the entrypoint renders
+      # the vhost from it.
+      TMA_NGINX_PORT: "${TMA_APP_PORT:-8001}"
+      # The browser gets these, so they must be host-addressable — and
+      # because the container listens on that same number, PHP reaches its
+      # own nginx at the identical URL.
       REVERB_HOST: localhost
       REVERB_PORT: "${TMA_APP_PORT:-8001}"
       REVERB_SCHEME: http
@@ -172,7 +179,7 @@ services:
       # So Xdebug can reach the IDE on a Linux host too.
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/up || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${TMA_NGINX_PORT}/up || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

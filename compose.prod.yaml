@@ -88,6 +88,15 @@ services:
     env_file:
       - path: .env.production
         required: true
+    environment:
+      # Must match compose.yaml exactly. Collation is fixed at initdb time
+      # and cannot be changed later without a dump and reload, so a
+      # production database initialised with a different locale than every
+      # developer's sorts and compares differently — permanently.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    # The default 64 MB /dev/shm is too small for Postgres parallel query and
+    # large sorts; it surfaces as "could not resize shared memory segment".
+    shm_size: 256mb
     volumes:
       # /var/lib/postgresql, NOT /var/lib/postgresql/data. The Postgres 18
       # images store data in a major-version subdirectory so that
@@ -110,12 +119,21 @@ services:
     restart: unless-stopped
     logging: *logging
     <<: *security
+    # maxmemory-policy is noeviction, not allkeys-lru: this Redis is not only a
+    # cache, it holds the ShouldBeUnique and withoutOverlapping locks. Evicting
+    # one of those under memory pressure would silently re-enable the
+    # duplicate-job flood the split topology exists to prevent. A failed cache
+    # write is the safer failure, and it is a loud one.
+    #
+    # Comments must stay OUTSIDE the folded block below — YAML folds every line
+    # of a `>` scalar into the string, so a `#` line becomes a redis-server
+    # argument and the container crash-loops on "wrong number of arguments".
     command: >
       redis-server
       --save ""
       --appendonly no
       --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
@@ -148,12 +166,26 @@ services:
     ports:
       # Bind to loopback and terminate TLS in front of it. Publishing this on
       # 0.0.0.0 exposes an app that trusts X-Forwarded-* from anyone.
-      - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:8001"
+      - "${TMA_APP_BIND:-127.0.0.1}:${TMA_APP_PORT:-8001}:${TMA_APP_PORT:-8001}"
     environment:
       <<: *php-env
+      TMA_NGINX_PORT: "${TMA_APP_PORT:-8001}"
       # Browser-facing. Must be the public origin, because the browser reads
       # these from GET /me to open its websocket. With TLS in front, that is
       # your real hostname on 443 over wss.
+      #
+      # IMPORTANT: config/broadcasting.php reads this SAME triple for PHP's
+      # server-side broadcaster, and the broadcast events are
+      # ShouldBroadcastNow — sent synchronously from inside the web request.
+      # So whatever goes here must ALSO be reachable from inside this
+      # container. Behind a TLS proxy, add an extra_hosts entry pointing the
+      # public hostname at the proxy on this network, so the hop stays inside
+      # Docker instead of leaving and re-entering through the internet:
+      #
+      #   extra_hosts:
+      #     - "portal.example.com:172.18.0.9"   # the TLS proxy container
+      #
+      # Leave the defaults and everything stays on one host and one port.
       REVERB_HOST: ${TMA_REVERB_PUBLIC_HOST:-localhost}
       REVERB_PORT: ${TMA_REVERB_PUBLIC_PORT:-8001}
       REVERB_SCHEME: ${TMA_REVERB_PUBLIC_SCHEME:-http}
@@ -165,7 +197,7 @@ services:
       - thumbs:/var/www/html/storage/app/private/thumbs
       - logs:/var/www/html/storage/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/up || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${TMA_NGINX_PORT}/up || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -203,8 +235,16 @@ services:
       - uploads:/var/www/html/storage/app/private/uploads
       - thumbs:/var/www/html/storage/app/private/thumbs
       - logs:/var/www/html/storage/logs
+    # Not long enough for SyncSharePointLibrary's full 1800s timeout — nothing
+    # reasonable would be, and a 30-minute shutdown is its own outage. 120s
+    # covers every other job; a SharePoint sync killed mid-flight leaves its
+    # library in 'syncing' and the next scheduled run recovers it.
     stop_grace_period: 120s
     healthcheck:
+      # Liveness only. This process is the container's PID 1, so the check can
+      # really only fail once the worker is already gone — which the restart
+      # policy handles anyway. It makes `docker compose ps` truthful; it is
+      # not a recovery mechanism.
       test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
