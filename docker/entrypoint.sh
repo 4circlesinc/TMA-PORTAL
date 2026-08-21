@@ -100,13 +100,24 @@ done
 # committed to the repository: the vault documents that every files row with
 # disk='local' resolves against, plus messaging attachments and avatars.
 #
-# `cp -rn` copies only what is missing and never overwrites, so this is safe to
-# run on every start: it fills a new volume, adds files a later image gained,
-# and leaves everything users have uploaded alone. The seed only exists in the
-# production image, so development skips this entirely.
+# This runs ONCE per volume, not on every start, and that distinction matters.
+# `cp -rn` on every boot would treat "the file is absent" as "the file is
+# missing", so a document an administrator deleted through the portal would
+# reappear the next time the container restarted — a deletion that silently
+# undoes itself. A stamp file in the target records that the seed has been
+# applied; the copy is skipped from then on.
+#
+# The stamp carries the seed's content signature, so an image that genuinely
+# ships new baked files still seeds them, while a rebuild of the same content
+# does not. flock serialises the containers that start together.
+#
+# The seed only exists in the production image, so development skips this.
 # ---------------------------------------------------------------------------
 seed_storage() {
     [ -d /opt/tma/seed ] || return 0
+
+    # Cheap, stable signature of what the image is offering.
+    rev="$(find /opt/tma/seed -type f 2>/dev/null | LC_ALL=C sort | md5sum | cut -d' ' -f1)"
 
     for pair in "private:storage/app/private" "public:storage/app/public"; do
         src="/opt/tma/seed/${pair%%:*}"
@@ -114,9 +125,27 @@ seed_storage() {
 
         [ -d "$src" ] || continue
         mkdir -p "$dst" 2>/dev/null || true
-        [ -w "$dst" ] || { log "WARNING: $dst is not writable; skipping seed"; continue; }
+        [ -w "$dst" ] || { log "WARNING: $dst is not writable; storage seed skipped"; continue; }
 
-        cp -rn "$src/." "$dst/" 2>/dev/null || true
+        stamp="$dst/.tma-seed-rev"
+        [ "$(cat "$stamp" 2>/dev/null)" = "$rev" ] && continue
+
+        (
+            flock 8
+            [ "$(cat "$stamp" 2>/dev/null)" = "$rev" ] && exit 0
+
+            before="$(find "$dst" -type f 2>/dev/null | wc -l)"
+            if cp -rn "$src/." "$dst/" 2>/dev/null; then
+                after="$(find "$dst" -type f 2>/dev/null | wc -l)"
+                log "seeded $dst from the image ($((after - before)) file(s) restored)"
+                printf '%s\n' "$rev" > "$stamp"
+            else
+                # Never silent: a failed seed in production means rows with
+                # disk='local' resolve to nothing, and no stamp is written so
+                # the next start tries again.
+                log "ERROR: failed to seed $dst from $src — files with disk='local' may 404"
+            fi
+        ) 8>"$dst/.tma-seed.lock"
     done
 }
 

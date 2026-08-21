@@ -262,6 +262,7 @@ The values that must differ inside Docker, and why:
 | `MAIL_PHOTOS_QUEUE` | `mail-photos` | Otherwise the dedicated photo worker consumes nothing |
 | `LOG_CHANNEL` | `stderr` | So `docker compose logs` works |
 | `APP_MAINTENANCE_DRIVER` | `cache` | `file` would take only one replica offline |
+| `APP_MAINTENANCE_STORE` | `redis` | the driver is `cache`, and the store otherwise defaults to the database — so every request would pay a Postgres round trip just to ask whether the site is down |
 | `REVERB_HOST` / `REVERB_PORT` | *per service* | See below |
 | `FILES_DISK` / `AVATAR_DISK` | `local` / `public` | No S3 credentials needed. Setting `s3` without `AWS_DEFAULT_REGION` throws on the first file operation; with a region but no credentials it hangs on the EC2 metadata service |
 

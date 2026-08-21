@@ -193,7 +193,10 @@ services:
       #
       # Leave the defaults and everything stays on one host and one port.
       REVERB_HOST: ${TMA_REVERB_PUBLIC_HOST:-localhost}
-      REVERB_PORT: ${TMA_REVERB_PUBLIC_PORT:-8001}
+      # Defaults to the app's own published port so the container-internal hop
+      # cannot desync when TMA_APP_PORT is overridden; an explicit public port
+      # (443 behind TLS) still wins.
+      REVERB_PORT: ${TMA_REVERB_PUBLIC_PORT:-${TMA_APP_PORT:-8001}}
       REVERB_SCHEME: ${TMA_REVERB_PUBLIC_SCHEME:-http}
     volumes:
       # The two local-disk roots: config/filesystems.php puts 'local' at

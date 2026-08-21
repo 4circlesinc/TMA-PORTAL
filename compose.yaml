@@ -60,7 +60,14 @@ x-php: &php
     # copy of the firm's live secrets inside four containers, which is reason
     # enough. Compose cannot glob a bind mount, so the risky names are listed.
     - ./docker/empty.env:/var/www/html/.env.backup:ro
-    - ./docker/empty.env:/var/www/html/.env.production:ro
+    #
+    # .env.production is deliberately NOT masked. Bind-mounting onto a path
+    # that does not exist makes Docker CREATE it, and an empty .env.production
+    # in the working tree silently satisfies compose.prod.yaml's
+    # `required: true` guard — turning "you forgot to write your production
+    # env" into a stack that boots with nothing configured. It is gitignored
+    # and only exists if you deliberately made one, in which case you are not
+    # running the development stack against it.
   environment: &app-env
     # APP_URL has to follow the published port, not sit pinned at 8001 in the
     # env template. Laravel builds absolute links from it in anything with no
@@ -105,6 +112,10 @@ services:
     environment:
       # Deterministic collation regardless of the host's locale.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    # Matches production. The default 64 MB /dev/shm is too small for Postgres
+    # parallel query and large sorts, which surfaces as
+    # "could not resize shared memory segment".
+    shm_size: 256mb
     volumes:
       # /var/lib/postgresql, NOT /var/lib/postgresql/data. The Postgres 18
       # images store data in a major-version subdirectory so that
@@ -332,10 +343,15 @@ services:
     #
     # --ignore-scripts mirrors `composer setup`, and keeps the playwright
     # dependency from pulling ~400 MB of browsers the build does not use.
+    # The handback is unconditional (;, not &&) so a failed build cannot leave
+    # root-owned files in the bind mount, and the exit status of the build is
+    # what the command returns. The target uid is read off a file the mount
+    # already owns rather than assumed to be 1000, so it is correct on any host
+    # — and a harmless no-op on macOS, where Docker Desktop maps ownership.
     command: >
-      sh -c "npm ci --ignore-scripts --no-audit --no-fund
-      && npm run build
-      && chown -R ${TMA_UID:-1000}:${TMA_GID:-1000} public/build"
+      sh -c "npm ci --ignore-scripts --no-audit --no-fund && npm run build; rc=$$?;
+      chown -R $$(stat -c %u composer.json):$$(stat -c %g composer.json) public/build 2>/dev/null || true;
+      exit $$rc"
 
 volumes:
   pgdata:

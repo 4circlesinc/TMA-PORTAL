@@ -104,24 +104,23 @@ server {
     }
 
     # -----------------------------------------------------------------------
-    # The public disk.
+    # /storage/ is NOT handled here, deliberately.
     #
-    # public/storage is a symlink created by `artisan storage:link`, and in
-    # development the repository is bind-mounted from the host, where that link
-    # points at an absolute /Users/... path that does not exist inside the
-    # container. Recreating it would fix the container and break the host, so
-    # nginx resolves the URL directly instead and the symlink is left alone.
+    # config/filesystems.php sets 'serve' => true on the local disk, which
+    # registers Laravel's own `GET storage/{path}` route (storage.local). That
+    # route authorises the request; nginx cannot. An earlier revision added a
+    # `location ^~ /storage/ { alias ...; }` here to work around the dangling
+    # public/storage symlink, and it was a mistake twice over: ^~ outranks
+    # `location /`, so it swallowed the signed-URL route that temporaryUrl()
+    # depends on (every desktop-app download 404'd), and it served the whole
+    # public disk with no session and no signature — including
+    # cip/passport-photos/, which Laravel answers 403 for. Verified: that path
+    # returned 200 with the file's contents.
     #
-    # ^~ so this wins over the regex locations below — a plain prefix would
-    # lose to `~* \.(png|jpe?g|...)$` for exactly the files this serves.
+    # The dangling symlink it was meant to fix is cosmetic: nothing serves
+    # through public/storage, because every asset streams through a controller.
+    # Let the front controller have this prefix.
     # -----------------------------------------------------------------------
-    location ^~ /storage/ {
-        alias /var/www/html/storage/app/public/;
-        add_header Cache-Control "public, max-age=3600, must-revalidate" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        access_log off;
-        try_files $uri =404;
-    }
 
     # -----------------------------------------------------------------------
     # Things that must never be served
@@ -194,8 +193,20 @@ server {
         return 404;
     }
 
-    location = /favicon.png { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
+    # Quiet in the log, but still cached like every other static file.
+    location = /favicon.png {
+        access_log off;
+        log_not_found off;
+        add_header Cache-Control "public, max-age=3600, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location = /robots.txt {
+        access_log off;
+        log_not_found off;
+        add_header Cache-Control "public, max-age=3600, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
 
     # -----------------------------------------------------------------------
     # Static assets

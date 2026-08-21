@@ -74,7 +74,7 @@ ENV APP_HOME=${APP_HOME} \
 
 # --- runtime packages -------------------------------------------------------
 # nginx and supervisor live here rather than in their own containers: see the
-# note in docker/nginx/app.conf for why serving the websocket on the same
+# note in docker/nginx/templates/app.conf.template for why serving the websocket on the same
 # origin is what makes Reverb work identically for PHP and for the browser.
 RUN set -eux; \
     apt-get update; \
@@ -329,8 +329,9 @@ ARG APP_HOME=/var/www/html
 
 COPY --from=deps --chown=www-data:www-data ${APP_HOME}/vendor ${APP_HOME}/vendor
 
-# --exclude keeps the build context honest even when .dockerignore is bypassed
-# by a caller building from a different context root.
+# These excludes trim what the image carries; they are NOT a security boundary.
+# .dockerignore is what keeps .env, .git, desktop/ and *.bak out of the build
+# context in the first place, and it is what must be relied on.
 # The two local-disk roots are excluded here and copied to /opt/tma/seed below
 # instead, so their ~45 MB of committed content exists in exactly one place in
 # the image. The entrypoint restores it into the running tree.
@@ -410,8 +411,10 @@ USER www-data
 
 EXPOSE 8001
 
+# Follows the same variable the nginx template does, so an image published on a
+# non-default port is still probed on the port it actually listens on.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -fsS http://127.0.0.1:8001/up || exit 1
+    CMD curl -fsS "http://127.0.0.1:${TMA_NGINX_PORT:-8001}/up" || exit 1
 
 CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 
