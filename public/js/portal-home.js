@@ -1413,10 +1413,12 @@
 
   /* Skyline masonry: place each tile at the highest (lowest y) leftmost slot.
    * Column stacks for the default board:
-   *   favorites → recentFiles, road → email, employees → shortcuts. */
+   *   favorites → recentFiles, road → email,
+   *   shortcuts → cipStatus, employees → shortcuts. */
   var TILE_STACK_UNDER = {
     favorites: 'recentFiles',
     road: 'email',
+    shortcuts: 'cipStatus',
     employees: 'shortcuts',
   };
 
@@ -1695,8 +1697,8 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  // 14 puts CIP Applications where Shortcuts used to lead the third column.
-  var DASHBOARD_LAYOUT_GEN = 14;
+  // 15 keeps Shortcuts stacked under CIP Applications in the third column.
+  var DASHBOARD_LAYOUT_GEN = 15;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
