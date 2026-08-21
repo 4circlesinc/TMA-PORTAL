@@ -129,9 +129,16 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    // Painted before the first frame arrives, so the window opens brand blue
-    // rather than flashing white on its way to the portal.
-    backgroundColor: titlebar.BLUE,
+    /*
+     * Painted before the first frame arrives, so the window opens in brand
+     * colour rather than flashing white on its way to the portal.
+     *
+     * The splash's surface, not the brand blue it used to be: the loading layer
+     * is the very next thing drawn, and when the two differed the window opened
+     * bright blue and immediately went dark. One colour from the first frame to
+     * the portal.
+     */
+    backgroundColor: splash.SURFACE,
     title: 'TM ANTOINE Portal',
     // Hides the native bar so titlebar.js can draw a blue one in its place.
     ...titlebar.windowOptions(),

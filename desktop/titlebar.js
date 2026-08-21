@@ -682,6 +682,34 @@ function script({ canGoBack, canGoForward }) {
  * centred in a 38px bar rather than the 28px one they are placed for by
  * default; on Windows the native caption buttons are told to match the blue.
  */
+/**
+ * Repaints the Windows caption strip.
+ *
+ * Windows draws the minimise/maximise/close buttons itself, in a block of
+ * `titleBarOverlay.color` at the top right — *over* whatever the web contents
+ * have painted. So that colour is only right while the thing behind it is the
+ * same colour, and during startup it was not: the strip was brand blue while
+ * the loading screen underneath was the darker #136da0, which put a bright blue
+ * rectangle in the corner of every cold start until the portal painted.
+ *
+ * Windows only. macOS draws our bar in the page, so there is nothing to keep in
+ * step, and the call does not exist there.
+ *
+ * @param {Electron.BrowserWindow} win
+ * @param {string} color  what is behind the strip right now
+ */
+function setOverlayColor(win, color) {
+  if (process.platform === 'darwin') return;
+  if (!win || win.isDestroyed()) return;
+
+  try {
+    win.setTitleBarOverlay({ color, symbolColor: '#ffffff', height: HEIGHT });
+  } catch {
+    // A window without an overlay (or a platform without the API) has nothing
+    // to recolour, and a startup cosmetic is not worth failing a launch over.
+  }
+}
+
 function windowOptions() {
   if (process.platform === 'darwin') {
     return {
@@ -746,5 +774,5 @@ async function apply(webContents) {
 // has to be measurable from a Mac, or its two reserved-space bugs are only ever
 // found by shipping.
 module.exports = {
-  apply, refresh, windowOptions, script, buildCss, metrics, CSS, HEIGHT, BLUE,
+  apply, refresh, windowOptions, setOverlayColor, script, buildCss, metrics, CSS, HEIGHT, BLUE,
 };

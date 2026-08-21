@@ -1,2 +1,1 @@
-- Updates now come to you: the notice is brought to the front, flashes in the taskbar if Windows will not let it through, and asks again by itself instead of going quiet after one Later
-- Choosing Later no longer switches automatic updates off for good — the app was staying open for days and never asking a second time
+- Windows no longer opens with a bright blue block in the corner — the window buttons now match the loading screen behind them, and the app is one colour from the moment it appears
