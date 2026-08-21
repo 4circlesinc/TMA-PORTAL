@@ -1,1 +1,4 @@
-- Windows no longer opens with a bright blue block in the corner — the window buttons now match the loading screen behind them, and the app is one colour from the moment it appears
+- The portal no longer reports on its own housekeeping — syncing, prefetching for offline and sending queued changes all happen quietly in the background, with nothing on screen
+- Signing out now takes one click
+- New Citizenship by Investment cards on the dashboard
+- Windows opens in one colour instead of flashing a blue block in the corner
