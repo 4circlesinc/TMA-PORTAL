@@ -11,7 +11,7 @@ use App\Support\Files\Vault;
 use App\Support\Files\Versions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Version history for a file.
@@ -109,7 +109,7 @@ class FileVersionController extends BaseFilesController
         return response()->json(['status' => 'ok', 'note' => $version->note]);
     }
 
-    public function download(Request $request, string $uuid, string $versionUuid): StreamedResponse
+    public function download(Request $request, string $uuid, string $versionUuid): SymfonyResponse
     {
         $user = $this->user($request);
         $file = $this->findFile($uuid, withTrashed: true);
@@ -123,7 +123,7 @@ class FileVersionController extends BaseFilesController
         return Vault::downloadVersion($version, $this->versionName($file, $version));
     }
 
-    public function preview(Request $request, string $uuid, string $versionUuid): StreamedResponse
+    public function preview(Request $request, string $uuid, string $versionUuid): SymfonyResponse
     {
         $user = $this->user($request);
         $file = $this->findFile($uuid, withTrashed: true);

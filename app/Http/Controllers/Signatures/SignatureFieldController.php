@@ -13,7 +13,7 @@ use App\Support\Signatures\Status;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * The document and its placed fields, for the signature editor.
@@ -31,7 +31,7 @@ class SignatureFieldController extends Controller
      * route, so Phase 4's public signing link can authorize by token against
      * this same shape without ever granting library access.
      */
-    public function document(Request $request, string $uuid): StreamedResponse
+    public function document(Request $request, string $uuid): SymfonyResponse
     {
         $signatureRequest = $this->findOwned($request, $uuid);
         $file = $signatureRequest->file;

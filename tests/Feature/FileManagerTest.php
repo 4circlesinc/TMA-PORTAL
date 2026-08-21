@@ -120,7 +120,7 @@ class FileManagerTest extends TestCase
         $res = $this->actingAs($user)->get("/portal/files/files/{$id}/preview")->assertOk();
         $res->assertHeader('content-type', 'application/pdf');
         $this->assertSame((string) strlen($bytes), $res->headers->get('content-length'));
-        $this->assertSame($bytes, $res->streamedContent());
+        $this->assertSame($bytes, $this->fileBody($res));
     }
 
     public function test_recent_includes_file_box_files_not_only_foldered_ones(): void

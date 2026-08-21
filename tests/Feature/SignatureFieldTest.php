@@ -297,7 +297,7 @@ class SignatureFieldTest extends TestCase
 
         $res = $this->actingAs($user)->get('/portal/signatures/'.$id.'/document');
         $res->assertOk();
-        $this->assertSame('%PDF-1.4 fake bytes', $res->streamedContent());
+        $this->assertSame('%PDF-1.4 fake bytes', $this->fileBody($res));
     }
 
     public function test_field_types_are_advertised_to_the_editor(): void

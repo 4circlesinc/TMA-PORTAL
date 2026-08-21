@@ -21,7 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * The recipient's signing page. No login, no portal.
@@ -83,7 +83,7 @@ class PublicSigningController extends Controller
     }
 
     /** The document bytes. Same token rules as the page. */
-    public function document(Request $request, string $token): StreamedResponse
+    public function document(Request $request, string $token): SymfonyResponse
     {
         $recipient = $this->resolve($token);
         abort_unless($recipient instanceof SignatureRecipient, 404);

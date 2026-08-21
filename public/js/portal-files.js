@@ -1727,11 +1727,11 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
       try {
-        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf.worker.min.mjs', window.location.href).href;
+        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
       } catch (e) {
-        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
       }
       return lib;
     }).catch(function (err) {
@@ -1856,6 +1856,7 @@
           'tma-portal-viewer__stage--pdf',
           f.category === 'pdf' && f.previewUrl && perm(f, 'preview')
         );
+        swapFullImage(stage);
       }
 
       paintPanel();
@@ -4294,6 +4295,25 @@
       stage.innerHTML = lightboxBody(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
       mountPdf(f);
+      swapFullImage(stage);
+    }
+
+    /* Put the real image in once it has decoded, so the picture never flashes
+     * empty on the way from thumbnail to full size. */
+    function swapFullImage(stage) {
+      var img = stage && stage.querySelector('[data-lb-full]');
+      if (!img) return;
+
+      var full = img.getAttribute('data-lb-full');
+      var loader = new Image();
+      loader.decoding = 'async';
+      loader.onload = function () {
+        if (!img.isConnected) return;
+        img.src = full;
+        img.classList.remove('is-preview');
+        img.removeAttribute('data-lb-full');
+      };
+      loader.src = full;
     }
 
     /* ── PDF via pdf.js — continuous scroll, floating toolbar ── */
@@ -5009,7 +5029,12 @@
     if (f.previewUrl && perm(f, 'preview')) {
       switch (f.category) {
         case 'image':
-          return '<img class="tma-portal-viewer__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
+          /* The thumbnail we already hold, swapped for the real file once it
+           * has decoded — a phone photo is megabytes and the stage used to sit
+           * empty for all of them. See swapFullImage below. */
+          return '<img class="tma-portal-viewer__img' + (f.thumbUrl ? ' is-preview' : '') +
+            '" src="' + esc(f.thumbUrl || f.previewUrl) + '" alt="' + esc(f.name) + '" decoding="async"' +
+            (f.thumbUrl ? ' data-lb-full="' + esc(f.previewUrl) + '"' : '') + '>';
         case 'pdf':
           return '<div class="tma-portal-viewer__pdf" data-lb-pdf>' +
             '<div class="tma-portal-viewer__pdf-scroll" data-lb-pdf-scroll></div>' +

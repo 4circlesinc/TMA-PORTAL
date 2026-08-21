@@ -117,13 +117,13 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
       // An absolute worker URL: a path-only src is resolved against the
       // module, not the page, and that 404 leaves getDocument hanging forever.
       try {
-        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf.worker.min.mjs', window.location.href).href;
+        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
       } catch (e) {
-        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
       }
       return lib;
     }).catch(function (err) {
@@ -134,14 +134,9 @@
   }
 
   /*
-   * Fetch the PDF on the page, then hand the bytes to pdf.js.
-   *
-   * getDocument({ url }) lets the worker request the file (range probes
-   * included). Laravel's stream does not speak Range, and a Content-Length
-   * that does not match the body makes that fetch wait forever — which is
-   * the blank white sheet with "Loading PDF…" stuck beside it. The page
-   * fetch uses the session cookie; rewriting to a same-origin path also
-   * survives APP_URL disagreeing with the host in the address bar.
+   * Same-origin path rather than whatever absolute URL the row carried: the
+   * session cookie goes with it, and it survives APP_URL disagreeing with the
+   * host in the address bar.
    */
   function pdfRequestUrl(url) {
     try {
@@ -152,30 +147,67 @@
     }
   }
 
+  /*
+   * Page one first, rather than the whole file first.
+   *
+   * This used to fetch every byte on the page and hand pdf.js the buffer,
+   * because the old file route could not answer a Range request — so opening a
+   * 40 MB scan meant waiting for all 40 MB before the first page could be
+   * drawn, and the reader watched "Loading preview…" for ten seconds to look
+   * at page one. The route speaks Range now (and object storage always did),
+   * so pdf.js is given the URL and pulls what it needs: the trailer, the page
+   * it is showing, and nothing else until the reader scrolls.
+   *
+   * The whole-file read is kept as the fallback. A file that is not a PDF is
+   * not a PDF either way, so only a transport failure is worth a second try —
+   * a proxy that strips Range, an ancient deploy — and there it is the same
+   * code that always worked.
+   */
   function loadPdfDocument(url) {
+    var path = pdfRequestUrl(url);
+
     return loadPdfjs().then(function (pdfjs) {
-      return fetch(pdfRequestUrl(url), {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/pdf' }
-      }).then(function (res) {
-        if (!res.ok) {
-          throw new Error('Could not load this PDF.');
+      return pdfjs.getDocument({
+        url: path,
+        rangeChunkSize: 262144,
+        // Only what is on screen. Without this pdf.js quietly keeps pulling
+        // the rest of the document in the background, which on a long scan is
+        // the very download this change exists to avoid.
+        disableAutoFetch: true,
+        isEvalSupported: false
+      }).promise.catch(function (err) {
+        var name = err && err.name;
+        if (name === 'InvalidPDFException' || name === 'PasswordException' || name === 'MissingPDFException') {
+          throw err;
         }
-        return res.arrayBuffer();
-      }).then(function (buf) {
-        if (!buf || !buf.byteLength) {
-          var empty = new Error('This file is not a valid PDF.');
-          empty.name = 'InvalidPDFException';
-          throw empty;
-        }
-        return pdfjs.getDocument({
-          data: new Uint8Array(buf),
-          disableRange: true,
-          disableStream: true,
-          useWorkerFetch: false,
-          isEvalSupported: false
-        }).promise;
+
+        return wholeFilePdf(pdfjs, path);
       });
+    });
+  }
+
+  function wholeFilePdf(pdfjs, path) {
+    return fetch(path, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/pdf' }
+    }).then(function (res) {
+      if (!res.ok) {
+        throw new Error('Could not load this PDF.');
+      }
+      return res.arrayBuffer();
+    }).then(function (buf) {
+      if (!buf || !buf.byteLength) {
+        var empty = new Error('This file is not a valid PDF.');
+        empty.name = 'InvalidPDFException';
+        throw empty;
+      }
+      return pdfjs.getDocument({
+        data: new Uint8Array(buf),
+        disableRange: true,
+        disableStream: true,
+        useWorkerFetch: false,
+        isEvalSupported: false
+      }).promise;
     });
   }
 
@@ -335,9 +367,20 @@
    */
   function stage(item) {
     if (isImage(item)) {
+      /*
+       * The thumbnail first, when there is one.
+       *
+       * A photo off a phone is several megabytes and the stage stayed empty
+       * until all of it arrived. The 400px thumbnail is already generated and
+       * cached, so it lands almost at once and the reader sees their picture —
+       * soft for a moment, then sharp when swapFullImage() puts the real one
+       * in. Nothing is hidden: the full image is loading the whole time.
+       */
+      var start = item.thumbUrl || item.url;
       return (
-        '<img class="tma-lightbox__img" src="' + esc(item.url) +
-        '" alt="' + esc(item.name) + '" data-lb-zoom>'
+        '<img class="tma-lightbox__img' + (item.thumbUrl ? ' is-preview' : '') +
+        '" src="' + esc(start) + '" alt="' + esc(item.name) + '" decoding="async"' +
+        (item.thumbUrl ? ' data-lb-full="' + esc(item.url) + '"' : '') + ' data-lb-zoom>'
       );
     }
 
@@ -387,6 +430,36 @@
       '" data-lb-thumb="' + i + '" aria-label="' + esc(item.name) + '"' +
       (i === activeIdx ? ' aria-current="true"' : '') + '>' + inner + '</button>'
     );
+  }
+
+  /* Replace the thumbnail with the real image once it has decoded — swapping
+   * on `load` rather than on `src` means the picture never flashes empty. */
+  function swapFullImage(el) {
+    var img = el.querySelector('[data-lb-full]');
+    if (!img) return;
+
+    var full = img.getAttribute('data-lb-full');
+    var loader = new Image();
+    loader.decoding = 'async';
+    loader.onload = function () {
+      if (!img.isConnected) return;
+      img.src = full;
+      img.classList.remove('is-preview');
+      img.removeAttribute('data-lb-full');
+    };
+    loader.src = full;
+  }
+
+  /* The next photo, fetched while this one is being looked at, so stepping
+   * through a set with the arrows does not wait for the network each time. */
+  function preloadNeighbours(items, idx) {
+    [idx - 1, idx + 1].forEach(function (i) {
+      var item = items[i];
+      if (!item || !isImage(item) || !item.url) return;
+      var warm = new Image();
+      warm.decoding = 'async';
+      warm.src = item.url;
+    });
   }
 
   function cleanupStage() {
@@ -464,6 +537,9 @@
           ? mountPdfInto(docHost, item.url)
           : mountTextInto(docHost, item.url, item.size);
       }
+
+      swapFullImage(el);
+      preloadNeighbours(items, idx);
     }
 
     function go(delta) {

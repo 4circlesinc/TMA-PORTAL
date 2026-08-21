@@ -153,17 +153,17 @@ class FileVersionTest extends TestCase
         $download = $this->actingAs($user)
             ->get("/portal/files/files/{$file->uuid}/versions/{$v1->uuid}/download")
             ->assertOk();
-        $this->assertSame('version one', $download->streamedContent());
+        $this->assertSame('version one', $this->fileBody($download));
         $this->assertStringContainsString('Brief (v1).txt', $download->headers->get('content-disposition'));
 
         $preview = $this->actingAs($user)
             ->get("/portal/files/files/{$file->uuid}/versions/{$v1->uuid}/preview")
             ->assertOk();
-        $this->assertSame('version one', $preview->streamedContent());
+        $this->assertSame('version one', $this->fileBody($preview));
 
         // The file itself still serves v2.
         $current = $this->actingAs($user)->get("/portal/files/files/{$file->uuid}/download")->assertOk();
-        $this->assertSame('version two', $current->streamedContent());
+        $this->assertSame('version two', $this->fileBody($current));
     }
 
     /**
@@ -194,12 +194,12 @@ class FileVersionTest extends TestCase
 
         // The restored content is really v1's.
         $this->assertSame('version one',
-            $this->actingAs($user)->get("/portal/files/files/{$file->uuid}/download")->streamedContent());
+            $this->fileBody($this->actingAs($user)->get("/portal/files/files/{$file->uuid}/download")));
 
         // v3's bytes are still retrievable too.
         $v3 = FileVersion::where('file_id', $file->id)->where('version_number', 3)->first();
         $this->assertSame('version three',
-            $this->actingAs($user)->get("/portal/files/files/{$file->uuid}/versions/{$v3->uuid}/download")->streamedContent());
+            $this->fileBody($this->actingAs($user)->get("/portal/files/files/{$file->uuid}/versions/{$v3->uuid}/download")));
     }
 
     public function test_a_restore_gets_its_own_bytes_not_a_shared_pointer(): void
@@ -354,7 +354,7 @@ class FileVersionTest extends TestCase
             ->assertJsonPath('versions.0.note', 'Uploaded in chunks');
 
         $this->assertSame('chunked version two',
-            $this->actingAs($user)->get("/portal/files/files/{$file->uuid}/download")->streamedContent());
+            $this->fileBody($this->actingAs($user)->get("/portal/files/files/{$file->uuid}/download")));
 
         // The name was NOT changed by the version upload.
         $this->assertSame('Brief.txt', $file->fresh()->name);

@@ -298,12 +298,23 @@ async function handle(request) {
     const response = await networkFetch(request);
 
     if (response.ok) {
-      try {
-        const copy = response.clone();
-        copy.arrayBuffer().then((buf) => {
-          fileCache.store(url.pathname, Buffer.from(buf), copy.headers.get('content-type'));
-        }).catch(() => { /* keeping a copy must never break the view */ });
-      } catch { /* as above */ }
+      /*
+       * Only a whole file is worth keeping. The portal answers Range now — a
+       * video seeking, or pdf.js pulling one page out of a 200-page scan — and
+       * a 206 stored under the file's own path is a fragment masquerading as
+       * the document: offline, the reader would open three pages of a contract
+       * and have no way to tell.
+       */
+      const whole = response.status === 200 && !request.headers.get('range');
+
+      if (whole) {
+        try {
+          const copy = response.clone();
+          copy.arrayBuffer().then((buf) => {
+            fileCache.store(url.pathname, Buffer.from(buf), copy.headers.get('content-type'));
+          }).catch(() => { /* keeping a copy must never break the view */ });
+        } catch { /* as above */ }
+      }
 
       return response;
     }

@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class FileController extends BaseFilesController
 {
@@ -193,7 +193,7 @@ class FileController extends BaseFilesController
         return response()->json(['ok' => true]);
     }
 
-    public function download(Request $request, string $uuid): StreamedResponse
+    public function download(Request $request, string $uuid): SymfonyResponse
     {
         $file = $this->findFile($uuid);
         $user = $this->user($request);
@@ -204,7 +204,7 @@ class FileController extends BaseFilesController
         return Vault::download($file);
     }
 
-    public function preview(Request $request, string $uuid): StreamedResponse
+    public function preview(Request $request, string $uuid): SymfonyResponse
     {
         $file = $this->findFile($uuid);
         $user = $this->user($request);

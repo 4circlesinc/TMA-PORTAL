@@ -29905,6 +29905,13 @@ button.tma-dash__header-popup-item:focus-visible {
   opacity: 1;
 }
 
+/* The 400px thumbnail standing in while the full file decodes. Softened just
+   enough to read as "still arriving" rather than as a bad photo. */
+.tma-lightbox__img.is-preview {
+  filter: blur(6px);
+  transform: scale(1.02);
+}
+
 .tma-lightbox__img.is-zoomed {
   max-width: none;
   max-height: none;

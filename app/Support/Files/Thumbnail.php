@@ -7,8 +7,18 @@ use App\Models\FileItem;
 /**
  * Generates and caches small image thumbnails with GD (the only image tool
  * available on this stack — no imagick/ffmpeg/ghostscript, so PDFs/videos fall
- * back to their type icon on the client). Cached under the private disk so a
- * thumbnail is only rendered once per file.
+ * back to their type icon on the client).
+ *
+ * CACHED IN TWO PLACES, AND THE SECOND IS THE IMPORTANT ONE
+ *
+ * Local scratch is the fast path — an already-generated thumbnail is a file
+ * read. But on Laravel Cloud that disk is ephemeral: it is empty after every
+ * deploy and different on every container. Generating one is not cheap either,
+ * because the source lives in R2 and GD needs it whole, so a miss means
+ * downloading the entire original — the 12 MP photo, the 40 MB scan — just to
+ * make a 400px JPEG. A folder of thirty photos did that thirty times, on every
+ * container, for ever. That is why the result is also written beside the file
+ * in the vault: generated once, then only ever fetched.
  */
 class Thumbnail
 {
@@ -43,9 +53,12 @@ class Thumbnail
             return null;
         }
 
-        $cacheDir = Vault::tempRoot().'/thumbs';
-        $cachePath = $cacheDir.'/'.$file->uuid.'.jpg';
+        $cachePath = self::cachePath($file, 'jpg');
         if (is_file($cachePath)) {
+            return $cachePath;
+        }
+
+        if (self::restore($file, 'jpg', $cachePath)) {
             return $cachePath;
         }
 
@@ -80,14 +93,18 @@ class Thumbnail
             imagefilledrectangle($thumb, 0, 0, $nw, $nh, $white);
             imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
 
-            if (! is_dir($cacheDir)) {
-                @mkdir($cacheDir, 0775, true);
-            }
+            self::ensureCacheDir();
             @imagejpeg($thumb, $cachePath, 82);
             imagedestroy($img);
             imagedestroy($thumb);
 
-            return is_file($cachePath) ? $cachePath : null;
+            if (! is_file($cachePath)) {
+                return null;
+            }
+
+            self::keep($file, 'jpg', $cachePath);
+
+            return $cachePath;
         } finally {
             Vault::cleanupLocalCopy($source);
         }
@@ -104,9 +121,12 @@ class Thumbnail
             return null;
         }
 
-        $cacheDir = Vault::tempRoot().'/thumbs';
-        $cachePath = $cacheDir.'/'.$file->uuid.'.svg';
+        $cachePath = self::cachePath($file, 'svg');
         if (is_file($cachePath)) {
+            return $cachePath;
+        }
+
+        if (self::restore($file, 'svg', $cachePath)) {
             return $cachePath;
         }
 
@@ -123,12 +143,16 @@ class Thumbnail
 
             $svg = self::sanitizeSvg($svg);
 
-            if (! is_dir($cacheDir)) {
-                @mkdir($cacheDir, 0775, true);
-            }
+            self::ensureCacheDir();
             @file_put_contents($cachePath, $svg);
 
-            return is_file($cachePath) ? $cachePath : null;
+            if (! is_file($cachePath)) {
+                return null;
+            }
+
+            self::keep($file, 'svg', $cachePath);
+
+            return $cachePath;
         } finally {
             Vault::cleanupLocalCopy($source);
         }
@@ -148,10 +172,96 @@ class Thumbnail
     public static function delete(FileItem $file): void
     {
         foreach (['jpg', 'svg'] as $ext) {
-            $path = Vault::tempRoot().'/thumbs/'.$file->uuid.'.'.$ext;
+            $path = self::cachePath($file, $ext);
             if (is_file($path)) {
                 @unlink($path);
             }
+
+            try {
+                Vault::disk()->delete(self::vaultPath($file, $ext));
+            } catch (\Throwable) {
+                // A thumbnail that outlives its file costs a few KB and is
+                // unreachable — never worth failing a delete over.
+            }
+        }
+    }
+
+    /** A tag for these bytes, so a reopened folder can be answered with a 304. */
+    public static function entityTag(FileItem $file, string $ext): string
+    {
+        return '"'.substr(hash('sha256', $file->uuid.'|'.$file->storage_path.'|'.$ext.'|'.self::MAX), 0, 32).'"';
+    }
+
+    private static function cacheDir(): string
+    {
+        return Vault::tempRoot().'/thumbs';
+    }
+
+    private static function cachePath(FileItem $file, string $ext): string
+    {
+        return self::cacheDir().'/'.$file->uuid.'.'.$ext;
+    }
+
+    private static function ensureCacheDir(): void
+    {
+        if (! is_dir(self::cacheDir())) {
+            @mkdir(self::cacheDir(), 0775, true);
+        }
+    }
+
+    /** Where the durable copy lives, beside the vault the file came from. */
+    private static function vaultPath(FileItem $file, string $ext): string
+    {
+        return 'thumbs/'.$file->uuid.'.'.$ext;
+    }
+
+    /**
+     * Pull a previously generated thumbnail back into local scratch.
+     *
+     * One small object read, against re-downloading the whole original and
+     * running GD over it. Silent on failure: the caller simply generates.
+     */
+    private static function restore(FileItem $file, string $ext, string $cachePath): bool
+    {
+        $disk = Vault::disk();
+        if (config('filesystems.disks.'.Vault::diskName().'.driver') === 'local') {
+            return false;
+        }
+
+        try {
+            $bytes = $disk->get(self::vaultPath($file, $ext));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if ($bytes === null || $bytes === '') {
+            return false;
+        }
+
+        self::ensureCacheDir();
+
+        return @file_put_contents($cachePath, $bytes) !== false;
+    }
+
+    /** Keep the generated thumbnail where the next container can find it. */
+    private static function keep(FileItem $file, string $ext, string $cachePath): void
+    {
+        if (config('filesystems.disks.'.Vault::diskName().'.driver') === 'local') {
+            return;
+        }
+
+        try {
+            $handle = fopen($cachePath, 'rb');
+            if ($handle === false) {
+                return;
+            }
+            Vault::disk()->writeStream(self::vaultPath($file, $ext), $handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        } catch (\Throwable) {
+            // The thumbnail is already on screen; not persisting it only means
+            // the next container generates it again.
         }
     }
 

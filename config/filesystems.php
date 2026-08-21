@@ -34,6 +34,17 @@ return [
     'files_disk' => env('FILES_DISK', 'local'),
 
     /*
+     * Whether a preview may be answered with a short-lived signed link
+     * straight to the object store instead of streaming through PHP.
+     *
+     * On by default, and it is most of why a photo opens at once: the bytes go
+     * Cloudflare→reader rather than Cloudflare→us→reader. Only element `src`
+     * loads (image/video/audio) take it — see Vault::mayRedirect. Set
+     * FILES_SIGNED_URLS=false to put everything back through the proxy.
+     */
+    'files_signed_urls' => (bool) env('FILES_SIGNED_URLS', true),
+
+    /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------

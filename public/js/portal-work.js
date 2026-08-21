@@ -1094,10 +1094,10 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
       // The worker must be same-origin; pdf.js can't infer the path when it's
       // imported from a classic script.
-      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
       return lib;
     }).catch(function (err) {
       pdfjsPromise = null; // let a later attempt retry

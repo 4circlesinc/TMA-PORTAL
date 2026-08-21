@@ -454,6 +454,8 @@
   padding: 0; overflow: hidden;
 }
 .tma-portal-viewer__img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5); }
+/* Thumbnail standing in until the real file has decoded — see swapFullImage. */
+.tma-portal-viewer__img.is-preview { filter: blur(6px); }
 .tma-portal-viewer__frame-doc { width: 100%; height: 100%; min-height: 60vh; border: 0; border-radius: var(--radius-8); background: #fff; }
 
 /* pdf.js canvas viewer — avoids Mac/Safari iframe PDF failures ------------ */
