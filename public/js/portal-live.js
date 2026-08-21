@@ -290,6 +290,15 @@
           var next = (me.capabilities || []).slice().sort().join('|');
           var current = window.TMAPortalAccess.capabilities().slice().sort().join('|');
 
+          /*
+           * Never during a sign-out. Signing out destroys the session, so the
+           * very next /me is a different capability set — this fired, reloaded
+           * the page out from under sign-out.js before it could navigate, and
+           * the click read as "it just refreshed the page and I am still
+           * signed in". sign-out.js raises the flag before it does anything.
+           */
+          if (window.__TMA_SIGNING_OUT) return;
+
           if (next !== current) window.location.reload();
         })
         .catch(function () {});

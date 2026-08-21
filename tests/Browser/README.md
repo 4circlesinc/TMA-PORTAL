@@ -1205,6 +1205,33 @@ that threw on every send (`Mail::fake()` never renders a view, so the PHPUnit
 suite was blind to it), a fields panel that couldn't scroll to its own
 controls, and a spurious error toast after a successful send.
 
+- **`sign-out.mjs`** — signing out in one click. It was reported as needing
+  two, the first "just refreshing the page", and none of it is reachable from
+  PHPUnit: the server side is correct and always was — a curl of
+  `POST /auth/logout` ends the session cleanly even with a remembered cookie.
+  What was wrong lived entirely in the browser, between the click and the
+  navigation.
+
+  It checks the session rather than the page: after one click it reads the
+  portal back and requires a redirect to sign in, because navigating while
+  still authenticated is exactly the bug. Then three clicks in a row, which
+  must still POST once — there was no re-entry guard, so an impatient second
+  click started a second sign-out. Then Back, which must not return to the
+  portal.
+
+  Two things it was written around. The click is dispatched, not driven by the
+  mouse: the button sits in the sidebar profile row, which is off-viewport in a
+  collapsed rail, and what is under test is the handler. And **the bundle has
+  to be rebuilt first** — the shell serves `public/build/app-*.js`, not the
+  individual files, so an edit to `public/js/sign-out.js` is invisible until
+  `node scripts/build-assets.mjs` has run. Skipping it makes this test pass
+  against the old code, which is how the first run of it was misread.
+
+  ```sh
+  node scripts/build-assets.mjs
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/sign-out.mjs
+  ```
+
 ## Running
 
 Playwright isn't a project dependency — install it wherever you like:
