@@ -81,6 +81,38 @@ function buildCss(platform = process.platform) {
   }
 
   /*
+   * The auth pages are not .tma-dash, and were left out of the shrink above for
+   * every release the bar has existed.
+   *
+   * The body padding moves them down, .tma-auth is min-height: 100vh, so every
+   * one of them stood exactly one bar taller than the window and scrolled by
+   * exactly ${HEIGHT}px. Not "some pages are long" — sign in, register, forgot
+   * password, both pending screens and the rest all fit their viewport
+   * perfectly in a browser and all scrolled in the app.
+   *
+   * --auth-bar is the second half. auth.css sizes the card against
+   * calc(100vh - var(--auth-chrome)), and builds that figure from its own
+   * chrome plus this variable — which is 0 in a browser. Setting it here is the
+   * whole of the app's share: each of auth.css's breakpoints keeps its own
+   * number and adds the bar to it, so this cannot fall out of step with them
+   * the way a flat override of --auth-chrome would.
+   *
+   * No backticks in here: this is inside the CSS template literal, and one
+   * would end it — the same trap the script builder above carries.
+   */
+  .tma-auth {
+    /*
+     * !important on a custom property looks like belt and braces and is not.
+     * insertCSS lands at a lower origin than the page's own stylesheets, so a
+     * plain declaration here loses to auth.css's --auth-bar: 0px and the bar is
+     * silently left out of the budget — the page still scrolls, and the only
+     * clue is that nothing changed.
+     */
+    --auth-bar: ${HEIGHT}px !important;
+    min-height: calc(100vh - ${HEIGHT}px) !important;
+  }
+
+  /*
    * The portal header is restyled into the fixed blue bar, so it must not keep
    * a grid row of its own. An auto row sized to the header's old padding
    * (space-20 × 2 + search ≈ 80px) is exactly the empty white band that opened

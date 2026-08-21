@@ -37,6 +37,37 @@ function serve() {
     const server = http.createServer((req, res) => {
       const url = decodeURIComponent(req.url.split('?')[0]);
 
+      /*
+       * The auth shell. Not the portal's — these pages are a different tree
+       * (.tma-auth, not .tma-dash) served by Blade, and they were left out of
+       * the bar's shrink for every release it has existed: body padding pushed
+       * them down, .tma-auth stayed min-height: 100vh, and every one of them
+       * scrolled by exactly the bar's height in the app while fitting perfectly
+       * in a browser.
+       *
+       * Only the three class names that carry the height are reproduced here —
+       * the real auth.css does the rest, so the numbers under test are the
+       * shipped ones and not a copy that can drift.
+       */
+      if (url === '/auth') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<!doctype html><html><head><meta charset="utf-8">
+          <link rel="stylesheet" href="/css/tokens.css">
+          <link rel="stylesheet" href="/css/theme.css">
+          <link rel="stylesheet" href="/css/auth.css">
+          <link rel="stylesheet" href="/css/auth-flow.css">
+          <style>html, body { margin: 0; min-height: 100%; }</style>
+        </head><body>
+          <main class="tma-auth">
+            <div class="tma-auth__body">
+              <section class="tma-auth__card tma-auth__card--tall"><h1 class="tma-auth__title">Sign in</h1></section>
+            </div>
+            <p class="tma-auth__copyright">&copy; TM ANTOINE Advisory</p>
+          </main>
+        </body></html>`);
+        return;
+      }
+
       if (url === '/') {
         // Scripts and the webfont are stripped: what is under test is how the
         // shell's CSS and the injected bar interact, and the portal's own JS
@@ -156,6 +187,61 @@ app.whenReady().then(async () => {
   check('collapsed: rail starts below the bar', collapsed.sidebarTop, titlebar.HEIGHT);
   check('collapsed: the rail logo is hidden, not clipped', collapsed.logoHidden, true);
   check('collapsed: page does not scroll', collapsed.overflow, 0);
+
+  /* ── the auth pages ──────────────────────────────────────────────────────
+   *
+   * The bug: .tma-dash is shrunk by the bar above and .tma-auth was not, so
+   * sign in, register, forgot password and the rest each stood exactly one bar
+   * taller than the window. Every one of them fit its viewport in a browser and
+   * scrolled in the app, which is why it survived so long — it is invisible
+   * anywhere but inside the shell.
+   *
+   * Both halves are checked. The shrink is only half a fix on its own: the card
+   * sizes itself against calc(100vh - var(--auth-chrome)), so with the bar left
+   * out of that budget a card that thinks it has the whole window pushes the
+   * page past the bottom again.
+   */
+  const authWin = new BrowserWindow({
+    width: 1400, height: 900, show: false, ...titlebar.windowOptions(),
+  });
+
+  await authWin.loadURL(`http://127.0.0.1:${port}/auth`);
+
+  const measureAuth = () => authWin.webContents.executeJavaScript(`
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve((() => {
+      const doc = document.scrollingElement;
+      const auth = document.querySelector('.tma-auth');
+      const chrome = getComputedStyle(auth).getPropertyValue('--auth-chrome').trim();
+
+      return {
+        overflow: doc.scrollHeight - doc.clientHeight,
+        // Resolved, not the calc() as written, so this reads the number the
+        // card is actually laid out against.
+        chrome: Math.round(parseFloat(getComputedStyle(auth).getPropertyValue('--auth-bar'))),
+        chromeRaw: chrome,
+      };
+    })()))))
+  `, true);
+
+  /*
+   * First prove the fixture can still fail. The old behaviour was the body
+   * padding with nothing shrinking .tma-auth — so injecting only that half has
+   * to reproduce the exact overflow this test exists to stop, or the checks
+   * below are passing on a page that was never at risk.
+   */
+  await authWin.webContents.insertCSS(`body { padding-top: ${titlebar.HEIGHT}px !important; }`);
+  const authBefore = await measureAuth();
+  check('auth: the padding alone still scrolls it by a bar', authBefore.overflow, titlebar.HEIGHT);
+
+  await titlebar.apply(authWin.webContents);
+
+  const authAfter = await measureAuth();
+  check('auth: page does not scroll', authAfter.overflow, 0);
+  check('auth: the bar is added to the card budget', authAfter.chrome, titlebar.HEIGHT);
+  check('auth: and the budget is still composed, not overridden',
+    authAfter.chromeRaw.includes('var(--auth-bar)') || authAfter.chromeRaw.includes('calc'), true);
+
+  authWin.destroy();
 
   /*
    * The Windows layout, measured on whatever this is running on.

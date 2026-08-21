@@ -5,8 +5,19 @@
  */
 
 .tma-auth {
-  /* vertical space around the card: body padding + copyright row */
-  --auth-chrome: 90px;
+  /*
+   * Vertical space around the card: body padding + copyright row, plus
+   * whatever chrome the host draws over the viewport.
+   *
+   * --auth-bar is that host's share and is 0 in a browser. The desktop app
+   * draws its own 52px title bar and pads the body down by it, so there the
+   * card has 52px less to size itself against — without this every auth page
+   * stood exactly one bar taller than the window and scrolled by exactly 52px.
+   * The app sets --auth-bar and nothing else; each tier below keeps its own
+   * figure and simply adds it.
+   */
+  --auth-bar: 0px;
+  --auth-chrome: calc(90px + var(--auth-bar));
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -973,9 +984,23 @@
 }
 
 /* Short viewports - tighten vertical rhythm so pages fit without scrolling */
-@media (max-height: 760px) {
+/*
+ * The tighter vertical rhythm.
+ *
+ * Was 760px, which almost nothing real ever hit: a 1440x900 window is a 848px
+ * viewport, and the desktop app spends 52 of those on its title bar. So the two
+ * long screens — Set up your profile and Set up your account — were laid out at
+ * full spacing in a space that could not hold them and scrolled: profile setup
+ * by 26px in a browser and 78px in the app, getting started by 50px and 102px.
+ *
+ * At 960 it covers every laptop viewport and both desktop window sizes, and
+ * both screens fit whole. Above it there is room for the full rhythm: the
+ * tallest card is 808px and the chrome 90px, so 961px of viewport is already
+ * enough without compressing anything.
+ */
+@media (max-height: 960px) {
   .tma-auth {
-    --auth-chrome: 66px;
+    --auth-chrome: calc(66px + var(--auth-bar));
   }
 
   .tma-auth__body {
@@ -983,8 +1008,21 @@
   }
 
   .tma-auth__card {
-    gap: var(--space-20);
+    gap: var(--space-16);
     padding: var(--space-16) var(--space-24);
+  }
+
+  /*
+   * The mark above the heading, which this tier used to leave at its full 80px
+   * while trimming everything around it. Set up your account is the screen that
+   * could not afford it: an 80px mark, five checklist rows and a button came to
+   * 760px in 730px of room, so the button sat below the fold with nothing to
+   * say it was there.
+   */
+  .tma-auth__icon,
+  .tma-auth__icon img {
+    width: 56px;
+    height: 56px;
   }
 
   .tma-auth__panel-body {
@@ -1021,9 +1059,55 @@
   }
 }
 
+/*
+ * The two long screens — Set up your profile and Set up your account — on a
+ * short window.
+ *
+ * Scoped to --tall on purpose. Every other auth screen has room to spare at
+ * these heights, and tightening all of them to rescue two would be paying for
+ * the fix on pages that never had the problem.
+ *
+ * 820px is where "Set up your account" stops fitting: five checklist rows, a
+ * mark and a button need 720px, and a 1366x768 laptop leaves 650px of that
+ * once the desktop app's title bar and this page's own chrome are out. Below
+ * the breakpoint the mark gives up 16px, the rows 8px each, and the two gap
+ * scales the rest — no content is hidden and nothing wraps differently.
+ */
+@media (max-height: 820px) {
+  .tma-auth__card--tall {
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-24);
+  }
+
+  .tma-auth__card--tall .tma-auth__icon,
+  .tma-auth__card--tall .tma-auth__icon img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .tma-auth__card--tall .tma-auth__checklist {
+    gap: var(--space-6);
+  }
+
+  .tma-auth__card--tall .tma-auth__task {
+    padding: var(--space-8) var(--space-14);
+  }
+
+  /* Set up your profile is nine stacked rows rather than a checklist, so its
+     saving is in the gaps between them and in the one multi-line field. */
+  .tma-auth__card--tall .tma-auth__form,
+  .tma-auth__card--tall .tma-auth__fields {
+    gap: var(--space-8);
+  }
+
+  .tma-auth__card--tall .tma-auth__field--textarea {
+    height: 56px;
+  }
+}
+
 @media (max-width: 720px) {
   .tma-auth {
-    --auth-chrome: 74px;
+    --auth-chrome: calc(74px + var(--auth-bar));
   }
 
   .tma-auth__body {
