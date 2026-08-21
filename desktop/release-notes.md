@@ -1,4 +1,2 @@
-- The portal no longer reports on its own housekeeping — syncing, prefetching for offline and sending queued changes all happen quietly in the background, with nothing on screen
-- Signing out now takes one click
-- New Citizenship by Investment cards on the dashboard
-- Windows opens in one colour instead of flashing a blue block in the corner
+- PDFs open in the app again — every document viewer was quietly failing, in the File Library, messages, mail attachments and signing alike
+- Files open far faster: a photo appears straight away, a long scan starts on its first page instead of downloading in full, and opening the same file twice is instant
