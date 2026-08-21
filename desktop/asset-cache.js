@@ -126,6 +126,25 @@ function sanitizeRequestHeaders(headers) {
  * dies. There is no third option while the app navigates to a website at all —
  * which is one more argument for the app carrying its own shell.
  */
+/*
+ * The handler's own name for "there was no answer at all".
+ *
+ * It has to be distinguishable from a real 502 the portal itself returned:
+ * one means the reader is on a train, the other means the firm's server is
+ * unwell, and telling a reader on a train that the portal is broken is the
+ * bug this header exists to prevent. main.js reads it to choose which screen
+ * to show; file-cache reads the status to decide whether to serve its copy.
+ */
+const OFFLINE_HEADER = 'x-tma-offline';
+
+function offlineResponse() {
+  return new Response('', {
+    status: 502,
+    statusText: 'Bad Gateway',
+    headers: { [OFFLINE_HEADER]: '1' },
+  });
+}
+
 function networkFetch(request) {
   try {
     const init = {
@@ -142,12 +161,12 @@ function networkFetch(request) {
     }).catch((err) => {
       console.error('[asset-cache] network fetch failed', request.url, err);
 
-      return new Response('', { status: 502, statusText: 'Bad Gateway' });
+      return offlineResponse();
     });
   } catch (err) {
     console.error('[asset-cache] network fetch threw', err);
 
-    return Promise.resolve(new Response('', { status: 502, statusText: 'Bad Gateway' }));
+    return Promise.resolve(offlineResponse());
   }
 }
 
@@ -297,7 +316,20 @@ async function handle(request) {
     return response;
   }
 
-  return shellCache.observe(url, request, await networkFetch(request));
+  const response = await networkFetch(request);
+
+  /*
+   * The network had nothing. If this was a navigation and we kept a shell,
+   * paint it rather than handing Chromium a 502 that becomes an error page —
+   * a reader who was signed in a minute ago should get their portal back,
+   * with the data layer serving from its own cache behind it.
+   */
+  if (response.headers.get(OFFLINE_HEADER) && shellCache.isNavigation(request)) {
+    const kept = await shellCache.maybeServe(url, request, { offline: true });
+    if (kept) return kept;
+  }
+
+  return shellCache.observe(url, request, response);
 }
 
 /**
@@ -393,6 +425,7 @@ function install(origin) {
 }
 
 module.exports = {
+  OFFLINE_HEADER,
   install,
   bundled,
   localFile,

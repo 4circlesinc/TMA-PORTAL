@@ -401,6 +401,16 @@ function attachNavigationRules(win) {
     // The error page is the thing to look at; hiding it behind a logo helps
     // nobody.
     if (loadingLayer) loadingLayer.hide();
+
+    // Being offline is not a failure worth a URL and an error code. If we had
+    // a shell to paint we would already have painted it, so this is the honest
+    // remaining case: nothing kept, and nothing to reach.
+    if (isOfflineError(errorCode)) {
+      showOffline(win);
+
+      return;
+    }
+
     showLoadError(win, errorDescription, validatedURL);
   });
 
@@ -412,8 +422,20 @@ function attachNavigationRules(win) {
    * disconnect/reset before headers… connection refused", which reads like the
    * app is broken rather than the server being briefly away.
    */
-  webContents.on('did-navigate', (_event, url, httpResponseCode, httpStatusText) => {
+  webContents.on('did-navigate', async (_event, url, httpResponseCode, httpStatusText) => {
     if (httpResponseCode < 500) return;
+
+    /*
+     * A 502 from the asset-cache handler is its own name for "no answer at
+     * all" — the reader is offline, not looking at an unwell server. Telling
+     * someone on a train that the portal is restarting sends them to check a
+     * status page that is also unreachable.
+     */
+    if (await looksOffline()) {
+      showOffline(win);
+
+      return;
+    }
 
     showLoadError(
       win,
@@ -432,6 +454,83 @@ function attachNavigationRules(win) {
       loadPortal(win, url);
     });
   });
+}
+
+/*
+ * net::ERR_* codes that mean "there is no network", as distinct from "the
+ * network answered and the answer was bad".
+ */
+const OFFLINE_ERRORS = new Set([
+  -21,  // NETWORK_CHANGED
+  -100, // CONNECTION_CLOSED
+  -101, // CONNECTION_RESET
+  -102, // CONNECTION_REFUSED
+  -104, // CONNECTION_FAILED
+  -105, // NAME_NOT_RESOLVED
+  -106, // INTERNET_DISCONNECTED
+  -109, // ADDRESS_UNREACHABLE
+  -118, // CONNECTION_TIMED_OUT
+  -137, // NAME_RESOLUTION_FAILED
+  -324, // EMPTY_RESPONSE
+]);
+
+function isOfflineError(code) {
+  return OFFLINE_ERRORS.has(code);
+}
+
+/** Can we reach the portal at all right now? */
+async function looksOffline() {
+  try {
+    const res = await net.fetch(new URL('/up', PORTAL_URL).toString(), {
+      bypassCustomProtocolHandlers: true,
+    });
+
+    // The handler's marker survives here too; a real /up says 200.
+    return !res.ok;
+  } catch {
+    return true;
+  }
+}
+
+/*
+ * The offline screen.
+ *
+ * Deliberately not an error: no URL, no net::ERR code, no red. The reader did
+ * nothing wrong and there is nothing for them to fix — they are somewhere
+ * without a connection, and the app's job is to say so plainly and get out of
+ * the way. It retries on its own when the machine comes back online, so the
+ * common case needs no click at all.
+ */
+function showOffline(win) {
+  const page = `
+    <meta charset="utf-8">
+    <style>
+      body { font: 15px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif; color: #1c1c1c;
+             display: grid; place-content: center; justify-items: center; height: 100vh;
+             margin: 0; text-align: center; gap: 10px; background: #fff; padding: 24px; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: #9a9a9a; margin-bottom: 6px; }
+      h1 { font-size: 17px; margin: 0; font-weight: 600; }
+      p { margin: 0; color: #6b6b6b; max-width: 30rem; }
+      button { font: inherit; padding: 8px 18px; border-radius: 8px; border: 1px solid #ddd;
+               background: #1c1c1c; color: #fff; cursor: pointer; margin-top: 10px; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #141414; color: #f2f2f2; } p { color: #9a9a9a; }
+        button { background: #f2f2f2; color: #141414; border-color: #333; }
+      }
+    </style>
+    <div class="dot"></div>
+    <h1>You're offline</h1>
+    <p>The portal will open again on its own as soon as you have a connection.
+       Anything you changed on this device is saved and will be sent then.</p>
+    <button onclick="location.href='${PORTAL_URL}'">Try now</button>
+    <script>
+      // Come back by itself. A reader who walks out of the tunnel should find
+      // the portal, not a button they have to notice.
+      addEventListener('online', () => { location.href = '${PORTAL_URL}'; });
+      setInterval(() => { if (navigator.onLine) location.href = '${PORTAL_URL}'; }, 5000);
+    </script>
+  `;
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);
 }
 
 function showLoadError(win, description, url) {

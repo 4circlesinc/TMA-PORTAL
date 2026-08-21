@@ -104,8 +104,22 @@ deploy build, and `/me` watchdogs for a dead session or a changed account.
 The asset cache serves the bundle *unverified* when the portal is
 unreachable — offline there is no API to be stale against. And `/me` itself
 is remembered (`tma.me` in localStorage, desktop only, cleared by sign-out
-and by a server refusal) so the boot knows who it is. Still to do: an honest
-offline banner on arrival, and the browser story if the firm ever wants one.
+and by a server refusal) so the boot knows who it is. (21 Aug) The arrival case is finished. Three things
+were wrong and are now right. A navigation whose first segment had never been
+captured fell through to the network even with a perfectly good shell on disk;
+offline it now answers from that shell and lets the SPA router take the path,
+while the prefixes that are not the SPA (`/auth/*`, `/r/*`, `/design/*`) stay
+refused with or without a network. The handler's stand-in for "no answer at
+all" was an anonymous 502, indistinguishable from the portal itself returning
+one, so a reader in a tunnel was told the server was restarting; it now carries
+`x-tma-offline` and the two cases have separate screens. And the screen itself
+is no longer an error: no URL, no `net::ERR` code, no red — one sentence saying
+the portal will come back on its own, which it does, on the `online` event and
+a five-second poll. `desktop/test-offline-boot.js` drives the serve path with
+`net.fetch` stubbed to fail the way a dead network fails;
+`desktop/test-offline-screen.js` renders the real screen and asserts a reader
+never sees a URL or an error code. Still to do: the browser story, if the firm
+ever wants one.
 
 **5. The write queue.** ✅ *Shipped, for applications.*
 `public/js/portal-queue.js`. A save that cannot be *delivered* — a rejected

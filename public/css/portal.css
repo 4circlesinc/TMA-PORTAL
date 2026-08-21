@@ -5187,8 +5187,13 @@ audio.call-recordings__player { background: transparent; }
 }
 
 /* ── the sync indicator ───────────────────────────────
-   One pill, bottom-left, shown only when the connection has gone or the
-   write queue is holding something. See portal-sync-status.js. */
+   One pill in the bottom-left of the CONTENT, shown only when the connection
+   has gone or the write queue is holding something. See portal-sync-status.js.
+
+   The offsets below exist because the pill is position:fixed while the sidebar
+   is a grid column: at a plain left:16px the pill is painted on top of the
+   rail, over the account chip that sits at its foot. It has to clear the rail
+   in both of the rail's widths, and get out of the tabbar's way on mobile. */
 .tma-sync-pill {
   position: fixed;
   left: var(--space-16);
@@ -5212,6 +5217,33 @@ audio.call-recordings__player { background: transparent; }
 }
 
 .tma-sync-pill:hover { border-color: var(--color-overlay-8, var(--color-overlay-4)); }
+
+/* Clear the rail when there is one. :has() rather than a descendant selector
+   because the pill is appended to <body>, a sibling of .tma-dash — nothing in
+   the sidebar's own subtree can reach it. */
+body:has(.tma-dash__sidebar) .tma-sync-pill {
+  left: calc(var(--dash-sidebar-w, 225px) + var(--space-16));
+}
+
+/* …and follow it when it collapses to the icon strip. */
+body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
+  left: calc(var(--dash-sidebar-collapsed-w, 72px) + var(--space-16));
+}
+
+/* Below 1025px the rail stops being a column and becomes an overlay, so there
+   is nothing to clear on the left — but the tabbar now owns the bottom edge,
+   and a pill sitting under it is a pill nobody can read or tap. */
+@media (max-width: 1024px) {
+  .tma-sync-pill,
+  body:has(.tma-dash__sidebar) .tma-sync-pill,
+  body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
+    left: var(--space-16);
+    bottom: calc(
+      var(--dash-tabbar-clearance, 72px) + var(--space-16)
+      + env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
 
 .tma-sync-pill__dot {
   width: 8px;

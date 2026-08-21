@@ -71,6 +71,14 @@ let remoteBuild = null;
    watchdogs only bite when the thing they guard was used. */
 let servedThisSession = false;
 
+/*
+ * First segments that are never the SPA shell, and must not be answered with
+ * it even when the network is gone. Sign-in, the public file-request link and
+ * the invite link are all their own documents; wrapping portal chrome around
+ * one would be worse than the offline notice.
+ */
+const NEVER_SHELL = ['auth', 'r', 'invite', 's', 'sign-in', 'sign-up', 'design', 'up'];
+
 /* Down after an auth or deploy mismatch, until a healthy /me proves the
    world makes sense again. */
 let suspended = false;
@@ -139,14 +147,31 @@ function firstSegment(pathname) {
  * @param {Request} request
  * @returns {Promise<Response|null>}
  */
-async function maybeServe(url, request) {
+/**
+ * @param {{offline?: boolean}} [opts]
+ *   `offline` is asked only after the network has already failed to answer.
+ *   It relaxes the "this segment has served the shell before" gate, because
+ *   that gate is about not guessing while a perfectly good network is there
+ *   to tell us — and with no network there is nothing to guess against. The
+ *   shell is one document for every SPA route, so serving the kept copy for a
+ *   portal path we happen not to have captured lets the router take over
+ *   client-side, which is the whole point of having kept it.
+ *
+ *   The prefixes that never carried the shell are still refused, offline or
+ *   not: /auth/*, /r/* and the like are not the SPA, and answering them with
+ *   it would put a portal chrome around a sign-in or an invite link.
+ */
+async function maybeServe(url, request, opts) {
   if (suspended || !isNavigation(request)) return null;
 
   const meta = readMeta();
   if (!meta) return null;
 
-  // The root is the shell's own page; anything else must have earned it.
-  if (url.pathname !== '/' && !meta.segments.includes(firstSegment(url.pathname))) return null;
+  // The root is the shell's own page; anything else must have earned it —
+  // unless there is no network to earn it from.
+  if (url.pathname !== '/' && !meta.segments.includes(firstSegment(url.pathname))) {
+    if (!(opts && opts.offline) || NEVER_SHELL.includes(firstSegment(url.pathname))) return null;
+  }
 
   // A deploy known to differ: the copy is dead, not merely suspect.
   if (remoteBuild && meta.build && meta.build !== remoteBuild) {
