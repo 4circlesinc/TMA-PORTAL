@@ -1,7 +1,7 @@
 /*
  * TMA - Portal Dashboard (home) view
  * Greeting, KPI cards (reuses tma-dash__card recipe), Recent Files,
- * Shortcuts, and Getting Started tutorials.
+ * and Shortcuts.
  * Registers view: 'dashboard' in TMAPortalViews.
  */
 (function () {
@@ -320,30 +320,6 @@
       }).join('') +
       '</div>'
     );
-  }
-
-  function renderTutorials(s) {
-    if (!homeFilesLoaded) {
-      return tileShell('tutorials', 'panel-tutorials', 'Tutorials', panelHead('Tutorials'), skeletonFileRows(4), '', true);
-    }
-    var done = s.tutorials.filter(function (t) { return t.done; }).length;
-    var head =
-      '<div class="tma-portal-panel__head">' +
-      '<div class="tma-portal-head" style="gap:var(--space-8);flex:1;min-width:0">' +
-      '<h2 class="tma-portal-panel__title">Tutorials</h2>' +
-      ui().select(['Getting Started'], 'Getting Started', 'data-home-tutorial-set', 'Tutorial set') +
-      '</div></div>';
-    var body =
-      '<p class="tma-portal-panel__note">' + done + ' of ' + s.tutorials.length + ' completed</p>' +
-      '<div class="tma-portal-tutorials">' +
-      s.tutorials.map(function (t) {
-        return '<button type="button" class="tma-portal-tutorial' + (t.done ? ' is-done' : '') + ' tma-portal-file-row" data-home-tutorial="' + ui().esc(t.id) + '" aria-pressed="' + t.done + '">' +
-          '<span class="tma-portal-tutorial__check">' + (t.done ? '<img src="images/icons/phosphor/Check.svg" alt="" width="12" height="12">' : '') + '</span>' +
-          '<span class="tma-portal-tutorial__label">' + ui().esc(t.label) + '</span>' +
-          '</button>';
-      }).join('') +
-      '</div>';
-    return tileShell('tutorials', 'panel-tutorials', 'Tutorials', head, body);
   }
 
   /* Staff team board — online / offline + today's work-plan status. */
@@ -1124,7 +1100,6 @@
       shortcuts: function () { return show.shortcuts ? renderShortcuts() : ''; },
       employees: function () { return show.employees !== false ? renderEmployees() : ''; },
       favorites: function () { return show.favorites ? renderFavorites(s) : ''; },
-      tutorials: function () { return show.tutorials ? renderTutorials(s) : ''; },
       road: function () { return show.road !== false ? renderRoadPanel() : ''; },
       // On unless the reader turned it off, like every tile that shipped after
       // the original board. Whether there is anything to draw is a separate
@@ -1368,7 +1343,6 @@
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
-    { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
     { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events for the selected day.', preview: 'road' },
     /*
      * staffOnly keeps Employees out of the Edit Dashboard list for a client
@@ -1384,10 +1358,9 @@
   // Shipped default board (3 equal columns, masonry):
   //   Recent Files → Favorites
   //   Recent Email → What's on the road?
-  //   Shortcuts → CIP Applications → Employees
+  //   CIP Applications → Shortcuts → Employees
   // Messages then lands in whichever column is shortest.
-  // Tutorials stays off by default.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'cipStatus', 'employees', 'messages', 'tutorials'];
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'cipStatus', 'favorites', 'road', 'shortcuts', 'employees', 'messages'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -1396,7 +1369,6 @@
     employees: 'third',
     email: 'third',
     messages: 'third',
-    tutorials: 'third',
     shortcuts: 'third',
     road: 'third',
     cipStatus: 'third',
@@ -1688,7 +1660,7 @@
     var show = tiles();
     var out = {};
     DEFAULT_TILE_ORDER.forEach(function (id) {
-      if (show[id] == null) out[id] = id !== 'tutorials';
+      if (show[id] == null) out[id] = true;
       else out[id] = !!show[id];
     });
     return out;
@@ -1723,10 +1695,8 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  // 12 adds the CIP Applications card. Bumped rather than left to tileOrder's
-  // append-the-missing rule, which would have parked a card the firm asked to
-  // lead with at the bottom of whichever column ended up shortest.
-  var DASHBOARD_LAYOUT_GEN = 12;
+  // 14 puts CIP Applications where Shortcuts used to lead the third column.
+  var DASHBOARD_LAYOUT_GEN = 14;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -1736,8 +1706,9 @@
     s.dashboardTileOrder = DEFAULT_TILE_ORDER.slice();
     s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
       recentFiles: true, email: true, shortcuts: true, employees: true,
-      favorites: true, road: true, messages: true, cipStatus: true, tutorials: false,
+      favorites: true, road: true, messages: true, cipStatus: true,
     });
+    delete s.dashboardTiles.tutorials;
     s.dashboardLayoutGen = DASHBOARD_LAYOUT_GEN;
     data().save();
     return true;
@@ -1807,7 +1778,7 @@
     if (!s.dashboardTiles) {
       s.dashboardTiles = {
         recentFiles: true, email: true, shortcuts: true, employees: true,
-        favorites: true, road: true, tutorials: false,
+        favorites: true, road: true,
       };
       data().save();
     }
@@ -2248,9 +2219,9 @@
     try {
     var s = data().state();
     var show = tiles();
-    // Local re-render only. Toggling a tile or ticking a tutorial is a change to
-    // *this* view, not a reason to re-request Recent Files, Favorites and the
-    // KPI row from the server.
+    // Local re-render only. Toggling a tile is a change to *this* view, not a
+    // reason to re-request Recent Files, Favorites and the KPI row from the
+    // server.
     function rerender() { mount(el, { fromLoad: true }); }
 
     /*
@@ -2403,16 +2374,6 @@
             ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
             : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' });
         }
-      });
-    });
-
-    pick('[data-home-tutorial]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var t = s.tutorials.filter(function (x) { return x.id === b.getAttribute('data-home-tutorial'); })[0];
-        if (!t) return;
-        t.done = !t.done;
-        data().save();
-        rerender();
       });
     });
 

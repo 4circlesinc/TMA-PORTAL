@@ -89,14 +89,13 @@
       dashboardTiles: {
         recentFiles: true,
         shortcuts: true,
-        tutorials: false,
         favorites: true,
         employees: true,
         email: true,
         road: true,
       },
       // Default admin home board order. Unknown ids are appended.
-      dashboardTileOrder: ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'tutorials'],
+      dashboardTileOrder: ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees'],
       // Legacy size map — unused after the fixed 2-column grid; kept empty for older caches.
       dashboardTileSizes: {},
       // Populated from the File Library (section=recent) on the dashboard mount;
@@ -108,13 +107,6 @@
         favorites: [],
         recycle: [],
       },
-      tutorials: [
-        { id: 'tut-1', label: 'Share a file securely', done: false },
-        { id: 'tut-2', label: 'Request files from a client', done: false },
-        { id: 'tut-3', label: 'Add people to your account', done: false },
-        { id: 'tut-4', label: 'Personalize your account branding', done: false },
-        { id: 'tut-5', label: 'Create your first project', done: false },
-      ],
       projects: [],
       templates: [
         { id: 'tpl-1', name: 'Client Onboarding', category: 'Accounting', kind: 'Project', description: 'Collect and organize files, to-dos, and handoffs to get client setup quickly.' },

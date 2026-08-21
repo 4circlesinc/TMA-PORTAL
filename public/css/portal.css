@@ -2703,37 +2703,6 @@
 
 .tma-portal-tutorials { display: flex; flex-direction: column; gap: var(--space-8); }
 
-.tma-portal-tutorial {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-8);
-  border-radius: var(--radius-12);
-}
-
-.tma-portal-tutorial__check {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border-soft);
-  flex-shrink: 0;
-  background: var(--color-white);
-}
-
-.tma-portal-tutorial.is-done .tma-portal-tutorial__check {
-  background: var(--color-green);
-  border-color: var(--color-green);
-}
-
-.tma-portal-tutorial.is-done .tma-portal-tutorial__check img { filter: invert(1); }
-
-.tma-portal-tutorial__label { font-size: var(--text-size-14); line-height: var(--text-lh-14); color: var(--color-black); }
-
-.tma-portal-tutorial.is-done .tma-portal-tutorial__label { color: var(--color-text-secondary); text-decoration: line-through; }
-
 /* ── template / project cards ─────────────────────── */
 .tma-portal-card-grid {
   display: grid;

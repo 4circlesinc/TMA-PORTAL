@@ -102,7 +102,7 @@ class PreferencesController extends Controller
 
     private const TILE_IDS = [
         'recentFiles', 'email', 'shortcuts', 'favorites',
-        'road', 'employees', 'tutorials',
+        'road', 'employees',
     ];
 
     /**
@@ -110,7 +110,7 @@ class PreferencesController extends Controller
      * Recent Files → Favorites | Recent Email → Road | Shortcuts → Employees.
      */
     private const DEFAULT_DASHBOARD_ORDER = [
-        'recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'tutorials',
+        'recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees',
     ];
 
     /** @var array<string, bool> */
@@ -121,7 +121,6 @@ class PreferencesController extends Controller
         'employees' => true,
         'favorites' => true,
         'road' => true,
-        'tutorials' => false,
     ];
 
     /** The signed-in user's preferences, filled in with defaults. */
@@ -134,7 +133,7 @@ class PreferencesController extends Controller
     }
 
     /** Layout generation — bump when the shipped default board changes. */
-    private const DASHBOARD_LAYOUT_VERSION = 10;
+    private const DASHBOARD_LAYOUT_VERSION = 11;
 
     /** Persist the default home board so every browser starts the same. */
     private function seedDashboardLayoutIfMissing(User $user): void
