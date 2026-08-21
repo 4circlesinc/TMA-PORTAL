@@ -1,5 +1,2 @@
-- The app now opens instantly onto your screens exactly as you left them — your dashboard, messages, files and calendar are there the moment the window appears, and quietly bring themselves up to date
-- It opens even with no internet, showing your clients, folders and applications from the last time it was connected; documents you have viewed open offline too
-- Changes you make offline are saved on your device and sent by themselves when you are back online
-- Right-clicking works everywhere now — copy, paste, spelling suggestions in anything you write, and saving or copying images
-- Connection problems now say what is actually wrong instead of showing an unexplained error
+- Sign-in with Google or Microsoft no longer leaves a blank blue window — the app shows a clear waiting screen with Open in browser and Back to sign in
+- Forgot password and other auth screens reveal immediately instead of staying covered by the loading splash
