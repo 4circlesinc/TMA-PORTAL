@@ -1,18 +1,21 @@
 /*
  * TMA — The sync indicator.
  *
- * One line, bottom-left, that appears only when there is something to say:
- * the connection has gone, or there is work parked in the write queue waiting
- * for it to come back. The rest of the time there is nothing on the screen at
- * all — an always-visible "Online ✓" is chrome that teaches the reader to
- * stop looking at exactly the corner they need to look at on the one day it
- * matters.
+ * Silent by design. Syncing, prefetching for offline, being offline, and
+ * writes parked waiting for a connection are all the app doing its job, and
+ * none of them put anything on screen. The work still happens; the commentary
+ * does not.
+ *
+ * The single thing that still surfaces is a change the server REFUSED. That
+ * one is not progress — it is the reader's own work, unsendable, held by the
+ * queue until a person retries it or throws it away. Staying quiet about that
+ * would not be tidy, it would be losing someone's edits without saying so.
  *
  * WHY IT IS NOT A TOAST
  *
- * Being offline is a state, not an event. A toast says it once and goes, and
- * the reader who fills in an application ten minutes later has no way to know
- * where it is going. This stays for as long as it is true.
+ * A refusal is a state, not an event. A toast says it once and goes, and the
+ * reader who looks up ten minutes later has no way to know something of theirs
+ * never left the machine. This stays for as long as it is true.
  *
  * OPENING IT SHOWS THE WORK
  *
@@ -35,10 +38,11 @@
   }
 
   /*
-   * The replica walkers, while they walk. A first sync pulls thousands of
-   * records; with nothing on screen it reads as the app doing nothing —
-   * phase 3's "progress the reader can see" is this line. Keyed per source
-   * so two walkers running at once sum rather than flicker over each other.
+   * The replica walkers, while they walk. Still tracked — the panel and any
+   * future diagnostic want to know a walk is in flight — but deliberately no
+   * longer painted: a first sync pulling thousands of records is housekeeping,
+   * not news. Keyed per source so two walkers running at once sum rather than
+   * flicker over each other.
    */
   var replicating = Object.create(null);
 
@@ -90,7 +94,21 @@
   }
 
   function paint(status) {
-    var wanted = !status.online || status.waiting > 0 || status.failed > 0 || replicaActive();
+    /*
+     * Nothing on screen for anything routine.
+     *
+     * Syncing, prefetching for offline, being offline, having writes parked
+     * waiting for a connection — all of it is the app doing its job, and a
+     * reader does not need a running commentary on its housekeeping. It syncs
+     * in the background and says nothing.
+     *
+     * The one exception is a change the SERVER REFUSED. That is not progress,
+     * it is work of the reader's that cannot be sent and that the queue will
+     * not throw away on its own — it needs a person to retry it or discard it.
+     * Hiding that would not be quiet, it would be losing someone's edits
+     * without telling them.
+     */
+    var wanted = status.failed > 0;
 
     if (!wanted) {
       if (pill) { pill.remove(); pill = null; }
