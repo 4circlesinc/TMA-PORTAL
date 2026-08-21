@@ -33,6 +33,7 @@ const taskbarPin = require('./taskbar-pin');
 const notifications = require('./notifications');
 const splash = require('./splash');
 const handoff = require('./signin-handoff');
+const { isSocialRedirect, signInProviderFor } = require('./signin-provider');
 const assetCache = require('./asset-cache');
 const contextMenu = require('./context-menu');
 const shellCache = require('./shell-cache');
@@ -290,7 +291,7 @@ function attachNavigationRules(win) {
       return { action: 'allow' };
     }
 
-    const provider = signInProviderFor(url, webContents.getURL());
+    const provider = signInProviderFor(url, webContents.getURL(), PORTAL_ORIGIN);
     if (provider) {
       startBrowserSignIn(provider);
       return { action: 'deny' };
@@ -298,7 +299,7 @@ function attachNavigationRules(win) {
 
     // Connecting a mailbox from Settings: the session is already ours, so keep
     // it in-app in a child window that shares our cookies.
-    if (isAuthUrl(url) || isSocialRedirect(url)) {
+    if (isAuthUrl(url) || isSocialRedirect(url, PORTAL_ORIGIN)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -320,7 +321,7 @@ function attachNavigationRules(win) {
   });
 
   webContents.on('will-navigate', (event, url) => {
-    const provider = signInProviderFor(url, webContents.getURL());
+    const provider = signInProviderFor(url, webContents.getURL(), PORTAL_ORIGIN);
     if (provider) {
       event.preventDefault();
       startBrowserSignIn(provider);
@@ -348,14 +349,33 @@ function attachNavigationRules(win) {
     // otherwise render underneath the bar.
     titlebar.apply(webContents);
 
-    if (!isPortalUrl(webContents.getURL())) {
+    const current = webContents.getURL();
+    if (!isPortalUrl(current)) {
       applyBadge(0);
       applyCallPhase('');
+      // Non-portal finishes (blocked IdP pages, etc.) used to return without
+      // taking the splash down — the window stayed brand-blue / "blank".
+      if (loadingLayer) loadingLayer.hide();
       return;
     }
     webContents.executeJavaScript(HOST_BRIDGE, true).catch(() => {
       // A page that never exposed the stores just leaves the badge alone.
     });
+
+    // Auth screens are plain forms — no shell to assemble — so reveal as soon
+    // as the document is in. Waiting for quiescence left the splash covering
+    // Forgot password / login long enough to read as a blank window.
+    // Do not treat `/` here: that is also the signed-in front door, and it
+    // still needs the painted reveal so the shell does not assemble on screen.
+    try {
+      const path = new URL(current).pathname;
+      if (path.startsWith('/auth/') && !path.startsWith('/auth/desktop')) {
+        if (loadingLayer) loadingLayer.hide();
+        return;
+      }
+    } catch {
+      // fall through to the painted reveal
+    }
 
     revealWhenPainted(webContents);
   });
@@ -367,7 +387,13 @@ function attachNavigationRules(win) {
   webContents.on('did-navigate-in-page', () => titlebar.refresh(webContents));
 
   webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-    if (!isMainFrame || errorCode === -3) return; // -3 = user aborted
+    if (!isMainFrame) return;
+    // -3 = aborted. Social sign-in preventDefault still raises the splash on
+    // did-start-navigation; leaving it up is the "blank window" on Windows.
+    if (errorCode === -3) {
+      if (loadingLayer) loadingLayer.hide();
+      return;
+    }
     // The error page is the thing to look at; hiding it behind a logo helps
     // nobody.
     if (loadingLayer) loadingLayer.hide();
@@ -436,9 +462,10 @@ function showLoadError(win, description, url) {
  * the machine can claim that scheme, so the reply carries only a token — worth
  * nothing without the verifier, which never leaves here. The server half is
  * app/Http/Controllers/DesktopAuthController.php.
+ *
+ * Which clicks count as sign-in (vs Settings "connect") lives in
+ * signin-provider.js — including the `/` address-bar lie from the asset cache.
  */
-
-const SOCIAL_REDIRECT = /^\/auth\/social\/(google|microsoft)\/redirect\b/;
 
 const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -465,37 +492,11 @@ function forgetVerifier() {
   handoff.forget(verifierDir());
 }
 
-function isSocialRedirect(url) {
-  try {
-    const parsed = new URL(url);
-    return parsed.origin === PORTAL_ORIGIN && SOCIAL_REDIRECT.test(parsed.pathname);
-  } catch {
-    return false;
-  }
-}
-
-/*
- * Returns the provider only when this is someone *signing in* — that is, the
- * click came from a page under /auth/. The same route is used to connect a
- * mailbox from Settings, and that one must stay in the app's own session.
- */
-function signInProviderFor(url, currentUrl) {
-  if (!isSocialRedirect(url)) return null;
-
-  try {
-    const from = new URL(currentUrl || '');
-    const signingIn = from.origin === PORTAL_ORIGIN
-      && from.pathname.startsWith('/auth/')
-      && !from.pathname.startsWith('/auth/desktop');
-    if (!signingIn) return null;
-  } catch {
-    return null;
-  }
-
-  return new URL(url).pathname.match(SOCIAL_REDIRECT)[1];
-}
-
 function startBrowserSignIn(provider) {
+  // Handoff aborts the in-app navigation; take the splash down immediately so
+  // the login screen is visible while the system browser does the work.
+  if (loadingLayer) loadingLayer.hide();
+
   const verifier = base64url(crypto.randomBytes(32));
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
   rememberVerifier(verifier);

@@ -12,7 +12,7 @@
     "dist": "electron-builder --mac",
     "release": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never && node verify-asar.js",
     "release:win": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never && node verify-asar.js",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-file-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-shell-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js && env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-file-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-shell-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js && env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-provider.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",
@@ -30,7 +30,8 @@
     "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
     "test:badge": "env -u ELECTRON_RUN_AS_NODE electron test-badge.js",
     "test:taskbar-pin": "env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js",
-    "test:signin-handoff": "env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js"
+    "test:signin-handoff": "env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js",
+    "test:signin-provider": "env -u ELECTRON_RUN_AS_NODE electron test-signin-provider.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",
