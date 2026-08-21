@@ -31,7 +31,7 @@ function install({ onShow, onQuit, updateItem }) {
   const image = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
 
-  tray.setToolTip('TM ANTOINE Portal');
+  paintTooltip();
 
   const rebuild = () => {
     tray.setContextMenu(Menu.buildFromTemplate([
@@ -58,15 +58,45 @@ function install({ onShow, onQuit, updateItem }) {
   return { rebuild };
 }
 
-/**
- * Unread count, drawn over the tray icon. The taskbar button gets its own
- * overlay separately — this is the one that stays visible with no window open.
+/*
+ * What the tooltip has to say, and why it says two things.
+ *
+ * Unread count: the taskbar button gets its own overlay separately — this is
+ * the one that stays visible with no window open.
+ *
+ * Waiting update: on macOS the menu bar relabels itself to "Install Update
+ * 0.8.29…" and is on screen whether or not a window is, so a deferred update
+ * announces itself permanently and for free. Windows keeps that same menu
+ * inside a window that is usually hidden, and the tray copy of it only exists
+ * while someone is right-clicking — so after one "Later" there was nothing on
+ * screen anywhere saying an update was still waiting. The tooltip is the one
+ * surface Windows gives a tray app that a passing glance can reach.
  */
-function setTooltipCount(count) {
+let unread = 0;
+let waiting = null;
+
+function paintTooltip() {
   if (!tray) return;
-  tray.setToolTip(count > 0
-    ? `TM ANTOINE Portal — ${count} unread`
-    : 'TM ANTOINE Portal');
+
+  // The update leads: it is the thing the user has to act on, and the count is
+  // already on the taskbar button.
+  const parts = ['TM ANTOINE Portal'];
+  if (waiting) parts.push(`update to ${waiting} ready`);
+  if (unread > 0) parts.push(`${unread} unread`);
+
+  tray.setToolTip(parts.join(' — '));
 }
 
-module.exports = { install, setTooltipCount };
+/** @param {number} count */
+function setTooltipCount(count) {
+  unread = Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
+  paintTooltip();
+}
+
+/** @param {string|null} version  the version deferred, or null once none is */
+function setUpdateWaiting(version) {
+  waiting = version || null;
+  paintTooltip();
+}
+
+module.exports = { install, setTooltipCount, setUpdateWaiting };

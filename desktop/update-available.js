@@ -12,33 +12,13 @@
  *   const choice = await updateAvailable.show({ version, notes });
  *   if (choice !== 'update') return;
  */
-const { BrowserWindow, ipcMain } = require('electron');
+const { BrowserWindow, ipcMain, nativeTheme } = require('electron');
 const path = require('node:path');
+
+const { surfaceOptions, reveal } = require('./update-surface');
 
 const WIDTH = 380;
 const COLLAPSED = 216; // opening size; the panel then follows its content
-
-const IS_MAC = process.platform === 'darwin';
-
-/** Same material as update-window.js — see the note there for why. */
-function material() {
-  if (IS_MAC) {
-    return {
-      transparent: true,
-      backgroundColor: '#00000000',
-      vibrancy: 'under-window',
-      visualEffectState: 'active',
-      titleBarStyle: 'hidden',
-      trafficLightPosition: { x: 13, y: 13 },
-    };
-  }
-
-  return {
-    backgroundMaterial: 'acrylic',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#8a8a8a', height: 34 },
-  };
-}
 
 let panel = null;
 
@@ -62,7 +42,7 @@ function show({ version, notes = [] }) {
       minimizable: true,
       maximizable: false,
       fullscreenable: false,
-      ...material(),
+      ...surfaceOptions(process.platform, nativeTheme.shouldUseDarkColors),
       webPreferences: {
         preload: path.join(__dirname, 'update-available-preload.js'),
         contextIsolation: true,
@@ -132,7 +112,10 @@ function show({ version, notes = [] }) {
 
     win.webContents.once('did-finish-load', () => {
       win.webContents.send('update-available:release', { version, notes });
-      win.show();
+      // This one is a question, so being in front is the whole point of it.
+      // Windows refuses the foreground to a tray app; reveal() is what gets it
+      // there anyway, and flashes the taskbar button when even that is refused.
+      reveal(win, process.platform);
     });
   });
 }
@@ -142,6 +125,15 @@ function close() {
   panel = null;
 }
 
+/**
+ * Brings the offer back to the front. What the "Update available" toast clicks
+ * through to on Windows: the window is already open by then — it just opened
+ * somewhere the user could not see it.
+ */
+function surface() {
+  if (panel && !panel.isDestroyed()) reveal(panel, process.platform);
+}
+
 const isOpen = () => !!panel && !panel.isDestroyed();
 
-module.exports = { show, close, isOpen, WIDTH, COLLAPSED };
+module.exports = { show, close, surface, isOpen, WIDTH, COLLAPSED };

@@ -1293,6 +1293,10 @@ if (!app.requestSingleInstanceLock()) {
     const rebuildMenus = () => {
       buildMenu();
       if (trayMenu) trayMenu.rebuild();
+      // The menus only say so while they are open. On Windows both of them are
+      // behind a click, so the waiting update also goes on the tray tooltip,
+      // which is the one place a glance can reach it.
+      tray.setUpdateWaiting(updater.deferredUpdate());
     };
 
     // Relabel the menus when an update is found and deferred.

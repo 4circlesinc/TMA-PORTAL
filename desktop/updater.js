@@ -26,6 +26,7 @@ const { Readable, Transform } = require('node:stream');
 
 const updateWindow = require('./update-window');
 const updateAvailable = require('./update-available');
+const updateNotice = require('./update-notice');
 
 const { version: APP_VERSION } = require('./package.json');
 
@@ -305,9 +306,34 @@ function discard(target) {
  * hand-rolled swap below. `/S` keeps it silent so the update feels like the
  * macOS one; `--force-run` is what electron-builder's installer reads to
  * relaunch afterwards.
+ *
+ * `--updated` is the third one, and it was missing. It is how the installer is
+ * told this is an update rather than a first install, and with `oneClick: false`
+ * — which is what this app builds — that is not a cosmetic distinction.
+ * electron-builder's own NSIS templates branch on it twice in ways that matter:
+ *
+ *   - `setIsTryToKeepShortcuts` sets keep-shortcuts to *false* when
+ *     `allowToChangeInstallationDirectory` is defined and the run is not marked
+ *     as an update. So every silent update was tearing down and recreating the
+ *     desktop and Start-menu shortcuts — which is how a pinned taskbar entry
+ *     gets orphaned, on an app whose first run goes out of its way to ask for
+ *     that pin (taskbar-pin.js).
+ *   - `_CHECK_APP_RUNNING` gives a marked update two sleeps to let this process
+ *     exit on its own before it force-stops it. Without the flag it goes
+ *     straight to the message box, whose silent-mode default is "close it" —
+ *     the app is killed rather than allowed to quit.
+ *
+ * The banner is posted before the spawn, not after: from here on this process
+ * has seconds to live, and the notification has to already be with the OS when
+ * it goes. It is the only thing on screen for the half-minute the installer
+ * takes, because /S means NSIS shows nothing of its own and the progress panel
+ * dies with us.
  */
-function runInstaller(installer) {
-  spawn(installer, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+const INSTALLER_ARGS = ['--updated', '/S', '--force-run'];
+
+function runInstaller(installer, version) {
+  updateNotice.installing(version);
+  spawn(installer, INSTALLER_ARGS, { detached: true, stdio: 'ignore' }).unref();
   app.quit();
 }
 
@@ -346,21 +372,55 @@ function defer(version) {
   onStateChange();
 }
 
-function progressBar(fraction) {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (win && !win.isDestroyed()) win.setProgressBar(fraction);
+/**
+ * The dock or taskbar progress.
+ *
+ * `win` is the update panel once there is one. It used to always be
+ * `getAllWindows()[0]` — the main portal window — which is right on macOS,
+ * where the progress is drawn on the Dock icon and any window will do. On
+ * Windows it is drawn on that window's own taskbar button, and the main window
+ * is normally hidden in the tray during an update, so the progress was being
+ * painted on a button nobody could see.
+ */
+function progressBar(fraction, win) {
+  const target = win && !win.isDestroyed() ? win : BrowserWindow.getAllWindows()[0];
+  if (target && !target.isDestroyed()) target.setProgressBar(fraction);
 }
 
-async function runUpdate(release, parentWindow) {
+/**
+ * @param {object} options
+ * @param {boolean} options.announce  back the offer with a notification when it
+ *                                    may have opened out of sight. True for
+ *                                    background checks; a manual check has the
+ *                                    user's attention already.
+ */
+async function runUpdate(release, parentWindow, { announce = false } = {}) {
+  /*
+   * Read before the offer is opened, because opening it is what changes the
+   * answer. Nothing of ours in the foreground means, on Windows, that the offer
+   * window will not be allowed into the foreground either — reveal() flashes
+   * the taskbar button in that case, and the banner below is the part that
+   * survives being ignored.
+   */
+  const unattended = !BrowserWindow.getFocusedWindow();
+
   /*
    * Was dialog.showMessageBox. A native message box cannot carry a disclosure,
    * so the only thing it could say about an update was its version number —
    * people were asked to accept a change they had no way to read.
    */
-  const choice = await updateAvailable.show({
+  const offer = updateAvailable.show({
     version: release.version,
     notes: release.notes || [],
   });
+
+  // No-op on macOS, where the menu bar carries this on its own and the offer
+  // window is allowed to come forward.
+  if (announce && unattended) {
+    updateNotice.available(release.version, () => updateAvailable.surface());
+  }
+
+  const choice = await offer;
 
   if (choice !== 'update') {
     defer(release.version);
@@ -379,20 +439,20 @@ async function runUpdate(release, parentWindow) {
     // Downloading 90 MB used to happen with nothing on screen but the dock
     // progress bar, and then the app vanished and came back — which on a slow
     // connection is a long silence followed by what looks like a crash.
-    updateWindow.show(release.version);
-    progressBar(0);
+    const panel = updateWindow.show(release.version);
+    progressBar(0, panel);
 
     const staged = await stageRelease(
       release,
-      (fraction) => { progressBar(fraction); updateWindow.setProgress(fraction); },
+      (fraction) => { progressBar(fraction, panel); updateWindow.setProgress(fraction); },
       (phase) => updateWindow.setPhase(phase),
     );
 
-    progressBar(-1);
+    progressBar(-1, panel);
     updateWindow.setPhase('restarting');
 
     if (IS_MAC) replaceAndRestart(staged);
-    else runInstaller(staged);
+    else runInstaller(staged, release.version);
   } catch (error) {
     progressBar(-1);
     // The screen says the app is restarting; it is not, so take it away before
@@ -433,7 +493,7 @@ async function checkForUpdates({ silent = true } = {}) {
 
     if (silent && declined === release.version) return null;
 
-    await runUpdate(release, parentWindow);
+    await runUpdate(release, parentWindow, { announce: silent });
     return release;
   } catch (error) {
     if (!silent) {
@@ -466,4 +526,7 @@ module.exports = {
   deferredUpdate,
   onStateChange: (fn) => { onStateChange = fn; },
   FEED_URL,
+  // Exported so a test can hold the line on --updated, which is invisible when
+  // it goes missing and costs a pinned taskbar shortcut when it does.
+  INSTALLER_ARGS,
 };

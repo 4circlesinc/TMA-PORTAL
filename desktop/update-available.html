@@ -183,6 +183,21 @@
   @media (prefers-reduced-motion: reduce) {
     .chevron { transition: none; }
   }
+  /*
+   * Windows paints its own surface.
+   *
+   * There is no vibrancy off the Mac, and `backgroundMaterial` only lands on
+   * Windows 11 22H2 and up — so a transparent page there is a window with
+   * nothing in it. Worse, `light-dark()` above follows the OS, so a Windows
+   * machine in dark mode drew near-white text onto Electron's default white
+   * window: on screen, correct, and unreadable. See update-surface.js.
+   *
+   * The colours match SURFACE there exactly, so the window's own
+   * backgroundColor is already right before the first frame paints.
+   */
+  :root[data-platform="win32"] .screen {
+    background: light-dark(#f6f6f6, #202020);
+  }
 </style>
 </head>
 <body>
@@ -212,6 +227,12 @@
 
 <script>
   var offer = window.TMAUpdateOffer;
+
+  // Windows has no traffic lights and no material behind the window; the page
+  // draws the surface instead. Set before anything else so there is no frame
+  // of transparent-on-white.
+  document.documentElement.dataset.platform = offer.platform;
+
   var screenEl = document.getElementById('screen');
   var contentEl = document.getElementById('content');
   var disclosure = document.getElementById('disclosure');

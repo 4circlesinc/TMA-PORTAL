@@ -406,6 +406,79 @@ Two things that bit, both now covered by `test-update-window.js`:
 `npm run test:update-window -- --watch` steps through the phases slowly and
 leaves the window up to look at.
 
+## Both panels on Windows
+
+`update-surface.js` + `update-notice.js`. Both update windows were built as
+macOS vibrancy panels — a transparent window with `background: transparent` all
+the way down, letting the system material behind it be the surface. That is why
+they look like part of the OS here, and it is why for several releases they were
+effectively invisible on Windows.
+
+Three separate failures, which had to be fixed together:
+
+- **The panel never had a background.** `backgroundMaterial: 'acrylic'` is
+  honoured only on Windows 11 22H2 and up, and only when the window's
+  `backgroundColor` is itself transparent. It was never set, so it defaulted to
+  opaque white and the material never drew on any Windows at all.
+- **And then the text disappeared into it.** Both pages pick colours with
+  `light-dark()`, which follows the OS. A Windows machine in dark mode therefore
+  painted near-white text onto that white window — a panel on screen, correct,
+  and unreadable. The same shape as the blank blue sign-in window fixed in
+  0.8.28.
+- **The offer opened behind everything.** `win.show()` is enough on macOS.
+  Windows refuses the foreground to a process that does not already hold it, and
+  this app's normal state is a hidden window and a tray icon — so "a new version
+  is available" could open behind the user's work with nothing but a taskbar
+  blink to say so.
+
+So Windows paints its own opaque surface in the theme the OS is actually in, and
+`reveal()` lifts the window over the foreground app (`alwaysOnTop` around the
+`show`, dropped again immediately) and flashes the taskbar button when even that
+is refused. A material that is sometimes there is worse than a plain surface
+that is always right.
+
+`surfaceOptions(platform, dark)` and `reveal(win, platform)` both **take** the
+platform rather than reading it, because every one of these bugs was shipped
+from a Mac where none of them is reachable by looking.
+`test-update-surface.js` runs the Windows branch here, and — the check that
+earns its keep — asserts that the colour the window is made with and the colour
+the page paints are the same value. They live in two files in two languages and
+nothing else connects them.
+
+Two more things Windows needs that macOS gets for free:
+
+- **A deferred update leaves no trace.** The menu bar is on screen on macOS
+  whether or not a window is, so relabelling it to `Install Update 0.8.29…` is a
+  permanent sign. Windows keeps that menu inside a hidden window, and the tray
+  copy only exists while someone is right-clicking. The tray **tooltip** carries
+  it now, alongside the unread count.
+- **The install runs with nothing on screen.** macOS `ditto`s an
+  already-unpacked bundle — a few seconds. Windows runs an NSIS installer with
+  `/S`, which unpacks ninety-odd megabytes into Program Files showing nothing of
+  its own, and by then this app has quit and taken the progress panel with it.
+  `update-notice.installing()` posts a toast immediately *before* the spawn, so
+  it is already with the OS when the process goes, and it sits in the Action
+  Center for the half-minute the app is away.
+
+### `--updated` is not optional
+
+`runInstaller` runs the NSIS installer with `--updated /S --force-run`. The
+first flag was missing, and with `oneClick: false` — which is what this app
+builds — that is not cosmetic. electron-builder's own templates branch on it:
+
+- `setIsTryToKeepShortcuts` sets keep-shortcuts to **false** when
+  `allowToChangeInstallationDirectory` is defined and the run is not marked as an
+  update. Every silent update was tearing down and recreating the desktop and
+  Start-menu shortcuts — which is how a pinned taskbar entry gets orphaned, on
+  an app whose first run goes out of its way to ask for that pin.
+- `_CHECK_APP_RUNNING` gives a marked update two sleeps to let the process exit
+  on its own before force-stopping it. Without the flag it goes straight to the
+  message box, whose silent-mode default is "close it" — killed rather than
+  allowed to quit.
+
+`test-update-surface.js` holds the line on all three flags, because a missing
+one is invisible until someone loses their taskbar pin.
+
 ## When the portal is down
 
 Two different failures, and only one of them is a "load failure" to Chromium.

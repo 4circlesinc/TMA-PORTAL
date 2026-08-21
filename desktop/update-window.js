@@ -9,51 +9,13 @@
  * as the call panel: the page it would sit on is about to be thrown away and
  * relaunched, and the swap happens after the main window has gone.
  */
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, nativeTheme } = require('electron');
 const path = require('node:path');
+
+const { surfaceOptions, reveal } = require('./update-surface');
 
 const WIDTH = 340;
 const HEIGHT = 230;
-
-const IS_MAC = process.platform === 'darwin';
-
-/**
- * The glass.
- *
- * `vibrancy` is what makes the panel a real system material rather than a
- * painted-on approximation: macOS blurs and tints whatever is behind the
- * window, so it picks up the desktop and follows light/dark on its own. It
- * needs a transparent window — anything opaque, including a `backgroundColor`,
- * is drawn *over* the material and flattens it back to a rectangle.
- *
- * `visualEffectState: 'active'` keeps it lively while the window is unfocused,
- * which is the normal case here: an update runs while the user is in another
- * app, and the default would grey the material out for the whole download.
- *
- * Windows has no vibrancy; `backgroundMaterial` is the equivalent (acrylic on
- * Windows 11, ignored on 10, where the plain window is the fallback).
- */
-function material() {
-  if (IS_MAC) {
-    return {
-      transparent: true,
-      backgroundColor: '#00000000',
-      vibrancy: 'under-window',
-      visualEffectState: 'active',
-      // Hidden, not absent: the traffic lights stay, drawn over the glass, so
-      // this is an ordinary window you can close or send to the Dock rather
-      // than a panel that traps you until it decides to go.
-      titleBarStyle: 'hidden',
-      trafficLightPosition: { x: 13, y: 13 },
-    };
-  }
-
-  return {
-    backgroundMaterial: 'acrylic',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#8a8a8a', height: 34 },
-  };
-}
 
 let panel = null;
 
@@ -83,7 +45,8 @@ function show(version) {
     // Not always-on-top: that is for something you must deal with now, and this
     // is something you watch or ignore.
     alwaysOnTop: false,
-    ...material(),
+    // What the panel is made of, and the one place the platform split lives.
+    ...surfaceOptions(process.platform, nativeTheme.shouldUseDarkColors),
     webPreferences: {
       preload: path.join(__dirname, 'update-preload.js'),
       contextIsolation: true,
@@ -98,7 +61,9 @@ function show(version) {
 
   panel.webContents.once('did-finish-load', () => {
     panel.webContents.send('update:version', version);
-    panel.show();
+    // Not panel.show(): Windows will not give a tray app the foreground, and a
+    // progress screen behind the user's work is the same as no progress screen.
+    reveal(panel, process.platform);
   });
 
   panel.on('closed', () => { panel = null; });
