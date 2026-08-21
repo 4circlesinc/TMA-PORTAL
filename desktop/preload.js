@@ -28,6 +28,9 @@ const RELAYS = [
   },
   { attribute: 'data-tma-call', channel: 'tma:call', read: (raw) => raw || '' },
   { attribute: 'data-tma-focus', channel: 'tma:focus', read: () => true, skipInitial: true },
+  // Sign-in waiting screen (file://) — reopen the system-browser tab, or cancel.
+  { attribute: 'data-tma-signin-reopen', channel: 'tma:signin-reopen', read: () => true, skipInitial: true },
+  { attribute: 'data-tma-signin-cancel', channel: 'tma:signin-cancel', read: () => true, skipInitial: true },
 ];
 
 function watchHostAttributes() {

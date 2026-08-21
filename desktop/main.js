@@ -341,7 +341,11 @@ function attachNavigationRules(win) {
    * flash the splash over a screen that is already there.
    */
   webContents.on('did-start-navigation', (event, url, isSameDocument, isMainFrame) => {
-    if (isMainFrame && !isSameDocument && loadingLayer) loadingLayer.show();
+    if (!isMainFrame || isSameDocument || !loadingLayer) return;
+    // Local waiting / error pages are the content — covering them with the
+    // blue splash is what made sign-in look like a blank window.
+    if (url.startsWith('file:') || url.startsWith('data:')) return;
+    loadingLayer.show();
   });
 
   webContents.on('did-finish-load', () => {
@@ -472,6 +476,13 @@ const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\
 let pendingVerifier = null;
 
 /*
+ * The system-browser URL opened for the current handoff. Kept here (not on the
+ * page) so "Open in browser" can re-fire it without giving the portal a general
+ * openExternal privilege.
+ */
+let pendingBrowserSignInUrl = null;
+
+/*
  * The verifier also goes to disk, because it has to outlive the process that
  * created it — see signin-handoff.js for the Windows cold start that made a
  * successful sign-in look like being dumped back on the login page.
@@ -489,14 +500,37 @@ function storedVerifier() {
 
 function forgetVerifier() {
   pendingVerifier = null;
+  pendingBrowserSignInUrl = null;
   handoff.forget(verifierDir());
 }
 
-function startBrowserSignIn(provider) {
-  // Handoff aborts the in-app navigation; take the splash down immediately so
-  // the login screen is visible while the system browser does the work.
+function providerLabel(provider) {
+  if (provider === 'google') return 'Google';
+  if (provider === 'microsoft') return 'Microsoft';
+  return '';
+}
+
+/**
+ * White waiting screen (same shape as /auth/desktop/finish) while the system
+ * browser does the OAuth. Replaces the blue splash that used to sit over a
+ * half-aborted navigation and read as a blank window.
+ */
+function showSignInWaiting(browserUrl, provider) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  pendingBrowserSignInUrl = browserUrl;
   if (loadingLayer) loadingLayer.hide();
 
+  mainWindow.loadFile(path.join(__dirname, 'signin-waiting.html'), {
+    query: {
+      provider: providerLabel(provider),
+    },
+  }).catch(() => {
+    // If the waiting page itself fails, at least leave the splash down.
+  });
+}
+
+function startBrowserSignIn(provider) {
   const verifier = base64url(crypto.randomBytes(32));
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
   rememberVerifier(verifier);
@@ -505,7 +539,9 @@ function startBrowserSignIn(provider) {
   url.searchParams.set('challenge', challenge);
   if (provider) url.searchParams.set('provider', provider);
 
-  shell.openExternal(url.toString());
+  const browserUrl = url.toString();
+  shell.openExternal(browserUrl);
+  showSignInWaiting(browserUrl, provider);
 }
 
 function claimBrowserSession(deepLink) {
@@ -1176,6 +1212,17 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('tma:badge', (event, count) => fromMainWindow(event) && applyBadge(count));
     ipcMain.on('tma:call', (event, phase) => fromMainWindow(event) && applyCallPhase(phase));
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
+    ipcMain.on('tma:signin-reopen', (event) => {
+      if (!fromMainWindow(event) || !pendingBrowserSignInUrl) return;
+      shell.openExternal(pendingBrowserSignInUrl);
+    });
+    ipcMain.on('tma:signin-cancel', (event) => {
+      if (!fromMainWindow(event)) return;
+      forgetVerifier();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        loadPortal(mainWindow, new URL('/auth/login', PORTAL_ORIGIN).toString());
+      }
+    });
 
     // From the ring panel. It has no portal session of its own, so answering
     // and declining both go through the page that owns the call.
