@@ -360,15 +360,43 @@ rm -f ${JSON.stringify(script)}
 
 /* ------------------------------------------------------------------------ flow */
 
-let checking = false;
-let declined = null; // version the user said "Later" to, so we ask once
+let checking = false;    // a manifest fetch is in flight
+let installing = false;  // downloading or handing over to the installer
+let declined = null;     // { version, at } — the last "Later"
 let onStateChange = () => {};
 
-/** A version the user deferred, so the menu can offer it again by name. */
-const deferredUpdate = () => declined;
+/**
+ * How long a "Later" holds before the update asks again.
+ *
+ * It used to hold forever. `declined` was set to the version and compared for
+ * the life of the process — and this process is a tray app that is designed
+ * never to end: closing the window backgrounds it, so a machine left on runs
+ * the same instance for days. One "Later", or one prompt that was never seen,
+ * and the automatic offer was gone for good. From then on the only way to
+ * update was the menu, which is exactly what people reported.
+ *
+ * Three hours against an hourly check means it asks roughly every third tick:
+ * often enough that an update cannot be lost, rarely enough not to be a nag.
+ */
+const REMIND_AFTER = 3 * 3600000;
 
-function defer(version) {
-  declined = version;
+/** A version the user deferred, so the menu can offer it again by name. */
+const deferredUpdate = () => (declined ? declined.version : null);
+
+/**
+ * Whether a background check should put this version up again.
+ *
+ * Pure, and taking the clock, so the expiry is testable without waiting three
+ * hours for it. A manual check never consults this — someone who has just
+ * asked is owed an answer whatever they said last time.
+ */
+function shouldReoffer(deferral, version, now) {
+  if (!deferral || deferral.version !== version) return true;
+  return now - deferral.at >= REMIND_AFTER;
+}
+
+function defer(version, now = Date.now()) {
+  declined = { version, at: now };
   onStateChange();
 }
 
@@ -472,7 +500,27 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
  *                                  when already current, and honour "Later".
  */
 async function checkForUpdates({ silent = true } = {}) {
-  if (checking || !app.isPackaged) return null;
+  if (!app.isPackaged) return null;
+
+  // Mid-install. Nothing to add and nothing to ask.
+  if (installing) return null;
+
+  /*
+   * An offer is already on screen.
+   *
+   * This is not a reason to do nothing, and treating it as one is half of why
+   * the automatic update went unnoticed on Windows: the offer opens while the
+   * user is in another app, the shell refuses it the foreground, and it sits
+   * behind their work unseen and unanswered. So a later tick brings that same
+   * window back to the front and flashes the taskbar button again rather than
+   * skipping — and never opens a second copy.
+   */
+  if (updateAvailable.isOpen()) {
+    updateAvailable.surface();
+    return null;
+  }
+
+  if (checking) return null;
   checking = true;
 
   const parentWindow = BrowserWindow.getAllWindows()[0] || null;
@@ -491,7 +539,18 @@ async function checkForUpdates({ silent = true } = {}) {
       return null;
     }
 
-    if (silent && declined === release.version) return null;
+    if (silent && !shouldReoffer(declined, release.version, Date.now())) return null;
+
+    /*
+     * Released before the offer, deliberately. `checking` guards the fetch, not
+     * the conversation: it used to be held across the await below, which waits
+     * on a human — so an offer nobody answered (see above) left this latched
+     * true for the life of the process and every later check, automatic *and*
+     * manual, returned at the first line without doing anything. One unseen
+     * prompt disabled updating entirely. The isOpen() guard above is what stops
+     * a second offer now.
+     */
+    checking = false;
 
     await runUpdate(release, parentWindow, { announce: silent });
     return release;
