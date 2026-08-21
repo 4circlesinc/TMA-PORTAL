@@ -6565,6 +6565,7 @@
     logout: 'Signed out',
     login_failed: 'Failed sign-in',
     lockout: 'Locked out',
+    social_failed: 'Microsoft or Google sign-in refused',
   };
 
   /* The Portal access tab.

@@ -29,7 +29,7 @@ class SignInActivityController extends Controller
     private const LIMIT = 8;
 
     /** Sign-ins and the attempts that failed — not sign-outs, which double the noise. */
-    private const EVENTS = ['login', 'login_failed', 'lockout'];
+    private const EVENTS = ['login', 'login_failed', 'lockout', 'social_failed'];
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -70,6 +70,12 @@ class SignInActivityController extends Controller
             'lockout' => $name
                 ? $name.' was locked out after too many attempts'
                 : 'An account was locked out after too many attempts',
+            // Refused by Microsoft or Google, not by us — usually the person's
+            // own tenant. Naming it as a plain failed sign-in would send
+            // whoever reads this card looking at the wrong thing entirely.
+            'social_failed' => $name
+                ? 'Microsoft or Google sign-in was refused for '.$name
+                : 'A Microsoft or Google sign-in was refused',
             default => $name ? 'Failed sign-in for '.$name : 'Failed sign-in attempt',
         };
     }

@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Realtime\Live;
 use App\Models\AuthEvent;
+use App\Models\Client;
+use App\Models\CompanyMember;
 use App\Models\FileLibrarySetting;
 use App\Models\Invitation;
 use App\Models\Notification;
@@ -20,6 +21,7 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use App\Support\Presence\LastSeen;
+use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -84,12 +86,12 @@ class AdminUsersController extends Controller
          * is a Private Client. Measured in two grouped queries, not per row.
          */
         $externalIds = $userModels->where('account_type', Role::CLIENT)->pluck('id');
-        $providerContactIds = $externalIds->isEmpty() ? collect() : \App\Models\CompanyMember::query()
+        $providerContactIds = $externalIds->isEmpty() ? collect() : CompanyMember::query()
             ->active()
             ->whereIn('user_id', $externalIds)
             ->pluck('user_id')
             ->flip();
-        $referredClientIds = $externalIds->isEmpty() ? collect() : \App\Models\Client::query()
+        $referredClientIds = $externalIds->isEmpty() ? collect() : Client::query()
             ->whereIn('user_id', $externalIds)
             ->whereNotNull('referred_by_company_id')
             ->pluck('user_id')
@@ -248,6 +250,7 @@ class AdminUsersController extends Controller
         ]);
 
         Live::staff(Live::USERS);
+
         return response()->json([
             'status' => 'ok',
             'invitation' => Invitations::toRecord($invitation->fresh()),
@@ -325,6 +328,7 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'account_updated');
 
         Live::staffAnd(Live::USERS, [$user->id]);
+
         return response()->json(['status' => 'ok']);
     }
 
@@ -364,7 +368,7 @@ class AdminUsersController extends Controller
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can view user activity.');
 
         // 'login' = sign-in history; 'app' = account & application events.
-        $loginEvents = ['login', 'logout', 'login_failed', 'lockout'];
+        $loginEvents = ['login', 'logout', 'login_failed', 'lockout', 'social_failed'];
 
         $events = AuthEvent::where('user_id', $user->id)
             ->when($request->query('type') === 'login', fn ($q) => $q->whereIn('event', $loginEvents))
@@ -374,6 +378,7 @@ class AdminUsersController extends Controller
             ->get()
             ->map(fn (AuthEvent $event) => [
                 'event' => $event->event,
+                'detail' => $event->detail,
                 'when' => $event->created_at->diffForHumans(),
                 'atIso' => $event->created_at->toIso8601String(),
                 'ip' => $event->ip,
@@ -442,6 +447,7 @@ class AdminUsersController extends Controller
         $this->clearPendingApprovalNotifications($user);
 
         Live::staffAnd(Live::USERS, [$user->id]);
+
         return response()->json(['status' => 'ok']);
     }
 
@@ -546,6 +552,7 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'account_suspended');
 
         Live::staffAnd(Live::USERS, [$user->id]);
+
         return response()->json(['status' => 'ok']);
     }
 
@@ -583,6 +590,7 @@ class AdminUsersController extends Controller
         $this->moveToRecycleBin($user, $request->user());
 
         Live::staffAnd(Live::USERS, [$user->id]);
+
         return response()->json(['status' => 'ok']);
     }
 
@@ -629,6 +637,7 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'account_reactivated');
 
         Live::staffAnd(Live::USERS, [$user->id]);
+
         return response()->json(['status' => 'ok']);
     }
 

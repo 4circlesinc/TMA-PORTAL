@@ -19,6 +19,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -32,6 +34,20 @@ class SocialAuthController extends Controller
     private const PROVIDERS = ['google', 'microsoft'];
 
     private const SYNC_EXTRAS = ['email', 'calendar', 'onedrive', 'sharepoint'];
+
+    /** Marks the browser that has already spent its one silent retry. */
+    private const RETRY_COOKIE = 'tma_social_retry';
+
+    private const RETRY_COOKIE_MINUTES = 5;
+
+    /**
+     * The cookie-less half of the same guard, and the reason it is measured in
+     * seconds: its key can only be the address and browser, which a whole
+     * office shares. Long enough to outlive one retry lap - the only thing it
+     * has to interrupt - and short enough that it cannot swallow the lap a
+     * colleague at the same address is owed a moment later.
+     */
+    private const RETRY_GUARD_SECONDS = 60;
 
     public function redirect(Request $request, string $provider): RedirectResponse
     {
@@ -92,7 +108,12 @@ class SocialAuthController extends Controller
         }
 
         $driver = Socialite::driver($provider);
-        $params = ['prompt' => 'select_account'];
+
+        // A silent second lap (see retryOnce) must not ask the person to pick
+        // their account again - they already did, and the only thing that
+        // failed was our half of the handshake. With no prompt the provider
+        // reuses the session it just established and the lap is invisible.
+        $params = $request->boolean('retry') ? [] : ['prompt' => 'select_account'];
 
         if (config("services.{$provider}.sync") && array_filter($wanted)) {
             $scopes = [];
@@ -163,6 +184,9 @@ class SocialAuthController extends Controller
                 'error_description' => Str::limit($description, 500, ''),
             ]);
 
+            $codes = self::refusalCodes($description);
+            $this->recordFailure($request, $provider, $codes ? 'AADSTS'.$codes[0] : ($error ?: 'refused'));
+
             return $this->fail($request, $this->refusalMessage($provider, $error, $description));
         }
 
@@ -179,6 +203,17 @@ class SocialAuthController extends Controller
                 'host' => $request->getHost(),
                 'error' => $e->getMessage(),
             ]);
+
+            // Nearly every one of those is cured by going round once more from
+            // whatever browser context we actually came back in, so do that
+            // rather than leaving someone to work it out from a sign-in screen
+            // that looks exactly like the one they started on. Only once a
+            // retry has been spent do we stop and say what happened.
+            if ($retry = $this->retryOnce($request, $provider)) {
+                return $retry;
+            }
+
+            $this->recordFailure($request, $provider, 'state_mismatch');
 
             return $this->fail($request, 'Your '.ucfirst($provider).' sign-in session expired. Please start again.');
         } catch (Throwable $e) {
@@ -201,8 +236,14 @@ class SocialAuthController extends Controller
                 'response' => $body,
             ]);
 
+            $this->recordFailure($request, $provider, 'token_exchange_failed');
+
             return $this->fail($request, 'Sign-in with '.ucfirst($provider)." didn't complete. Please try again.");
         }
+
+        // Through the handshake: release the one-retry guard so a genuine
+        // failure weeks from now still gets a silent second lap of its own.
+        $this->clearRetryGuard($request, $provider);
 
         $verified = match ($provider) {
             // Google supplies an explicit claim; Microsoft account emails
@@ -776,11 +817,108 @@ class SocialAuthController extends Controller
         return null;
     }
 
-    private function record(?int $userId, string $event): void
+    /**
+     * One silent second lap through the provider after a state mismatch.
+     *
+     * The state token lives in the session, so anything that separates a
+     * browser from its session between the two hops loses it: Edge on Windows
+     * handing a work sign-in to a different profile, a cookie jar that didn't
+     * carry across, a refreshed or replayed callback whose token was already
+     * spent. Every one of those is fixed by starting again in the context we
+     * came back in - which is what the person would eventually do by hand,
+     * except nothing on the screen tells them that retrying is the answer.
+     *
+     * Bounded twice, because an unbounded retry is a redirect loop. A cookie
+     * marks the browser that has spent its lap; a short-lived cache key does
+     * the same for a browser that keeps no cookies at all - which is itself a
+     * reason sign-in can never succeed, so it has to end in a message rather
+     * than bouncing until the browser gives up.
+     */
+    private function retryOnce(Request $request, string $provider): ?RedirectResponse
+    {
+        if ($request->cookie(self::RETRY_COOKIE) === $provider) {
+            return null;
+        }
+
+        try {
+            if (! Cache::add($this->retryGuardKey($request, $provider), true, self::RETRY_GUARD_SECONDS)) {
+                return null;
+            }
+        } catch (Throwable) {
+            // No cache to lean on. The cookie still bounds this for every
+            // browser that keeps cookies, which is every browser that could
+            // have completed a sign-in in the first place.
+        }
+
+        // Whatever survived of the original intent still applies; anything
+        // that didn't defaults exactly as a fresh sign-in would.
+        $query = ['provider' => $provider, 'retry' => 1];
+
+        if ($return = $request->session()->get('social.return')) {
+            $query['return'] = $return;
+        }
+
+        foreach (self::SYNC_EXTRAS as $extra) {
+            if ($request->session()->get("social.sync_{$extra}")) {
+                $query['sync_all'] = 1;
+                break;
+            }
+        }
+
+        return redirect()->route('social.redirect', $query)->withCookie(Cookie::make(
+            name: self::RETRY_COOKIE,
+            value: $provider,
+            minutes: self::RETRY_COOKIE_MINUTES,
+            httpOnly: true,
+            secure: $request->isSecure(),
+            sameSite: 'lax',
+        ));
+    }
+
+    private function clearRetryGuard(Request $request, string $provider): void
+    {
+        try {
+            Cache::forget($this->retryGuardKey($request, $provider));
+        } catch (Throwable) {
+            // Nothing to do: the key expires on its own within minutes.
+        }
+
+        if ($request->cookie(self::RETRY_COOKIE) !== null) {
+            Cookie::queue(Cookie::forget(self::RETRY_COOKIE));
+        }
+    }
+
+    /**
+     * Identifies the browser without relying on a cookie - the one thing that
+     * may be missing in exactly the case this guard exists for.
+     */
+    private function retryGuardKey(Request $request, string $provider): string
+    {
+        return 'social-retry:'.$provider.':'.sha1($request->ip().'|'.$request->userAgent());
+    }
+
+    /**
+     * A refused social sign-in used to leave nothing behind but a log line on
+     * the hosting platform, so the only question worth asking - which of these
+     * is actually happening to people - had no answer anyone could reach from
+     * inside the portal. It is recorded here instead, against the account when
+     * there is one to name.
+     *
+     * Deliberately not 'login_failed'. That event feeds the repeated-failure
+     * security alert and the lockout tally, and a tenant that has not approved
+     * the portal is a configuration problem, not an attack on an account.
+     */
+    private function recordFailure(Request $request, string $provider, string $reason): void
+    {
+        $this->record($request->user()?->getKey(), 'social_failed', $provider.': '.$reason);
+    }
+
+    private function record(?int $userId, string $event, ?string $detail = null): void
     {
         AuthEvent::create([
             'user_id' => $userId,
             'event' => $event,
+            'detail' => $detail,
             'ip' => request()->ip(),
             'user_agent' => (string) request()->userAgent(),
             'created_at' => now(),

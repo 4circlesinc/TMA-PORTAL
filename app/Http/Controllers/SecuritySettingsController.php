@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Fortify\PasswordValidationRules;
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\AuthenticatorApp;
 use App\Support\Security\SecurityAlerts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class SecuritySettingsController extends Controller
@@ -38,6 +40,7 @@ class SecuritySettingsController extends Controller
             ->get()
             ->map(fn (AuthEvent $event) => [
                 'event' => $event->event,
+                'detail' => $event->detail,
                 'when' => $event->created_at->diffForHumans(),
                 'atIso' => $event->created_at->toIso8601String(),
                 'ip' => $event->ip,
@@ -71,7 +74,7 @@ class SecuritySettingsController extends Controller
                 ]),
             'twoFactor' => $user->two_factor_confirmed_at ? 'on' : ($user->two_factor_secret ? 'pending' : 'off'),
             'twoFactorSince' => $user->two_factor_confirmed_at?->format('j M Y'),
-            'twoFactorApp' => \App\Support\AuthenticatorApp::meta($user->two_factor_app),
+            'twoFactorApp' => AuthenticatorApp::meta($user->two_factor_app),
             'recoveryCodesCount' => $user->two_factor_confirmed_at ? count($user->recoveryCodes()) : 0,
             'failedSignins7d' => $failed,
             'sessions' => $this->sessionsFor($user, $request->session()->getId())->values(),
@@ -218,7 +221,7 @@ class SecuritySettingsController extends Controller
     public function setTwoFactorApp(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'app' => ['required', \Illuminate\Validation\Rule::in(\App\Support\AuthenticatorApp::KEYS)],
+            'app' => ['required', Rule::in(AuthenticatorApp::KEYS)],
         ]);
 
         $request->user()->forceFill(['two_factor_app' => $data['app']])->save();
@@ -226,7 +229,7 @@ class SecuritySettingsController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-        public function logoutOtherDevices(Request $request): JsonResponse|RedirectResponse
+    public function logoutOtherDevices(Request $request): JsonResponse|RedirectResponse
     {
         $request->validate([
             'password' => ['required', 'current_password'],

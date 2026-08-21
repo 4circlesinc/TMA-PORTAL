@@ -105,7 +105,8 @@
   var ACT_LABELS = {
     registered: 'Account created', email_verified: 'Email verified', login: 'Signed in',
     logout: 'Signed out', login_failed: 'Failed sign-in attempt', password_reset: 'Password reset',
-    lockout: 'Sign-in locked', social_connected: 'Sign-in method connected',
+    lockout: 'Sign-in locked', social_failed: 'Microsoft or Google sign-in refused',
+    social_connected: 'Sign-in method connected',
     social_disconnected: 'Sign-in method disconnected', user_invited: 'Invited to the portal',
     account_approved: 'Account approved', account_suspended: 'Account suspended',
     account_reactivated: 'Account reactivated', account_updated: 'Profile updated by admin',
@@ -130,7 +131,8 @@
       var rows = j.events.length ? j.events.map(function (ev) {
         var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ev.when;
         return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
-          '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') + '</span></div>';
+          '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') +
+          (ev.detail ? ' · ' + escapeHtml(ev.detail) : '') + '</span></div>';
       }).join('') : '<p class="tma-user-info-panel__field-label">' + empty + '</p>';
       el.innerHTML = last + '<div>' + rows + '</div>';
     }).catch(function () {

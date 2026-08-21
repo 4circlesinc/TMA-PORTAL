@@ -1674,6 +1674,7 @@
     logout: { label: 'Signed out', badge: '' },
     login_failed: { label: 'Failed', badge: 'tma-auth__badge--danger' },
     lockout: { label: 'Blocked', badge: 'tma-auth__badge--danger' },
+    social_failed: { label: 'Sign-in refused', badge: 'tma-auth__badge--danger' },
     registered: { label: 'Account created', badge: '' },
     email_verified: { label: 'Email verified', badge: '' },
     password_reset: { label: 'Password reset', badge: '' },
@@ -1996,7 +1997,8 @@
           var s3 = SEC_STATUS[ev.event] || { label: ev.event, badge: '' };
           var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' }) : ev.when;
           return '<tr><td>' + esc(at) + '</td><td>' + esc(ev.ip || '') + '</td><td>' + esc(ev.device || '') + '</td>' +
-            '<td><span class="tma-auth__badge ' + s3.badge + '">' + esc(s3.label) + '</span></td></tr>';
+            '<td><span class="tma-auth__badge ' + s3.badge + '">' + esc(s3.label) + '</span>' +
+            (ev.detail ? '<div class="tma-security__row-sub">' + esc(ev.detail) + '</div>' : '') + '</td></tr>';
         }).join('');
 
         root.innerHTML =
