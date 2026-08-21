@@ -463,6 +463,12 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
     return;
   }
 
+  // Accepted, so the last "Later" is spent — and the hourly tick must not walk
+  // in on a download and start asking about the same version again.
+  declined = null;
+  installing = true;
+  onStateChange();
+
   try {
     // Downloading 90 MB used to happen with nothing on screen but the dock
     // progress bar, and then the app vanished and came back — which on a slow
@@ -483,6 +489,9 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
     else runInstaller(staged, release.version);
   } catch (error) {
     progressBar(-1);
+    // Back to idle: a failed attempt must leave the hourly check free to try
+    // again, which is what "we'll try again later" below promises.
+    installing = false;
     // The screen says the app is restarting; it is not, so take it away before
     // the error appears behind it.
     updateWindow.close();
@@ -583,6 +592,8 @@ module.exports = {
   parseManifest,
   compareVersions,
   deferredUpdate,
+  shouldReoffer,
+  REMIND_AFTER,
   onStateChange: (fn) => { onStateChange = fn; },
   FEED_URL,
   // Exported so a test can hold the line on --updated, which is invisible when

@@ -1,2 +1,2 @@
-- Sign in, sign up and the other account screens no longer scroll — each one fits the window in a single view
-- Setting up your profile and your account now show every field and the button at once, instead of hiding the button below the fold
+- Updates now come to you: the notice is brought to the front, flashes in the taskbar if Windows will not let it through, and asks again by itself instead of going quiet after one Later
+- Choosing Later no longer switches automatic updates off for good — the app was staying open for days and never asking a second time

@@ -36,6 +36,38 @@ const height = () => panel().getContentSize()[1];
 const js = (expr) => panel().webContents.executeJavaScript(expr, true);
 const toggle = () => js("document.getElementById('disclosure').click(); void 0;");
 
+/**
+ * Waits for the panel to stop resizing, rather than guessing how long it takes.
+ *
+ * A fixed wait was making this test a coin flip. The resize is a round trip —
+ * the renderer measures its content, posts the height over IPC, and the main
+ * process calls setContentSize — and on a loaded machine that does not always
+ * finish inside half a second. It failed on a different check each run, which
+ * is the tell: the panel was right, the stopwatch was wrong.
+ */
+async function settled(before) {
+  // First the resize has to *start*. Sampling for stability alone returns
+  // instantly with the old height — nothing has moved yet, so two identical
+  // samples mean "not begun", not "finished".
+  let moved = false;
+  let last = -1;
+
+  for (let i = 0; i < 60; i += 1) {
+    await wait(50);
+    const now = height();
+
+    if (!moved) {
+      if (now !== before) { moved = true; last = now; }
+      continue;
+    }
+
+    if (now === last) return now;
+    last = now;
+  }
+
+  return height();
+}
+
 setTimeout(() => { console.log('\nFAILED — timed out'); app.exit(1); }, 60000).unref();
 
 app.whenReady().then(async () => {
@@ -51,20 +83,20 @@ app.whenReady().then(async () => {
 
   const collapsed = height();
 
-  await toggle(); await wait(500);
+  await toggle(); await settled(collapsed);
   const expanded = height();
   check('discloses the notes', await js("document.getElementById('details').hidden"), false);
   check('chevron turns down', await js("document.getElementById('disclosure').getAttribute('aria-expanded')"), 'true');
   check('label becomes Hide details', await js("document.getElementById('disclosure-label').textContent"), 'Hide details');
   check('panel grows to fit them', expanded > collapsed + 80, true);
 
-  await toggle(); await wait(500);
+  await toggle(); await settled(expanded);
   check('panel collapses back to where it started', height(), collapsed);
 
   // Twice, because one working cycle can be luck.
-  await toggle(); await wait(500);
+  await toggle(); await settled(collapsed);
   check('second expand matches the first', height(), expanded);
-  await toggle(); await wait(500);
+  await toggle(); await settled(expanded);
   check('second collapse matches too', height(), collapsed);
 
   /* ── the ways out ──────────────────────────────────────────────── */
