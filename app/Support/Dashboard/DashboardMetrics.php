@@ -2,13 +2,16 @@
 
 namespace App\Support\Dashboard;
 
+use App\Models\CipEvent;
 use App\Models\ConversationParticipant;
 use App\Models\MailMessage;
 use App\Models\Message;
-use App\Models\Share;
 use App\Models\SignatureRequest;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\Status as CipStatus;
 use App\Support\Signatures\Status;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -18,11 +21,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Scope follows the reader: an administrator sees the whole firm, an employee
  * sees their own work. Clients never see these cards at all — they measure how
- * well the firm serves clients, so they are staff-facing by definition.
+ * the firm is doing, so they are staff-facing by definition.
  *
- * Every card reports a trailing window against the window before it. Where
- * there is nothing to measure the card says so; it never falls back to a
- * plausible-looking number.
+ * Every card reports a trailing window against the window before it (or a live
+ * backlog with the longest wait). Where there is nothing to measure the card
+ * says so; it never falls back to a plausible-looking number.
  */
 class DashboardMetrics
 {
@@ -85,8 +88,8 @@ class DashboardMetrics
             'windowDays' => $this->windowDays,
             'cards' => [
                 'clientResponse' => $this->clientResponseCard($timelines),
-                'filesShared' => $this->filesSharedCard(),
-                'awaitingReply' => $this->awaitingReplyCard($timelines),
+                'cipNew' => $this->cipNewCard(),
+                'cipUpdatesRequired' => $this->cipUpdatesRequiredCard(),
                 'awaitingSignature' => $this->awaitingSignatureCard(),
             ],
         ];
@@ -134,59 +137,95 @@ class DashboardMetrics
         ];
     }
 
-    /* ── card 2: files shared ──────────────────────────────────────── */
+    /* ── card 2: new CIP applications ──────────────────────────────── */
 
     /** @return array<string, mixed> */
-    private function filesSharedCard(): array
+    private function cipNewCard(): array
     {
-        $shared = fn (CarbonImmutable $from, CarbonImmutable $to) => Share::query()
-            ->whereIn('shared_by', $this->scopeStaffIds)
-            ->whereNull('revoked_at')
+        if (! CipAccess::enabled()) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => '—',
+                'deltaUp' => false,
+                'hint' => 'CIP is not enabled on this portal.',
+            ];
+        }
+
+        $filed = fn (CarbonImmutable $from, CarbonImmutable $to) => ApplicationScope::query($this->user)
             ->where('created_at', '>=', $from)
             ->where('created_at', '<', $to)
             ->count();
 
-        $current = $shared($this->windowStart, $this->now);
-        $prior = $shared($this->priorStart, $this->windowStart);
+        $current = $filed($this->windowStart, $this->now);
+        $prior = $filed($this->priorStart, $this->windowStart);
 
         return [
             'value' => Format::count($current),
             'count' => $current,
             'delta' => Format::change($current, $prior === 0 ? null : $prior),
             'deltaUp' => $current >= $prior,
-            'hint' => 'Files and folders shared in the last '.$this->windowDays.' days. Revoked shares are not counted.',
+            'hint' => 'New CIP applications filed in the last '.$this->windowDays.' days.',
         ];
     }
 
-    /* ── card 3: clients awaiting a reply ──────────────────────────── */
+    /* ── card 3: CIP applications waiting on updates ───────────────── */
 
     /** @return array<string, mixed> */
-    private function awaitingReplyCard(Timelines $timelines): array
+    private function cipUpdatesRequiredCard(): array
     {
-        $waits = $timelines->awaiting($this->now);
-        $count = count($waits);
+        if (! CipAccess::enabled()) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => '—',
+                'deltaUp' => false,
+                'hint' => 'CIP is not enabled on this portal.',
+            ];
+        }
+
+        $apps = ApplicationScope::query($this->user)
+            ->where('status', CipStatus::UPDATE_REQUIRED)
+            ->get(['id', 'updated_at']);
+
+        $count = $apps->count();
 
         if ($count === 0) {
             return [
                 'value' => '0',
                 'count' => 0,
-                'delta' => 'All answered',
+                'delta' => 'All clear',
                 'deltaUp' => true,
-                'hint' => 'No client is waiting on a reply.',
+                'hint' => 'No CIP applications are waiting on updates.',
             ];
         }
 
-        $longest = max($waits);
+        $entered = CipEvent::query()
+            ->whereIn('application_id', $apps->pluck('id')->all())
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+            ->where('to_status', CipStatus::UPDATE_REQUIRED)
+            ->selectRaw('application_id, max(created_at) as entered_at')
+            ->groupBy('application_id')
+            ->pluck('entered_at', 'application_id');
+
+        $longest = 0;
+        foreach ($apps as $app) {
+            $at = isset($entered[$app->id])
+                ? CarbonImmutable::parse((string) $entered[$app->id])
+                : CarbonImmutable::instance($app->updated_at);
+            $longest = max($longest, (int) $at->diffInSeconds($this->now));
+        }
 
         return [
             'value' => Format::count($count),
             'count' => $count,
             'longestSeconds' => $longest,
             'delta' => Format::duration($longest).' waiting',
-            // More people waiting is worse, so this card's arrow always points
-            // down while anyone is unanswered.
+            // More files waiting is worse, so the arrow always points down
+            // while anyone is unanswered.
             'deltaUp' => false,
-            'hint' => Format::plural($count, 'client has', 'clients have').' sent a message with no reply yet.',
+            'hint' => Format::plural($count, 'application is', 'applications are')
+                .' waiting on updates from the provider.',
         ];
     }
 
@@ -245,7 +284,7 @@ class DashboardMetrics
 
     /**
      * Client and staff activity from both channels, merged into one set of
-     * threads. Built once and shared by the two cards that read it.
+     * threads. Built once for the response-time card.
      */
     private function buildTimelines(): Timelines
     {

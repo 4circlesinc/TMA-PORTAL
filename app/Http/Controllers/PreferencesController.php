@@ -101,26 +101,30 @@ class PreferencesController extends Controller
     ];
 
     private const TILE_IDS = [
-        'recentFiles', 'email', 'shortcuts', 'favorites',
-        'road', 'employees',
+        'recentFiles', 'email', 'cipStatus', 'favorites', 'road',
+        'shortcuts', 'employees', 'messages',
     ];
 
     /**
      * Default home board — mirrors the client masonry columns:
-     * Recent Files → Favorites | Recent Email → Road | Shortcuts → Employees.
+     * Recent Files → Favorites | Recent Email → Road |
+     * CIP Applications → Shortcuts → Employees (Messages fills shortest).
      */
     private const DEFAULT_DASHBOARD_ORDER = [
-        'recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees',
+        'recentFiles', 'email', 'cipStatus', 'favorites', 'road',
+        'shortcuts', 'employees', 'messages',
     ];
 
     /** @var array<string, bool> */
     private const DEFAULT_DASHBOARD_TILES = [
         'recentFiles' => true,
         'email' => true,
+        'cipStatus' => true,
         'shortcuts' => true,
         'employees' => true,
         'favorites' => true,
         'road' => true,
+        'messages' => true,
     ];
 
     /** The signed-in user's preferences, filled in with defaults. */
@@ -133,7 +137,7 @@ class PreferencesController extends Controller
     }
 
     /** Layout generation — bump when the shipped default board changes. */
-    private const DASHBOARD_LAYOUT_VERSION = 11;
+    private const DASHBOARD_LAYOUT_VERSION = 12;
 
     /** Persist the default home board so every browser starts the same. */
     private function seedDashboardLayoutIfMissing(User $user): void

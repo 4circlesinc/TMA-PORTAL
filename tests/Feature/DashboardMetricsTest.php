@@ -2,17 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipEvent;
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
-use App\Models\FileItem;
-use App\Models\Folder;
 use App\Models\MailMessage;
 use App\Models\Message;
-use App\Models\Share;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Cip\Applications;
+use App\Support\Cip\Status as CipStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -221,106 +222,53 @@ class DashboardMetricsTest extends TestCase
         $this->assertSame(0, $card['sample']);
     }
 
-    /* ── clients awaiting reply ────────────────────────────────────── */
+    /* ── CIP updates required ──────────────────────────────────────── */
 
-    public function test_it_counts_clients_whose_last_message_went_unanswered(): void
+    public function test_it_counts_cip_applications_waiting_on_updates(): void
     {
+        config(['services.cip.enabled' => true]);
         $staff = $this->staff();
-        $waiting = $this->client('dana@example.com');
-        $answered = $this->client('sam@example.com');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
-        $a = $this->conversation($staff, $waiting);
-        $this->say($a, $waiting, '3 hours');
+        $waiting = Applications::create($provider, $staff);
+        $waiting->forceFill(['status' => CipStatus::UPDATE_REQUIRED])->save();
+        CipEvent::create([
+            'application_id' => $waiting->id,
+            'actor_id' => $staff->id,
+            'action' => CipEvent::ACTION_STATUS_CHANGED,
+            'from_status' => CipStatus::ASSESSMENT_FEEDBACK,
+            'to_status' => CipStatus::UPDATE_REQUIRED,
+        ])->forceFill(['created_at' => now()->subHours(3)])->saveQuietly();
 
-        $b = $this->conversation($staff, $answered);
-        $this->say($b, $answered, '5 hours');
-        $this->say($b, $staff, '4 hours');
+        $clear = Applications::create($provider, $staff);
+        $clear->forceFill(['status' => CipStatus::REVIEW_APPLICATION])->save();
 
-        $card = $this->metrics($staff)['cards']['awaitingReply'];
+        $card = $this->metrics($staff)['cards']['cipUpdatesRequired'];
 
         $this->assertSame('1', $card['value']);
         $this->assertStringContainsString('3h', $card['delta']);
     }
 
-    public function test_one_client_waiting_in_two_threads_is_counted_once(): void
+    /* ── new CIP applications ──────────────────────────────────────── */
+
+    public function test_new_cip_applications_count_the_window(): void
     {
+        config(['services.cip.enabled' => true]);
         $staff = $this->staff();
-        $client = $this->client();
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
-        $this->say($this->conversation($staff, $client), $client, '2 hours');
-        $this->say($this->conversation($staff, $client), $client, '6 hours');
+        $recent = Applications::create($provider, $staff);
+        $recent->forceFill(['created_at' => now()->subDays(2)])->saveQuietly();
 
-        $card = $this->metrics($staff)['cards']['awaitingReply'];
+        $alsoRecent = Applications::create($provider, $staff);
+        $alsoRecent->forceFill(['created_at' => now()->subDays(9)])->saveQuietly();
 
-        // One person, reported at their longest wait.
-        $this->assertSame(1, $card['count']);
-        $this->assertStringContainsString('6h', $card['delta']);
-    }
+        $old = Applications::create($provider, $staff);
+        $old->forceFill(['created_at' => now()->subDays(45)])->saveQuietly();
 
-    public function test_a_client_reaching_out_by_both_channels_is_one_waiting_client(): void
-    {
-        $staff = $this->staff();
-        $client = $this->client('dana@example.com');
-        $account = $this->mailbox($staff);
-
-        $this->say($this->conversation($staff, $client), $client, '2 hours');
-        $this->mail($staff, $account, ['sent_at' => now()->subHours(3)]);
-
-        $this->assertSame(1, $this->metrics($staff)['cards']['awaitingReply']['count']);
-    }
-
-    /* ── files shared ──────────────────────────────────────────────── */
-
-    public function test_files_shared_counts_the_window_and_ignores_revoked_shares(): void
-    {
-        $staff = $this->staff();
-
-        $this->share($staff, now()->subDays(2));
-        $this->share($staff, now()->subDays(9));
-        $this->share($staff, now()->subDays(3), revoked: true);
-        $this->share($staff, now()->subDays(45));   // before the window
-
-        $card = $this->metrics($staff)['cards']['filesShared'];
+        $card = $this->metrics($staff)['cards']['cipNew'];
 
         $this->assertSame(2, $card['count']);
-    }
-
-    private function share(User $by, $at, bool $revoked = false): Share
-    {
-        $folder = Folder::create([
-            'uuid' => (string) Str::uuid(),
-            'name' => 'Docs',
-            'owner_id' => $by->id,
-            'created_by' => $by->id,
-        ]);
-
-        $file = FileItem::create([
-            'uuid' => (string) Str::uuid(),
-            'folder_id' => $folder->id,
-            'owner_id' => $by->id,
-            'uploaded_by' => $by->id,
-            'name' => 'brief.pdf',
-            'extension' => 'pdf',
-            'mime_type' => 'application/pdf',
-            'size' => 100,
-            'disk' => 'local',
-            'storage_path' => 'files/'.Str::random(8).'.pdf',
-        ]);
-
-        $share = Share::create([
-            'uuid' => (string) Str::uuid(),
-            'token' => Str::random(32),
-            'item_type' => 'file',
-            'item_id' => $file->id,
-            'shared_by' => $by->id,
-            'kind' => 'link',
-            'role' => 'viewer',
-            'revoked_at' => $revoked ? now() : null,
-        ]);
-
-        $share->forceFill(['created_at' => $at])->saveQuietly();
-
-        return $share;
     }
 
     /* ── documents awaiting signature ──────────────────────────────── */
@@ -397,14 +345,14 @@ class DashboardMetricsTest extends TestCase
         $admin = $this->staff('admin@example.com');
         $officer = $this->staff('officer@example.com', 'Reviewing Officer');
 
-        $this->share($admin, now()->subDay());
-        $this->share($officer, now()->subDay());
+        $this->request($admin, 'sent');
+        $this->request($officer, 'sent');
 
         $this->assertSame('organization', $this->metrics($admin)['scope']);
-        $this->assertSame(2, $this->metrics($admin)['cards']['filesShared']['count']);
+        $this->assertSame(2, $this->metrics($admin)['cards']['awaitingSignature']['count']);
 
         $this->assertSame('personal', $this->metrics($officer)['scope']);
-        $this->assertSame(1, $this->metrics($officer)['cards']['filesShared']['count']);
+        $this->assertSame(1, $this->metrics($officer)['cards']['awaitingSignature']['count']);
     }
 
     public function test_clients_get_no_kpi_row(): void
@@ -417,10 +365,11 @@ class DashboardMetricsTest extends TestCase
 
     public function test_an_empty_account_reports_nothing_rather_than_inventing_a_number(): void
     {
+        config(['services.cip.enabled' => true]);
         $cards = $this->metrics($this->staff())['cards'];
 
         $this->assertSame('—', $cards['clientResponse']['value']);
-        $this->assertSame('0', $cards['filesShared']['value']);
-        $this->assertSame('0', $cards['awaitingReply']['value']);
+        $this->assertSame('0', $cards['cipNew']['value']);
+        $this->assertSame('0', $cards['cipUpdatesRequired']['value']);
     }
 }

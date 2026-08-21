@@ -80,8 +80,8 @@
 
     return '<div class="tma-dash__cards">' +
       kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse')) +
-      kpiCard('purple', 'Files Shared', 'Share', card('filesShared')) +
-      kpiCard('blue', 'Clients Awaiting Reply', 'ChatDots', card('awaitingReply')) +
+      kpiCard('purple', 'New CIP Applications', 'FilePlus', card('cipNew')) +
+      kpiCard('blue', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired')) +
       kpiCard('purple', 'Awaiting Signature', 'Signature', card('awaitingSignature')) +
       '</div>';
   }
@@ -1697,8 +1697,9 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  // 15 keeps Shortcuts stacked under CIP Applications in the third column.
-  var DASHBOARD_LAYOUT_GEN = 15;
+  // 16 re-applies CIP → Shortcuts after the server whitelist started accepting
+  // cipStatus/messages (older saves had stripped them and put CIP at the end).
+  var DASHBOARD_LAYOUT_GEN = 16;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();

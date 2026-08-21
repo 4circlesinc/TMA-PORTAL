@@ -340,8 +340,8 @@
     var cards = j.cards;
     var order = [
       ['clientResponse', 'Client response'],
-      ['filesShared', 'Files shared'],
-      ['awaitingReply', 'Awaiting reply'],
+      ['cipNew', 'New CIP applications'],
+      ['cipUpdatesRequired', 'CIP updates required'],
       ['awaitingSignature', 'Awaiting signature'],
     ];
     return order.map(function (pair) {

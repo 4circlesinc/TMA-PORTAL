@@ -95,7 +95,7 @@
         road: true,
       },
       // Default admin home board order. Unknown ids are appended.
-      dashboardTileOrder: ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees'],
+      dashboardTileOrder: ['recentFiles', 'email', 'cipStatus', 'favorites', 'road', 'shortcuts', 'employees', 'messages'],
       // Legacy size map — unused after the fixed 2-column grid; kept empty for older caches.
       dashboardTileSizes: {},
       // Populated from the File Library (section=recent) on the dashboard mount;
