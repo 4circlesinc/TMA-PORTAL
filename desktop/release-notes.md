@@ -1,2 +1,3 @@
-- Sign-in with Google or Microsoft no longer leaves a blank blue window — the app shows a clear waiting screen with Open in browser and Back to sign in
-- Forgot password and other auth screens reveal immediately instead of staying covered by the loading splash
+- On Windows, the update notice and the updating screen now appear properly, instead of opening blank or behind whatever you were working on
+- Windows tells you from the notification area when an update is waiting, and stays on screen while it installs itself
+- Updating on Windows leaves your desktop, Start menu and pinned taskbar shortcuts where they were
