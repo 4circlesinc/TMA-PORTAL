@@ -1,3 +1,2 @@
-- On Windows, the update notice and the updating screen now appear properly, instead of opening blank or behind whatever you were working on
-- Windows tells you from the notification area when an update is waiting, and stays on screen while it installs itself
-- Updating on Windows leaves your desktop, Start menu and pinned taskbar shortcuts where they were
+- Sign in, sign up and the other account screens no longer scroll — each one fits the window in a single view
+- Setting up your profile and your account now show every field and the button at once, instead of hiding the button below the fold
