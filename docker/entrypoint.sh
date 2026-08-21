@@ -41,8 +41,11 @@ DEV_KEY='base64:Yk5nQ0RlVjBja1hUM3BSNVdmMkxxSmg4dEF6TnhFNmM='
 if [ "${APP_ENV:-}" = "production" ]; then
     [ "${APP_KEY:-}" = "$DEV_KEY" ] && fail "APP_KEY is the public development key from .env.docker.example. Supply the real production key (and APP_PREVIOUS_KEYS) before starting in production."
     [ -z "${APP_KEY:-}" ] && fail "APP_KEY is empty."
-    case "${APP_DEBUG:-false}" in
-        true|1|on|On|TRUE) fail "APP_DEBUG is enabled with APP_ENV=production." ;;
+    # Match what Laravel's env parser accepts as true, not just the obvious
+    # spellings: ON, yes, y, (true) and any capitalisation all resolve to true,
+    # and a guard that misses them lets debug output reach production.
+    case "$(printf '%s' "${APP_DEBUG:-false}" | tr 'A-Z' 'a-z' | tr -d '()')" in
+        true|1|on|yes|y) fail "APP_DEBUG is enabled with APP_ENV=production." ;;
     esac
 fi
 
@@ -67,11 +70,12 @@ fi
 # ---------------------------------------------------------------------------
 # Writable state.
 #
-# Volumes mount at leaf directories only — never at storage/ or
-# storage/app/private, which would mask the 285 committed documents under
-# storage/app/private/vault that every files row with disk='local' resolves
-# against. A fresh named volume also arrives empty and root-owned on some
-# engines, so ownership is asserted here rather than assumed from the image.
+# Production mounts named volumes at the two disk roots (storage/app/private
+# and storage/app/public) so a worker's writes are visible to the web container
+# and survive a redeploy. A fresh volume arrives empty, which would mask the
+# documents committed under storage/app/private/vault — seed_storage() below
+# restores them. Ownership is asserted here rather than assumed, because Docker
+# creates a volume root-owned when the image has no directory at its mountpoint.
 # ---------------------------------------------------------------------------
 for dir in \
     storage/app/private/uploads \
@@ -116,7 +120,10 @@ done
 seed_storage() {
     [ -d /opt/tma/seed ] || return 0
 
-    # Cheap, stable signature of what the image is offering.
+    # Signature of the seed's file LIST (paths, not contents) — enough to notice
+    # an image that ships different baked files, and cheap enough to run on
+    # every boot. It is skipped entirely when /opt/tma/seed is absent, which is
+    # every development container.
     rev="$(find /opt/tma/seed -type f 2>/dev/null | LC_ALL=C sort | md5sum | cut -d' ' -f1)"
 
     for pair in "private:storage/app/private" "public:storage/app/public"; do
@@ -225,18 +232,19 @@ wait_for_db() {
 }
 
 # ---------------------------------------------------------------------------
-# public/storage.
+# public/storage is deliberately NOT created.
 #
-# The host's symlink is an absolute path into /Users/... and is excluded from
-# the build context, so it must be recreated here. Nothing currently serves
-# through it — every asset streams via a controller — but it costs one
-# idempotent call and keeps legacy photo_url LIKE '/storage/%' rows resolving.
+# `artisan storage:link` points public/storage at storage/app/public, which puts
+# the entire public disk inside the document root. nginx's try_files then serves
+# any file under it directly — no session, no signature — which is exactly the
+# unauthenticated exposure of cip/passport-photos and avatars that removing the
+# /storage/ alias was meant to close. Laravel already owns that URL: the local
+# disk sets 'serve' => true, registering an authorising storage.local route.
+#
+# Nothing needs the symlink. Every asset in this application streams through a
+# controller, and the only Storage URL call is a temporaryUrl for desktop
+# releases, which the signed route handles.
 # ---------------------------------------------------------------------------
-link_storage() {
-    [ -L public/storage ] && return 0
-    [ -e public/storage ] && return 0
-    php artisan storage:link --quiet 2>/dev/null || log "storage:link skipped"
-}
 
 # ---------------------------------------------------------------------------
 # Production caches.
@@ -269,7 +277,6 @@ role="${1:-}"
 case "$role" in
     supervisord)
         wait_for_db
-        link_storage
         optimize
         log "starting web (nginx + php-fpm) on :${TMA_NGINX_PORT}"
         ;;

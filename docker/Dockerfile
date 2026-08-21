@@ -67,10 +67,15 @@ ARG APP_HOME=/var/www/html
 ARG UID=1000
 ARG GID=1000
 
+# HOME is set away from ${APP_HOME} on purpose: www-data's home would otherwise
+# be the application directory, which in development is the bind-mounted
+# repository — so `artisan tinker` would write its history into the developer's
+# working tree and show up as a dirty file in git.
 ENV APP_HOME=${APP_HOME} \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1 \
-    COMPOSER_HOME=/tmp/composer
+    COMPOSER_HOME=/tmp/composer \
+    HOME=/tmp/tma-home
 
 # --- runtime packages -------------------------------------------------------
 # nginx and supervisor live here rather than in their own containers: see the
@@ -204,10 +209,11 @@ RUN set -eux; \
         /var/log/supervisor \
         /run/php \
         /tmp/composer \
+        /tmp/tma-home \
     ; \
     rm -f /etc/nginx/sites-enabled/default; \
     chown -R www-data:www-data \
-        "${APP_HOME}" /tmp/nginx /var/log/supervisor /run/php /tmp/composer /var/lib/nginx
+        "${APP_HOME}" /tmp/nginx /var/log/supervisor /run/php /tmp/composer /tmp/tma-home /var/lib/nginx
 
 # Fail the build, not the deploy, if either daemon's configuration is wrong.
 # Runs after the directories above exist: nginx -t verifies its temp paths and
@@ -334,7 +340,8 @@ COPY --from=deps --chown=www-data:www-data ${APP_HOME}/vendor ${APP_HOME}/vendor
 # context in the first place, and it is what must be relied on.
 # The two local-disk roots are excluded here and copied to /opt/tma/seed below
 # instead, so their ~45 MB of committed content exists in exactly one place in
-# the image. The entrypoint restores it into the running tree.
+# the image. The entrypoint restores it into an empty volume ONCE, stamped, so
+# a document deleted through the portal does not reappear on the next boot.
 COPY --chown=www-data:www-data \
      --exclude=docker \
      --exclude=desktop \

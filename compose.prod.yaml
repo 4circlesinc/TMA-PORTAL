@@ -162,6 +162,11 @@ services:
     # administrator with a random password printed to a log nobody is reading.
     command: php artisan migrate --force --isolated
     volumes:
+      # The same disk roots as everything else. Without them this one-shot
+      # seeds a throwaway container layer on every deploy, logs a misleading
+      # "seeded ... file(s) restored" line, and throws the work away.
+      - storage_private:/var/www/html/storage/app/private
+      - storage_public:/var/www/html/storage/app/public
       - logs:/var/www/html/storage/logs
 
   # ---------------------------------------------------------------------------

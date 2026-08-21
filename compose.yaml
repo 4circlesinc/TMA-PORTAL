@@ -265,7 +265,7 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # Scheduler. 18 tasks; five of them fire every minute. Exactly one replica —
+  # Scheduler. 18 tasks, several of which fire every minute. Exactly one replica —
   # no schedule entry uses ->onOneServer(). It is also the only thing that
   # reaps expired chunked uploads, so without it that directory grows forever.
   # ---------------------------------------------------------------------------

@@ -225,7 +225,7 @@ Three files, and they do not overwrite each other:
 
 | File | Role |
 |------|------|
-| `.env` | **Not used by any container.** It points at the live Laravel Cloud database. Compose mounts an empty file over it inside the container so it cannot be read by accident. `.env.backup` and `.env.production` are masked the same way — the first carries the same production credentials, and the bind mount would otherwise hand a readable copy to every container |
+| `.env` | **Not used by any container.** It points at the live Laravel Cloud database. Compose mounts an empty file over it inside the container so it cannot be read by accident. `.env.backup` is masked the same way — it carries the same production credentials and the bind mount would otherwise hand a readable copy to every container. `.env.production` is deliberately *not* masked: bind-mounting onto a missing path makes Docker create it, and an empty `.env.production` would silently satisfy the production stack's own "you must write this file" guard |
 | `.env.docker.example` | Committed, complete, safe defaults. Compose reads this first. Editing it is not required |
 | `.env.docker` | Yours, gitignored, optional. Compose reads it second, so anything in it wins |
 
@@ -371,9 +371,11 @@ discarded on the next redeploy, which silently loses every uploaded avatar.
 
 Those volumes start empty, which would hide the content committed to the
 repository — 285 vault documents that `files` rows with `disk='local'` resolve
-against, plus messaging attachments and avatars. The image carries a seed copy
-at `/opt/tma/seed`, and the entrypoint copies anything missing into place on
-every start (`cp -rn`, so it never overwrites what users have uploaded).
+against, plus messaging attachments and avatars. The image carries a seed copy at
+`/opt/tma/seed`, and the entrypoint restores it into an empty volume **once**,
+recording a stamp so it does not run again. That distinction matters: copying on
+every start would treat "absent" as "missing", so a document an administrator
+deleted through the portal would reappear at the next restart.
 
 Back up `pgdata`, and the `storage_*` volumes too unless `FILES_DISK=s3`:
 
