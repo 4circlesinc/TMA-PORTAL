@@ -125,7 +125,7 @@
   /* What "collapsed" means for this reader: the icon rail, or nothing at all.
    * Mirrored from the server preference so it follows the account; kept in
    * localStorage too so the very first paint is already right. */
-  var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode.v2';
+  var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode.v3';
   /* v5: starred tab beside important. */
   var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v5';
   var SPLIT_RATIO_MIN = 0.22;
@@ -162,7 +162,7 @@
       var saved = localStorage.getItem(SIDEBAR_MODE_KEY);
       if (SIDEBAR_MODES.indexOf(saved) !== -1) return saved;
     } catch (e) { /* ignore */ }
-    return 'icons';
+    return 'hidden';
   }
 
   function saveSidebarMode(mode) {
@@ -7438,7 +7438,7 @@
             { id: 'single', label: 'Full width' },
           ])) +
         settingsRow('Email sidebar', 'Closing the folder list hides it completely. Icons only keeps a slim rail.',
-          settingsChoice('sidebarMode', prefs.sidebarMode || 'icons', [
+          settingsChoice('sidebarMode', prefs.sidebarMode || 'hidden', [
             { id: 'full', label: 'Full' },
             { id: 'hidden', label: 'Hidden' },
             { id: 'icons', label: 'Icons only' },

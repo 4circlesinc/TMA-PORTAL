@@ -319,10 +319,9 @@ class AccountSetupController extends Controller
 
         return [
             'layout' => in_array($mail['layout'] ?? '', ['split', 'single'], true) ? $mail['layout'] : 'split',
-            // Full was the previous implicit default. Treat it as unset so the
-            // setup screen lands on Icons only unless they picked Hidden.
-            'sidebarMode' => in_array($mail['sidebarMode'] ?? '', ['icons', 'hidden'], true)
-                ? $mail['sidebarMode'] : 'icons',
+            // Always present Hidden as the selected default. Earlier passes
+            // saved Full or Icons only as the implicit choice.
+            'sidebarMode' => 'hidden',
             'signature' => (string) ($mail['signature'] ?? ''),
         ];
     }

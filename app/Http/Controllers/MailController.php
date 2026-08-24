@@ -1949,9 +1949,8 @@ class MailController extends Controller
             'conversationView' => true,
             'previewPane' => true,
             'undoSendSeconds' => 5,
-            // Compact icon rail by default. Full labels and Hidden stay
-            // available from setup and mailbox settings.
-            'sidebarMode' => 'icons',
+            // Hidden by default so the folder list is off until they open it.
+            'sidebarMode' => 'hidden',
             // Split keeps folders, list and message on screen together; single
             // gives the list the full width and opens messages over it.
             'layout' => 'split',
@@ -1966,7 +1965,7 @@ class MailController extends Controller
         // A stored value from an older client (or a hand-edited row) must never
         // put the UI into a state it has no rendering for.
         if (! in_array($merged['sidebarMode'], ['full', 'icons', 'hidden'], true)) {
-            $merged['sidebarMode'] = 'icons';
+            $merged['sidebarMode'] = 'hidden';
         }
         if (! in_array($merged['layout'], ['split', 'single'], true)) {
             $merged['layout'] = 'split';

@@ -137,25 +137,26 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertDontSee('Connect Microsoft to continue')
             ->assertDontSee('Email signature')
             ->assertSee('name="layout" value="split" checked', false)
-            ->assertSee('name="sidebarMode" value="icons" checked', false);
+            ->assertSee('name="sidebarMode" value="hidden" checked', false);
 
         $this->actingAs($user)->post(route('account-setup.store', ['step' => 'email']), [
             'layout' => 'split',
-            'sidebarMode' => 'icons',
+            'sidebarMode' => 'hidden',
         ])->assertRedirect('/');
     }
 
-    public function test_email_setup_selects_icons_even_when_full_was_already_saved(): void
+    public function test_email_setup_selects_hidden_even_when_another_sidebar_was_already_saved(): void
     {
         $user = $this->staffMidSetup([
             'accountSetupStep' => 'email',
-            'mail' => ['layout' => 'split', 'sidebarMode' => 'full'],
+            'mail' => ['layout' => 'split', 'sidebarMode' => 'icons'],
         ]);
 
         $this->actingAs($user)
             ->get(route('account-setup.show', ['step' => 'email']))
             ->assertOk()
-            ->assertSee('name="sidebarMode" value="icons" checked', false)
+            ->assertSee('name="sidebarMode" value="hidden" checked', false)
+            ->assertDontSee('name="sidebarMode" value="icons" checked', false)
             ->assertDontSee('name="sidebarMode" value="full" checked', false);
     }
 

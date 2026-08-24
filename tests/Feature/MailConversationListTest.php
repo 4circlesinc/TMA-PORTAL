@@ -245,9 +245,9 @@ class MailConversationListTest extends TestCase
 
         $preferences = $this->actingAs($user)->getJson('/portal/mail')->json('preferences');
 
-        // Split and an icons-only sidebar are the defaults the first paint relies on.
+        // Split and a hidden sidebar are the defaults the first paint relies on.
         $this->assertSame('split', $preferences['layout']);
-        $this->assertSame('icons', $preferences['sidebarMode']);
+        $this->assertSame('hidden', $preferences['sidebarMode']);
         $this->assertSame(['important', 'starred', 'pinned'], $preferences['inboxCategories']);
     }
 
