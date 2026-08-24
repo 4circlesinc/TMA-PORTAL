@@ -5,16 +5,16 @@
 @section('body')
   <main class="tma-auth" data-account-setup data-step="{{ $step }}">
     <div class="tma-auth__body">
-      <section class="tma-auth__card tma-auth__card--tall tma-auth__card--setup" aria-labelledby="setup-title">
-        <div class="tma-auth__setup-progress" aria-hidden="true">
-          @for ($i = 1; $i <= $total; $i++)
-            <span class="tma-auth__setup-dot {{ $i < $index ? 'tma-auth__setup-dot--done' : ($i === $index ? 'tma-auth__setup-dot--active' : '') }}"></span>
-          @endfor
+      <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="setup-title">
+        <div class="tma-auth__progress" aria-hidden="true">
+          <div class="tma-auth__progress-row">
+            <span><strong>Step {{ $index }}</strong> of {{ $total }}</span>
+            <span>@if ($optional) Optional @endif</span>
+          </div>
+          <div class="tma-auth__progress-track">
+            <div class="tma-auth__progress-fill" style="width: {{ (int) round($index / max($total, 1) * 100) }}%;"></div>
+          </div>
         </div>
-
-        <p class="tma-auth__setup-kicker">Step {{ $index }} of {{ $total }}</p>
-
-        @yield('setup-content')
 
         @if ($errors->any())
           <div class="tma-auth__alert tma-auth__alert--error" role="alert">
@@ -22,6 +22,8 @@
             <span>{{ $errors->first() }}</span>
           </div>
         @endif
+
+        @yield('setup-content')
       </section>
     </div>
 
@@ -30,5 +32,5 @@
 @endsection
 
 @push('scripts')
-  <script src="/js/account-setup.js?v=1"></script>
+  <script src="/js/account-setup.js?v=2"></script>
 @endpush
