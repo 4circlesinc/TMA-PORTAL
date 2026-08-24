@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\AvatarService;
+use App\Support\Cip\CipAccess;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
 use App\Support\Presence\AvailabilityService;
@@ -42,6 +43,11 @@ class MeController extends Controller
             'accountType' => $user->account_type,
             'isAdmin' => Role::isAdmin($user),
             'isStaff' => Role::isStaff($user),
+            // External CIP: service-provider contacts see only their firm's
+            // applications (no Service providers tab). Private clients too.
+            'cipReach' => CipAccess::canReach($user),
+            'isProviderContact' => CipAccess::isProviderContact($user),
+            'isPrivateClient' => CipAccess::isPrivateClient($user),
             // What this account may reach, so the sidebar, the mobile menu and
             // the global search index can hide exactly what the server would
             // refuse. Convenience only — every one of these is enforced again

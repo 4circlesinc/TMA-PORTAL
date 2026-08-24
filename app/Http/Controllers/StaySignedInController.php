@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,8 @@ class StaySignedInController extends Controller
     public function show(Request $request): View|RedirectResponse
     {
         if (! StaySignedIn::isNeeded($request)) {
+            SafeIntended::scrub();
+
             return redirect()->intended('/');
         }
 
@@ -43,6 +46,7 @@ class StaySignedInController extends Controller
 
         StaySignedIn::clearNeeded($request);
 
+        SafeIntended::scrub();
         $response = redirect()->intended('/');
 
         foreach (StaySignedIn::answerCookies($request, $data['stay']) as $cookie) {

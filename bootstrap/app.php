@@ -42,6 +42,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
         $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);
+
+        // Guest hits on /media/avatars/*.jpg must not park that URL as
+        // url.intended — otherwise register/login sends people to a raw image.
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->is('media/*')) {
+                return null;
+            }
+
+            return route('login');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -90,7 +100,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Expired/invalid signed email-verification links get the design's
         // "link expired" card instead of a bare 403.
         $exceptions->render(function (InvalidSignatureException $e, Request $request) {
-            if ($request->routeIs('verification.verify')) {
+            if ($request->routeIs('verification.verify', 'verification.verify.unsigned')) {
                 return response()->view('auth.verify-link-expired', [], 403);
             }
 

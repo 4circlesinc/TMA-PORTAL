@@ -4,10 +4,6 @@
 
 @section('body')
   <main class="tma-auth tma-auth--split">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
-
     {{-- The mark used to sit in this corner as well. Two logos on one screen is
          one too many, and the full lockup in the panel beside it is the one that
          actually names the firm. --}}

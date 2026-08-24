@@ -1,53 +1,35 @@
 /*
- * Sign-out for static portal shells: POSTs to Fortify's logout endpoint
- * using the XSRF cookie (no server-rendered form needed on static pages).
- * Wire any element with data-action="sign-out".
+ * Sign-out for the portal shell: POST /auth/logout, then leave for login.
  *
- * It was reported as needing two clicks — the first one "just refreshing the
- * page". Everything below is about making one click final:
+ * Wire any element with data-action="sign-out". Capture-phase so other click
+ * handlers (SPA nav, settings) cannot turn the click into a soft refresh.
  *
- *   - The listener is on the *capture* phase, so it runs before anything else
- *     on the page can act on the same click, and it stops the event dead. A
- *     document-level bubbling listener is the last to hear a click, not the
- *     first, so every other handler between the button and here had already
- *     run by the time sign-out started.
- *   - The page is flagged as leaving. portal-live.js reloads the page by
- *     itself when /me comes back with a different capability set — and a
- *     session that has just been destroyed is exactly a different capability
- *     set, so a poller landing mid-sign-out reloaded the page out from under
- *     this and the click looked like it had only refreshed.
- *   - Nothing unbounded is awaited before leaving. The cache wipe used to be,
- *     and IndexedDB is not obliged to answer: a wipe that never settles was a
- *     click that never went anywhere.
- *   - A second click while one is in flight is ignored rather than starting
- *     another.
+ * A failed logout that still navigated to /auth/login used to bounce the
+ * still-authenticated reader straight back into the portal — that is the
+ * "it just refreshed" bug, especially visible on Account settings.
  */
 (function () {
   'use strict';
 
-  /* Long enough for a real wipe, short enough that nobody waits on a broken
-     one. Whatever is left is finished on the next boot — see the marker. */
   var WIPE_MS = 1500;
-
-  /* Set while a wipe is outstanding, so a sign-out that had to leave before
-     the cache was empty is finished the next time the app starts rather than
-     leaving one reader's cached pages for the next one. */
   var PENDING = 'tma.wipe-pending';
-
+  var FLAG = 'tma.signing-out';
   var leaving = false;
 
   function forget() {
     try { localStorage.removeItem('tma.me'); } catch (e) { /* nothing kept */ }
   }
 
-  /**
-   * Everything this browser holds about the reader who is leaving.
-   *
-   * portal-store.js always described clear() as "what signing out runs", but
-   * for a long time nothing ran it: on a desktop the previous reader's cache
-   * outlived their session, saved only by setAccount wiping on the NEXT
-   * sign-in.
-   */
+  function markLeaving() {
+    window.__TMA_SIGNING_OUT = true;
+    try { sessionStorage.setItem(FLAG, '1'); } catch (e) { /* private mode */ }
+  }
+
+  function clearLeaving() {
+    window.__TMA_SIGNING_OUT = false;
+    try { sessionStorage.removeItem(FLAG); } catch (e) { /* private mode */ }
+  }
+
   function wipe() {
     if (!window.TMAStore || !window.TMAStore.clear) return Promise.resolve();
 
@@ -59,52 +41,92 @@
       })
       .catch(function () {});
 
-    // Raced, not awaited. A wipe that never settles must not become a
-    // sign-out that never happens.
     return Promise.race([
       done,
       new Promise(function (resolve) { setTimeout(resolve, WIPE_MS); }),
     ]);
   }
 
-  function token() {
+  function cookieToken() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-
     return m ? decodeURIComponent(m[1]) : '';
   }
 
-  function post() {
+  function csrf() {
+    if (typeof window.TMACsrfToken === 'string' && window.TMACsrfToken) {
+      return window.TMACsrfToken;
+    }
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) return meta.content;
+    return cookieToken();
+  }
+
+  function postFetch() {
     return fetch('/auth/logout', {
       method: 'POST',
       credentials: 'same-origin',
+      redirect: 'manual',
       headers: {
         'Accept': 'application/json',
-        'X-XSRF-TOKEN': token(),
-        'X-Requested-With': 'XMLHttpRequest'
-      }
+        'X-XSRF-TOKEN': cookieToken() || csrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrf(),
+      },
     });
   }
 
-  /**
-   * The POST, and one retry.
-   *
-   * A rejected or refused logout used to be swallowed whole, and the page then
-   * navigated to /auth/login with the session still alive — which the server
-   * answers by sending the reader straight back to the portal. That is the
-   * "it just refreshed" symptom exactly, and it is also why a second click
-   * worked: the round trip in between had left a usable token behind.
-   *
-   * 419 is the one worth retrying: the token travelled and was stale. The
-   * response carries a fresh XSRF cookie, so simply asking again works.
-   */
-  function signOut() {
-    return post()
-      .then(function (res) {
-        if (res.status !== 419) return res;
+  function ok(res) {
+    if (!res) return false;
+    // redirect:manual → opaqueredirect on 302; Fortify also returns 204/200 JSON.
+    if (res.type === 'opaqueredirect') return true;
+    return res.status === 200 || res.status === 204 || res.status === 302;
+  }
 
-        return post();
+  function formFallback() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/logout';
+    form.style.display = 'none';
+
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = '_token';
+    input.value = csrf();
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  function goLogin() {
+    clearLeaving();
+    window.location.replace('/auth/login');
+  }
+
+  function signOut() {
+    return postFetch()
+      .then(function (res) {
+        if (res && res.status === 419) return postFetch();
+        return res;
       })
       .catch(function () { return null; });
+  }
+
+  function run() {
+    if (leaving) return;
+    leaving = true;
+    markLeaving();
+    forget();
+
+    Promise.all([wipe(), signOut()]).then(function (parts) {
+      var res = parts[1];
+      if (ok(res)) {
+        goLogin();
+        return;
+      }
+      // Last resort: full form POST (browser navigates with the session cookie).
+      formFallback();
+    });
   }
 
   document.addEventListener('click', function (ev) {
@@ -112,38 +134,34 @@
     if (!btn) return;
 
     ev.preventDefault();
-    // Capture phase: nothing else on the page gets to see this click at all.
     ev.stopPropagation();
     if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-
-    if (leaving) return;
-    leaving = true;
-
-    /* Read by portal-live.js, which otherwise reloads the page the moment /me
-       reports the capabilities of a session that no longer exists. */
-    window.__TMA_SIGNING_OUT = true;
 
     try {
       btn.setAttribute('aria-busy', 'true');
       btn.setAttribute('aria-disabled', 'true');
     } catch (e) { /* decoration only */ }
 
-    forget();
-
-    Promise.all([wipe(), signOut()]).then(function () {
-      // replace(), not href: the portal must not be one Back press away from a
-      // reader who has just left it.
-      window.location.replace('/auth/login');
-    });
+    run();
   }, true);
 
-  /* Finish a wipe that had to be cut short last time. Cheap when there is
-     nothing to do — the marker is only ever set by a sign-out. */
+  // Mid-sign-out reload: finish leaving instead of painting the portal again.
+  try {
+    if (sessionStorage.getItem(FLAG)) {
+      markLeaving();
+      forget();
+      signOut().then(function (res) {
+        if (ok(res)) goLogin();
+        else formFallback();
+      });
+    }
+  } catch (e) { /* no storage */ }
+
   try {
     if (localStorage.getItem(PENDING) && window.TMAStore && window.TMAStore.clear) {
       Promise.resolve(window.TMAStore.clear()).then(function () {
         try { localStorage.removeItem(PENDING); } catch (e) { /* best effort */ }
       }).catch(function () {});
     }
-  } catch (e) { /* no storage, nothing pending */ }
+  } catch (e) { /* no storage */ }
 })();

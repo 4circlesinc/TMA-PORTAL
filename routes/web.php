@@ -92,6 +92,8 @@ use App\Http\Controllers\PortalPermissionsController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
+use App\Http\Controllers\EmailVerificationStatusController;
+use App\Http\Controllers\UnsignedVerifyEmailController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\ServiceTeamsController;
@@ -119,7 +121,20 @@ Route::middleware(['auth'])->group(function () {
     // The company logo, for the same reason: the onboarding and profile-setup
     // screens wear the firm's branding before 'profile.complete' passes.
     Route::get('/media/branding/{name}', [BrandingController::class, 'logo'])->name('branding.logo');
+
+    // Poll target for the "Confirm your email" screen — another device may
+    // have already followed the signed link.
+    Route::get('/auth/email/verification-status', EmailVerificationStatusController::class)
+        ->name('verification.status');
 });
+
+/*
+ * Confirm email from the signed link without requiring an active session.
+ * Fortify still registers the authenticated verify route; the mail points here.
+ */
+Route::get('/auth/email/confirm/{id}/{hash}', UnsignedVerifyEmailController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify.unsigned');
 
 /*
  * Portal - requires login, verified email, and administrator approval.

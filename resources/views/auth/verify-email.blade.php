@@ -4,10 +4,6 @@
 
 @section('body')
   <main class="tma-auth">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
-
     <div class="tma-auth__body">
       <section class="tma-auth__card" aria-labelledby="verify-title">
         <div class="tma-auth__icon" aria-hidden="true">
@@ -43,3 +39,22 @@
     <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
   </main>
 @endsection
+
+@push('scripts')
+<script>
+  // Confirming from another device marks the account verified in the
+  // database — poll and reload into profile setup automatically.
+  (function () {
+    function check() {
+      fetch('/auth/email/verification-status', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.verified) window.location.reload();
+        }).catch(function () {});
+    }
+    setInterval(check, 3000);
+  })();
+</script>
+@endpush

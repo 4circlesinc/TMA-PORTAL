@@ -93,6 +93,8 @@
      Shells without it — the classic and onboarding layouts — fall back to
      holding the gated rows until /me answers, exactly as before. */
   var boot = Array.isArray(window.TMABootCapabilities) ? window.TMABootCapabilities : null;
+  var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true';
+  var providerContact = window.TMABootProviderContact === true || window.TMABootProviderContact === 'true';
 
   var caps = boot;
   var readyResolve;
@@ -104,6 +106,9 @@
     if (!capability) return true;
     // Before /me resolves nothing is known; callers should await ready().
     if (!caps) return false;
+    // Service-provider / private-client CIP reach: keep Applications nav
+    // without granting the staff clients.view capability.
+    if (capability === 'clients.view' && cipReach) return true;
     return caps.indexOf(capability) !== -1;
   }
 
@@ -229,6 +234,8 @@
   function adopt(me) {
     if (!me) return;
     caps = Array.isArray(me.capabilities) ? me.capabilities : [];
+    cipReach = !!me.cipReach;
+    providerContact = !!me.isProviderContact;
     apply();
     readyResolve(caps);
   }
@@ -269,5 +276,7 @@
     apply: apply,
     ready: function () { return readyPromise; },
     capabilities: function () { return caps ? caps.slice() : []; },
+    cipReach: function () { return !!cipReach; },
+    isProviderContact: function () { return !!providerContact; },
   };
 })();

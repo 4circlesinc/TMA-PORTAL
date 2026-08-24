@@ -1430,12 +1430,23 @@ a.tma-flowmap__name:hover {
 /* country hint on phone fields: a right-hand suffix inside the field box */
 .tma-auth__field .tma-phone-hint {
   order: 9;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
   padding-left: var(--space-8);
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+.tma-auth__field .tma-phone-hint__flag {
+  width: 16px;
+  height: 12px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .tma-phone-hint[hidden] { display: none; }

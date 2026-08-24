@@ -2899,9 +2899,9 @@
   var TWO_STEP_BACKUP_CODES = ['12345678', '23456789', '34567890', '45678901', '56789012', '67890123', '78901234', '89012345'];
   var TWO_STEP_PINNED_COUNTRY_CODE = '+1-758';
   var TWO_STEP_COUNTRIES = window.TMA_TWO_STEP_COUNTRIES || [
-    { flag: '🇱🇨', name: 'Saint Lucia', code: '+1-758' },
-    { flag: '🇺🇸', name: 'United States', code: '+1' },
-    { flag: '🇬🇧', name: 'United Kingdom', code: '+44' },
+    { iso: 'LC', name: 'Saint Lucia', code: '+1-758' },
+    { iso: 'US', name: 'United States', code: '+1' },
+    { iso: 'GB', name: 'United Kingdom', code: '+44' },
   ];
 
   function renderPopupClose(className) {
@@ -3070,9 +3070,15 @@
     return TWO_STEP_PINNED_COUNTRY_CODE;
   }
 
+  function countryFlagHtml(country) {
+    var iso = (country && country.iso) ? String(country.iso).toLowerCase() : '';
+    if (!iso) return '';
+    return '<img class="tma-dash__settings-two-step-country-flag" src="https://flagcdn.com/' + iso + '.svg" alt="" width="20" height="15" loading="lazy"> ';
+  }
+
   function renderTwoStepCountryRow(country, extraClass) {
     return '<button type="button" class="tma-dash__settings-two-step-country' + (extraClass || '') + '" data-two-step-country="' + esc(country.code) + '" data-two-step-country-name="' + esc(country.name) + '">' +
-      '<span class="tma-dash__settings-two-step-country-label">' + country.flag + ' ' + esc(country.name) + ' ' + esc(country.code) + '</span></button>';
+      '<span class="tma-dash__settings-two-step-country-label">' + countryFlagHtml(country) + esc(country.name) + ' ' + esc(country.code) + '</span></button>';
   }
 
   function renderTwoStepCountryPicker() {

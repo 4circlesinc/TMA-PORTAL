@@ -28709,6 +28709,17 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-secondary);
 }
 
+.tma-phone-hint__flag,
+.tma-dash__settings-two-step-country-flag {
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 .tma-phone-hint[hidden] { display: none; }
 
 /* inside the panel's boxed field, tuck it under the value quietly */

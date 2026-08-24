@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use Illuminate\Http\JsonResponse;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
@@ -11,6 +12,8 @@ class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
 {
     public function toResponse($request)
     {
+        SafeIntended::scrub();
+
         if ($request->wantsJson()) {
             return new JsonResponse('', 204);
         }

@@ -23,7 +23,10 @@ class CreateNewUser implements CreatesNewUsers
     public function create(array $input): User
     {
         Validator::make($input, [
-            'name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'gender' => ['required', Rule::in(['Female', 'Male', 'Non-binary', 'Prefer not to say'])],
             'email' => [
                 'required',
                 'string',
@@ -37,10 +40,20 @@ class CreateNewUser implements CreatesNewUsers
             'terms.accepted' => 'Please accept the Terms of Service and Privacy Policy to continue.',
         ])->validate();
 
-        return User::create([
-            'name' => $input['name'],
+        $user = User::create([
+            'first_name' => trim($input['first_name']),
+            'middle_name' => filled($input['middle_name'] ?? null) ? trim($input['middle_name']) : null,
+            'last_name' => trim($input['last_name']),
+            'gender' => $input['gender'],
             'email' => $input['email'],
             'password' => Hash::make($input['password']),
+            // Placeholder until syncDisplayName() runs — the column is NOT NULL.
+            'name' => trim($input['first_name'].' '.$input['last_name']),
         ]);
+
+        $user->syncDisplayName();
+        $user->save();
+
+        return $user;
     }
 }

@@ -1468,6 +1468,7 @@
      administrator's call, and these three open exactly those settings
      sections. Hidden rather than left to 404 in the rail. */
   function canManageClientHub() {
+    if (isExternalCipUser()) return false;
     var access = window.TMAPortalAccess;
     return !access || !access.canSettingsPage || access.canSettingsPage('clienthub-access');
   }
@@ -1529,9 +1530,29 @@
    * Rendered into the shell's head, so it is synced on every render the way
    * the head actions are; the page's own DOM no longer contains them.
    */
+  function isExternalCipUser() {
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.isProviderContact === 'function' && access.isProviderContact()) {
+      return true;
+    }
+    if (window.TMABootProviderContact === true || window.TMABootProviderContact === 'true') {
+      return true;
+    }
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && (me.isProviderContact || (me.cipReach && !me.isStaff)));
+  }
+
   function syncClientsHeadTabs(state, render) {
     var slot = document.querySelector('[data-page-head-tabs]');
     if (!slot) return;
+
+    // Provider contacts / private clients: applications only — no staff tabs.
+    if (isExternalCipUser()) {
+      state.listTab = 'applications';
+      slot.hidden = true;
+      slot.innerHTML = '';
+      return;
+    }
 
     // The tabs describe a list. There is no list on a profile or a form.
     var show = state.screen === 'list' && state.viewMode === 'list';

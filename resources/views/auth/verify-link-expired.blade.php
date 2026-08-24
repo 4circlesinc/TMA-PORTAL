@@ -4,10 +4,6 @@
 
 @section('body')
   <main class="tma-auth">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
-
     <div class="tma-auth__body">
       <section class="tma-auth__card" aria-labelledby="expired-title">
         <div class="tma-auth__icon" aria-hidden="true">

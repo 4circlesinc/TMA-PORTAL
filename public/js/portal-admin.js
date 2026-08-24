@@ -2602,7 +2602,16 @@
           '<h3 class="tma-portal-section__title">Multi-Factor authentication</h3>' +
           '<p class="tma-portal-subtitle">Require every user to set up an authenticator app. Anyone without one is sent to Security settings at sign-in.</p>' +
           ui().section('', '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require multi-factor authentication</span>' +
-            ui().toggle(p.requireMfa, 'data-signin-mfa' + (admin ? '' : ' disabled'), 'Require MFA') + '</div>');
+            ui().toggle(p.requireMfa, 'data-signin-mfa' + (admin ? '' : ' disabled'), 'Require MFA') + '</div>') +
+          '<h3 class="tma-portal-section__title">Getting started requirements</h3>' +
+          '<p class="tma-portal-subtitle">Turn these on to require staff to connect accounts during Set up your account. Off means the step stays optional.</p>' +
+          ui().section('', 
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require Microsoft connect</span>' +
+            ui().toggle(!!p.requireMicrosoftConnect, 'data-signin-ms' + (admin ? '' : ' disabled'), 'Require Microsoft') + '</div>' +
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require Google connect</span>' +
+            ui().toggle(!!p.requireGoogleConnect, 'data-signin-google' + (admin ? '' : ' disabled'), 'Require Google') + '</div>' +
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require authenticator app</span>' +
+            ui().toggle(!!p.requireAuthenticatorApp, 'data-signin-authapp' + (admin ? '' : ' disabled'), 'Require authenticator') + '</div>');
 
         function save(done) {
           secApi('PUT', '/admin/security-policies/sign-in', p).then(function (res) {
@@ -2613,6 +2622,12 @@
 
         var mfa = root.querySelector('[data-signin-mfa]');
         if (mfa) mfa.addEventListener('change', function () { p.requireMfa = mfa.checked; save(); });
+        var ms = root.querySelector('[data-signin-ms]');
+        if (ms) ms.addEventListener('change', function () { p.requireMicrosoftConnect = ms.checked; save(); });
+        var ggl = root.querySelector('[data-signin-google]');
+        if (ggl) ggl.addEventListener('change', function () { p.requireGoogleConnect = ggl.checked; save(); });
+        var authApp = root.querySelector('[data-signin-authapp]');
+        if (authApp) authApp.addEventListener('change', function () { p.requireAuthenticatorApp = authApp.checked; save(); });
 
         var edit = root.querySelector('[data-signin-edit]');
         if (edit) edit.addEventListener('click', function () {

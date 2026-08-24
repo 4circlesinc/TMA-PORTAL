@@ -62,10 +62,16 @@
     try { return (names && names.of(iso)) || iso; } catch (e) { return iso; }
   }
 
+  function flagImg(iso) {
+    if (!iso) return '';
+    var code = String(iso).toLowerCase();
+    // SVG flags render on every device — emoji flags do not.
+    return '<img class="tma-phone-hint__flag" src="https://flagcdn.com/' + code + '.svg" alt="" width="16" height="12" loading="lazy">';
+  }
+
   function flag(iso) {
-    return iso.replace(/./g, function (c) {
-      return String.fromCodePoint(127397 + c.charCodeAt(0));
-    });
+    // Kept for callers that still expect a plain string; prefer flagImg in UI.
+    return iso;
   }
 
   /* After an exit code, a Caribbean area code reads as a country code to the
@@ -103,9 +109,9 @@
 
   function nanpInfo(area) {
     var iso = NANP[area] || (CANADA.indexOf(area) !== -1 ? 'CA' : null);
-    if (iso) return { iso: iso, name: regionName(iso), flag: flag(iso), dial: '+1 ' + area };
-    if (area.length === 3) return { iso: 'US', name: regionName('US'), flag: flag('US'), dial: '+1 ' + area };
-    return { iso: null, name: 'US or Canada', flag: flag('US'), dial: '+1' };
+    if (iso) return { iso: iso, name: regionName(iso), flag: iso, dial: '+1 ' + area };
+    if (area.length === 3) return { iso: 'US', name: regionName('US'), flag: 'US', dial: '+1 ' + area };
+    return { iso: null, name: 'US or Canada', flag: 'US', dial: '+1' };
   }
 
   /* what country is this number from?
@@ -126,7 +132,7 @@
     for (var len = 3; len >= 1; len--) {
       var code = d.slice(0, len);
       if (CODES[code]) {
-        return { iso: CODES[code], name: regionName(CODES[code]), flag: flag(CODES[code]), dial: '+' + code };
+        return { iso: CODES[code], name: regionName(CODES[code]), flag: CODES[code], dial: '+' + code };
       }
     }
     return null;
@@ -176,7 +182,7 @@
     if (!v) { hint.textContent = ''; hint.hidden = true; return; }
     var info = describe(v);
     if (info) {
-      hint.textContent = info.flag + ' ' + info.name + ' \u00b7 ' + info.dial;
+      hint.innerHTML = flagImg(info.iso || info.flag) + ' <span>' + info.name + ' \u00b7 ' + info.dial + '</span>';
     } else if (v.charAt(0) === '+' || /^[01]\d{0,3}$/.test(v)) {
       /* "+..." or a part-typed trunk/exit prefix like 1, 0, 00, 011 */
       hint.textContent = 'Keep typing\u2026';

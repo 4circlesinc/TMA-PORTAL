@@ -19,6 +19,10 @@ class SecurityPolicies
             'numbersRequired' => 0,
             'specialRequired' => 0,
             'requireMfa' => false,
+            // Getting-started checklist: firm can require provider connects.
+            'requireMicrosoftConnect' => false,
+            'requireGoogleConnect' => false,
+            'requireAuthenticatorApp' => false,
         ],
         'security' => [
             'trustedDomains' => '',

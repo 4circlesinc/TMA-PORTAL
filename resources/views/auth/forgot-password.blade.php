@@ -11,27 +11,29 @@
 @endphp
 
 @section('body')
-  <main class="tma-auth">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
+  <main class="tma-auth tma-auth--split">
+    <section class="tma-auth__stage" aria-hidden="true">
+      <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
+    </section>
 
-    <div class="tma-auth__body">
-      <section class="tma-auth__card" aria-labelledby="forgot-title">
-        <div class="tma-auth__icon" aria-hidden="true">
-          <img src="/images/icons/phosphor/LockKey.svg" alt="" width="80" height="80">
-        </div>
+    <section class="tma-auth__panel" aria-labelledby="forgot-title">
+      <header class="tma-auth__brand">
+        <a href="/" class="tma-auth__brand-link">
+          <img src="/images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Partners">
+        </a>
+      </header>
 
+      <div class="tma-auth__panel-body">
         @if ($sent)
           <div class="tma-auth__intro">
             <h1 class="tma-auth__title" id="forgot-title">Check your inbox</h1>
-            <p class="tma-auth__subtitle">If an account exists for that email address, password reset instructions have been sent.</p>
+            <p class="tma-auth__subtitle">If an account exists for that email, we sent reset instructions.</p>
           </div>
           <a class="tma-auth__submit" href="{{ route('login') }}">Back to sign in</a>
         @else
           <div class="tma-auth__intro">
             <h1 class="tma-auth__title" id="forgot-title">Reset your password</h1>
-            <p class="tma-auth__subtitle">We'll email you reset instructions.</p>
+            <p class="tma-auth__subtitle">We'll email you a reset link.</p>
           </div>
 
           <form class="tma-auth__form" method="POST" action="{{ route('password.email') }}">
@@ -52,9 +54,9 @@
 
           <p class="tma-auth__alt-link"><a href="{{ route('login') }}">Back to sign in</a></p>
         @endif
-      </section>
-    </div>
+      </div>
 
-    <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
+      <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
+    </section>
   </main>
 @endsection

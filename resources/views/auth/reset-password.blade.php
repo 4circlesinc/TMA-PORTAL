@@ -3,20 +3,22 @@
 @section('title', 'Create a New Password')
 
 @section('body')
-  <main class="tma-auth">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
+  <main class="tma-auth tma-auth--split">
+    <section class="tma-auth__stage" aria-hidden="true">
+      <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
+    </section>
 
-    <div class="tma-auth__body">
-      <section class="tma-auth__card" aria-labelledby="reset-title">
-        <div class="tma-auth__icon" aria-hidden="true">
-          <img src="/images/icons/phosphor/Password.svg" alt="" width="80" height="80">
-        </div>
+    <section class="tma-auth__panel" aria-labelledby="reset-title">
+      <header class="tma-auth__brand">
+        <a href="/" class="tma-auth__brand-link">
+          <img src="/images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Partners">
+        </a>
+      </header>
 
+      <div class="tma-auth__panel-body">
         <div class="tma-auth__intro">
           <h1 class="tma-auth__title" id="reset-title">Create a new password</h1>
-          <p class="tma-auth__subtitle">Setting a new password for <strong>{{ $request->email }}</strong></p>
+          <p class="tma-auth__subtitle">For <strong>{{ $request->email }}</strong></p>
         </div>
 
         @error('email')
@@ -30,7 +32,6 @@
           @csrf
           <input type="hidden" name="token" value="{{ $request->route('token') }}">
           <input type="hidden" name="email" value="{{ $request->email }}">
-          {{-- lets password managers pair the new password with the account --}}
           <input type="email" value="{{ $request->email }}" autocomplete="username" readonly tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);border:0;padding:0;">
 
           <div class="tma-auth__group">
@@ -82,9 +83,9 @@
         </form>
 
         <p class="tma-auth__alt-link"><a href="{{ route('login') }}">Back to sign in</a></p>
-      </section>
-    </div>
+      </div>
 
-    <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
+      <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
+    </section>
   </main>
 @endsection

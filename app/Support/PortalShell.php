@@ -4,7 +4,9 @@ namespace App\Support;
 
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Session;
 
 /**
  * Serves the SPA shell with the signed-in account's capabilities baked in.
@@ -92,7 +94,17 @@ final class PortalShell
         // would paint the previous reader's inbox for a frame — see
         // readMailCache() in email.js. It is the account's own id, which it
         // can read from /me anyway.
+        $cipReach = CipAccess::canReach($user) ? 'true' : 'false';
+        $provider = CipAccess::isProviderContact($user) ? 'true' : 'false';
+        $token = json_encode((string) Session::token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
+        // CSRF for shell sign-out (static HTML has no Blade @csrf). Capabilities
+        // plus CIP reach so provider contacts keep the Applications nav without
+        // holding clients.view.
         return '<script>window.TMABootCapabilities='.$json.';'
-            .'window.TMABootUserId='.(int) $user->id.';</script>'."\n  ";
+            .'window.TMABootUserId='.(int) $user->id.';'
+            .'window.TMABootCipReach='.$cipReach.';'
+            .'window.TMABootProviderContact='.$provider.';'
+            .'window.TMACsrfToken='.$token.';</script>'."\n  ";
     }
 }

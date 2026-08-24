@@ -64,6 +64,8 @@ class AvatarDuringProfileSetupTest extends TestCase
     {
         $name = $this->storeAvatar();
 
-        $this->get('/media/avatars/'.$name)->assertRedirect();
+        // 401 rather than a login redirect: a redirect would park the image URL
+        // as url.intended and send a fresh registrant to a raw JPEG after signup.
+        $this->get('/media/avatars/'.$name)->assertUnauthorized();
     }
 }

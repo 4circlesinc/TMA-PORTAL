@@ -4,10 +4,6 @@
 
 @section('body')
   <main class="tma-auth tma-auth--split">
-    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
-      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
-    </button>
-
     <section class="tma-auth__stage" aria-hidden="true">
       <img class="tma-auth__stage-mark" src="/images/brand/tma/tma-logo-mark.png" alt="" width="40" height="40">
       <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
@@ -55,10 +51,51 @@
           </button>
 
           <div class="tma-auth__group">
-            <label class="tma-auth__field @error('name') tma-auth__field--error @enderror">
-              <input class="tma-auth__input" type="text" name="name" placeholder="Full name" autocomplete="name" aria-label="Full name" value="{{ old('name') }}" required>
+            <label class="tma-auth__field @error('first_name') tma-auth__field--error @enderror">
+              <input class="tma-auth__input" type="text" name="first_name" placeholder="First name" autocomplete="given-name" aria-label="First name" value="{{ old('first_name') }}" required>
             </label>
-            @error('name')
+            @error('first_name')
+              <p class="tma-auth__field-msg">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                <span>{{ $message }}</span>
+              </p>
+            @enderror
+          </div>
+
+          <div class="tma-auth__group">
+            <label class="tma-auth__field @error('middle_name') tma-auth__field--error @enderror">
+              <input class="tma-auth__input" type="text" name="middle_name" placeholder="Middle name (optional)" autocomplete="additional-name" aria-label="Middle name" value="{{ old('middle_name') }}">
+            </label>
+            @error('middle_name')
+              <p class="tma-auth__field-msg">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                <span>{{ $message }}</span>
+              </p>
+            @enderror
+          </div>
+
+          <div class="tma-auth__group">
+            <label class="tma-auth__field @error('last_name') tma-auth__field--error @enderror">
+              <input class="tma-auth__input" type="text" name="last_name" placeholder="Last name" autocomplete="family-name" aria-label="Last name" value="{{ old('last_name') }}" required>
+            </label>
+            @error('last_name')
+              <p class="tma-auth__field-msg">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                <span>{{ $message }}</span>
+              </p>
+            @enderror
+          </div>
+
+          <div class="tma-auth__group">
+            <label class="tma-auth__field @error('gender') tma-auth__field--error @enderror">
+              <select class="tma-auth__input" name="gender" aria-label="Gender" required>
+                <option value="" disabled hidden @selected(!old('gender'))>Gender</option>
+                @foreach (['Female', 'Male', 'Non-binary', 'Prefer not to say'] as $g)
+                  <option value="{{ $g }}" @selected(old('gender') === $g)>{{ $g }}</option>
+                @endforeach
+              </select>
+            </label>
+            @error('gender')
               <p class="tma-auth__field-msg">
                 <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
                 <span>{{ $message }}</span>
@@ -155,7 +192,7 @@
       providers.hidden = true;
       emailForm.hidden = false;
       if (focus) {
-        var first = emailForm.querySelector('input[name="name"]');
+        var first = emailForm.querySelector('input[name="first_name"]');
         if (first) first.focus();
       }
     }
@@ -170,7 +207,7 @@
       showEmail.focus();
     });
     if (location.hash === "#email") toEmail(true);
-    @if ($errors->any() || old('email') || old('name'))
+    @if ($errors->any() || old('email') || old('first_name') || old('last_name'))
       toEmail(false);
     @endif
   })();

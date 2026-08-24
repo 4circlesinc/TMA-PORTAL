@@ -51,6 +51,9 @@ class AdminSecurityController extends Controller
                 'numbersRequired' => ['required', 'integer', 'between:0,4'],
                 'specialRequired' => ['required', 'integer', 'between:0,4'],
                 'requireMfa' => ['required', 'boolean'],
+                'requireMicrosoftConnect' => ['required', 'boolean'],
+                'requireGoogleConnect' => ['required', 'boolean'],
+                'requireAuthenticatorApp' => ['required', 'boolean'],
             ]),
             'security' => $request->validate([
                 'trustedDomains' => ['present', 'string', 'max:2000'],
