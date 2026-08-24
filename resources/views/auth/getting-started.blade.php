@@ -21,6 +21,8 @@
           </p>
         </div>
 
+        @include('auth.setup._progress')
+
         @if (session('social_error'))
           <div class="tma-auth__alert tma-auth__alert--error" role="alert">
             <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
@@ -34,11 +36,6 @@
             <span>Connected. Syncing continues in the background.</span>
           </div>
         @endif
-
-        <div class="tma-auth__progress" aria-hidden="true">
-          <div class="tma-auth__progress-row"><span><strong>{{ $done }} of {{ $total }}</strong> complete</span><span></span></div>
-          <div class="tma-auth__progress-track"><div class="tma-auth__progress-fill" style="width: {{ (int) ($done / max($total, 1) * 100) }}%;"></div></div>
-        </div>
 
         <div class="tma-auth__checklist">
           <div class="tma-auth__task tma-auth__task--done">

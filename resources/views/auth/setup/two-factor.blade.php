@@ -10,6 +10,8 @@
     <p class="tma-auth__subtitle">Sign in with your password plus a 6-digit code from your phone.</p>
   </div>
 
+  @include('auth.setup._progress')
+
   @if ($twoFactorOn)
     <div class="tma-auth__alert tma-auth__alert--success" role="status">
       <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
@@ -91,4 +93,6 @@
       </form>
     @endif
   @endif
+
+  @include('auth.setup._back')
 @endsection

@@ -39,28 +39,7 @@ class GettingStartedController extends Controller
         $microsoftConnected = $features['email'] && $features['calendar'] && $features['onedrive'];
         $googleConnected = (bool) $google;
 
-        // Email is always done by the time anyone reaches this screen.
-        $steps = [
-            ['key' => 'email', 'done' => true, 'required' => true],
-            ['key' => 'microsoft', 'done' => $microsoftConnected, 'required' => $requireMicrosoft],
-            ['key' => 'google', 'done' => $googleConnected, 'required' => $requireGoogle],
-        ];
-
-        // When Microsoft sync is on and required, the three sync rows count as
-        // the Microsoft step (one consent). Otherwise show optional connects.
-        $visible = array_values(array_filter($steps, function (array $step) use ($microsoftConfigured, $googleConfigured) {
-            if ($step['key'] === 'microsoft') {
-                return $microsoftConfigured;
-            }
-            if ($step['key'] === 'google') {
-                return $googleConfigured || $step['required'];
-            }
-
-            return true;
-        }));
-
-        $done = count(array_filter($visible, fn (array $s) => $s['done']));
-        $total = max(count($visible), 1);
+        $wizard = AccountSetupFlow::position(AccountSetupFlow::ACCOUNTS, $user);
 
         return view('auth.getting-started', [
             'user' => $user,
@@ -74,8 +53,8 @@ class GettingStartedController extends Controller
             'requireGoogle' => $requireGoogle,
             'features' => $features,
             'allConnected' => $microsoftConnected,
-            'done' => $done,
-            'total' => $total,
+            'index' => $wizard['index'],
+            'total' => $wizard['total'],
         ]);
     }
 

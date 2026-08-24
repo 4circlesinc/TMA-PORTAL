@@ -34,9 +34,24 @@ class AccountSetupController extends Controller
         AccountSetupFlow::begin($user);
         $user->refresh();
 
+        $steps = AccountSetupFlow::applicableSteps($user);
         $current = $user->preferences['accountSetupStep'] ?? AccountSetupFlow::firstStep($user);
-        if ($step !== $current) {
+        $currentIndex = array_search($current, $steps, true);
+        $requestedIndex = array_search($step, $steps, true);
+
+        if ($requestedIndex === false) {
+            return redirect()->route('account-setup.show', ['step' => AccountSetupFlow::firstStep($user)]);
+        }
+
+        // Don't skip ahead. Going back is allowed, and becomes the resume point.
+        if ($currentIndex !== false && $requestedIndex > $currentIndex) {
             return redirect()->route('account-setup.show', ['step' => $current]);
+        }
+
+        if ($requestedIndex < $currentIndex) {
+            $prefs = $user->preferences ?? [];
+            $prefs['accountSetupStep'] = $step;
+            $user->forceFill(['preferences' => $prefs])->save();
         }
 
         if ($step === 'two-factor') {
@@ -46,6 +61,7 @@ class AccountSetupController extends Controller
         }
 
         $position = AccountSetupFlow::position($step, $user);
+        $previous = AccountSetupFlow::previousStep($step, $user);
 
         return view('auth.setup.'.$step, array_merge([
             'user' => $user,
@@ -54,7 +70,8 @@ class AccountSetupController extends Controller
             'index' => $position['index'],
             'total' => $position['total'],
             'optional' => AccountSetupFlow::isOptional($step),
-            'steps' => AccountSetupFlow::applicableSteps($user),
+            'steps' => $steps,
+            'previousUrl' => $previous ? AccountSetupFlow::routeFor($previous) : null,
         ], $this->stepData($user, $step)));
     }
 

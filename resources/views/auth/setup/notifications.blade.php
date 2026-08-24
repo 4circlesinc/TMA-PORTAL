@@ -10,6 +10,8 @@
     <p class="tma-auth__subtitle">Choose how you want to hear about activity. You can fine-tune every category later in Settings.</p>
   </div>
 
+  @include('auth.setup._progress')
+
   <form class="tma-auth__form" method="POST" action="{{ route('account-setup.store', ['step' => 'notifications']) }}">
     @csrf
 
@@ -53,4 +55,6 @@
       <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
     </div>
   </form>
+
+  @include('auth.setup._back')
 @endsection

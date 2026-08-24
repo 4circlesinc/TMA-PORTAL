@@ -10,6 +10,8 @@
     <p class="tma-auth__subtitle">Choose how the portal looks and feels. You can change these anytime in Settings.</p>
   </div>
 
+  @include('auth.setup._progress')
+
   <form class="tma-auth__form" method="POST" action="{{ route('account-setup.store', ['step' => 'preferences']) }}" data-setup-form="preferences">
     @csrf
 
@@ -80,4 +82,6 @@
       <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
     </div>
   </form>
+
+  @include('auth.setup._back')
 @endsection

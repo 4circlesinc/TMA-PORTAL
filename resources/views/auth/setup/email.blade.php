@@ -10,6 +10,8 @@
     <p class="tma-auth__subtitle">Connect Outlook mail and choose how your inbox looks in the portal.</p>
   </div>
 
+  @include('auth.setup._progress')
+
   @if (session('social_error'))
     <div class="tma-auth__alert tma-auth__alert--error" role="alert">
       <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
@@ -101,4 +103,6 @@
       </button>
     </div>
   </form>
+
+  @include('auth.setup._back')
 @endsection

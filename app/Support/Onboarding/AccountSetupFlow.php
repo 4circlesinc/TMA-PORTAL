@@ -14,6 +14,9 @@ final class AccountSetupFlow
 {
     public const FLOW = 'account-setup';
 
+    /** Virtual first screen for staff — the getting-started connect checklist. */
+    public const ACCOUNTS = 'accounts';
+
     /** @var array<string, array{title: string, optional?: bool}> */
     private const STEPS = [
         'preferences' => ['title' => 'Your preferences'],
@@ -95,16 +98,54 @@ final class AccountSetupFlow
         return self::applicableSteps($user)[0] ?? 'preferences';
     }
 
+    /**
+     * Every screen in the post-approval walkthrough, including getting-started
+     * for staff so "1 of N complete" is the same counter on every page.
+     *
+     * @return array<int, string>
+     */
+    public static function screens(User $user): array
+    {
+        $steps = self::applicableSteps($user);
+
+        if (! Role::isClient($user)) {
+            array_unshift($steps, self::ACCOUNTS);
+        }
+
+        return $steps;
+    }
+
     /** @return array{index: int, total: int} */
     public static function position(string $step, User $user): array
     {
-        $steps = self::applicableSteps($user);
-        $index = array_search($step, $steps, true);
+        $screens = self::screens($user);
+        $index = array_search($step, $screens, true);
 
         return [
             'index' => $index === false ? 1 : $index + 1,
-            'total' => max(count($steps), 1),
+            'total' => max(count($screens), 1),
         ];
+    }
+
+    public static function previousStep(string $step, User $user): ?string
+    {
+        $screens = self::screens($user);
+        $index = array_search($step, $screens, true);
+
+        if ($index === false || $index < 1) {
+            return null;
+        }
+
+        return $screens[$index - 1];
+    }
+
+    public static function routeFor(string $step): string
+    {
+        if ($step === self::ACCOUNTS) {
+            return route('getting-started');
+        }
+
+        return route('account-setup.show', ['step' => $step]);
     }
 
     public static function routeForStep(string $step): string
