@@ -9,6 +9,7 @@ use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\Notifications\Notifier;
+use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\Onboarding\ClientFlow;
 use App\Support\Onboarding\ClientProfile;
 use Illuminate\Http\RedirectResponse;
@@ -127,15 +128,19 @@ class ClientOnboardingController extends Controller
         ])->save();
 
         $user->forceFill([
-            'onboarding_completed_at' => now(),
             // The wizard collects everything profile-setup would have asked
             // for, so a client who finishes here is not sent round again.
             'profile_completed_at' => $user->profile_completed_at ?? now(),
         ])->save();
 
+        AccountSetupFlow::markAccountsPhaseComplete($user);
+        AccountSetupFlow::begin($user->fresh());
+
         $this->announce($user);
 
-        return redirect('/');
+        return redirect()->route('account-setup.show', [
+            'step' => AccountSetupFlow::firstStep($user->fresh()),
+        ]);
     }
 
     /** Tell the staff who look after this client that they are set up. */

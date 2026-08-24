@@ -13,7 +13,7 @@
         <div class="tma-auth__intro">
           <h1 class="tma-auth__title" id="getting-started-title">Set up your account</h1>
           <p class="tma-auth__subtitle">
-            @if ($requireMicrosoft || $requireGoogle || $requireAuthenticator)
+            @if ($requireMicrosoft || $requireGoogle)
               Finish the required steps below to continue.
             @else
               Your account is approved. These steps are optional.
@@ -127,31 +127,11 @@
             @endif
           @endif
 
-          @if ($twoFactorOn)
-            <div class="tma-auth__task tma-auth__task--done">
-              <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16"></span>
-              <span class="tma-auth__task-copy">
-                <span class="tma-auth__task-name">Two-factor authentication</span>
-                <span class="tma-auth__task-desc">A code is required when you sign in</span>
-              </span>
-              <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">On</span></span>
-            </div>
-          @else
-            <a class="tma-auth__task" href="{{ route('security-settings') }}#two-factor">
-              <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16"></span>
-              <span class="tma-auth__task-copy">
-                <span class="tma-auth__task-name">Turn on two-factor authentication</span>
-                <span class="tma-auth__task-desc">A 6-digit app code protects your sign-in</span>
-              </span>
-              <span class="tma-auth__task-side"><span class="tma-auth__badge {{ $requireAuthenticator ? 'tma-auth__badge--recommended' : '' }}">{{ $requireAuthenticator ? 'Required' : 'Recommended' }}</span></span>
-            </a>
-          @endif
         </div>
 
         @php
           $blocked = ($requireMicrosoft && ! $allConnected && $microsoftReady)
-            || ($requireGoogle && ! $google)
-            || ($requireAuthenticator && ! $twoFactorOn);
+            || ($requireGoogle && ! $google);
         @endphp
 
         <form method="POST" action="{{ route('getting-started.finish') }}">
@@ -159,7 +139,7 @@
           @if ($blocked)
             <button type="submit" class="tma-auth__submit" disabled>Finish required steps to continue</button>
           @else
-            <button type="submit" class="tma-auth__submit">Continue to portal</button>
+            <button type="submit" class="tma-auth__submit">Continue</button>
           @endif
         </form>
       </section>

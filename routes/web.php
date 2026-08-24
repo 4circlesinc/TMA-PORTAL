@@ -74,6 +74,7 @@ use App\Http\Controllers\Files\SyncStatusController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\Files\WorkflowHubController;
+use App\Http\Controllers\AccountSetupController;
 use App\Http\Controllers\GettingStartedController;
 use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\InvitationAcceptController;
@@ -1256,6 +1257,19 @@ Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
     Route::post('/onboarding/{step}/back', [ClientOnboardingController::class, 'back'])
         ->where('step', '[a-z-]+')->name('onboarding.back');
     Route::post('/onboarding-complete', [ClientOnboardingController::class, 'complete'])->name('onboarding.complete');
+});
+
+Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
+    Route::get('/auth/setup/{step}', [AccountSetupController::class, 'show'])
+        ->where('step', '[a-z-]+')->name('account-setup.show');
+    Route::post('/auth/setup/{step}', [AccountSetupController::class, 'store'])
+        ->where('step', '[a-z-]+')->name('account-setup.store');
+    Route::post('/auth/setup/{step}/skip', [AccountSetupController::class, 'skip'])
+        ->where('step', '[a-z-]+')->name('account-setup.skip');
+    Route::get('/auth/setup/two-factor/qr', [AccountSetupController::class, 'twoFactorQr'])
+        ->name('account-setup.two-factor.qr');
+    Route::get('/auth/setup/two-factor/recovery-codes', [AccountSetupController::class, 'twoFactorRecoveryCodes'])
+        ->name('account-setup.two-factor.recovery');
 });
 
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved'])->group(function () {

@@ -62,7 +62,7 @@ class SocialAuthController extends Controller
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
         $request->session()->put(
             'social.return',
-            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email', 'calendar', 'onboarding'], true) ? $request->query('return') : 'security-settings',
+            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email', 'calendar', 'onboarding', 'account-setup-email'], true) ? $request->query('return') : 'security-settings',
         );
 
         if (! config("services.{$provider}.client_id")) {
@@ -535,6 +535,11 @@ class SocialAuthController extends Controller
             // Back into the client wizard, which resumes at the next
             // unfinished step.
             return redirect()->route('onboarding.index')->with($ok ? 'status' : 'social_error', $ok ? 'social-connected' : $message);
+        }
+
+        if ($return === 'account-setup-email') {
+            return redirect()->route('account-setup.show', ['step' => 'email'])
+                ->with($ok ? 'status' : 'social_error', $ok ? 'social-connected' : $message);
         }
 
         $route = $return === 'getting-started' ? 'getting-started' : 'security-settings';

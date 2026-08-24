@@ -53,6 +53,27 @@ class ClientOnboardingTest extends TestCase
         return [$user, $client];
     }
 
+    /** Walk through personal setup after the client wizard or getting-started. */
+    private function completeAccountSetup(User $user): void
+    {
+        $this->actingAs($user)->post('/auth/setup/preferences', [
+            'themeMode' => 'light',
+            'fontScale' => 3,
+            'sidebarStyle' => 'hover',
+        ])->assertRedirect('/auth/setup/two-factor');
+
+        $this->actingAs($user)->post('/auth/setup/two-factor/skip')
+            ->assertRedirect('/auth/setup/notifications');
+
+        $this->actingAs($user)->post('/auth/setup/notifications', [
+            'messages' => ['portal' => '1', 'desktop' => '1'],
+            'email' => ['portal' => '1', 'desktop' => '0'],
+            'calendar' => ['portal' => '1', 'desktop' => '0'],
+            'files' => ['portal' => '1', 'desktop' => '0'],
+            'approvals' => ['portal' => '1', 'desktop' => '0'],
+        ])->assertRedirect('/');
+    }
+
     /** Walk the wizard to the end, answering each step. */
     private function walk(User $user, array $overrides = []): void
     {
@@ -119,7 +140,9 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($invited)->get('/')->assertRedirect(route('onboarding.index'));
 
         $this->walk($invited, ['name' => ['first_name' => 'Bruce', 'last_name' => 'Wayne']]);
-        $this->actingAs($invited)->post('/onboarding-complete')->assertRedirect('/');
+        $this->actingAs($invited)->post('/onboarding-complete')
+            ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
+        $this->completeAccountSetup($invited);
 
         $this->assertSame(1, User::where('email', 'bruce@wayne.test')->count());
         $this->assertSame($invited->id, $record->fresh()->user_id);
@@ -264,7 +287,9 @@ class ClientOnboardingTest extends TestCase
                 ['name' => 'Alex Fox', 'email' => 'alex@acme.test', 'role' => 'Finance contact'],
             ]],
         ]);
-        $this->actingAs($user)->post('/onboarding-complete')->assertRedirect('/');
+        $this->actingAs($user)->post('/onboarding-complete')
+            ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
+        $this->completeAccountSetup($user);
 
         $user->refresh();
         $this->assertSame('Dana M Reed-Smith', $user->name);
@@ -374,7 +399,9 @@ class ClientOnboardingTest extends TestCase
     {
         [$user] = $this->client();
         $this->walk($user);
-        $this->actingAs($user)->post('/onboarding-complete');
+        $this->actingAs($user)->post('/onboarding-complete')
+            ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
+        $this->completeAccountSetup($user);
 
         // The portal is now reachable, and onboarding no longer intercepts.
         $this->actingAs($user->fresh())->get('/')->assertOk();

@@ -1,0 +1,305 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Support\Access\Role;
+use App\Support\AuthenticatorApp;
+use App\Support\Notifications\NotificationPreferences;
+use App\Support\Notifications\NotificationType;
+use App\Support\Onboarding\AccountSetupFlow;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
+use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
+use Laravel\Fortify\Actions\GenerateNewRecoveryCodes;
+
+class AccountSetupController extends Controller
+{
+    public function show(Request $request, string $step): View|RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($this->mustFinishAccountsPhase($user)) {
+            return $this->accountsRedirect($user);
+        }
+
+        if (! AccountSetupFlow::exists($step) || ! AccountSetupFlow::applies($step, $user)) {
+            return redirect()->route('account-setup.show', ['step' => AccountSetupFlow::firstStep($user)]);
+        }
+
+        AccountSetupFlow::begin($user);
+        $user->refresh();
+
+        $current = $user->preferences['accountSetupStep'] ?? AccountSetupFlow::firstStep($user);
+        if ($step !== $current) {
+            return redirect()->route('account-setup.show', ['step' => $current]);
+        }
+
+        if ($step === 'two-factor') {
+            // Fortify's 2FA routes require a recent password confirmation — skip
+            // that during onboarding by marking the session confirmed here.
+            $request->session()->put('auth.password_confirmed_at', time());
+        }
+
+        $position = AccountSetupFlow::position($step, $user);
+
+        return view('auth.setup.'.$step, array_merge([
+            'user' => $user,
+            'step' => $step,
+            'title' => AccountSetupFlow::title($step),
+            'index' => $position['index'],
+            'total' => $position['total'],
+            'optional' => AccountSetupFlow::isOptional($step),
+            'steps' => AccountSetupFlow::applicableSteps($user),
+        ], $this->stepData($user, $step)));
+    }
+
+    public function store(Request $request, string $step): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! AccountSetupFlow::exists($step) || ! AccountSetupFlow::applies($step, $user)) {
+            return redirect()->route('account-setup.show', ['step' => AccountSetupFlow::firstStep($user)]);
+        }
+
+        match ($step) {
+            'preferences' => $this->storePreferences($request, $user),
+            'two-factor' => $this->storeTwoFactor($request, $user),
+            'notifications' => $this->storeNotifications($request, $user),
+            'email' => $this->storeEmail($request, $user),
+            default => null,
+        };
+
+        AccountSetupFlow::advance($user, $step);
+
+        $user->refresh();
+
+        if (AccountSetupFlow::isComplete($user)) {
+            return redirect('/');
+        }
+
+        $next = AccountSetupFlow::nextAfter($step, $user);
+
+        return redirect()->route('account-setup.show', ['step' => $next ?? AccountSetupFlow::firstStep($user)]);
+    }
+
+    public function skip(Request $request, string $step): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! AccountSetupFlow::isOptional($step)) {
+            return redirect()->route('account-setup.show', ['step' => $step]);
+        }
+
+        AccountSetupFlow::skip($user, $step);
+        $user->refresh();
+
+        if (AccountSetupFlow::isComplete($user)) {
+            return redirect('/');
+        }
+
+        $next = AccountSetupFlow::nextAfter($step, $user);
+
+        return redirect()->route('account-setup.show', ['step' => $next ?? AccountSetupFlow::firstStep($user)]);
+    }
+
+    /** @return array<string, mixed> */
+    private function stepData(User $user, string $step): array
+    {
+        return match ($step) {
+            'preferences' => [
+                'prefs' => array_merge([
+                    'themeMode' => 'light',
+                    'fontScale' => 3,
+                    'sidebarStyle' => 'hover',
+                ], array_intersect_key($user->preferences ?? [], array_flip(['themeMode', 'fontScale', 'sidebarStyle']))),
+            ],
+            'two-factor' => [
+                'twoFactorOn' => $user->hasTwoFactorEnabled(),
+                'authApps' => [
+                    AuthenticatorApp::meta('microsoft'),
+                    AuthenticatorApp::meta('google'),
+                ],
+            ],
+            'notifications' => [
+                'groups' => AccountSetupFlow::NOTIFICATION_GROUPS,
+                'prefs' => NotificationPreferences::forUser($user),
+                'nonSilenceable' => NotificationType::NON_SILENCEABLE,
+            ],
+            'email' => [
+                'microsoft' => $user->connectedAccount('microsoft'),
+                'mail' => $this->mailPrefs($user),
+            ],
+            default => [],
+        };
+    }
+
+    private function storePreferences(Request $request, User $user): void
+    {
+        $data = $request->validate([
+            'themeMode' => ['required', Rule::in(['light', 'dark', 'system'])],
+            'fontScale' => ['required', 'integer', 'between:1,5'],
+            'sidebarStyle' => ['required', Rule::in(['standard', 'hover'])],
+        ]);
+
+        $prefs = $user->preferences ?? [];
+        foreach ($data as $key => $value) {
+            $prefs[$key] = $key === 'fontScale' ? (int) $value : $value;
+        }
+        $user->forceFill(['preferences' => $prefs])->save();
+    }
+
+    private function storeTwoFactor(Request $request, User $user): void
+    {
+        if ($user->hasTwoFactorEnabled()) {
+            return;
+        }
+
+        $data = $request->validate([
+            'app' => ['required', Rule::in(AuthenticatorApp::KEYS)],
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $user->forceFill(['two_factor_app' => $data['app']])->save();
+
+        if (! $user->two_factor_secret) {
+            app(EnableTwoFactorAuthentication::class)($user);
+            $user->refresh();
+        }
+
+        app(ConfirmTwoFactorAuthentication::class)($user, $data['code']);
+
+        if ($user->two_factor_recovery_codes === null) {
+            app(GenerateNewRecoveryCodes::class)($user);
+        }
+    }
+
+    private function storeNotifications(Request $request, User $user): void
+    {
+        $rules = [];
+        foreach (array_keys(AccountSetupFlow::NOTIFICATION_GROUPS) as $group) {
+            $rules["{$group}.portal"] = ['boolean'];
+            $rules["{$group}.desktop"] = ['boolean'];
+        }
+
+        $data = $request->validate($rules);
+
+        $stored = $user->preferences['notifications'] ?? [];
+        foreach ($data as $group => $channels) {
+            $stored[$group] = array_merge($stored[$group] ?? [], $channels);
+            if (in_array($group, NotificationType::NON_SILENCEABLE, true)) {
+                $stored[$group]['portal'] = true;
+            }
+        }
+
+        $prefs = $user->preferences ?? [];
+        $prefs['notifications'] = $stored;
+        $user->forceFill(['preferences' => $prefs])->save();
+    }
+
+    private function storeEmail(Request $request, User $user): void
+    {
+        if (! $user->connectedAccount('microsoft')) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'microsoft' => 'Connect Microsoft Outlook before continuing.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'layout' => ['required', Rule::in(['split', 'single'])],
+            'sidebarMode' => ['required', Rule::in(['full', 'icons', 'hidden'])],
+            'signature' => ['nullable', 'string', 'max:100000'],
+        ]);
+
+        $prefs = $user->preferences ?? [];
+        $mail = $prefs['mail'] ?? [];
+        $mail['layout'] = $data['layout'];
+        $mail['sidebarMode'] = $data['sidebarMode'];
+        if (array_key_exists('signature', $data)) {
+            $mail['signature'] = $data['signature'] ?? '';
+            if ($mail['signature'] !== '') {
+                $mail['signatures'] = [[
+                    'id' => 'default',
+                    'name' => 'Default',
+                    'html' => $mail['signature'],
+                ]];
+                $mail['activeSignatureId'] = 'default';
+            }
+        }
+        $prefs['mail'] = $mail;
+        $user->forceFill(['preferences' => $prefs])->save();
+    }
+
+    public function twoFactorQr(Request $request): JsonResponse
+    {
+        $this->ensureTwoFactorStep($request);
+
+        $user = $request->user();
+        if (! $user->two_factor_secret) {
+            app(EnableTwoFactorAuthentication::class)($user);
+            $user->refresh();
+        }
+
+        return response()->json([
+            'svg' => $user->twoFactorQrCodeSvg(),
+            'secretKey' => decrypt($user->two_factor_secret),
+        ]);
+    }
+
+    public function twoFactorRecoveryCodes(Request $request): JsonResponse
+    {
+        $this->ensureTwoFactorStep($request);
+
+        return response()->json($request->user()->recoveryCodes());
+    }
+
+    private function ensureTwoFactorStep(Request $request): void
+    {
+        abort_unless(
+            ($request->user()->preferences['accountSetupStep'] ?? null) === 'two-factor',
+            403,
+        );
+        $request->session()->put('auth.password_confirmed_at', time());
+    }
+
+    /** @return array<string, mixed> */
+    private function mailPrefs(User $user): array
+    {
+        $mail = $user->preferences['mail'] ?? [];
+
+        return [
+            'layout' => in_array($mail['layout'] ?? '', ['split', 'single'], true) ? $mail['layout'] : 'split',
+            'sidebarMode' => in_array($mail['sidebarMode'] ?? '', ['full', 'icons', 'hidden'], true)
+                ? $mail['sidebarMode'] : 'full',
+            'signature' => (string) ($mail['signature'] ?? ''),
+        ];
+    }
+
+    private function mustFinishAccountsPhase(User $user): bool
+    {
+        if (AccountSetupFlow::accountsPhaseComplete($user)) {
+            return false;
+        }
+
+        if (Role::isClient($user)) {
+            $progress = $user->onboardingProgress;
+
+            return ! $progress || $progress->completed_at === null;
+        }
+
+        return true;
+    }
+
+    private function accountsRedirect(User $user): RedirectResponse
+    {
+        if (Role::isClient($user)) {
+            return redirect()->route('onboarding.index');
+        }
+
+        return redirect()->route('getting-started');
+    }
+}

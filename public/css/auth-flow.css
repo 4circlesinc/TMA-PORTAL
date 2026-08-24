@@ -1489,3 +1489,65 @@ select.tma-auth__input {
 .tma-photo__placeholder { display: flex; align-items: center; justify-content: center; opacity: 0.45; }
 .tma-photo__side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-6); align-items: flex-start; }
 .tma-photo__btn { cursor: pointer; }
+
+/* ── Account setup (post getting-started) ── */
+.tma-auth__card--setup { gap: var(--space-16); }
+.tma-auth__setup-kicker { margin: 0; font-size: var(--text-size-12); line-height: var(--text-lh-12); color: var(--color-text-secondary); text-align: center; }
+.tma-auth__setup-progress { display: flex; justify-content: center; gap: var(--space-8); }
+.tma-auth__setup-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border-medium); }
+.tma-auth__setup-dot--active { background: var(--color-accent); transform: scale(1.15); }
+.tma-auth__setup-dot--done { background: var(--color-accent); opacity: 0.45; }
+.tma-auth__setup-form { display: flex; flex-direction: column; gap: var(--space-16); width: min(420px, 100%); margin: 0 auto; }
+.tma-auth__setup-group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tma-auth__setup-label { margin: 0; font-size: var(--text-size-14); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.tma-auth__setup-hint { margin: 0; font-size: var(--text-size-12); line-height: var(--text-lh-12); color: var(--color-text-secondary); }
+.tma-auth__setup-hint--mono { font-family: ui-monospace, monospace; word-break: break-all; }
+.tma-auth__setup-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); }
+.tma-auth__setup-options--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tma-auth__setup-options--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tma-auth__setup-option { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); padding: var(--space-8); border: 0.5px solid var(--color-border-soft); border-radius: var(--radius-12); cursor: pointer; background: var(--color-white); text-align: center; }
+.tma-auth__setup-option:has(input:checked) { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.tma-auth__setup-option--tall { align-items: stretch; text-align: left; }
+.tma-auth__setup-option input { position: absolute; opacity: 0; pointer-events: none; }
+.tma-auth__setup-option-label { font-size: var(--text-size-13); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.tma-auth__setup-option-desc { font-size: var(--text-size-11); line-height: var(--text-lh-11); color: var(--color-text-secondary); }
+.tma-auth__setup-option-copy { display: flex; flex-direction: column; gap: 2px; }
+.tma-auth__setup-preview { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-8); background: var(--color-hover); border: 0.5px solid var(--color-border-soft); position: relative; overflow: hidden; }
+.tma-auth__setup-preview--theme--light { background: linear-gradient(135deg, #fff 55%, #eef2ff); }
+.tma-auth__setup-preview--theme--dark { background: linear-gradient(135deg, #1f2937 55%, #111827); }
+.tma-auth__setup-preview--theme--system { background: linear-gradient(90deg, #fff 50%, #1f2937 50%); }
+.tma-auth__setup-preview--sidebar::before, .tma-auth__setup-preview--sidebar::after { content: ""; position: absolute; top: 8px; bottom: 8px; border-radius: 3px; background: rgba(99,102,241,.25); }
+.tma-auth__setup-preview--sidebar-standard::before { left: 8px; width: 28%; }
+.tma-auth__setup-preview--sidebar-standard::after { left: calc(8px + 28% + 6px); right: 8px; background: rgba(148,163,184,.25); }
+.tma-auth__setup-preview--sidebar-hover::before { left: 8px; width: 18%; opacity: .7; }
+.tma-auth__setup-preview--sidebar-hover::after { left: 8px; right: 8px; background: rgba(148,163,184,.2); }
+.tma-auth__setup-preview--mail-split::before { content: ""; position: absolute; top: 8px; bottom: 8px; left: 8px; width: 38%; border-radius: 3px; background: rgba(99,102,241,.22); }
+.tma-auth__setup-preview--mail-split::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: calc(8px + 38% + 4px); right: 8px; border-radius: 3px; background: rgba(148,163,184,.22); }
+.tma-auth__setup-preview--mail-single::before { content: ""; position: absolute; top: 8px; left: 8px; right: 8px; height: 35%; border-radius: 3px; background: rgba(99,102,241,.22); }
+.tma-auth__setup-preview--mail-single::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 8px; top: calc(8px + 35% + 4px); border-radius: 3px; background: rgba(148,163,184,.18); }
+.tma-auth__setup-preview--mail-sidebar-full::before { content: "Inbox"; position: absolute; top: 10px; left: 10px; font-size: 8px; color: var(--color-text-secondary); }
+.tma-auth__setup-preview--mail-sidebar-full::after { content: ""; position: absolute; top: 22px; bottom: 8px; left: 8px; width: 32%; border-radius: 3px; background: rgba(99,102,241,.22); }
+.tma-auth__setup-preview--mail-sidebar-icons::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 8px; width: 14%; border-radius: 3px; background: rgba(99,102,241,.22); }
+.tma-auth__setup-preview--mail-sidebar-hidden::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 8px; right: 8px; border-radius: 3px; background: rgba(148,163,184,.18); }
+.tma-auth__setup-font { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-12); border: 0.5px solid var(--color-border-soft); border-radius: var(--radius-12); background: var(--color-white); }
+.tma-auth__setup-font-step { flex: 1; display: flex; justify-content: center; }
+.tma-auth__setup-font-step input { position: absolute; opacity: 0; }
+.tma-auth__setup-font-step span { display: block; width: 100%; max-width: 36px; height: 8px; border-radius: 999px; background: var(--color-border-medium); cursor: pointer; transition: background var(--transition-base), transform var(--transition-base); }
+.tma-auth__setup-font-step:nth-child(1) span { max-width: 18px; }
+.tma-auth__setup-font-step:nth-child(2) span { max-width: 24px; }
+.tma-auth__setup-font-step:nth-child(3) span { max-width: 30px; }
+.tma-auth__setup-font-step:nth-child(4) span { max-width: 36px; }
+.tma-auth__setup-font-step:nth-child(5) span { max-width: 42px; }
+.tma-auth__setup-font-step:has(input:checked) span { background: var(--color-accent); transform: scaleY(1.35); }
+.tma-auth__setup-notify-list { display: flex; flex-direction: column; gap: var(--space-8); width: min(420px, 100%); margin: 0 auto; }
+.tma-auth__setup-notify-row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--space-12); align-items: center; padding: var(--space-10) var(--space-12); border: 0.5px solid var(--color-border-soft); border-radius: var(--radius-12); background: var(--color-white); }
+.tma-auth__setup-notify-name { font-size: var(--text-size-14); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.tma-auth__setup-toggle { display: inline-flex; align-items: center; gap: var(--space-6); font-size: var(--text-size-12); color: var(--color-text-secondary); cursor: pointer; }
+.tma-auth__tfa-panel { display: flex; flex-direction: column; gap: var(--space-12); width: min(420px, 100%); margin: 0 auto; }
+.tma-auth__qr-wrap { display: flex; justify-content: center; padding: var(--space-12); border: 0.5px solid var(--color-border-soft); border-radius: var(--radius-12); background: var(--color-white); min-height: 200px; align-items: center; }
+.tma-auth__qr-wrap svg { max-width: 180px; height: auto; }
+.tma-auth__skip-form { margin-top: var(--space-8); text-align: center; }
+.tma-auth__alt-link--button { background: none; border: none; font: inherit; cursor: pointer; padding: 0; }
+.tma-auth__input--area { min-height: 96px; resize: vertical; }
+.tma-auth__input--code { letter-spacing: 0.2em; text-align: center; font-size: var(--text-size-18); font-weight: var(--font-weight-semibold); }
+[data-theme="dark"] .tma-auth__setup-option, [data-theme="dark"] .tma-auth__setup-font, [data-theme="dark"] .tma-auth__setup-notify-row, [data-theme="dark"] .tma-auth__qr-wrap { background: var(--color-surface-raised, #1f2937); }

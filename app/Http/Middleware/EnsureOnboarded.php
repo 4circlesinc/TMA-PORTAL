@@ -3,14 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Support\Access\Role;
+use App\Support\Onboarding\AccountSetupFlow;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Once an administrator approves an account, the member is walked through
- * the security checklist before entering the portal. Security settings stay
- * reachable so they can finish a step (two-factor) and come back.
+ * Walks new members through account connections, then personal setup
+ * (preferences, two-factor, notifications, email) before the portal.
  */
 class EnsureOnboarded
 {
@@ -18,21 +18,39 @@ class EnsureOnboarded
     {
         $user = $request->user();
 
-        if (
-            $user
-            && $user->onboarding_completed_at === null
-            && ! $request->routeIs('security-settings*')
-            && ! $request->is('settings', 'account-settings')
-            && ! $request->routeIs('social.*')
-        ) {
-            // Two flows: clients get the guided wizard, staff get the security
-            // checklist. Staff onboarding is a later phase and keeps its
-            // existing screen until then.
+        if (! $user || AccountSetupFlow::isComplete($user)) {
+            return $next($request);
+        }
+
+        if ($this->isOnboardingRoute($request)) {
+            return $next($request);
+        }
+
+        if (! AccountSetupFlow::accountsPhaseComplete($user)) {
             return Role::isClient($user)
                 ? redirect()->route('onboarding.index')
                 : redirect()->route('getting-started');
         }
 
+        $setupUrl = AccountSetupFlow::redirectFor($user);
+
+        if ($setupUrl) {
+            return redirect($setupUrl);
+        }
+
         return $next($request);
+    }
+
+    private function isOnboardingRoute(Request $request): bool
+    {
+        return $request->routeIs(
+            'getting-started',
+            'getting-started.finish',
+            'onboarding.*',
+            'onboarding.complete',
+            'account-setup.*',
+            'social.*',
+            'security-settings*',
+        ) || $request->is('settings', 'account-settings');
     }
 }

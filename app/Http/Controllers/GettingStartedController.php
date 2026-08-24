@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\SecurityPolicies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The walkthrough after approval. Steps that are required vs optional come
- * from Account settings > Sign in policy so the firm can turn Microsoft /
- * Google / authenticator requirements on or off without a deploy.
+ * The walkthrough after approval. Connects Microsoft / Google for sign-in.
+ * Personal preferences, two-factor, notifications, and email are handled
+ * in the account-setup flow that follows.
  */
 class GettingStartedController extends Controller
 {
@@ -29,8 +30,6 @@ class GettingStartedController extends Controller
 
         $requireMicrosoft = (bool) ($policy['requireMicrosoftConnect'] ?? false) && $microsoftConfigured;
         $requireGoogle = (bool) ($policy['requireGoogleConnect'] ?? false) && $googleConfigured;
-        $requireAuthenticator = (bool) ($policy['requireAuthenticatorApp'] ?? false)
-            || (bool) ($policy['requireMfa'] ?? false);
 
         $features = [
             'email' => (bool) ($microsoft?->sync_email),
@@ -39,14 +38,12 @@ class GettingStartedController extends Controller
         ];
         $microsoftConnected = $features['email'] && $features['calendar'] && $features['onedrive'];
         $googleConnected = (bool) $google;
-        $twoFactorOn = $user->hasTwoFactorEnabled();
 
         // Email is always done by the time anyone reaches this screen.
         $steps = [
             ['key' => 'email', 'done' => true, 'required' => true],
             ['key' => 'microsoft', 'done' => $microsoftConnected, 'required' => $requireMicrosoft],
             ['key' => 'google', 'done' => $googleConnected, 'required' => $requireGoogle],
-            ['key' => 'authenticator', 'done' => $twoFactorOn, 'required' => $requireAuthenticator],
         ];
 
         // When Microsoft sync is on and required, the three sync rows count as
@@ -75,10 +72,8 @@ class GettingStartedController extends Controller
             'googleConfigured' => $googleConfigured,
             'requireMicrosoft' => $requireMicrosoft,
             'requireGoogle' => $requireGoogle,
-            'requireAuthenticator' => $requireAuthenticator,
             'features' => $features,
             'allConnected' => $microsoftConnected,
-            'twoFactorOn' => $twoFactorOn,
             'done' => $done,
             'total' => $total,
         ]);
@@ -113,16 +108,11 @@ class GettingStartedController extends Controller
             }
         }
 
-        $requireAuthenticator = (bool) ($policy['requireAuthenticatorApp'] ?? false)
-            || (bool) ($policy['requireMfa'] ?? false);
+        AccountSetupFlow::markAccountsPhaseComplete($user);
+        AccountSetupFlow::begin($user->fresh());
 
-        if ($requireAuthenticator && ! $user->hasTwoFactorEnabled()) {
-            return redirect()->route('getting-started')
-                ->with('social_error', 'Set up an authenticator app to continue.');
-        }
-
-        $user->forceFill(['onboarding_completed_at' => now()])->save();
-
-        return redirect('/');
+        return redirect()->route('account-setup.show', [
+            'step' => AccountSetupFlow::firstStep($user->fresh()),
+        ]);
     }
 }
