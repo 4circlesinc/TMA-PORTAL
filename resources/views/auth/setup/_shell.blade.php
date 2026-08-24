@@ -22,5 +22,5 @@
 @endsection
 
 @push('scripts')
-  <script src="/js/account-setup.js?v=3"></script>
+  <script src="/js/account-setup.js?v=4"></script>
 @endpush

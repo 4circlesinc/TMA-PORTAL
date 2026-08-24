@@ -84,6 +84,48 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee('Notifications');
     }
 
+    public function test_optional_two_factor_continue_advances_without_a_code(): void
+    {
+        $user = $this->staffMidSetup(['accountSetupStep' => 'two-factor']);
+
+        $this->actingAs($user)
+            ->get(route('account-setup.show', ['step' => 'two-factor']))
+            ->assertOk()
+            ->assertSee(route('account-setup.store', ['step' => 'two-factor']), false)
+            ->assertDontSee('data-tfa-next', false);
+
+        $this->actingAs($user)
+            ->post(route('account-setup.store', ['step' => 'two-factor']))
+            ->assertRedirect(route('account-setup.show', ['step' => 'notifications']));
+    }
+
+    public function test_staff_continue_reaches_the_email_step(): void
+    {
+        $user = $this->staffMidSetup();
+        $total = AccountSetupFlow::position('preferences', $user)['total'];
+        $this->assertGreaterThanOrEqual(5, $total);
+
+        $this->actingAs($user)->post(route('account-setup.store', ['step' => 'preferences']), [
+            'themeMode' => 'light',
+            'fontScale' => 3,
+            'sidebarStyle' => 'hover',
+        ])->assertRedirect(route('account-setup.show', ['step' => 'two-factor']));
+
+        $this->actingAs($user)
+            ->post(route('account-setup.store', ['step' => 'two-factor']))
+            ->assertRedirect(route('account-setup.show', ['step' => 'notifications']));
+
+        $this->actingAs($user)
+            ->post(route('account-setup.store', ['step' => 'notifications']))
+            ->assertRedirect(route('account-setup.show', ['step' => 'email']));
+
+        $this->actingAs($user)
+            ->get(route('account-setup.show', ['step' => 'email']))
+            ->assertOk()
+            ->assertSee("5 of {$total}", false)
+            ->assertSee('Email');
+    }
+
     public function test_a_client_walkthrough_is_preferences_then_two_factor_then_notifications(): void
     {
         $user = User::factory()->create([

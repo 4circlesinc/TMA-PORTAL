@@ -72,7 +72,9 @@ class AccountSetupController extends Controller
             'optional' => AccountSetupFlow::isOptional($step),
             'steps' => $steps,
             'previousUrl' => $previous ? AccountSetupFlow::routeFor($previous) : null,
-        ], $this->stepData($user, $step)));
+        ], $this->stepData($user, $step), $step === 'two-factor'
+            ? $this->twoFactorPanelData($request, $user)
+            : []));
     }
 
     public function store(Request $request, string $step): RedirectResponse
@@ -176,6 +178,12 @@ class AccountSetupController extends Controller
             return;
         }
 
+        // Optional 2FA: Continue posts here with no code and must still
+        // advance. Requiring a code trapped people on this screen.
+        if (! $request->filled('code') && AccountSetupFlow::isOptional('two-factor')) {
+            return;
+        }
+
         $data = $request->validate([
             'app' => ['required', Rule::in(AuthenticatorApp::KEYS)],
             'code' => ['required', 'string', 'size:6'],
@@ -272,6 +280,48 @@ class AccountSetupController extends Controller
         $this->ensureTwoFactorStep($request);
 
         return response()->json($request->user()->recoveryCodes());
+    }
+
+    /** @return array<string, mixed> */
+    private function twoFactorPanelData(Request $request, User $user): array
+    {
+        if ($user->hasTwoFactorEnabled()) {
+            return [
+                'panel' => 'done',
+                'chosenApp' => 'microsoft',
+                'qrSvg' => null,
+                'secretKey' => null,
+            ];
+        }
+
+        $panel = $request->query('panel', 'app');
+        if (! in_array($panel, ['app', 'scan', 'confirm'], true)) {
+            $panel = 'app';
+        }
+
+        $chosenApp = $request->query('app', 'microsoft');
+        if (! in_array($chosenApp, AuthenticatorApp::KEYS, true)) {
+            $chosenApp = 'microsoft';
+        }
+
+        $qrSvg = null;
+        $secretKey = null;
+
+        if (in_array($panel, ['scan', 'confirm'], true)) {
+            if (! $user->two_factor_secret) {
+                app(EnableTwoFactorAuthentication::class)($user);
+                $user->refresh();
+            }
+            $qrSvg = $user->twoFactorQrCodeSvg();
+            $secretKey = decrypt($user->two_factor_secret);
+        }
+
+        return [
+            'panel' => $panel,
+            'chosenApp' => $chosenApp,
+            'qrSvg' => $qrSvg,
+            'secretKey' => $secretKey,
+        ];
     }
 
     private function ensureTwoFactorStep(Request $request): void
