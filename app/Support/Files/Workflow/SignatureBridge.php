@@ -19,8 +19,8 @@ use Illuminate\Support\Str;
  * Makes a signature request visible as a file workflow.
  *
  * The portal already has a complete, tested signing engine. Rather than
- * reimplementing signing inside the workflow tables — which would risk breaking
- * something that works — a signature request is *mirrored* into a workflow row
+ * reimplementing signing inside the workflow tables, which would risk breaking
+ * something that works, a signature request is *mirrored* into a workflow row
  * so the file viewer can show its status, its recipients' progress and its
  * badge exactly like any other request.
  *
@@ -183,7 +183,7 @@ class SignatureBridge
     }
 
     /**
-     * When signing finishes, make it visible from the ORIGINAL file — not only
+     * When signing finishes, make it visible from the ORIGINAL file, not only
      * from the signed copy. Someone looking at the document they sent needs to
      * see that it was signed, and be able to reach the signed output.
      */

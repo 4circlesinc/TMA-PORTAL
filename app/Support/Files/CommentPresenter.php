@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 /**
  * Shapes comment threads for the viewer.
  *
- * Bodies go out as plain text — never HTML. The client escapes them and then
+ * Bodies go out as plain text, never HTML. The client escapes them and then
  * decorates the mentioned names, so nothing a user typed can be interpreted as
  * markup in somebody else's browser.
  */
@@ -42,7 +42,7 @@ class CommentPresenter
         $nextCursor = $hasMore ? $roots->last()->id : null;
 
         // Every reply for these threads in one query rather than one per
-        // thread — this panel opens on every file, so it must not be N+1.
+        // thread, this panel opens on every file, so it must not be N+1.
         $replies = $roots->isEmpty() ? collect() : FileComment::query()
             ->whereIn('root_id', $roots->pluck('id'))
             ->whereNotNull('parent_id')
@@ -80,7 +80,7 @@ class CommentPresenter
         return [
             'id' => $comment->uuid,
             'body' => $deleted ? null : $comment->body,
-            // The highlighted area the thread is about, or null — the viewer
+            // The highlighted area the thread is about, or null, the viewer
             // draws it back onto the page on hover.
             'anchor' => $comment->anchor,
             'deleted' => $deleted,
@@ -136,7 +136,7 @@ class CommentPresenter
     }
 
     /**
-     * People the author may add to this file — by mentioning them in a comment,
+     * People the author may add to this file, by mentioning them in a comment,
      * or by asking them to review it.
      *
      * Two lists, decided by what the viewer may do:
@@ -155,7 +155,7 @@ class CommentPresenter
      *
      * The wide list is staff-only. A client can hold `full` over their own
      * upload, and the answer to "who else exists in this portal?" is not theirs
-     * to browse — the firm's other clients are on that list.
+     * to browse, the firm's other clients are on that list.
      *
      * @return list<array>
      */

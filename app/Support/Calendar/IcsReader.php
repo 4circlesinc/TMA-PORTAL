@@ -54,7 +54,7 @@ class IcsReader
 
         foreach ($vcalendar->VEVENT ?? [] as $vevent) {
             if (++$seen > self::MAX_EVENTS) {
-                $failed[] = 'Stopped after '.self::MAX_EVENTS.' events — the file is too large.';
+                $failed[] = 'Stopped after '.self::MAX_EVENTS.' events, the file is too large.';
                 break;
             }
 
@@ -66,7 +66,7 @@ class IcsReader
             } catch (\Throwable $e) {
                 // Named where possible, so the result screen is actionable.
                 $title = (string) ($vevent->SUMMARY ?? 'Untitled event');
-                $failed[] = $title.' — '.$e->getMessage();
+                $failed[] = $title.': '.$e->getMessage();
             }
         }
 
@@ -96,7 +96,7 @@ class IcsReader
 
         /*
          * DTEND is optional. RFC 5545 says a missing DTEND on a timed event
-         * means zero duration, and on an all-day event means one day — but a
+         * means zero duration, and on an all-day event means one day, but a
          * DURATION may be given instead, which several exporters prefer.
          */
         if (isset($vevent->DTEND)) {
@@ -128,7 +128,7 @@ class IcsReader
         $status = strtoupper((string) ($vevent->STATUS ?? 'CONFIRMED'));
 
         return [
-            // The provider's UID is what duplicate detection keys on — never
+            // The provider's UID is what duplicate detection keys on, never
             // the title or the date.
             'uid' => isset($vevent->UID) ? (string) $vevent->UID : null,
             'title' => trim((string) ($vevent->SUMMARY ?? '')) ?: 'Untitled event',

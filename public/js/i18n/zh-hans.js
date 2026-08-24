@@ -1,4 +1,4 @@
-/* Simplified Chinese dictionary for i18n.js — keys are the portal's English strings. */
+/* Simplified Chinese dictionary for i18n.js, keys are the portal's English strings. */
 window.TMAI18nDict = {
   strings: {
     // Navigation & chrome

@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  *
  *  1. **Sanitise.** The composer produces rich text, so what arrives is HTML
  *     written by a browser we do not control. It is parsed and rebuilt against
- *     an allow-list — unknown elements are unwrapped, every attribute except a
+ *     an allow-list, unknown elements are unwrapped, every attribute except a
  *     named few is dropped, and any URL that is not http/https/mailto is
  *     removed. Nothing else in the portal renders user HTML into another
  *     person's page, so this is the one place that has to be right.
@@ -33,7 +33,7 @@ use Illuminate\Support\Str;
  *
  * There is no HTML purifier dependency in this project; adding one for this is
  * a bigger decision than it looks, so the allow-list below is deliberately
- * narrow — it permits what the composer can actually produce and nothing more.
+ * narrow, it permits what the composer can actually produce and nothing more.
  */
 final class FeedContent
 {
@@ -103,7 +103,7 @@ final class FeedContent
         $doc = new DOMDocument;
 
         // Parse as a fragment inside a known wrapper. The XML declaration
-        // forces UTF-8 handling — without it DOMDocument assumes ISO-8859-1
+        // forces UTF-8 handling, without it DOMDocument assumes ISO-8859-1
         // and mangles every accented character and emoji.
         $previous = libxml_use_internal_errors(true);
         $loaded = $doc->loadHTML(
@@ -308,7 +308,7 @@ final class FeedContent
     /**
      * The tokens the composer marked as mentions.
      *
-     * A token is "user:{id}" or "group:{uuid}" — people are addressed by
+     * A token is "user:{id}" or "group:{uuid}", people are addressed by
      * numeric id across this portal's APIs while groups carry a uuid, so the
      * marker names which it is rather than leaving the resolver to guess.
      *

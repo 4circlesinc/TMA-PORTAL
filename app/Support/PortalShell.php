@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Session;
  * The shell is one static file shared by every account type, so the role-gated
  * rows (Overview, Client hub, Email, Feed, Users, Templates) can't be decided
  * until the browser knows who is reading. portal-access.js used to hold them
- * with `visibility:hidden` until /me answered — which reserved their space and
+ * with `visibility:hidden` until /me answered, which reserved their space and
  * painted a sidebar with six blank gaps in it for the length of a round trip.
  *
  * Handing the capabilities over in the document removes the round trip: the
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Session;
  * start, never the authority.
  *
  * Safe to inline per-account data here only because the shell is served
- * no-store (see headers below) — it is never written to a shared cache.
+ * no-store (see headers below), it is never written to a shared cache.
  *
  * This is presentation only. Every capability is enforced again on the server;
  * see {@see Role}.
@@ -42,7 +42,7 @@ final class PortalShell
     ];
 
     /**
-     * The script tag the boot data must land in front of — portal-access.js
+     * The script tag the boot data must land in front of, portal-access.js
      * reads it the moment it runs, and it runs in <head> before the sidebar
      * parses. Anchoring to the consumer rather than to </head> means the two
      * cannot drift apart silently.
@@ -65,7 +65,7 @@ final class PortalShell
 
     private static function inject(string $html, ?User $user): string
     {
-        // No identity, no head start — let the browser hold the gated rows the
+        // No identity, no head start, let the browser hold the gated rows the
         // way it always has rather than assert an empty capability list, which
         // would strip the menu down to nothing.
         if ($user === null) {
@@ -91,7 +91,7 @@ final class PortalShell
         // Who the shell was served to, so anything a view caches per-tab can
         // be discarded the moment a different account is in it. Sign-out does
         // not clear sessionStorage, so without this the mailbox's warm start
-        // would paint the previous reader's inbox for a frame — see
+        // would paint the previous reader's inbox for a frame, see
         // readMailCache() in email.js. It is the account's own id, which it
         // can read from /me anyway.
         $cipReach = CipAccess::canReach($user) ? 'true' : 'false';

@@ -26,8 +26,8 @@ use Illuminate\Support\Facades\DB;
  * rather than over the whole portal and then filtered.
  *
  * Two numbers are easy to confuse and are kept apart deliberately:
- *   - **views** — how many times posts were opened (repeat views included)
- *   - **reach** — how many distinct people opened them
+ *   - **views**, how many times posts were opened (repeat views included)
+ *   - **reach**, how many distinct people opened them
  * A post read five times by one person has five views and a reach of one.
  */
 class FeedAnalyticsController extends Controller
@@ -108,7 +108,7 @@ class FeedAnalyticsController extends Controller
         return [
             'posts' => $postIds->count(),
             'views' => (int) FeedPostView::query()->whereIn('post_id', $postIds)->sum('view_count'),
-            // Distinct people, not rows — see the class comment.
+            // Distinct people, not rows, see the class comment.
             'reach' => (int) FeedPostView::query()->whereIn('post_id', $postIds)->distinct('user_id')->count('user_id'),
             'comments' => FeedComment::query()->whereIn('post_id', $postIds)->count(),
             'reactions' => FeedReaction::query()
@@ -116,7 +116,7 @@ class FeedAnalyticsController extends Controller
                 ->whereIn('reactable_id', $postIds)
                 ->count(),
             'members' => (int) FeedChannel::query()->whereIn('id', $channelIds)->sum('members_count'),
-            // Someone who posted, commented or reacted in the window — the
+            // Someone who posted, commented or reacted in the window, the
             // number that says whether the Feed is actually being used, as
             // opposed to how many people were added to it.
             'activeMembers' => $this->activeMembers($channelIds, $postIds, $since),

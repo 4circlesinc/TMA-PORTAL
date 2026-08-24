@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * A direct upload link aimed at ONE checklist slot (§11).
  *
  * The tokenised public flow already exists and already handles the hard parts
- * — expiry, passwords, extension allow-lists, sniffed MIME, uploader identity.
+ *, expiry, passwords, extension allow-lists, sniffed MIME, uploader identity.
  * What it could not do was land in a *requirement*: it targets a folder and
  * always creates a new file, so a second upload against the same document
  * arrived as "Passport bio page (2).pdf" beside the first rather than as its
@@ -27,7 +27,7 @@ use Illuminate\Support\Str;
  *
  *  - the upload becomes the slot's next VERSION, through {@see Versions}. The
  *    library's own name-conflict "replace" path soft-deletes and recreates,
- *    which silently forks the chain — it is not used here and must not be.
+ *    which silently forks the chain, it is not used here and must not be.
  *  - the slot moves through {@see DocumentEngine} like every other transition,
  *    never by writing the column, so a link upload lands in the audit trail
  *    beside the ones a signed-in reviewer made.
@@ -58,7 +58,7 @@ class DocumentRequests
             'title' => $slot->label,
             'message' => 'Please upload '.$slot->label.' for '
                 .($slot->person?->fullName() ?? 'this application').'.',
-            // The same drawer a portal upload would use — a document must
+            // The same drawer a portal upload would use, a document must
             // not land in two places depending on which door it came in by.
             'folder_id' => DocumentSlots::destinationForSlot($slot, $creator),
             'client_id' => $slot->application?->client_id,
@@ -87,7 +87,7 @@ class DocumentRequests
      * Put an uploaded file into the slot, as a new version where there is
      * already one.
      *
-     * Returns the file the visitor's bytes ended up in — the same FileItem as
+     * Returns the file the visitor's bytes ended up in, the same FileItem as
      * last time when this is a re-upload, which is the whole point.
      *
      * @param  array{uuid:string,disk:string,path:string,size:int,checksum:string}  $stored
@@ -121,7 +121,7 @@ class DocumentRequests
                  * addStored appends to the chain the library's own history,
                  * download and restore routes already read, so a document
                  * filled by a link has the same history as one filled by a
-                 * member of staff — which is what makes "who sent this, and
+                 * member of staff, which is what makes "who sent this, and
                  * when" answerable later.
                  *
                  * Authored by the requester rather than by nobody: there is no
@@ -181,7 +181,7 @@ class DocumentRequests
          *
          * A null actor is the system, which the engine allows: nobody is
          * signed in behind a token, and refusing the transition would leave a
-         * filled slot still reading "Pending upload" — a checklist lying about
+         * filled slot still reading "Pending upload", a checklist lying about
          * work somebody has actually done.
          */
         self::advance($slot->refresh());
@@ -189,7 +189,7 @@ class DocumentRequests
         return $file;
     }
 
-    /** Pending upload, or a document sent back — either way an upload puts it
+    /** Pending upload, or a document sent back, either way an upload puts it
         in front of a reviewer again. Anything else is left as it is. */
     private static function advance(CipDocument $slot): void
     {

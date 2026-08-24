@@ -82,7 +82,7 @@ class Stamper
             // Encrypted or otherwise unreadable. Should have been caught at
             // send time; if it wasn't, say so plainly rather than half-write.
             throw new StampingException(
-                'This PDF can\'t be stamped — it may be password-protected or damaged.',
+                'This PDF can\'t be stamped. It may be password-protected or damaged.',
                 previous: $e,
             );
         } finally {

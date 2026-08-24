@@ -4,8 +4,8 @@
  *
  * The mirror of App\Support\Presence\LastSeen. The server formats a label at
  * the moment it answers; this re-derives the same sentence from the ISO
- * timestamp beside it, so a board that polls every 30 seconds — or does not
- * poll at all while somebody reads it — never shows "5 minutes ago" twenty
+ * timestamp beside it, so a board that polls every 30 seconds, or does not
+ * poll at all while somebody reads it, never shows "5 minutes ago" twenty
  * minutes later.
  *
  * Keep the two in step. If one grows a case the other doesn't have, the same
@@ -13,7 +13,7 @@
  *
  * Times render on the reader's wall clock. i18n.js patches Date/Intl to the
  * time zone chosen in Settings, so plain Date formatting here is already in
- * the right zone — do not reach for a second one.
+ * the right zone, do not reach for a second one.
  */
 (function () {
   'use strict';
@@ -82,7 +82,7 @@
    * "just now" / "5 minutes ago" / "yesterday at 8:15 PM" / "Friday at 8:15 PM"
    * / "August 2, 2026 at 8:15 PM".
    *
-   * An absent timestamp is "recently", not "never" and not blank — the caller
+   * An absent timestamp is "recently", not "never" and not blank, the caller
    * without one is usually looking at somebody who hides their detail, and the
    * missing data should not read as its own state.
    */
@@ -151,7 +151,7 @@
         return p.lastSeen || p.label || 'Last seen recently';
       }
       var statusLabel = p.statusLabel || p.label || String(p.status || '').replace(/_/g, ' ');
-      return p.statusMessage ? (statusLabel + ' — ' + p.statusMessage) : statusLabel;
+      return p.statusMessage ? (statusLabel + ': ' + p.statusMessage) : statusLabel;
     }
     if (p.online) return 'Online';
     var at = p.lastSeenAt || p.last_seen_at || null;

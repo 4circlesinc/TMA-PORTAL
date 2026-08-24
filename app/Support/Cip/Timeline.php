@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
- * One application's history, in English — what the Activity tab reads from.
+ * One application's history, in English, what the Activity tab reads from.
  *
  * cip_events is written for the auditor: an action slug, two status codes and
  * a bag of meta. "status_changed / review_application" is not a line anybody
@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
  * through {@see Status} and a slot's through {@see DocumentStatus}, so a
  * wording changed in either shows up here without an edit. Sibling to
  * {@see CalendarAudit::describe()}, which does the same job for a calendar's
- * history — the two should read alike.
+ * history, the two should read alike.
  */
 class Timeline
 {
@@ -47,7 +47,7 @@ class Timeline
          * already.
          *
          * A history is the most detailed thing the module holds about a file —
-         * who worked it, when, and what they judged — and a caller written
+         * who worked it, when, and what they judged, and a caller written
          * after this one must not be able to hand over an application object
          * and have it read out. Nothing, rather than an error: it is the same
          * answer the reader would be given anyway, and it costs one exists().
@@ -63,7 +63,7 @@ class Timeline
              * A hundred events must not be a hundred user lookups. Trashed
              * matters as much: an account in the Recycle Bin still belongs to
              * the person who made the decision, and without this their name
-             * falls back to the system — a machine credited with somebody's
+             * falls back to the system, a machine credited with somebody's
              * judgement, in the one record kept for compliance.
              */
             ->with(['actor' => fn ($q) => $q->withTrashed()])
@@ -95,7 +95,7 @@ class Timeline
     /**
      * Who acted, as the tab draws them.
      *
-     * A null actor_id is the system — a scheduled job, or a link upload nobody
+     * A null actor_id is the system, a scheduled job, or a link upload nobody
      * was signed in for. An actor_id with no user behind it is different and is
      * said differently: that is a person whose account has been purged, and
      * calling them the system would put a machine's name on their decision.
@@ -140,8 +140,8 @@ class Timeline
              * An action added to the table after this file was written.
              *
              * Passive, and read off the slug itself: every action cip_events
-             * holds today comes out right that way — "status changed by Ada
-             * Admin", "number assigned by the system" — which is the best
+             * holds today comes out right that way, "status changed by Ada
+             * Admin", "number assigned by the system", which is the best
              * evidence available that the next one will too. The alternative
              * is a row that appears in the history saying nothing.
              */
@@ -153,7 +153,7 @@ class Timeline
         return Str::ucfirst($line);
     }
 
-    /** "moved it from Draft to New" — the codes read through {@see Status}. */
+    /** "moved it from Draft to New", the codes read through {@see Status}. */
     private static function statusSentence(CipEvent $event, string $who): string
     {
         $to = $event->to_status;
@@ -172,7 +172,7 @@ class Timeline
     /**
      * The government's number arriving, or being corrected.
      *
-     * Told apart by the meta {@see Submission} writes — a correction carries
+     * Told apart by the meta {@see Submission} writes, a correction carries
      * what the number was before. Both are the same action on purpose (§7), so
      * without this a typo being fixed would read as a second submission.
      *
@@ -246,7 +246,7 @@ class Timeline
     }
 
     /**
-     * The delay clock running out — usually the system, named by how long.
+     * The delay clock running out, usually the system, named by how long.
      *
      * @param  array<string, mixed>  $meta
      */
@@ -261,7 +261,7 @@ class Timeline
      * A checklist verdict, named by the document rather than by its uuid.
      *
      * {@see DocumentEngine} puts the slot's uuid and both of its statuses in
-     * the meta and nothing else — the label lives on the slot, which is why
+     * the meta and nothing else, the label lives on the slot, which is why
      * {@see documentLabels()} goes and gets it. A slot since removed leaves the
      * sentence standing without one.
      *
@@ -290,7 +290,7 @@ class Timeline
     /**
      * uuid => label for every document this run of events names.
      *
-     * One query for the lot rather than one per line — the same rule as the
+     * One query for the lot rather than one per line, the same rule as the
      * actors. Trashed slots included: a requirement dropped from the checklist
      * last month does not stop the trail having to say which document was sent
      * back.

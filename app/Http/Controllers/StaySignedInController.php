@@ -27,7 +27,7 @@ class StaySignedInController extends Controller
         // Sent back to this screen by name rather than by `back()`: a failure
         // here is held by EnsureStaySignedInChoice anyway, and bouncing via the
         // referer let the flashed message be consumed by the intermediate
-        // redirect — leaving the person on a prompt whose buttons looked dead.
+        // redirect, leaving the person on a prompt whose buttons looked dead.
         $validator = Validator::make($request->all(), [
             'stay' => ['required', 'in:yes,no'],
         ], [

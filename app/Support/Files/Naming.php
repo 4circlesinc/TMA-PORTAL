@@ -11,7 +11,7 @@ class Naming
 {
     public static function clean(string $name): string
     {
-        // Drop any path components — names are logical, never a filesystem path.
+        // Drop any path components, names are logical, never a filesystem path.
         $name = str_replace(['/', '\\', "\0"], '', $name);
         // Remove control characters.
         $name = preg_replace('/[\x00-\x1F\x7F]/u', '', $name) ?? '';

@@ -4,7 +4,7 @@
  *
  * Drag down from the top of a page to reload it. The gesture hands off to
  * TMADashboard.refresh(), which is the same reload path the sidebar uses when
- * you re-select the page you are already on — so a pull and a re-tap fetch
+ * you re-select the page you are already on, so a pull and a re-tap fetch
  * exactly the same things.
  *
  * Touch only. There is no mouse equivalent on purpose: dragging the page down
@@ -13,7 +13,7 @@
  *
  * The touchmove listener is non-passive (it has to stop the scroller from
  * moving while the finger drags the indicator), so it is bound for the length
- * of one gesture and unbound again — a permanent non-passive move listener on
+ * of one gesture and unbound again, a permanent non-passive move listener on
  * the document is a scroll-performance cost paid on every swipe in the app.
  */
 (function () {
@@ -29,7 +29,7 @@
    * Messages owns the top of its own screen: it is live over the socket, and
    * its bubbles carry a swipe gesture that a drag starting on one would
    * compete with. The signature editor is excluded too, but by the wizard
-   * class below rather than by view — the requests list behind it is an
+   * class below rather than by view, the requests list behind it is an
    * ordinary table and refreshes like one.
    */
   var SKIP_VIEWS = { messages: 1 };
@@ -106,7 +106,7 @@
      does not float over the sidebar on a desktop layout. */
   function placeHost(main) {
     var box = main.getBoundingClientRect();
-    // Start just above the content — on mobile that is under the fixed header,
+    // Start just above the content, on mobile that is under the fixed header,
     // so the indicator slides out from behind it rather than appearing on top
     // of the first row.
     var pad = parseFloat(window.getComputedStyle(main).paddingTop) || 0;

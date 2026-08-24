@@ -7,7 +7,7 @@
   the instant the window appears, so there is no boot, no fetch and no spinner.
 
   Message bodies are attacker-controlled, so each one renders inside a
-  sandboxed, script-free iframe — the same rule the reading pane follows.
+  sandboxed, script-free iframe, the same rule the reading pane follows.
 --}}
 @php
   /** Address arrays are stored as [{name, email}]; render them the way a mail client does. */
@@ -183,7 +183,7 @@
         </div>
 
         <dl class="mw__fields">
-          <dt>to:</dt><dd>{{ $to !== '' ? $to : '—' }}</dd>
+          <dt>to:</dt><dd>{{ $to !== '' ? $to : '-' }}</dd>
           @if($cc !== '')<dt>cc:</dt><dd>{{ $cc }}</dd>@endif
           @if($bcc !== '')<dt>bcc:</dt><dd>{{ $bcc }}</dd>@endif
           <dt>subject:</dt><dd>{{ $m->subject ?: '(no subject)' }}</dd>
@@ -200,7 +200,7 @@
         @if($m->attachments->isNotEmpty())
           <div class="mw__files">
             @foreach($m->attachments as $a)
-              {{-- No ?inline — the plain attachment URL downloads, which is
+              {{-- No ?inline, the plain attachment URL downloads, which is
                    what a paperclip in a read-only window should do. --}}
               <a class="mw__file" href="/portal/mail/attachments/{{ $a->uuid }}">
                 <img src="/images/icons/phosphor/PaperclipHorizontal.svg" alt="" width="14" height="14">

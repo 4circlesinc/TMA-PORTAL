@@ -9,7 +9,7 @@
   <p style="font-size:14px;line-height:22px;margin:0 0 16px;color:#374151;">
     {{ $name ? 'Hi '.$name.',' : 'Hello,' }}
     {{ $organizer ? $organizer.' cancelled this event.' : 'This event was cancelled.' }}
-    You don't need to do anything — it has been taken off your calendar.
+    You don't need to do anything, it has been taken off your calendar.
   </p>
 
   @include('mail.calendar._details')

@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
  *
  * RRULE is the storage format rather than a set of columns because it is what
  * ICS export writes, what ICS import reads, and what Google and Microsoft both
- * speak — keeping anything else as the source of truth would mean translating
+ * speak, keeping anything else as the source of truth would mean translating
  * at every boundary.
  */
 class RecurrenceRule
@@ -80,7 +80,7 @@ class RecurrenceRule
         /*
          * COUNT and UNTIL are mutually exclusive in RFC 5545. The UI offers
          * "after N times" / "on a date" / "never" as one choice, so only one
-         * can arrive — but a malformed request must not produce a rule that
+         * can arrive, but a malformed request must not produce a rule that
          * every other calendar client rejects.
          */
         $count = isset($spec['count']) ? (int) $spec['count'] : 0;

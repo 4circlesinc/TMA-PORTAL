@@ -5,8 +5,8 @@ namespace App\Support\Companies;
 /**
  * What each company role may do, by default.
  *
- * The spec's warning — "do not assume every company member should have full
- * access" — is the whole point of this class. A role is a starting point, not
+ * The spec's warning, "do not assume every company member should have full
+ * access", is the whole point of this class. A role is a starting point, not
  * the answer: it seeds the `can_*` flags on a company_members row, and from
  * then on the flags are what get checked. That means one finance contact can be
  * given contract-signing rights without inventing a new role, and nobody
@@ -108,7 +108,7 @@ final class CompanyRoles
     }
 
     /**
-     * The full flag set for a role — every ability present, so a caller never
+     * The full flag set for a role, every ability present, so a caller never
      * has to guess whether a missing key means false.
      *
      * @return array<string, bool>

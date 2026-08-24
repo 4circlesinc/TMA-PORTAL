@@ -7,7 +7,7 @@
  * /portal/calendar; nothing is seeded and nothing is kept in localStorage.
  *
  * Rendering goes through TMAMorph so a save, a visibility toggle or a
- * background refresh updates only what changed — scroll position, the open
+ * background refresh updates only what changed, scroll position, the open
  * panel, and in-flight typing all survive. Listener wiring must therefore use
  * TMAMorph.unwired/on, never a bare addEventListener walk, or handlers stack
  * on the nodes that survived the patch.
@@ -50,8 +50,8 @@
 
   /*
    * The colour palette lives in calendar-colours.js, loaded as a sibling
-   * script. If that file ever fails to load — a stale static export, a cache
-   * miss, a blocked request — this used to hard-crash the whole page on the
+   * script. If that file ever fails to load, a stale static export, a cache
+   * miss, a blocked request, this used to hard-crash the whole page on the
    * first colours().normalise(). A missing palette should degrade to "plain
    * blue", not a white screen, so fall back to a self-contained shim with the
    * same interface. Kept minimal on purpose; calendar-colours.js remains the
@@ -296,7 +296,7 @@
 
       /*
        * Remembered chrome arrives with the list. Applied only on the first
-       * load — a background refresh must never yank the view out from under
+       * load, a background refresh must never yank the view out from under
        * someone who has since switched it.
        */
       var prefs = data && data.preferences;
@@ -409,7 +409,7 @@
     }
 
     /*
-     * A recurring master has no row of its own in the grid — it is present
+     * A recurring master has no row of its own in the grid, it is present
      * only as generated occurrences with composite ids. Holding the master's
      * uuid (which is what saving a new series hands back) would otherwise
      * match nothing and silently blank the open panel, so fall back to the
@@ -464,7 +464,7 @@
 
     /*
      * The source badge is the sync status line from the brief. Local
-     * calendars say nothing — a badge on every row would be noise.
+     * calendars say nothing, a badge on every row would be noise.
      */
     var badge = '';
     if (cal.source === 'google') badge = 'Google';
@@ -946,7 +946,7 @@
       '</div>' +
       '</div>';
 
-    // An availability-only viewer gets the time block and nothing else — the
+    // An availability-only viewer gets the time block and nothing else, the
     // server already withheld the detail, so there is nothing here to hide.
     if (event.private) {
       return (
@@ -1013,7 +1013,7 @@
   /*
    * The guest list. `attendees` is null until the event has been fetched with
    * them (the week query deliberately omits them), so a null list means "not
-   * loaded" and an empty array means "nobody invited" — rendering them the
+   * loaded" and an empty array means "nobody invited", rendering them the
    * same way would flash "No guests" onto every event on open.
    */
   function renderAttendees(event) {
@@ -1054,7 +1054,7 @@
 
   /*
    * Accept / Tentative / Decline, shown only to someone who is actually on the
-   * guest list — including via a group, which is why `myResponse` is resolved
+   * guest list, including via a group, which is why `myResponse` is resolved
    * server-side rather than by looking for the viewer's own row.
    */
   function renderRsvp(event) {
@@ -1303,7 +1303,7 @@
 
   /*
    * Free/busy for the guests picked so far. Only ever shows whether someone is
-   * busy — the server withholds everything else, and this must not imply more.
+   * busy, the server withholds everything else, and this must not imply more.
    */
   function renderAvailabilityStrip() {
     var panel = state.panel || {};
@@ -1348,7 +1348,7 @@
 
     /*
      * The event's own calendar must always be an option, even when the user
-     * cannot normally add events to it — a contributor editing their own
+     * cannot normally add events to it, a contributor editing their own
      * event on a colleague's calendar would otherwise find it missing, and
      * the browser would select the first entry instead, silently moving the
      * event to a different calendar on save.
@@ -1480,8 +1480,8 @@
       '<span class="tma-dash__clients-form-label">Who can see it</span>' +
       '<select class="tma-dash__clients-field-select" data-cal-field="visibility"' +
       (draft.isSystem ? ' disabled' : '') + '>' +
-      [['private', 'Private — only me and people I share it with'],
-        ['shared', 'Shared — people I share it with'],
+      [['private', 'Private: only me and people I share it with'],
+        ['shared', 'Shared: people I share it with'],
         ['all_staff', 'All staff can find it']]
         .map(function (pair) {
           return '<option value="' + pair[0] + '"' + (draft.visibility === pair[0] ? ' selected' : '') + '>' +
@@ -1817,7 +1817,7 @@
         }).join('') +
       '</select></label>' +
 
-      '<p class="tma-dash__calendar-share-meta">Subscribed calendars are read-only — changes come from the source.</p>' +
+      '<p class="tma-dash__calendar-share-meta">Subscribed calendars are read-only. Changes come from the source.</p>' +
       (panel.error ? '<p class="tma-dash__calendar-empty">' + esc(panel.error) + '</p>' : '') +
 
       '</div>' +
@@ -1921,7 +1921,7 @@
                 '<span class="tma-dash__calendar-share-meta">' +
                 esc(SYNC_STATUS_LABELS[c.status] || c.status) +
                 (c.eventCount != null ? ' · ' + c.eventCount + ' events' : '') +
-                (c.error ? ' — ' + esc(c.error) : '') +
+                (c.error ? ', ' + esc(c.error) : '') +
                 '</span></span>' + retry + '</li>';
             }).join('') + '</ul>'
           : '');
@@ -1991,9 +1991,9 @@
       '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
       '<span class="tma-dash__clients-form-label">Sync direction</span>' +
       '<select class="tma-dash__clients-field-select" data-sync-direction' + (canWrite ? '' : ' disabled') + '>' +
-      [['two_way', 'Two-way — changes flow both ways'],
-        ['import', 'Import only — changes come in, nothing goes out'],
-        ['export', 'Export only — portal events go out, nothing comes in']]
+      [['two_way', 'Two-way: changes flow both ways'],
+        ['import', 'Import only: changes come in, nothing goes out'],
+        ['export', 'Export only: portal events go out, nothing comes in']]
         .map(function (p) {
           return '<option value="' + p[0] + '"' + (cal.sync.direction === p[0] ? ' selected' : '') + '>' +
             esc(p[1]) + '</option>';
@@ -2014,7 +2014,7 @@
     if (panel.loading) {
       body = window.TMASkeleton ? window.TMASkeleton.rows(2, { compact: true }) : '<p>Loading…</p>';
     } else if (!panel.conflicts || !panel.conflicts.length) {
-      body = '<p class="tma-dash__calendar-empty">No conflicts — nothing was changed in both places.</p>';
+      body = '<p class="tma-dash__calendar-empty">No conflicts, nothing was changed in both places.</p>';
     } else {
       body = panel.conflicts.map(function (c) {
         var yours = c.yours || {};
@@ -2193,7 +2193,7 @@
 
   /*
    * The server sends the RRULE string; the form works in the shape the
-   * picker renders. Kept deliberately small — it only needs to understand
+   * picker renders. Kept deliberately small, it only needs to understand
    * what RecurrenceRule::build() can produce.
    */
   function parseRule(rule) {
@@ -2237,7 +2237,7 @@
       description: (get('description') || {}).value ? get('description').value.trim() : '',
       // Held in state rather than the DOM: the swatches are buttons, not inputs.
       colour: state.panel && state.panel.draft ? state.panel.draft.colour : '',
-      // Likewise the guest chips — they are not form controls.
+      // Likewise the guest chips, they are not form controls.
       guests: state.panel && state.panel.draft ? (state.panel.draft.guests || []) : [],
       /*
        * And the recurrence spec, which is spread across a preset select, day
@@ -2269,7 +2269,7 @@
     var draft = readEventForm(form);
 
     /*
-     * Editing one instance of a series is ambiguous — this occurrence, this
+     * Editing one instance of a series is ambiguous, this occurrence, this
      * and everything after, or all of them? Ask rather than guess. Creating
      * is never ambiguous, and neither is a plain event.
      */
@@ -2335,7 +2335,7 @@
           state.monthDate = startOfMonth(starts);
         }
 
-        // Guests are invited after the event exists — an invitation needs
+        // Guests are invited after the event exists, an invitation needs
         // something to point at.
         var guests = draft.guests || [];
         if (guests.length) {
@@ -2811,7 +2811,7 @@
     net(BASE + '/calendars/' + encodeURIComponent(calendarId) + '/subscribe', { method: 'POST' })
       .then(function () {
         showToast('Added to your calendars');
-        // Drop it from the browse list — it is no longer addable.
+        // Drop it from the browse list, it is no longer addable.
         if (state.panel && state.panel.mode === 'browse') {
           state.panel.calendars = state.panel.calendars.filter(function (c) { return c.id !== calendarId; });
         }
@@ -2982,7 +2982,7 @@
     })
       .then(function () {
         state.panel = null;
-        showToast('Subscribed — events will appear shortly');
+        showToast('Subscribed, events will appear shortly');
         return load(true);
       })
       .catch(function (err) {
@@ -3106,7 +3106,7 @@
         showToast(
           (data && data.calendarsAdded
             ? data.calendarsAdded + ' calendar' + (data.calendarsAdded === 1 ? '' : 's') + ' connected'
-            : 'Calendars connected') + ' — syncing in the background'
+            : 'Calendars connected') + ', syncing in the background'
         );
         pollSyncStatus(accountId);
         return load(true);
@@ -3733,7 +3733,7 @@
       });
     });
 
-    // Changing an existing level is the same call as sharing — the server
+    // Changing an existing level is the same call as sharing, the server
     // updates the grant rather than stacking a second one.
     M.unwired(root, '[data-share-user-role]').forEach(function (select) {
       select.addEventListener('change', function () {
@@ -3837,7 +3837,7 @@
      * Changing the slot re-checks who is free in it.
      *
      * These go through syncDraftFromForm() rather than poking one field,
-     * because refreshDraftAvailability() re-renders — and a re-render writes
+     * because refreshDraftAvailability() re-renders, and a re-render writes
      * the draft back over every input that isn't focused. Setting only `date`
      * meant changing the date silently wiped the title the user had just
      * typed, which then failed validation on save with no obvious cause.
@@ -4232,7 +4232,7 @@
 
   /*
    * The shell's badge helpers (dashboard.js, portal-home.js) call this
-   * synchronously while painting nav, long before — or entirely without —
+   * synchronously while painting nav, long before, or entirely without —
    * the calendar page being mounted. It therefore answers from a cache and
    * refreshes it in the background: the badge is absent on the very first
    * paint and correct from then on, rather than showing a made-up number.
@@ -4291,8 +4291,8 @@
   }
 
   /*
-   * Live updates: an event someone else creates, moves or cancels — and any
-   * calendar shared with you — lands here without a refresh.
+   * Live updates: an event someone else creates, moves or cancels, and any
+   * calendar shared with you, lands here without a refresh.
    *
    * load(true) is the existing background path, so it already shows the quiet
    * "refreshing" state rather than the full loading one.

@@ -60,7 +60,7 @@
           var err = new Error(message(data, res.status));
           err.status = res.status;
           err.data = data;
-          // A channel the user isn't in resolves as 404, not 403 — treat it
+          // A channel the user isn't in resolves as 404, not 403, treat it
           // as "gone" so the UI drops it instead of showing an error.
           err.gone = res.status === 404;
           // Validation errors are shown against their field, not as a toast.

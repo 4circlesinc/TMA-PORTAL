@@ -51,7 +51,7 @@ class FileReviewController extends BaseFilesController
 
         // Sending a document back without a reason leaves whoever uploaded it
         // with nothing to act on, which is the one outcome that always needs
-        // an explanation — CIP and ordinary client files alike.
+        // an explanation. CIP and ordinary client files alike.
         abort_if($to === ReviewStatus::UPDATE_REQUIRED && $note === '', 422, 'Say what needs changing.');
 
         $slot = CipDocument::query()->where('file_id', $file->id)->first();

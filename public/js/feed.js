@@ -49,7 +49,7 @@
   var QUICK_REACTIONS = ['👍', '❤️', '🎉', '👏', '😄', '🤔', '👀'];
 
   /*
-   * Channel colours are design-system token names, never hex values — the
+   * Channel colours are design-system token names, never hex values, the
    * sidebar dot, the header badge and the post chip all resolve the same one.
    * Only colours that exist in tokens.css are offered; there is no purple in
    * this design system, and inventing one here would be the only place it
@@ -122,7 +122,7 @@
     comments: {},         // postId => { open, loading, items, draft, replyTo, error }
     reactionPicker: null, // postId currently showing the emoji picker
     menuFor: null,        // postId whose overflow menu is open
-    modal: null,          // { kind, ... } — channel form, members, analytics, ...
+    modal: null,          // { kind, ... }, channel form, members, analytics, ...
     analytics: null,
     searchResults: null,
     toastedGone: false,
@@ -164,8 +164,8 @@
    *
    * Most accounts here have no uploaded photo, and the portal's rule is that
    * they fall back to initials rather than to a system picture. Drawing a
-   * transparent pixel instead — which is what a bespoke fallback here would do
-   * — leaves a hole where every author's face should be.
+   * transparent pixel instead, which is what a bespoke fallback here would do
+   *, leaves a hole where every author's face should be.
    */
   function myAvatar() {
     var u = me();
@@ -190,7 +190,7 @@
     return person.photo || TRANSPARENT;
   }
 
-  /* A short, human time — "3m", "2h", "Mon", "4 Mar". */
+  /* A short, human time, "3m", "2h", "Mon", "4 Mar". */
   function shortTime(iso) {
     if (!iso) return '';
     var then = new Date(iso);
@@ -243,7 +243,7 @@
    * `viewerId` is resolved from /me before the memory is read, and never from
    * window.TMACurrentUser here: that store fills in asynchronously, so reading
    * it at mount produced the key "tma.feed.anon" while every later save used
-   * "tma.feed.7" — the settings were written faithfully and then never found
+   * "tma.feed.7", the settings were written faithfully and then never found
    * again.
    */
   var viewerId = null;
@@ -375,7 +375,7 @@
         state.error = null;
         state.real = true;
         /*
-         * Warm boot keeps the plain first page of the stream — the screen a
+         * Warm boot keeps the plain first page of the stream, the screen a
          * launch lands on. A search, a filter or a page deep in history is a
          * place someone navigated to, not where they will land next time.
          */
@@ -565,7 +565,7 @@
 
   function viewRowHtml(view) {
     // "All channels" and "My channels" are only active when no single channel
-    // is open — otherwise the sidebar would show two things selected at once.
+    // is open, otherwise the sidebar would show two things selected at once.
     var active = state.view === view.id && (view.id !== 'all' || !state.channelId);
 
     return (
@@ -707,7 +707,7 @@
   /*
    * A channel's header (§3), or a plain title for the cross-channel views.
    *
-   * The cover is only drawn when the channel actually has one — an empty band
+   * The cover is only drawn when the channel actually has one, an empty band
    * of grey says "this is broken", not "this channel has no cover".
    */
   function mainHeaderHtml() {
@@ -962,7 +962,7 @@
   /*
    * Which channel the post goes to.
    *
-   * Inside a channel this is fixed and shown as a label — a picker there
+   * Inside a channel this is fixed and shown as a label, a picker there
    * invites a post to land somewhere nobody meant. Off a channel it is a
    * required choice.
    */
@@ -995,7 +995,7 @@
    * A contenteditable with an explicit toolbar rather than a third-party
    * editor: the server's sanitiser allow-list is narrow and known, and every
    * button here maps onto something that survives it. `data-feed-editor` is
-   * deliberately keyed so morph preserves the node across renders — replacing
+   * deliberately keyed so morph preserves the node across renders, replacing
    * it would drop the caret mid-sentence.
    */
   function editorHtml(draft) {
@@ -1022,8 +1022,8 @@
       '</div>' +
       /*
        * data-morph-skip is essential, not decorative. The rendered string for
-       * this node is always empty — the browser owns its contents while
-       * someone types — so without the skip, any render triggered mid-sentence
+       * this node is always empty, the browser owns its contents while
+       * someone types, so without the skip, any render triggered mid-sentence
        * (the mention autocomplete answering, an upload finishing) would diff
        * the typed text against nothing and delete it.
        */
@@ -1435,7 +1435,7 @@
       return (
         '<div class="tma-dash__feed-post-status">' +
         '<img src="' + ICON + 'PencilSimple.svg" alt="" width="14" height="14">' +
-        '<span>Draft — only you can see this.</span>' +
+        '<span>Draft, only you can see this.</span>' +
         '<button type="button" class="tma-dash__feed-btn tma-dash__feed-btn--ghost"' +
         ' data-feed-edit="' + esc(post.id) + '">Continue</button>' +
         '<button type="button" class="tma-dash__feed-btn tma-dash__feed-btn--primary"' +
@@ -1474,7 +1474,7 @@
   /*
    * The post body.
    *
-   * `post.body` is server-sanitised HTML — it is inserted as markup on purpose,
+   * `post.body` is server-sanitised HTML, it is inserted as markup on purpose,
    * because rich text is the point (§4). Nothing reaches this that has not
    * been through FeedContent::sanitise, and no client-side value is ever
    * concatenated into it.
@@ -2357,7 +2357,7 @@
     }).join('');
   }
 
-  /* Acknowledgement statistics (§12) — including who has *not* replied. */
+  /* Acknowledgement statistics (§12), including who has *not* replied. */
   function acksModalHtml(modal) {
     if (modal.loading) return '<div class="tma-dash__feed-comment-skel" aria-hidden="true"></div>';
     if (modal.error) return '<p class="tma-dash__feed-error">' + esc(modal.error) + '</p>';
@@ -2626,7 +2626,7 @@
     });
 
     // The editor is the one node whose content is *not* re-rendered from
-    // state — the browser owns the caret. State reads from the DOM instead.
+    // state, the browser owns the caret. State reads from the DOM instead.
     var editor = M.unwiredOne(root, '[data-feed-editor]', 'wire');
     if (editor) {
       // Restore the draft body once, when the node first appears.
@@ -2962,8 +2962,8 @@
   /*
    * Replace the typed trigger with a marker span.
    *
-   * The marker is what the server reads on the way in — see
-   * FeedContent::mentionTokens — so the identity stored is the one that was
+   * The marker is what the server reads on the way in, see
+   * FeedContent::mentionTokens, so the identity stored is the one that was
    * picked, not a name that might match two people.
    */
   function pickMention(index) {
@@ -3079,7 +3079,7 @@
    *
    * Creating one on the first keystroke would fill the Drafts view with
    * abandoned single-character posts, so the first save is the deliberate one
-   * — "Save draft" — and the timer keeps it current from then on.
+   *, "Save draft", and the timer keeps it current from then on.
    */
   function autosaveDraft() {
     var composer = state.composer;
@@ -3154,7 +3154,7 @@
     composer.error = null;
     render();
 
-    // The channel is only sent on create — a post never changes channel, and
+    // The channel is only sent on create, a post never changes channel, and
     // the server refuses the field on update for exactly that reason.
     var request = composer.id
       ? API.updatePost(composer.id, payload)
@@ -3172,7 +3172,7 @@
         );
 
         // A draft or scheduled post does not belong in the published stream,
-        // and a published one does — so the list is only refetched when the
+        // and a published one does, so the list is only refetched when the
         // post would not otherwise be where the reader is looking.
         if (status !== 'published' || state.view !== 'all') loadPosts(false);
         else refreshChannelCounts();
@@ -3486,7 +3486,7 @@
    * React, optimistically.
    *
    * The reaction row is redrawn from the server's answer, which is what makes
-   * add/change/remove consistent even when two tabs race — but the immediate
+   * add/change/remove consistent even when two tabs race, but the immediate
    * flip is what makes it feel like a button rather than a request.
    */
   function react(postId, emoji) {
@@ -3597,8 +3597,8 @@
     toast(url, 'neutral');
   }
 
-  /* The set is whichever list the clicked file lives in — the post's
-   * attachments, or one comment's — so prev/next stays within that context. */
+  /* The set is whichever list the clicked file lives in, the post's
+   * attachments, or one comment's, so prev/next stays within that context. */
   function lightboxSetFor(post, attachmentId) {
     var has = function (files) {
       return (files || []).some(function (f) { return f.id === attachmentId; });
@@ -4175,7 +4175,7 @@
   /*
    * Subscribe to the open channel's live updates.
    *
-   * The event carries no content — only what changed and where — so each
+   * The event carries no content, only what changed and where, so each
    * arrival refetches exactly one post and patches it in. That is what lets a
    * comment or a reaction from someone else appear without the reader's own
    * scroll position, open composer or half-typed reply being disturbed.
@@ -4323,10 +4323,10 @@
     /*
      * ── Warm boot ──────────────────────────────────────────────────
      * The stream paints its kept first page while the loadViewer chain —
-     * which was always going to run — fetches the truth. Gated on the
+     * which was always going to run, fetches the truth. Gated on the
      * server not having answered yet (`state.real`), not on emptiness: a
      * dead network fills nothing but still finishes the chain. A deep link
-     * skips it — someone following a notification means to land on that
+     * skips it, someone following a notification means to land on that
      * post, and the kept page may not hold it. Mount runs well after DCL,
      * so the account scope is set and no readiness dance is needed.
      */
@@ -4355,7 +4355,7 @@
       .then(function () {
         loadMemory();
 
-        // A deep link outranks the remembered position — someone following a
+        // A deep link outranks the remembered position, someone following a
         // notification means to land on that post, not where they were last.
         if (deepLink && deepLink.channel) {
           state.channelId = deepLink.channel;
@@ -4385,7 +4385,7 @@
       })
       .catch(function (err) {
         state.loading = false;
-        // Warm rows already painted beat an error card — they are the last
+        // Warm rows already painted beat an error card, they are the last
         // known truth, and the failed boot that lands here offline was never
         // going to say anything truer.
         if (!state.posts.length) {
@@ -4400,7 +4400,7 @@
    *
    * Unread posts across every channel the reader belongs to. The shell asks
    * for this on its own schedule, so it reads what is already loaded rather
-   * than fetching — a badge is not worth a request per poll.
+   * than fetching, a badge is not worth a request per poll.
    */
   function getUnreadCount() {
     return state.channels.reduce(function (total, channel) {
@@ -4409,7 +4409,7 @@
   }
 
   /*
-   * Reload the channel on screen — the shell's refresh gesture.
+   * Reload the channel on screen, the shell's refresh gesture.
    *
    * mount() cannot do this: after the first visit it is only a re-render of
    * state already in memory, which is right for switching views and useless

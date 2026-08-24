@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@yield('title', 'Shared') — TM ANTOINE Advisory</title>
+  <title>@yield('title', 'Shared') | TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="/images/brand/tma/favicon.png">
   <style>
     :root { --ink:#0f1115; --muted:#6b7280; --line:#e6e8ec; --bg:#f6f7f9; --brand:#136da0; }

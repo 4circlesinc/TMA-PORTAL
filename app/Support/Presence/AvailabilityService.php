@@ -26,8 +26,8 @@ class AvailabilityService
      *
      * Null means "not primed": every caller then behaves exactly as it did.
      *
-     * Reading one person's availability costs four queries — two purge
-     * deletes, the states themselves, and a re-read of the presence row — and
+     * Reading one person's availability costs four queries, two purge
+     * deletes, the states themselves, and a re-read of the presence row, and
      * the Dashboard's Employees card reads every member of staff. That is 4n
      * round trips for a card showing thirteen faces: ten seconds against the
      * remote database, on the same page load as everything else.
@@ -69,7 +69,7 @@ class AvailabilityService
         $rows = UserPresenceState::whereIn('user_id', array_keys($ids))->get();
 
         // Seed every id asked for, so "primed and empty" is distinguishable
-        // from "not primed" — that difference is the whole saving.
+        // from "not primed", that difference is the whole saving.
         self::$primedStates = array_fill_keys(array_keys($ids), []);
         foreach ($rows as $row) {
             self::$primedStates[(int) $row->user_id][] = $row;
@@ -291,7 +291,7 @@ class AvailabilityService
         if ($presence) {
             // syncPrimary force-fills and saves THIS instance, so it is already
             // current. The refresh that used to stand here re-read the row from
-            // the database for every person in a listing — a whole extra query
+            // the database for every person in a listing, a whole extra query
             // each to fetch back what we had just written.
             $presence = self::syncPrimary($subject, $presence);
         }
@@ -373,7 +373,7 @@ class AvailabilityService
     {
         $primed = self::primed($user);
 
-        // Nothing of theirs to purge — established for the whole page in one
+        // Nothing of theirs to purge, established for the whole page in one
         // query rather than two deletes each.
         if ($primed !== null && $primed === []) {
             return;

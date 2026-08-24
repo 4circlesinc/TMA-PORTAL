@@ -32,7 +32,7 @@ class CalendarSyncController extends Controller
 {
     /**
      * The signed-in user's connected accounts and whether each can sync
-     * calendars — what the "Connect a calendar" screen reads.
+     * calendars, what the "Connect a calendar" screen reads.
      */
     public function accounts(Request $request): JsonResponse
     {
@@ -61,7 +61,7 @@ class CalendarSyncController extends Controller
 
     /**
      * The provider-side calendars an account can see, minus the ones already
-     * connected — the picker on the connect screen.
+     * connected, the picker on the connect screen.
      */
     public function providerCalendars(Request $request, int $accountId): JsonResponse
     {
@@ -69,7 +69,7 @@ class CalendarSyncController extends Controller
         $account = $this->account($user, $accountId);
 
         abort_unless($account->canReadCalendar(), 422,
-            'This connection cannot read calendars — reconnect and allow calendar access.');
+            'This connection cannot read calendars, reconnect and allow calendar access.');
 
         try {
             $calendars = ProviderFactory::for($account)->listCalendars();
@@ -102,7 +102,7 @@ class CalendarSyncController extends Controller
         $account = $this->account($user, $accountId);
 
         abort_unless($account->canReadCalendar(), 422,
-            'This connection cannot read calendars — reconnect and allow calendar access.');
+            'This connection cannot read calendars, reconnect and allow calendar access.');
 
         $data = $request->validate([
             'externalId' => ['required', 'string', 'max:512'],
@@ -174,7 +174,7 @@ class CalendarSyncController extends Controller
         $account = $this->account($user, $accountId);
 
         abort_unless($account->canReadCalendar(), 422,
-            'This connection cannot read calendars — reconnect and allow calendar access.');
+            'This connection cannot read calendars, reconnect and allow calendar access.');
 
         $data = $request->validate([
             'direction' => ['sometimes', Rule::in(['two_way', 'import', 'export'])],
@@ -329,7 +329,7 @@ class CalendarSyncController extends Controller
         abort_unless(CalendarAccess::can($user, $calendar, 'edit_calendar'), 403, 'You cannot sync this calendar.');
         abort_unless($calendar->isProviderSynced(), 422, 'That calendar is not connected to a provider.');
 
-        // Clear the back-off — the user asked, so retry now.
+        // Clear the back-off, the user asked, so retry now.
         $calendar->forceFill(['subscription_status' => 'syncing', 'subscription_failures' => 0])->save();
 
         SyncProviderCalendar::dispatch($calendar->id);
@@ -426,7 +426,7 @@ class CalendarSyncController extends Controller
                 'ends_at' => $snapshot['endsAt'],
             ]);
             // Restoring the local version means it must be pushed out again, so
-            // the sync markers are left stale on purpose — the next push picks
+            // the sync markers are left stale on purpose, the next push picks
             // it up.
             $event->external_synced_local_at = null;
         }

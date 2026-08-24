@@ -22,7 +22,7 @@
    *
    * Laravel's `broadcast(...)->toOthers()` can only exclude the sender if the
    * request tells it which socket made it. Without this header every client
-   * receives its own echoes — which silently made a sender mark its *own*
+   * receives its own echoes, which silently made a sender mark its *own*
    * message delivered off its own acknowledgement, showing two ticks when
    * nobody had received it.
    */
@@ -56,7 +56,7 @@
           var err = new Error((data && data.message) || 'Request failed');
           err.status = res.status;
           err.data = data;
-          // A conversation the user isn't in resolves as 404, not 403 — treat
+          // A conversation the user isn't in resolves as 404, not 403, treat
           // it as "gone" so the UI drops it instead of showing an error.
           err.gone = res.status === 404;
           throw err;
@@ -326,13 +326,13 @@
     },
 
     /* Every photo, video or document the user can see, pooled across all of
-     * their conversations — the inbox column's Media view, as opposed to
+     * their conversations, the inbox column's Media view, as opposed to
      * gallery() which is scoped to one thread. */
     media: function (shelf) {
       return api(BASE + '/media' + query({ shelf: shelf }));
     },
 
-    /* Recent call history across all the viewer's conversations — the Calls tab.
+    /* Recent call history across all the viewer's conversations, the Calls tab.
      * Server-backed so it is populated on first open, not only for threads
      * whose messages happen to be loaded. */
     calls: function () {
@@ -386,7 +386,7 @@
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/read', { method: 'POST' });
     },
 
-    /* Acknowledge receipt — the sender's second grey tick. Distinct from
+    /* Acknowledge receipt, the sender's second grey tick. Distinct from
      * markRead, and not gated on any privacy setting. */
     markDelivered: function (conversationId) {
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/delivered', {

@@ -3,7 +3,7 @@
 namespace App\Support\Cip;
 
 /**
- * The application status vocabulary — the full lifecycle, defined once even
+ * The application status vocabulary, the full lifecycle, defined once even
  * though the transitions arrive over several build phases, so dashboards and
  * scope queries never need rework as statuses light up.
  *
@@ -74,7 +74,7 @@ class Status
     ];
 
     /**
-     * The status token §22 puts in email subjects — not the chip/bucket label.
+     * The status token §22 puts in email subjects, not the chip/bucket label.
      *
      * Chips say Review Applications and Approved; the filing format says
      * REVIEW APPLICATION and GRANTED, matching the brief's worked examples.
@@ -100,7 +100,7 @@ class Status
      *
      * The portal's five generic chip tones (action, pending, success, danger,
      * neutral) still colour files and everything else. CIP does not borrow
-     * them across eleven different queues — that is how five blues sat next
+     * them across eleven different queues, that is how five blues sat next
      * to each other. Approved and Denied keep success and danger so a
      * decision still reads as a decision. Draft is leftover and stays grey.
      */

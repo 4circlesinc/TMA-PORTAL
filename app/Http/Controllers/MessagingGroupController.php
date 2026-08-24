@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
  * Group conversations: creating them, and changing who and what they are.
  *
  * Split from MessagingController because group administration is a different
- * concern from sending and reading — different permissions, and every change
+ * concern from sending and reading, different permissions, and every change
  * leaves a system message in the thread so the group can see its own history.
  *
  * Membership is still the authorization boundary: every route resolves through
@@ -46,7 +46,7 @@ class MessagingGroupController extends Controller
         ]);
 
         // A client may only build a group from the people working on their
-        // account — the ids come straight off the request, so filter rather
+        // account, the ids come straight off the request, so filter rather
         // than trust them.
         $reachable = ContactScope::visibleUserIds($user);
 
@@ -333,7 +333,7 @@ class MessagingGroupController extends Controller
      * A group must keep at least one administrator.
      *
      * Without this a group can be left with nobody able to add members, rename
-     * it, or remove anyone — recoverable only from the database.
+     * it, or remove anyone, recoverable only from the database.
      */
     private function assertNotLastAdmin(Conversation $conversation, ConversationParticipant $participant): void
     {

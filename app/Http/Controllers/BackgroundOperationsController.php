@@ -15,8 +15,8 @@ use Illuminate\Validation\Rule;
  * Settings → Background Operations: what the portal is doing when nobody is
  * watching, read from the real queue rather than a list of examples.
  *
- * The queue is load-bearing here — mail import, calendar import, OneDrive
- * sync, notification email and every outbound message ride it — and its
+ * The queue is load-bearing here, mail import, calendar import, OneDrive
+ * sync, notification email and every outbound message ride it, and its
  * characteristic failure is silence: with no worker running, jobs pile up and
  * every one of those features simply stops, with nothing on screen to say so.
  * So the page leads with whether work is actually moving, not just a list.
@@ -102,7 +102,7 @@ class BackgroundOperationsController extends Controller
     }
 
     /**
-     * Pause or resume one import source — Smartsheet documents, OneDrive, or
+     * Pause or resume one import source. Smartsheet documents, OneDrive, or
      * a single SharePoint library. Mailbox and calendar sync stay on each
      * person's Connectors toggles.
      */

@@ -141,7 +141,7 @@ class NotificationController extends Controller
      * Apply one action to a selection of notifications (?20).
      *
      * Scoped to the caller's own rows like every other route here, so an id
-     * belonging to someone else is silently no-op rather than an error — the
+     * belonging to someone else is silently no-op rather than an error, the
      * selection is a UI convenience, not an authorisation surface.
      */
     public function bulk(Request $request): JsonResponse

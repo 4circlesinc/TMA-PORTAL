@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * Adding people to a company account, inviting them, and taking access away.
  *
  * A member row is created first and the invitation second, so the company can
- * be set up in full before anyone is emailed — and so an administrator can see
+ * be set up in full before anyone is emailed, and so an administrator can see
  * who is *meant* to have access, not only who has accepted.
  */
 final class CompanyMembers
@@ -98,7 +98,7 @@ final class CompanyMembers
 
     /**
      * Invite a member who has no account yet. Returns null when there is
-     * nothing to send — they already have a login, or no address was given.
+     * nothing to send, they already have a login, or no address was given.
      */
     public static function invite(Company $company, CompanyMember $member, User $by): ?Invitation
     {

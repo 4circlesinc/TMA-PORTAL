@@ -8,7 +8,7 @@ use App\Models\Notification;
  * The registry of every notification type the portal can raise (§13–§15).
  *
  * One place decides, per type: which module it belongs to, its semantic level
- * (§14, which drives the icon tone — never a bespoke colour), the fallback
+ * (§14, which drives the icon tone, never a bespoke colour), the fallback
  * system icon used when there is no human actor (§3), the default action label
  * (§15), the priority, and which user preference group can silence it (§21).
  *
@@ -136,7 +136,7 @@ final class NotificationType
         // ── Feed ───────────────────────────────────────────────
         // The internal communications feed (§8). These all sit in one
         // preference group, so someone who wants the Feed quiet silences it
-        // once rather than type by type — except a mention, which is
+        // once rather than type by type, except a mention, which is
         // addressed to them personally and rides the same 'At' icon the
         // messaging mention uses.
         'feed.post' => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'Newspaper',     'priority' => 'normal', 'pref' => 'feed', 'action_label' => 'Open post'],

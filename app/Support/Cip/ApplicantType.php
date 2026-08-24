@@ -14,7 +14,7 @@ use App\Models\CipPerson;
  *
  * The type is derived on every read, never stored. Role and date of birth are
  * already on the person, and a stored copy of a computable answer is a copy
- * that goes stale — a dependant's date of birth is corrected far more often
+ * that goes stale, a dependant's date of birth is corrected far more often
  * than anyone would remember to re-classify them afterwards.
  *
  * A spouse is a dependant by relationship but never by age: they are filed as
@@ -35,7 +35,7 @@ class ApplicantType
     public const SPONSOR = 'sponsor';
 
     /**
-     * The order a family is read in — the applicant, then the household
+     * The order a family is read in, the applicant, then the household
      * youngest bracket first, then the sponsor, who is on the application
      * rather than of it. Checklists, pickers and the requirements screen all
      * list them this way, so a reader's eye lands in the same place on each.
@@ -99,7 +99,7 @@ class ApplicantType
     }
 
     /**
-     * The age at which a dependant crosses into the older bracket — the firm's
+     * The age at which a dependant crosses into the older bracket, the firm's
      * to set, and explained in config/cip.php.
      */
     public static function cutoff(): int
@@ -111,8 +111,8 @@ class ApplicantType
      * Dependents::label() is the authority, because it is what the folder tree
      * and the filed form already call this person. The pattern behind it
      * catches relationships that did not come through the intake form, where
-     * the value is whatever the source system wrote — "Spouse", "spouse of
-     * applicant" — and where reading it as a child would be the worst
+     * the value is whatever the source system wrote, "Spouse", "spouse of
+     * applicant", and where reading it as a child would be the worst
      * available answer.
      */
     private static function isSpouse(CipPerson $person): bool
@@ -123,7 +123,7 @@ class ApplicantType
 
     /**
      * The age bracket, measured on the day the application was created rather
-     * than today — see config/cip.php for why the reference date matters.
+     * than today, see config/cip.php for why the reference date matters.
      * now() stands in for a person whose application has not been saved yet,
      * where the two dates are the same day anyway.
      *

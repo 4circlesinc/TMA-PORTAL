@@ -7,7 +7,7 @@
   </h1>
 
   <p style="font-size:14px;line-height:22px;margin:0 0 16px;color:#374151;">
-    {{ $name ? 'Hi '.$name.',' : 'Hello,' }} you can {{ $action }} <strong>{{ $title }}</strong> online — no account needed.
+    {{ $name ? 'Hi '.$name.',' : 'Hello,' }} you can {{ $action }} <strong>{{ $title }}</strong> online, no account needed.
   </p>
 
   @if ($note)
@@ -34,5 +34,5 @@
 @endsection
 
 @section('foot')
-  This link is personal to you — please don't forward it.
+  This link is personal to you, please don't forward it.
 @endsection

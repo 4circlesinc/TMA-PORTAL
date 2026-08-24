@@ -1,10 +1,10 @@
 /*
- * TMA — Catching up on the client book.
+ * TMA. Catching up on the client book.
  *
- * A TMAReplica walker over `GET /portal/clients/sync` — the eleven thousand
+ * A TMAReplica walker over `GET /portal/clients/sync`, the eleven thousand
  * records the offline plan's phase 3 was written about. Each arrives as the
  * same full record the profile screen fetches one at a time
- * (`Client::toRecord()`), and lands under `clients:record:<uid>` — which is
+ * (`Client::toRecord()`), and lands under `clients:record:<uid>`, which is
  * what lets a profile open offline for a client nobody has clicked before,
  * instead of only for the ones somebody happened to visit.
  *
@@ -13,7 +13,7 @@
  * refreshed by its own swr; this replica is the deep layer under it.
  *
  * Staff only in effect: the endpoint answers 403 for a client account, the
- * walk fails quietly, and the cursor stays put — the same shape as an
+ * walk fails quietly, and the cursor stays put, the same shape as an
  * account with no CIP reach walking the applications cursor.
  *
  * Global: window.TMAClientsSync
@@ -22,7 +22,7 @@
   'use strict';
 
   function keep(record) {
-    // `id` IS the uid — toRecord()'s own naming, kept rather than translated.
+    // `id` IS the uid, toRecord()'s own naming, kept rather than translated.
     if (!record || !record.id) return Promise.resolve();
 
     var key = 'clients:record:' + record.id;

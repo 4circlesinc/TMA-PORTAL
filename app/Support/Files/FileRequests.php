@@ -12,8 +12,8 @@ use Illuminate\Support\Str;
  * The rules behind a document request, in one place.
  *
  * A request link is the only part of the portal a stranger can write to, so
- * every rule about it — where the bytes may land, what may be sent, how big,
- * how many, for how long — is decided here and re-checked on every upload.
+ * every rule about it, where the bytes may land, what may be sent, how big,
+ * how many, for how long, is decided here and re-checked on every upload.
  * The public controller reads nothing from the visitor except the bytes and
  * (optionally) their name; the destination, the limits and the owner all come
  * from the record the requester created while signed in.
@@ -75,7 +75,7 @@ final class FileRequests
      * Normalise the extension list the modal sends.
      *
      * Accepts group keys ("documents") and bare extensions ("pdf", ".PDF")
-     * alike, and returns null for "anything" — an empty list would otherwise
+     * alike, and returns null for "anything", an empty list would otherwise
      * read as "nothing is allowed" on the upload page.
      *
      * @param  array<int, string>|null  $input
@@ -138,7 +138,7 @@ final class FileRequests
             return;
         }
 
-        // An empty string is how the modal says "remove the password" — a null
+        // An empty string is how the modal says "remove the password", a null
         // means "leave whatever is there alone".
         $request->password_hash = $password === '' ? null : Hash::make($password);
     }
@@ -156,7 +156,7 @@ final class FileRequests
      * Is this filename acceptable to *this* request?
      *
      * Returns null when it is, or the sentence to show the visitor when it is
-     * not. Content inspection happens separately and afterwards — this is the
+     * not. Content inspection happens separately and afterwards, this is the
      * requester's own list, not the safety check.
      */
     public static function rejectExtension(FileRequest $request, string $filename): ?string
@@ -176,7 +176,7 @@ final class FileRequests
         return 'Only '.self::describeExtensions($allowed).' can be uploaded here.';
     }
 
-    /** "PDF, DOCX or PNG files" — the allow-list as a sentence. */
+    /** "PDF, DOCX or PNG files", the allow-list as a sentence. */
     public static function describeExtensions(array $allowed): string
     {
         $labels = array_map(fn ($e) => strtoupper((string) $e), array_slice($allowed, 0, 8));

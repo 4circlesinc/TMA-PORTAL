@@ -3,7 +3,7 @@
  *
  * The sidebar, the mobile menu and the bottom tab bar are static HTML shared
  * by every account type, so a client used to see Clients, Users, Email,
- * Templates, Workflows and People — click any of them and the page loaded,
+ * Templates, Workflows and People, click any of them and the page loaded,
  * then filled with permission errors. This removes what the server would
  * refuse, so the portal only ever offers what the account can actually use.
  *
@@ -12,7 +12,7 @@
  * search for free. Hiding would have left it findable.
  *
  * This is presentation only. Every capability below is enforced again on the
- * server — see App\Support\Access\Role.
+ * server, see App\Support\Access\Role.
  *
  * Global: window.TMAPortalAccess  ({ can, ready, apply })
  */
@@ -38,7 +38,7 @@
     'people-home': 'directory.view',
     'people-employees': 'directory.view',
     /* The client and group screens live inside People, so reaching People at
-       all is the first requirement — see Role::PAGE_CAPABILITIES, where these
+       all is the first requirement, see Role::PAGE_CAPABILITIES, where these
        carry both capabilities. Listing the narrower one here would leave the
        row in a section the account cannot open. */
     'people-clients': 'directory.view',
@@ -55,14 +55,14 @@
   };
 
   /* Pieces of the shell's first-paint skeleton that stand in for role-gated
-     content — [data-boot-needs="<capability>"]. The Dashboard's KPI row is
+     content. [data-boot-needs="<capability>"]. The Dashboard's KPI row is
      staff-only, so its placeholder cards must not flash at a client. Every
      capability used in the shell markup is listed here so the hold CSS can be
      written before the DOM exists to prune. */
   var BOOT_GATED_CAPABILITIES = ['overview.view'];
 
   /* Account settings rail (portal-admin.js): section id => capability.
-     Anything absent is personal — profile, theme, time, notifications,
+     Anything absent is personal, profile, theme, time, notifications,
      privacy, account security, payment, plugins, and linking your own storage
      account. Everything here is the firm's administration, which the rail used
      to offer to every account because it is one static list.
@@ -90,7 +90,7 @@
   /* The shell is served with the reader's capabilities already in the
      document (App\Support\PortalShell), so on those pages nothing here has to
      wait for /me: the nav is decided before the sidebar has even parsed.
-     Shells without it — the classic and onboarding layouts — fall back to
+     Shells without it, the classic and onboarding layouts, fall back to
      holding the gated rows until /me answers, exactly as before. */
   var boot = Array.isArray(window.TMABootCapabilities) ? window.TMABootCapabilities : null;
   var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true';
@@ -126,7 +126,7 @@
   }
 
   /* A group whose children have all gone should not leave an empty
-     disclosure behind — drop the toggle and its panel together. */
+     disclosure behind, drop the toggle and its panel together. */
   function pruneEmptyGroups(scope) {
     scope.querySelectorAll('[data-subnav]').forEach(function (panel) {
       if (panel.querySelector('[data-nav]')) return;
@@ -140,8 +140,8 @@
 
   /* A section left with nothing in it would still draw its divider. Takes the
      list snapshotted before pruning, NOT a live query: sections that never
-     held nav rows — the Main Menu / Folder Shortcuts tab row, the shortcuts
-     list — carry buttons and containers rather than [data-nav], so a live
+     held nav rows, the Main Menu / Folder Shortcuts tab row, the shortcuts
+     list, carry buttons and containers rather than [data-nav], so a live
      query reads them as empty and deletes them for every user. */
   function pruneEmptySections(sections) {
     sections.forEach(function (section) {
@@ -189,7 +189,7 @@
      <head> either way. What differs is how much it has to hide:
 
      - With boot capabilities we know precisely which rows this account may
-       not have, so hide only those, and with `display:none` — the row leaves
+       not have, so hide only those, and with `display:none`, the row leaves
        the layout entirely, so the menu paints closed up and correct.
      - Without them nothing is known yet, so every gated row is held with
        `visibility:hidden`. That reserves its space, which is deliberate: the
@@ -241,7 +241,7 @@
   }
 
   /* If /me never answers we must not leave the sidebar permanently hidden.
-     Reveal everything and let the server refuse — a nav item that 403s is a
+     Reveal everything and let the server refuse, a nav item that 403s is a
      far better failure than a portal with half a menu and no explanation. */
   function releaseHold() {
     if (caps) return;
@@ -255,7 +255,7 @@
     if (boot) apply();
 
     if (!window.TMACurrentUser) {
-      // No identity source on this shell — reveal rather than strand the nav.
+      // No identity source on this shell, reveal rather than strand the nav.
       releaseHold();
       return;
     }

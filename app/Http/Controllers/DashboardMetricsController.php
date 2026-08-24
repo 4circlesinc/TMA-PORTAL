@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Cache;
  *
  * The cards measure how well the firm serves its clients, so they are staff
  * only. A client asking for them gets an explicit `staff: false` rather than a
- * 403 — the dashboard simply drops the row for them, and a failed request
+ * 403, the dashboard simply drops the row for them, and a failed request
  * would be indistinguishable from the metrics being broken.
  */
 class DashboardMetricsController extends Controller
@@ -21,8 +21,8 @@ class DashboardMetricsController extends Controller
      * How long a computed row stays warm.
      *
      * The cards measure rolling multi-week windows, so a few minutes of lag is
-     * invisible in the numbers but removes roughly ten queries — including
-     * timeline scans over messages and mail — from every visit to the
+     * invisible in the numbers but removes roughly ten queries, including
+     * timeline scans over messages and mail, from every visit to the
      * dashboard. Deliberately short: this is a staleness budget, not a cache
      * that needs invalidating on write.
      */

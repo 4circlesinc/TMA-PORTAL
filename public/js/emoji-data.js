@@ -3,7 +3,7 @@
  *
  * Generated from the Unicode character database, not hand-written: the
  * names double as search keywords, so they cannot drift or carry typos.
- * Native Unicode characters rather than image assets — the previous picker
+ * Native Unicode characters rather than image assets, the previous picker
  * used 21 SVGs, 18 of which were malformed XML and rendered as broken
  * images, and images could never cover categories or search anyway.
  *

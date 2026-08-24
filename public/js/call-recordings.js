@@ -1,15 +1,15 @@
 /*
- * Client Call Recordings — the staff area for recordings of client calls.
+ * Client Call Recordings, the staff area for recordings of client calls.
  *
  * Portal-view-pattern module (§ cbi.js): registers with TMAPortalViews for
  * the SPA shell (/call-recordings). All data is live from
- * /portal/call-recordings — loading, empty and error states only, never mock
+ * /portal/call-recordings, loading, empty and error states only, never mock
  * rows (§ the file-manager rule). Rendering is design-system components
  * only: .tma-portal-head, the Users-table .tma-dash__toolbar, ui().table,
  * the documented pagination bar, ui().openModal.
  *
  * Who sees what is the server's decision (callRecordings.view; admins see
- * the firm, an employee their own calls) — this module only draws it.
+ * the firm, an employee their own calls), this module only draws it.
  */
 (function () {
   'use strict';
@@ -69,7 +69,7 @@
   }
 
   /* ── Formatting ──
-   * Instants arrive as ISO and are rendered on the reader's clock — the
+   * Instants arrive as ISO and are rendered on the reader's clock, the
    * same rule the mail thread follows; never a server-formatted time. */
 
   function dateLabel(iso) {
@@ -96,7 +96,7 @@
     return m + ':' + String(s).padStart(2, '0');
   }
 
-  /* "John Smith — Client Call — August 10, 2026 — 2:15 PM — 34:21" */
+  /* "John Smith. Client Call. August 10, 2026. 2:15 PM. 34:21" */
   function displayName(r) {
     return [
       r.clientName || 'Client',
@@ -104,7 +104,7 @@
       dateLabel(r.startedAt),
       timeLabel(r.startedAt),
       r.status === 'ready' ? durationLabel(r.durationMs) : null,
-    ].filter(Boolean).join(' — ');
+    ].filter(Boolean).join(' · ');
   }
 
   /* The documented five-tone system (portal-files.css): tones answer "whose
@@ -124,7 +124,7 @@
   /* ── Data ── */
 
   /* Monotonic request token: the LAST REQUEST wins, not whichever response
-   * happens to resolve last — search latency varies per term, and without
+   * happens to resolve last, search latency varies per term, and without
    * this the table could settle on results for a query the box no longer
    * shows. */
   var loadSeq = 0;
@@ -187,7 +187,7 @@
     if (state.from) chips.push({ key: 'from', label: 'From: ' + state.from });
     if (state.to) chips.push({ key: 'to', label: 'To: ' + state.to });
 
-    // The documented filter-tag bar — the Users-table recipe cbi.js follows.
+    // The documented filter-tag bar, the Users-table recipe cbi.js follows.
     host.innerHTML = chips.length
       ? '<div class="tma-dash__filter-bar" role="list">' + chips.map(function (chip) {
         return '<div class="tma-dash__filter-tag" role="listitem">' +
@@ -240,7 +240,7 @@
         '<td>' + esc(kind) + '</td>' +
         '<td>' + esc(dateLabel(r.startedAt)) + '</td>' +
         '<td>' + esc(timeLabel(r.startedAt)) + '</td>' +
-        '<td>' + (r.status === 'ready' ? esc(durationLabel(r.durationMs)) : '—') + '</td>' +
+        '<td>' + (r.status === 'ready' ? esc(durationLabel(r.durationMs)) : '-') + '</td>' +
         '<td>' + statusBadge(r.status) + '</td>' +
         '</tr>';
     }).join('');

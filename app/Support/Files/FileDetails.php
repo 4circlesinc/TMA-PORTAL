@@ -16,8 +16,8 @@ use Illuminate\Support\Carbon;
  * The "More details" metadata block in the file viewer.
  *
  * Every value here is read from the record. Fields that do not apply to a file
- * are omitted rather than rendered as a placeholder — the spec is explicit that
- * only applicable fields show, and an "—" against "SharePoint item ID" on a
+ * are omitted rather than rendered as a placeholder, the spec is explicit that
+ * only applicable fields show, and an "-" against "SharePoint item ID" on a
  * file that was never in SharePoint reads as a sync failure.
  *
  * Fields that later phases fill in (version, sync state, retention,
@@ -37,14 +37,14 @@ class FileDetails
              * the reader opening each one.
              *
              * Carried here rather than fetched separately because this request
-             * is already being made when the panel opens — three more round
+             * is already being made when the panel opens, three more round
              * trips to render three numbers would cost more than the numbers
              * are worth.
              *
              * "Open" comments, not all of them: a resolved thread is finished
              * business, and counting it would leave a file reading "3 comments"
              * forever after the discussion ended. Same definition the Comments
-             * tab badge uses — see CommentPresenter::thread().
+             * tab badge uses, see CommentPresenter::thread().
              */
             'counts' => [
                 'comments' => FileComment::where('file_id', $file->id)
@@ -55,7 +55,7 @@ class FileDetails
                 /*
                  * Still open, by the same definition the panel uses.
                  *
-                 * This previously excluded status 'closed' — a value that does
+                 * This previously excluded status 'closed', a value that does
                  * not exist. The finished states are Status::TERMINAL
                  * (approved, changes_requested, declined, signed,
                  * acknowledged, completed), so every workflow ever created
@@ -165,7 +165,7 @@ class FileDetails
      * A date somebody can read, in their own zone.
      *
      * This was toIso8601String(), so the panel showed
-     * "2026-08-08T22:09:15+00:00" against Created and Modified — a machine
+     * "2026-08-08T22:09:15+00:00" against Created and Modified, a machine
      * value in a place people go to answer "when was this last touched?", and
      * in UTC rather than the reader's zone, so it was also wrong by however
      * far they sit from Greenwich.

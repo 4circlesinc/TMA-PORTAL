@@ -27,7 +27,7 @@ class ProfileSetupController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'gender' => ['required', Rule::in(['Female', 'Male', 'Non-binary', 'Prefer not to say'])],
-            // A real photo is required — unless a Google/Microsoft photo is
+            // A real photo is required, unless a Google/Microsoft photo is
             // already on file, in which case uploading is optional.
             'avatar_photo' => [$hasProviderPhoto ? 'nullable' : 'required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],
             'avatar_choice' => ['nullable', Rule::in(['provider', 'upload'])],

@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
  * had. This is the enforcement that comment promised.
  *
  * Holders of `clients.viewAll` (administrators) see everything. Everyone else
- * sees the clients they hold a *live* assignment on — the same rows that
+ * sees the clients they hold a *live* assignment on, the same rows that
  * already drive folder access, so what an employee can open and what they can
  * find now agree.
  *
@@ -58,7 +58,7 @@ class ClientScope
     }
 
     /**
-     * Resolve one client by uid, or fail — 404 rather than 403, so an employee
+     * Resolve one client by uid, or fail. 404 rather than 403, so an employee
      * cannot use the error to learn that a client they may not see exists.
      */
     public static function findOrFail(?User $user, string $uid): Client

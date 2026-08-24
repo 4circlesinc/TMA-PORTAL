@@ -5,7 +5,7 @@ namespace App\Support;
 /**
  * Swaps the shell's per-file asset tags for the built bundles.
  *
- * The shell keeps listing every stylesheet and script individually — that list
+ * The shell keeps listing every stylesheet and script individually, that list
  * is the source of truth for load order, and editing it is still how you add
  * an asset. This rewrites those tags on the way out when a build exists, so
  * the ordering lives in one place and the browser still gets two requests
@@ -13,15 +13,15 @@ namespace App\Support;
  *
  * No build, no rewrite: a fresh checkout or a local dev session with no
  * public/build serves the raw tags exactly as it always has. Nothing here is
- * required for the portal to work, which is the point — a broken or missing
+ * required for the portal to work, which is the point, a broken or missing
  * build degrades to "slower", never to "blank page".
  *
- * @see scripts/build-assets.mjs — writes the manifest this reads.
+ * @see scripts/build-assets.mjs, writes the manifest this reads.
  */
 final class AssetBundle
 {
     /**
-     * Must stay in step with CSS_TAG/JS_TAG in scripts/build-assets.mjs — the
+     * Must stay in step with CSS_TAG/JS_TAG in scripts/build-assets.mjs, the
      * build reads the load order through these same shapes, so a tag either
      * side misses is a tag that silently stops being served.
      */

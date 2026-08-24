@@ -13,7 +13,7 @@ use Illuminate\Validation\Rule;
  * Account settings > Client hub management > Custom fields.
  *
  * Defines the extra details the firm collects about every client. The values
- * are collected on the client record itself — see
+ * are collected on the client record itself, see
  * {@see ClientCustomFields::sanitise()}, which every client write runs through.
  */
 class ClientCustomFieldsController extends Controller
@@ -85,8 +85,8 @@ class ClientCustomFieldsController extends Controller
 
         /* Values already stored against this field are left in place rather
            than swept out of every client record. They stop being read the
-           moment the definition goes — sanitise() drops anything without a
-           definition on the next write — so this is not data that resurfaces,
+           moment the definition goes, sanitise() drops anything without a
+           definition on the next write, so this is not data that resurfaces,
            and re-creating a field by mistake should not have meant a
            destructive pass over every client to undo. */
         return response()->json($this->index($request)->getData(true));

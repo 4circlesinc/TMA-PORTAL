@@ -18,14 +18,14 @@ use Illuminate\Validation\Rule;
  * The firm-wide shape of the client hub: which of its capabilities employees
  * hold, and how client invitations behave. Reading is open to anyone who may
  * open the section; writing is administrators only, exactly like the security
- * policies — see AdminSecurityController, whose shape this follows.
+ * policies, see AdminSecurityController, whose shape this follows.
  */
 class ClientHubSettingsController extends Controller
 {
     /**
      * Each managed capability, in the order the screen lists them, with the
      * plain-English label and the consequence of switching it off. The screen
-     * has no business inventing these — an access toggle whose effect is
+     * has no business inventing these, an access toggle whose effect is
      * described only in the JS is a toggle nobody can audit.
      */
     private const CAPABILITY_COPY = [

@@ -19,7 +19,7 @@ use Throwable;
  * Gmail can expose the configured signature when the account was granted
  * `gmail.settings.basic`; Microsoft Graph does not. In both cases the reliable
  * fallback is to read recent Sent mail and lift the trailing block that repeats
- * across messages — that is the signature people actually send.
+ * across messages, that is the signature people actually send.
  */
 class SignatureImporter
 {
@@ -398,7 +398,7 @@ class SignatureImporter
 
     /**
      * Gmail (`gmail_signature`) and Outlook (`#Signature`) wrap the block the
-     * author configured. Prefer the last match — a reply can still carry an
+     * author configured. Prefer the last match, a reply can still carry an
      * older copy further up the document after quote stripping.
      */
     private function extractKnownWrapper(string $html): ?string

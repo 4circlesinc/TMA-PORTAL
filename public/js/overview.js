@@ -17,11 +17,11 @@
   }
 
   /* Targets, Budget and Settings were removed from this page along with the
-     Project Spendings table and the Add Target action — none of them were
+     Project Spendings table and the Add Target action, none of them were
      backed by anything, and the page reads as a real dashboard, so figures
      nobody entered are worse than absent sections. */
   /* Employees (the presence board), Users (the account-management table) and
-     the Recycle Bin all ride on administrator-only data — an employee's tab
+     the Recycle Bin all ride on administrator-only data, an employee's tab
      would be an empty board or a table of 403s. The server enforces each one
      separately; hiding them here just keeps the offer honest. */
   var BASE_TABS = ['Overview', 'Files', 'Notifications', 'Activity'];
@@ -53,7 +53,7 @@
     return new Date(+parts[0], (+parts[1]) - 1, +parts[2]);
   }
 
-  /* Real calendar week chrome — never hardcode sample day numbers. */
+  /* Real calendar week chrome, never hardcode sample day numbers. */
   function weekDaysFor(selectedKey, weekStartDate) {
     var labels = ['SU', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
     var start = weekStartDate || startOfWeek(parseDateKey(selectedKey));
@@ -82,7 +82,7 @@
   var ROOT = window.__TMA_SITE_ROOT || '';
 
   /* Whether the server has answered this session. Warm boot keys on this,
-     never on the panels having content — a dead fetch leaves them empty. */
+     never on the panels having content, a dead fetch leaves them empty. */
   var OVERVIEW_REAL = false;
 
   /* The mounted container, so a snapshot resolving after mount repaints. */
@@ -91,7 +91,7 @@
   /*
    * ── Warm boot ────────────────────────────────────────────────────
    * Overview paints its last-known panels and lets refreshOverviewData —
-   * which was always going to run — correct them silently. The road is
+   * which was always going to run, correct them silently. The road is
    * day-keyed, so it only hydrates onto the same day it was kept for:
    * yesterday's road under today's date is a wrong screen, not a warm one.
    * Post-DCL for the account scope; 'complete' guard for
@@ -245,7 +245,7 @@
   }
 
   function loadLatestFiles() {
-    // only=files — Recent is folder-first, so a busy org folder list would
+    // only=files. Recent is folder-first, so a busy org folder list would
     // otherwise return zero files for a small perPage window.
     return apiGet('/portal/files?section=recent&perPage=8&only=files')
       .then(function (j) {
@@ -288,7 +288,7 @@
   /* Sign-ins are their own feed, not a slice of the audit trail: failed
      attempts only exist in auth_events, and the trail shows non-admins their
      own rows alone. apiGet swallows the failure, so a null answer is the
-     error state rather than an empty list — an empty list means nobody has
+     error state rather than an empty list, an empty list means nobody has
      signed in, which is a different thing to say. */
   function loadSignIns() {
     return apiGet('/portal/sign-ins?limit=8').then(function (j) {
@@ -348,7 +348,7 @@
       var c = cards[pair[0]] || {};
       return {
         label: pair[1],
-        value: c.value != null ? String(c.value) : '—',
+        value: c.value != null ? String(c.value) : '-',
         hint: c.delta || '',
       };
     });
@@ -469,7 +469,7 @@
 
   /* Recent sign-ins. The rows are the shared activity component the right
      sidebar and the Activities popup already use, so a sign-in looks the same
-     wherever it is shown — only the feed behind it is different. */
+     wherever it is shown, only the feed behind it is different. */
   function renderSignInRows() {
     var R = window.TMANotifyRender;
     if (!R) return '';
@@ -902,7 +902,7 @@
       loadSignIns(),
     ]).then(function () {
       // Metrics answering is the tell that the server, not a dead network,
-      // produced this state — a failed apiGet resolves null everywhere.
+      // produced this state, a failed apiGet resolves null everywhere.
       if (METRICS || FILES.length || SIGNINS.length) {
         OVERVIEW_REAL = true;
         keepOverviewWarm();
@@ -993,7 +993,7 @@
     OVERVIEW_CONTAINER = container;
     refreshOverviewData(container);
 
-    // /me may resolve after first paint — reveal the admin-only tabs then.
+    // /me may resolve after first paint, reveal the admin-only tabs then.
     if (window.TMACurrentUser && typeof window.TMACurrentUser.onChange === 'function') {
       window.TMACurrentUser.onChange(function () {
         remountTabsForAdmin(container, requestedTab);
@@ -1007,7 +1007,7 @@
     var tab = normalizeTab(token) || 'Overview';
     var container = document.querySelector('[data-overview]');
     if (!container || !container.querySelector('.tma-dash__overview')) {
-      // Not mounted yet — leave a marker mount() will pick up.
+      // Not mounted yet, leave a marker mount() will pick up.
       var dash = document.querySelector('.tma-dash');
       if (dash) dash._pendingOverviewTab = token;
       return;

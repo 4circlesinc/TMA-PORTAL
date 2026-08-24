@@ -18,7 +18,7 @@ use Throwable;
  * a connection is made, redirects are followed manually so each new location
  * gets the same treatment, and only a small prefix of the response is read.
  *
- * Results are cached — including failures — because the composer asks for a
+ * Results are cached, including failures, because the composer asks for a
  * preview while the user is still typing.
  */
 class LinkPreviewService
@@ -39,7 +39,7 @@ class LinkPreviewService
     /**
      * Preview for one URL, from cache when possible.
      *
-     * Returns null when the link has no usable metadata — the caller renders a
+     * Returns null when the link has no usable metadata, the caller renders a
      * plain link in that case rather than an empty card.
      */
     public static function for(string $url): ?LinkPreview
@@ -259,7 +259,7 @@ class LinkPreviewService
     /**
      * Pull Open Graph (and sensible fallbacks) out of the document head.
      *
-     * Returns null when there is nothing worth showing — a card with only a
+     * Returns null when there is nothing worth showing, a card with only a
      * domain is noise, so a plain link is better.
      */
     private static function parse(string $html, string $url): ?array

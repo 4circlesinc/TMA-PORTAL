@@ -1,4 +1,4 @@
-{{-- Mini chrome preview — same structure as Settings → Theme (settings.js). --}}
+{{-- Mini chrome preview, same structure as Settings → Theme (settings.js). --}}
 <span class="tma-auth__pref-preview tma-auth__pref-preview--{{ $mode }}" aria-hidden="true">
   <span class="tma-auth__pref-preview-sidebar"></span>
   <span class="tma-auth__pref-preview-main">

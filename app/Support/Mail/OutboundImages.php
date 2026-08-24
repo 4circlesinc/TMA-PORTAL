@@ -12,7 +12,7 @@ use Throwable;
  * When the reading pane opens a message, its embedded pictures are rewritten
  * from `cid:` to authenticated `/portal/mail/attachments/…` URLs (see
  * MailController::embedInlineImages). Quoting that message in a reply drags
- * those URLs into the outgoing body — and nobody outside the portal session
+ * those URLs into the outgoing body, and nobody outside the portal session
  * can load them, so the receiver sees broken images. This fetches the bytes
  * back from the provider and inlines them as data: URIs, which
  * {@see InlineImages} then converts to proper cid: inline attachments.
@@ -63,7 +63,7 @@ final class OutboundImages
 
     private static function dataUriFor(ConnectedAccount $account, string $uuid, ?MailProvider &$provider): ?string
     {
-        // Scoped to the sender's own mailbox — a foreign uuid resolves to
+        // Scoped to the sender's own mailbox, a foreign uuid resolves to
         // nothing rather than to someone else's attachment.
         $attachment = MailAttachment::query()
             ->where('uuid', $uuid)

@@ -64,7 +64,7 @@ class MessagingSearch
         ];
     }
 
-    /** lower(col) LIKE ? — the same on Postgres and the SQLite tests use. */
+    /** lower(col) LIKE ?, the same on Postgres and the SQLite tests use. */
     private static function like($query, string $column, string $term)
     {
         return $query->whereRaw('lower('.$column.') like ?', ['%'.mb_strtolower($term).'%']);
@@ -112,7 +112,7 @@ class MessagingSearch
      * Conversations by name.
      *
      * A direct thread has no name of its own, so it matches on the other
-     * person's — which is what someone searching "Ana" is looking for.
+     * person's, which is what someone searching "Ana" is looking for.
      */
     private static function conversations(User $user, string $term, $ids): array
     {

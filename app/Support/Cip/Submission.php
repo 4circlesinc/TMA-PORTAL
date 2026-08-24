@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
  * internal number to the CIP number (§7).
  *
  * §7 keeps two numbers for one application. The internal number is ours,
- * generated on creation and permanent — invoices, drafts, reviews and
+ * generated on creation and permanent, invoices, drafts, reviews and
  * assessment feedback all refer to it, and it stays stored and searchable
  * forever. The CIP number is the government's, and it does not exist until
  * the Unit has the application in hand.
@@ -22,7 +22,7 @@ use Illuminate\Validation\ValidationException;
  * This is the moment the second number arrives. Because every user-facing
  * surface renders {@see CipApplication::displayNumber()} and nothing else,
  * writing it here flips dashboards, reports, status screens, email subjects
- * and search results in one move — which is exactly why the rule was built as
+ * and search results in one move, which is exactly why the rule was built as
  * one accessor in phase 1d rather than a formatting decision repeated per
  * screen.
  *
@@ -34,7 +34,7 @@ use Illuminate\Validation\ValidationException;
 class Submission
 {
     /**
-     * The Unit's own identifier — its shape is theirs, not ours.
+     * The Unit's own identifier, its shape is theirs, not ours.
      *
      * Long enough for anything they have issued (`10T1G12661P` is eleven) with
      * room to spare, and no pattern: a regex here would be us guessing at a
@@ -127,8 +127,8 @@ class Submission
      * Trimmed, and inner runs of whitespace closed up.
      *
      * Numbers get read off a PDF and pasted, which brings spaces and
-     * non-breaking spaces with them. Case is left exactly as given — it is
-     * the Unit's identifier and not ours to restyle — but see
+     * non-breaking spaces with them. Case is left exactly as given, it is
+     * the Unit's identifier and not ours to restyle, but see
      * {@see assertFree}, which compares without it.
      */
     private static function clean(string $number): string
@@ -143,7 +143,7 @@ class Submission
 
         if (mb_strlen($number) > self::MAX_LENGTH) {
             throw ValidationException::withMessages([
-                'cipNumber' => 'That CIP number is too long — check it against the letter.',
+                'cipNumber' => 'That CIP number is too long, check it against the letter.',
             ]);
         }
 

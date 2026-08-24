@@ -56,7 +56,7 @@ class SocialAuthController extends Controller
         // Remember where the user came from *before* anything can fail.
         // These used to be written further down, after the configuration
         // check, so a provider with no client id fell back to the default
-        // return of 'security-settings' — which is why "Connect Google" on the
+        // return of 'security-settings', which is why "Connect Google" on the
         // onboarding screen dumped people in Account settings instead of
         // leaving them on onboarding with the reason.
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
@@ -94,7 +94,7 @@ class SocialAuthController extends Controller
         //
         // One consent covers everything: sync_all expands to every capability
         // the provider has scopes for, and a connect for one capability always
-        // re-includes whatever the account already syncs — so reconnecting the
+        // re-includes whatever the account already syncs, so reconnecting the
         // mailbox can never switch the calendar or OneDrive off again.
         $account = $request->user()?->connectedAccount($provider);
 
@@ -163,7 +163,7 @@ class SocialAuthController extends Controller
         // A provider that turns someone away reports it here rather than by
         // throwing, and the reason is the only thing separating "I changed my
         // mind" from "this tenant will not allow it without an administrator".
-        // Discarding it — as this did — leaves the person on the sign-in screen
+        // Discarding it, as this did, leaves the person on the sign-in screen
         // being told they cancelled something they did not, with nothing in the
         // log to contradict them, so the only move left is to try again and be
         // refused identically. Entra refuses this way for a whole class of
@@ -178,7 +178,7 @@ class SocialAuthController extends Controller
                 'error' => $error,
                 'error_subcode' => (string) $request->query('error_subcode'),
                 // Lifted out of the description so refusals can be counted and
-                // grepped by cause — the description itself carries a unique
+                // grepped by cause, the description itself carries a unique
                 // trace id and timestamp, so no two are ever the same string.
                 'aadsts' => self::refusalCodes($description),
                 'error_description' => Str::limit($description, 500, ''),
@@ -195,7 +195,7 @@ class SocialAuthController extends Controller
             $oauth = Socialite::driver($provider)->user();
         } catch (InvalidStateException $e) {
             // The state token in the callback didn't match the one we stored at
-            // redirect — almost always a lost/expired session between the two
+            // redirect, almost always a lost/expired session between the two
             // hops (cookie not persisting, wrong SESSION_DOMAIN, or the user
             // took too long / reused a stale link).
             Log::warning('Social sign-in state mismatch', [
@@ -222,7 +222,7 @@ class SocialAuthController extends Controller
             // endpoint, etc. The user sees a generic message; we don't.
             // When the provider's token endpoint answers with a 4xx (Guzzle
             // ClientException), the response body carries the precise reason —
-            // e.g. AADSTS7000215 "Invalid client secret" — so capture it.
+            // e.g. AADSTS7000215 "Invalid client secret", so capture it.
             $body = null;
             if ($e instanceof RequestException && $e->hasResponse()) {
                 $body = Str::limit((string) $e->getResponse()->getBody(), 1000, '');
@@ -437,7 +437,7 @@ class SocialAuthController extends Controller
     /**
      * The moment mail sync is (re)enabled, start the analyze → import
      * pipeline so the user sees mailbox totals within seconds of landing
-     * back on the portal — not after the whole import. Guarded because on a
+     * back on the portal, not after the whole import. Guarded because on a
      * synchronous queue this runs inline, and a provider hiccup must not
      * break the OAuth callback; the progress record carries any failure.
      */
@@ -447,7 +447,7 @@ class SocialAuthController extends Controller
             return;
         }
 
-        // Only an actual (re)connection lands in the audit trail — a plain
+        // Only an actual (re)connection lands in the audit trail, a plain
         // social sign-in that happens to carry the same grant does not.
         if ($account->wasRecentlyCreated || $account->wasChanged('sync_email') || $account->wasChanged('token')) {
             $providerName = ucfirst($account->provider);
@@ -463,7 +463,7 @@ class SocialAuthController extends Controller
                 'user' => $account->user_id,
                 'type' => 'security.account_connected',
                 'title' => $providerName.' mailbox connected',
-                'message' => $account->email.' — import is starting in the background.',
+                'message' => $account->email.': import is starting in the background.',
                 'action_url' => '/email',
                 'dedupe_key' => 'mailbox.connected:'.$account->id,
             ]);
@@ -476,7 +476,7 @@ class SocialAuthController extends Controller
 
     /**
      * Mirror every calendar the account can see as soon as calendar sync is
-     * (re)enabled — the user should never have to find a "Connect all"
+     * (re)enabled, the user should never have to find a "Connect all"
      * button. The import skips calendars that are already mirrored.
      */
     private function startCalendarPipeline(ConnectedAccount $account): void
@@ -580,15 +580,15 @@ class SocialAuthController extends Controller
      *
      * "Cancelled" is only true when they cancelled. A Microsoft 365 tenant that
      * restricts which apps its people may consent to refuses with the same
-     * shape, and so does a blocked or conditional-access-gated account — and in
+     * shape, and so does a blocked or conditional-access-gated account, and in
      * every one of those cases the fix belongs to their administrator, not to
      * them. Telling that person they cancelled sends them round the same loop
      * indefinitely, because retrying is precisely what cannot work.
      *
      * Naming only a handful of codes was nearly as bad: everything else landed
      * on one catch-all that named no cause at all, so the single most common
-     * refusal a *new* person meets — 50105, the account was never assigned to
-     * the app — was indistinguishable from a misconfigured client secret. A
+     * refusal a *new* person meets. 50105, the account was never assigned to
+     * the app, was indistinguishable from a misconfigured client secret. A
      * tenant can sign its existing staff in happily for months while turning
      * every new starter away, and nothing on the screen or in the log said
      * which setting to look at.
@@ -602,7 +602,7 @@ class SocialAuthController extends Controller
 
         // 50105: the app has "user assignment required" switched on and this
         // account is not in the assigned list. Nothing is wrong with their
-        // account, the portal, or the consent — an administrator simply has to
+        // account, the portal, or the consent, an administrator simply has to
         // add them. This is what breaks new starters and only new starters.
         if (self::anyCode($codes, '/^50105$/')) {
             return 'Your '.$name." administrator hasn't given your account access to the portal yet.";
@@ -633,7 +633,7 @@ class SocialAuthController extends Controller
         }
 
         // Conditional access, device compliance, MFA policy, risky sign-in.
-        // "Approve the portal" is the wrong advice here — the block is on the
+        // "Approve the portal" is the wrong advice here, the block is on the
         // sign-in itself, not on the app.
         if (self::anyCode($codes, '/^(50005|50076|50079|50158|53\d{3})$/')) {
             return "Your organisation's security policy blocked this sign-in - your ".$name.' administrator can say why.';
@@ -646,7 +646,7 @@ class SocialAuthController extends Controller
 
         // Ours to fix, not theirs: a redirect URI, requested permission or
         // credential on the app registration is wrong. Sending these people to
-        // their own administrator wastes everybody's time — nothing in their
+        // their own administrator wastes everybody's time, nothing in their
         // tenant can put it right.
         if (
             in_array($error, ['unauthorized_client', 'invalid_client', 'invalid_request'], true)
@@ -719,7 +719,7 @@ class SocialAuthController extends Controller
         ];
 
         // The granted scopes are the provider's word on what the new token can
-        // do — store them as-is when present (the redirect re-requested every
+        // do, store them as-is when present (the redirect re-requested every
         // previously held scope, so they only ever grow), keep the old list
         // when the response omits them.
         $granted = $oauth->accessTokenResponseBody['scope'] ?? '';

@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 /**
  * The one listing endpoint behind every file area (All / My / Shared with me /
  * Shared folders / Favourites / File Box / Recent / Recycle bin). Search,
- * sort, filter and pagination all run in the database — the browser never
+ * sort, filter and pagination all run in the database, the browser never
  * receives the whole table.
  */
 class BrowserController extends BaseFilesController
@@ -65,7 +65,7 @@ class BrowserController extends BaseFilesController
         }
 
         /*
-         * Who owns things here, with a count each — what the Owner column's
+         * Who owns things here, with a count each, what the Owner column's
          * filter offers.
          *
          * Measured before the owner constraint is applied, and that ordering is
@@ -124,7 +124,7 @@ class BrowserController extends BaseFilesController
     /**
      * The owners of everything in scope, with how much each holds.
      *
-     * Two grouped counts — one per table — rather than a row per item, so the
+     * Two grouped counts, one per table, rather than a row per item, so the
      * facet costs the same whether the folder holds ten files or ten thousand.
      * Both queries arrive already narrowed to what this account may see, which
      * is what keeps the facet from naming people whose files the viewer cannot
@@ -173,7 +173,7 @@ class BrowserController extends BaseFilesController
             $owners[] = ['id' => (int) $id, 'name' => $names[$id], 'n' => $n];
         }
 
-        // Busiest first — the useful end of a list nobody wants to read.
+        // Busiest first, the useful end of a list nobody wants to read.
         usort($owners, fn ($a, $b) => [$b['n'], strtolower($a['name'])] <=> [$a['n'], strtolower($b['name'])]);
 
         return $owners;
@@ -231,13 +231,13 @@ class BrowserController extends BaseFilesController
             ],
             'recent' => [
                 // Recency, not tree position, so unlike 'all'/'my' this isn't
-                // scoped to `whereNull('parent_id')` — a nested folder that
+                // scoped to `whereNull('parent_id')`, a nested folder that
                 // was just touched belongs here too. A trashed folder's whole
                 // subtree is soft-deleted with it (FolderTree::softDeleteTree),
                 // so the default non-trashed scope already excludes orphans.
                 // The bare "Client Files"/"Staff Files" root anchors are
                 // structural scaffolding auto-provisioned for every user, not
-                // activity — excluded, or a brand new user's Recent would show
+                // activity, excluded, or a brand new user's Recent would show
                 // nothing but two empty containers created moments earlier.
                 // Actual client/organization/staff folders (not the root type)
                 // still belong here.
@@ -296,7 +296,7 @@ class BrowserController extends BaseFilesController
                 ->orWhereIn('id', $ids ?: [0])
                 ->orWhereIn('folder_id', $folderIds ?: [0]));
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
-            // Mirror of the folder rule, at ANY depth — Recent and search list
+            // Mirror of the folder rule, at ANY depth. Recent and search list
             // nested files, so "top level only" here leaked the inside of
             // people's drives. A hidden owner's file is personal space when it
             // is unfiled or inside a personal (user-type) folder; only an

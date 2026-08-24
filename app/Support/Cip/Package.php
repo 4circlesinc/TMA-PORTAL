@@ -12,11 +12,11 @@ use App\Support\Files\FileAccess;
 use App\Support\Files\FolderTree;
 
 /**
- * §17 — what freezes when a package is confirmed, and what does not.
+ * §17, what freezes when a package is confirmed, and what does not.
  *
  * Confirm submission (§15) stamps `locked_at`. From that moment the original
- * per-person folders — Main Applicant, Sponsor, Dependent N, and everything
- * inside them — are view-only for everyone, including administrators. The
+ * per-person folders. Main Applicant, Sponsor, Dependent N, and everything
+ * inside them, are view-only for everyone, including administrators. The
  * Additional Documents drawer hanging off the same client stays writable:
  * queries, non-compliance responses, supplementary papers and Unit requests
  * land there, and versioning stays on.
@@ -107,7 +107,7 @@ class Package
 
     /**
      * Withdraw every open link that still targets this application's original
-     * package — slot links and folder links into person trees. Links aimed at
+     * package, slot links and folder links into person trees. Links aimed at
      * Additional Documents are left alone.
      */
     public static function revokeOutstandingLinks(CipApplication $application): void
@@ -229,7 +229,7 @@ class Package
      *
      * Reads FileAccess's chain cache rather than keeping a second one: the
      * §17 check runs inside FileAccess::can, so by the time we are here that
-     * chain has usually been fetched already — and when it has not, a listing
+     * chain has usually been fetched already, and when it has not, a listing
      * has warmed it for the whole page in one pass.
      *
      * @return list<int>

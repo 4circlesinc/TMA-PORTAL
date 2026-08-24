@@ -202,7 +202,7 @@
 
     progressEl.textContent = required.length
       ? done + ' of ' + required.length + ' required field' + (required.length === 1 ? '' : 's') + ' complete'
-      : (optionalDone ? optionalDone + ' field(s) complete' : 'Nothing required — you can finish');
+      : (optionalDone ? optionalDone + ' field(s) complete' : 'Nothing required. You can finish');
 
     finishBtn.disabled = done < required.length;
   }
@@ -357,7 +357,7 @@
           return;
         }
         if (file.size > 4 * 1024 * 1024) {
-          fail('That image is too large — 4 MB maximum.');
+          fail('That image is too large. 4 MB maximum.');
           return;
         }
         ok();
@@ -520,7 +520,7 @@
     post('/submit', { values: valuePayload() })
       .then(function () {
         showDone(
-          "Thanks — you're done",
+          "Thanks, you're done",
           'Your signature has been recorded. You\'ll get a copy by email once everyone has signed.'
         );
       })

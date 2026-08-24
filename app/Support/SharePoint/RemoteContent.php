@@ -17,7 +17,7 @@ use Throwable;
  * This turns one of those into a real stored file, on demand.
  *
  * Everything reads through Vault, so hooking materialisation in there means
- * download, preview, signing, zipping and copying all get it for free — none of
+ * download, preview, signing, zipping and copying all get it for free, none of
  * them need to know a file started life as a reference.
  */
 class RemoteContent
@@ -35,7 +35,7 @@ class RemoteContent
     /**
      * Make sure the bytes are here, fetching them if they are not.
      *
-     * Returns false when the file cannot be materialised — no mapping, or Graph
+     * Returns false when the file cannot be materialised, no mapping, or Graph
      * refused. Callers treat that the same as a missing file, which it is.
      */
     public static function ensure(FileItem $file): bool
@@ -55,7 +55,7 @@ class RemoteContent
         /*
          * One fetch at a time per file.
          *
-         * Opening a file twice quickly — or two people opening it at once —
+         * Opening a file twice quickly, or two people opening it at once —
          * would otherwise download it twice and race to write the record. The
          * loser's temp file becomes an orphan in R2 that nothing points at.
          */

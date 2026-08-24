@@ -4,7 +4,7 @@
  * Rides the same Reverb websocket the messaging page uses. It listens on the
  * signed-in user's own private channel for `notification.created` and applies
  * the new item to the shared store, so the bell badge, the header popup, and
- * the right sidebar all update live — smoothly appended, never a full refetch
+ * the right sidebar all update live, smoothly appended, never a full refetch
  * or a reset scroll.
  *
  * Degrades quietly: with no websocket configured (or Reverb unreachable) the

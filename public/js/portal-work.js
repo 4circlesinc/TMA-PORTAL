@@ -19,7 +19,7 @@
    * The file viewer answers "what is happening to this file", which is only
    * useful once you already know which file. Nobody arrives knowing that: they
    * arrive wanting to know what is waiting on them. So this page is built the
-   * other way round — everything addressed to you first, and the file named as
+   * other way round, everything addressed to you first, and the file named as
    * context underneath it.
    *
    * Nothing here has its own write endpoints. Every row carries the uuid of
@@ -102,7 +102,7 @@
   function wfTabs() {
     var all = wf.page === 'comments' ? WF_COMMENT_TABS : WF_TABS;
 
-    // The firm-wide tab is not merely hidden from clients — the server refuses
+    // The firm-wide tab is not merely hidden from clients, the server refuses
     // the scope, so offering it would be a button that quietly does something
     // else.
     return all.filter(function (t) { return !t.staffOnly || wf.canSeeAll; });
@@ -267,9 +267,9 @@
     /*
      * Per-person outcomes only where they add something.
      *
-     * With one recipient the headline already says it — "Your response is
+     * With one recipient the headline already says it, "Your response is
      * needed" above "Bea Adams · Waiting", or "Approved" above "Bea Adams ·
-     * Approved" — the same fact twice in two wordings, which invites the
+     * Approved", the same fact twice in two wordings, which invites the
      * reader to hunt for the difference. With several people it is the only
      * place you can see who did what. A comment is always worth showing: it is
      * the one thing the headline cannot carry.
@@ -306,7 +306,7 @@
     }
 
     var footer = [];
-    if (r.notYourTurn) footer.push('<span class="tma-portal-muted">It isn’t your turn yet — this request is answered one person at a time.</span>');
+    if (r.notYourTurn) footer.push('<span class="tma-portal-muted">It isn’t your turn yet, this request is answered one person at a time.</span>');
     if (r.canCancel) footer.push('<button type="button" class="tma-portal-link" data-wfh-cancel="' + esc(r.id) + '">Cancel request</button>');
 
     return '<article class="tma-portal-wf-card' + (r.onMe && r.isOpen ? ' is-mine' : '') + '">' +
@@ -403,7 +403,7 @@
    * to be read letter by letter here.
    *
    * TMAFileIcons resolves from the name, so nothing extra has to travel in the
-   * payload — and unknown extensions land on its own default rather than on a
+   * payload, and unknown extensions land on its own default rather than on a
    * broken image.
    */
   function wfFileIcon(file) {
@@ -414,7 +414,7 @@
     return '<img class="tma-portal-wf-file__icon" src="' + ui().esc(src) + '" alt="" width="18" height="18">';
   }
 
-  /* Real photo if there is one, otherwise the shared initials avatar — the
+  /* Real photo if there is one, otherwise the shared initials avatar, the
      same generator the rest of the portal uses, so one person is the same
      colour everywhere. */
   function wfAvatar(p) {
@@ -428,7 +428,7 @@
     return '<img class="tma-portal-wf-avatar" src="' + ui().esc(src) + '" alt="" width="24" height="24">';
   }
 
-  /* "in 2 days", "2 days ago", "today" — a deadline is a question about how
+  /* "in 2 days", "2 days ago", "today", a deadline is a question about how
      long is left, not a timestamp to do arithmetic against. */
   function wfRelative(iso) {
     if (!iso) return '';
@@ -636,7 +636,7 @@
      * Underline chrome and keyboard arrows only.
      *
      * Switching is delegated below: PortalTabGroup binds a handler per button,
-     * and patch() replaces those buttons whenever a tab count changes — so a
+     * and patch() replaces those buttons whenever a tab count changes, so a
      * group wired that way stops responding the moment a number moves.
      */
     var tabHost = root.querySelector('.tma-tab-group');
@@ -2334,7 +2334,7 @@
             body.innerHTML = links.map(function (l, i) {
               return '<div class="tma-portal-field">' +
                 '<span class="tma-portal-field__label">' + ui().esc(l.name || l.email) +
-                (l.canSign ? '' : ' — waiting their turn') + '</span>' +
+                (l.canSign ? '' : ', waiting their turn') + '</span>' +
                 '<div class="tma-portal-sig-link-row">' +
                 ui().input({ value: l.url, attrs: 'data-sig-link="' + i + '" readonly' }) +
                 ui().btn({ label: 'Copy', small: true, attrs: 'data-sig-copy="' + i + '"' }) +
@@ -2395,9 +2395,9 @@
                   '<td>' + ui().esc(SIG_EVENT_LABEL[e.action] || e.action) +
                   (e.meta && e.meta.field ? ' <span class="tma-portal-muted">(' + ui().esc(e.meta.field) + ')</span>' : '') +
                   '</td>' +
-                  '<td>' + ui().esc(e.actor || '—') + '</td>' +
-                  '<td>' + (when ? ui().esc(when.toLocaleString()) : '—') + '</td>' +
-                  '<td>' + ui().esc(e.ip || '—') + '</td>' +
+                  '<td>' + ui().esc(e.actor || '-') + '</td>' +
+                  '<td>' + (when ? ui().esc(when.toLocaleString()) : '-') + '</td>' +
+                  '<td>' + ui().esc(e.ip || '-') + '</td>' +
                   '</tr>';
               }).join('')
             );
@@ -2825,7 +2825,7 @@
       /*
        * Somebody else approving, commenting or replying happens in their
        * browser, and this page is precisely a list of what other people owe
-       * you — left alone it would go stale while you watched it.
+       * you, left alone it would go stale while you watched it.
        */
       window.TMALive.register(
         window.TMALive.RESOURCES.FILES,

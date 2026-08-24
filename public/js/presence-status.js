@@ -1,5 +1,5 @@
 /*
- * TMA — Advanced user presence & availability status.
+ * TMA. Advanced user presence & availability status.
  * Global: window.TMAPresence
  */
 (function () {
@@ -129,7 +129,7 @@
         return 'Offline · ' + ls.replace(/^Last seen /i, '');
       }
       var base = p.statusLabel || meta(p.status).label;
-      if (p.statusMessage) return base + ' — ' + p.statusMessage;
+      if (p.statusMessage) return base + ': ' + p.statusMessage;
       return base;
     }
     if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
@@ -439,7 +439,7 @@
       el.className = 'tma-presence-pill tma-presence-pill--' + slug;
       el.innerHTML = pillHtml;
       el.setAttribute('data-presence-status', slug);
-      el.title = p.message ? label + ' — ' + p.message : label;
+      el.title = p.message ? label + ': ' + p.message : label;
       el.setAttribute('aria-label', 'Status: ' + label + '. Click to change.');
     });
 
@@ -484,7 +484,7 @@
       wrap.querySelectorAll('[data-presence-user-name]').forEach(function (el) { el.remove(); });
     });
 
-    /* Legacy placements — title area, sidebar, duplicate slots. */
+    /* Legacy placements, title area, sidebar, duplicate slots. */
     document.querySelectorAll(
       '.tma-dash__header-left [data-presence-header], .tma-dash__profile-meta [data-presence-indicator], [data-presence-titlebar] [data-presence-indicator]'
     ).forEach(function (el) {
@@ -902,7 +902,7 @@
       });
     }
 
-    /* Nothing entered — skip unless we need to turn off a previously saved location. */
+    /* Nothing entered, skip unless we need to turn off a previously saved location. */
     if (!enabled && !hasCoords && !address) {
       var existing = (state && state.locations || []).find(function (l) { return l.type === type; });
       if (existing) return persist(existing.latitude, existing.longitude).then(function () { return true; });
@@ -1093,7 +1093,7 @@
     ensureSlots();
     paintHeader();
 
-    /* Portal morph may rebuild the header — re-mount the pill beside icons. */
+    /* Portal morph may rebuild the header, re-mount the pill beside icons. */
     if (!document.documentElement.dataset.tmaPresenceHeaderWatch) {
       document.documentElement.dataset.tmaPresenceHeaderWatch = '1';
       new MutationObserver(function () {

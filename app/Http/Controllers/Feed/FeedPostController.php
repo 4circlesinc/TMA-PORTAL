@@ -37,7 +37,7 @@ use Illuminate\Validation\ValidationException;
  * reader does to one (§4, §5, §6, §11, §12, §15).
  *
  * A draft, a scheduled post and a published post are the same row in three
- * states, so most of this file is shared between them — `store` writes a draft
+ * states, so most of this file is shared between them. `store` writes a draft
  * or publishes outright depending on the status asked for, and `update` moves
  * a post between states without ever re-parenting its attachments.
  */
@@ -106,7 +106,7 @@ class FeedPostController extends Controller
         $posts = $posts->take(self::PAGE_SIZE);
 
         // The pinned band belongs to a channel's own stream, and only to the
-        // first page — beyond that it would repeat on every scroll.
+        // first page, beyond that it would repeat on every scroll.
         $pinned = ($channel && empty($data['before']) && $view === 'all')
             ? $this->baseQuery($user, $visibleIds, 'all')
                 ->where('feed_posts.is_pinned', true)
@@ -297,7 +297,7 @@ class FeedPostController extends Controller
     /* ── Writing ──────────────────────────────────────────────────── */
 
     /**
-     * Create a post — as a draft, a scheduled publication, or live now.
+     * Create a post, as a draft, a scheduled publication, or live now.
      *
      * The whole write is one transaction: body, attachments, poll, mentions
      * and hashtags either all land or none do. Notifying and emailing happen
@@ -404,7 +404,7 @@ class FeedPostController extends Controller
                 $post->body = $body;
                 $post->body_text = FeedContent::flatten($body);
                 // Only a real content edit marks the post as edited, and only
-                // once it is already live — editing a draft is just writing.
+                // once it is already live, editing a draft is just writing.
                 if ($wasPublished) {
                     $post->edited_at = Carbon::now();
                 }
@@ -569,7 +569,7 @@ class FeedPostController extends Controller
             $this->syncMentions($copy, $user);
             FeedContent::syncHashtags($copy, FeedContent::hashtags($copy->body));
 
-            // A poll is copied without its votes — the tally belongs to the
+            // A poll is copied without its votes, the tally belongs to the
             // post that gathered it.
             if ($post->poll) {
                 $poll = FeedPoll::create([
@@ -758,7 +758,7 @@ class FeedPostController extends Controller
     /**
      * Who has acknowledged an announcement, and who has not (§12).
      *
-     * The "not yet" side is what makes this useful — an administrator needs to
+     * The "not yet" side is what makes this useful, an administrator needs to
      * know who to chase, which a list of the compliant cannot tell them.
      */
     public function acknowledgements(Request $request, string $uuid): JsonResponse
@@ -794,7 +794,7 @@ class FeedPostController extends Controller
     /**
      * Validate the composer's payload.
      *
-     * `creating` decides whether the channel is required — a post never
+     * `creating` decides whether the channel is required, a post never
      * changes channel after it is written, because its attachments, mentions
      * and audience were all resolved against the one it was written in.
      *
@@ -836,7 +836,7 @@ class FeedPostController extends Controller
     /**
      * Refuse a publish or schedule that cannot work.
      *
-     * A draft may be empty — that is what a draft is for. A published post
+     * A draft may be empty, that is what a draft is for. A published post
      * may not be, and a scheduled one needs a time that is actually in the
      * future. Choosing an email audience beyond the channel's own members is
      * a moderator's decision, not any author's.
@@ -924,7 +924,7 @@ class FeedPostController extends Controller
      * Create or replace a post's poll.
      *
      * An existing poll's options are only replaced when the labels actually
-     * changed — rewriting them on every edit would discard every vote cast so
+     * changed, rewriting them on every edit would discard every vote cast so
      * far, because the votes hang off the option rows.
      *
      * @param  array<string, mixed>|null  $spec

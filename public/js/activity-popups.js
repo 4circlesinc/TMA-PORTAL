@@ -193,7 +193,7 @@
       }
       var anyOpen = state.notifications || state.activities;
       host.hidden = !anyOpen;
-      // Only ever one panel — they must never overlap (§2).
+      // Only ever one panel, they must never overlap (§2).
       host.classList.toggle('tma-dash__header-popups--single', anyOpen);
       host.classList.remove('tma-dash__header-popups--both');
       if (notificationsPanel) notificationsPanel.hidden = !state.notifications;

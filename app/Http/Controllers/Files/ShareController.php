@@ -41,7 +41,7 @@ class ShareController extends BaseFilesController
     /**
      * Who this item can be assigned to, for a picker that lists people.
      *
-     * Gated on `assign`, the same ability the assignment itself needs — a
+     * Gated on `assign`, the same ability the assignment itself needs, a
      * reader who could not act on the answer has no business asking. What the
      * list may contain is {@see Assignable}'s rule, which is the mention
      * composer's: naming somebody lets them in, so who you may name is who you
@@ -243,7 +243,7 @@ class ShareController extends BaseFilesController
      * Share with a company rather than with a list of people.
      *
      * One row covers every current member, so joining the company grants
-     * access and being removed takes it away — there are no per-person share
+     * access and being removed takes it away, there are no per-person share
      * rows to keep in step. `companyRole` narrows it to one kind of member.
      */
     private function shareWithCompany(User $user, FileItem|Folder $item, string $type, array $data): void

@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
  *
  * Every action re-derives what the caller may do from FileAccess and the
  * comment's own authorship. The client hides buttons it shouldn't offer, but
- * that is presentation — this is the control.
+ * that is presentation, this is the control.
  */
 class FileCommentController extends BaseFilesController
 {
@@ -59,7 +59,7 @@ class FileCommentController extends BaseFilesController
             'mentions.*' => ['integer', 'min:1'],
             /*
              * The highlighted area this comment is about, as fractions of the
-             * rendered page — resolution-independent, so the same anchor
+             * rendered page, resolution-independent, so the same anchor
              * lands on the same words on any screen. Bounded to the page so a
              * hand-built request cannot park a marker off the document.
              */

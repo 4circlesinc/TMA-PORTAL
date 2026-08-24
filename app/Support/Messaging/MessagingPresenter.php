@@ -282,7 +282,7 @@ class MessagingPresenter
      * The compact quote shown above a reply.
      *
      * Carries enough about an attachment for the quote to show a thumbnail or
-     * a file-type icon — replying to a photo should look like replying to a
+     * a file-type icon, replying to a photo should look like replying to a
      * photo, not read as a line of text.
      */
     public static function replyStub(Message $message): array
@@ -359,7 +359,7 @@ class MessagingPresenter
      * The sender's tick state: 'sent' → 'delivered' → 'read'.
      *
      * Each step requires *every* other participant to have reached it, so in a
-     * group the tick only turns blue once the whole room has read it — which is
+     * group the tick only turns blue once the whole room has read it, which is
      * the behaviour people already expect from other messengers.
      *
      * Read receipts are a privacy setting, delivery is not. Someone with
@@ -409,7 +409,7 @@ class MessagingPresenter
      *
      * `$known` is the count already worked out in bulk by the caller. When it
      * is absent this counts in the database rather than over
-     * `$conversation->messages` — that relation is usually loaded with only the
+     * `$conversation->messages`, that relation is usually loaded with only the
      * newest message (for the list preview), so counting across it silently
      * capped every conversation at 1 unread and made the sidebar badge read
      * "number of conversations with something new" instead of a message count.
@@ -433,7 +433,7 @@ class MessagingPresenter
      * The most recent reaction in a conversation, phrased for the chat list.
      *
      * Reactions are not messages, so they never move a conversation or change
-     * its preview on their own — but a reaction arriving is the kind of thing
+     * its preview on their own, but a reaction arriving is the kind of thing
      * you want to see from the list, the same way an unsent draft is surfaced
      * there. Only shown when it is newer than the last message.
      */
@@ -555,7 +555,7 @@ class MessagingPresenter
     /**
      * Chat-list timestamps compress with age, like every messenger's list.
      *
-     * Rendered on the reader's wall clock — "today" and "yesterday" are
+     * Rendered on the reader's wall clock, "today" and "yesterday" are
      * decided in their zone, not the server's. Payloads that carry an ISO
      * timestamp are re-formatted by the browser anyway (a broadcast reaches
      * several zones at once); this is what the rest read.

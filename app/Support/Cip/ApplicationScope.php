@@ -11,18 +11,18 @@ use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Which CIP applications an account may see — the row-level gate the module's
+ * Which CIP applications an account may see, the row-level gate the module's
  * capability checks cannot provide.
  *
  * Administrators and officers see every application. External accounts see
  * exactly their slice: a Service Provider contact (an active member of the
  * firm a provider is linked to) sees their firm's applications; a private
  * client sees the applications on their own client record. An employee with
- * no officer grant sees nothing — widen deliberately when the firm decides,
+ * no officer grant sees nothing, widen deliberately when the firm decides,
  * not by default.
  *
  * Use {@see self::query()} anywhere applications are listed, counted or
- * fetched; {@see self::findOrFail()} answers 404 — never 403 — so existence
+ * fetched; {@see self::findOrFail()} answers 404, never 403, so existence
  * never leaks (the ClientScope convention).
  */
 class ApplicationScope
@@ -42,18 +42,18 @@ class ApplicationScope
         }
 
         /*
-         * An officer sees the files they hold. Nothing else — not the
+         * An officer sees the files they hold. Nothing else, not the
          * unassigned pool, and not even applications they filed themselves.
          *
          * §10 is the reason: the administrator assigns, and the assignment is
-         * what starts the review — so a file nobody has been given is the
+         * what starts the review, so a file nobody has been given is the
          * administrator's to see and nobody else's. A creator exception was
          * tried here and taken out on the firm's own instruction: an officer
          * who files an application hands it to the administrator like any
          * provider does, and it comes back into their view the moment it is
          * assigned to them.
          *
-         * "Holds" is either assignment record — the client's list, which is
+         * "Holds" is either assignment record, the client's list, which is
          * what the Assigned tab and §8's column read, or the application's own
          * workflow row; the picker writes both together, but a file must not
          * vanish from its officer because one half was written by an older

@@ -12,8 +12,8 @@ use Sabre\VObject\Component\VCalendar;
 /**
  * Generates the .ics file the export actions hand back.
  *
- * Series masters are written **as series** — one VEVENT carrying the RRULE,
- * plus a VEVENT per detached occurrence with a RECURRENCE-ID — rather than as
+ * Series masters are written **as series**, one VEVENT carrying the RRULE,
+ * plus a VEVENT per detached occurrence with a RECURRENCE-ID, rather than as
  * hundreds of expanded copies. That is what keeps a re-import, or a sync to
  * Google, recognisably the same recurring meeting instead of a pile of
  * unrelated events.
@@ -71,7 +71,7 @@ class IcsWriter
         if ($event->all_day) {
             /*
              * All-day events are DATE values, not DATE-TIMEs, and DTEND is
-             * exclusive — which is exactly how they are stored, so no
+             * exclusive, which is exactly how they are stored, so no
              * adjustment is needed here beyond dropping the time.
              */
             $vevent->add('DTSTART', $event->starts_at->setTimezone($tz), ['VALUE' => 'DATE']);

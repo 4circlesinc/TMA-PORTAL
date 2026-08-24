@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Http;
 /**
  * Thin wrapper over the Smartsheet REST API (v2.0).
  *
- * Auth is a single service token from config — server-side only, never
+ * Auth is a single service token from config, server-side only, never
  * per-user, never sent to the browser. There is deliberately no retry loop
  * here: 429/503 become SmartsheetThrottledException carrying Retry-After and
  * the queue-job layer decides (the SharePoint stack's division of labour).
@@ -32,7 +32,7 @@ class Client
     {
         $request = Http::withToken((string) config('services.smartsheet.token'))
             ->acceptJson()
-            // Timeouts are mandatory — a single stalled response once wedged
+            // Timeouts are mandatory, a single stalled response once wedged
             // an entire SharePoint import for the worker's whole lifetime.
             // 300s because Smartsheet serves dense 210-column grids at a
             // trickle (~8 KB/s observed); a 200-row page needs the headroom.

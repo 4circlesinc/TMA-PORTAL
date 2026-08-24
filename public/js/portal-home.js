@@ -63,7 +63,7 @@
 
   // Cards the server couldn't measure. Shown when the metrics request fails —
   // an em-dash is honest about the gap; a number would not be.
-  var KPI_UNAVAILABLE = { value: '—', delta: 'Unavailable', deltaUp: false, hint: 'Could not load this metric.' };
+  var KPI_UNAVAILABLE = { value: '-', delta: 'Unavailable', deltaUp: false, hint: 'Could not load this metric.' };
 
   function renderKpis() {
     if (!homeMetricsLoaded) {
@@ -72,7 +72,7 @@
         '</div>';
     }
     // The KPI row measures how the firm serves its clients, so it is staff
-    // only — a client account gets no row rather than four meaningless cards.
+    // only, a client account gets no row rather than four meaningless cards.
     if (homeMetrics && homeMetrics.staff === false) return '';
 
     var c = (homeMetrics && homeMetrics.cards) || {};
@@ -106,7 +106,7 @@
    * Whether each tile's state came from the SERVER, as opposed to a failed
    * fetch marking the tile "loaded" with nothing so the skeleton comes down.
    * Hydration keys on this, never on the loaded flags: a dead network races
-   * the store read and loses the board otherwise — the loader fails fast,
+   * the store read and loses the board otherwise, the loader fails fast,
    * stamps loaded-empty, and a guard on "loaded" then throws the snapshot
    * away in favour of an empty tile.
    */
@@ -118,14 +118,14 @@
    * Every tile below keeps its last answer in the store and starts from it.
    * That is the whole difference between "an app opening" and "a page
    * loading": the board paints exactly what it showed when the app was quit,
-   * and the fetches — which every loader already runs as a quiet,
-   * diff-before-repaint revalidation — correct it behind the paint. No
+   * and the fetches, which every loader already runs as a quiet,
+   * diff-before-repaint revalidation, correct it behind the paint. No
    * skeleton, no tiles filling in one by one; the data simply updates, the
    * way a chat app's list does.
    *
    * On the desktop the snapshots survive a restart (IndexedDB); in a browser
    * the store is memory, so this warms in-session navigation and leaves
-   * nothing on the disk — the firm's standing decision.
+   * nothing on the disk, the firm's standing decision.
    *
    * Hydration runs at script load, not at mount: the store's memory tier
    * answers in a microtask and the disk tier in a few milliseconds, both
@@ -163,7 +163,7 @@
 
     window.TMAStore.get('home:staff').then(function (snap) {
       if (!snap || homeReal.staff) return;
-      // Presence dots a restart old are presence dots, not the truth — the
+      // Presence dots a restart old are presence dots, not the truth, the
       // refresh already on its way corrects them, the same as a chat app
       // showing last-known "online" for the first breath after launch.
       homeStaff = snap;
@@ -216,7 +216,7 @@
   var METRICS_FRESH_MS = 300000; // the KPI row is a rolling measurement
   var PRESENCE_FRESH_MS = 20000; // who is online moves faster than anything else
   /* A bucket only moves when an application does, and every CIP write raises
-     the live signal this card listens to — so the window is a backstop for the
+     the live signal this card listens to, so the window is a backstop for the
      changes whose signal we never saw (another firm's officer, a queued job),
      not the way the counts normally arrive. */
   var CIP_FRESH_MS = 30000;
@@ -227,7 +227,7 @@
   // requested on every mount, including the two re-renders each load triggers.
   var pendingUsersCount = null;
 
-  // Inbox unread — same pattern as users. Never invent a number: hide the
+  // Inbox unread, same pattern as users. Never invent a number: hide the
   // badge until the first real count arrives (from /portal/mail or the email
   // module), then keep painting from cache so remounts do not flash.
   var inboxUnreadCount = null;
@@ -235,7 +235,7 @@
   var shortcutCountListenersBound = false;
 
   // `path` from the API is the full ancestor chain ([{id,name}, ...], root
-  // first) rather than just the immediate parent's name — join it into one
+  // first) rather than just the immediate parent's name, join it into one
   // breadcrumb string. A file directly in the File Box (no folder) has an
   // empty path; a top-level folder does too, but only files get the label.
   function pathLabel(kind, crumbs) {
@@ -273,7 +273,7 @@
     // data-key ties this panel to *itself* across renders. Panels are siblings
     // in one grid and can be shown or hidden individually, so without a key a
     // hidden neighbour would shift the others along and this panel's contents —
-    // thumbnails included — would be rewritten onto a different node.
+    // thumbnails included, would be rewritten onto a different node.
     if (!homeFilesLoaded) {
       return tileShell('recentFiles', 'panel-recent', 'Recent files', panelHead('Recent Files'), skeletonFileRows(3), '', true);
     }
@@ -322,7 +322,7 @@
     );
   }
 
-  /* Staff team board — online / offline + today's work-plan status. */
+  /* Staff team board, online / offline + today's work-plan status. */
   var homeStaffLoaded = false;
   var homeStaff = null;
   var homeStaffInflight = null;
@@ -337,7 +337,7 @@
     return person.avatar || 'images/avatars/Avatar3d01.png';
   }
 
-  /* Presence chips are Online / Offline only — the work plan (in office,
+  /* Presence chips are Online / Offline only, the work plan (in office,
      remote, leave) lives on the row subtitle, not on the badge. */
   function presenceBadge(p) {
     if (p.statusLabel) {
@@ -364,7 +364,7 @@
    * Message / voice / video, on hover.
    *
    * The board answers "who is around?" and the obvious next thing to do about
-   * an answer is reach them — which previously meant leaving the Dashboard,
+   * an answer is reach them, which previously meant leaving the Dashboard,
    * opening Messages and searching for the person by name.
    *
    * Rendered for every row rather than only the hovered one, and hidden in CSS:
@@ -372,7 +372,7 @@
    * the row would have no keyboard path to them at all. They are real buttons,
    * so Tab reaches them and :focus-within reveals them.
    *
-   * Not on your own row — there is nobody to call.
+   * Not on your own row, there is nobody to call.
    */
   var EMPLOYEE_ACTIONS = [
     { key: 'message', icon: 'ChatCircle', label: 'Message' },
@@ -434,7 +434,7 @@
   }
 
   function renderEmployees() {
-    // Identity/API may still be loading — show a skeleton rather than vanishing.
+    // Identity/API may still be loading, show a skeleton rather than vanishing.
     // The server is the source of truth for staff vs client (`staff: false`).
     if (!homeStaffLoaded) return employeesSkeleton();
 
@@ -560,7 +560,7 @@
       .catch(function () { return null; })
       .then(function (index) {
         if (!index) {
-          // The network failed — this is the skeleton coming down, not an
+          // The network failed, this is the skeleton coming down, not an
           // answer, so it is neither kept nor allowed to outrank the kept.
           finish({ connected: true, messages: (homeEmail && homeEmail.messages) || [] });
           return null;
@@ -618,7 +618,7 @@
     }
   }
 
-  /* Recent chats for the home dashboard — the top of the Messages list. */
+  /* Recent chats for the home dashboard, the top of the Messages list. */
   var HOME_CHAT_LIMIT = 5;
   var homeChatsLoaded = false;
   var homeChats = null;
@@ -785,8 +785,8 @@
         }
       });
 
-    // Messaging has no shell-wide realtime listener — only the Messages view
-    // subscribes — so the tile polls while the dashboard is open.
+    // Messaging has no shell-wide realtime listener, only the Messages view
+    // subscribes, so the tile polls while the dashboard is open.
     if (!homeChatsTimer && !opts.skipTimer) {
       homeChatsTimer = setInterval(function () {
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
@@ -824,7 +824,7 @@
    * came back, in the order it came back in.
    *
    * A private client never sees this card. They share the service-provider set
-   * with the contact, so the dashboard name cannot decide it — the server
+   * with the contact, so the dashboard name cannot decide it, the server
    * answers with `card`.
    */
   var homeCipLoaded = false;
@@ -833,7 +833,7 @@
   var homeCipAt = 0;
 
   /*
-   * What the counts are measured over — deliberately not a total.
+   * What the counts are measured over, deliberately not a total.
    *
    * The two sets that can arrive count different things, so a single meta that
    * fits one is a lie on the other. A Reviewing Officer's four are the files on
@@ -857,7 +857,7 @@
    *
    * A bucket with nothing in it is neutral whatever tone the server gave it.
    * The colour is the only part of a row that claims the reader has something
-   * to do about it, and "Updates Required 0" has nothing behind it — the row
+   * to do about it, and "Updates Required 0" has nothing behind it, the row
    * stays, because zero is a true answer worth reading, but it stops shouting.
    *
    * The greyed dot is the whole of what a zero earns. The row used to carry a
@@ -900,7 +900,7 @@
      * their real set and never sees this at all.
      *
      * The placeholders sit straight in the row: there is nothing to press yet,
-     * so there is no button. That matters beyond tidiness — a
+     * so there is no button. That matters beyond tidiness, a
      * .tma-portal-cip__link wrapper would hand the loading rows the link's
      * pointer cursor and hover wash, so six rows nobody can click would invite
      * the click. dashboard.css gives the row itself the padding and gap the
@@ -908,7 +908,7 @@
      * both shapes measure the same and the card does not jump when the counts
      * arrive.
      *
-     * No inline sizes. The stylesheet owns every measurement here — an inline
+     * No inline sizes. The stylesheet owns every measurement here, an inline
      * width outranks it, and the two were quietly disagreeing about how wide a
      * placeholder label is. --avatar is what keeps the dot round: .tma-skeleton
      * loads after dashboard.css and would otherwise square it off with its own
@@ -933,7 +933,7 @@
      * The skeleton is withheld from a reader we already know will not be given
      * a card. /me settles well before this payload does, and six shimmering
      * rows that resolve into nothing would have announced a module to somebody
-     * who does not have one — the exact thing the silences below are careful
+     * who does not have one, the exact thing the silences below are careful
      * not to do. The KPI row and Employees both shimmer first and vanish
      * second, which is right for them: those two are *staff* only, and the
      * board they sit on is the staff board, so the flash is rare. This card is
@@ -950,7 +950,7 @@
     /*
      * Three different silences, and all of them are the right answer.
      *
-     * `cip: false` is the server saying the module is not this reader's — the
+     * `cip: false` is the server saying the module is not this reader's, the
      * same answer /portal/dashboard/metrics gives a client account asking for
      * staff KPIs, and it is honoured the same way: no card, no explanation,
      * nothing to dismiss.
@@ -989,7 +989,7 @@
       /*
        * A queue with nothing in it is marked, not hidden.
        *
-       * Zero is a true answer and the row stays a control — an empty queue is
+       * Zero is a true answer and the row stays a control, an empty queue is
        * a reasonable thing to open, and a reader who cannot open it has to
        * confirm the zero some other way. All the modifier does is let the
        * count step back to the grey its label is already written in, so the
@@ -1016,8 +1016,8 @@
   /*
    * The counts, re-read rather than adjusted by hand.
    *
-   * Buckets are uncached server-side on purpose — an officer who clears a file
-   * and watches the number sit still concludes the portal is broken — so the
+   * Buckets are uncached server-side on purpose, an officer who clears a file
+   * and watches the number sit still concludes the portal is broken, so the
    * only thing between a status change and this card is the window below, and
    * the `cip` live signal that every CIP write already raises cuts through it.
    *
@@ -1048,7 +1048,7 @@
         homeCipInflight = null;
         var wasLoaded = homeCipLoaded;
         homeCipLoaded = true;
-        // Same counts, same rows — leave the card alone. Every loader on this
+        // Same counts, same rows, leave the card alone. Every loader on this
         // board answers on every visit, and each answer used to repaint it.
         if ((!wasLoaded || JSON.stringify(homeCip || null) !== before) && el.isConnected) {
           mount(el, { fromLoad: true });
@@ -1062,8 +1062,8 @@
    * The view first, the filter second, and that order is what makes it safe
    * both ways round. navigate() activates the clients view and settles its URL
    * synchronously, so by the time openBucket runs there is a table to narrow;
-   * and when there isn't one — the view has never been mounted in this session
-   * — openBucket parks the key for the mount to pick up, the way the tab and
+   * and when there isn't one, the view has never been mounted in this session
+   *, openBucket parks the key for the mount to pick up, the way the tab and
    * folder position is parked. The other order is the one that breaks:
    * navigate's own URL sync would land last and drop the ?bucket= the filter
    * had just written, so a reload would come back unfiltered.
@@ -1103,7 +1103,7 @@
       road: function () { return show.road !== false ? renderRoadPanel() : ''; },
       // On unless the reader turned it off, like every tile that shipped after
       // the original board. Whether there is anything to draw is a separate
-      // question, and the server answers that one — see renderCipStatus.
+      // question, and the server answers that one, see renderCipStatus.
       cipStatus: function () { return show.cipStatus !== false ? renderCipStatus() : ''; },
     };
     return tileOrder().map(function (id) {
@@ -1115,7 +1115,7 @@
    * The staff answer this listener has already acted on.
    *
    * TMACurrentUser fans out to its listeners from paint(), and paint() runs on
-   * every `tma:view-rendered` — so this fired on *every* navigation back to the
+   * every `tma:view-rendered`, so this fired on *every* navigation back to the
    * Dashboard, not only when identity arrived. Each firing force-refreshed the
    * Default Folders strip, which is what emptied every card on the way in. What
    * the listener is actually for is the one-time race where /me answers after
@@ -1142,7 +1142,7 @@
         homeStaffLoaded = false;
         homeStaff = null;
       }
-      // Re-fetch default folders once identity is *newly* known — the first
+      // Re-fetch default folders once identity is *newly* known, the first
       // load may have raced ahead of /me and skipped staff-only chrome. A /me
       // that says the same thing as last time changes nothing on this board.
       if (!settled && answer && window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
@@ -1198,7 +1198,7 @@
     bindStaffUserListener();
 
     // Only skip the network call when we already know this account is a client.
-    // If /me has not loaded yet, still ask the server — the session knows.
+    // If /me has not loaded yet, still ask the server, the session knows.
     if (isStaffUser() === false) {
       homeStaffLoaded = true;
       homeStaff = { staff: false, employees: [] };
@@ -1236,7 +1236,7 @@
       homeStaffTimer = setInterval(function () {
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
-        // A hidden tab polling presence is pure cost — the visibilitychange
+        // A hidden tab polling presence is pure cost, the visibilitychange
         // handler catches up on the way back.
         if (document.visibilityState === 'hidden') return;
         if (homeStaffInflight) return;
@@ -1252,7 +1252,7 @@
    * Hands straight over to the shared dialog (portal-file-requests.js) rather
    * than keeping the Dashboard's own version. That version asked for an email
    * address, wrote a line to the local activity log, said "File request sent"
-   * and sent nothing — there was no request, no link and no destination behind
+   * and sent nothing, there was no request, no link and no destination behind
    * it. One implementation now serves all three entry points.
    */
   function requestFiles() {
@@ -1262,14 +1262,14 @@
     }
     window.TMAFileRequests.open({
       onCreated: function () {
-        // A request is not a file, so nothing on the board changes yet — but
+        // A request is not a file, so nothing on the board changes yet, but
         // the folder it points at is worth revalidating next time round.
         homeFilesAt = 0;
       },
     });
   }
 
-  /* Share Files only — Request Files went to the real implementation above,
+  /* Share Files only. Request Files went to the real implementation above,
      which left this branch dead. */
   function shareFilesModal() {
     var s = data().state();
@@ -1362,7 +1362,7 @@
   // Messages then lands in whichever column is shortest.
   var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'cipStatus', 'favorites', 'road', 'shortcuts', 'employees', 'messages'];
 
-  // Every tile is one column of the 3-up board — nothing spans full width.
+  // Every tile is one column of the 3-up board, nothing spans full width.
   var TILE_SPAN = {
     recentFiles: 'third',
     favorites: 'third',
@@ -1389,7 +1389,7 @@
 
   /*
    * Kept fractional on purpose. Rounding each column up made the columns no
-   * longer fit the container they were derived from — at 1152px wide, three
+   * longer fit the container they were derived from, at 1152px wide, three
    * 370.67px columns became 371px each and the last one no longer passed the
    * `x + w <= containerWidth` test in packHomeTiles. The tile fell back to an
    * earlier column and the board rendered a whole empty column on the right,
@@ -1592,7 +1592,7 @@
           timer = null;
           var w = grid.clientWidth || 0;
           if (grid._masonryWidth && Math.abs(grid._masonryWidth - w) < 1) {
-            // Width unchanged — still re-pack if content height likely changed.
+            // Width unchanged, still re-pack if content height likely changed.
             var sig = Array.prototype.map.call(
               grid.querySelectorAll('[data-tile-id]'),
               function (n) { return n.getAttribute('data-tile-id'); }
@@ -1960,7 +1960,7 @@
 
     // Recent Files and Favorites are server-owned, so any value persisted by the
     // old localStorage mock must never reach the screen. That purge belongs to
-    // the *first* load only — doing it on every refresh is what emptied the
+    // the *first* load only, doing it on every refresh is what emptied the
     // panel and forced the skeleton back each time the Dashboard was opened.
     if (!homeFilesLoaded) {
       var s0 = data().state();
@@ -2074,7 +2074,7 @@
         homeMetricsInflight = null;
         var wasLoaded = homeMetricsLoaded;
         homeMetricsLoaded = true;
-        // Same numbers, same cards — leave the row alone.
+        // Same numbers, same cards, leave the row alone.
         if ((!wasLoaded || JSON.stringify(homeMetrics || null) !== before) && el.isConnected) {
           mount(el, { fromLoad: true });
         }
@@ -2082,7 +2082,7 @@
   }
 
   // Shortcut badges: Email = exact inbox unread, Calendar = today's events,
-  // Users = pending approvals. Never a placeholder number — and never "99+".
+  // Users = pending approvals. Never a placeholder number, and never "99+".
   function formatShortcutCount(n) {
     n = Math.max(0, parseInt(n, 10) || 0);
     if (n <= 0) return '';
@@ -2189,7 +2189,7 @@
    * The shell's Today control lives in .tma-dash__main-head, which Dashboard
    * hides. Park it beside Edit Dashboard so the greeting stays one row.
    *
-   * Morph of the hello actions only knows about Edit Dashboard — so Today must
+   * Morph of the hello actions only knows about Edit Dashboard, so Today must
    * be moved back to the shell before any patch, or the reconciler deletes it.
    */
   function parkTodayInHello(el) {
@@ -2233,7 +2233,7 @@
      *
      * It used to always emit a blank skeleton avatar and then assign the true
      * src further down. Under a reconciling render that reads as: reset the
-     * image to a 1x1 placeholder, then set it back — a visible flash of every
+     * image to a 1x1 placeholder, then set it back, a visible flash of every
      * profile picture on every render, and a fresh network request each time.
      */
     var me = window.TMACurrentUser ? window.TMACurrentUser.get() : null;
@@ -2274,7 +2274,7 @@
      * Reconcile rather than replace.
      *
      * Assigning innerHTML here destroyed and rebuilt the whole Dashboard on
-     * every render — including each Recent Files thumbnail and the profile
+     * every render, including each Recent Files thumbnail and the profile
      * photo, which is what made the panel blink and the images re-request. The
      * panels and rows carry stable keys, so unchanged rows are now left
      * untouched and only genuinely changed ones are rewritten.
@@ -2295,7 +2295,7 @@
     var rendered = el.firstElementChild;
     var unchanged = el._homeHtml === html &&
       !!rendered && rendered.getAttribute('data-node-id') === 'portal-home';
-    // Rescue Today before morph — hello actions HTML has no Today node, so a
+    // Rescue Today before morph, hello actions HTML has no Today node, so a
     // patch would throw the parked control away and it would never come back.
     restoreTodayToShell();
     if (!unchanged) {
@@ -2305,12 +2305,12 @@
     }
 
     // Shell hides .tma-dash__main-head on Dashboard, so park the Today control
-    // in the hello actions — Hello / Change picture / Today / Edit Dashboard
+    // in the hello actions. Hello / Change picture / Today / Edit Dashboard
     // stay one row instead of Today stacking above Edit Dashboard.
     parkTodayInHello(el);
 
     // Wiring runs after every render, but the nodes it walks now survive across
-    // renders — so each binding is registered once per element rather than once
+    // renders, so each binding is registered once per element rather than once
     // per render. Without this, a single click would fire N times on the Nth
     // render. See TMAMorph.unwired.
     var pick = window.TMAMorph
@@ -2437,7 +2437,7 @@
 
     /* The greeting and avatar are rendered directly in the markup above when
      * TMACurrentUser is ready. When it isn't yet, the skeleton stands until
-     * current-user.js's own listener fires and re-renders this view — no
+     * current-user.js's own listener fires and re-renders this view, no
      * post-render patching of the DOM is needed here.
      * The picture picker itself is owned by current-user.js (delegated click). */
 
@@ -2448,7 +2448,7 @@
     watchLiveCip();
 
     /*
-     * Revalidate on a genuine mount — but only what has actually gone stale.
+     * Revalidate on a genuine mount, but only what has actually gone stale.
      *
      * This block used to run every endpoint unconditionally on every visit to
      * the Dashboard, force-refreshing the Default Folders as well. Leaving for
@@ -2458,8 +2458,8 @@
      * that changes in between arrives through TMALive instead.
      */
     if (!opts.fromLoad) {
-      /* An explicit refresh — re-selecting the page you are on, or the
-         pull-to-refresh gesture — is a request for the latest, so it ignores
+      /* An explicit refresh, re-selecting the page you are on, or the
+         pull-to-refresh gesture, is a request for the latest, so it ignores
          the windows above. They exist to stop idle navigation from polling,
          not to answer somebody who has just asked. */
       var force = !!opts.refresh;
@@ -2481,7 +2481,7 @@
         // Only forced on an explicit refresh. A forced load replaced
         // state.defaults with preview-less folders straight away, so every card
         // on the strip read "Nothing in this folder yet" until the previews came
-        // back — the Default Folders blanking on every visit. Left to itself the
+        // back, the Default Folders blanking on every visit. Left to itself the
         // strip revalidates on its own schedule and repaints only what changed.
         window.TMAPortalHomeLibrary.load(function () {
           if (el.isConnected) mount(el, { fromLoad: true });
@@ -2578,22 +2578,22 @@
   }
 
   /*
-   * On DOMContentLoaded, not at parse — two orderings force it. The store's
+   * On DOMContentLoaded, not at parse, two orderings force it. The store's
    * reads are scoped to the account, and the account is set by
    * current-user.js, which parses AFTER this file: a read fired at parse
    * looks under the anonymous scope and misses everything. Deferred scripts
    * all parse before DCL fires, and the desktop's remembered /me applies
-   * synchronously during current-user's parse — so at DCL the scope is set,
+   * synchronously during current-user's parse, so at DCL the scope is set,
    * and the dashboard view mounts later still. (readyState guard because a
    * deferred script can, in odd embeddings, run after DCL already fired.)
    */
   /*
    * The deferred-script trap, in its precise form: while deferred scripts
-   * execute, readyState is ALREADY 'interactive' — but DOMContentLoaded has
+   * execute, readyState is ALREADY 'interactive', but DOMContentLoaded has
    * NOT fired yet; it fires after the last deferred script returns. A guard
    * on `readyState === 'loading'` therefore runs immediately, at parse,
    * before current-user.js (later in the order) has told the store whose
-   * scope to read — and every get() misses. 'complete' is the only state
+   * scope to read, and every get() misses. 'complete' is the only state
    * that proves DCL is in the past. Both listeners, once-guarded, cover the
    * sliver between DCL and load.
    */

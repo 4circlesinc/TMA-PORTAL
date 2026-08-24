@@ -8,8 +8,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 /**
- * The three ways to change a recurring event — this occurrence, this and
- * everything after it, or the whole series — expressed once so the controller
+ * The three ways to change a recurring event, this occurrence, this and
+ * everything after it, or the whole series, expressed once so the controller
  * doesn't grow three near-identical branches.
  *
  * The awkward case is "this and following". Rather than track split points,
@@ -96,7 +96,7 @@ class SeriesEditor
      * End the series immediately before `$splitAt`, so everything from that
      * instant onwards stops being generated.
      *
-     * UNTIL is inclusive in RFC 5545, hence the one-second step back — without
+     * UNTIL is inclusive in RFC 5545, hence the one-second step back, without
      * it the occurrence at the split point survives on both sides of the
      * split, which shows up as a duplicate on the day of the change.
      */
@@ -125,7 +125,7 @@ class SeriesEditor
         $duration = $master->starts_at->diffInSeconds($master->ends_at);
 
         /*
-         * A COUNT-limited series can't simply be copied forward — the tail
+         * A COUNT-limited series can't simply be copied forward, the tail
          * would restart the count from scratch and generate more occurrences
          * than the original ever had. Convert the remaining count instead.
          */
@@ -199,7 +199,7 @@ class SeriesEditor
 
             /*
              * Truncating to before the very first occurrence would leave a
-             * master that generates nothing — a ghost row. Delete it instead.
+             * master that generates nothing, a ghost row. Delete it instead.
              */
             if ($occurrenceStart <= $master->starts_at) {
                 $master->occurrences()->delete();

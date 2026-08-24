@@ -370,11 +370,11 @@
         var style = btn.getAttribute('data-sidebar-style');
         // Unlike theme/font/accent (local-only), sidebar style is a
         // per-user preference that must persist server-side and sync
-        // across the user's other sessions — store.set write-throughs to
+        // across the user's other sessions, store.set write-throughs to
         // /me/preferences (see PREF_SERVER_KEYS below), and the prefs API
         // call applies it to the live sidebar immediately.
         store.set('tma.sidebarStyle', style);
-        // A discrete click, not a continuous input like typing — flush the
+        // A discrete click, not a continuous input like typing, flush the
         // write-through right away instead of waiting out the 400ms debounce
         // (meant for rapid-fire changes). Otherwise a reload moments after
         // picking a style can race the debounced PUT: hydratePrefs() would
@@ -425,7 +425,7 @@
     autoTimezone: prefBoolCodec(),
     notifyAlwaysEmail: prefBoolCodec(),
     // Without a codec this round-trips as the string "true"/"false", and the
-    // column wants a real boolean — the validator rejects the string.
+    // column wants a real boolean, the validator rejects the string.
     fileSyncNoticeDismissed: prefBoolCodec(),
     fontScale: prefIntCodec(3),
     historyDays: prefIntCodec(30),
@@ -517,7 +517,7 @@
     } catch (e) {}
   }
 
-  /* A changed language needs a full re-render through i18n.js — reload once
+  /* A changed language needs a full re-render through i18n.js, reload once
      the preference has flushed to the account. */
   function reloadForLanguage() {
     applyLanguage();
@@ -534,7 +534,7 @@
   }
 
   /* dashboard.js boots the theme from localStorage before this lands, so the
-     account's saved look has to be re-applied once it arrives — otherwise a
+     account's saved look has to be re-applied once it arrives, otherwise a
      new browser keeps whatever the defaults painted. Idempotent when the
      stored value already matched. */
   function applyHydratedTheme(p) {
@@ -688,7 +688,7 @@
   function timezoneDisplayLabel(prefs) {
     if (prefs.autoTimezone) {
       var detected = detectedTimezone();
-      if (detected) return 'Automatic — ' + detected.replace(/_/g, ' ');
+      if (detected) return 'Automatic, ' + detected.replace(/_/g, ' ');
     }
     for (var i = 0; i < TIMEZONES.length; i++) {
       if (TIMEZONES[i].id === prefs.timezone) return TIMEZONES[i].label;
@@ -1635,7 +1635,7 @@
   }
 
   /* The four messaging privacy controls are stored with the other messaging
-     settings (and enforced there — presence, receipts and typing all check
+     settings (and enforced there, presence, receipts and typing all check
      them server-side), so this panel reads and writes that endpoint rather
      than duplicating the state. */
   var privacyCache = null;
@@ -2739,7 +2739,7 @@
     return DEFAULT_PLUGINS.find(function (p) { return p.id === id; });
   }
 
-  /* The saved list is authoritative for *membership*, not just on/off — it
+  /* The saved list is authoritative for *membership*, not just on/off, it
      used to be replayed over the whole catalog, so a removed plugin came
      straight back on the next load. Only the name/icon/copy come from the
      catalog; ids no longer in it are dropped. */
@@ -4799,7 +4799,7 @@
       prefsHydration = hydratePrefs(root);
     } else if (prefsHydration) {
       // The page-load hydration may still be in flight, and it had no panels
-      // to update. Re-sync once it lands — the .then defers past the render
+      // to update. Re-sync once it lands, the .then defers past the render
       // below, so the panels exist by then.
       prefsHydration.then(function () { syncSyncedPanels(root); });
     }
@@ -4851,7 +4851,7 @@
   /* Preferences used to hydrate only when the Settings panel mounted, so the
      account's theme and sidebar style did nothing on every other page until
      you happened to visit Settings. settings.js loads on all the portal
-     shells, so hydrate here instead — once per page load. */
+     shells, so hydrate here instead, once per page load. */
   function bootPrefs() {
     applyLanguage();
     if (prefsHydrated) return;

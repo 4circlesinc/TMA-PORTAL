@@ -7,7 +7,7 @@ use App\Models\User;
 /**
  * Per-user notification toast preferences (position, duration, sound, …).
  *
- * Stored under users.preferences['toasts'] — the same JSON column the rest of
+ * Stored under users.preferences['toasts'], the same JSON column the rest of
  * personal settings already use. Only whitelisted keys are accepted.
  */
 class ToastSettings
@@ -32,7 +32,7 @@ class ToastSettings
         'enabled' => true,
         'position' => self::POSITION_BOTTOM_RIGHT,
         'durationSec' => 10,
-        // Everything on by default — see NotificationPreferences::groupDefault.
+        // Everything on by default, see NotificationPreferences::groupDefault.
         'stickyImportant' => true,
         'sound' => true,
         'previewText' => true,

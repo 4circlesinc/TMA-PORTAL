@@ -87,7 +87,7 @@ function readWindowState() {
     const saved = JSON.parse(fs.readFileSync(statePath(), 'utf8'));
     if (Number.isFinite(saved.width) && Number.isFinite(saved.height)) return saved;
   } catch {
-    // first run, or the file got mangled — fall through to defaults
+    // first run, or the file got mangled, fall through to defaults
   }
   return { width: 1440, height: 900 };
 }
@@ -117,7 +117,7 @@ let mainWindow = null;
 let loadingLayer = null;
 
 // Closing the window puts the app in the background rather than ending it, so
-// messages and calls keep arriving. Only Quit — or an update restart — sets
+// messages and calls keep arriving. Only Quit, or an update restart, sets
 // this, and only then is the window really allowed to go.
 let quitting = false;
 
@@ -161,7 +161,7 @@ function createWindow() {
    * Right-click does something.
    *
    * Electron ships no context menu at all, so until now it did nothing
-   * anywhere in the app — no Copy, no Paste, and no way to reach a single one
+   * anywhere in the app, no Copy, no Paste, and no way to reach a single one
    * of the spelling suggestions `spellcheck: true` above has been generating
    * all along. Attached per window rather than per session so a call window
    * or the update window can decide for itself.
@@ -178,7 +178,7 @@ function createWindow() {
 
   /*
    * The loading layer goes up before anything is asked for, and comes down only
-   * once the page underneath has painted — so the staged assembly of the shell
+   * once the page underneath has painted, so the staged assembly of the shell
    * (sidebar, then labels, then icons) happens out of sight.
    */
   loadingLayer = splash.attach(mainWindow);
@@ -200,7 +200,7 @@ function loadPortal(win, url = PORTAL_URL) {
  * `did-finish-load` is far too early to reveal on: it fires when the document
  * and its subresources have loaded, which is before layout has settled and
  * before webfonts have swapped. Revealing there is what produced the staged
- * assembly — shell, then labels, then icons — that made the app look like a
+ * assembly, shell, then labels, then icons, that made the app look like a
  * page being built rather than an app opening.
  *
  * So it waits for the load event, then for the fonts (they reshape every label
@@ -209,7 +209,7 @@ function loadPortal(win, url = PORTAL_URL) {
  *
  * That last one is what actually matters. The portal fetches its data *after*
  * the page has loaded and renders it when the answers arrive, so waiting only
- * for paint revealed a shell with no labels and a column of skeletons — icons
+ * for paint revealed a shell with no labels and a column of skeletons, icons
  * present, content still on its way. Quiescence is the only honest signal that
  * the screen has finished assembling, since nothing in the page announces it.
  */
@@ -219,8 +219,8 @@ async function revealWhenPainted(webContents) {
   try {
     await webContents.executeJavaScript(`
       new Promise((resolve) => {
-        // Capped, because a page that never stops moving — a spinner, a live
-        // clock — would otherwise hold the screen for ever.
+        // Capped, because a page that never stops moving, a spinner, a live
+        // clock, would otherwise hold the screen for ever.
         const CAP = 6000;
         const QUIET = 350;
 
@@ -349,7 +349,7 @@ function attachNavigationRules(win) {
    */
   webContents.on('did-start-navigation', (event, url, isSameDocument, isMainFrame) => {
     if (!isMainFrame || isSameDocument || !loadingLayer) return;
-    // Local waiting / error pages are the content — covering them with the
+    // Local waiting / error pages are the content, covering them with the
     // blue splash is what made sign-in look like a blank window.
     if (url.startsWith('file:') || url.startsWith('data:')) return;
     loadingLayer.show();
@@ -365,7 +365,7 @@ function attachNavigationRules(win) {
       applyBadge(0);
       applyCallPhase('');
       // Non-portal finishes (blocked IdP pages, etc.) used to return without
-      // taking the splash down — the window stayed brand-blue / "blank".
+      // taking the splash down, the window stayed brand-blue / "blank".
       if (loadingLayer) loadingLayer.hide();
       return;
     }
@@ -373,7 +373,7 @@ function attachNavigationRules(win) {
       // A page that never exposed the stores just leaves the badge alone.
     });
 
-    // Auth screens are plain forms — no shell to assemble — so reveal as soon
+    // Auth screens are plain forms, no shell to assemble, so reveal as soon
     // as the document is in. Waiting for quiescence left the splash covering
     // Forgot password / login long enough to read as a blank window.
     // Do not treat `/` here: that is also the signed-in front door, and it
@@ -394,7 +394,7 @@ function attachNavigationRules(win) {
   // The portal routes through pushState, which fires no load event. Without
   // this the bar survives the first screen and disappears on the second.
   // pushState only moves within the same document, so the stylesheet is still
-  // there — only the bar's Back/Forward state needs redrawing.
+  // there, only the bar's Back/Forward state needs redrawing.
   webContents.on('did-navigate-in-page', () => titlebar.refresh(webContents));
 
   webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -422,8 +422,8 @@ function attachNavigationRules(win) {
   });
 
   /*
-   * A 5xx is a *successful* load as far as Chromium is concerned — bytes were
-   * asked for and bytes arrived — so did-fail-load never sees it and the body
+   * A 5xx is a *successful* load as far as Chromium is concerned, bytes were
+   * asked for and bytes arrived, so did-fail-load never sees it and the body
    * renders as the page. When the portal is between containers that body is the
    * proxy's own, and the window fills with "upstream connect error or
    * disconnect/reset before headers… connection refused", which reads like the
@@ -434,7 +434,7 @@ function attachNavigationRules(win) {
 
     /*
      * A 502 from the asset-cache handler is its own name for "no answer at
-     * all" — the reader is offline, not looking at an unwell server. Telling
+     * all", the reader is offline, not looking at an unwell server. Telling
      * someone on a train that the portal is restarting sends them to check a
      * status page that is also unreachable.
      */
@@ -446,7 +446,7 @@ function attachNavigationRules(win) {
 
     showLoadError(
       win,
-      'The portal is temporarily unavailable — it may be restarting. '
+      'The portal is temporarily unavailable, it may be restarting. '
       + `(${httpResponseCode}${httpStatusText ? ` ${httpStatusText}` : ''})`,
       url,
     );
@@ -503,7 +503,7 @@ async function looksOffline() {
  * The offline screen.
  *
  * Deliberately not an error: no URL, no net::ERR code, no red. The reader did
- * nothing wrong and there is nothing for them to fix — they are somewhere
+ * nothing wrong and there is nothing for them to fix, they are somewhere
  * without a connection, and the app's job is to say so plainly and get out of
  * the way. It retries on its own when the machine comes back online, so the
  * common case needs no click at all.
@@ -569,12 +569,12 @@ function showLoadError(win, description, url) {
  *
  * Google refuses OAuth inside an embedded webview, so signing in happens in the
  * user's real browser and comes back over the tmaportal:// scheme. Any app on
- * the machine can claim that scheme, so the reply carries only a token — worth
+ * the machine can claim that scheme, so the reply carries only a token, worth
  * nothing without the verifier, which never leaves here. The server half is
  * app/Http/Controllers/DesktopAuthController.php.
  *
  * Which clicks count as sign-in (vs Settings "connect") lives in
- * signin-provider.js — including the `/` address-bar lie from the asset cache.
+ * signin-provider.js, including the `/` address-bar lie from the asset cache.
  */
 
 const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -590,7 +590,7 @@ let pendingBrowserSignInUrl = null;
 
 /*
  * The verifier also goes to disk, because it has to outlive the process that
- * created it — see signin-handoff.js for the Windows cold start that made a
+ * created it, see signin-handoff.js for the Windows cold start that made a
  * successful sign-in look like being dumped back on the login page.
  */
 const verifierDir = () => app.getPath('userData');
@@ -695,7 +695,7 @@ function claimBrowserSession(deepLink) {
 /**
  * Which count the taskbar is being asked to show. Drawing is a round trip into
  * the renderer, so two counts arriving close together can come back in either
- * order — and the loser would be the one left on screen. Anything that returns
+ * order, and the loser would be the one left on screen. Anything that returns
  * to find the number has moved on drops its result.
  */
 let badgeWanted = 0;
@@ -722,7 +722,7 @@ async function taskbarOverlay(count) {
 }
 
 function applyBadge(count) {
-  // Full total on dock / taskbar — do not clamp to 99 or 999.
+  // Full total on dock / taskbar, do not clamp to 99 or 999.
   const n = Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
 
   if (IS_MAC) {
@@ -750,12 +750,12 @@ function applyBadge(count) {
 let bounceId = null;
 let powerBlockerId = null;
 
-/** Who is calling, straight from the page — see publishCallPhase(). */
+/** Who is calling, straight from the page, see publishCallPhase(). */
 /**
  * The caller's photo, as a data: URI the ring panel can actually display.
  *
  * The panel is a local file, and the portal publishes avatars as root-relative
- * paths — so handing it "/media/avatars/x.jpg" resolves to file:///media/... and
+ * paths, so handing it "/media/avatars/x.jpg" resolves to file:///media/... and
  * quietly fails, leaving the initials. Making the URL absolute is not enough
  * either: that route is behind auth, and the session cookie is SameSite=Lax, so
  * a file:// page requesting it is a cross-site subresource and sends no cookie.
@@ -776,7 +776,7 @@ async function avatarDataUri(raw) {
     return '';
   }
 
-  // Somewhere else entirely — a provider photo on its own CDN, say. Those need
+  // Somewhere else entirely, a provider photo on its own CDN, say. Those need
   // no session, so the panel can load them directly.
   if (!isPortalUrl(url)) return url;
 
@@ -832,7 +832,7 @@ async function ringPanel() {
 function answerCall() {
   callWindow.close();
   if (!mainWindow) return;
-  // Forward first, then answer — not the other way round. Answering opens the
+  // Forward first, then answer, not the other way round. Answering opens the
   // call's own floating window, and a browser will not hand one to a page that
   // is not on screen. The call then floats above whatever the user goes back
   // to, which is the point of it having a window at all.
@@ -853,7 +853,7 @@ function applyCallPhase(phase) {
     ringPanel();
 
     if (IS_MAC && bounceId == null) {
-      // 'critical' bounces until the app is activated — the whole point of a
+      // 'critical' bounces until the app is activated, the whole point of a
       // ring you can hear from another Space.
       bounceId = app.dock.bounce('critical');
     } else if (!IS_MAC && mainWindow && !mainWindow.isDestroyed()) {
@@ -886,7 +886,7 @@ function applyCallPhase(phase) {
 
 /*
  * macOS gates camera and microphone behind TCC, and an Electron app has to ask
- * for itself — the web permission grant alone leaves getUserMedia failing with
+ * for itself, the web permission grant alone leaves getUserMedia failing with
  * no device. Asked once; the answer is remembered by the OS.
  */
 async function ensureMediaAccess() {
@@ -927,12 +927,12 @@ function applyPermissionPolicy() {
   });
 
   /*
-   * getDisplayMedia — screen sharing in calls. A browser shows its own
+   * getDisplayMedia, screen sharing in calls. A browser shows its own
    * picker; Electron shows NOTHING unless the app answers this handler, so
    * without it Share Screen rejected before any picker existed and the
    * button read as dead in the desktop app while working fine on the web.
    * macOS 15+ gets the native system picker; everywhere else the primary
-   * screen is granted directly — the call UI's own Stop control (and the
+   * screen is granted directly, the call UI's own Stop control (and the
    * OS capture indicator) still govern the share.
    *
    * On a Mac the first capture attempt makes the OS itself ask for Screen
@@ -953,7 +953,7 @@ function applyPermissionPolicy() {
           explainScreenPermission();
           return deny();
         }
-        // 'not-determined': carry on — getSources below is what makes the
+        // 'not-determined': carry on, getSources below is what makes the
         // OS show its permission prompt, which is the ask the user expects.
       }
 
@@ -967,7 +967,7 @@ function applyPermissionPolicy() {
   }, { useSystemPicker: true });
 }
 
-/* One dialog at a time — mashing Share Screen must not stack alerts. */
+/* One dialog at a time, mashing Share Screen must not stack alerts. */
 let screenPermissionDialogOpen = false;
 
 function explainScreenPermission() {
@@ -978,7 +978,7 @@ function explainScreenPermission() {
     message: 'Allow screen recording to share your screen',
     detail: 'macOS is blocking screen sharing for this app. In System Settings, '
       + 'turn on Screen Recording for TM ANTOINE Portal, then quit and reopen '
-      + 'the app — macOS only applies the change on a fresh start.',
+      + 'the app, macOS only applies the change on a fresh start.',
     buttons: ['Open System Settings', 'Not now'],
     defaultId: 0,
     cancelId: 1,
@@ -1081,8 +1081,8 @@ function appSettingsMenu() {
 }
 
 function buildMenu() {
-  // `role: 'appMenu'` and everything under it — services, hide, hideOthers,
-  // unhide — exist only on macOS. Windows convention puts About and Quit at
+  // `role: 'appMenu'` and everything under it, services, hide, hideOthers,
+  // unhide, exist only on macOS. Windows convention puts About and Quit at
   // the bottom of File and settings alongside them, so the two platforms get
   // genuinely different first menus rather than a Mac menu with holes in it.
   const macAppMenu = {
@@ -1201,8 +1201,8 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
         {
-          // Notifications fail at three different layers — macOS, the app, and
-          // the portal's own per-account switch — and they are indistinguishable
+          // Notifications fail at three different layers, macOS, the app, and
+          // the portal's own per-account switch, and they are indistinguishable
           // from "nothing happened". This answers the first of the three.
           label: 'Send a Test Notification',
           click: () => {
@@ -1210,7 +1210,7 @@ function buildMenu() {
               dialog.showMessageBox(mainWindow, {
                 type: 'warning',
                 message: 'This system cannot show notifications',
-                detail: 'Nothing further to try here — the operating system is refusing them outright.',
+                detail: 'Nothing further to try here, the operating system is refusing them outright.',
               });
             }
           },
@@ -1260,7 +1260,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // macOS delivers the deep link as an event. Windows re-launches the exe with
   // the URL as an argument instead, which `second-instance` covers for a
-  // running app — but not for a cold start, where it arrives in our own argv.
+  // running app, but not for a cold start, where it arrives in our own argv.
   app.on('open-url', (event, url) => {
     event.preventDefault();
     if (url.startsWith(`${PROTOCOL}://`)) claimBrowserSession(url);
@@ -1285,7 +1285,7 @@ if (!app.requestSingleInstanceLock()) {
      * The Mac menu carries `role: 'about'`, and with nothing configured that
      * opens a panel showing a generic icon and the word "Electron" under the
      * version. It is a small window almost nobody opens, and it is also the
-     * one place in the app that answers "what is this program" — a stock icon
+     * one place in the app that answers "what is this program", a stock icon
      * there says the answer is "somebody else's".
      */
     app.setAboutPanelOptions({
@@ -1306,7 +1306,7 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     // Groups the window under one taskbar button and lets Windows match the
-    // running app to its Start-menu shortcut — without it, notifications are
+    // running app to its Start-menu shortcut, without it, notifications are
     // attributed to "electron.app.…" instead of the portal.
     if (process.platform === 'win32') app.setAppUserModelId('com.tmantoinelaw.portal');
 
@@ -1336,7 +1336,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('call:decline', declineCall);
 
     /*
-     * Before the window — and deliberately NOT awaited. The handler is live
+     * Before the window, and deliberately NOT awaited. The handler is live
      * the moment install() returns; what the promise carries is verification
      * against the deploy, which is a network round trip, and a cold start
      * that waits on the network is the thing this whole layer exists to end.
@@ -1352,12 +1352,12 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     /*
-     * When a shell served from disk turns out to be the wrong one — the
-     * portal deployed, the session died, somebody else signed in — the only
+     * When a shell served from disk turns out to be the wrong one, the
+     * portal deployed, the session died, somebody else signed in, the only
      * honest move is a fresh copy from the network. IgnoringCache, because
      * the wrong shell may have primed the HTTP cache with the wrong assets.
      */
-    // Document bytes, kept per machine under a budget — see file-cache.js.
+    // Document bytes, kept per machine under a budget, see file-cache.js.
     fileCache.configure({ dir: path.join(app.getPath('userData'), 'file-cache') });
 
     shellCache.on({
@@ -1368,7 +1368,7 @@ if (!app.requestSingleInstanceLock()) {
          * shell goes stale that are about WHO: a dead session, and somebody
          * else signing in. Their right to every cached document is their own,
          * not inherited from whoever fetched it. A deploy changing is about
-         * WHAT and keeps the bytes — files do not redeploy with the portal.
+         * WHAT and keeps the bytes, files do not redeploy with the portal.
          */
         if (reason === 'signed-out' || reason === 'account-changed') fileCache.clear();
         if (mainWindow) mainWindow.webContents.reloadIgnoringCache();

@@ -27,7 +27,7 @@
     return ICON + (name || 'Notification') + '.svg';
   }
 
-  /* Initials tile as a data URI — same palette/algorithm as current-user.js /
+  /* Initials tile as a data URI, same palette/algorithm as current-user.js /
      the email inbox (seed by email when available) so a person looks the same
      in the mailbox, the bell, the sidebar, and toasts. */
   function initialsUri(name, seed) {
@@ -50,7 +50,7 @@
 
   function isRealPhoto(src) {
     // Portal-served sender photos (faces + brand marks) live under
-    // /portal/mail/sender-photo/… — same URLs the inbox list uses.
+    // /portal/mail/sender-photo/…, same URLs the inbox list uses.
     if (!src) return false;
     var s = String(src).trim();
     if (!s) return false;
@@ -108,7 +108,7 @@
 
   /* The leading visual: a person's photo/initials, or a system glyph. Popups
      wrap the photo in a sized span (existing CSS); the sidebar uses a bare
-     rb-avatar image — so the markup follows each surface's existing styles. */
+     rb-avatar image, so the markup follows each surface's existing styles. */
   function senderEmail(item) {
     if (item.meta && item.meta.from_email) return String(item.meta.from_email);
     if (item.actor && item.actor.email) return String(item.actor.email);
@@ -134,7 +134,7 @@
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var size = cfg.avatarSize || 40;
     var img = personImg(src, fallback, size, cfg.avatarImgClass || '');
-    // Always clip inside a fixed square — bare <img> tags were stretching into
+    // Always clip inside a fixed square, bare <img> tags were stretching into
     // tall pills when height:auto won over the size rules. Inline size is the
     // last line of defence when a cached stylesheet lags behind the markup.
     var wrap = cfg.avatarWrap || 'tma-dash__person-avatar';
@@ -152,7 +152,7 @@
 
   /* A notification's leading element. A person is anyone with an actor (§3);
      an explicit image (sender photo) also counts; email rows always show a
-     face or initials — never the envelope glyph. */
+     face or initials, never the envelope glyph. */
   function notificationLeading(item, cfg) {
     var name = senderName(item);
     var isEmail = item.module === 'email' || (item.type && String(item.type).indexOf('email.') === 0);

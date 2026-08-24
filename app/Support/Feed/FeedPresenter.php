@@ -125,7 +125,7 @@ final class FeedPresenter
      * One post, as a card in the stream.
      *
      * `$viewerState` carries the per-viewer facts that would otherwise be one
-     * query per card — their reaction, whether they bookmarked it, whether
+     * query per card, their reaction, whether they bookmarked it, whether
      * they acknowledged it. The caller loads them in bulk for the whole page.
      *
      * @param  array{reaction?: ?string, bookmarked?: bool, acknowledged?: bool, voted?: array<int, string>}  $viewerState
@@ -192,7 +192,7 @@ final class FeedPresenter
             'acknowledged' => (bool) ($viewerState['acknowledged'] ?? false),
 
             // Email fan-out is the author's and moderators' business, not
-            // every reader's — so it is only reported to those who may see it.
+            // every reader's, so it is only reported to those who may see it.
             'email' => $channel && FeedAccess::canModerate($channel, $viewer)
                 ? [
                     'audience' => $post->email_audience,
@@ -260,7 +260,7 @@ final class FeedPresenter
      * A poll and its live tally.
      *
      * When results are hidden until closing, the counts are withheld rather
-     * than rendered as zero — a zero would read as "nobody voted", which is a
+     * than rendered as zero, a zero would read as "nobody voted", which is a
      * different and misleading statement.
      *
      * @param  array<int, string>  $votedOptionUuids

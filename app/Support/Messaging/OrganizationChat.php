@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  * it: administrators manage it, nobody leaves it, and membership follows the
  * staff list instead of being curated.
  *
- * Membership is reconciled lazily — when a user loads their conversations —
+ * Membership is reconciled lazily, when a user loads their conversations —
  * rather than by a hook on account approval. A hook would be one more thing to
  * remember to call from every path that creates or approves an account, and it
  * would leave everyone who joined before this feature existed permanently

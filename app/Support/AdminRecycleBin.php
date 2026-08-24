@@ -253,7 +253,7 @@ class AdminRecycleBin
     }
 
     /**
-     * Deleted accounts. Addressed by numeric id rather than a uuid — users have
+     * Deleted accounts. Addressed by numeric id rather than a uuid, users have
      * no public identifier, and the admin table this bin restores back into
      * already works in those ids.
      *
@@ -511,7 +511,7 @@ class AdminRecycleBin
 
     /**
      * The real delete. Hands the account's system folders to a surviving admin
-     * first — folders and files cascade on owner, so erasing an administrator
+     * first, folders and files cascade on owner, so erasing an administrator
      * without this would take client and organization content with it.
      */
     private static function eraseUser(?User $user): void

@@ -80,7 +80,7 @@ class DevDatabaseController extends Controller
         }
 
         if ($value === null) {
-            return '—';
+            return '-';
         }
 
         $value = (string) $value;

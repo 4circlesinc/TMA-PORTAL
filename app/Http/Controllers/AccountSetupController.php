@@ -55,7 +55,7 @@ class AccountSetupController extends Controller
         }
 
         if ($step === 'two-factor') {
-            // Fortify's 2FA routes require a recent password confirmation — skip
+            // Fortify's 2FA routes require a recent password confirmation, skip
             // that during onboarding by marking the session confirmed here.
             $request->session()->put('auth.password_confirmed_at', time());
         }

@@ -54,14 +54,14 @@ class Synchroniser
     /**
      * The mappings for the page being processed, keyed by Graph item id.
      *
-     * A SELECT per item is not affordable — every item costs a lookup for
+     * A SELECT per item is not affordable, every item costs a lookup for
      * itself and one for its parent, and against a database in another region,
      * where a round-trip is ~380ms rather than ~0.4ms, that alone is over an
      * hour for a few thousand items. So they are fetched in bulk.
      *
      * But in bulk PER PAGE, not per connection. Loading every mapping a
-     * connection has took 370 MB on the firm's largest library — 85,404
-     * mappings — which is more than the whole instance has, so the process was
+     * connection has took 370 MB on the firm's largest library. 85,404
+     * mappings, which is more than the whole instance has, so the process was
      * killed before it could log anything. Three days of "Syncing 85,404 of
      * 85,404" was that: a run dying on the first breath, the lock going stale
      * half an hour later, and the next run dying in exactly the same place.
@@ -73,7 +73,7 @@ class Synchroniser
      */
     private static array $mappings = [];
 
-    /** Resolved once per connection run — every create asked the same query. */
+    /** Resolved once per connection run, every create asked the same query. */
     private static ?int $ownerId = null;
 
     /**
@@ -131,7 +131,7 @@ class Synchroniser
             return ['skipped' => true];
         }
 
-        // Fresh per run — a long-lived worker syncs many connections.
+        // Fresh per run, a long-lived worker syncs many connections.
         self::$mappings = [];
         self::$ownerId = null;
 
@@ -139,7 +139,7 @@ class Synchroniser
          * One run at a time per connection.
          *
          * Two concurrent runs share a delta cursor, so they process the same
-         * pages twice and race each other's writes — observed for real when a
+         * pages twice and race each other's writes, observed for real when a
          * manual run overlapped the scheduled one.
          *
          * The lock is the status column plus a staleness window rather than a
@@ -229,7 +229,7 @@ class Synchroniser
             $connection->update([
                 'status' => SharePointConnection::STATUS_IDLE,
                 'last_success_at' => $complete ? now() : $connection->last_success_at,
-                'last_error' => $complete ? null : 'Import did not finish — more pages remain.',
+                'last_error' => $complete ? null : 'Import did not finish, more pages remain.',
                 'error_count' => $complete ? 0 : $connection->error_count,
             ]);
 
@@ -264,12 +264,12 @@ class Synchroniser
      *
      * **This exists because delta does not reliably emit tombstones.** Verified
      * against a real library on 2026-08-01: deleting a file produced no
-     * `deleted` facet even after twenty seconds — the item simply stopped
+     * `deleted` facet even after twenty seconds, the item simply stopped
      * appearing. Trusting tombstones would have meant deletions silently never
      * propagating, which is the worst kind of sync bug because nothing looks
      * wrong until someone notices a file that should be gone.
      *
-     * So absence from a listing is the *hint* that something went — never the
+     * So absence from a listing is the *hint* that something went, never the
      * verdict. Absence has three other explanations, and all three were seen on
      * real drives: a truncated listing (see {@see Drive::childIds()}), an item
      * that moved elsewhere, and a listing that failed halfway. Acting on the
@@ -281,7 +281,7 @@ class Synchroniser
      * back in the folder while the portal still has it in the bin was restored
      * from OneDrive's recycle bin, and belongs back in the library here too.
      *
-     * Only the folders delta reported as changed are examined — a delete or a
+     * Only the folders delta reported as changed are examined, a delete or a
      * restore always modifies the parent. The library is never re-walked
      * wholesale, which §1 forbids.
      */
@@ -350,13 +350,13 @@ class Synchroniser
      * Did SharePoint really lose this item?
      *
      * Yes only if Graph says so. A delete moves an item into SharePoint's own
-     * recycle bin, out of the drive, and Graph then answers 404 for it — so a
+     * recycle bin, out of the drive, and Graph then answers 404 for it, so a
      * 404 (or an explicit `deleted` facet) is the evidence, and nothing else
      * is. An item that answers normally is alive: it was missing from its old
      * parent's listing because it MOVED, so the mapping is re-pointed at
      * wherever it now lives instead of being recycled.
      *
-     * Any other outcome — a 403, a timeout, a throttle — is uncertainty, and
+     * Any other outcome, a 403, a timeout, a throttle, is uncertainty, and
      * uncertainty must fail towards keeping the file.
      */
     private static function confirmRemoved(SharePointConnection $connection, SharePointItem $mapping): bool
@@ -367,7 +367,7 @@ class Synchroniser
             throw $e;
         } catch (\Throwable $e) {
             self::log($connection, 'delete-unverified', 'warning', $mapping->graph_item_id,
-                'Left alone — could not confirm it was deleted: '.$e->getMessage());
+                'Left alone, could not confirm it was deleted: '.$e->getMessage());
 
             return false;
         }
@@ -396,12 +396,12 @@ class Synchroniser
             return;
         }
 
-        // The drive root arrives in delta but is not content — it is the
+        // The drive root arrives in delta but is not content, it is the
         // library itself, already represented by the connection's folder. The
         // same is true of the folder a scoped connection starts from.
         if (isset($item['root']) || $graphId === $connection->root_item_id) {
             // Not content, but it still knows how many items sit at the top
-            // level — and those are part of the library total. Without this the
+            // level, and those are part of the library total. Without this the
             // total is short by every loose file in the root.
             if (isset($item['folder']['childCount'])) {
                 $connection->update(['root_child_count' => $item['folder']['childCount']]);
@@ -429,7 +429,7 @@ class Synchroniser
              *
              * This has to be tested BEFORE the eTag short-circuit below: a
              * restore does not have to change the item at all, so the eTag can
-             * come back exactly as we stored it — and "nothing changed" would
+             * come back exactly as we stored it, and "nothing changed" would
              * leave the file sitting in the portal's bin for ever.
              */
             if ($mapping->isRecycled()) {
@@ -438,7 +438,7 @@ class Synchroniser
             }
 
             /*
-             * eTag covers ANY change — content, name, or move. If it matches
+             * eTag covers ANY change, content, name, or move. If it matches
              * what we stored, this item is byte-for-byte what we already have
              * and there is nothing to write.
              *
@@ -466,7 +466,7 @@ class Synchroniser
      *
      * A personal OneDrive's contents belong to the person whose drive it is,
      * read from `owner_upn`. It used to be `created_by`, which is only the
-     * same person when somebody connects their own drive — two of these
+     * same person when somebody connects their own drive, two of these
      * connections were made by a console command and have no creator at all,
      * so they were writing a null owner.
      *
@@ -561,7 +561,7 @@ class Synchroniser
     }
 
     /**
-     * A deletion in SharePoint recycles in the portal — it never purges.
+     * A deletion in SharePoint recycles in the portal, it never purges.
      * Retention and "somebody deleted the wrong thing" are the same problem,
      * and only a recoverable delete solves both.
      *
@@ -600,7 +600,7 @@ class Synchroniser
      * Put back what SharePoint put back.
      *
      * Restoring an item from OneDrive's recycle bin restores it here, on the
-     * same row — the file keeps its versions, comments, shares and link. That
+     * same row, the file keeps its versions, comments, shares and link. That
      * is only possible because the mapping outlived the delete.
      *
      * Public because `sharepoint:recover-recycled` undoes the deletions made
@@ -667,7 +667,7 @@ class Synchroniser
             'origin' => 'sharepoint',
         ]);
 
-        // Version 1 is a placeholder too — RemoteContent fills both in together.
+        // Version 1 is a placeholder too. RemoteContent fills both in together.
         Versions::recordInitial($file, $connection->created_by, 'Imported from SharePoint')
             ?->update(['content_state' => RemoteContent::PENDING]);
         Activity::forFile($connection->created_by, $file, 'upload', ['via' => 'sharepoint']);
@@ -720,7 +720,7 @@ class Synchroniser
      * updateOrCreate, not create.
      *
      * The unique key on (connection, graph_item_id) is the anti-duplicate
-     * guarantee, and it did its job — but hitting it should not cost an item.
+     * guarantee, and it did its job, but hitting it should not cost an item.
      * The same id can legitimately reach here twice: an item can appear in two
      * delta pages, and re-scoping a connection replays ids that are already
      * mapped. Writing idempotently makes the second arrival a no-op instead of
@@ -742,7 +742,7 @@ class Synchroniser
                 'item_type' => 'folder',
                 'folder_id' => $folder->id,
                 // Graph offers no recursive total, but every item has exactly
-                // one parent — so the sum of these across folders IS the
+                // one parent, so the sum of these across folders IS the
                 // library's size. See the child_count migration.
                 'child_count' => $item['folder']['childCount'] ?? null,
             ],
@@ -787,7 +787,7 @@ class Synchroniser
             'size' => $item['size'] ?? null,
             'graph_modified_at' => isset($item['lastModifiedDateTime']) ? \Illuminate\Support\Carbon::parse($item['lastModifiedDateTime']) : null,
             'graph_modified_by' => $item['lastModifiedBy']['user']['displayName'] ?? null,
-            // A successful pass clears an earlier failure — §26 says stale
+            // A successful pass clears an earlier failure. §26 says stale
             // failed statuses must not linger after things recover.
             'sync_status' => SharePointItem::SYNCED,
             'last_error' => null,

@@ -1,5 +1,5 @@
 /**
- * TMA — people on a record, and the card that answers "who is this?"
+ * TMA, people on a record, and the card that answers "who is this?"
  * Global: window.TMAPersonCard
  *
  * Two halves of one idea:
@@ -7,7 +7,7 @@
  *   faces(people)  the cell: a row of circles with the names beside them.
  *                  Repeating face-name, face-name down a column made four
  *                  colleagues look like four separate facts; one group with
- *                  one list reads as the single answer it is — who has this.
+ *                  one list reads as the single answer it is, who has this.
  *
  *   the card       hovering (or focusing) a face gives the full name, the roles
  *                  that person holds here, and the three things you would open
@@ -21,7 +21,7 @@
  * use it: hand it person objects, put the markup in a cell, call wire() once.
  *
  * A person is { name, email, photo, userId, roles[], first }. Only `name` is
- * required. `userId` is what decides whether the actions work at all — many
+ * required. `userId` is what decides whether the actions work at all, many
  * people in the caseload have no portal account, and a button that cannot work
  * is worse than one that is not there, so those are disabled with the reason
  * given rather than hidden.
@@ -42,7 +42,7 @@
 
   /* The portal's one avatar resolver: a real photo, else initials on a colour
      hashed from the name. Never an invented avatar.
-     `photo` and `avatar` are both accepted — CBI names the field one way and
+     `photo` and `avatar` are both accepted. CBI names the field one way and
      the File Library's presenter the other, and neither is worth a migration
      to settle. */
   function faceSrc(person) {
@@ -54,7 +54,7 @@
   }
 
   /* TMAPortalUI's toast, the one the pages that render faces already use.
-     window.TMAToast is a different, lower-level renderer — not this. */
+     window.TMAToast is a different, lower-level renderer, not this. */
   function toast(message, ok) {
     if (ui() && ui().toast) {
       ok === false ? ui().toastError(message) : ui().toast(message);
@@ -68,7 +68,7 @@
    *
    * The people are serialised onto the wrapper and each face carries its index
    * into that list, so the card resolves a face back to a person without
-   * re-parsing what the face already knows — and without the caller having to
+   * re-parsing what the face already knows, and without the caller having to
    * keep a lookup alive across re-renders.
    */
   function faces(people, opts) {
@@ -83,7 +83,7 @@
      * `total` counts everyone, including those the caller did not send.
      *
      * A firm-wide grant reaches every member of staff, and no listing wants
-     * thirteen people repeated on every row — so the server sends the first
+     * thirteen people repeated on every row, so the server sends the first
      * few and says how many there really are. Without it the "+N" could only
      * count the ones it was handed, which is not the number anybody wants.
      */
@@ -104,7 +104,7 @@
     }
 
     /*
-     * `names: 'single'` — write the name out when there is one person, and let
+     * `names: 'single'`, write the name out when there is one person, and let
      * the faces speak for themselves when there are several. A list of five
      * names is a paragraph in a table cell; five faces is a glance, and the
      * card names them on hover. Default 'all' keeps CBI as it was.
@@ -114,7 +114,7 @@
      *
      * A single assignee is the answer to "who has this", and half an answer
      * is worse than the extra word. Two or more is a list, and a list of full
-     * names is a paragraph in a table cell — the first names identify them
+     * names is a paragraph in a table cell, the first names identify them
      * among colleagues, and the card names them properly on hover.
      */
     var showNames = o.names === 'single' ? total === 1 : o.names !== 'none';

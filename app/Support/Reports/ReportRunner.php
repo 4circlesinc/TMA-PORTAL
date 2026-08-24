@@ -8,8 +8,8 @@ use Throwable;
 /**
  * Compute a report and store the answer on the row.
  *
- * One code path for both callers — the Reporting page creating or re-running a
- * report, and the `reports:run` scheduler tick — so a recurring report and a
+ * One code path for both callers, the Reporting page creating or re-running a
+ * report, and the `reports:run` scheduler tick, so a recurring report and a
  * hand-run one can never disagree about what the numbers mean.
  */
 final class ReportRunner
@@ -19,7 +19,7 @@ final class ReportRunner
         /*
          * A builder that throws must not lose the report. The row keeps the
          * request and carries the reason, so the page can offer "Run again"
-         * rather than the dialog appearing to do nothing — and a recurring
+         * rather than the dialog appearing to do nothing, and a recurring
          * report that failed once still has a next run scheduled.
          */
         try {
@@ -45,8 +45,8 @@ final class ReportRunner
     /**
      * Roll a recurring report's window forward so it ends today.
      *
-     * A one-off keeps the dates it was created with — re-running it is a
-     * retry, not a new question — and so do a custom window and "All dates",
+     * A one-off keeps the dates it was created with, re-running it is a
+     * retry, not a new question, and so do a custom window and "All dates",
      * which are periods somebody deliberately picked.
      */
     public static function rollWindow(Report $report): Report

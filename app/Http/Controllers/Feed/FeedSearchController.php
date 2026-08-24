@@ -33,7 +33,7 @@ class FeedSearchController extends Controller
      * Grouped search: posts, comments, channels, people, hashtags, files.
      *
      * Grouped rather than ranked into one list because the groups answer
-     * different questions — "where was this discussed" and "who works on this"
+     * different questions, "where was this discussed" and "who works on this"
      * are not competing for the same slot.
      */
     public function __invoke(Request $request): JsonResponse
@@ -225,7 +225,7 @@ class FeedSearchController extends Controller
      * The composer's @ autocomplete: people first, then groups (§16).
      *
      * Returns the same token shape the sanitiser expects on the way back in —
-     * "user:{id}" or "group:{uuid}" — so the client never has to construct it.
+     * "user:{id}" or "group:{uuid}", so the client never has to construct it.
      */
     public function mentionable(Request $request): JsonResponse
     {

@@ -89,7 +89,7 @@ class AvailabilityController extends Controller
         return response()->json(AvailabilityService::selfPayload($user));
     }
 
-    /** Resolve an address to coordinates (Nominatim proxy — not stored). */
+    /** Resolve an address to coordinates (Nominatim proxy, not stored). */
     public function geocode(Request $request): JsonResponse
     {
         $data = $request->validate([

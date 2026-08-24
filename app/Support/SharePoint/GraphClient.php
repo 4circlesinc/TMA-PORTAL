@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Http;
  *
  * The app holds `Sites.Selected`, which by itself grants access to NOTHING.
  * An administrator authorises this app per site; anything not granted returns
- * 403 no matter what the token says. That is the point of choosing it — the
+ * 403 no matter what the token says. That is the point of choosing it, the
  * portal cannot reach a library nobody approved.
  */
 class GraphClient
@@ -51,7 +51,7 @@ class GraphClient
                     'client_id' => config('services.microsoft.client_id'),
                     'client_secret' => config('services.microsoft.client_secret'),
                     // .default asks for whatever application permissions the
-                    // admin has consented to — never a scope list of our own.
+                    // admin has consented to, never a scope list of our own.
                     'scope' => 'https://graph.microsoft.com/.default',
                     'grant_type' => 'client_credentials',
                 ]
@@ -84,7 +84,7 @@ class GraphClient
         $url = str_starts_with($path, 'http') ? $path : self::BASE.$path;
 
         // Timeouts are not optional here. Without them a stalled Graph
-        // response hangs the sync process for ever — observed on a real drive,
+        // response hangs the sync process for ever, observed on a real drive,
         // where one request froze the whole import with no error and no
         // progress. Better to fail an item and retry it than to wedge.
         $request = Http::withToken($token)
@@ -98,7 +98,7 @@ class GraphClient
          * Http::get($url, []) replaces the URL's own query string. Graph's
          * delta nextLink carries its $skiptoken there, so passing an empty
          * array stripped the token and every "next page" request returned
-         * page ONE — the walk processed the same 200 items fifty times, never
+         * page ONE, the walk processed the same 200 items fifty times, never
          * reached the deltaLink, and restarted from scratch on every run. It
          * looked like a hang; it was an infinite loop over the first page.
          */
@@ -127,7 +127,7 @@ class GraphClient
         return $response->json() ?? [];
     }
 
-    /** Forget the cached token — used after a credential change. */
+    /** Forget the cached token, used after a credential change. */
     public static function forgetToken(): void
     {
         Cache::forget(self::TOKEN_CACHE_KEY);

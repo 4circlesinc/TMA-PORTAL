@@ -13,7 +13,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>@yield('title', 'Upload files') — TM ANTOINE Advisory</title>
+  <title>@yield('title', 'Upload files') | TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="/images/brand/tma/favicon.png">
   <style>
     :root {
@@ -77,7 +77,7 @@
     @yield('content')
     <p class="foot">
       Uploaded over an encrypted connection to TM ANTOINE Advisory.<br>
-      This link only accepts files — it gives no access to anything else.
+      This link only accepts files, it gives no access to anything else.
     </p>
   </div>
 </body>

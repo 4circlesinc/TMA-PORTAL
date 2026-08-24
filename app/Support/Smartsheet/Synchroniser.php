@@ -16,7 +16,7 @@ use Throwable;
 
 /**
  * One-way inbound sync: Smartsheet → the mirror tables. The portal never
- * writes back — Smartsheet is being retired, not partnered with.
+ * writes back. Smartsheet is being retired, not partnered with.
  *
  * Change detection is two-tier. The workspace walk (one request) discovers
  * sheets and their folder paths; per sheet, the cheap /version endpoint says
@@ -56,7 +56,7 @@ class Synchroniser
             ->update(['status' => SmartsheetSheet::STATUS_IDLE]);
 
         // Remote deletions: a sheet we mirror that the walk no longer finds.
-        // Mirror data is kept — this archive outlives the Smartsheet account.
+        // Mirror data is kept, this archive outlives the Smartsheet account.
         SmartsheetSheet::query()
             ->whereNotIn('remote_id', array_keys($seen))
             ->where('status', '!=', SmartsheetSheet::STATUS_GONE)
@@ -68,13 +68,13 @@ class Synchroniser
 
         /*
          * Tier one of change detection. The stored `version` column can't be
-         * the gate here — it is only ever written by syncSheet, always equal
+         * the gate here, it is only ever written by syncSheet, always equal
          * to synced_version, so comparing them would go circular after the
          * first success and freeze the sheet forever. The walk DOES refresh
          * modified_at_remote every tick, so that timestamp is the tier-one
          * signal; syncSheet's cheap /version probe stays as tier two and
          * short-circuits advisory bumps that changed nothing. Errored sheets
-         * are always due again — a failed pass must retry, not hide.
+         * are always due again, a failed pass must retry, not hide.
          */
         $due = SmartsheetSheet::query()
             ->where('sync_enabled', true)
@@ -122,7 +122,7 @@ class Synchroniser
             $sub = $path === '' ? (string) $folder['name'] : $path.'/'.$folder['name'];
             self::walkFolder($folder, $sub, $seen, $batch);
         }
-        // Reports are saved views over sheets — derived data, never synced.
+        // Reports are saved views over sheets, derived data, never synced.
     }
 
     /**
@@ -152,14 +152,14 @@ class Synchroniser
      * Sync one sheet into the mirror. Returns:
      *  'unchanged' | 'synced' | 'locked' | 'throttled' | 'failed'
      *
-     * Throttling is reported, not thrown — the job re-dispatches itself with
+     * Throttling is reported, not thrown, the job re-dispatches itself with
      * the Retry-After delay instead of burning a retry (SharePoint pattern).
      *
      * @return array{status: string, retryAfter?: int}
      */
     public static function syncSheet(SmartsheetSheet $sheet, ?string $runId = null, bool $force = false): array
     {
-        // Status-column lock with a staleness window — deliberately not a
+        // Status-column lock with a staleness window, deliberately not a
         // cache lock, so a run that died mid-sync is taken over, not waited on.
         $sheet->refresh();
         if ($sheet->status === SmartsheetSheet::STATUS_SYNCING) {
@@ -172,7 +172,7 @@ class Synchroniser
         try {
             $version = (int) (Client::get('/sheets/'.$sheet->remote_id.'/version')['version'] ?? 0);
             if (! $force && $sheet->synced_version !== null && $version === (int) $sheet->synced_version) {
-                // Verified current — advancing last_success_at is what stops
+                // Verified current, advancing last_success_at is what stops
                 // an advisory modified_at bump from re-probing every tick.
                 // Safe as the rowsModifiedSince watermark too: nothing changed.
                 $sheet->update([
@@ -190,7 +190,7 @@ class Synchroniser
 
             /*
              * Rows are PAGED, and attachments come from their own listing
-             * endpoint rather than include=attachments — an unpaged 210-column
+             * endpoint rather than include=attachments, an unpaged 210-column
              * master sheet with row includes is a response Smartsheet serves
              * at a trickle (observed: 1.3 MB in 15 minutes, then a timeout).
              * Small pages arrive in seconds.
@@ -237,7 +237,7 @@ class Synchroniser
             /*
              * rowsModifiedSince never reports deletions or moves-away, so an
              * incremental pass reconciles ids whenever the remote row count
-             * disagrees with ours — one extra request fetching only the
+             * disagrees with ours, one extra request fetching only the
              * primary column, not the whole sheet.
              */
             if (! $incremental) {
@@ -287,7 +287,7 @@ class Synchroniser
 
     /*
      * All apply* methods write in bulk (chunked upserts against the tables'
-     * unique keys). The database is Laravel Cloud Postgres over TLS — per-row
+     * unique keys). The database is Laravel Cloud Postgres over TLS, per-row
      * updateOrCreate at WAN latency turns a 2,000-row master sheet into a
      * half-hour sync; batched, it's a handful of statements.
      */
@@ -302,7 +302,7 @@ class Synchroniser
                 'remote_id' => (int) $column['id'],
                 'title' => (string) $column['title'],
                 'type' => (string) ($column['type'] ?? 'TEXT_NUMBER'),
-                // upsert() bypasses Eloquent casts — encode JSON by hand.
+                // upsert() bypasses Eloquent casts, encode JSON by hand.
                 'options' => isset($column['options']) ? json_encode($column['options']) : null,
                 'position' => (int) ($column['index'] ?? 0),
                 'is_primary' => (bool) ($column['primary'] ?? false),
@@ -322,7 +322,7 @@ class Synchroniser
 
         foreach ($rows as $row) {
             // Sparse cell map: only cells that hold anything. ~40 of 210 on a
-            // typical tracker row — the other 170 would be pure dead weight.
+            // typical tracker row, the other 170 would be pure dead weight.
             $cells = [];
             foreach ($row['cells'] ?? [] as $cell) {
                 $entry = [];
@@ -360,8 +360,8 @@ class Synchroniser
     }
 
     /**
-     * One paged listing covers every attachment on the sheet — sheet-level
-     * and row-level alike, each row carrying parentType/parentId — far
+     * One paged listing covers every attachment on the sheet, sheet-level
+     * and row-level alike, each row carrying parentType/parentId, far
      * cheaper than inlining attachments into the row payload.
      */
     private static function applySheetAttachments(SmartsheetSheet $sheet): void
@@ -470,7 +470,7 @@ class Synchroniser
     /**
      * Cheap id sweep after an incremental pass whose counts disagree:
      * fetch every row id (primary column only) and drop local rows that
-     * vanished — usually rows moved to a closed sheet.
+     * vanished, usually rows moved to a closed sheet.
      */
     private static function reconcileRowIds(SmartsheetSheet $sheet, ?string $runId): void
     {

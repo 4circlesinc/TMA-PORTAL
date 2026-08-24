@@ -8,7 +8,7 @@ use App\Models\ConnectedAccount;
  * Picks the provider implementation for an account.
  *
  * A single seam so the synchronizer, the connect flow and the tests all
- * resolve a provider the same way — and so a test can swap in a fake with one
+ * resolve a provider the same way, and so a test can swap in a fake with one
  * override instead of mocking HTTP in every case.
  */
 class ProviderFactory

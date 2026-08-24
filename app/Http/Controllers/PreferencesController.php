@@ -13,7 +13,7 @@ class PreferencesController extends Controller
 {
     /**
      * Personal preferences we persist per user, with their defaults. Only these
-     * keys are accepted or returned — anything else is ignored, so the client
+     * keys are accepted or returned, anything else is ignored, so the client
      * can't stuff arbitrary data into the column.
      */
     private const DEFAULTS = [
@@ -25,11 +25,11 @@ class PreferencesController extends Controller
         'language' => 'auto',
         'voice' => 'en-us',
         'sidebarStyle' => 'hover',
-        // Email notifications even while actively using the portal — off means
+        // Email notifications even while actively using the portal, off means
         // "don't email me what the bell already showed me".
         'notifyAlwaysEmail' => false,
         // Theme panel. These used to live only in localStorage, so the look
-        // reset on every new browser — they follow the account now.
+        // reset on every new browser, they follow the account now.
         //
         // Light, not 'system': dark mode is still being finished, so the
         // portal ignores the device's colour scheme until someone picks Dark
@@ -43,13 +43,13 @@ class PreferencesController extends Controller
         // strictly necessary cookies (see the published Privacy Policy), so
         // there was nothing for them to turn off.
         'historyDays' => 30,
-        // Plugins panel. null means "never customized" — the client falls
+        // Plugins panel. null means "never customized", the client falls
         // back to its shipped catalog. Once set, the stored list is
         // authoritative for membership as well as on/off, so removing a
         // plugin sticks instead of reappearing on reload.
         'plugins' => null,
         // Calendar page chrome, remembered per user so the page reopens the
-        // way it was left. Which calendars are ticked is not here — that is
+        // way it was left. Which calendars are ticked is not here, that is
         // server state on calendar_subscriptions.
         'calendarView' => 'month',
         'calendarSidebarOpen' => true,
@@ -57,7 +57,7 @@ class PreferencesController extends Controller
          * The File Library's "…synced 2 hours ago" line, once dismissed.
          *
          * Stored on the account rather than in localStorage so closing it
-         * means closing it — not closing it again on the next browser. It
+         * means closing it, not closing it again on the next browser. It
          * only ever hides the QUIET line; an in-progress sync and a sync
          * error both still show, because those are worth interrupting for.
          */
@@ -67,7 +67,7 @@ class PreferencesController extends Controller
     private const RULES = [
         'autoTimezone' => ['boolean'],
         // Legacy utc±N picker ids, or a real IANA name ("America/New_York")
-        // from auto-detection — only IANA values are honoured downstream
+        // from auto-detection, only IANA values are honoured downstream
         // (CalendarProvisioner::defaultTimezone re-validates against PHP's
         // timezone list).
         'timezone' => ['string', 'max:64', 'regex:#^(utc[+-]\d{1,2}|[A-Za-z][A-Za-z_]*(/[A-Za-z0-9_+\-]+){1,2})$#'],
@@ -86,7 +86,7 @@ class PreferencesController extends Controller
         'calendarView' => ['string', 'in:week,month,agenda,day,work_week'],
         'calendarSidebarOpen' => ['boolean'],
         'fileSyncNoticeDismissed' => ['boolean'],
-        // Nested toast prefs — validated + cleaned by ToastSettings.
+        // Nested toast prefs, validated + cleaned by ToastSettings.
         'toasts' => ['array'],
         'toasts.enabled' => ['boolean'],
         'toasts.position' => ['string', 'in:bottom-right,top-right,bottom-left'],
@@ -106,7 +106,7 @@ class PreferencesController extends Controller
     ];
 
     /**
-     * Default home board — mirrors the client masonry columns:
+     * Default home board, mirrors the client masonry columns:
      * Recent Files → Favorites | Recent Email → Road |
      * CIP Applications → Shortcuts → Employees (Messages fills shortest).
      */
@@ -136,7 +136,7 @@ class PreferencesController extends Controller
         return response()->json($this->payload($user->fresh()));
     }
 
-    /** Layout generation — bump when the shipped default board changes. */
+    /** Layout generation, bump when the shipped default board changes. */
     private const DASHBOARD_LAYOUT_VERSION = 12;
 
     /** Persist the default home board so every browser starts the same. */
@@ -184,7 +184,7 @@ class PreferencesController extends Controller
             if ($key === 'plugins') {
                 // An explicit null puts the list back to "never customized",
                 // which is not the same as an empty list (every plugin
-                // removed) — the client falls back to its catalog for one and
+                // removed), the client falls back to its catalog for one and
                 // shows nothing for the other.
                 $current[$key] = is_array($value) ? $this->sanitizePlugins($value) : null;
 
@@ -220,7 +220,7 @@ class PreferencesController extends Controller
         }
 
         // A changed time zone re-times the person's own local calendars, so
-        // the setting is visible immediately — provider-synced calendars keep
+        // the setting is visible immediately, provider-synced calendars keep
         // the zone the provider reports.
         if (array_key_exists('timezone', $data)) {
             Calendar::query()
@@ -266,7 +266,7 @@ class PreferencesController extends Controller
     /**
      * Keep the plugin list to `{id, enabled}` pairs, first occurrence wins.
      * The catalog itself is the client's, so we don't police which ids are
-     * real — only the shape, so the column can't be used as scratch storage.
+     * real, only the shape, so the column can't be used as scratch storage.
      *
      * @param  array<int, mixed>  $plugins
      * @return list<array{id: string, enabled: bool}>

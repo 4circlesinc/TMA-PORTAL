@@ -66,8 +66,8 @@ class Names
      *
      * Prefer one somebody typed in mixed case: it differs from both its
      * shouted and its whispered form, so it was a choice rather than a stuck
-     * key. Failing that, title-case an all-lower one — no acronym is written
-     * that way — but leave an all-upper one alone, because GCC and RIF are as
+     * key. Failing that, title-case an all-lower one, no acronym is written
+     * that way, but leave an all-upper one alone, because GCC and RIF are as
      * likely as a stuck caps lock and mangling those is the worse error.
      *
      * @param  array<int, array{name: string, n: int}>  $variants

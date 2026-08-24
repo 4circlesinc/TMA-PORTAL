@@ -180,7 +180,7 @@ class DashboardMetricsTest extends TestCase
 
         $card = $this->metrics($staff)['cards']['clientResponse'];
 
-        $this->assertSame('—', $card['value']);
+        $this->assertSame('-', $card['value']);
         $this->assertSame(0, $card['sample']);
     }
 
@@ -368,7 +368,7 @@ class DashboardMetricsTest extends TestCase
         config(['services.cip.enabled' => true]);
         $cards = $this->metrics($this->staff())['cards'];
 
-        $this->assertSame('—', $cards['clientResponse']['value']);
+        $this->assertSame('-', $cards['clientResponse']['value']);
         $this->assertSame('0', $cards['cipNew']['value']);
         $this->assertSame('0', $cards['cipUpdatesRequired']['value']);
     }

@@ -2,7 +2,7 @@
  * TMA - Overview → Activity tab: the complete activity log (§8, §9, §10).
  *
  * Server-backed audit trail. Administrators see the whole firm; everyone else
- * sees only their own actions — the server enforces both (ActivityController).
+ * sees only their own actions, the server enforces both (ActivityController).
  * Filters (module / status / actor / date / system) and full-text search run
  * server-side; results page in with a cursor "Load more" so the tab never
  * reloads. IP, device, and the value diff are shown only to viewers the server
@@ -343,7 +343,7 @@
         state.expanded[id] = !state.expanded[id];
         renderBody();
       }
-      // Activity rows are informational only — not navigational links.
+      // Activity rows are informational only, not navigational links.
     });
 
     container.addEventListener('focusin', function (e) { if (e.target.closest('[data-actlog-search]')) state.searchFocused = true; });

@@ -8,7 +8,7 @@
   /*
    * Keyed DOM reconciliation (js/dom-morph.js).
    *
-   * render() replaces this view's markup on every state change — a delivery
+   * render() replaces this view's markup on every state change, a delivery
    * tick, a reaction, a typing indicator. Assigning innerHTML for that threw
    * away and rebuilt the entire thread each time, which re-requested every
    * avatar and attachment, dropped scroll position, and interrupted typing.
@@ -120,7 +120,7 @@
     limits: {},
     loaded: false,
     loadError: null,
-    // Whether the SERVER has answered this session — as opposed to `loaded`,
+    // Whether the SERVER has answered this session, as opposed to `loaded`,
     // which also goes true when a fetch fails so the spinner can come down.
     // Warm boot keys on this: a dead network must not outrank the snapshot.
     real: false,
@@ -153,7 +153,7 @@
   }
 
   /* Set by mount, so a warm snapshot landing after the view is up repaints
-     it. Before mount there is nothing to repaint — the first render reads
+     it. Before mount there is nothing to repaint, the first render reads
      the hydrated STORE by itself. */
   var warmRerender = null;
 
@@ -281,8 +281,8 @@
     var presence = threadPresence(row);
 
     // A live typing / recording indicator outranks online-or-last-seen.
-    // Live typing is not part of `row.presence` — it is transient socket
-    // state that no reload should be able to bring back — so it is consulted
+    // Live typing is not part of `row.presence`, it is transient socket
+    // state that no reload should be able to bring back, so it is consulted
     // separately and takes precedence over the recording flag.
     var typing = typingLabel(row);
 
@@ -335,7 +335,7 @@
   /*
    * Typing is live-only state: who is typing right now, per conversation.
    * Nothing about it is persisted or reloaded, so it lives here rather than
-   * on a row — a re-render must not resurrect an indicator that has expired.
+   * on a row, a re-render must not resurrect an indicator that has expired.
    *
    *   typingBy[conversationId] = { userId: { name: 'Ada', at: 1690000000 } }
    */
@@ -373,7 +373,7 @@
   }
 
   /*
-   * "typing…" in a direct thread — you know who. A group has to name them,
+   * "typing…" in a direct thread, you know who. A group has to name them,
    * and past two people the names are longer than the information is worth.
    */
   function typingLabel(row) {
@@ -403,7 +403,7 @@
 
     // Only repaint when the indicator actually appears or disappears. A
     // typist refreshing every few seconds must not re-render the thread
-    // under them — that would fight the scroll and caret restoration.
+    // under them, that would fight the scroll and caret restoration.
     if (had !== has && typeof render === 'function') render();
 
     scheduleTypingExpiry(conversationId, render);
@@ -479,7 +479,7 @@
   }
 
   function renderContactName(row) {
-    // Opens the messaging profile *inside* the chat column — never the client
+    // Opens the messaging profile *inside* the chat column, never the client
     // record, which is a separate, permissioned action in that panel.
     return (
       '<button type="button" class="tma-dash__messages-chat-name ' +
@@ -668,7 +668,7 @@
    * page's render() rebuilds the whole column and resets its scroll position,
    * so opening the shelf through a re-render would yank the list out from
    * under the finger that just pulled it. It exists at zero height and the
-   * gesture only toggles a class — see wireArchivedPull.
+   * gesture only toggles a class, see wireArchivedPull.
    *
    * It stays in the tab order even while collapsed, and opens on focus. Making
    * it a gesture removed the only visible way to reach archived chats, and a
@@ -679,7 +679,7 @@
 
     // Rendered even with nothing archived. Hiding it in that case meant the
     // pull produced no response at all on a mailbox that had never archived
-    // anything — which reads as a broken gesture rather than an empty shelf,
+    // anything, which reads as a broken gesture rather than an empty shelf,
     // and leaves no way to tell the two apart.
     var inner = count
       ? '<button type="button" class="tma-dash__messages-archived-reveal-btn" data-messages-archived>' +
@@ -687,7 +687,7 @@
         '<span class="tma-dash__messages-archived-reveal-label">Archived</span>' +
         '<span class="tma-dash__messages-archived-reveal-count">' + count + '</span>' +
         '</button>'
-      // Nothing to open, so it is not a control — just the shelf saying it is
+      // Nothing to open, so it is not a control, just the shelf saying it is
       // empty, which still confirms the pull worked.
       : '<span class="tma-dash__messages-archived-reveal-btn is-empty">' +
         '<img src="' + ICONS.Archive + '" alt="">' +
@@ -707,7 +707,7 @@
    * Two gestures, because the page is used on both: a finger drag (tracked
    * live, so the shelf follows the pull rather than snapping), and a trackpad
    * overscroll upward. Both only engage at scrollTop 0 and only when the
-   * movement is clearly vertical — the rows have their own horizontal swipe
+   * movement is clearly vertical, the rows have their own horizontal swipe
    * actions, and stealing those would break archiving from the list itself.
    *
    * Nothing here calls render(). The shelf is already in the DOM; this only
@@ -850,7 +850,7 @@
    * The inbox column's navigation: which view the column is showing, plus the
    * two actions that are not views (New message, Settings).
    *
-   * Each entry carries its name under the icon — a bar of unlabelled glyphs
+   * Each entry carries its name under the icon, a bar of unlabelled glyphs
    * is a guessing game.
    */
   /*
@@ -862,7 +862,7 @@
     return n > 99 ? '99+' : n;
   }
 
-  /* "1 missed call", "2 missed calls" — the badge is read aloud, not scanned. */
+  /* "1 missed call", "2 missed calls", the badge is read aloud, not scanned. */
   function navCountLabel(n, singular, plural) {
     return n + ' ' + (n === 1 ? singular : plural);
   }
@@ -870,7 +870,7 @@
   function renderListFoot(state) {
     state = state || {};
 
-    // Chats is summed from the visible rows — the same rule the sidebar badge
+    // Chats is summed from the visible rows, the same rule the sidebar badge
     // uses, so archived threads are excluded from both. Calls comes from the
     // server, which is the only place that knows what this user has already
     // looked at (see App\Support\Messaging\TabCounts).
@@ -1409,7 +1409,7 @@
    * Focusing the search field takes over the inbox column with grouped
    * results. Grouped rather than one ranked list because "a person called
    * Ana", "a message about invoices" and "a file named invoice.pdf" are
-   * different kinds of answer — flattening them buries the useful one.
+   * different kinds of answer, flattening them buries the useful one.
    * ---------------------------------------------------------------- */
 
   function renderSearchGroup(label, body) {
@@ -1657,7 +1657,7 @@
 
   /*
    * Opening a tab clears its badge. Cleared locally first so the number goes
-   * the instant the tab does, then confirmed by the server — which decides
+   * the instant the tab does, then confirmed by the server, which decides
    * *what* was seen, so a call that lands mid-request is not swallowed.
    */
   function markTabSeen(root, state, render, tab) {
@@ -1753,7 +1753,7 @@
    *
    * The row is the person, not the event: their photo leads it exactly as it
    * does everywhere else in Messages, and the outcome is carried by a small
-   * direction arrow beside the subtitle — the same shorthand every phone uses.
+   * direction arrow beside the subtitle, the same shorthand every phone uses.
    * A large naked phone glyph in the avatar's place said "call" three times
    * over and left the log looking nothing like the chat list above it.
    *
@@ -1798,7 +1798,7 @@
       esc(call.conversationId) + '">' +
       avatar +
       '<span class="tma-dash__messages-person-text">' +
-      // Time sits on the name line, as it does in the chat list — the subtitle
+      // Time sits on the name line, as it does in the chat list, the subtitle
       // is narrow enough already once the call buttons take their room.
       '<span class="tma-dash__call-name-line">' +
       '<span class="tma-dash__messages-person-name">' + esc(name) + '</span>' +
@@ -1819,7 +1819,7 @@
    * Media
    *
    * Every photo and video the user can see, pooled across all of their
-   * conversations — for finding a file you remember receiving without
+   * conversations, for finding a file you remember receiving without
    * remembering who sent it. The per-thread shelf in the profile panel stays
    * as it is; this is the same shelf without the thread filter.
    *
@@ -1887,7 +1887,7 @@
         '</div>';
     } else if (shelf === 'links') {
       // Links open externally rather than in the lightbox, and are titled by
-      // whatever the preview cache knows — falling back to the domain, then to
+      // whatever the preview cache knows, falling back to the domain, then to
       // the raw URL, so a link with no cached preview is still readable.
       body =
         '<div class="tma-dash__messages-media-docs">' +
@@ -1912,7 +1912,7 @@
         }).join('') +
         '</div>';
     } else if (shelf === 'documents') {
-      // Documents read better as rows than tiles — the filename is the point.
+      // Documents read better as rows than tiles, the filename is the point.
       body =
         '<div class="tma-dash__messages-media-docs">' +
         state.mediaItems.map(function (item, i) {
@@ -1959,7 +1959,7 @@
   }
 
   /* Opens a media item in the shared portal lightbox, with the rest of the
-   * shelf as its gallery — the same component the conversation gallery and the
+   * shelf as its gallery, the same component the conversation gallery and the
    * File Library use, so a preview looks identical wherever it was opened. */
   function openMessagesMediaItem(state, index) {
     var items = state.mediaItems || [];
@@ -1993,7 +1993,7 @@
    *
    * Native Unicode characters, from the generated emoji-data.js. The previous
    * picker drew 21 SVG assets, 18 of which were malformed XML and rendered as
-   * broken images — and 21 images could never satisfy categories or search.
+   * broken images, and 21 images could never satisfy categories or search.
    * ---------------------------------------------------------------- */
 
   var RECENT_EMOJI_KEY = 'tma.messages.recentEmoji';
@@ -2009,7 +2009,7 @@
       var list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list.filter(function (c) { return typeof c === 'string'; }) : [];
     } catch (err) {
-      // Private browsing, or a corrupted value — recents are a nicety.
+      // Private browsing, or a corrupted value, recents are a nicety.
       return [];
     }
   }
@@ -2224,7 +2224,7 @@
    * server's pre-formatted string.
    *
    * A message fans out to everyone in the conversation at once, so no single
-   * server-rendered clock time can be right for all of them — it used to be
+   * server-rendered clock time can be right for all of them, it used to be
    * rendered in the app's zone (UTC), which is nobody's. toLocale* honours
    * the reader's zone, and i18n.js redirects it to a manually chosen zone
    * and language. The server's string stays as the fallback for any payload
@@ -2273,7 +2273,7 @@
   }
 
   /*
-   * Sender-side only — an incoming message never carries a delivery state.
+   * Sender-side only, an incoming message never carries a delivery state.
    *
    * The words replace the pair of nested ticks messengers usually draw: one
    * tick versus two is a convention you have to be taught, and it is read
@@ -2282,7 +2282,7 @@
    *   pending    the optimistic bubble, not yet confirmed by the server
    *   sent       stored, but nobody's client has acknowledged it
    *   delivered  every other participant's client has it
-   *   read       drawn *outside* the bubble instead — see renderBubbleReceipt
+   *   read       drawn *outside* the bubble instead, see renderBubbleReceipt
    *   failed     the send errored and can be retried
    */
   function renderBubbleStatus(msg) {
@@ -2300,7 +2300,7 @@
       delivered: 'Delivered',
     }[state] || 'Sent';
 
-    var title = state === 'failed' ? 'Not sent — tap to retry' : label;
+    var title = state === 'failed' ? 'Not sent, tap to retry' : label;
 
     return (
       '<span class="tma-dash__messages-bubble-status tma-dash__messages-bubble-status--' + state +
@@ -2333,7 +2333,7 @@
   /*
    * Who a bubble's photo belongs to.
    *
-   * The message carries its own sender, but not every message has one — a
+   * The message carries its own sender, but not every message has one, a
    * system line has no author, and older or optimistically-rendered rows can
    * reach the renderer before the server has filled it in. The conversation
    * always knows: a direct chat *is* the other person, and a group lists its
@@ -2352,7 +2352,7 @@
     }
 
     // A direct conversation only has one other person in it, so its own photo
-    // and name are that person's — the same ones the inbox row shows.
+    // and name are that person's, the same ones the inbox row shows.
     var direct = isDirectThread(thread) ? thread : {};
 
     return {
@@ -2366,7 +2366,7 @@
    *
    * It sits on the *last* bubble of a run, next to the message that finished
    * the thought, and the earlier bubbles in that run keep an empty slot of the
-   * same width so the whole run stays in one column — which is how WhatsApp
+   * same width so the whole run stays in one column, which is how WhatsApp
    * and Teams both draw a group of messages from one person.
    *
    * `side` is the side the bubble is *drawn* on, which is not always
@@ -2555,7 +2555,7 @@
         : '') +
       '<span class="tma-dash__messages-link-site">' +
       // The favicon comes from Google's lookup service, which 404s for any
-      // domain it has no icon for — a broken image plus a console error on a
+      // domain it has no icon for, a broken image plus a console error on a
       // perfectly good link. Removing itself on error leaves just the domain
       // name, which is all the favicon was decorating anyway.
       (card.faviconUrl
@@ -2574,7 +2574,7 @@
   /*
    * Watch the composer for a link and fetch its card.
    *
-   * Waits for the URL to look finished — a trailing space, or a short pause —
+   * Waits for the URL to look finished, a trailing space, or a short pause —
    * so a half-typed address isn't requested character by character.
    */
   function scheduleLinkPreview(state, text, render) {
@@ -2621,7 +2621,7 @@
    *
    * Each kind gets the affordance it actually needs: images and video are
    * shown, audio gets transport controls, and anything else gets its file-type
-   * icon plus name and size — the File Library's icons, not a second set.
+   * icon plus name and size, the File Library's icons, not a second set.
    * ---------------------------------------------------------------- */
 
   function renderAttachment(msg, attachment) {
@@ -2730,7 +2730,7 @@
    * A call is a message, not an announcement.
    *
    * Calls are stored as system lines, so they used to render as the same
-   * centred pill as "Ana added Ben" — a column of identical grey lozenges that
+   * centred pill as "Ana added Ben", a column of identical grey lozenges that
    * said nothing about who called whom, and read as chrome rather than as part
    * of the conversation. They get a bubble on the caller's side instead.
    *
@@ -2762,7 +2762,7 @@
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side +
       '" data-messages-id="' + esc(msg.id) + '">' +
       // A call is always its own run, so an incoming one always carries the
-      // caller's photo — which keeps it in the same column as the bubbles
+      // caller's photo, which keeps it in the same column as the bubbles
       // around it. One you placed sits on your side and carries none, exactly
       // like every other message of yours.
       renderBubbleAvatar(msg, row, side, true) +
@@ -2863,7 +2863,7 @@
        * They used to be inline right after the text, so a long or wrapping
        * message left them stranded mid-line. A float keeps them on the last
        * line when there is room and drops them onto their own line when there
-       * isn't — which is how every messenger behaves — and the zero-width
+       * isn't, which is how every messenger behaves, and the zero-width
        * spacer stops the text running underneath them.
        */
       inner =
@@ -3008,7 +3008,7 @@
   /*
    * Missed calls, for the badges outside this page.
    *
-   * A missed call is deliberately *not* an unread message server-side — it has
+   * A missed call is deliberately *not* an unread message server-side, it has
    * no read state of its own, and counting system lines put a badge on threads
    * nobody had written in (§ ConversationParticipant::unreadCount). But the
    * sidebar badge answers a broader question than the Chats one: "what is
@@ -3034,7 +3034,7 @@
    *
    * Files are uploaded as soon as they are chosen and held as *staged* rows
    * server-side; the message claims them on send. That is what makes a preview,
-   * a progress bar, a remove button and a retry possible — and it means a
+   * a progress bar, a remove button and a retry possible, and it means a
    * failed upload can never take the typed text with it.
    * ---------------------------------------------------------------- */
 
@@ -3068,7 +3068,7 @@
           var uploading = item.status === 'uploading';
 
           // A local object URL while uploading, the server thumbnail once it
-          // lands — so an image previews immediately rather than after the round trip.
+          // lands, so an image previews immediately rather than after the round trip.
           var thumb = item.previewUrl || (item.attachment && item.attachment.thumbUrl);
 
           return (
@@ -3113,7 +3113,7 @@
    * The preview shown above the composer as a link is typed.
    *
    * Dismissible: pasting a link and not wanting a card is common. The message
-   * still sends immediately either way — nothing here blocks sending.
+   * still sends immediately either way, nothing here blocks sending.
    */
   function renderComposerLinkPreview(state) {
     var url = state.composerLinkUrl;
@@ -3147,7 +3147,7 @@
     var bars = (peaks && peaks.length ? peaks : null);
 
     // No peaks (an older note, or a browser without Web Audio) still gets a
-    // bar chart, just a flat one — better than an empty gap.
+    // bar chart, just a flat one, better than an empty gap.
     if (!bars) {
       bars = [];
       for (var i = 0; i < 40; i++) bars.push(18);
@@ -3324,7 +3324,7 @@
       'placeholder="Search emoji" aria-label="Search emoji" value="' + esc(term) + '" autocomplete="off">' +
       '</div>' +
       '<div class="tma-dash__messages-emoji-body">' + body + '</div>' +
-      // Category strip is hidden while searching — the results span categories.
+      // Category strip is hidden while searching, the results span categories.
       (term.trim()
         ? ''
         : '<div class="tma-dash__messages-emoji-tabs" role="tablist">' +
@@ -3387,11 +3387,11 @@
       '">' +
       renderEmojiPicker(state) +
       (editing
-        ? '<div class="tma-dash__messages-composer-editing">Editing message — press Escape to cancel</div>'
+        ? '<div class="tma-dash__messages-composer-editing">Editing message, press Escape to cancel</div>'
         : '') +
       renderComposerLinkPreview(state) +
       renderComposerAttachments(state) +
-      // Recording replaces the input row entirely — there is nothing else to
+      // Recording replaces the input row entirely, there is nothing else to
       // do with the composer mid-recording.
       (state.recording
         ? renderRecorder(state)
@@ -3473,7 +3473,7 @@
 
         if (state.selectedId && !state.editing) scheduleDraftSave(state.selectedId, text);
 
-        // Emptying the box is stopping, not typing — otherwise clearing a
+        // Emptying the box is stopping, not typing, otherwise clearing a
         // draft leaves the other side watching a phantom.
         if (state.selectedId && !state.editing) {
           if (text.trim()) {
@@ -3541,7 +3541,7 @@
      * Opening re-renders rather than just unhiding.
      *
      * The picker's contents depend on state that changes while it is closed —
-     * recently used emoji above all — and simply flipping `hidden` showed
+     * recently used emoji above all, and simply flipping `hidden` showed
      * whatever markup was produced the last time the composer rendered. A
      * freshly used emoji never appeared under Recent because of it.
      */
@@ -3571,7 +3571,7 @@
     }
 
     if (picker) {
-      // Inserting keeps the picker open — people usually add more than one —
+      // Inserting keeps the picker open, people usually add more than one —
       // and remembers the choice for the Recent tab.
       MORPH.unwired(picker, '[data-messages-emoji-char]').forEach(function (btn) {
         MORPH.on(btn, 'click', function (e) {
@@ -3793,7 +3793,7 @@
 
     /*
      * "Seen" is drawn once, on the newest message of yours that has been read
-     * — see renderBubbleReceipt. Scanning backwards finds it; everything above
+     *, see renderBubbleReceipt. Scanning backwards finds it; everything above
      * it has been read too and stays unmarked.
      */
     var seenIndex = -1;
@@ -3847,7 +3847,7 @@
   /* ------------------------------------------------------------------
    * Conversation profile
    *
-   * Replaces the conversation *inside* the chat column — the inbox stays put
+   * Replaces the conversation *inside* the chat column, the inbox stays put
    * and the scroll position with it. Deliberately separate from the client
    * record: this is the messaging profile, and "Open client record" is an
    * explicit, permissioned action rather than what a name click does.
@@ -3943,7 +3943,7 @@
    * Group membership and administration.
    *
    * What is offered depends on the server's own verdict (`canManage`), not on
-   * a guess here — the organization chat is administrator-only however the
+   * a guess here, the organization chat is administrator-only however the
    * participant roles happen to be set, and nobody can leave it at all.
    */
   function renderGroupSection(state, info, row) {
@@ -4051,7 +4051,7 @@
       '<div class="tma-dash__messages-profile" data-messages-profile-body>' +
 
       // Cover + avatar. The avatar opens in the lightbox, but only when there
-      // is a real photo — an initials tile has nothing to enlarge.
+      // is a real photo, an initials tile has nothing to enlarge.
       '<div class="tma-dash__messages-profile-cover"></div>' +
       '<div class="tma-dash__messages-profile-head">' +
       (p.photo
@@ -4357,8 +4357,8 @@
      * .tma-dash__main's side gutters and swaps its scroll for `overflow:
      * hidden`. That is only ever right while Messages is the visible view.
      *
-     * render() runs in the background too — realtime events, resizes, badge
-     * syncs — so toggling on viewport width alone stamped the modifier on
+     * render() runs in the background too, realtime events, resizes, badge
+     * syncs, so toggling on viewport width alone stamped the modifier on
      * every narrow load. The Dashboard then lost its gutters entirely and
      * could not scroll past the fold.
      */
@@ -4482,12 +4482,12 @@
         // Read the index off the LIVE attribute at trigger time, never the
         // bind-time capture: paging older history prepends messages and
         // shifts every bubble's position. The morph layer keeps the
-        // attribute current while a captured variable stays stale — which
+        // attribute current while a captured variable stays stale, which
         // quietly quoted a message a whole page older than the one swiped.
         var index = parseInt(row.getAttribute('data-messages-index'), 10);
 
         // setReplyTo takes a message *id*. This passed the bubble's numeric
-        // index — a leftover from when replies were tracked by position — so
+        // index, a leftover from when replies were tracked by position, so
         // the swipe stored a reply target no message could ever match and the
         // preview never appeared.
         var msg = getMessages(state.selectedId)[index];
@@ -4538,7 +4538,7 @@
 
           if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
             // A scroll, not a swipe. Give the pointer back so the list
-            // actually scrolls — holding capture here left the gesture dead.
+            // actually scrolls, holding capture here left the gesture dead.
             dragging = false;
             track.classList.remove('is-dragging');
             if (pointerId !== undefined && track.hasPointerCapture(pointerId)) {
@@ -4559,7 +4559,7 @@
         var offset = setOffset(raw);
 
         // Reaching the trigger IS the gesture: fire there and then, mid-drag,
-        // rather than making the finger also let go — the wait for pointerup
+        // rather than making the finger also let go, the wait for pointerup
         // was read as lag. The pointer is handed back so nothing else of this
         // drag is swallowed; dragging=false makes the trailing pointerup a
         // no-op instead of a second trigger.
@@ -4658,7 +4658,7 @@
 
           // Same rule as the pointer path: crossing the trigger fires the
           // reply immediately. The end-of-scroll timer only remains to snap
-          // back a swipe that never made it that far — it is no longer what
+          // back a swipe that never made it that far, it is no longer what
           // decides the reply, so the 160 ms wait it imposed is gone.
           var wheelTrigger = getReplySwipeTrigger();
           if (side === 'in' ? offsetNow >= wheelTrigger : offsetNow <= -wheelTrigger) {
@@ -4711,13 +4711,13 @@
   }
 
   /*
-   * "Call Sarah?" — the chooser between a voice and a video call.
+   * "Call Sarah?", the chooser between a voice and a video call.
    *
    * Both header buttons open it: pressing a small glyph is a slight target
    * for an action that immediately rings another person, so the kind of call
    * is confirmed as an explicit step rather than inferred from which icon the
    * pointer happened to land on. Imperative like the toast, not part of
-   * render() — a call is a moment, not state worth re-rendering the page for.
+   * render(), a call is a moment, not state worth re-rendering the page for.
    */
   function closeCallChooser() {
     var open = document.querySelector('[data-messages-callask]');
@@ -5176,8 +5176,8 @@
         var action = btn.getAttribute('data-messages-row-swipe-action');
         var id = btn.getAttribute('data-messages-row-id');
         var wrap = btn.closest('[data-messages-row-swipe]');
-        // 'delete' is a real delete now — it leaves the conversation for
-        // this user — so route it through the confirming action.
+        // 'delete' is a real delete now, it leaves the conversation for
+        // this user, so route it through the confirming action.
         if (action === 'delete') {
           closeMessagesRowSwipes(root);
           runConversationAction(root, state, render, id, 'leave');
@@ -5213,7 +5213,7 @@
    * Which field had focus, and where the caret was.
    *
    * The search fields re-render on every keystroke, and a full re-render
-   * replaces the element the user is typing into — without this the field
+   * replaces the element the user is typing into, without this the field
    * loses focus after one character and the caret jumps to the start.
    */
   var FOCUSABLE_KEYS = [
@@ -5361,7 +5361,7 @@
       var onReady = function () {
         el.removeEventListener(evt, onReady);
         el.removeEventListener('error', onReady);
-        // Only chase the bottom while the reader is still near it — if they
+        // Only chase the bottom while the reader is still near it, if they
         // scrolled up to read history, leave them be.
         if (chat.scrollHeight - chat.scrollTop - chat.clientHeight <= 240) pin();
       };
@@ -5410,7 +5410,7 @@
 
   /*
    * Load a conversation's stored draft into the composer, unless the user has
-   * already typed something here in this session — local keystrokes are always
+   * already typed something here in this session, local keystrokes are always
    * newer than the copy the server last heard about.
    */
   function seedComposerDraft(state, conversationId) {
@@ -5461,7 +5461,7 @@
           state.selectedId = null;
         }
         // Deliberately no auto-select. Opening the newest conversation on load
-        // marked it read on the user's behalf — they never looked at it — which
+        // marked it read on the user's behalf, they never looked at it, which
         // sent a false read receipt and wiped the unread badge. The chat column
         // starts in its empty state instead, the same one the close button
         // returns to.
@@ -5469,7 +5469,7 @@
         // Seed the composer from the stored draft for whichever conversation
         // ends up open. Without this a draft only reappeared when the user
         // switched *into* a conversation, so the one already open on load —
-        // usually the one they were last typing in — came back empty.
+        // usually the one they were last typing in, came back empty.
         seedComposerDraft(state, state.selectedId);
 
         render();
@@ -5490,7 +5490,7 @@
       })
       .catch(function (err) {
         STORE.loaded = true;
-        // Rows already on screen — the warm snapshot, or a previous answer —
+        // Rows already on screen, the warm snapshot, or a previous answer —
         // beat an error card: they are the last known truth, and replacing
         // them with "could not be loaded" because a refresh failed is the
         // File Library lesson unlearned.
@@ -5527,7 +5527,7 @@
         if (data.conversation) replaceThread(data.conversation);
 
         // A conversation the user is looking at is a conversation they have
-        // read — subject to their own read-receipt setting, enforced server side.
+        // read, subject to their own read-receipt setting, enforced server side.
         if (state.selectedId === conversationId && !document.hidden) {
           markConversationRead(root, state, render, conversationId);
         }
@@ -5644,7 +5644,7 @@
             preview: messagePreview(replySource),
           }
         : null,
-      // Show the real attachments straight away — they are already uploaded.
+      // Show the real attachments straight away, they are already uploaded.
       attachments: ready.map(function (item) {
         return item.attachment;
       }),
@@ -5719,7 +5719,7 @@
   }
 
   /* ------------------------------------------------------------------
-   * Drafts — per conversation, saved server-side so they survive a reload.
+   * Drafts, per conversation, saved server-side so they survive a reload.
    * ---------------------------------------------------------------- */
 
   var draftTimer = null;
@@ -5779,8 +5779,8 @@
   /*
    * Leave the open conversation without picking another one.
    *
-   * Everything about the inbox is deliberately left alone — scroll position,
-   * search text, filters — so closing a chat returns you to exactly the list
+   * Everything about the inbox is deliberately left alone, scroll position,
+   * search text, filters, so closing a chat returns you to exactly the list
    * you were looking at rather than a reset one.
    */
   function closeConversation(root, state, render) {
@@ -5809,7 +5809,7 @@
   function startRealtime(root, state, render) {
     var realtime = window.TMAMessagingRealtime;
 
-    // No websocket configured at all — poll instead of going dead.
+    // No websocket configured at all, poll instead of going dead.
     if (!STORE.realtime || !realtime || !realtime.start(STORE.realtime)) {
       startPollingFallback(root, state, render);
       return;
@@ -5842,7 +5842,7 @@
     if (pollTimer) return;
 
     if (window.console) {
-      console.warn('[messaging] live updates unavailable — falling back to polling.');
+      console.warn('[messaging] live updates unavailable, falling back to polling.');
     }
 
     pollTimer = setInterval(function () {
@@ -5892,7 +5892,7 @@
     window.TMAMessagingRealtime.listen(channel, 'call.signal', function (payload) {
       if (window.TMAMessagingCalls) {
         // The caller's signal has no avatar, but the answerer already has this
-        // conversation locally — hand the calls module the peer's name/photo so
+        // conversation locally, hand the calls module the peer's name/photo so
         // the incoming call and pill can show their picture, not just initials.
         var row = payload && findThread(payload.conversationId);
         if (row) {
@@ -5924,7 +5924,7 @@
       var msg = findMessageById(payload.conversationId, payload.messageId);
       if (!msg) return;
 
-      // The event carries counts and names but not "mine" — that is per
+      // The event carries counts and names but not "mine", that is per
       // viewer, so each client derives it from its own id.
       var me = (STORE.me || {}).id;
       msg.reactions = (payload.reactions || []).map(function (r) {
@@ -5994,7 +5994,7 @@
   /*
    * Somebody came online or went offline. The event carries no conversation,
    * because one person's presence is the same fact in every thread they are
-   * in — so it is applied to every row that resolves to them.
+   * in, so it is applied to every row that resolves to them.
    */
   function applyPresence(payload, render) {
     var changed = false;
@@ -6052,7 +6052,7 @@
      * Call signalling on this user's *own* channel.
      *
      * The conversation channel carries it too, but a client only subscribes to
-     * the thread it currently has open — so a call rung into any other
+     * the thread it currently has open, so a call rung into any other
      * conversation used to reach nobody. This is the subscription that makes an
      * incoming call actually arrive. Duplicates across the two channels are
      * settled by the signal id (see App\Events\CallSignal).
@@ -6068,7 +6068,7 @@
 
       // A call that ended is a call that may have been missed. The server has
       // just written the history line, so read the badge back rather than
-      // guessing at it here — only the server knows whether this one counts.
+      // guessing at it here, only the server knows whether this one counts.
       if (payload && (payload.type === 'hangup' || payload.type === 'reject')) {
         setTimeout(function () { refreshTabCounts(root, state, render); }, 400);
       }
@@ -6090,7 +6090,7 @@
         row.unread = 0;
       }
 
-      // Arriving messages are not announced here — the conversation channel
+      // Arriving messages are not announced here, the conversation channel
       // already covers them for every thread, open or not.
       syncTabBarBadges();
       render();
@@ -6125,7 +6125,7 @@
         if (data.conversation) replaceThread(data.conversation);
         render();
 
-        // Acknowledge receipt first — that is true the moment it arrives.
+        // Acknowledge receipt first, that is true the moment it arrives.
         // Marking it read is a separate, weaker claim and only holds if the
         // tab is actually visible.
         window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
@@ -6196,7 +6196,7 @@
      * It used to be, which meant it only ever appeared on the two shells that
      * mount Messages, and only while the tab was hidden. It now belongs to the
      * notification store (notify-store.js), which runs on every page and gets
-     * the same arrival over the portal notification channel — so being on the
+     * the same arrival over the portal notification channel, so being on the
      * Calendar, or in another application entirely, still notifies.
      */
   }
@@ -6207,7 +6207,7 @@
    * Keys, not paths, are what a preference stores; this is the only place
    * that maps one to a file. 'beep' is the synthesised tone this file has
    * always played and ships no asset, so it stays available as the lightest
-   * option — and as the fallback if a key ever goes missing.
+   * option, and as the fallback if a key ever goes missing.
    *
    * Each sound is one <audio> element, reused. Building a new Audio() per
    * arrival leaves a pile of elements behind on a busy thread and re-fetches
@@ -6279,7 +6279,7 @@
 
   /*
    * The send confirmation. Deliberately not a separate preference: it is the
-   * counterpart of the arrival tone, so it follows it — silence one and you
+   * counterpart of the arrival tone, so it follows it, silence one and you
    * have silenced both.
    */
   function playSentMessageSound() {
@@ -6291,7 +6291,7 @@
   /*
    * Settings previews. A ringtone runs 7–16 seconds, which is right for a call
    * and far too long for "what does this one sound like", so a preview is cut
-   * short — and any previous one stopped, so flicking through the list never
+   * short, and any previous one stopped, so flicking through the list never
    * layers two tones over each other.
    */
   var previewTone = null;
@@ -6561,7 +6561,7 @@
    * Look up people for the search field and the new-message panel.
    *
    * Debounced, and the result is discarded if the query moved on while the
-   * request was in flight — otherwise a slow response for "an" can land after
+   * request was in flight, otherwise a slow response for "an" can land after
    * and overwrite the results for "andrew".
    */
   function searchPeople(state, render, term, target) {
@@ -6647,8 +6647,8 @@
    * Open (or create) the direct conversation with one person.
    *
    * `media` places a call as soon as it is open. A call needs a *conversation*
-   * id, which callers outside Messages never have — the Dashboard's Employees
-   * board knows a user id and nothing else — so "call this colleague" has to
+   * id, which callers outside Messages never have, the Dashboard's Employees
+   * board knows a user id and nothing else, so "call this colleague" has to
    * resolve the conversation first and then ring. Doing it here rather than in
    * each caller keeps the conversation lookup, the subscription and the call in
    * the order the rest of the page expects.
@@ -6693,7 +6693,7 @@
   /*
    * The calls module lives outside this file and has no store of its own, so
    * the call-related settings are handed to it whenever settings load or
-   * change — the display preference, and what to ring with. Devices are
+   * change, the display preference, and what to ring with. Devices are
    * deliberately not here: those are per-machine and the calls module keeps
    * them in localStorage.
    */
@@ -6703,8 +6703,8 @@
     window.TMAMessagingSettings.ringtone = STORE.settings.ringtone || 'ringtone-1';
     window.TMAMessagingSettings.notificationSounds = STORE.settings.notificationSounds !== false;
     // The calls module shows an incoming-call desktop notification. Passed
-    // through raw (not coerced) so the calls side can treat "unset" as on — a
-    // ringing call is high-priority — while still honouring an explicit off.
+    // through raw (not coerced) so the calls side can treat "unset" as on, a
+    // ringing call is high-priority, while still honouring an explicit off.
     window.TMAMessagingSettings.desktopNotifications = STORE.settings.desktopNotifications;
     if (window.TMAMessagingCalls && window.TMAMessagingCalls.setDisplayPreference) {
       window.TMAMessagingCalls.setDisplayPreference(window.TMAMessagingSettings.callDisplay);
@@ -6726,7 +6726,7 @@
 
   /*
    * A banner the user asked for by switching the setting on, so it is shown
-   * whether or not the window is in the background — the whole point is that
+   * whether or not the window is in the background, the whole point is that
    * they see it happen.
    */
   function showTestDesktopNotification() {
@@ -6751,7 +6751,7 @@
     render();
 
     // Desktop notifications are useless without browser permission, so ask at
-    // the moment the user turns them on — the toggle is the user gesture the
+    // the moment the user turns them on, the toggle is the user gesture the
     // browser requires before it will even show the prompt.
     if (key === 'desktopNotifications' && value) {
       var desktop = window.TMADesktopNotify;
@@ -6990,7 +6990,7 @@
       .start(function (elapsed) {
         if (!state.recording) return;
         state.recording.elapsedMs = elapsed;
-        // Repaint just the counter and bars — a full render on every tick
+        // Repaint just the counter and bars, a full render on every tick
         // would fight the composer and the rest of the page.
         paintRecorder(root, state);
       })
@@ -7003,7 +7003,7 @@
         state.recording = null;
         voiceRecorder = null;
         render();
-        // getUserMedia failures are the common case here — the message is
+        // getUserMedia failures are the common case here, the message is
         // already phrased for a person by the recorder.
         showMessagesToast(root, err.message || 'Recording could not start');
       });
@@ -7177,7 +7177,7 @@
     var id = el.getAttribute('data-messages-voice');
     var src = el.getAttribute('data-messages-voice-src');
 
-    // Only one voice note plays at a time — overlapping playback is noise.
+    // Only one voice note plays at a time, overlapping playback is noise.
     if (playingVoice && playingVoice.id !== id) {
       playingVoice.audio.pause();
       playingVoice = null;
@@ -7220,7 +7220,7 @@
    * recording length when it does not.
    *
    * A MediaRecorder WebM has no Duration element, so `audio.duration` is
-   * Infinity until the file is seeked to its end — which is why progress sat
+   * Infinity until the file is seeked to its end, which is why progress sat
    * at zero for every recorded note.
    */
   function voiceDuration(el, audio) {
@@ -7371,7 +7371,7 @@
    * The reaction pill: one row of the six emoji people actually use, plus a
    * "+" that opens the full picker.
    *
-   * Deliberately not the whole grid up front — reacting is a one-tap action,
+   * Deliberately not the whole grid up front, reacting is a one-tap action,
    * and 700 emoji in the way of a thumbs-up is not a picker, it's an obstacle.
    */
   function openReactionPill(root, state, render, messageId, position, anchor) {
@@ -7478,7 +7478,7 @@
   }
 
   /*
-   * Who reacted, grouped by emoji — opened by clicking a reaction pill.
+   * Who reacted, grouped by emoji, opened by clicking a reaction pill.
    *
    * Each row is a button: the viewer's own reaction is marked and clicking it
    * removes it, which is how a reaction gets taken back without hunting for
@@ -7652,7 +7652,7 @@
 
     if (!state.profileGallery) state.profileGallery = {};
 
-    // Already fetched — switching tabs should not refetch.
+    // Already fetched, switching tabs should not refetch.
     if (state.profileGallery[shelf]) {
       render();
       return;
@@ -7671,7 +7671,7 @@
       });
   }
 
-  /* Open a gallery item in the lightbox — media, and documents too now that
+  /* Open a gallery item in the lightbox, media, and documents too now that
    * the lightbox previews PDFs and text itself. */
   function openGalleryItem(state, attachmentId) {
     var shelf = state.profileShelf || 'media';
@@ -7993,7 +7993,7 @@
         e.stopPropagation();
         var row = findThread(state.selectedId);
         if (!row || !window.TMAMessagingCalls) return;
-        // Whichever icon was pressed, the kind is chosen in the dialog — one
+        // Whichever icon was pressed, the kind is chosen in the dialog, one
         // prompt owns the decision (§ openCallChooser).
         openCallChooser(root, row);
       });
@@ -8064,7 +8064,7 @@
 
     /*
      * Right-click and long-press open the same menu at the pointer. Long press
-     * is the mobile equivalent — there is no hover there — and it must not fire
+     * is the mobile equivalent, there is no hover there, and it must not fire
      * when the finger is actually scrolling or swiping to reply.
      */
     MORPH.unwired(root, '[data-messages-id]').forEach(function (row) {
@@ -8519,7 +8519,7 @@
     });
 
     /* One view owns the inbox column at a time. Every nav entry goes through
-     * this so a new one can never forget to close the others — which is
+     * this so a new one can never forget to close the others, which is
      * exactly how two panels end up stacked on top of each other. */
     function showListView(view) {
       showMessagesChats(state);
@@ -8753,7 +8753,7 @@
 
   /*
    * Per-message menu, opened by the "more" button, a right-click, or a mobile
-   * long press. Only actions that will actually work are listed — permissions
+   * long press. Only actions that will actually work are listed, permissions
    * come from the server on each message (`msg.can`), never from hiding
    * buttons client-side alone.
    */
@@ -8878,7 +8878,7 @@
    * Dismiss on a click *outside* the open panel.
    *
    * This used to be a `{ once: true }` listener that closed unconditionally, so
-   * interacting with the panel's own contents shut it — switching emoji
+   * interacting with the panel's own contents shut it, switching emoji
    * category closed the picker instead of changing category. Containment is
    * checked instead, and the listener persists until the panel actually closes.
    */
@@ -8925,7 +8925,7 @@
       searchLoading: false,
       /* The pooled Media view over the inbox column: which shelf is showing,
        * what it holds, and whether it is still loading. Fetched once per
-       * opening rather than kept live — it is a browsing view, and re-fetching
+       * opening rather than kept live, it is a browsing view, and re-fetching
        * on every render would make scrolling it stutter. */
       mediaMode: false,
       mediaShelf: 'media',
@@ -8972,7 +8972,7 @@
       ensureMessagesMobileHeader(root, state);
       wireEvents(root, state, render);
 
-      // Scroll is largely preserved by reconciliation itself now — the panes
+      // Scroll is largely preserved by reconciliation itself now, the panes
       // are never destroyed. This still runs because it also handles the
       // deliberate moves: opening a conversation jumps to the newest message,
       // and loading older history holds the reader's place.
@@ -9027,7 +9027,7 @@
        * Registered in the capture phase so the Messages page gets first refusal
        * on these keys. The portal's global command palette also opens on "/",
        * and without capturing, one keypress both focused this search *and*
-       * opened the palette — which then sat over the page swallowing clicks.
+       * opened the palette, which then sat over the page swallowing clicks.
        */
       document.addEventListener('keydown', function (e) {
         if (!root.isConnected) return;
@@ -9040,7 +9040,7 @@
             target.tagName === 'SELECT' ||
             target.isContentEditable ||
             // A keystroke that lands on the document while the composer holds
-            // text is still typing as far as the user is concerned — treating
+            // text is still typing as far as the user is concerned, treating
             // it as a shortcut is how "/" got eaten out of a pasted URL.
             !!(target.closest && target.closest('.tma-dash__messages-composer')));
 
@@ -9146,7 +9146,7 @@
     }
 
     // Closing the tab has to retract the indicator too, and a normal request
-    // will not survive teardown — sendBeacon is the only thing that does.
+    // will not survive teardown, sendBeacon is the only thing that does.
     window.addEventListener('pagehide', function () {
       if (!typingOut.conversationId || !navigator.sendBeacon) return;
 
@@ -9178,7 +9178,7 @@
   }
 
   /*
-   * ?conversation=<uuid> — how a notification names the thread it is about.
+   * ?conversation=<uuid>, how a notification names the thread it is about.
    *
    * Read once, here at load, because the shell rewrites the address bar to the
    * bare page path as soon as it activates a view: by the time the inbox has

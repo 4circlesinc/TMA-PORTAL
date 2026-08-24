@@ -8,7 +8,7 @@ namespace App\Support\Cip;
  * This is not a smaller copy of {@see Status}. An application's status says
  * where the whole file has reached; a slot's says whether this one piece of
  * paper has been accepted, which a reviewer decides a document at a time.
- * The two vocabularies never overlap and never move each other — an
+ * The two vocabularies never overlap and never move each other, an
  * application is not in review because a birth certificate is.
  *
  * Nothing here is terminal, which is why there is no TERMINAL list to mirror.

@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 
 /**
- * Who a CIP notice writes to — §22's four classes, unique by mailbox.
+ * Who a CIP notice writes to. §22's four classes, unique by mailbox.
  *
  * A member whose mailbox is also the registry contact is one recipient, not
  * two, and a private client with no firm behind them is their own provider
@@ -19,7 +19,7 @@ use App\Support\Access\Role;
 class Contacts
 {
     /**
-     * Every approved Administrator account — the brief's "Administrator" as a
+     * Every approved Administrator account, the brief's "Administrator" as a
      * class, not the person who last touched the file.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
@@ -133,7 +133,7 @@ class Contacts
     }
 
     /**
-     * Everyone currently holding this file — reviewing officer and, when one
+     * Everyone currently holding this file, reviewing officer and, when one
      * is named, the compliance officer. §22 says "Assigned Officer".
      *
      * @return list<array{email:string, name:?string, userId:?int}>
@@ -163,7 +163,7 @@ class Contacts
      * The reviewing officer holding this file, if anybody is.
      *
      * Live assignments are the authority; the cache column is only what the
-     * table draws. An application nobody holds contributes nobody — the other
+     * table draws. An application nobody holds contributes nobody, the other
      * classes still get the notice.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
@@ -211,7 +211,7 @@ class Contacts
         }
 
         // The registry's own contact address, where it is nobody already on
-        // the list — a firm may route notices to a mailbox no member owns.
+        // the list, a firm may route notices to a mailbox no member owns.
         $contact = $application->provider?->contact_email;
 
         if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
@@ -223,7 +223,7 @@ class Contacts
         }
 
         // The company's own mailbox, when it is not already a member or the
-        // registry contact — that is the service provider email on the firm
+        // registry contact, that is the service provider email on the firm
         // record, and CIP notices have to reach it too.
         $firmEmail = $company?->email;
 

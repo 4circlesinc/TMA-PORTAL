@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Sidebar folder shortcuts — each user's own pinned folders.
+ * Sidebar folder shortcuts, each user's own pinned folders.
  *
  * A shortcut is only ever a pointer: the listing re-checks the folder still
  * exists and that the viewer may still see it, so a deleted folder or a
@@ -46,7 +46,7 @@ class ShortcutController extends BaseFilesController
     private function autoGroups(User $user): array
     {
         // Default / organization / assigned-client / staff folders are staff
-        // tooling only. Clients never receive those auto groups — they reach
+        // tooling only. Clients never receive those auto groups, they reach
         // files through shares and their own pins.
         if (! FileAccess::isStaff($user)) {
             return [
@@ -70,7 +70,7 @@ class ShortcutController extends BaseFilesController
             ->where('subject_user_id', $user->id)
             ->orderBy('name')->get();
 
-        // The "Client Files" / "Staff Files" containers — a fast path to browse
+        // The "Client Files" / "Staff Files" containers, a fast path to browse
         // every client/staff folder. Only visible to whoever may see the root
         // (administrators), so staff never get a shortcut listing all clients.
         // Ensure both exist so an admin always has the entry points, even before
@@ -85,7 +85,7 @@ class ShortcutController extends BaseFilesController
             ->filter(fn (Folder $f) => FileAccess::can($user, 'view', $f))
             ->values();
 
-        // All default/system-type folders here — colour/icon are the one
+        // All default/system-type folders here, colour/icon are the one
         // admin-set values, no per-viewer preference lookup needed.
         $map = fn ($folders) => $folders->map(fn (Folder $f) => [
             'id' => $f->uuid,
@@ -114,7 +114,7 @@ class ShortcutController extends BaseFilesController
             ->where('folder_id', $folder->id)
             ->first();
 
-        // Already pinned — succeed quietly rather than creating a duplicate.
+        // Already pinned, succeed quietly rather than creating a duplicate.
         if (! $existing) {
             $count = FolderShortcut::where('user_id', $user->id)->count();
             abort_if($count >= self::MAX, 422, 'You can pin up to '.self::MAX.' folders.');

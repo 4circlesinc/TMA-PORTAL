@@ -31,7 +31,7 @@ class Drive
      *
      * `$link` is either null (start from the beginning), or the
      * `@odata.nextLink` / `@odata.deltaLink` handed back last time. Both are
-     * absolute URLs and must be followed verbatim — rebuilding them from parts
+     * absolute URLs and must be followed verbatim, rebuilding them from parts
      * loses the token and silently restarts the whole library.
      *
      * @return array{items: array<int, array>, next: ?string, delta: ?string}
@@ -61,13 +61,13 @@ class Drive
     }
 
     /**
-     * Every child id of a folder — ALL of them.
+     * Every child id of a folder. ALL of them.
      *
      * Graph pages `/children` at 200 whether you ask it to or not, and a caller
      * that reads `['value']` and stops has silently been handed "the first 200
      * of 600". The sync used exactly that list to decide what had been deleted,
      * so on any folder with more than 200 children the remainder looked gone
-     * and was recycled — 626 files and 73 folders that were never deleted in
+     * and was recycled. 626 files and 73 folders that were never deleted in
      * OneDrive at all. Following nextLink is the whole fix.
      *
      * @return array<int, string>
@@ -97,7 +97,7 @@ class Drive
                 return $ids;
             }
 
-            // nextLink is absolute and carries its own $skiptoken — follow it
+            // nextLink is absolute and carries its own $skiptoken, follow it
             // verbatim, and never alongside a query array that would strip it.
             $url = $next;
             $query = [];
@@ -113,7 +113,7 @@ class Drive
      *
      * A delete moves an item into SharePoint's own recycle bin, out of the
      * drive's item space, so Graph answers 404 for it. That 404 is the only
-     * trustworthy evidence that something was really deleted — anything else
+     * trustworthy evidence that something was really deleted, anything else
      * (a throttle, a permissions blip, a truncated listing) must not be read
      * as one.
      */

@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Mail;
  * Callers describe *what happened*; the Notifier fills in everything derivable
  * from the type registry (module, level, icon, priority, action label),
  * enforces the recipient's preferences (§21) and privacy rules, and collapses
- * repeats via a dedupe key. It never throws into the caller's flow — a failed
+ * repeats via a dedupe key. It never throws into the caller's flow, a failed
  * notification must not fail the action that triggered it (§27).
  *
  * Real-time fan-out (§24) is layered on in Phase 10; this class stays the one
@@ -97,7 +97,7 @@ final class Notifier
     }
 
     /**
-     * Fan a notification out to every approved administrator — the recipient
+     * Fan a notification out to every approved administrator, the recipient
      * set for approval requests, security alerts, and failed system jobs (§16).
      *
      * @param  array<string, mixed>  $attrs
@@ -128,7 +128,7 @@ final class Notifier
         $actorId = self::idOf($attrs['actor'] ?? null);
 
         // Never tell someone about their own action (§13). System notifications
-        // (null actor) about the recipient — "your export is ready" — still pass.
+        // (null actor) about the recipient, "your export is ready", still pass.
         if ($actorId !== null && $actorId === $recipient->id) {
             return null;
         }
@@ -175,7 +175,7 @@ final class Notifier
 
         self::broadcast($notification);
 
-        // 'email' => false opts a send out of the email channel — for flows
+        // 'email' => false opts a send out of the email channel, for flows
         // that already deliver their own, richer email (approval, invites),
         // where a second "you were approved" mail would read as a duplicate.
         if (($attrs['email'] ?? true) !== false) {
@@ -187,8 +187,8 @@ final class Notifier
 
     /**
      * The email twin of a fresh notification, for modules whose email channel
-     * is on. Skipped while the person is actively using the portal — the bell
-     * already has it — unless they chose "always send email". Only fresh rows
+     * is on. Skipped while the person is actively using the portal, the bell
+     * already has it, unless they chose "always send email". Only fresh rows
      * email: a dedupe refresh never re-sends. Queued, so a mail hiccup can
      * never fail the action that raised the notification.
      */

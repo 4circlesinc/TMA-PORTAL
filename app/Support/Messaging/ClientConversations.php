@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
  *
  * The Message button on an applicant is not a generic DM. Staff usually need
  * to talk to the service provider *about* the applicant, and only sometimes
- * to the person themselves — and only then if that person has a portal login.
+ * to the person themselves, and only then if that person has a portal login.
  *
  * The case thread is one group per client: named for the applicant, members
  * are the officer who opened it plus everyone at the provider firm who can

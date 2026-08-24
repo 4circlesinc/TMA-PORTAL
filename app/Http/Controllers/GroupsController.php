@@ -16,12 +16,12 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
- * Teams, departments, projects and committees — the org structure the portal
+ * Teams, departments, projects and committees, the org structure the portal
  * previously had only as a JavaScript array on the Distribution Groups screen.
  *
  * Groups are staff-only and administrator-managed; a group manager may curate
  * membership but not create or delete groups. What a group can *see* is never
- * decided here — that is a grant made against a calendar (or, later, a folder).
+ * decided here, that is a grant made against a calendar (or, later, a folder).
  */
 class GroupsController extends Controller
 {
@@ -29,8 +29,8 @@ class GroupsController extends Controller
     private const MAX_MEMBERS = 512;
 
     /**
-     * Groups the caller may see. Staff see the whole directory — a group is
-     * org structure, not a secret — but membership detail needs opening one.
+     * Groups the caller may see. Staff see the whole directory, a group is
+     * org structure, not a secret, but membership detail needs opening one.
      */
     public function index(Request $request): JsonResponse
     {
@@ -82,7 +82,7 @@ class GroupsController extends Controller
     }
 
     /**
-     * The staff who can be put in a group — what the group builder's picker
+     * The staff who can be put in a group, what the group builder's picker
      * lists. Clients are excluded: a group is internal structure.
      */
     public function staff(Request $request): JsonResponse

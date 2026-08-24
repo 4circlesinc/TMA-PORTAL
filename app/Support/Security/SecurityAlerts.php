@@ -13,7 +13,7 @@ use App\Models\User;
  * decides which *channels* a whole module may use, while these are the
  * individual account-safety emails a person can opt out of one at a time.
  *
- * New-device sign-in alerts can never be switched off — that is the one alert
+ * New-device sign-in alerts can never be switched off, that is the one alert
  * that tells somebody their account has been taken over, so the UI locks the
  * switch and the server re-asserts it here regardless of what was posted.
  */

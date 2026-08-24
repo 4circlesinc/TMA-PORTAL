@@ -11,8 +11,8 @@
   'use strict';
 
   /*
-   * The `purple` key is historical — the calendar has always called this tone
-   * "purple" — but the design system has no purple: --color-violet is aliased
+   * The `purple` key is historical, the calendar has always called this tone
+   * "purple", but the design system has no purple: --color-violet is aliased
    * to --color-primary (#03a5e9, brand blue) and --color-purple is a legacy
    * alias marked do-not-use. Pointing it at either made this entry render
    * indistinguishably from `blue`, so it maps to --color-primary-dark, the

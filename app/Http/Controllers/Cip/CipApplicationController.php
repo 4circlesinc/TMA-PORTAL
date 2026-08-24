@@ -41,7 +41,7 @@ use Illuminate\Support\Str;
 /**
  * CIP applications: what the intake wizard needs, and filing one.
  *
- * The gate is CipAccess, not the capability matrix alone — Service Provider
+ * The gate is CipAccess, not the capability matrix alone. Service Provider
  * contacts and Private Clients are promised application creation by §1 and
  * hold no matrix capability by design. 404 rather than 403 throughout, the
  * portal's convention for anything a reader may not see.
@@ -52,7 +52,7 @@ class CipApplicationController extends Controller
      * How many applications one sync page carries.
      *
      * Each is a whole family with their checklists, so this is not a cheap
-     * row — and a first sync of the firm's whole book is a lot of them. Small
+     * row, and a first sync of the firm's whole book is a lot of them. Small
      * enough that a page answers before a phone gives up on it, large enough
      * that catching up after a week is not two hundred round trips.
      */
@@ -92,7 +92,7 @@ class CipApplicationController extends Controller
             'genders' => ['Male', 'Female'],
             /*
              * The wizard's document sections, from the same templates the
-             * admin screen edits — so a requirement added, reworded or
+             * admin screen edits, so a requirement added, reworded or
              * retired there changes what the form asks without a deploy.
              * Only the people the form collects: the applicant's list and
              * the sponsor's. The photo controls stay their own thing and
@@ -121,7 +121,7 @@ class CipApplicationController extends Controller
         $data = $request->validate(Intake::rules(), Intake::messages());
 
         // A provider this account may not file under is not offered and not
-        // accepted — the same list the form was drawn from decides.
+        // accepted, the same list the form was drawn from decides.
         $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
 
@@ -139,7 +139,7 @@ class CipApplicationController extends Controller
      *
      * The pull half of working offline (docs/offline-plan.md, phase 2). A
      * device that has been on a plane comes back, replays what it queued, and
-     * then asks this for whatever moved while it was away — so the cached
+     * then asks this for whatever moved while it was away, so the cached
      * copy on the desktop is brought up to date without re-downloading eleven
      * thousand records.
      *
@@ -155,7 +155,7 @@ class CipApplicationController extends Controller
      * NO CURSOR MEANS EVERYTHING
      *
      * A first run has nothing to catch up from, so it walks the whole set a
-     * page at a time — the same loop, no separate download path to keep in
+     * page at a time, the same loop, no separate download path to keep in
      * step with this one.
      */
     public function sync(Request $request): JsonResponse
@@ -170,7 +170,7 @@ class CipApplicationController extends Controller
          * Everything {@see record()} reads, loaded once for the page.
          *
          * It builds every row of this answer, so a relation it has to fetch
-         * for itself is not one query — it is fifty. The officer names both
+         * for itself is not one query, it is fifty. The officer names both
          * photo columns because photoUrl() falls back from one to the other,
          * and a column that was never selected reads as no photo at all.
          */
@@ -188,7 +188,7 @@ class CipApplicationController extends Controller
              * again while its timestamp equals the cursor's, because it can
              * change AGAIN inside that instant and strictly-greater would
              * skip the second change for ever. One re-delivered record per
-             * walk, absorbed by the upsert — same rule as the files cursor.
+             * walk, absorbed by the upsert, same rule as the files cursor.
              */
             $query->where(function (Builder $q) use ($since, $after) {
                 $q->where('updated_at', '>', $since)
@@ -252,7 +252,7 @@ class CipApplicationController extends Controller
      *
      * Its own endpoint rather than a widening of the client directory, for two
      * reasons. The directory answers with every client the reader may see —
-     * eleven thousand of them — and pages in the browser; hanging an
+     * eleven thousand of them, and pages in the browser; hanging an
      * application, its provider, its officer and a head-count off each of
      * those rows is the shape that put the container out of memory once
      * already. And the table lists applications, not clients: a client with no
@@ -260,7 +260,7 @@ class CipApplicationController extends Controller
      * once.
      *
      * Paged on the server, and every column is either a column of the row or
-     * an eager-loaded relation — no per-row query. Family size in particular
+     * an eager-loaded relation, no per-row query. Family size in particular
      * is `withCount`, because §8 puts it on every line and `people()->count()`
      * would be one query per application to answer it.
      */
@@ -342,7 +342,7 @@ class CipApplicationController extends Controller
          * A chip opening the table it counted.
          *
          * Applied by the SAME definition that measured the count, so the
-         * number on the chip and the rows behind it cannot disagree — which
+         * number on the chip and the rows behind it cannot disagree, which
          * they would the moment this re-expressed a bucket as a status filter,
          * because four of them are a person as well as a status.
          *
@@ -366,7 +366,7 @@ class CipApplicationController extends Controller
              *
              * Kept as two paths rather than collapsed into one, because
              * Buckets::apply is the single definition each count was measured
-             * through — including the officer queues, which are a person as
+             * through, including the officer queues, which are a person as
              * well as a status. Re-expressing a set of them as one status list
              * here would be a second definition, and the first time the two
              * drifted the menu would promise rows the table could not produce.
@@ -387,7 +387,7 @@ class CipApplicationController extends Controller
          *
          * An officer or a provider this reader cannot see simply matches
          * nothing, which is the same answer they would get for one that does
-         * not exist — the listing is already scoped, so an id from outside it
+         * not exist, the listing is already scoped, so an id from outside it
          * can no more be filtered *to* than it can be read. That is the
          * portal's convention working by construction rather than by a check.
          */
@@ -417,7 +417,7 @@ class CipApplicationController extends Controller
              * menu is opened from this table and nowhere else, and a second
              * round trip would mean the reader could open it before it had
              * anything to show. Measured over the whole slice rather than this
-             * page — see {@see Facets}.
+             * page, see {@see Facets}.
              */
             'assignees' => Facets::assignees($user),
             'providers' => Facets::providers($user),
@@ -448,8 +448,8 @@ class CipApplicationController extends Controller
     /**
      * §7's search, on the table it lists: either number, or the applicant.
      *
-     * The numbers are matched from the start — a number is typed to find one
-     * record — while a name is matched anywhere, because people search on a
+     * The numbers are matched from the start, a number is typed to find one
+     * record, while a name is matched anywhere, because people search on a
      * surname as readily as a first name.
      */
     private function applyListSearch($query, string $term): void
@@ -476,7 +476,7 @@ class CipApplicationController extends Controller
      *
      * Subqueries rather than joins: a person or assignment join would multiply
      * rows, and a page of fifty would silently skip applications. No sort
-     * stays newest-first — the table is a worklist, and the application filed
+     * stays newest-first, the table is a worklist, and the application filed
      * this morning is the one somebody is looking for.
      */
     private function applyListSort(Builder $query, ?string $sort, ?string $dir): void
@@ -536,7 +536,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The first live assignee's name — the same person the column leads with.
+     * The first live assignee's name, the same person the column leads with.
      *
      * Live window copied from {@see ClientAssignment::scopeLive()} rather than
      * joined, so a client with two officers does not become two rows.
@@ -617,14 +617,14 @@ class CipApplicationController extends Controller
             'photo' => $client?->photo_url,
             'applicantName' => $main
                 ? trim($main->first_name.' '.$main->last_name)
-                : ($client?->name ?? '—'),
+                : ($client?->name ?? '-'),
             'provider' => $application->provider?->name,
             /*
              * Who to contact about this application.
              *
              * The client record's own contact, which for a provider-referred
              * application is the person the firm deals with there and for a
-             * private client is the applicant. Not `unit_contact` — that is
+             * private client is the applicant. Not `unit_contact`, that is
              * the government's officer, a different question that §8 does not
              * ask on this row.
              */
@@ -646,7 +646,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The next moves this reader may drive — what a status chip offers.
+     * The next moves this reader may drive, what a status chip offers.
      *
      * The engine's list, not a second reading of the map, so a choice the
      * chip draws is one the status endpoint would accept.
@@ -688,12 +688,12 @@ class CipApplicationController extends Controller
          *
          * One record, deliberately. The tab and this column used to read
          * different tables, so staff put on from one place were invisible in
-         * the other — and assigning somebody the column already named (because
+         * the other, and assigning somebody the column already named (because
          * they were on the client) changed the database and nothing on screen.
          * They are now the same rows: assign in either place and both follow.
          *
          * Live only. An assignment that has ended is not a lighter shade of
-         * assigned — that person has stopped working on this — and §8's column
+         * assigned, that person has stopped working on this, and §8's column
          * asks who is.
          */
         $person = fn ($a, string $role) => [
@@ -714,7 +714,7 @@ class CipApplicationController extends Controller
         }
 
         /*
-         * No client record at all — nothing to share a list with.
+         * No client record at all, nothing to share a list with.
          *
          * The application's own assignments answer instead. This cannot bring
          * back the bug the merge fixed: that came from a client's staff
@@ -735,13 +735,13 @@ class CipApplicationController extends Controller
 
         /*
          * The checklist is settled on the read that opens ONE file, so the
-         * detail tabs always show the templates as they stand — however a
+         * detail tabs always show the templates as they stand, however a
          * template arrived, a seeder and an import included. Materialise is
          * idempotent and writes nothing when nothing changed, so this read
          * stays a read on every open-and-look. Deliberately NOT done on
          * sync() or index(): those serve fifty applications a page, and when
          * the templates HAVE moved, a per-row write there would touch every
-         * application on the page — and the sync cursor answers "which
+         * application on the page, and the sync cursor answers "which
          * applications moved since?" from exactly that timestamp.
          */
         Requirements::materialiseApplication($application);
@@ -756,7 +756,7 @@ class CipApplicationController extends Controller
      * The application a client's profile is showing.
      *
      * Answered as null rather than 404 when there is none: a client can exist
-     * without one — imported, or created by hand — and the profile asking
+     * without one, imported, or created by hand, and the profile asking
      * "which application is this person's" deserves "none yet" rather than an
      * error it has to special-case.
      */
@@ -771,7 +771,7 @@ class CipApplicationController extends Controller
          * ClientScope answers "may you see this client", which is about hub
          * assignments and would refuse an officer looking at an application
          * they are perfectly entitled to work on. What governs here is CIP
-         * reach, and ApplicationScope is what holds it — an application this
+         * reach, and ApplicationScope is what holds it, an application this
          * reader may not see comes back as none, which is what they would be
          * told anyway.
          */
@@ -781,7 +781,7 @@ class CipApplicationController extends Controller
          * Looking the client up first and scoping only the application told a
          * reader two different things: a uid nobody holds answered 404, and a
          * uid held by somebody they may not see answered 200 with null. That
-         * difference is enumerable, and client uids are name slugs — so any
+         * difference is enumerable, and client uids are name slugs, so any
          * account that passes canReach, a contact at a rival firm included,
          * could have walked a list of names and learned which of them are the
          * firm's clients.
@@ -794,7 +794,7 @@ class CipApplicationController extends Controller
             ->latest('id')
             ->first();
 
-        // The client profile is the other detail read — settled here for the
+        // The client profile is the other detail read, settled here for the
         // same reason show() settles it, and kept off the fifty-row pages for
         // the same reason too.
         if ($application) {
@@ -842,7 +842,7 @@ class CipApplicationController extends Controller
      * subjects and search off the internal number in one move.
      *
      * The capability is not checked here on purpose. Submission is a status
-     * change and {@see Engine} owns those — it refuses the edge from anywhere
+     * change and {@see Engine} owns those, it refuses the edge from anywhere
      * but Ready to submit, and refuses the actor without `cip.compliance`.
      * A second check in the controller would be a second place to get it wrong.
      */
@@ -899,7 +899,7 @@ class CipApplicationController extends Controller
      * The filed passport photo at the resolution it was filed in.
      *
      * Scoped through the application, not the person: whoever may read the
-     * application may see who it is for, and nobody else may — a uuid in the
+     * application may see who it is for, and nobody else may, a uuid in the
      * URL is not an argument for showing someone's face.
      */
     public function passportPhoto(Request $request, string $uuid)
@@ -926,7 +926,7 @@ class CipApplicationController extends Controller
         ], self::assigneeRelations()));
 
         /*
-         * One presenter, primed once — for the family, or for the whole page.
+         * One presenter, primed once, for the family, or for the whole page.
          *
          * Presenter::file() rolls up shares, review status and favourites, and
          * unprimed it does that per file: six people would be six sets of the
@@ -934,14 +934,14 @@ class CipApplicationController extends Controller
          *
          * A caller reading MANY applications passes its own, primed across all
          * of them. Without that the priming was per application and the sync
-         * page cost four queries a row on top of everything else — invisible
+         * page cost four queries a row on top of everything else, invisible
          * on a family of six and three hundred queries on a page of fifty.
          */
         $presenter ??= self::presenterFor($viewer, [$application]);
 
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
-        // Numbered first and in their number, then the unnumbered — a spouse
+        // Numbered first and in their number, then the unnumbered, a spouse
         // carries no ordinal, and sorting on the column alone put null first,
         // so the family read Spouse, QD1, QD2 instead of the other way round.
         $dependents = $application->people
@@ -973,7 +973,7 @@ class CipApplicationController extends Controller
                 $application->investment_type_other,
             ),
             // The stored values, for a form that has to put the record back
-            // into its own controls — `investmentType` above is the display
+            // into its own controls. `investmentType` above is the display
             // string, which is the free text once somebody picked Other.
             'investmentTypeValue' => $application->investment_type,
             'investmentTypeOther' => $application->investment_type_other,
@@ -984,11 +984,11 @@ class CipApplicationController extends Controller
             'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
             'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
             // §4d's Timeline card on Overview: how far the file has travelled,
-            // and — because the steps it has not reached are answered too —
+            // and, because the steps it has not reached are answered too —
             // how far it has left to go.
             'milestones' => Milestones::for($application),
             'assignedOfficer' => $this->officer($application),
-            // The same people the table column and Assigned tab name — faces
+            // The same people the table column and Assigned tab name, faces
             // on the facts strip under every tab, not a second list.
             'assignedTo' => $this->assignees($application),
             'createdAt' => $application->created_at?->toIso8601String(),
@@ -1006,7 +1006,7 @@ class CipApplicationController extends Controller
      * Who {@see assignees()} names, loaded with the page rather than per row.
      *
      * The detail record carries the same list the table column draws, and a
-     * relation it has to fetch for itself is not one query — it is fifty on a
+     * relation it has to fetch for itself is not one query, it is fifty on a
      * sync page. Live only, both photo columns, because photoUrl() falls back
      * from one to the other and a column that was never selected reads empty.
      *
@@ -1029,7 +1029,7 @@ class CipApplicationController extends Controller
      * what that column is for: {@see App\Support\Cip\Assignments} keeps it in
      * step with the live row, and asking the table here would be a query per
      * application on a sync page of fifty. One person rather than the list
-     * {@see assignees()} builds — that column answers who is working this
+     * {@see assignees()} builds, that column answers who is working this
      * client, where the record asks the narrower question of who the file was
      * actually handed to. A file nobody holds answers null rather than naming
      * the last officer who did.
@@ -1080,7 +1080,7 @@ class CipApplicationController extends Controller
     /**
      * One individual, with their checklist.
      *
-     * The same shape whoever it is — the caller already knows which role it
+     * The same shape whoever it is, the caller already knows which role it
      * asked for, and a sponsor that described itself differently from an
      * applicant would mean two ways to read the same person.
      */
@@ -1115,8 +1115,8 @@ class CipApplicationController extends Controller
             /*
              * The photo as it was filed, in the File Library's own shape.
              *
-             * It IS a library file — DocumentSlots puts it in the person's
-             * folder through Vault like every other document — so opening it
+             * It IS a library file. DocumentSlots puts it in the person's
+             * folder through Vault like every other document, so opening it
              * opens the library's viewer, with the comments, versions, review
              * and sharing that come with it. That viewer reads a whole file
              * row, so this is the same row the library would have handed it,
@@ -1147,7 +1147,7 @@ class CipApplicationController extends Controller
                         'uploaded' => $slot->isFilled(),
                         /*
                      * §12's own status, not the file library's review_status.
-                     * They are different vocabularies with different rules — a
+                     * They are different vocabularies with different rules, a
                      * document waiting for a reviewer is not the same idea as a
                      * library file marked "pending review", and conflating them
                      * would let either one overwrite the other.

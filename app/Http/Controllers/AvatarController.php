@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Serves profile photos through the app instead of a public bucket URL, so the
  * storage bucket can stay private (the file manager keeps confidential documents
- * in the same private bucket). Any signed-in user may view any avatar — that's
+ * in the same private bucket). Any signed-in user may view any avatar, that's
  * expected: colleagues and clients see each other in the portal.
  */
 class AvatarController extends Controller

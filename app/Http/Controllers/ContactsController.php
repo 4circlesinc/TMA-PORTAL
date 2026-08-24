@@ -16,7 +16,7 @@ use Illuminate\Validation\Rule;
  * One controller for both books: the Shared book is account-wide and every
  * staff member reads and writes it; a Personal book belongs to the caller
  * alone. The scope decides both, and {@see Contact::scopeVisibleTo()} is the
- * single place that is enforced — every route here resolves a record through
+ * single place that is enforced, every route here resolves a record through
  * it, so a personal entry cannot be reached by guessing its id.
  */
 class ContactsController extends Controller
@@ -83,7 +83,7 @@ class ContactsController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-    /** Remove the checked rows — what the list's "Remove Selected" sends. */
+    /** Remove the checked rows, what the list's "Remove Selected" sends. */
     public function bulkDestroy(Request $request): JsonResponse
     {
         $user = $this->authorizeBooks($request);

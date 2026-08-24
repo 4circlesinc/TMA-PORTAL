@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\Mail;
  *  - **The author never notifies themselves.** Notifier already skips
  *    self-notification; the email side has to do it here.
  *  - **A mention beats a mute.** Someone who muted a channel still hears when
- *    they are named in it — that is the point of naming them.
+ *    they are named in it, that is the point of naming them.
  *  - **Recipients are recomputed at send time.** A group mention resolves to
  *    its members *now*, so somebody who joined the department after the post
  *    was written is still included.
@@ -285,7 +285,7 @@ final class FeedNotifier
         }
     }
 
-    /** Tell an author their scheduled post went live — or that it could not. */
+    /** Tell an author their scheduled post went live, or that it could not. */
     public static function schedulePublished(FeedPost $post, bool $succeeded, ?string $reason = null): void
     {
         try {
@@ -311,7 +311,7 @@ final class FeedNotifier
     /**
      * Send the post's email notification, if the author chose an audience.
      *
-     * `email_sent_at` makes this idempotent — a re-published or retried post
+     * `email_sent_at` makes this idempotent, a re-published or retried post
      * never mails the channel twice, which matters most for exactly the posts
      * that go to everyone.
      *
@@ -350,7 +350,7 @@ final class FeedNotifier
      * Resolve the chosen audience to actual people.
      *
      * A member whose per-channel `email_frequency` is `none` is dropped from
-     * every audience except `mentioned` — muting a channel's email should not
+     * every audience except `mentioned`, muting a channel's email should not
      * be overridden by someone picking "everyone", but being named personally
      * is a different thing from channel traffic.
      *
@@ -400,7 +400,7 @@ final class FeedNotifier
     }
 
     /**
-     * The email itself — the portal's one postcard design, never a bespoke
+     * The email itself, the portal's one postcard design, never a bespoke
      * layout. §7 fixes its contents: channel, title or opening lines, author,
      * publish date, and a link that opens the post.
      */

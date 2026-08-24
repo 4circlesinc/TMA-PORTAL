@@ -697,7 +697,7 @@ if (state.filters.user) {
      * @param {boolean} [silent] Background refresh driven by a live update
      *   rather than by the person at the keyboard. Keeps the page they are on
      *   and the rows they have ticked, and leaves a working table alone if the
-     *   refresh fails — see the guards below.
+     *   refresh fails, see the guards below.
      */
     function loadRealUsers(silent) {
       return usersApi('GET', '/admin/users').then(function (res) {
@@ -705,7 +705,7 @@ if (state.filters.user) {
           // A refresh nobody asked for must not replace a working directory
           // with an error banner; the next one can correct it.
           if (silent) return;
-          // Keep empty — never fall back to design-system demo rows in production.
+          // Keep empty, never fall back to design-system demo rows in production.
           state.rows = [];
           state.loadError = true;
           state.loadErrorStatus = res.status || 0;
@@ -758,7 +758,7 @@ if (state.filters.user) {
           : (msg ? ('Could not load users: ' + msg) : 'Could not load users right now.');
         state.live = false;
         state.selected = {};
-        if (window.console && console.warn) console.warn('Users: failed to load real accounts —', err);
+        if (window.console && console.warn) console.warn('Users: failed to load real accounts', err);
         render();
       });
     }
@@ -900,7 +900,7 @@ if (state.filters.user) {
           statusAction('/admin/users/' + row._id + '/approve', { account_type: type });
         } else {
           // The endpoint validates the whole identity, not just the field
-          // being changed — send the row's own values back unaltered. Fall
+          // being changed, send the row's own values back unaltered. Fall
           // back to splitting the display name when first/last were never
           // filled in, so a role assignment is not refused for a missing
           // last name on an otherwise fine account.
@@ -1850,7 +1850,7 @@ e.target.closest('[data-filter-user]') ||
    * shows up here without a refresh.
    *
    * Registered once at module scope and fanned out to whichever mounts are on
-   * screen, rather than once per mount — this module mounts twice (the Users
+   * screen, rather than once per mount, this module mounts twice (the Users
    * page and the Overview tab), and registering inside mount() would stack a
    * new watcher every time either is navigated to.
    */

@@ -9,7 +9,7 @@ use App\Support\Access\Role;
 use Illuminate\Support\Collection;
 
 /**
- * Answers "which groups is this person in?" — the question every group-granted
+ * Answers "which groups is this person in?", the question every group-granted
  * permission check reduces to.
  *
  * Cached per request because access resolution asks it repeatedly: once for
@@ -40,7 +40,7 @@ class GroupMembership
         /*
          * auto_join groups follow the staff list rather than a curated
          * membership, so a new joiner belongs immediately instead of waiting
-         * to be added. Clients are never folded in — an auto-join group is an
+         * to be added. Clients are never folded in, an auto-join group is an
          * internal one by definition.
          */
         if (CalendarAccess::isStaff($user)) {

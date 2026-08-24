@@ -29,7 +29,7 @@ class GoogleCalendarProvider implements CalendarProvider
 
     public function listCalendars(): array
     {
-        // Interactive "connect a calendar" call — fail fast so a slow provider
+        // Interactive "connect a calendar" call, fail fast so a slow provider
         // can't push the request past the gateway timeout (a 504). Background
         // sync keeps the full 30s.
         $response = $this->request(timeout: 12)->get(self::BASE.'/users/me/calendarList');
@@ -259,7 +259,7 @@ class GoogleCalendarProvider implements CalendarProvider
         }
 
         if ($response->status() === 401 || $response->status() === 403) {
-            throw new CalendarSyncException("Google refused to {$what} — the connection may need reauthorising.");
+            throw new CalendarSyncException("Google refused to {$what}, the connection may need reauthorising.");
         }
 
         throw new CalendarSyncException("Google could not {$what} (HTTP {$response->status()}).");

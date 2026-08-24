@@ -12,7 +12,7 @@ use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 
 /**
- * Phase-1 recipient suggestions for compose To/Cc/Bcc — no provider OAuth.
+ * Phase-1 recipient suggestions for compose To/Cc/Bcc, no provider OAuth.
  *
  * Sources, in merge priority when the same email appears twice:
  *   1. portal users (staff / approved accounts)
@@ -85,7 +85,7 @@ final class RecipientSuggester
     }
 
     /**
-     * Prefer Microsoft / Google directory (or contact) photos — not portal uploads.
+     * Prefer Microsoft / Google directory (or contact) photos, not portal uploads.
      *
      * Portal avatars are ignored on purpose: compose should show the face from
      * the mail provider (org directory, Google other-contacts, Gravatar), not

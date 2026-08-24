@@ -30,7 +30,7 @@ class MimeBuilder
         $lines[] = 'Subject: '.self::encodeHeader((string) ($message['subject'] ?? ''));
 
         // Threading. Other mailboxes group by In-Reply-To / References matching
-        // the original RFC Message-ID — a Gmail/Graph internal id here would
+        // the original RFC Message-ID, a Gmail/Graph internal id here would
         // land as a brand-new conversation on every client that receives it.
         $inReplyTo = self::rfcMessageId($message['inReplyTo'] ?? '');
         if ($inReplyTo !== '') {
@@ -40,7 +40,7 @@ class MimeBuilder
         }
 
         // data:-URI images (the signature logo above all) must travel as cid:
-        // inline parts — Gmail and Outlook render those and refuse data: URIs,
+        // inline parts. Gmail and Outlook render those and refuse data: URIs,
         // which otherwise arrive as a broken-image icon.
         [$bodyHtml, $inline] = InlineImages::extract((string) ($message['bodyHtml'] ?? ''));
 

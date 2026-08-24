@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  * The physical file store. Durable bytes live on the configured "files" disk —
  * the local private disk in dev, or object storage (Cloudflare R2) in production
  * so uploads survive deploys. Files are stored under vault/{yyyy}/{mm}/{uuid}.{ext}
- * with random names; nothing here (path or disk) is exposed to clients — bytes
+ * with random names; nothing here (path or disk) is exposed to clients, bytes
  * are only reachable through the authorized download/preview controllers.
  *
  * Transient work (chunk assembly, thumbnail cache, temp downloads) always uses
@@ -60,7 +60,7 @@ class Vault
     }
 
     /**
-     * Local scratch root for transient work — always the local private disk,
+     * Local scratch root for transient work, always the local private disk,
      * regardless of where durable bytes live.
      */
     public static function tempRoot(): string
@@ -89,7 +89,7 @@ class Vault
 
         $in = fopen($sourceAbsPath, 'rb');
         if ($in === false) {
-            throw new FileValidationException('Storage unavailable — the file could not be read.');
+            throw new FileValidationException('Storage unavailable, the file could not be read.');
         }
 
         try {
@@ -101,7 +101,7 @@ class Vault
         }
 
         if (! $ok) {
-            throw new FileValidationException('Storage unavailable — the file could not be saved.');
+            throw new FileValidationException('Storage unavailable, the file could not be saved.');
         }
 
         @unlink($sourceAbsPath);
@@ -134,7 +134,7 @@ class Vault
         // Different disk (or copy unsupported) → stream the bytes across.
         $in = $srcDisk->readStream($file->storage_path);
         if ($in === false || $in === null) {
-            throw new FileValidationException('Storage unavailable — the file could not be copied.');
+            throw new FileValidationException('Storage unavailable, the file could not be copied.');
         }
         try {
             $ok = self::disk()->writeStream($relPath, $in);
@@ -144,7 +144,7 @@ class Vault
             }
         }
         if (! $ok) {
-            throw new FileValidationException('Storage unavailable — the file could not be copied.');
+            throw new FileValidationException('Storage unavailable, the file could not be copied.');
         }
 
         return ['uuid' => $uuid, 'disk' => self::diskName(), 'path' => $relPath];
@@ -176,7 +176,7 @@ class Vault
 
         $in = $srcDisk->readStream($version->storage_path);
         if ($in === false || $in === null) {
-            throw new FileValidationException('Storage unavailable — that version could not be copied.');
+            throw new FileValidationException('Storage unavailable, that version could not be copied.');
         }
         try {
             $ok = self::disk()->writeStream($relPath, $in);
@@ -186,7 +186,7 @@ class Vault
             }
         }
         if (! $ok) {
-            throw new FileValidationException('Storage unavailable — that version could not be copied.');
+            throw new FileValidationException('Storage unavailable, that version could not be copied.');
         }
 
         return ['uuid' => $uuid, 'disk' => self::diskName(), 'path' => $relPath];
@@ -225,8 +225,8 @@ class Vault
             $name,
             $mime,
             $disposition,
-            // A version's bytes never change once written — its own vault path
-            // is a fresh uuid — so the tag is simply the path.
+            // A version's bytes never change once written, its own vault path
+            // is a fresh uuid, so the tag is simply the path.
             '"'.substr(hash('sha256', (string) $version->storage_path), 0, 32).'"',
             self::mayRedirect($mime, $disposition),
         );
@@ -261,7 +261,7 @@ class Vault
          * A file imported from SharePoint has a record before it has bytes, so
          * the first read is what pulls them across. Hooking it here rather than
          * in the download controller means preview, signing, zipping and copy
-         * all inherit it — none of them should have to know a file arrived by
+         * all inherit it, none of them should have to know a file arrived by
          * reference.
          */
         if (RemoteContent::isPending($file)) {
@@ -298,7 +298,7 @@ class Vault
      *
      * Everything here used to be one: `readStream` into `fpassthru`. Measured
      * against the R2 bucket that is production, that path spent 9.8 seconds on
-     * a 40 MB PDF before the reader saw a single byte — because Flysystem's S3
+     * a 40 MB PDF before the reader saw a single byte, because Flysystem's S3
      * stream is not a stream at all, it downloads the whole object and only
      * then answers the first `fread`. Two `HEAD`s (`exists` then `size`) went
      * ahead of it, half a second each, and the response forbade caching, so
@@ -394,7 +394,7 @@ class Vault
             ]);
         } catch (\Throwable) {
             // A disk that cannot sign (or a misconfigured one) is not a reason
-            // to fail the read — the proxy below still serves it.
+            // to fail the read, the proxy below still serves it.
             return null;
         }
     }
@@ -459,7 +459,7 @@ class Vault
             $result = $client->getObject($params);
         } catch (\Throwable $e) {
             // A Range the object cannot satisfy is the reader's problem, not
-            // a missing file — say so rather than claiming the file is gone.
+            // a missing file, say so rather than claiming the file is gone.
             if ($range && str_contains($e->getMessage(), 'InvalidRange')) {
                 abort(416, 'That range is not satisfiable.');
             }
@@ -511,7 +511,7 @@ class Vault
             $client = $disk->getClient();
 
             /*
-             * getObject is NOT a real method on the AWS client — every S3 call
+             * getObject is NOT a real method on the AWS client, every S3 call
              * is generated through __call, so method_exists('getObject') is
              * false and this used to fall back to the slow whole-object read
              * every single time. getCommand is declared, so it is the honest
@@ -526,7 +526,7 @@ class Vault
     /**
      * Which reads may go straight to the object store.
      *
-     * Only the ones the browser loads through an element `src` — those follow
+     * Only the ones the browser loads through an element `src`, those follow
      * a cross-origin redirect without asking anybody's permission. SVG is out
      * because the portal never serves one raw; it goes through the sanitising
      * thumbnail route.
@@ -553,7 +553,7 @@ class Vault
      *
      * The checksum when we have one; otherwise the vault path, which is a
      * fresh uuid for every version written, plus the size. Either way it moves
-     * when the content does and stands still when it does not — which is the
+     * when the content does and stands still when it does not, which is the
      * whole contract a reopen relies on.
      */
     private static function entityTag(FileItem $file): ?string
@@ -601,7 +601,7 @@ class Vault
     }
 
     /**
-     * A path to the file's bytes on the LOCAL filesystem — the real vault path
+     * A path to the file's bytes on the LOCAL filesystem, the real vault path
      * when it lives on a local disk, or a temp download when it lives remotely.
      * Callers MUST pass the result to cleanupLocalCopy() when done.
      */

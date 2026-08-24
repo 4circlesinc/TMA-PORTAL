@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  * The four KPI cards on the portal home, computed from real activity.
  *
  * Scope follows the reader: an administrator sees the whole firm, an employee
- * sees their own work. Clients never see these cards at all — they measure how
+ * sees their own work. Clients never see these cards at all, they measure how
  * the firm is doing, so they are staff-facing by definition.
  *
  * Every card reports a trailing window against the window before it (or a live
@@ -113,7 +113,7 @@ class DashboardMetrics
 
         if ($current === []) {
             return [
-                'value' => '—',
+                'value' => '-',
                 'delta' => 'No replies yet',
                 'deltaUp' => false,
                 'sample' => 0,
@@ -128,7 +128,7 @@ class DashboardMetrics
             'value' => Format::duration($average),
             'seconds' => $average,
             'delta' => Format::change($average, $priorAverage),
-            // The arrow reports direction, not goodness — a falling response
+            // The arrow reports direction, not goodness, a falling response
             // time is an improvement, and shows a down arrow.
             'deltaUp' => $priorAverage !== null && $average > $priorAverage,
             'sample' => count($current),
@@ -146,7 +146,7 @@ class DashboardMetrics
             return [
                 'value' => '0',
                 'count' => 0,
-                'delta' => '—',
+                'delta' => '-',
                 'deltaUp' => false,
                 'hint' => 'CIP is not enabled on this portal.',
             ];
@@ -178,7 +178,7 @@ class DashboardMetrics
             return [
                 'value' => '0',
                 'count' => 0,
-                'delta' => '—',
+                'delta' => '-',
                 'deltaUp' => false,
                 'hint' => 'CIP is not enabled on this portal.',
             ];
@@ -245,7 +245,7 @@ class DashboardMetrics
             ->whereIn('created_by', $this->scopeStaffIds)
             ->whereIn('status', Status::PENDING)
             // A request past its expiry can't be signed any more, so it is no
-            // longer outstanding — it needs re-sending, which is a different
+            // longer outstanding, it needs re-sending, which is a different
             // problem from waiting on a signer.
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', $this->now);
@@ -266,7 +266,7 @@ class DashboardMetrics
         }
 
         // Oldest first, so the head of the list is the one that has been out
-        // longest — the one worth chasing.
+        // longest, the one worth chasing.
         $oldestSentAt = $outstanding->first()->sent_at;
         $waiting = $oldestSentAt ? (int) $oldestSentAt->diffInSeconds($this->now) : null;
 
@@ -302,7 +302,7 @@ class DashboardMetrics
 
     /**
      * Portal messaging. Only conversations that put a client and an in-scope
-     * staff member in the same thread are considered — internal chatter is not
+     * staff member in the same thread are considered, internal chatter is not
      * a client response time.
      */
     private function addPortalMessages(Timelines $timelines): void

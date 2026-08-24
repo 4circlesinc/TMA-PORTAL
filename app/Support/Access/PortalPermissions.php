@@ -12,7 +12,7 @@ use Throwable;
  *
  * Account settings > Advanced Preferences > Permissions edits this. It is the
  * second administrator-editable overlay on {@see Role}, after
- * {@see ClientHubSettings}, and follows that class exactly — one
+ * {@see ClientHubSettings}, and follows that class exactly, one
  * `portal_settings` row, a memo plus a short cache, and a flush that makes the
  * next capability check see the change.
  *
@@ -21,8 +21,8 @@ use Throwable;
  *  - `directoryForEmployees` grants a capability, so it resolves through
  *    Role::can() and moves the sidebar, the page gate, the API and the
  *    browser's capability list together.
- *  - `clientSharing` is not a capability — a client's right to re-share is a
- *    property of the item they hold, not of their account — so it is enforced
+ *  - `clientSharing` is not a capability, a client's right to re-share is a
+ *    property of the item they hold, not of their account, so it is enforced
  *    at the one choke point every share decision already passes through,
  *    {@see \App\Support\Files\FileAccess::can()}.
  *
@@ -52,7 +52,7 @@ class PortalPermissions
      * The capability default comes from the matrix, so a matrix edit still
      * moves the baseline and a firm that never touches this screen behaves
      * exactly as it did. `clientSharing` defaults to false for the same
-     * reason — clients could not re-share before this setting existed, and a
+     * reason, clients could not re-share before this setting existed, and a
      * new setting must not quietly widen access on the day it ships.
      */
     public static function defaults(): array
@@ -94,7 +94,7 @@ class PortalPermissions
      * Whether a client account may share a file or folder onward.
      *
      * Read by FileAccess::can() for the `share` ability. Staff are never asked
-     * about — this decides what clients may do with what has been shared with
+     * about, this decides what clients may do with what has been shared with
      * them, which is the whole question the setting exists to answer.
      */
     public static function allowsClientSharing(): bool

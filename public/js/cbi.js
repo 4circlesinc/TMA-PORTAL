@@ -1,9 +1,9 @@
 /*
- * CBI — Citizenship by Investment.
+ * CBI. Citizenship by Investment.
  *
  * Portal-view-pattern module: mounts standalone at /dev/cbi and registers
  * with TMAPortalViews for the SPA shell (/cbi). All data is live from
- * /portal/cbi/* — loading, empty and error states only, never mock rows.
+ * /portal/cbi/*, loading, empty and error states only, never mock rows.
  *
  * Rendering is design-system components only (DESIGN_SYSTEM.md):
  * .tma-portal-head, ui().tabs, the Users-table .tma-dash__toolbar (icon tool
@@ -12,7 +12,7 @@
  *
  * Two restraint rules earned the hard way, after a first pass that read as
  * clutter: colour marks exceptions only (a chip on every row carries no
- * information), and read-only facts sit flat on the page — filled cards are
+ * information), and read-only facts sit flat on the page, filled cards are
  * for forms, and nesting them produced boxes inside boxes. cbi.css is
  * page-layout glue only: tokens, no new component styling.
  */
@@ -37,7 +37,7 @@
   }
 
   // Imported cell text becomes hrefs in a couple of places; only http(s)
-  // ever renders as a link — a javascript: URL typed into Smartsheet must
+  // ever renders as a link, a javascript: URL typed into Smartsheet must
   // degrade to plain text, not an anchor.
   function safeUrl(u) {
     u = String(u == null ? '' : u).trim();
@@ -282,7 +282,7 @@
   /*
    * Which of the five tones a status wears. Smartsheet is free text, so this
    * matches on meaning rather than listing the forty strings the caseload
-   * happens to hold today — a status typed tomorrow still lands somewhere,
+   * happens to hold today, a status typed tomorrow still lands somewhere,
    * and the order is load-bearing: "PENDING COR - NCR" is waiting on somebody,
    * "APPLY FOR COR" is ours to do, and both mention COR.
    */
@@ -296,7 +296,7 @@
     if (/GRANTED|CITIZEN|APPROVED|APPEAL WON|COMPLETE|RECEIVED|REVIEWED|DELIVERED/.test(s)) return 'success';
     // Parked or over without an outcome.
     if (/CLOSED|WITHDRAWN|CANCEL|FUNDS RETURNED|ON HOLD/.test(s)) return 'neutral';
-    // Waiting on somebody else — the whole PENDING family, including the
+    // Waiting on somebody else, the whole PENDING family, including the
     // artefact stages (NIC, COR, PADS, passport) the office tracks by name.
     if (/PENDING|AWAITING|DELAYED|BACKGROUND CHECK|APPEALED|IN PROGRESS/.test(s)) return 'pending';
     // The firm's move next.
@@ -310,8 +310,8 @@
   /*
    * Everyone on the case, as faces and first names.
    *
-   * These were seven labelled rows — assigned, verification officer, DD
-   * officer, PA, file owner, submitted by, verified by — most of them empty on
+   * These were seven labelled rows, assigned, verification officer, DD
+   * officer, PA, file owner, submitted by, verified by, most of them empty on
    * most files, and where they were filled they usually named the same two
    * people. It is a list of who is on this, so it reads as one: a face, a
    * first name, commas between. The role survives on hover rather than taking
@@ -333,16 +333,16 @@
      (window.TMAPersonCard), shared with the File Library. */
 
   function statusCell(status) {
-    if (!status) return '<span class="tma-portal-table__muted">—</span>';
+    if (!status) return '<span class="tma-portal-table__muted">-</span>';
     return '<span class="tma-portal-status tma-portal-status--' + statusTone(status) + '">' +
       esc(status) + '</span>';
   }
   function stageChip(stage) {
-    var label = STAGE_LABELS[stage] || stage || '—';
+    var label = STAGE_LABELS[stage] || stage || '-';
     return '<span class="tma-portal-status tma-portal-status--neutral">' + esc(label) + '</span>';
   }
   function reviewChip() {
-    return '<span class="tma-portal-status tma-portal-status--pending" title="Weak identity — check for duplicates">Review</span>';
+    return '<span class="tma-portal-status tma-portal-status--pending" title="Weak identity, check for duplicates">Review</span>';
   }
   function num(n) {
     return (n == null) ? '' : Number(n).toLocaleString();
@@ -352,7 +352,7 @@
    * A colleague, as a face and a name. The portal's own initials avatar
    * (TMACurrentUser.initialsFor) colours the circle by hashing the name, so
    * one person keeps the same colour everywhere and two people beside each
-   * other are told apart at a glance — which a column of identical grey
+   * other are told apart at a glance, which a column of identical grey
    * circles never managed.
    */
 
@@ -393,8 +393,8 @@
    *
    * The page title is gone: the sidebar row and the browser tab already say
    * which page this is, and a heading repeating it cost a whole band above the
-   * only thing the reader came for. The buttons move onto the tab row — the
-   * one line the page already had — rather than keeping a row to themselves.
+   * only thing the reader came for. The buttons move onto the tab row, the
+   * one line the page already had, rather than keeping a row to themselves.
    */
   function renderHeadActions() {
     var s = state.summary;
@@ -439,7 +439,7 @@
   }
 
   /*
-   * Two icon buttons and a search field — the Users table's toolbar. Filter
+   * Two icon buttons and a search field, the Users table's toolbar. Filter
    * values live in the documented tma-filter-popover (a fields list that
    * cascades into values), so the bar stays quiet however many facets the
    * data has; what is actually applied shows as chips underneath.
@@ -457,7 +457,7 @@
       '</div>';
   }
 
-  /* Active filters as removable chips — the Users-table filter bar recipe. */
+  /* Active filters as removable chips, the Users-table filter bar recipe. */
   function renderFilterChips() {
     var f = state.filters;
     var tags = [];
@@ -497,7 +497,7 @@
       });
     }
 
-    // The stage column only earns its place on the unfiltered view — inside
+    // The stage column only earns its place on the unfiltered view, inside
     // a stage tab every row would repeat the tab's own name.
     var showStage = !state.filters.stage;
 
@@ -505,12 +505,12 @@
       return '<tr data-cbi-open="' + esc(a.uuid) + '" data-id="' + esc(a.uuid) + '">' +
         '<td data-cbi-name>' + esc(a.applicantName || 'Unnamed applicant') +
           (a.applicantNumber ? '<div class="tma-portal-table__muted">' + esc(a.applicantNumber) + '</div>' : '') + '</td>' +
-        (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '—') + '</td>' : '') +
+        (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '-') + '</td>' : '') +
         '<td>' + statusCell(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.referredBy || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.referredBy || '-') + '</td>' +
         '<td>' + peopleOnCase(a) + '</td>' +
-        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.receivedAt) || '—') + '</td>' +
-        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.modifiedAt) || '—') + '</td>' +
+        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.receivedAt) || '-') + '</td>' +
+        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.modifiedAt) || '-') + '</td>' +
         '</tr>';
     }).join('');
 
@@ -736,7 +736,7 @@
 
   /*
    * A read-only fact: quiet 12px label above a 14px value, on the page
-   * surface. This is the Clients profile's list-item treatment — read-only
+   * surface. This is the Clients profile's list-item treatment, read-only
    * facts do not belong in filled form cards, which is what made the first
    * pass read as boxes-inside-boxes.
    */
@@ -872,7 +872,7 @@
     var known = tabs.some(function (t) { return t.key === activeTab; });
     if (!known) activeTab = 'overview';
 
-    // Every panel renders; the inactive ones carry `hidden` — the documented
+    // Every panel renders; the inactive ones carry `hidden`, the documented
     // clients-profile tab-panel pattern (no refetch on switch).
     function tabPanel(key, html) {
       return '<div class="cbi-tabpanel" role="tabpanel" data-cbi-panel="' + key + '"' +
@@ -926,7 +926,7 @@
       fact('Agent assessment', a.agentAssessment) +
       fact('Assessment response', a.assessmentResponse);
 
-    // Milestones as clean label/date rows, in process order — only the
+    // Milestones as clean label/date rows, in process order, only the
     // dates the file has actually reached.
     var timelineRows = TIMELINE_LABELS.map(function (t) {
       var v = a.timeline && a.timeline[t[0]];
@@ -981,7 +981,7 @@
   }
 
   /*
-   * Documents — the client's File Library folder, same window the Client hub
+   * Documents, the client's File Library folder, same window the Client hub
    * opens under its Documents tab.
    *
    * Smartsheet attachments are mirrored into that folder on sync. Showing the
@@ -1621,7 +1621,7 @@
     if (events.length) {
       body = '<ul class="cbi-activity">' + events.map(function (e) {
         var what = '<strong>' + esc(EVENT_LABELS[e.type] || e.type) + '</strong>';
-        if (e.from || e.to) what += ' ' + (e.from ? esc(e.from) : '—') + ' → ' + (e.to ? esc(e.to) : '—');
+        if (e.from || e.to) what += ' ' + (e.from ? esc(e.from) : '-') + ' → ' + (e.to ? esc(e.to) : '-');
         if (e.actor) what += ' · ' + esc(e.actor);
         return '<li><span class="tma-portal-table__muted cbi-activity__time">' + esc(fmtDateTime(e.at)) + '</span>' +
           '<span>' + what + '</span></li>';
@@ -1662,7 +1662,7 @@
     wire();
   }
 
-  /* ── events (delegated named handlers — safe across morphs) ── */
+  /* ── events (delegated named handlers, safe across morphs) ── */
 
   function onClick(e) {
     var open = e.target.closest('[data-cbi-open]');
@@ -1769,7 +1769,7 @@
             var parts = [];
             if (d.queued) parts.push('Queued ' + d.queued + ' sheet sync(s)');
             if (d.hubQueued) parts.push('filing documents into client folders');
-            toast(parts.length ? parts.join(' — ') + '.' : 'Everything already up to date.');
+            toast(parts.length ? parts.join(' · ') + '.' : 'Everything already up to date.');
             loadSummary();
           })
           .catch(function (e) { toast((e && e.message) || 'Sync failed to start', false); });
@@ -1897,7 +1897,7 @@
     }
 
     /* The tab markup is new on every repaint and needs re-initialising, but
-       `el` is the same node — wiring the change listener again would stack
+       `el` is the same node, wiring the change listener again would stack
        another handler on it each time (the documented portal-admin guard).
        One handler serves both tab groups: the stage tabs on the list and
        the workspace tabs on the detail never coexist, so the route decides

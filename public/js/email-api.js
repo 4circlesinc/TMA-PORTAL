@@ -4,8 +4,8 @@
  * Mirrors the clients.js persistence layer: same fetch wrapper, same CSRF
  * handling, same error shape. email.js talks to this and never to fetch.
  *
- * Writes are optimistic — the UI updates immediately and this reconciles
- * afterwards — because a provider round trip is far too slow to block a
+ * Writes are optimistic, the UI updates immediately and this reconciles
+ * afterwards, because a provider round trip is far too slow to block a
  * star or a read toggle on.
  *
  * Global: window.TMAEmailAPI
@@ -85,7 +85,7 @@
       }));
     },
 
-    /* Recipient typeahead for To/Cc/Bcc — portal people, clients, groups,
+    /* Recipient typeahead for To/Cc/Bcc, portal people, clients, groups,
      * and addresses from previous conversations. No provider OAuth. */
     suggest: function (q) {
       return mailFetch(BASE + '/suggest' + query({ q: q || '' }));
@@ -189,7 +189,7 @@
     },
 
     /* opts.fast asks for the inbox-only live check rather than the full folder
-     * walk — the difference between something that can run every five seconds
+     * walk, the difference between something that can run every five seconds
      * and something that cannot. */
     sync: function (opts) {
       return mailFetch(BASE + '/sync' + ((opts && opts.fast) ? '?fast=1' : ''), { method: 'POST' });
@@ -209,7 +209,7 @@
     },
 
     /* Re-dispatch a stalled or failed sync. Resumes from the stored page
-     * tokens server-side — never a from-scratch re-import. */
+     * tokens server-side, never a from-scratch re-import. */
     retrySync: function () {
       return mailFetch(BASE + '/sync/retry', { method: 'POST' });
     },
@@ -217,7 +217,7 @@
     /* Signs out of the mailbox ONLY: stops mail sync so the page drops back
      * to the "Connect your mailbox" state. The Google/Microsoft account
      * itself stays connected to the portal (sign-in, calendar, files are
-     * untouched) — fully disconnecting it lives in Security settings.
+     * untouched), fully disconnecting it lives in Security settings.
      * Imported mail is kept, so reconnecting later is instant. */
     disconnect: function (provider) {
       return mailFetch(BASE + '/sign-out', { method: 'POST' });

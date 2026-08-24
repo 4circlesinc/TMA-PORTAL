@@ -38,7 +38,7 @@ final class SafeIntended
 
         $path = strtolower($path);
 
-        // Binary / media / storage — never a post-auth landing page.
+        // Binary / media / storage, never a post-auth landing page.
         if (preg_match('#^/(media|storage|build|vendor)(/|$)#', $path)) {
             return true;
         }

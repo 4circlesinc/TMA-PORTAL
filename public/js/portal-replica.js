@@ -1,8 +1,8 @@
 /*
- * TMA — The replica walker, once.
+ * TMA. The replica walker, once.
  *
- * Three record types sync the same way — applications, the File Library,
- * the client book — and the walk is the same each time: desktop only, one
+ * Three record types sync the same way, applications, the File Library,
+ * the client book, and the walk is the same each time: desktop only, one
  * run at a time, follow the cursor page by page into the store, save the
  * cursor per page so a closed lid costs the pages that were left and never
  * the ones that landed, stop at a budget so a first sync cannot hold a
@@ -16,7 +16,7 @@
  * PROGRESS IS ANNOUNCED, NOT POLLED
  *
  * Every page dispatches `tma:replica-progress` with the walker's name, the
- * running total, and whether it is still going — the plan's "progress the
+ * running total, and whether it is still going, the plan's "progress the
  * reader can see" (docs/offline-plan.md, phase 3). Nothing here draws;
  * portal-sync-status.js decides what a person should be shown.
  *
@@ -91,7 +91,7 @@
 
         return taken;
       }).catch(function () {
-        // Offline, or an account this record type answers 403/404 — either
+        // Offline, or an account this record type answers 403/404, either
         // way the cursor is untouched and the next wake tries again.
         running = false;
         announce(config.name, taken, false);
@@ -101,7 +101,7 @@
     }
 
     /* Every walker wakes the same three ways: a connection returning, and a
-       queued write landing — the one change the server holds that this
+       queued write landing, the one change the server holds that this
        device is guaranteed not to have seen the final shape of. (The third,
        /me answering, is current-user.js calling run() directly.) */
     window.addEventListener('online', function () { run(); });

@@ -13,10 +13,10 @@ use App\Support\Access\Role;
  *
  * Officer-ness is the account type: "CRO / Reviewing officer" sits beside
  * Administrator in the Users page dropdown. Officers carry the full Employee
- * baseline everywhere in the portal — the type only decides what they may do
+ * baseline everywhere in the portal, the type only decides what they may do
  * INSIDE the CIP module, and that mapping lives in Role::MATRIX:
  *
- *   CRO / Reviewing officer — cip.review (assess documents, issue comments,
+ *   CRO / Reviewing officer, cip.review (assess documents, issue comments,
  *                             request updates, approve documents) plus
  *                             cip.compliance + cip.decide (process submissions,
  *                             update statuses, record decisions)
@@ -50,9 +50,9 @@ class CipAccess
 
     /**
      * Does this user hold the capability? Role::can already answers
-     * everything — the matrix rows carry the officer type, the baseline
+     * everything, the matrix rows carry the officer type, the baseline
      * fallback carries their employee reach, and the FEATURE_CIP check
-     * darkens it all — this wrapper only spares callers the import.
+     * darkens it all, this wrapper only spares callers the import.
      */
     public static function can(?User $user, string $capability): bool
     {
@@ -63,7 +63,7 @@ class CipAccess
      * May this account reach the module at all?
      *
      * Staff are answered by the capability matrix. External accounts never
-     * hold a matrix capability — that is a portal-wide invariant — so the
+     * hold a matrix capability, that is a portal-wide invariant, so the
      * brief's two external types are answered by what they ARE in the Client
      * Hub: a Service Provider contact is an active member of a firm that
      * carries a CIP code; a Private Client is somebody with a client record.
@@ -116,7 +116,7 @@ class CipAccess
         return Client::query()->where('user_id', $user->id)->exists();
     }
 
-    /** Is this user an officer at all — or of the given role specifically? */
+    /** Is this user an officer at all, or of the given role specifically? */
     public static function isOfficer(?User $user, ?string $role = null): bool
     {
         if ($user === null || ! self::enabled()) {

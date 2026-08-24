@@ -9,8 +9,8 @@ use App\Models\User;
  * The client onboarding flow: which steps exist, which ones apply to a given
  * person, and what each one accepts.
  *
- * One definition drives everything — the step order, the progress dots, the
- * validation, the review screen and the "what's left" calculation — so a step
+ * One definition drives everything, the step order, the progress dots, the
+ * validation, the review screen and the "what's left" calculation, so a step
  * cannot appear in the wizard but be missing from the count, or be validated
  * differently from the way it is rendered.
  *
@@ -228,7 +228,7 @@ final class ClientFlow
     }
 
     /**
-     * The values a step should start with — what they answered before, falling
+     * The values a step should start with, what they answered before, falling
      * back to what we already know about them. This is what makes the flow
      * feel like it remembers, and it is why the invited client is not asked to
      * retype the name and email the staff member already entered.

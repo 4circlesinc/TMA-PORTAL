@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Recording a Unit query (§18) — the Query received date, and the automatic
+ * Recording a Unit query (§18), the Query received date, and the automatic
  * move to Non-compliant.
  *
  * The generic status endpoint refuses NON-COMPLIANT on purpose: a bare

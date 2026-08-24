@@ -40,7 +40,7 @@ class Mailbox
             ->first();
     }
 
-    /** Same, but fails loudly — for routes that cannot do anything useful without one. */
+    /** Same, but fails loudly, for routes that cannot do anything useful without one. */
     public static function requireAccountFor(User $user): ConnectedAccount
     {
         $account = self::accountFor($user);

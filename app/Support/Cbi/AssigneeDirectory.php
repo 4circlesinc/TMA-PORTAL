@@ -10,7 +10,7 @@ use App\Support\Access\Role;
  * One person, one assignee.
  *
  * "Assigned To" is a free-text Smartsheet cell, so the same colleague appears
- * as "Dincel", "Dincel Baptiste", and "Dincel Baptiste <dbaptiste@…>" — three
+ * as "Dincel", "Dincel Baptiste", and "Dincel Baptiste <dbaptiste@…>", three
  * rows in every filter list, three slices of what is one person's workload.
  * This folds the spellings back together and, where the firm already has an
  * account for them, points the application at it.
@@ -79,7 +79,7 @@ class AssigneeDirectory
     }
 
     /**
-     * Fold "Dincel" into "Dincel Baptiste" — but only where there is exactly
+     * Fold "Dincel" into "Dincel Baptiste", but only where there is exactly
      * one candidate to fold into.
      *
      * @param  array<string, array{variants: array<int, array{name: string, n: int}>, raw: array<int, string>, emails?: array<int, string>, n: int}>  $byName
@@ -105,7 +105,7 @@ class AssigneeDirectory
                 }
             }
 
-            // Nobody to fold into, or more than one — either way, leave it be.
+            // Nobody to fold into, or more than one, either way, leave it be.
             if (count($candidates) !== 1) {
                 $multi[$key] = $group;
 

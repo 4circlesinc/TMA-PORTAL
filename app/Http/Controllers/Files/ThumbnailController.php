@@ -28,8 +28,8 @@ class ThumbnailController extends BaseFilesController
         /*
          * A folder of thirty photos asks for thirty of these on every visit,
          * and a thumbnail only changes when the file behind it does. Answering
-         * the repeat visit here — before Thumbnail::ensure, which on a cold
-         * container means pulling each original out of R2 — is most of why a
+         * the repeat visit here, before Thumbnail::ensure, which on a cold
+         * container means pulling each original out of R2, is most of why a
          * grid now paints at once.
          */
         if ($request->headers->get('If-None-Match') === $etag) {

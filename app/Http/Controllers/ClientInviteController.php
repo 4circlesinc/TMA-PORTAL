@@ -20,8 +20,8 @@ use Illuminate\Support\Str;
  *
  * This is a shortcut into the same machinery as InvitationController: the
  * client hub already knows the name, email and client record, so the button
- * only has to say which client. Everything else — the token, the email, the
- * delivery record, the audit entry — is the shared invitation flow.
+ * only has to say which client. Everything else, the token, the email, the
+ * delivery record, the audit entry, is the shared invitation flow.
  */
 class ClientInviteController extends Controller
 {
@@ -83,7 +83,7 @@ class ClientInviteController extends Controller
 
     /**
      * Everything the Portal access tab shows: whether they can sign in, the
-     * invitation if they cannot, and — once they can — their sign-in history
+     * invitation if they cannot, and, once they can, their sign-in history
      * and account activity.
      *
      * The two halves are deliberately exclusive. Before an account exists the

@@ -65,7 +65,7 @@
   function flagImg(iso) {
     if (!iso) return '';
     var code = String(iso).toLowerCase();
-    // SVG flags render on every device — emoji flags do not.
+    // SVG flags render on every device, emoji flags do not.
     return '<img class="tma-phone-hint__flag" src="https://flagcdn.com/' + code + '.svg" alt="" width="16" height="12" loading="lazy">';
   }
 

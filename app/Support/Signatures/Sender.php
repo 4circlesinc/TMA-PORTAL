@@ -51,7 +51,7 @@ class Sender
         ]);
 
         // Mirror into the File Library so the document's own viewer shows the
-        // request. Never allowed to affect sending — see SignatureBridge.
+        // request. Never allowed to affect sending, see SignatureBridge.
         \App\Support\Files\Workflow\SignatureBridge::sync($request->fresh());
 
         // Only the first group is invited; later signers are emailed when
@@ -160,7 +160,7 @@ class Sender
         // we can't produce a signed copy of.
         if (! Stamper::canStamp($request->file)) {
             throw new SendValidationException(
-                'This document can\'t be prepared for signing — it may be password-protected or damaged.'
+                'This document can\'t be prepared for signing. It may be password-protected or damaged.'
             );
         }
 

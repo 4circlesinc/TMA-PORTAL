@@ -35,7 +35,7 @@ class AdminUsersController extends Controller
     // parked Employee type is recognized on existing rows but never granted.
     public const ACCOUNT_TYPES = Role::ASSIGNABLE;
 
-    /** How the directory describes an account — never what a dropdown offers. */
+    /** How the directory describes an account, never what a dropdown offers. */
     private function accountTypeLabel(User $user, $providerContactIds, $referredClientIds): string
     {
         if ($user->account_type === Role::EMPLOYEE) {
@@ -190,7 +190,7 @@ class AdminUsersController extends Controller
      *
      * This used to create a live, approved account immediately and email a
      * password-reset link, which meant the user directory filled with accounts
-     * belonging to people who had never accepted — with no way to see that, to
+     * belonging to people who had never accepted, with no way to see that, to
      * chase it, or to withdraw it. It now issues a real Invitation: no account
      * exists until the invitation is accepted.
      */
@@ -429,7 +429,7 @@ class AdminUsersController extends Controller
             'actor' => $request->user(),
             'type' => 'account.approved',
             'title' => 'Your account has been approved',
-            'message' => 'Welcome to the portal — you now have full access.',
+            'message' => 'Welcome to the portal. You now have full access.',
             'action_url' => '/',
             // The welcome postcard below is the email for this moment.
             'email' => false,
@@ -507,7 +507,7 @@ class AdminUsersController extends Controller
     /**
      * Once an account is approved or denied, every administrator's outstanding
      * "needs approval" notification for it is completed and marked read, so it
-     * stops showing as an action still to do — and can't be processed twice.
+     * stops showing as an action still to do, and can't be processed twice.
      */
     private function clearPendingApprovalNotifications(User $subject): void
     {
@@ -605,7 +605,7 @@ class AdminUsersController extends Controller
      * is a deliberate re-assignment rather than a silent return of everything
      * the person could once reach.
      *
-     * System folders stay put — see SystemFolders::rehome, which runs on purge
+     * System folders stay put, see SystemFolders::rehome, which runs on purge
      * instead, when the row really is about to go.
      */
     private function moveToRecycleBin(User $user, User $actor): void

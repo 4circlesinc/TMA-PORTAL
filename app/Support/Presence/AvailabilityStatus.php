@@ -3,7 +3,7 @@
 namespace App\Support\Presence;
 
 /**
- * Registry of availability statuses. Add new slugs here — priority and labels
+ * Registry of availability statuses. Add new slugs here, priority and labels
  * follow from this single list.
  */
 final class AvailabilityStatus
@@ -24,7 +24,7 @@ final class AvailabilityStatus
 
     public const AWAY = 'away';
 
-    /** Extensible future statuses — registered but not yet surfaced in UI. */
+    /** Extensible future statuses, registered but not yet surfaced in UI. */
     public const AVAILABLE = 'available';
 
     public const BE_RIGHT_BACK = 'be_right_back';

@@ -41,7 +41,7 @@
         <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Outlook.svg" alt="" width="16" height="16"></span>
         <span class="tma-auth__task-copy">
           <span class="tma-auth__task-name">Connect Microsoft Outlook</span>
-          <span class="tma-auth__task-desc">Mail syncs into the portal — we do not connect Gmail for email.</span>
+          <span class="tma-auth__task-desc">Mail syncs into the portal. We do not connect Gmail for email.</span>
         </span>
         <span class="tma-auth__task-side"><span class="tma-auth__badge">Optional</span></span>
       </a>

@@ -13,7 +13,7 @@ use App\Support\DeviceName;
  * renders. One place decides the contract so the right sidebar, the header
  * popups, and the Overview activity log all read the same fields.
  *
- * Actors are serialised as `{ id, name, avatar }` — the avatar is a real photo
+ * Actors are serialised as `{ id, name, avatar }`, the avatar is a real photo
  * URL or null. When it is null the front-end draws an initials tile (§3, §4);
  * we never hand it a stock or broken image path.
  */
@@ -30,7 +30,7 @@ final class NotificationPresenter
             'priority' => $n->priority,
             'title' => $n->title,
             'message' => $n->message,
-            'icon' => $n->icon,          // Phosphor name — the system-icon fallback
+            'icon' => $n->icon,          // Phosphor name, the system-icon fallback
             'image' => self::image($n),  // sender/client photo when available
             'isSystem' => $n->isSystem(),
             'actor' => self::actor($n->actor),

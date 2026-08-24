@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 /**
  * The passport-sized photo (§2), and the profile picture that comes with it.
  *
- * A passport photo is 2×2 inches, square, and printed — so the rule here is
+ * A passport photo is 2×2 inches, square, and printed, so the rule here is
  * square at 600 pixels or better, which is two inches at 300dpi. Anything
  * smaller cannot be filed however good it looks on screen, and a portrait
  * snapshot centre-cropped to square would cut the head the government wants
@@ -24,7 +24,7 @@ use Illuminate\Support\Str;
  * row as everybody else. Uploading a new photo replaces both.
  *
  * It arrives as an ordinary upload, the same way every other file in the
- * portal does — the form is multipart precisely so a scanned document never
+ * portal does, the form is multipart precisely so a scanned document never
  * has to be base64 in a request body.
  */
 class PassportPhoto
@@ -69,13 +69,13 @@ class PassportPhoto
 
         if ($width < self::MIN_PIXELS || $height < self::MIN_PIXELS) {
             return 'A passport photo has to be at least '.self::MIN_PIXELS.'×'.self::MIN_PIXELS
-                .' pixels — this one is '.$width.'×'.$height.'.';
+                .' pixels, this one is '.$width.'×'.$height.'.';
         }
 
         // Square, because 2×2 inches is square. Checked as a ratio so a
         // 601×600 crop passes and a portrait photo does not.
         if (abs($width - $height) / max($width, $height) > self::SQUARE_TOLERANCE) {
-            return 'A passport photo has to be square (2×2 inches) — this one is '
+            return 'A passport photo has to be square (2×2 inches), this one is '
                 .$width.'×'.$height.'.';
         }
 
@@ -122,7 +122,7 @@ class PassportPhoto
         ];
     }
 
-    /** The same disk avatars use — one bucket for likenesses. */
+    /** The same disk avatars use, one bucket for likenesses. */
     private static function disk(): string
     {
         return config('filesystems.avatar_disk', 'public');

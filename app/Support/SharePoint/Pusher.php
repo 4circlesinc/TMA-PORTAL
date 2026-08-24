@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * The conflict rule is the firm's own decision, and it is applied here:
  * **portal wins for portal-originated files.** A file the portal authored is
  * pushed even if SharePoint has moved on; a file SharePoint authored is never
- * overwritten behind its back — it is flagged as a conflict for a person to
+ * overwritten behind its back, it is flagged as a conflict for a person to
  * resolve. §25 forbids silently discarding either side's changes, and this is
  * where that promise is kept or broken.
  *
@@ -48,7 +48,7 @@ class Pusher
     }
 
     /**
-     * The connection covering a folder, if any — found by walking up to a
+     * The connection covering a folder, if any, found by walking up to a
      * mapped ancestor. A file outside every linked library simply isn't synced.
      */
     public static function connectionFor(?Folder $folder): ?SharePointConnection
@@ -72,7 +72,7 @@ class Pusher
 
     /**
      * The connection for a file: a folder-linked library when any ancestor is
-     * connected, otherwise the personal root drive — the null-folder OneDrive
+     * connected, otherwise the personal root drive, the null-folder OneDrive
      * connection that mirrors the top level of a person's own library.
      */
     public static function connectionForFile(FileItem $file): ?SharePointConnection
@@ -98,7 +98,7 @@ class Pusher
                 return null;
             }
 
-            // The tree's owner decides whose drive this is — a file someone
+            // The tree's owner decides whose drive this is, a file someone
             // else drops into my shared folder still mirrors to MY OneDrive.
             $driveOwner = $node->owner_id;
         }
@@ -191,7 +191,7 @@ class Pusher
             }
 
             /*
-             * A file imported by reference has no local bytes — and does not
+             * A file imported by reference has no local bytes, and does not
              * need any. SharePoint already holds the content; that is where we
              * got the file from. Pushing it back would mean downloading the
              * bytes purely to upload the identical bytes to where they came
@@ -234,7 +234,7 @@ class Pusher
      * Has SharePoint changed this item since we last saw it?
      *
      * cTag tracks content. If it has moved and the file did NOT originate in
-     * the portal, overwriting would destroy somebody's edit — so the item is
+     * the portal, overwriting would destroy somebody's edit, so the item is
      * flagged and left alone. For a portal-originated file the firm's rule says
      * the portal wins, so the push proceeds.
      */
@@ -255,7 +255,7 @@ class Pusher
         }
 
         if ($file->origin === 'portal') {
-            // Portal wins for what the portal authored — the firm's decision.
+            // Portal wins for what the portal authored, the firm's decision.
             Synchroniser::log($connection, 'conflict-overridden', 'warning', $mapping->graph_item_id,
                 'SharePoint had newer content; portal-originated file took precedence.');
 
@@ -299,7 +299,7 @@ class Pusher
             'last_error' => null,
             'failure_count' => 0,
             'last_synced_at' => now(),
-            // Pushing an item up is the end of its time in the bin — a restore
+            // Pushing an item up is the end of its time in the bin, a restore
             // in the portal comes through here.
             'recycled_at' => null,
         ];
@@ -334,7 +334,7 @@ class Pusher
 
     /**
      * Delete in SharePoint. Graph's DELETE sends the item to SharePoint's own
-     * recycle bin, so this is recoverable on both sides — deleting in the
+     * recycle bin, so this is recoverable on both sides, deleting in the
      * portal never destroys the firm's only copy.
      */
     public static function pushDelete(FileItem $file): array

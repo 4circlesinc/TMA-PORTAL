@@ -5,8 +5,8 @@
  * ── The one idea this file is built on ──────────────────────────────────
  * There is exactly **one call**: one peer connection, one local stream, one
  * remote stream, one timer, one set of mute/camera flags. Everything the user
- * can see — the answer pop-up, the large modal, the bottom-left compact
- * window, the Dynamic Island — is a *presentation* of that single session.
+ * can see, the answer pop-up, the large modal, the bottom-left compact
+ * window, the Dynamic Island, is a *presentation* of that single session.
  * Changing presentation re-renders a shell and moves one persistent media
  * element into it; it never touches the connection, the streams, or the timer.
  * That is what makes "minimize" and "expand" free, and why muting in one mode
@@ -28,7 +28,7 @@
  * **The pre-answer preview stream is not the call.** It is a local-only
  * `getUserMedia` stream so the callee can see themselves before answering; it
  * is never added to the peer connection. Answering hands those same tracks to
- * the call, which is why answering does not ask for the camera twice — and
+ * the call, which is why answering does not ask for the camera twice, and
  * declining stops them without the caller ever having seen anything.
  *
  * Signalling is race-tolerant: remote ICE that lands before a remote
@@ -57,7 +57,7 @@
    * call away and builds it again: the avatar re-requests and flashes, the
    * window replays its entry animation, and the video element is torn out of
    * the document and put back. A connection-quality sample lands every four
-   * seconds, so a live call visibly blinked at rest — as if it were reloading
+   * seconds, so a live call visibly blinked at rest, as if it were reloading
    * itself. patch() updates the existing tree in place instead, so a state
    * change that touches one word touches one word and nothing else moves.
    *
@@ -77,7 +77,7 @@
     } catch (e) { return fallback; }
   }
   function writeStore(key, value) {
-    try { localStorage.setItem(key, value); } catch (e) { /* private mode — ignore */ }
+    try { localStorage.setItem(key, value); } catch (e) { /* private mode, ignore */ }
   }
 
   var pillPos = readStore('tma.call.pillPos', 'tc');
@@ -85,7 +85,7 @@
   /*
    * Preferred devices are remembered on the machine they describe, not on the
    * account: a camera id from this laptop means nothing on the user's phone.
-   * The *display* preference is the opposite — it is about how the user likes
+   * The *display* preference is the opposite, it is about how the user likes
    * to work, so it lives on the account (MessagingSettings.callDisplay).
    */
   function readDevicePrefs() {
@@ -133,7 +133,7 @@
    * Ringing
    *
    * One looping element for the whole module, started when a call begins to
-   * ring at either end and stopped from closeOverlay() — every path that ends
+   * ring at either end and stopped from closeOverlay(), every path that ends
    * a call goes through there, so none of them can leave it playing.
    *
    * The tone is the user's choice, handed over by messages.js in
@@ -185,7 +185,7 @@
 
   function stopRinging() {
     // A call that has stopped ringing has also stopped being an unanswered
-    // incoming one, so the OS notification goes with it — every accept, decline
+    // incoming one, so the OS notification goes with it, every accept, decline
     // and hangup path already funnels through here or through closeOverlay().
     closeCallNotification();
     if (!ringEl) return;
@@ -200,7 +200,7 @@
    * Desktop notification (an incoming call, when the tab is not in front)
    *
    * The on-screen pop-up and ringtone already cover a focused tab; this is for
-   * the case that actually needs it — the call rung in while the user was in
+   * the case that actually needs it, the call rung in while the user was in
    * another tab or another app. Closed the moment the call stops ringing.
    * ------------------------------------------------------------------ */
 
@@ -229,7 +229,7 @@
         body: 'Incoming ' + (isVideo ? 'video call' : 'voice call') + '…',
         tag: 'tma-call-' + sess.conversationId,
         icon: sess.peerAvatar || undefined,
-        // Keep it up until acted on — a call is not a fire-and-forget alert.
+        // Keep it up until acted on, a call is not a fire-and-forget alert.
         requireInteraction: true,
         renotify: true,
       });
@@ -267,7 +267,7 @@
         var p = Notification.requestPermission();
         if (p && typeof p.catch === 'function') p.catch(function () {});
       }
-    } catch (e) { /* older callback-only API — the toggle in settings still works */ }
+    } catch (e) { /* older callback-only API, the toggle in settings still works */ }
 
     if (readStore(PRIME_KEY, '') === '1' || mediaUnsupported()) return;
 
@@ -277,12 +277,12 @@
       .catch(function (err) {
         var name = err && err.name;
         // No camera on this machine? Still secure the microphone so voice calls
-        // never prompt. A denial, by contrast, is a real choice — leave the flag
+        // never prompt. A denial, by contrast, is a real choice, leave the flag
         // unset so a later deliberate call can still raise the browser prompt.
         if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
           navigator.mediaDevices.getUserMedia({ audio: true })
             .then(function (stream) { stopStream(stream); granted(); })
-            .catch(function () { /* denied or nothing there — the call will explain */ });
+            .catch(function () { /* denied or nothing there, the call will explain */ });
         }
       });
   }
@@ -396,10 +396,10 @@
       if (caller) {
         if (window.TMAToast && window.TMAToast.show) window.TMAToast.show('No answer');
         announce('No answer');
-        endSession(true); // hangup, answered:false — recorded as missed
+        endSession(true); // hangup, answered:false, recorded as missed
         return;
       }
-      // The vanished-caller failsafe: close quietly, no signal — there is
+      // The vanished-caller failsafe: close quietly, no signal, there is
       // nobody left to hear a reject.
       stopRinging();
       stopRecording();
@@ -509,7 +509,7 @@
     return api().callSignal(session.conversationId, body).catch(function () {});
   }
 
-  /* Tell the other end what our microphone and camera are doing (§4) — and
+  /* Tell the other end what our microphone and camera are doing (§4), and
    * whether we are sharing a screen or recording, which they cannot see. */
   function publishState() {
     signal('state', {
@@ -552,14 +552,14 @@
    * Turn a getUserMedia rejection into something a person can act on (§23).
    * The distinction that matters is "you said no" (fixable in the browser)
    * versus "there is nothing there" (fixable by plugging something in) versus
-   * "something else has it" — each has a different next step.
+   * "something else has it", each has a different next step.
    */
   function describeMediaError(err, wantVideo) {
     var name = (err && err.name) || '';
     var thing = wantVideo ? 'Camera' : 'Microphone';
     // `media: true` is what earns an error its recovery actions. Every failure
-    // to reach a device is recoverable in the same three ways — try again,
-    // choose a different device, or carry on without it — so the actions hang
+    // to reach a device is recoverable in the same three ways, try again,
+    // choose a different device, or carry on without it, so the actions hang
     // off the category rather than off each individual error name.
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
       return {
@@ -655,7 +655,7 @@
 
     if (kind === 'speaker') { applySpeaker(); render(); return Promise.resolve(); }
 
-    // Preview (before answering) has no senders — just rebuild the preview.
+    // Preview (before answering) has no senders, just rebuild the preview.
     if (session.mode === MODES.INCOMING) {
       return startPreview(session.previewWantsVideo !== false);
     }
@@ -822,7 +822,7 @@
 
   /*
    * After setRemoteDescription the callee's transceivers exist and their
-   * receivers report a kind — that is the only reliable moment to learn which
+   * receivers report a kind, that is the only reliable moment to learn which
    * sender is which without having created them ourselves.
    */
   function adoptSenders() {
@@ -867,7 +867,7 @@
     publishState();
     announce(callKindLabel(session.media) + ' connected');
 
-    // Both streams are live from here — the one moment a client-call
+    // Both streams are live from here, the one moment a client-call
     // recording can begin. The server decides whether this call is one.
     maybeStartRecording();
   }
@@ -999,7 +999,7 @@
    * The layer is re-parented for every presentation, and now into an entirely
    * different document when the call floats in its own window. Sound has to
    * survive all of that, so the one element carrying it is created once, parked
-   * in the page, and never moved — a call cannot be silenced by a change of
+   * in the page, and never moved, a call cannot be silenced by a change of
    * scenery it never hears about.
    */
   function buildAudioSink() {
@@ -1022,7 +1022,7 @@
   }
 
   /*
-   * Whether anything on this call is showing moving pictures — a camera call,
+   * Whether anything on this call is showing moving pictures, a camera call,
    * our shared screen, or theirs. Screen share deliberately never flips
    * session.media (that word means what the camera flow negotiated, and the
    * far end still expects camera semantics from it), so every layout decision
@@ -1039,7 +1039,7 @@
     var localStream = localPicture();
     if (local && localStream && local.srcObject !== localStream) {
       local.srcObject = localStream;
-      local.play().catch(function () { /* autoplay policy — muted, so rare */ });
+      local.play().catch(function () { /* autoplay policy, muted, so rare */ });
     }
     var remote = mediaLayer.querySelector('[data-call-remote]');
     if (remote && session.remoteStream && remote.srcObject !== session.remoteStream) {
@@ -1069,14 +1069,14 @@
   }
 
   /*
-   * Reflect state onto the media layer without rebuilding it — this runs on
+   * Reflect state onto the media layer without rebuilding it, this runs on
    * every render, and rebuilding would restart the video elements.
    */
   function syncMediaLayer() {
     if (!mediaLayer || !session) return;
 
     // A remote screen share is a live video track like any other, but it must
-    // not be hidden by remoteCameraOff — the camera being off is exactly the
+    // not be hidden by remoteCameraOff, the camera being off is exactly the
     // state a sharer is usually in.
     var remoteLive = !!(session.remoteStream && session.remoteStream.getVideoTracks().some(function (t) {
       return t.readyState === 'live';
@@ -1105,7 +1105,7 @@
      * The small window has room for exactly one picture, so it shows the best
      * one there is: the other person once they are on camera, and until then
      * your own preview. Without this a call spends the whole time it is ringing
-     * showing a black rectangle — the camera is running, it is just in the
+     * showing a black rectangle, the camera is running, it is just in the
      * self-view, which this presentation hides.
      */
     if ((isFloating() || session.mode === MODES.COMPACT) && !remoteHasVideo && localHasVideo) {
@@ -1136,7 +1136,7 @@
     var tag = mediaLayer.querySelector('[data-call-remote-tag]');
     if (tag) {
       tag.textContent = session.peerName +
-        (session.remoteScreenSharing ? ' — sharing screen' : '');
+        (session.remoteScreenSharing ? ', sharing screen' : '');
     }
 
     // The pip keeps its dragged position; clear it when it becomes the big one.
@@ -1220,7 +1220,7 @@
    * The floating window (§24)
    *
    * A call should not hold the machine hostage. You take it, and then you get
-   * on with your work — in the portal, in Excel, anywhere. Document
+   * on with your work, in the portal, in Excel, anywhere. Document
    * Picture-in-Picture gives us a real operating-system window for exactly
    * that: it floats above every other application, it is not a browser tab,
    * and it stays put while the user works somewhere else.
@@ -1248,7 +1248,7 @@
   /*
    * Whether a call should float. Remembered on the machine rather than the
    * account, for the same reason a camera id is: it describes this screen and
-   * this desk, not the person. Closing the window is itself an answer — the
+   * this desk, not the person. Closing the window is itself an answer, the
    * call stops floating until it is popped out again.
    */
   var floatWanted = readStore('tma.call.float', '1') !== '0';
@@ -1266,7 +1266,7 @@
   function isFloating() { return !!(floatWin && !floatWin.closed && floatRoot); }
 
   /* Wherever the call is currently drawn. Everything that reaches into the
-   * rendered call — the timer, the status line, focus — asks for this rather
+   * rendered call, the timer, the status line, focus, asks for this rather
    * than assuming the page. */
   function hostEl() { return isFloating() ? floatRoot : overlay; }
 
@@ -1274,7 +1274,7 @@
    * Must be called from a user gesture: no browser hands out a floating window
    * without one. Answering a call and placing a call are both clicks, which is
    * why the window is opened at those moments rather than when the call
-   * finally connects — by then the gesture is long gone.
+   * finally connects, by then the gesture is long gone.
    */
   function openFloat() {
     if (!session || isFloating() || !floatWanted || !floatSupported()) {
@@ -1324,7 +1324,7 @@
   }
 
   /*
-   * A picture-in-picture window opens empty — no stylesheet, no theme, not even
+   * A picture-in-picture window opens empty, no stylesheet, no theme, not even
    * a background colour. Everything the call needs to look like itself has to
    * be carried across.
    */
@@ -1333,7 +1333,7 @@
     doc.title = callKindLabel(session.media) + ' · ' + (session.peerName || '');
 
     /* The call's look lives in the app's own stylesheets. Copying the <link>s
-     * means the window is styled by exactly the same rules — and, being links
+     * means the window is styled by exactly the same rules, and, being links
      * to files the page has already fetched, they come from cache. */
     document.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
       if (node.tagName === 'LINK') {
@@ -1349,8 +1349,8 @@
     });
 
     /* Last, and inline, so it is doing two jobs: it paints the window dark
-     * immediately — before a single one of those stylesheets has arrived, which
-     * is what stops the window opening as a white rectangle — and it still wins
+     * immediately, before a single one of those stylesheets has arrived, which
+     * is what stops the window opening as a white rectangle, and it still wins
      * afterwards over the app's light page background, which was never meant
      * to be behind a call. */
     var boot = doc.createElement('style');
@@ -1380,7 +1380,7 @@
    *
    * One shell per mode, reconciled on render; the media layer is re-parented
    * into it rather than recreated. Every control is a [data-call-action], so
-   * a single delegated listener covers all four modes — which is what stops a
+   * a single delegated listener covers all four modes, which is what stops a
    * control existing in one layout and doing nothing in another.
    * ------------------------------------------------------------------ */
 
@@ -1401,13 +1401,13 @@
 
     var floating = isFloating();
     // A floating call is drawn in its own window, and the page is left with an
-    // empty overlay — the portal underneath stays completely usable, which is
+    // empty overlay, the portal underneath stays completely usable, which is
     // the whole point of putting the call in a window of its own.
     var mode = floating ? MODES.COMPACT : session.mode;
     var host = floating ? floatRoot : overlay;
 
     if (floating) {
-      // Nothing of the call is left behind in the page — not an empty scrim,
+      // Nothing of the call is left behind in the page, not an empty scrim,
       // not a stale class that still catches clicks.
       if (overlay.firstChild) overlay.textContent = '';
       overlay.className = 'tma-call tma-call--parked';
@@ -1468,7 +1468,7 @@
   /*
    * Hidden controls have to introduce themselves once. The small window shows
    * its bars for a moment when it first appears and then gets out of the way,
-   * so nobody has to guess that hovering does anything. Only on arrival — a
+   * so nobody has to guess that hovering does anything. Only on arrival, a
    * later render must not make them flash back, which is the exact behaviour
    * this whole change is here to remove.
    */
@@ -1497,7 +1497,7 @@
 
   /*
    * ── Incoming: a plain, centered call card (§1,§14) ──
-   * Deliberately quiet before it is answered — photo, who is calling, and the
+   * Deliberately quiet before it is answered, photo, who is calling, and the
    * two choices that matter. Mid-call controls (mute, camera, devices) belong
    * to the call once it exists, not to the decision of whether to take it, so
    * they are not shown here. A video call still previews the self-view so the
@@ -1595,7 +1595,7 @@
       (supportsSinkId() ? ctrl('devices', iconSpeaker(), false, 'Audio and device settings') : '') +
       ctrl('swap', iconSwap(), false, 'Swap the large and small video', !showsVideo) +
       // Not `is-off`: on every other control that white, inverted state means
-      // "this is switched off", and "More" is never off — it is open.
+      // "this is switched off", and "More" is never off, it is open.
       '<button type="button" class="tma-call__ctrl' + (session.sheet ? ' is-active' : '') +
       '" data-call-action="more" aria-haspopup="menu" aria-expanded="' +
       (session.sheet ? 'true' : 'false') + '" aria-label="More options" title="More options">' +
@@ -1618,7 +1618,7 @@
   }
 
   /* Not ctrl(): sharing is `is-active` (a thing you are doing), never
-   * `is-off` — that inverted state reads as "switched off" everywhere else. */
+   * `is-off`, that inverted state reads as "switched off" everywhere else. */
   function shareScreenBtn(small) {
     var label = session.screenSharing ? 'Stop sharing your screen' : 'Share your screen';
     return '<button type="button" class="tma-call__ctrl' +
@@ -1628,7 +1628,7 @@
       '" aria-label="' + label + '" title="' + label + '">' + iconScreen() + '</button>';
   }
 
-  /* The red dot beside the clock — recording is never only a colour, the
+  /* The red dot beside the clock, recording is never only a colour, the
    * word rides with it (§ the quality badge follows the same rule). */
   function recordingChip() {
     if (!session.recording && !session.remoteRecording) return '';
@@ -1663,7 +1663,7 @@
    * ── The small window (§7, §8, §19) ──
    *
    * The picture *is* the window. It runs edge to edge, and everything else —
-   * who you are talking to, how long for, and every control — floats over it
+   * who you are talking to, how long for, and every control, floats over it
    * and stays out of the way until the pointer arrives. That is how a call
    * window behaves everywhere else on the machine, and it is what makes this
    * small enough to leave open beside real work.
@@ -1710,7 +1710,7 @@
       (showsVideo
         ? '<div class="tma-call__media-slot" data-call-media-slot data-morph-skip></div>'
         // A voice call has no picture, but the media layer still has to live
-        // somewhere — it is the one thing that is moved rather than rebuilt.
+        // somewhere, it is the one thing that is moved rather than rebuilt.
         : '<div class="tma-call__compact-face">' + avatarBlock('tma-call__compact-avatar') +
           '<div class="tma-call__media-park" data-call-media-slot data-morph-skip aria-hidden="true"></div></div>') +
       '</div>' +
@@ -1743,7 +1743,7 @@
       '</div>';
   }
 
-  /* ── Dynamic Island (§9) — the original capsule, kept as it was ── */
+  /* ── Dynamic Island (§9), the original capsule, kept as it was ── */
   function renderIsland() {
     var isVideo = session.media === 'video';
     return '<div class="tma-call__pill tma-call__pill--' + pillPos + '" data-key="island" role="dialog" ' +
@@ -1807,8 +1807,8 @@
     } else if (e.kind === 'connection') {
       actions += '<button type="button" class="tma-call__btn tma-call__btn--ghost" data-call-action="retry-connection">Retry</button>';
     } else {
-      // Everything that is not the connection itself — a declined upgrade, a
-      // failed screen share — leaves a perfectly good call running. There
+      // Everything that is not the connection itself, a declined upgrade, a
+      // failed screen share, leaves a perfectly good call running. There
       // must always be a way past the panel that is not hanging up.
       actions += '<button type="button" class="tma-call__btn tma-call__btn--ghost" data-call-action="dismiss-error">Continue</button>';
     }
@@ -1909,7 +1909,7 @@
    * these.
    *
    * A masked <span>, not an <img>. These SVGs are black, and an <img> of one
-   * cannot be recoloured by CSS — the same trap the sidebar nav hit. A call is
+   * cannot be recoloured by CSS, the same trap the sidebar nav hit. A call is
    * drawn on near-black, so every glyph has to take its colour from the control
    * around it, which is what `background-color: currentColor` behind a mask
    * does. The name is the only thing this file decides; the art and the size
@@ -1951,14 +1951,14 @@
     if (!session || session.mode === mode) return;
     options = options || {};
     // Remember where we came from so minimizing can return there (§10). The
-    // answer pop-up is never a restore target — nobody wants to go "back" to
+    // answer pop-up is never a restore target, nobody wants to go "back" to
     // an incoming call that has already been answered.
     if (!options.silent && session.mode !== MODES.INCOMING && session.mode !== MODES.MODAL) {
       session.prevMode = session.mode;
     }
     session.sheet = null;
     session.mode = mode;
-    // The compact window always reopens in the far bottom-right — forget any
+    // The compact window always reopens in the far bottom-right, forget any
     // spot it was dragged to the last time it was shown.
     if (mode === MODES.COMPACT) session.compactPos = null;
     render();
@@ -1966,7 +1966,7 @@
 
   /*
    * Minimize returns the call to whatever it was before it was expanded (§10)
-   * — the island if it came from the island, the compact window if it came
+   *, the island if it came from the island, the compact window if it came
    * from there. It falls back to the user's preference, and never to a
    * hardcoded layout.
    */
@@ -1998,8 +1998,8 @@
 
   /*
    * The compact window's resting place (§19): the far bottom-right corner. It
-   * lands there every time the mode is entered — setMode() clears any position
-   * it was dragged to on a previous visit — and a drag within the session is
+   * lands there every time the mode is entered, setMode() clears any position
+   * it was dragged to on a previous visit, and a drag within the session is
    * still honoured until the next entry, clamped back into view on resize.
    */
   function defaultCompactPos(w, h) {
@@ -2031,7 +2031,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Controls — one delegated listener for every mode (§17)
+   * Controls, one delegated listener for every mode (§17)
    * ------------------------------------------------------------------ */
 
   var ACTIONS = {
@@ -2090,7 +2090,7 @@
 
   /*
    * One delegated listener per place the call can be drawn. Bound to the root
-   * rather than to the controls, so it survives every render — and applied to
+   * rather than to the controls, so it survives every render, and applied to
    * the floating window's root too, which is what makes a button in that
    * window do exactly what the same button does in the page.
    */
@@ -2291,7 +2291,7 @@
   /*
    * The camera button means two different things, and which one is never in
    * doubt: in a video call it turns your own camera off and on; in a voice
-   * call it starts the deliberate switch to video (§12) — which asks the other
+   * call it starts the deliberate switch to video (§12), which asks the other
    * person first and never just starts sending.
    */
   function toggleCamera() {
@@ -2319,7 +2319,7 @@
   /* ── Screen sharing ──
    *
    * A pure replaceTrack() on the video sender that has existed since the call
-   * was negotiated — the same trick voice↔video switching uses, so sharing
+   * was negotiated, the same trick voice↔video switching uses, so sharing
    * never renegotiates either. session.media is left alone: the camera flow
    * keeps its meaning, and the far end learns about the share through the
    * `state` signal instead.
@@ -2348,7 +2348,7 @@
       session.screenStream = stream;
       session.screenSharing = true;
       // The browser's own "Stop sharing" pill ends the track without telling
-      // us first — treat that exactly like our Stop button.
+      // us first, treat that exactly like our Stop button.
       track.onended = function () { stopScreenShare(); };
       if (session.videoSender) session.videoSender.replaceTrack(track).catch(function () {});
       // The self-view now shows the screen, so it must re-attach.
@@ -2357,7 +2357,7 @@
       announce('You are sharing your screen');
       if (session.connected) publishState();
     }).catch(function (err) {
-      // Cancelling the picker is a decision, not an error — Chromium reports
+      // Cancelling the picker is a decision, not an error. Chromium reports
       // it as NotAllowedError and it stays silent. Anything else means
       // sharing is genuinely unavailable (an outdated desktop shell, OS
       // screen-recording permission, policy), and swallowing that made the
@@ -2403,7 +2403,7 @@
    * Calls between a staff member and a client are recorded for the client's
    * file (§ CallRecordingController). The server is the single authority on
    * WHETHER a call is such a call: both sides ask at connect, and only the
-   * staff side of a staff↔client call is handed a recording id — so this
+   * staff side of a staff↔client call is handed a recording id, so this
    * code never needs to know who is a client, and nobody can talk a browser
    * into recording a colleague.
    *
@@ -2411,8 +2411,8 @@
    * out the moment the id arrives, and the recorder starts on a delay behind
    * them, so no frame exists that predates the notice. Never record silently.
    *
-   * What is captured: both voices, mixed into one track — a recording with
-   * one side of a conversation is not a record of it — plus the client's
+   * What is captured: both voices, mixed into one track, a recording with
+   * one side of a conversation is not a record of it, plus the client's
    * video when the call has one. Chunks upload every few seconds while the
    * call runs, so a crash mid-call costs seconds, not the recording.
    */
@@ -2431,7 +2431,7 @@
       if (!rec || !rec.id) return;
       if (!session || session.conversationId !== conversationId || session.recording) {
         // The call ended (or was replaced) while the request was in flight.
-        // The server already opened a row for it — close it, or it lingers
+        // The server already opened a row for it, close it, or it lingers
         // in the listing as a phantom "interrupted" recording forever.
         api().callRecordingFinish(rec.id, { failed: true }).catch(function () {});
         return;
@@ -2463,7 +2463,7 @@
     }).catch(function (err) {
       // A 4xx answer means "not a recorded call" and silence is the whole
       // answer. A network blip or 5xx means an ELIGIBLE call would silently
-      // go unrecorded — that gets one more try before giving up.
+      // go unrecorded, that gets one more try before giving up.
       var transient = !err || err.status === undefined || err.status >= 500;
       if (transient && !attempt) {
         setTimeout(function () {
@@ -2516,7 +2516,7 @@
 
       // The client's picture, when the call has one. A MediaRecorder keeps
       // the track list it was born with, so a voice call that upgrades later
-      // stays an audio recording — the metadata says which it was.
+      // stays an audio recording, the metadata says which it was.
       var video = session.media === 'video' && session.remoteStream
         ? session.remoteStream.getVideoTracks()[0] || null
         : null;
@@ -2558,13 +2558,13 @@
       recorder.start(REC_CHUNK_MS);
     } catch (e) {
       abandonRecording();
-      if (window.console) console.warn('[call] recording unavailable —', e && e.message);
+      if (window.console) console.warn('[call] recording unavailable', e && e.message);
     }
   }
 
   /*
    * Chunks ride a promise chain, one at a time, so they land on the server in
-   * order — the file is a single WebM stream and order IS the file. One retry
+   * order, the file is a single WebM stream and order IS the file. One retry
    * per chunk; the server treats a repeated seq as already-written, so a
    * retry whose first attempt actually landed cannot double-append.
    */
@@ -2628,7 +2628,7 @@
     });
   }
 
-  /* The recorder never produced anything — tell the server so the row does
+  /* The recorder never produced anything, tell the server so the row does
    * not linger as a phantom "recording in progress". */
   function abandonRecording() {
     var rec = session && session.recording;
@@ -2644,8 +2644,8 @@
 
   /*
    * Voice → video, in the order a person expects (§12): see yourself first,
-   * decide, and only then ask the other side. Nothing is sent — not the
-   * request, and certainly not the picture — until the user confirms.
+   * decide, and only then ask the other side. Nothing is sent, not the
+   * request, and certainly not the picture, until the user confirms.
    */
   function requestUpgrade() {
     if (!session || session.upgrade) return;
@@ -2709,7 +2709,7 @@
     var asked = session.upgrade && session.upgrade.direction === 'out';
     session.upgrade = null;
     dropPendingVideo();
-    // Only retract a request that was actually made — cancelling the private
+    // Only retract a request that was actually made, cancelling the private
     // confirm step never tells the other side anything happened.
     if (asked) signal('upgrade-decline', { media: 'video' });
     render();
@@ -2752,13 +2752,13 @@
     session.cameraOff = false;
     render();
     publishState();
-    announce(on ? 'Video on' : 'Video off — voice call continues');
+    announce(on ? 'Video on' : 'Video off. Voice call continues');
   }
 
   function switchToVoice() {
     if (!session || session.media !== 'video') return;
     // Stop sending pictures, keep the audio call exactly as it is (§13).
-    // A live screen share owns the sender and stays — only the camera stops.
+    // A live screen share owns the sender and stays, only the camera stops.
     if (session.videoSender && !session.screenSharing) {
       session.videoSender.replaceTrack(null).catch(function () {});
     }
@@ -2780,7 +2780,7 @@
     clearError();
     var wantVideo = session.media === 'video';
 
-    // The outgoing call never got as far as ringing — start it over rather
+    // The outgoing call never got as far as ringing, start it over rather
     // than collecting a stream that nothing is waiting for.
     if (session.role === 'caller' && !session.pc) { render(); beginOutgoing(); return; }
 
@@ -2876,8 +2876,8 @@
       meter = { ctx: ctx, stop: function () { if (raf) cancelAnimationFrame(raf); } };
     } catch (e) {
       // No meter is better than a broken sheet, but a silent failure here is
-      // indistinguishable from a dead microphone — say so in the console.
-      if (window.console) console.warn('[call] microphone meter unavailable —', e && e.message);
+      // indistinguishable from a dead microphone, say so in the console.
+      if (window.console) console.warn('[call] microphone meter unavailable', e && e.message);
     }
   }
 
@@ -2955,7 +2955,7 @@
     session.media = 'audio';
     session.cameraOff = false;
     if (session.role === 'callee') {
-      // Answering with video failed — answer as a voice call instead.
+      // Answering with video failed, answer as a voice call instead.
       acceptIncoming(false);
       return;
     }
@@ -2975,7 +2975,7 @@
       initiatorId: meId,
       peerName: peerName || 'Contact',
       peerAvatar: peerAvatar || null,
-      // A call you placed shows its full window while it rings — you are
+      // A call you placed shows its full window while it rings, you are
       // looking at it, and it is the only place the ringing state is legible.
       // markConnected() hands it to the user's preferred display once
       // answered, and minimizing goes there too.
@@ -2984,7 +2984,7 @@
       statusText: 'Calling…',
     });
     render();
-    // Straight into its own window, from the click that placed the call — the
+    // Straight into its own window, from the click that placed the call, the
     // only moment a floating window can be asked for. It rings, connects and
     // runs in there, and the portal behind it is never taken over.
     openFloat();
@@ -2999,7 +2999,7 @@
   /*
    * The pre-answer preview (§2). Local only: these tracks are never given to
    * the peer connection, so nothing reaches the caller until the call is
-   * answered — and because the same tracks are then handed to the call,
+   * answered, and because the same tracks are then handed to the call,
    * answering does not prompt for the camera a second time.
    */
   function startPreview(wantVideo) {
@@ -3023,7 +3023,7 @@
       session.previewError = describeMediaError(err, wantVideo);
       if (wantVideo) {
         session.cameraOff = true;
-        // Audio alone may still be available — a call with no picture is fine.
+        // Audio alone may still be available, a call with no picture is fine.
         getMedia(false).then(function (audioOnly) {
           if (!session || session.mode !== MODES.INCOMING) { stopStream(audioOnly); return; }
           session.previewStream = audioOnly;
@@ -3053,12 +3053,12 @@
     session.mode = defaultMode();
     session.prevMode = session.mode;
     render();
-    // Answering is a click — in the page, or the desktop app's ring panel,
+    // Answering is a click, in the page, or the desktop app's ring panel,
     // which forwards it as a real gesture. That click is the whole budget for
     // opening a floating window, so it is spent here rather than on connect.
     openFloat();
 
-    // Reuse the preview's tracks — no second permission prompt (§22).
+    // Reuse the preview's tracks, no second permission prompt (§22).
     var ready = session.previewStream
       ? Promise.resolve(session.previewStream)
       : getMedia(wantVideo).catch(function (err) {
@@ -3072,7 +3072,7 @@
       if (!session) { stopStream(stream); return; }
       if (!session.error && (!stream || !stream.getAudioTracks().length)) {
         // Joining without a microphone is still better than not joining, but
-        // the person has to be told they cannot be heard — otherwise they talk
+        // the person has to be told they cannot be heard, otherwise they talk
         // into a call that is silently one-way.
         session.error = {
           title: 'No microphone',
@@ -3124,7 +3124,7 @@
 
   /*
    * Create and send the SDP answer, but only once both the local media and the
-   * caller's offer are available. Callable more than once — it no-ops until
+   * caller's offer are available. Callable more than once, it no-ops until
    * the preconditions are met and after it has already answered.
    */
   function maybeAnswer() {
@@ -3170,7 +3170,7 @@
     if (!payload || payload.fromUserId === meId) return;
 
     // The same signal arrives on the conversation channel and on this user's
-    // own channel — apply it once (see App\Events\CallSignal).
+    // own channel, apply it once (see App\Events\CallSignal).
     if (payload.signalId) {
       if (!seenSignals[payload.signalId]) seenSignals[payload.signalId] = Date.now();
       else return;
@@ -3197,7 +3197,7 @@
           mode: MODES.INCOMING,
           statusText: 'Ringing…',
           remoteOffer: body.sdp || null,
-          // Before answering, the big picture is *you* — the point of the
+          // Before answering, the big picture is *you*, the point of the
           // preview is seeing how you look. The caller has not sent anything
           // yet, and will not until this is answered.
           swapped: media === 'video',
@@ -3210,7 +3210,7 @@
         startPreview(media === 'video');
         loadDeviceList();
         armRingTimeout();
-        // Tell the caller the phone is actually ringing here — until this
+        // Tell the caller the phone is actually ringing here, until this
         // lands their side only knows it asked ("Calling…").
         signal('state', { payload: { ringing: true } });
       } else if (type === 'offer' && body.sdp) {
@@ -3225,7 +3225,7 @@
 
     if (type === 'accept') {
       // Answered. The media connection takes a moment more, but ringing past
-      // the moment somebody picked up is the wrong sound — and an answered
+      // the moment somebody picked up is the wrong sound, and an answered
       // call must never be cut down by the no-answer clock.
       stopRinging();
       clearRingTimeout();
@@ -3252,7 +3252,7 @@
       return;
     }
 
-    // The far end's microphone/camera state — what turns a black rectangle
+    // The far end's microphone/camera state, what turns a black rectangle
     // into their photo (§4). Screen share and recording ride the same signal:
     // both are things a peer cannot see for themselves and must be told.
     if (type === 'state') {
@@ -3287,7 +3287,7 @@
 
     if (type === 'upgrade') {
       if (session.upgrade && session.upgrade.direction === 'out') {
-        // Both asked at once — the one who did not place the call yields.
+        // Both asked at once, the one who did not place the call yields.
         if (session.role === 'caller') return;
         session.upgrade = null;
       }

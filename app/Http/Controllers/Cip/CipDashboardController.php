@@ -12,14 +12,14 @@ use Illuminate\Http\Request;
 /**
  * §9's dashboard: the buckets this reader opens their day on, counted.
  *
- * Somebody the module is not for is told so — `cip: false` and an empty list —
+ * Somebody the module is not for is told so. `cip: false` and an empty list —
  * rather than refused. The dashboard-metrics controller answers a client
  * asking for staff KPIs the same way, for the same reason: on a home screen a
  * 403 is indistinguishable from the numbers being broken, and a page that is
  * simply not offered a row can drop it without knowing why.
  *
  * `card` is whether the home screen draws this payload as the CIP Applications
- * tile. Staff get it, and so does a Service Provider contact — §9's six are
+ * tile. Staff get it, and so does a Service Provider contact. §9's six are
  * their day-opening view. A private client reaches the module through their
  * own application and is not offered a summary of a book; they share the
  * service-provider *set* with the contact, so the dashboard name cannot decide
@@ -29,7 +29,7 @@ use Illuminate\Http\Request;
  * know what a bucket is, so the counts served here and the filter the
  * applications listing applies cannot become two definitions of the same word.
  *
- * There is no cache around this and there must not be — see the note in
+ * There is no cache around this and there must not be, see the note in
  * {@see Buckets}. A work queue that lags a status change by five minutes reads
  * as broken.
  */

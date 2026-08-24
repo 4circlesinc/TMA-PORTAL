@@ -26,7 +26,7 @@ class DesktopReleasesController extends Controller
         'windows' => 'latest.yml',
     ];
 
-    /** Installer first, archive last — whatever a person double-clicks. */
+    /** Installer first, archive last, whatever a person double-clicks. */
     private const PREFERRED = [
         'mac' => ['dmg', 'pkg', 'zip'],
         'windows' => ['exe', 'msi', 'zip'],
@@ -37,7 +37,7 @@ class DesktopReleasesController extends Controller
      * than letting someone install a app their Mac will refuse to open.
      *
      * Mirrors `mac.minimumSystemVersion` in desktop/package.json, which is what
-     * electron-builder writes into the bundle's LSMinimumSystemVersion — change
+     * electron-builder writes into the bundle's LSMinimumSystemVersion, change
      * both together. Reading it back out would mean opening a 94 MB DMG.
      */
     private const MIN_OS = [
@@ -54,7 +54,7 @@ class DesktopReleasesController extends Controller
      * release the moment it is published rather than up to TTL later.
      *
      * Called by desktop:publish. Without it the button spends the five minutes
-     * after every release handing people the *previous* version — which reads
+     * after every release handing people the *previous* version, which reads
      * as a broken publish, and is the one moment someone is certain to be
      * clicking it to check the release they just made.
      */

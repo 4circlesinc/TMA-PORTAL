@@ -75,19 +75,19 @@ class MailSynchronizer
     }
 
     /**
-     * "Has anything arrived?" — one small request, safe to run every few seconds.
+     * "Has anything arrived?", one small request, safe to run every few seconds.
      *
      * A mailbox has to feel live, and a full incremental pass cannot: it walks
      * six folders and pages through each, so running it on a five-second timer
      * means each poll is still working when the next one starts, and the
      * provider begins throttling. That is what "auto sync isn't working" looks
-     * like from the outside — not a sync that never runs, but one that never
+     * like from the outside, not a sync that never runs, but one that never
      * finishes.
      *
      * This asks only the inbox, only for what is newer than the newest message
      * already stored, and never advances the cursor. The full pass stays the
      * authority on reads, moves and deletions; this only gets arrivals on
-     * screen quickly. Overlap between the two is harmless — the upsert is
+     * screen quickly. Overlap between the two is harmless, the upsert is
      * idempotent.
      *
      * @return int the number of messages written
@@ -133,7 +133,7 @@ class MailSynchronizer
 
         rescue(fn () => $this->notifyNewMail(array_values(array_diff($incoming, $known))), report: false);
 
-        // Only the timestamp moves — not the cursor. The full pass still has
+        // Only the timestamp moves, not the cursor. The full pass still has
         // to cover this window for everything a listing cannot report.
         $this->account->forceFill(['mail_synced_at' => now()])->save();
 
@@ -170,7 +170,7 @@ class MailSynchronizer
      * back through the rest using the provider's page token.
      *
      * Returns ['written' => int, 'done' => bool]. Call again while done is
-     * false — progress is saved after every page, so it resumes safely.
+     * false, progress is saved after every page, so it resumes safely.
      *
      * @return array{written:int, done:bool}
      */
@@ -277,7 +277,7 @@ class MailSynchronizer
 
     /**
      * Labels in the portal are user-created only. Provider categories/labels
-     * are intentionally not imported as sidebar defaults — the user adds what
+     * are intentionally not imported as sidebar defaults, the user adds what
      * they want via New label.
      */
     public function syncLabels(): void
@@ -449,7 +449,7 @@ class MailSynchronizer
      * the inbox, unread, recent, and not something they sent themselves.
      *
      * A burst collapses into one summary row rather than one notification per
-     * message — reconnecting after a weekend must not ring the bell 40 times.
+     * message, reconnecting after a weekend must not ring the bell 40 times.
      * The per-message dedupe key keeps the quick check and the full pass from
      * double-announcing the same arrival.
      *
@@ -472,7 +472,7 @@ class MailSynchronizer
             ->orderByDesc('sent_at')
             ->get()
             ->reject(fn (MailMessage $m): bool => mb_strtolower((string) $m->from_email) === $own)
-            // Shared inboxes deliver everyone else's mail too — only ring the
+            // Shared inboxes deliver everyone else's mail too, only ring the
             // bell when this person is a real recipient or it's a reply to them.
             ->filter(fn (MailMessage $m): bool => $this->shouldNotifyUser($m))
             ->values();
@@ -559,7 +559,7 @@ class MailSynchronizer
             : $this->account->user()->first();
     }
 
-    /** Portal login address — the person, not the mailbox. */
+    /** Portal login address, the person, not the mailbox. */
     private function personalAddresses(): array
     {
         $email = mb_strtolower(trim((string) ($this->accountUser()?->email ?? '')));
@@ -585,7 +585,7 @@ class MailSynchronizer
     /**
      * True when this person is on To, Cc or Bcc.
      *
-     * Uses the portal login email only — never the connected mailbox address.
+     * Uses the portal login email only, never the connected mailbox address.
      * Shared inboxes put the mailbox on every message, which is what made
      * "sent you an email" / "New email from…" fire for colleagues' mail.
      */

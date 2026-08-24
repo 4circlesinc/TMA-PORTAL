@@ -1,11 +1,11 @@
 /*
- * TMA — Catching up on the File Library.
+ * TMA. Catching up on the File Library.
  *
  * A TMAReplica walker over `GET /portal/files/sync`: records land under
  * `files:folder:<uuid>` and `files:item:<uuid>`, a tombstone deletes its
  * key, and the two cursors (folders and files are separate id sequences)
  * ride together in one stored pair. The listing caches (`files:listing:`)
- * are untouched — they belong to the screens; this is the record layer
+ * are untouched, they belong to the screens; this is the record layer
  * beneath them, and portal-files.js assembles offline listings from it.
  *
  * Desktop only, like everything that replicates: in a browser the store is

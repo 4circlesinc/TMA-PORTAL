@@ -22,7 +22,7 @@
     var mountEl = root.querySelector('.tma-dash__view[data-view="' + view + '"] [data-portal-mount]');
     if (!mountEl) return false;
     fn(mountEl, opts || {});
-    // A view just (re)rendered its markup — let shared chrome (the signed-in
+    // A view just (re)rendered its markup, let shared chrome (the signed-in
     // user's name/avatar in current-user.js) re-apply itself so re-created
     // elements don't keep placeholder/broken images.
     try {
@@ -325,7 +325,7 @@
   function wireHeadDropdown(wrap, onSelect) {
     // A JS property, not a dataset flag. TMAMorph syncs attributes from the
     // rendered markup, so an imperative data-* guard is stripped on the next
-    // render — the guard resets and this binds a second time on the same node.
+    // render, the guard resets and this binds a second time on the same node.
     if (!wrap || wrap._portalHeadDropdownWired) return;
     wrap._portalHeadDropdownWired = true;
     if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();

@@ -43,9 +43,9 @@
   }
 
   function fmtDate(iso) {
-    if (!iso) return '—';
+    if (!iso) return '-';
     var d = new Date(iso);
-    if (isNaN(d)) return '—';
+    if (isNaN(d)) return '-';
     var now = new Date();
     if (d.toDateString() === now.toDateString()) {
       return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -55,7 +55,7 @@
 
   function cap(s) {
     s = String(s || '');
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
   }
 
   function fileIconSrc(item) {
@@ -72,7 +72,7 @@
   function folderIconHtml(item, size) {
     var px = size || 28;
     var base = (item.fileCount === 0) ? 'FolderEmpty' : 'FolderFilled';
-    // Always wrap at a fixed size — bare .tma-folder-icon__base is styled
+    // Always wrap at a fixed size, bare .tma-folder-icon__base is styled
     // width/height:100% in portal-files.css and balloons inside these cards.
     var inner = window.TMAFolderIcons
       ? window.TMAFolderIcons.html(base, item.colour, item.iconName, px)
@@ -92,8 +92,8 @@
   }
 
   function ownerCell(person) {
-    if (!person) return '—';
-    var name = person.name || person.email || '—';
+    if (!person) return '-';
+    var name = person.name || person.email || '-';
     var src = (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
       ? window.TMACurrentUser.avatarSrc(person.avatar, name)
       : (person.avatar || '');
@@ -143,7 +143,7 @@
     var files = folder.files || [];
     var subfolders = folder.folders || [];
 
-    // Subfolders first, then files — the same order the library itself uses.
+    // Subfolders first, then files, the same order the library itself uses.
     // Every row carries a data-key so a background poll re-render reuses the
     // existing node instead of rebuilding it (and re-requesting its thumbnail).
     var rows = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
@@ -178,7 +178,7 @@
       '</div></section>';
   }
 
-  /** "3 files · 2 folders", or "Empty" — the same shape the library uses. */
+  /** "3 files · 2 folders", or "Empty", the same shape the library uses. */
   function folderMeta(sub) {
     var parts = [];
     if (sub.fileCount) parts.push(sub.fileCount + (sub.fileCount === 1 ? ' file' : ' files'));
@@ -256,7 +256,7 @@
    * Delegates to the File Library rather than reimplementing any of it, so the
    * destination picker, the confirm wording, the permission rules and the
    * endpoints are all literally the same code. On completion the list is
-   * reloaded from the server — a move or delete changes what belongs in Recent
+   * reloaded from the server, a move or delete changes what belongs in Recent
    * Files, and guessing locally would leave a row that no longer exists.
    */
   function runBulk(action) {
@@ -319,7 +319,7 @@
   /**
    * The bulk toolbar, mirroring the File Library's (and the Users table's).
    *
-   * Same classes, same order, same hidden-until-selected behaviour — this is
+   * Same classes, same order, same hidden-until-selected behaviour, this is
    * the documented component, not a second one that merely looks similar.
    */
   function bulkToolbar() {
@@ -370,7 +370,7 @@
 
     var rows = all.map(function (it) {
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
-      var size = it.type === 'folder' ? (it.sizeLabel || '—') : (it.sizeLabel || '—');
+      var size = it.type === 'folder' ? (it.sizeLabel || '-') : (it.sizeLabel || '-');
       var when = fmtDate(it.modifiedAt || it.createdAt || it.uploadedAt);
 
       return '<tr data-home-lib-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '"' +
@@ -439,7 +439,7 @@
      * re-renders on three background polls (inbox, chats, presence), and each
      * one then tore the whole strip out of the document and rebuilt it: every
      * folder icon and thumbnail became a new <img>, and the container's height
-     * collapsed and came back within the same frame — which, mid-scroll, reads
+     * collapsed and came back within the same frame, which, mid-scroll, reads
      * as the page refreshing under you.
      *
      * The stale-block problem is solved properly instead: each shape inside
@@ -472,7 +472,7 @@
   /*
    * "Some but not all selected" is a property, not an attribute.
    *
-   * There is no HTML for it — `indeterminate` can only be set on the element —
+   * There is no HTML for it. `indeterminate` can only be set on the element —
    * so the header box has to be corrected after every render or a partial
    * selection renders as plain unchecked.
    */
@@ -489,7 +489,7 @@
 
     // Bind once per element, via a property rather than an attribute: the strip
     // now survives re-renders, and morph strips any data-* attribute the fresh
-    // markup doesn't repeat — a dataset flag would be wiped on every patch and
+    // markup doesn't repeat, a dataset flag would be wiped on every patch and
     // stack a new click handler each time.
     var bindOnce = window.TMAMorph
       ? function (el, type, fn, tag) { window.TMAMorph.on(el, type, fn, tag); }
@@ -531,10 +531,10 @@
         e.preventDefault();
         e.stopPropagation();
         var menuItem = findItem(rowMenu.getAttribute('data-home-lib-menu'));
-        // The File Library owns the menu — same actions, same permissions.
+        // The File Library owns the menu, same actions, same permissions.
         if (menuItem && acts()) {
           var r = rowMenu.getBoundingClientRect();
-          // Reload when an action changes something — a rename or a delete
+          // Reload when an action changes something, a rename or a delete
           // leaves this row stale otherwise.
           acts().menu(r.left, r.bottom + 4, menuItem, function () { refresh(); });
         }
@@ -555,7 +555,7 @@
       }
     }, 'homeLib');
 
-    // Checkboxes fire `change`, not `click` — binding click here would miss a
+    // Checkboxes fire `change`, not `click`, binding click here would miss a
     // keyboard toggle entirely.
     bindOnce(host, 'change', function (e) {
       var all = e.target.closest('[data-home-lib-all]');
@@ -637,14 +637,14 @@
       dash._homeLibRerender();
       return;
     }
-    // Dashboard not mounted yet — next visit will render from state.
+    // Dashboard not mounted yet, next visit will render from state.
   }
 
   /*
    * What the strip currently draws.
    *
    * A background revalidation that returns exactly what is already on screen
-   * must not repaint anything — that repaint is what the dashboard's callers
+   * must not repaint anything, that repaint is what the dashboard's callers
    * see as the strip "reloading" on every visit.
    */
   function itemSig(it) {
@@ -680,7 +680,7 @@
    *
    * The previews are a second round of requests, so a folder that survives the
    * refresh keeps the contents it is already showing until its own preview
-   * comes back. Replacing the list outright — which is what this used to do —
+   * comes back. Replacing the list outright, which is what this used to do —
    * left every card reading "Nothing in this folder yet" for as long as the
    * preview requests took, on every single visit to the Dashboard.
    */
@@ -724,7 +724,7 @@
       if (!force) return state.inflight;
       return state.inflight.then(function () { return load(remount, true); });
     }
-    // Already current — answer from what we have rather than asking again.
+    // Already current, answer from what we have rather than asking again.
     if (!force && state.loaded && (Date.now() - state.loadedAt) < FRESH_MS) {
       return Promise.resolve();
     }
@@ -741,7 +741,7 @@
       net().fetchJSON(net().url('/shortcuts')).catch(function () { return null; }),
       net().fetchJSON(net().url('/?section=recent&perPage=40')).catch(function () { return null; }),
       net().fetchJSON(net().url('/?section=shared&perPage=40')).catch(function () { return null; }),
-      // Admin File Library list — backup if shortcuts race or cache is stale.
+      // Admin File Library list, backup if shortcuts race or cache is stale.
       fetchAdminOrgFolders(),
     ]).then(function (res) {
       state.inflight = null;
@@ -773,7 +773,7 @@
       }
 
       // Paint the folder list as soon as we know it, then again once the
-      // previews land — the cards keep their old contents in between.
+      // previews land, the cards keep their old contents in between.
       if (snapshot() !== before) {
         before = snapshot();
         if (done) done();

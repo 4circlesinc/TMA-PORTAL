@@ -23,7 +23,7 @@ class FolderTree
      * A stop condition, not a limit anyone should reach: the deepest tree in
      * the firm's library is eleven levels, and SharePoint itself will not
      * serve a path much past this. Its job is to make a `parent_id` cycle
-     * terminate — the recursion has no other reason to stop.
+     * terminate, the recursion has no other reason to stop.
      */
     private const MAX_DEPTH = 64;
 
@@ -168,11 +168,11 @@ class FolderTree
      * Recursive counts for many folders, in one query.
      *
      * A listing of twenty subfolders used to run twenty descendant walks plus
-     * a COUNT and a SUM per folder — that is what made opening a client's
+     * a COUNT and a SUM per folder, that is what made opening a client's
      * Documents tab stall against Cloud Postgres. A combined breadth-first
      * walk replaced that, and was itself the largest remaining cost once the
      * N+1s went: one round trip per level of the tree (eleven, here), then
-     * every folder id in the library — forty-two thousand of them — carried
+     * every folder id in the library, forty-two thousand of them, carried
      * back out to the database inside a single IN list to sum the files.
      *
      * The database can walk its own tree. One recursive CTE descends from all
@@ -270,7 +270,7 @@ class FolderTree
 
     /**
      * Soft-delete a folder and its whole subtree (folders + files) so the tree
-     * lands in the recycle bin together. Files are NOT purged — only recycled.
+     * lands in the recycle bin together. Files are NOT purged, only recycled.
      */
     public static function softDeleteTree(Folder $folder, int $userId): void
     {

@@ -31,7 +31,7 @@ class MeController extends Controller
             'lastName' => $user->last_name,
             'email' => $user->email,
             // The profile card renders straight from this store, on the account
-            // page and on the Overview — without these four it had nothing but
+            // page and on the Overview, without these four it had nothing but
             // dashes to show.
             'phone' => $user->phone,
             'jobTitle' => $user->job_title,
@@ -50,7 +50,7 @@ class MeController extends Controller
             'isPrivateClient' => CipAccess::isPrivateClient($user),
             // What this account may reach, so the sidebar, the mobile menu and
             // the global search index can hide exactly what the server would
-            // refuse. Convenience only — every one of these is enforced again
+            // refuse. Convenience only, every one of these is enforced again
             // on the request that acts on it.
             'capabilities' => Role::capabilities($user),
             'providerPhoto' => $user->provider_avatar_url,
@@ -60,7 +60,7 @@ class MeController extends Controller
             // session already lands in the right corner with the right hold.
             'toasts' => ToastSettings::for($user),
             // Desktop notifications are raised by the notification store, which
-            // runs on every shell — including the ones that never mount
+            // runs on every shell, including the ones that never mount
             // Messages and so never load the messaging settings.
             'desktopNotifications' => [
                 'enabled' => (bool) MessagingSettings::get($user, 'desktopNotifications'),

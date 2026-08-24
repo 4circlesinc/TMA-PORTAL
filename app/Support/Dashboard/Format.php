@@ -43,13 +43,13 @@ class Format
 
     /**
      * Change against the previous window. A null or zero baseline has no
-     * percentage to give — saying "+100%" against nothing would be inventing a
-     * trend, so those read as "New" or "—" instead.
+     * percentage to give, saying "+100%" against nothing would be inventing a
+     * trend, so those read as "New" or "-" instead.
      */
     public static function change(int|float $current, int|float|null $prior): string
     {
         if ($prior === null || $prior == 0) {
-            return $current > 0 ? 'New' : '—';
+            return $current > 0 ? 'New' : '-';
         }
 
         $percent = (($current - $prior) / $prior) * 100;

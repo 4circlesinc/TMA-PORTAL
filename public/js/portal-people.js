@@ -9,7 +9,7 @@
  * /portal/people/* (a staff read of the users table) and are written through
  * /admin/users, which is where the rules for creating, suspending and
  * deleting an account already live; the address books are /portal/contacts;
- * groups are /portal/groups. Nothing here keeps a list of its own — the page
+ * groups are /portal/groups. Nothing here keeps a list of its own, the page
  * used to hold one in localStorage, which is why it always looked empty.
  */
 (function () {
@@ -19,7 +19,7 @@
 
   /*
    * Rendering reconciles rather than replaces (see dom-morph.js), so nodes
-   * survive a render — every binding below therefore goes through
+   * survive a render, every binding below therefore goes through
    * MORPH.unwired / unwiredOne / on, never a bare addEventListener walk, or
    * handlers stack one per render.
    */
@@ -87,7 +87,7 @@
    * Set while a live update is refetching in the background.
    *
    * A flag rather than another parameter because every caller reaches load()
-   * through ensure(), whose eight branches would each have to thread it — and
+   * through ensure(), whose eight branches would each have to thread it, and
    * the one that got missed would be the screen that blanks itself. Refreshes
    * are driven one at a time by TMALive, which suppresses overlapping runs,
    * so there is only ever one refresh this could describe.
@@ -104,8 +104,8 @@
     /*
      * ── Warm boot ──────────────────────────────────────────────────
      * Every People feed goes through this one function, so the warm start
-     * is one seam too: the kept list paints while the fetch below — always
-     * already running — corrects it. `f.real` (the server answered), not
+     * is one seam too: the kept list paints while the fetch below, always
+     * already running, corrects it. `f.real` (the server answered), not
      * `f.loaded` (something finished), gates it: a dead fetch marks loaded
      * to bring the skeleton down and must not outrank the snapshot. Mounts
      * happen long after DCL, so the store scope is set.
@@ -144,7 +144,7 @@
         f.loaded = true;
         f.loading = false;
         // Keep a list that is already on screen rather than swapping it for an
-        // error because a refresh nobody requested happened to fail — and the
+        // error because a refresh nobody requested happened to fail, and the
         // warm rows count as on screen: an error card must not replace them.
         if (!silent && !f.items.length) f.error = errMsg(e, 'Couldn’t load this list.');
         render();
@@ -304,7 +304,7 @@
   ];
 
   /* "UserCirclePlus" -> "user-circle-plus", naming the mask rule in
-     portal.css. The art itself is named there, never inline — a relative
+     portal.css. The art itself is named there, never inline, a relative
      url() in an inline style resolves against the page, not the stylesheet. */
   function iconSlug(name) {
     return String(name).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
@@ -385,7 +385,7 @@
       return '<tr data-people-row="' + p.id + '">' +
         nameCell(p, chips) +
         '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(p.jobTitle || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.jobTitle || '-') + '</td>' +
         '<td>' + chip(s.label, s.variant) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(p.lastLogin || 'Never') + '</td>' +
         (state.caps.manageUsers
@@ -437,7 +437,7 @@
         (state.selected[p.id] ? ' checked' : '') + ' aria-label="Select ' + esc(p.name || p.email) + '"></label></td>' +
         nameCell(p) +
         '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(p.company || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.company || '-') + '</td>' +
         '<td>' + chip(s.label, s.variant) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(p.lastLogin || 'Never') + '</td>' +
         // No menu at all when every action in it would be refused.
@@ -467,7 +467,7 @@
   /* ── prospects / invitation management ──────────── */
 
   /* The states an invitation can be looked at in. `waiting` is this screen's
-     original question — who has not activated — and the rest open up the
+     original question, who has not activated, and the rest open up the
      settled invitations that used to be invisible here entirely. */
   var INVITE_VIEWS = [
     { value: 'waiting', label: 'Still waiting' },
@@ -540,14 +540,14 @@
           ? '<br><span class="tma-portal-table__muted">' + esc(p.lastError) + '</span>'
           : '');
       var when = p.status === 'accepted'
-        ? (shortDate(p.acceptedAt) || p.invited || '—')
-        : (p.invited || '—');
+        ? (shortDate(p.acceptedAt) || p.invited || '-')
+        : (p.invited || '-');
 
       return '<tr data-people-row="' + esc(p.id) + '">' +
         nameCell(p) +
         '<td class="tma-portal-table__muted">' + emailCell + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(p.company || p.accountType || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(p.invitedBy || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.company || p.accountType || '-') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.invitedBy || '-') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
         '<td>' + inviteStatusChip(p) + '</td>' +
         (state.caps.manageUsers
@@ -602,9 +602,9 @@
         '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + esc(c.id) + '"' +
         (state.selected[c.id] ? ' checked' : '') + ' aria-label="Select ' + esc(c.name) + '"></label></td>' +
         '<td><strong>' + esc(c.name) + '</strong></td>' +
-        '<td class="tma-portal-table__muted">' + esc(c.email || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(c.company || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(c.phone || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.email || '-') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.company || '-') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.phone || '-') + '</td>' +
         // A shared entry someone else added is read-only unless you administer
         // the account, so it gets no menu rather than one that only errors.
         '<td>' + (c.canEdit === false ? '' : menuBtn('data-people-contact-menu', c.id, 'Manage ' + c.name)) + '</td>' +
@@ -688,7 +688,7 @@
         return '<tr data-people-row="' + esc(p.id) + '">' +
           '<td><strong>' + esc(p.name || p.email) + '</strong></td>' +
           '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
-          '<td class="tma-portal-table__muted">' + esc(p.invited || '—') + '</td>' +
+          '<td class="tma-portal-table__muted">' + esc(p.invited || '-') + '</td>' +
           '<td>' + ui().btn({ label: 'Send', small: true, variant: 'ghost', attrs: ' data-people-resend-one="' + esc(p.email) + '"' }) + '</td>' +
           '</tr>';
       }).join('');
@@ -716,7 +716,7 @@
 
   /* ── modals ─────────────────────────────────────── */
 
-  // Same working roles the Users page offers — never the parked Employee type.
+  // Same working roles the Users page offers, never the parked Employee type.
   var ACCOUNT_TYPES = ['CRO / Reviewing officer', 'Administrator'];
 
   /* Create an account (employee or client contact) through /admin/users. */
@@ -796,7 +796,7 @@
             job_title: host.querySelector('[data-acct-job]').value.trim() || null,
             phone: host.querySelector('[data-acct-phone]').value.trim() || null,
           };
-          // Only send a type the Users API accepts — a parked Employee label
+          // Only send a type the Users API accepts, a parked Employee label
           // is display-only and must not block an unrelated profile save.
           if (ACCOUNT_TYPES.indexOf(type) !== -1) {
             payload.account_type = type;
@@ -895,7 +895,7 @@
           ui().field('Everyone on staff',
             '<label class="tma-portal-check-row"><input type="checkbox" class="tma-dash__check" data-group-auto' +
             (existing && existing.autoJoin ? ' checked' : '') + '>' +
-            '<span>Membership follows the staff list — new joiners are added automatically</span></label>') +
+            '<span>Membership follows the staff list, new joiners are added automatically</span></label>') +
           ui().field('Members',
             '<div class="tma-portal-check-list" data-group-members>' +
             (staffRows || '<p class="tma-portal-table__muted">No staff to add yet.</p>') + '</div>') +
@@ -1142,7 +1142,7 @@
     MORPH.unwired(el, '[data-people-client-menu]').forEach(function (b) {
       var person = findPerson('clients', b.getAttribute('data-people-client-menu'));
       if (!person) return;
-      // Only what this viewer may actually do — the writes below are all
+      // Only what this viewer may actually do, the writes below are all
       // administrator-only, so an employee gets the client record link alone.
       var items = [];
       if (state.caps.manageUsers) items.push({ label: 'Edit details', action: 'edit' });
@@ -1203,7 +1203,7 @@
           invitationAction(person, 'link', 'POST').then(function (res) {
             var url = res && res.url;
             if (!url) return;
-            var done = function () { ui().toast('Link copied — it replaces any link already sent'); };
+            var done = function () { ui().toast('Link copied, it replaces any link already sent'); };
             if (navigator.clipboard && navigator.clipboard.writeText) {
               navigator.clipboard.writeText(url).then(done, function () { window.prompt('Invitation link', url); });
             } else {
@@ -1368,7 +1368,7 @@
     state.el = el;
     var next = (opts && opts.navId && SCREEN_FOR_NAV[opts.navId]) || null;
     if (next && next !== state.screen) {
-      // A different screen starts clean — a letter or search left over from
+      // A different screen starts clean, a letter or search left over from
       // the last list would silently hide rows on this one.
       state.alpha = 'All';
       state.search = '';
@@ -1386,7 +1386,7 @@
    * invitations all read from tables other people are editing.
    *
    * Only the feed behind the screen on show is refetched, plus the summary
-   * counts the other screens display — refetching all eight caches on every
+   * counts the other screens display, refetching all eight caches on every
    * signal would be seven wasted requests for a list nobody is looking at.
    */
   if (window.TMALive) {
@@ -1411,7 +1411,7 @@
     };
 
     // People is assembled from accounts *and* the client directory, so it has
-    // to listen for both — a new client contact is not a `users` change.
+    // to listen for both, a new client contact is not a `users` change.
     watchPeople(window.TMALive.RESOURCES.USERS);
     watchPeople(window.TMALive.RESOURCES.CLIENTS);
     watchPeople(window.TMALive.RESOURCES.CONTACTS);

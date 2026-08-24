@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
 
 /**
  * The single server-side authorization surface for file/folder actions.
- * Every controller action runs through here — hidden buttons on the client are
+ * Every controller action runs through here, hidden buttons on the client are
  * never trusted. Access comes from ownership, the admin role, or an active
  * share/assignment (directly on the item or on an ancestor folder).
  */
@@ -71,7 +71,7 @@ class FileAccess
     /** Effective role a user holds over a file (null = no access). */
     public static function fileRole(User $user, FileItem $file): ?string
     {
-        // Checked BEFORE the admin short-circuit on purpose — see the method.
+        // Checked BEFORE the admin short-circuit on purpose, see the method.
         $driveOwner = self::personalSpaceOwner($file->folder_id, $file->owner_id);
         if ($driveOwner !== null) {
             if ($driveOwner === $user->id) {
@@ -81,7 +81,7 @@ class FileAccess
             /*
              * Everyone else gets EXACTLY what the owner handed out, and
              * nothing else. Not the firm-wide default, not an all-staff folder
-             * grant, not administrator reach — but a share the owner chose to
+             * grant, not administrator reach, but a share the owner chose to
              * make still works, because choosing who sees your own files is
              * the point of keeping the drive private in the first place.
              */
@@ -154,7 +154,7 @@ class FileAccess
     }
 
     /**
-     * Is this folder the root of — or inside — a synced personal OneDrive?
+     * Is this folder the root of, or inside, a synced personal OneDrive?
      *
      * Checked against the CONNECTION rather than a flag on the folder, because
      * the connection is what knows whose drive it is. A folder carries no
@@ -165,7 +165,7 @@ class FileAccess
      * Whose personal OneDrive this sits in, if it sits in one at all.
      *
      * Returns null for everything that is not inside a synced personal drive —
-     * which is almost everything — and the owner's id when it is.
+     * which is almost everything, and the owner's id when it is.
      *
      * This runs ahead of the administrator short-circuit, which is the whole
      * point. `isAdmin` grants 'full' over the entire library, so without this
@@ -174,7 +174,7 @@ class FileAccess
      * rule is that a personal drive is the owner's alone (2026-08-05), and
      * "alone" has to mean alone or it means nothing.
      *
-     * A leaving employee's files are still reachable — in Microsoft 365, by a
+     * A leaving employee's files are still reachable, in Microsoft 365, by a
      * tenant administrator, which is where that decision belongs. It is not
      * something the portal should quietly grant.
      */
@@ -199,7 +199,7 @@ class FileAccess
     /**
      * Is this folder a connected personal OneDrive?
      *
-     * This used to run an uncached exists() per folder per call — over a
+     * This used to run an uncached exists() per folder per call, over a
      * thousand queries to list one folder, the largest single cost in a file
      * listing. The note that stood here said memoising it fails OPEN, and it
      * was right: a naive static let a colleague open somebody's drive, and the
@@ -208,7 +208,7 @@ class FileAccess
      * What makes caching safe is invalidation, not avoidance. The answer only
      * changes when a connection is written, so AppServiceProvider drops this
      * whenever one is saved or deleted. A drive connected mid-request is seen
-     * by the next call, not the next deploy — and the failure mode is now
+     * by the next call, not the next deploy, and the failure mode is now
      * closed rather than open, because a cleared cache re-queries.
      */
     private static function isPersonalDriveFolder(Folder $folder): bool
@@ -222,7 +222,7 @@ class FileAccess
         return self::$personalDrives[$folder->id];
     }
 
-    /** Called whenever a SharePoint connection changes — see AppServiceProvider. */
+    /** Called whenever a SharePoint connection changes, see AppServiceProvider. */
     public static function forgetPersonalDrives(): void
     {
         self::$personalDrives = [];
@@ -237,13 +237,13 @@ class FileAccess
      *  - **Folder-linked** (onedrive:connect): the drive appears as one portal
      *    folder; anything under that folder is the drive owner's alone.
      *  - **Root-mirrored** (connect via OAuth): the drive syncs into the top
-     *    of its owner's own library — the connection has no portal folder. The
+     *    of its owner's own library, the connection has no portal folder. The
      *    personal space is then the owner's tree of ordinary user folders and
      *    their unfiled root files, because that tree IS the drive's mirror,
      *    and anything added to it flows back into the drive.
      *
-     * Same consequence either way: owner gets full, everyone else — including
-     * administrators — gets exactly what an explicit share hands out.
+     * Same consequence either way: owner gets full, everyone else, including
+     * administrators, gets exactly what an explicit share hands out.
      */
     private static function personalSpaceOwner(?int $folderId, ?int $ownerId): ?int
     {
@@ -275,7 +275,7 @@ class FileAccess
     /**
      * Whether a user has a root-mirrored OneDrive connection.
      *
-     * Previously ran a live DB query on every call — one per unique user id
+     * Previously ran a live DB query on every call, one per unique user id
      * encountered while walking file/folder chains, which on a busy listing
      * could mean dozens of identical queries. We now resolve the full set once
      * per request and answer from that set.
@@ -363,7 +363,7 @@ class FileAccess
             && $folder->client_id !== null
             && self::isStaff($user)) {
             // Ended assignments are kept as history, so this must ask for the
-            // live one — without the scope an expired row could be picked up
+            // live one, without the scope an expired row could be picked up
             // and hand back access that was taken away.
             $assignment = ClientAssignment::live()
                 ->where('client_id', $folder->client_id)
@@ -436,7 +436,7 @@ class FileAccess
             ->first();
 
         // An assignment scoped to the company alone stops at the company's own
-        // files — it is not a way to read every contact's folder.
+        // files, it is not a way to read every contact's folder.
         if (! $assignment || ! $assignment->reachesClients()) {
             return null;
         }
@@ -485,7 +485,7 @@ class FileAccess
         }
 
         /* A client's right to re-share is the firm's to decide, not the item
-           role's — an owner or editor role says what they may do with the
+           role's, an owner or editor role says what they may do with the
            file, not who else may end up holding it. Settings > Advanced
            Preferences > Permissions turns this on; it is off by default, so a
            client sharing onward is something a firm opts into. Every share
@@ -498,8 +498,8 @@ class FileAccess
         /*
          * A client's records are not assigned file by file.
          *
-         * Who works on a client is a client assignment — ClientAssignment,
-         * with a job role and an end date, kept in step by AccessSync — and
+         * Who works on a client is a client assignment. ClientAssignment,
+         * with a job role and an end date, kept in step by AccessSync, and
          * everything under that client's folder follows from it. A share
          * bolted onto one document would be a second, invisible door: nothing
          * closes it when the assignment ends, it appears in no client's
@@ -512,7 +512,7 @@ class FileAccess
          * anything added later all reach this method.
          *
          * The rest of the row menu is untouched. Naming a colleague in a
-         * comment still lets them in ({@see AccessGrants}) — that is the way
+         * comment still lets them in ({@see AccessGrants}), that is the way
          * in for a document, and it leaves a record of who was asked and why.
          */
         if ($ability === 'assign' && self::inClientTree($item)) {
@@ -527,7 +527,7 @@ class FileAccess
      *
      * Asked of the whole chain rather than the item's own folder. `client_id`
      * is inherited as subfolders are created (FolderProvisioner, Cip\Tree), so
-     * the parent alone would usually answer it — but a folder made by hand
+     * the parent alone would usually answer it, but a folder made by hand
      * inside a client's tree carries whatever `create()` gave it, and "usually
      * inherited" is not a permission rule. The chain is already cached from
      * the role check a few lines above, so this costs no query.
@@ -585,7 +585,7 @@ class FileAccess
      * This is what makes company sharing worth having: one share row covers
      * everyone at the company, so joining grants access and being removed takes
      * it away with no share rows to maintain. A share may narrow itself to a
-     * single company role — "Company finance contacts" — via
+     * single company role, "Company finance contacts", via
      * `target_company_role`; null means every member.
      */
     private static function companyShareRole(User $user, string $type, int $id): ?string
@@ -670,8 +670,8 @@ class FileAccess
      * Rows, not answers. The distinction matters: memoising *whether a folder
      * is a personal drive* fails open, because a drive connected mid-flight
      * would be read from a cache that says otherwise. A folder's own row is
-     * not a permission decision — every rule above is still evaluated against
-     * it on every call — and it is invalidated the moment any folder is
+     * not a permission decision, every rule above is still evaluated against
+     * it on every call, and it is invalidated the moment any folder is
      * written, from the observer that already watches them.
      */
     private static array $folders = [];
@@ -680,7 +680,7 @@ class FileAccess
      * Fetch whole ancestor chains up front, one query per depth level.
      *
      * chainFolders below caches a row once it has seen it, but it can only
-     * discover the next ancestor after fetching the current one — so a cold
+     * discover the next ancestor after fetching the current one, so a cold
      * cache costs one round trip per level, per chain. A listing asks about
      * dozens of chains and pays that serially: 11 folder lookups and 11
      * personal-drive checks, ~6s of a 19s response, purely in latency.
@@ -773,7 +773,7 @@ class FileAccess
     /**
      * Drop the folder rows.
      *
-     * Called whenever a folder is created, moved, renamed or removed — a move
+     * Called whenever a folder is created, moved, renamed or removed, a move
      * changes parent_id, which is the one field this cache is walking, so a
      * stale row would evaluate the rules against a tree that no longer exists.
      */
@@ -785,7 +785,7 @@ class FileAccess
 
         /*
          * The personal-drive answers go with them. Both caches are keyed by
-         * folder id, and ids are reused — by a fresh database between tests,
+         * folder id, and ids are reused, by a fresh database between tests,
          * and by any deployment restoring one. An id cached as "is a personal
          * drive" and then handed to a different folder is wrong in whichever
          * direction it lands: it denied firm-wide access to four ordinary

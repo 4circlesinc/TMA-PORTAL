@@ -49,7 +49,7 @@ final class Hub
     /** Requests you sent to other people. */
     public const SCOPE_SENT = 'sent';
 
-    /** Everything on files you can open — staff only. */
+    /** Everything on files you can open, staff only. */
     public const SCOPE_ALL = 'all';
 
     public const SCOPES = [self::SCOPE_INBOX, self::SCOPE_SENT, self::SCOPE_ALL];
@@ -60,7 +60,7 @@ final class Hub
     /** The same set, narrowed to threads nobody has closed off. */
     public const COMMENTS_UNRESOLVED = 'unresolved';
 
-    /** All recent discussion on files you can open — staff only. */
+    /** All recent discussion on files you can open, staff only. */
     public const COMMENTS_ALL = 'all';
 
     public const COMMENT_SCOPES = [self::COMMENTS_MINE, self::COMMENTS_UNRESOLVED, self::COMMENTS_ALL];
@@ -157,7 +157,7 @@ final class Hub
         if ($scope === self::COMMENTS_UNRESOLVED) {
             /*
              * A reply is not a thread. Resolution lives on the top-level
-             * comment, so "unresolved" has to be asked of the root — a reply
+             * comment, so "unresolved" has to be asked of the root, a reply
              * under a closed thread is closed too, and listing it would put
              * settled work back on somebody's plate.
              */
@@ -202,8 +202,8 @@ final class Hub
      * The numbers on the tabs.
      *
      * Deliberately unfiltered by access: they count rows that name this person
-     * directly — their own open steps, their own sent requests, comments that
-     * named them — none of which can exist on a file they were never given.
+     * directly, their own open steps, their own sent requests, comments that
+     * named them, none of which can exist on a file they were never given.
      * Running the per-file check over every one of them to render three
      * numbers would cost more than the page it labels.
      *
@@ -227,7 +227,7 @@ final class Hub
          * marker, and inventing one here would make the badge a guess.
          *
          * Resolution lives on the thread's first comment, so a mention inside
-         * a reply has to be judged by its root — otherwise closing a thread
+         * a reply has to be judged by its root, otherwise closing a thread
          * would leave its replies still counted, and the badge would never
          * reach zero.
          */
@@ -268,7 +268,7 @@ final class Hub
         };
 
         // "Open" is the default on every scope but the inbox, which is open by
-        // construction — a settled request is not waiting on anybody.
+        // construction, a settled request is not waiting on anybody.
         $state = $filters['state'] ?? 'open';
         if ($state === 'open') {
             $query->whereNotIn('file_workflows.status', Status::TERMINAL);
@@ -365,7 +365,7 @@ final class Hub
      * The viewer's panel already learned this lesson: "Awaiting approval" names
      * an internal state and leaves the reader to work out whether it is their
      * problem. Away from the file it is worse, because there is no context at
-     * all — so every row leads with whose turn it is.
+     * all, so every row leads with whose turn it is.
      */
     private static function request(FileWorkflow $workflow, User $viewer, array $paths): array
     {
@@ -409,7 +409,7 @@ final class Hub
             'requireComment' => (bool) $workflow->require_comment,
             'isOpen' => $isOpen,
             // What this reader can do about it, from here, right now. `myStep`
-            // is null while an ordered flow has not reached them — they are on
+            // is null while an ordered flow has not reached them, they are on
             // the request, but it is not yet their turn.
             'myStep' => $mine?->uuid,
             'myActions' => $mine ? Status::actionsFor($workflow->type) : [],
@@ -474,7 +474,7 @@ final class Hub
             'replyCount' => (int) $comment->replies_count,
             'can' => [
                 // A reply from here goes on the thread, never as a reply to a
-                // reply — the store endpoint threads one level and would
+                // reply, the store endpoint threads one level and would
                 // re-parent it anyway.
                 'reply' => $file !== null && Comments::canComment($viewer, $file),
                 'resolve' => ! $comment->trashed() && ! $comment->isReply()

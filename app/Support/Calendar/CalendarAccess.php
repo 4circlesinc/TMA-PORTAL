@@ -11,7 +11,7 @@ use App\Support\Access\Role;
  * The single server-side authorization surface for calendar actions.
  *
  * Every controller action resolves permission through here; a hidden control
- * on the client is never trusted. Mirrors App\Support\Files\FileAccess — same
+ * on the client is never trusted. Mirrors App\Support\Files\FileAccess, same
  * shape, same "role ladder + capability table" approach.
  *
  * Access comes from ownership, the admin role, an explicit calendar_members
@@ -91,7 +91,7 @@ class CalendarAccess
 
         /*
          * Administrators run the organization's and groups' calendars, but a
-         * colleague's personal calendar is not org property — an admin reaches
+         * colleague's personal calendar is not org property, an admin reaches
          * it only through a real grant, the same as anyone else. Without this
          * split, "Administrator" would silently mean "reads everyone's diary".
          */
@@ -146,7 +146,7 @@ class CalendarAccess
      * What the calendar's broad visibility grants on its own.
      *
      * Only `all_staff` grants anything without an explicit member row, and
-     * only to staff — which is the rule that keeps clients out of internal
+     * only to staff, which is the rule that keeps clients out of internal
      * calendars by default.
      */
     private static function defaultRole(User $user, Calendar $calendar): ?string

@@ -14,7 +14,7 @@ final class AccountSetupFlow
 {
     public const FLOW = 'account-setup';
 
-    /** Virtual first screen for staff — the getting-started connect checklist. */
+    /** Virtual first screen for staff, the getting-started connect checklist. */
     public const ACCOUNTS = 'accounts';
 
     /** @var array<string, array{title: string, optional?: bool}> */

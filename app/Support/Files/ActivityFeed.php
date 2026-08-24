@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
  * renders ("Today", "Yesterday", "This week", …).
  *
  * Reads `file_activities`, which the file manager has been writing since it was
- * built — nothing here invents or backfills events. A file with no history
+ * built, nothing here invents or backfills events. A file with no history
  * returns an empty page, never placeholder rows.
  */
 class ActivityFeed
@@ -76,7 +76,7 @@ class ActivityFeed
             ->where('item_id', $file->id)
             ->when($actions !== [], fn ($q) => $q->whereIn('action', $actions))
             ->when($before !== null, fn ($q) => $q->where('id', '<', $before))
-            // photoUrl() reads both columns — selecting only one silently
+            // photoUrl() reads both columns, selecting only one silently
             // drops every provider photo back to initials.
             ->with('user:id,name,email,avatar_url,provider_avatar_url')
             ->orderByDesc('id')
@@ -122,7 +122,7 @@ class ActivityFeed
     }
 
     /**
-     * "Vernon Francis renamed this file" — the actor is rendered separately by
+     * "Vernon Francis renamed this file", the actor is rendered separately by
      * the panel, so this is only the predicate.
      */
     private static function sentence(FileActivity $activity, User $viewer): string
@@ -195,7 +195,7 @@ class ActivityFeed
 
     /**
      * The date band a timestamp belongs in. The spec asks for "Today",
-     * "Yesterday", "This week", "Three weeks ago" — relative bands, so they
+     * "Yesterday", "This week", "Three weeks ago", relative bands, so they
      * stay meaningful as the file ages.
      */
     private static function band(Carbon $at): string

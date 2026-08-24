@@ -86,7 +86,7 @@ class CalendarEventController extends Controller
 
         /*
          * Single events and detached occurrences: anything that physically
-         * overlaps the window. Overlap, not containment — an event starting
+         * overlaps the window. Overlap, not containment, an event starting
          * before the window and ending inside it still belongs on the grid.
          */
         $rows = CalendarEvent::query()
@@ -102,7 +102,7 @@ class CalendarEventController extends Controller
         /*
          * Series masters are fetched by rule rather than by date, because a
          * weekly meeting that began last year still generates occurrences in
-         * this week's window — a date filter would miss it entirely. Masters
+         * this week's window, a date filter would miss it entirely. Masters
          * that have already finished are excluded cheaply via `starts_at`.
          */
         $masters = CalendarEvent::query()
@@ -217,7 +217,7 @@ class CalendarEventController extends Controller
          * Snapshot what invitees care about *before* anything is written, so
          * the change notice can say what actually moved rather than "something
          * changed". Only the fields that would make someone rearrange their
-         * day — a note edit should not mail thirty people.
+         * day, a note edit should not mail thirty people.
          */
         $before = [
             'title' => $event->title,
@@ -251,7 +251,7 @@ class CalendarEventController extends Controller
             }
         }
 
-        // Times move together — a start without an end is not a valid edit.
+        // Times move together, a start without an end is not a valid edit.
         if (isset($data['startsAt']) || isset($data['endsAt'])) {
             $times = $this->resolveTimes([
                 'startsAt' => $data['startsAt'] ?? $event->starts_at->toIso8601String(),
@@ -297,7 +297,7 @@ class CalendarEventController extends Controller
         $scope = $request->input('scope', SeriesEditor::SCOPE_ALL);
 
         // Deleting one occurrence of a series excludes that instant rather
-        // than removing a row — there is no row for a virtual occurrence.
+        // than removing a row, there is no row for a virtual occurrence.
         $occurrence = RecurrenceExpander::parseOccurrenceId($uuid);
 
         if ($occurrence) {
@@ -465,7 +465,7 @@ class CalendarEventController extends Controller
     /**
      * Accept, decline, or mark tentative.
      *
-     * The caller answers for themselves only — an organizer cannot RSVP on
+     * The caller answers for themselves only, an organizer cannot RSVP on
      * someone else's behalf, so the attendee row is resolved from the signed-in
      * user rather than taken from the request.
      */
@@ -600,7 +600,7 @@ class CalendarEventController extends Controller
 
     /**
      * Plain-language list of what changed, for the update notice. Empty when
-     * nothing an invitee would act on moved — an edit to the private notes
+     * nothing an invitee would act on moved, an edit to the private notes
      * should not mail thirty people.
      *
      * @param  array<string, mixed>  $before
@@ -665,7 +665,7 @@ class CalendarEventController extends Controller
      * The viewer's own place on the guest list, or null if they aren't on it.
      *
      * Resolved here rather than by the client hunting for its own row, because
-     * someone invited only through a group has no row yet — they still need
+     * someone invited only through a group has no row yet, they still need
      * the RSVP buttons, and replying is what creates the row.
      *
      * @return array<string, mixed>|null
@@ -698,7 +698,7 @@ class CalendarEventController extends Controller
      * need later.
      *
      * The result is converted to UTC before it is returned. The zone the event
-     * was authored in is not lost — it is kept in `timezone`, which is the
+     * was authored in is not lost, it is kept in `timezone`, which is the
      * column recurrence and ICS export read. Storing UTC explicitly means the
      * instant survives a driver that serialises without an offset, rather than
      * being re-read as a different moment.

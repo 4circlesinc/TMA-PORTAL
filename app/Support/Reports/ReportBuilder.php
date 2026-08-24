@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\DB;
  * Turns a report request into real numbers.
  *
  * Everything here is measured from tables the portal already writes as a side
- * effect of being used — sign-ins land in `activity_logs`, opens and downloads
- * in `file_activities`, bytes in `files` — so a report is a read, never a
+ * effect of being used, sign-ins land in `activity_logs`, opens and downloads
+ * in `file_activities`, bytes in `files`, so a report is a read, never a
  * separate tracking pipeline that could drift from what happened.
  *
  * Queries go through the query builder rather than Eloquent on purpose. A
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * must not silently subtract them. Where "still there now" *is* the question
  * (storage on hand), the `deleted_at` filter is written out explicitly.
  *
- * The output shape is deliberately generic — a metric strip plus one table —
+ * The output shape is deliberately generic, a metric strip plus one table —
  * so the Reporting page renders any report type without knowing what it means.
  */
 final class ReportBuilder
@@ -66,7 +66,7 @@ final class ReportBuilder
             Report::TYPE_MESSAGING => 'Messaging report',
             Report::TYPE_STORAGE => 'Storage report',
             default => 'Report',
-        }.' — '.$rangeLabel;
+        }.': '.$rangeLabel;
     }
 
     /* ── report types ───────────────────────────────────────────────── */
@@ -134,7 +134,7 @@ final class ReportBuilder
         $uploads = $activity()->where('action', 'upload')->count();
 
         // A null actor on a file activity is somebody who followed a share
-        // link without signing in — the only anonymous reader the portal has.
+        // link without signing in, the only anonymous reader the portal has.
         $anonymous = $activity()->whereNull('user_id')->count();
 
         $shares = self::window(DB::table('shares'), 'created_at', $from, $to);
@@ -214,7 +214,7 @@ final class ReportBuilder
     /**
      * Bytes on hand, and how the window moved them.
      *
-     * The totals are "right now" rather than as-of the window's end — storage
+     * The totals are "right now" rather than as-of the window's end, storage
      * is a level, not a flow, and a report that claimed to know what the disk
      * looked like three weeks ago would be inventing it. What the window does
      * bound is the added/removed pair.

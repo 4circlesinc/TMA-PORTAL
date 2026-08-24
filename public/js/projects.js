@@ -8,7 +8,7 @@
 
   var VIEW_KEY = 'tma.projectsViewMode.v1';
 
-  /* Live data only — design-system sample cards are not painted as real projects. */
+  /* Live data only, design-system sample cards are not painted as real projects. */
   var STATS = [];
   var PROJECTS = [];
 

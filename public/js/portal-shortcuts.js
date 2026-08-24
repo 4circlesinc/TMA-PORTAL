@@ -3,8 +3,8 @@
  *
  * Each user pins their own folders from the File Library; the list lives
  * server-side (/portal/files/shortcuts) so it follows them between devices.
- * The server is the authority on what may appear — it drops folders that were
- * deleted or are no longer shared with the viewer — so this module just
+ * The server is the authority on what may appear, it drops folders that were
+ * deleted or are no longer shared with the viewer, so this module just
  * renders whatever comes back. Reuses the existing sidebar nav-item chrome.
  *
  * Globals: window.TMASidebarShortcuts
@@ -73,7 +73,7 @@
       return;
     }
 
-    // The standing sections come first — the libraries, the client folders
+    // The standing sections come first, the libraries, the client folders
     // this user is assigned to, the organization folders they may see, and
     // their own staff folder. They are not pins and cannot be unpinned;
     // they are the folders this user is expected to work out of, which is
@@ -87,7 +87,7 @@
       groupHtml('My Staff Folder', g.staff);
 
     // Then whatever they pinned themselves, labelled so the two are tellable
-    // apart — only these carry a remove button.
+    // apart, only these carry a remove button.
     var pinned = (items && items.length)
       ? '<div class="tma-dash__group-label">Pinned Folders</div>' +
         items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
@@ -254,7 +254,7 @@
     bindDrag();
 
     // Folders deleted, renamed or unshared elsewhere change what may appear
-    // here — the server re-filters, we just re-ask.
+    // here, the server re-filters, we just re-ask.
     document.addEventListener('tma:folders-changed', function () {
       if (status === 'ready') load(true);
     });

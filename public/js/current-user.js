@@ -11,7 +11,7 @@
   var me = null;
   var listeners = [];
 
-  // 1x1 transparent GIF — lets an <img> show its skeleton background with no
+  // 1x1 transparent GIF, lets an <img> show its skeleton background with no
   // broken-image icon and, crucially, no dummy photo.
   var TRANSPARENT = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   var SKELETON_TEXT = '.tma-dash__profile-name, .tma-dash__profile-email, .tma-portal-hello__title';
@@ -39,7 +39,7 @@
       '.tma-dash__profile-email.tma-skeleton{min-width:124px;height:.62em}' +
       '.tma-portal-hello__title.tma-skeleton{min-width:150px;height:1.05em}' +
       '@keyframes tma-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}' +
-      /* The chosen theme, not the device — the portal stays light on a dark
+      /* The chosen theme, not the device, the portal stays light on a dark
          machine, and these skeletons have to stay light with it. */
       '[data-theme="dark"] .tma-skeleton{background:linear-gradient(90deg,#2a2f37 25%,#353b45 37%,#2a2f37 63%)!important}';
     (document.head || document.documentElement).appendChild(style);
@@ -214,7 +214,7 @@
   }
 
   /*
-   * Everything that hangs off knowing who this is, in one place — the same
+   * Everything that hangs off knowing who this is, in one place, the same
    * wiring whether the answer came from the server or, offline on the
    * desktop, from the copy kept from last time.
    */
@@ -225,7 +225,7 @@
      *
      * A cache is scoped to an account, and until /me answers there is no
      * account to scope it to. Signing in as somebody else from the same
-     * machine wipes what was held — warming a screen with the last
+     * machine wipes what was held, warming a screen with the last
      * reader's clients would look exactly like a permissions failure.
      */
     if (window.TMAStore && j && j.id != null) window.TMAStore.setAccount(j.id);
@@ -264,7 +264,7 @@
   }
 
   /*
-   * Who this is, remembered — the desktop only.
+   * Who this is, remembered, the desktop only.
    *
    * The one answer everything else waits for. With no network, no cached
    * copy of /me means no name, no capabilities, no account for the store to
@@ -273,7 +273,7 @@
    *
    * localStorage rather than TMAStore, because the store cannot hold this:
    * its keys are scoped to the account, and this IS how the account gets
-   * known — a copy filed under the account id can never be found by the boot
+   * known, a copy filed under the account id can never be found by the boot
    * that does not have the id yet. In a browser nothing is kept, which is
    * the firm's decision about whose disk holds what (see portal-store.js).
    */
@@ -295,7 +295,7 @@
 
   function load() {
     /*
-     * The remembered answer paints first — the greeting, the sidebar profile
+     * The remembered answer paints first, the greeting, the sidebar profile
      * and the avatar are the most-looked-at pixels on the boot screen, and a
      * shimmer where a person's own name was yesterday is the loudest "this is
      * a website" tell there is. The server's answer follows and repaints;
@@ -306,7 +306,7 @@
 
     return api('GET', '/me').then(function (res) {
       /*
-       * A real answer that is not this person — signed out, suspended. The
+       * A real answer that is not this person, signed out, suspended. The
        * remembered copy dies with it: falling back here would paint an
        * account the server just refused to.
        */
@@ -320,7 +320,7 @@
       });
     }).catch(function () {
       /*
-       * Nothing answered at all — the offline case, and only that one. The
+       * Nothing answered at all, the offline case, and only that one. The
        * server refusing lands above; this is the network being absent, where
        * the remembered copy is not a substitute for the truth, it is the
        * truth as of when there was last a connection.
@@ -483,7 +483,7 @@
     openAvatarPicker: openAvatarPicker,
     onChange: function (fn) { listeners.push(fn); if (me) fn(me); },
     // Shared resolver so re-rendered views (e.g. the dashboard greeting) draw
-    // the same photo/initials this file does — never a broken images/avatars/…
+    // the same photo/initials this file does, never a broken images/avatars/…
     avatarSrc: avatarSrc,
     // Initials for someone who is *not* the signed-in user (an email sender,
     // say): same palette and shape, seeded per person so a given address keeps
@@ -496,7 +496,7 @@
   /* ── firm branding ────────────────────────────────────────────────
      The company name, page title, logo and accent colour an administrator
      set in Account settings → Edit Company Branding. It lives here rather
-     than with the settings page because it is shell chrome — the shells are
+     than with the settings page because it is shell chrome, the shells are
      static HTML carrying the portal's own logo and title, and every one of
      them loads this file. Branding an administrator saved is applied on the
      spot too, so they see the change without a reload. */
@@ -523,7 +523,7 @@
     }
 
     /* The accent is the documented brand token every accent consumer derives
-       from (links, badges, highlights, focus tints — see tokens.css), so
+       from (links, badges, highlights, focus tints, see tokens.css), so
        setting it here re-tints all of them at once instead of introducing a
        parallel colour nothing else honours. */
     if (b.accentColor) {

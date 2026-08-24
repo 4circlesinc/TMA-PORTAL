@@ -18,13 +18,13 @@ use Illuminate\Support\Facades\DB;
  * cip_application_assignments is the authority and this is its one writer: a
  * file is held by one person per role at a time, an assignment ends rather
  * than disappears so the record keeps everybody who ever held it, and
- * cip_applications.assigned_officer_id is only a cache of the live row — kept
+ * cip_applications.assigned_officer_id is only a cache of the live row, kept
  * so §8's table can name the officer without a join per line.
  *
  * §10 makes assignment a lifecycle event as well as a piece of bookkeeping:
  * giving a NEW application to an officer is what starts the review. That half
- * goes through {@see Engine} like every other status change — nothing here
- * writes cip_applications.status — and it happens only from NEW. §26 lets an
+ * goes through {@see Engine} like every other status change, nothing here
+ * writes cip_applications.status, and it happens only from NEW. §26 lets an
  * administrator reassign at any time, and a file that has reached assessment
  * feedback has not gone back to the beginning because it changed hands.
  *
@@ -49,7 +49,7 @@ class Assignments
     /**
      * Who may hand a file to an officer.
      *
-     * §10 gives this to the Administrator, and the matrix agrees — in the way
+     * §10 gives this to the Administrator, and the matrix agrees, in the way
      * the matrix says it. `cip.assign => []` looks like a grant to nobody, but
      * an empty row means administrators only: {@see Role::can} answers true
      * for an administrator before it ever reads the row. Both halves are
@@ -57,7 +57,7 @@ class Assignments
      * firm widens that row to an officer type the screens follow without an
      * edit; naming the administrator beside it keeps §10 true whatever the row
      * says. The enabled() guard is what the isAdmin half would otherwise walk
-     * straight past — while FEATURE_CIP is off the module does not exist for
+     * straight past, while FEATURE_CIP is off the module does not exist for
      * anyone, administrators included.
      */
     public static function canAssign(?User $user): bool
@@ -118,7 +118,7 @@ class Assignments
 
             /*
              * §10 in one line: the file being assigned is what puts it into
-             * review. Only from NEW — an application further down the
+             * review. Only from NEW, an application further down the
              * lifecycle is changing hands, and driving it back to REVIEW
              * APPLICATION to record that would throw away the reviewer's work
              * and tell every dashboard the file had started again.
@@ -160,7 +160,7 @@ class Assignments
      * Take the file off somebody.
      *
      * The status stays exactly where it is. An application between officers is
-     * still under review — there is no edge back out of REVIEW APPLICATION,
+     * still under review, there is no edge back out of REVIEW APPLICATION,
      * and inventing one so an empty "Assigned To" column looked tidy would be
      * rewriting the file's history to describe the staffing.
      */
@@ -269,7 +269,7 @@ class Assignments
      * Public because this class is not the only thing that ends an assignment:
      * suspending an account ends every file it holds (see AccessSync), and
      * without this the row would say nobody holds the file while the cache
-     * went on naming the suspended officer — and every screen reads the cache.
+     * went on naming the suspended officer, and every screen reads the cache.
      */
     public static function refreshCache(CipApplication $application): void
     {

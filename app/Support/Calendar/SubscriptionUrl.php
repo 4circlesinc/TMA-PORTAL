@@ -7,7 +7,7 @@ namespace App\Support\Calendar;
  * fetches it.
  *
  * This exists because "subscribe to this URL" is a server-side request to an
- * address an outsider chose — classic SSRF. Without a guard, someone could
+ * address an outsider chose, classic SSRF. Without a guard, someone could
  * point a subscription at the cloud metadata endpoint, at an internal admin
  * service, or at localhost, and read the response back out through the
  * calendar. Every host is therefore resolved and checked against private and

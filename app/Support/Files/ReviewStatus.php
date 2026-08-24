@@ -11,11 +11,11 @@ use App\Support\Cip\DocumentStatus;
  * The same four-status vocabulary as {@see DocumentStatus}: a client file
  * and a CIP checklist slot are the same kind of document, and a reviewer
  * looking at one in the File Library, the Documents tab, or a person tab
- * must read the same words. Pending upload stays off this list — it is a
+ * must read the same words. Pending upload stays off this list, it is a
  * slot with no file, and a row in the library is a file.
  *
  * Stored on the file rather than derived. There is nothing to derive it from
- * for an ordinary client upload that is not a CIP slot — "nobody has looked
+ * for an ordinary client upload that is not a CIP slot, "nobody has looked
  * at this yet" is the absence of activity, and absence cannot be told apart
  * from "this file has no review process at all" without recording the
  * difference. CIP slots keep their own copy on `cip_documents.status`; the
@@ -34,7 +34,7 @@ final class ReviewStatus
     public const READY_FOR_SUBMISSION = DocumentStatus::READY_FOR_SUBMISSION;
 
     /**
-     * What a client document starts as — an upload waiting to be judged.
+     * What a client document starts as, an upload waiting to be judged.
      *
      * Alias of {@see self::APPLICATION_REVIEW}. Kept so callers that mean
      * "the opening state" do not have to say the longer name.
@@ -49,7 +49,7 @@ final class ReviewStatus
     ];
 
     /**
-     * Settled by a person — the review round is over, whichever way it went.
+     * Settled by a person, the review round is over, whichever way it went.
      *
      * Automatic moves stop at these. A comment arriving on a document somebody
      * has already accepted is a remark about finished work, not a reason to
@@ -77,7 +77,7 @@ final class ReviewStatus
     /**
      * Any file-level state may be set from any other, for documents that are
      * not CIP slots. CIP slots travel {@see DocumentEngine}'s
-     * edges instead — this table is the library's, and a reviewer who wants a
+     * edges instead, this table is the library's, and a reviewer who wants a
      * settled extra file to start over is doing ordinary work.
      *
      * Only "move it to where it already is" is refused.
@@ -127,7 +127,7 @@ final class ReviewStatus
     /**
      * The vocabulary value a stored string means.
      *
-     * Unknown values stay unknown — a workflow status that leaked onto this
+     * Unknown values stay unknown, a workflow status that leaked onto this
      * column is not a client-document state, and pretending it is would draw
      * the wrong badge.
      */

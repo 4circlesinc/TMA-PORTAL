@@ -52,7 +52,7 @@ class ClientConversationController extends Controller
 
     /**
      * Recordings of calls about this applicant. Anyone who can open the client
-     * sees the file's recordings — that is the point of keeping them here —
+     * sees the file's recordings, that is the point of keeping them here —
      * rather than only the calls they personally placed.
      *
      * @return array<int, array<string, mixed>>

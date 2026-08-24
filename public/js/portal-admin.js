@@ -80,7 +80,7 @@
 
   /* Every group in the rail starts open. The sections inside them are what the
      page is for, and leaving them shut hid most of Settings behind a caret.
-     Collapsing still works — it just isn't where a reader starts. */
+     Collapsing still works, it just isn't where a reader starts. */
   NAV.forEach(function (n) { if (n.group) state.expanded[n.group] = true; });
 
   function groupForPage(pageId) {
@@ -139,7 +139,7 @@
 
   /* Server-backed: the real queue. Long jobs (mail import, calendar import,
      OneDrive sync, outbound email) all run here, and their signature failure
-     is a worker that stopped — so the health line comes first. */
+     is a worker that stopped, so the health line comes first. */
   PAGES['background-ops'] = {
     render: function () {
       secEnsureStyles();
@@ -241,7 +241,7 @@
             : empty('No failed jobs.');
 
           root.innerHTML =
-            '<p class="tma-portal-subtitle">Work the portal does in the background — importing mail and files, ' +
+            '<p class="tma-portal-subtitle">Work the portal does in the background, importing mail and files, ' +
             'syncing calendars, sending email. You can keep working while these run.</p>' +
             ui().section('Imports', pauseBlock) +
             health +
@@ -313,7 +313,7 @@
 
   /* ── Account and Reporting ──────────────────────────────────────────
      All three pages below used to read and write window.TMAPortalData, the
-     localStorage store — so a "report" held a name and a date and no numbers,
+     localStorage store, so a "report" held a name and a date and no numbers,
      the notification history listed whatever the mock had pushed into it, and
      branding applied to the one browser that typed it. They are server-backed
      now: ReportsController (numbers computed from the portal's own tables),
@@ -407,7 +407,7 @@
               }));
 
         /* The tab markup is new on every repaint and needs re-initialising,
-           but `root` is the same node — wiring the change listener again would
+           but `root` is the same node, wiring the change listener again would
            stack another handler on it each time a tab is clicked. */
         if (root._repTabsWired) {
           if (window.PortalTabGroup) window.PortalTabGroup.init(root);
@@ -880,7 +880,7 @@
   /* ── Client hub access (real: /admin/client-hub) ──────────────────
      The capability toggles here are the same names the server enforces and
      the sidebar prunes on, so switching one off removes the Clients page for
-     every employee — not just its buttons. Administrators always hold all of
+     every employee, not just its buttons. Administrators always hold all of
      them, which is why nobody can lock themselves out of this screen.
 
      Rows reuse the Privacy panel's cookie-row component (label + description
@@ -916,7 +916,7 @@
         var counts = d.counts || {};
 
         root.innerHTML =
-          '<p class="tma-portal-subtitle">Who may work in CIP Applications, and how clients get their account — ' +
+          '<p class="tma-portal-subtitle">Who may work in CIP Applications, and how clients get their account, ' +
           'administrators always hold every permission below.</p>' +
           (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change this access.</p>') +
           ui().section('What employees can do',
@@ -997,7 +997,7 @@
   };
 
   /* ── Service teams (real: /admin/service-teams) ────────────────────
-     Teams are the firm's staff groups — this screen does not create a second
+     Teams are the firm's staff groups, this screen does not create a second
      kind. Putting a team on a client fans out into ordinary per-person
      assignments, which is what FileAccess reads, so folder access arrives by
      the route it always did. */
@@ -1021,7 +1021,7 @@
       return;
     }
     if (!removing && !team.memberCount) {
-      ui().toast('“' + team.name + '” has no staff members yet — add some under People → Groups');
+      ui().toast('“' + team.name + '” has no staff members yet, add some under People → Groups');
       return;
     }
 
@@ -1040,8 +1040,8 @@
           ui().field('What they do for this client', ui().select(roleOptions, 'general', 'data-team-role', 'Role')) +
           ui().field('What they can reach', ui().select(d.levels, 'view_files', 'data-team-level', 'Permission level'))) +
         '<p class="tma-portal-note">' + (removing
-          ? 'Anyone in this team who is on the client for another reason loses that too — a client records one assignment per person, not one per team.'
-          : 'Nobody becomes the client’s primary contact this way. Adding someone to the team later does not put them on the client — re-apply the team to include them.') + '</p>' +
+          ? 'Anyone in this team who is on the client for another reason loses that too, a client records one assignment per person, not one per team.'
+          : 'Nobody becomes the client’s primary contact this way. Adding someone to the team later does not put them on the client, re-apply the team to include them.') + '</p>' +
         '<div class="tma-portal-form-actions">' +
         ui().btn({
           label: removing ? 'Remove from client' : 'Assign team',
@@ -1082,7 +1082,7 @@
       var canEdit = !!d.canEdit;
 
       return '<p class="tma-portal-subtitle">Put a whole staff team onto a client in one move. ' +
-        'Teams are your staff groups — create and edit them under People → Groups.</p>' +
+        'Teams are your staff groups, create and edit them under People → Groups.</p>' +
         (canEdit ? '' : '<p class="tma-portal-note">Only administrators can assign service teams.</p>') +
         (d.teams.length
           ? ui().table(['Team', 'Staff', 'Clients', ''], d.teams.map(function (t) {
@@ -1296,9 +1296,9 @@
    *
    * The checklists every applicant is measured against, one list per
    * applicant type, editable by administrators. The server already enforces
-   * the rules that matter — a retired requirement is a soft delete because
+   * the rules that matter, a retired requirement is a soft delete because
    * filed documents key on it, re-adding one restores it, and renaming
-   * changes the label never the key — so this screen is honest chrome over
+   * changes the label never the key, so this screen is honest chrome over
    * /portal/cip/requirements.
    */
   var CIPDOCS = { loaded: false, loading: false, error: '', types: null };
@@ -1336,7 +1336,7 @@
     ui().openModal({
       title: 'Filing folder',
       body:
-        '<p class="tma-portal-note">Uploads stay inside that person’s own folder — Main Applicant, Sponsor, or Dependent. Pick a subfolder inside it, or create one. The main applicant’s files cannot be filed anywhere else.</p>' +
+        '<p class="tma-portal-note">Uploads stay inside that person’s own folder. Main Applicant, Sponsor, or Dependent. Pick a subfolder inside it, or create one. The main applicant’s files cannot be filed anywhere else.</p>' +
         ui().field('Folder', ui().select(options, selected, 'data-cipdoc-folder-pick', 'Folder')) +
         '<div data-cipdoc-folder-new' + (selected === '__new__' ? '' : ' hidden') + '>' +
         ui().field('New folder name', ui().input({
@@ -1379,19 +1379,19 @@
 
   function cipDocRow(r, canEdit) {
     // A retired row keeps its place in the list but drops to the muted ink —
-    // the same grey the table already uses — so the eye reads it as history.
+    // the same grey the table already uses, so the eye reads it as history.
     var name = r.retired
       ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
       : '<strong>' + ui().esc(r.label) + '</strong>';
 
     // Required is a tick in its own column. Ticked means required; unticked
-    // means optional. The old inverted reading — a filled circle for optional
-    // — is the thing this column exists to stop.
+    // means optional. The old inverted reading, a filled circle for optional
+    //, is the thing this column exists to stop.
     var tick = r.retired ? '' :
       '<input type="checkbox" class="tma-dash__check" data-cipdoc-toggle="' + ui().esc(r.id) + '"' +
       (r.required ? ' checked' : '') + (canEdit ? '' : ' disabled') +
-      ' title="' + (r.required ? 'Required — untick to make it optional' : 'Optional — tick to make it required') + '"' +
-      ' aria-label="Required — ' + ui().esc(r.label) + '">';
+      ' title="' + (r.required ? 'Required, untick to make it optional' : 'Optional, tick to make it required') + '"' +
+      ' aria-label="Required, ' + ui().esc(r.label) + '">';
 
     var meta = [];
     if (r.help) meta.push(ui().esc(r.help));
@@ -1581,7 +1581,7 @@
   function cipLetterModal(found) {
     var letter = found.letter;
     var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
-      return '{{' + p.token + '}} — ' + p.meaning;
+      return '{{' + p.token + '}}, ' + p.meaning;
     }).join('<br>');
 
     ui().openModal({
@@ -2016,7 +2016,7 @@
             ? '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#change-password-dialog"><span>Change password</span></button></div>' +
               '<p class="tma-security__desc">Use a password you don\'t use anywhere else.</p></section>'
             // An account created by an administrator, or through Google/Microsoft,
-            // has a random password nobody has ever seen — so "change" can't work.
+            // has a random password nobody has ever seen, so "change" can't work.
             : '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#set-password-dialog"><span>Set a password</span></button></div>' +
               '<p class="tma-security__desc">Set one to sign in with your email address as well as your connected accounts.</p></section>') +
 
@@ -2343,7 +2343,7 @@
           });
         });
 
-        /* security notification switches — saved as they're flipped */
+        /* security notification switches, saved as they're flipped */
         root.querySelectorAll('[data-sec-alert]').forEach(function (cb) {
           cb.addEventListener('change', function () {
             var body = {};
@@ -2575,7 +2575,7 @@
         var tfa = el.querySelector('[data-si-tfa]');
         var ses = el.querySelector('[data-si-sessions]');
         if (si) si.innerHTML = '<strong>' + d.failedSignins7d + '</strong> failed sign-in attempt' + (d.failedSignins7d === 1 ? '' : 's') + ' in the last 7 days';
-        if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong> — turn it on under Account security';
+        if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong>: turn it on under Account security';
         if (ses) ses.innerHTML = '<strong>' + d.sessions.length + '</strong> active session' + (d.sessions.length === 1 ? '' : 's');
       }).catch(function () {});
     },
@@ -2710,7 +2710,7 @@
   /* ── Security alert settings (real: /admin/security-policies) ───────
      Only the two events the portal actually detects are offered. The screen
      this replaced also listed "signs in from a different country" and "a
-     suspicious file is uploaded" — the portal does no geo-IP lookup and runs
+     suspicious file is uploaded", the portal does no geo-IP lookup and runs
      no malware scanner, so those switches could never have fired. The event
      list comes from the server for exactly that reason. */
   PAGES['alert-settings'] = {
@@ -2827,7 +2827,7 @@
     },
   };
 
-  // One Microsoft consent covers all three — each tile reflects a facet of
+  // One Microsoft consent covers all three, each tile reflects a facet of
   // the same connected account, so connecting any of them connects them all.
   var CONNECTOR_CATALOG = [
     { id: 'email', name: 'Outlook', desc: 'Read and send your mail in the portal', icon: 'images/icons/brands/Outlook.svg' },
@@ -2863,7 +2863,7 @@
 
         root.innerHTML =
           '<h3 class="tma-portal-section__title">Connectors</h3>' +
-          '<p class="tma-portal-subtitle">Connect once — Outlook, Calendar and OneDrive link together.</p>' +
+          '<p class="tma-portal-subtitle">Connect once. Outlook, Calendar and OneDrive link together.</p>' +
           '<div class="tma-portal-connector-list">' +
           CONNECTOR_CATALOG.map(function (c) {
             var f = features[c.id] || {};
@@ -3032,8 +3032,8 @@
 
         var rows = list.map(function (f) {
           return '<tr><td><strong>' + esc(f.name) + '</strong></td>' +
-            '<td class="tma-portal-table__muted">' + esc(f.folder || '—') + '</td>' +
-            '<td class="tma-portal-table__muted">' + esc(f.owner || '—') + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(f.folder || '-') + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(f.owner || '-') + '</td>' +
             '<td class="tma-portal-table__muted">' + esc(when(f.uploadedAt)) + '</td>' +
             '<td class="tma-portal-table__muted">' + esc(bytes(f.bytes)) + '</td></tr>';
         }).join('');
@@ -3055,7 +3055,7 @@
   /* ── Permissions (real: /admin/permissions) ───────────────────────
      Two firm-wide defaults of deliberately different kinds. The directory
      toggle grants a capability, so switching it off takes the People section
-     away from every employee — sidebar, page gate and API together. Client
+     away from every employee, sidebar, page gate and API together. Client
      sharing is not a capability (the right to re-share belongs to the item,
      not the account), so the server enforces it inside FileAccess::can, which
      every share path already passes through. */
@@ -3072,7 +3072,7 @@
         var counts = d.counts || {};
 
         root.innerHTML =
-          '<p class="tma-portal-subtitle">Firm-wide defaults for what employees can see and what clients can pass on — ' +
+          '<p class="tma-portal-subtitle">Firm-wide defaults for what employees can see and what clients can pass on, ' +
           'administrators are unaffected by both.</p>' +
           (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change these permissions.</p>') +
           ui().section('Directory',
@@ -3123,7 +3123,7 @@
 
   /* ── Folder templates (real: /portal/file-library/folder-templates) ──
      A template is a named list of subfolder names. Creating one is only half
-     the feature — "Apply" is the half that makes it worth having, and it goes
+     the feature, "Apply" is the half that makes it worth having, and it goes
      through the same folder creation the client defaults use, so a name that
      already exists is skipped rather than duplicated. */
   var FTPL = { loaded: false, loading: false, error: '', templates: [], targets: [] };
@@ -3142,7 +3142,7 @@
   }
 
   /* The target list is grouped (organization folders, then each client's), and
-     ui().select has no optgroup support — so this builds one, reusing the same
+     ui().select has no optgroup support, so this builds one, reusing the same
      class so it still looks like every other select on the page. */
   function targetSelect(targets) {
     var groups = [];
@@ -3215,7 +3215,7 @@
       title: 'Apply “' + template.name + '”',
       body:
         '<p>This creates ' + template.subfolders.length + ' folder' + (template.subfolders.length === 1 ? '' : 's') +
-        ' — ' + ui().esc(template.subfolders.join(', ')) + ' — inside the folder you pick.</p>' +
+        ', ' + ui().esc(template.subfolders.join(', ')) + ', inside the folder you pick.</p>' +
         ui().field('Destination folder', targetSelect(FTPL.targets)) +
         '<p class="tma-portal-note">Folders that already exist are left alone.</p>' +
         '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Apply template', attrs: 'data-ftpl-apply-go' }) + '</div>',
@@ -3462,14 +3462,14 @@
           ? ui().table(['Folder', 'Staff access', ''], orgRows)
           : ui().emptyState({ illustration: 'Illustration03', title: 'No organization folders yet', subtitle: 'Shared internal folders your staff can access. Clients never see these.' })) +
         '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create organization folder', attrs: 'data-org-create' }) + '</div>',
-        { description: 'Shared internal folders for your staff — e.g. Company Documents, Templates, Policies. Clients can’t see these unless you share a specific file or folder with them.' });
+        { description: 'Shared internal folders for your staff, e.g. Company Documents, Templates, Policies. Clients can’t see these unless you share a specific file or folder with them.' });
 
       var subChips = (FILELIB.settings.clientSubfolders || []).map(function (n, i) {
         return '<span class="tma-portal-subchip">' + ui().esc(n) +
           '<button type="button" class="tma-portal-subchip__x" data-sub-remove="' + i + '" aria-label="Remove ' + ui().esc(n) + '">&times;</button></span>';
       }).join('');
       var subSection = ui().section('Default client subfolders',
-        '<div class="tma-portal-subchips">' + (subChips || '<span class="tma-portal-note">None — new clients get just their main folder.</span>') + '</div>' +
+        '<div class="tma-portal-subchips">' + (subChips || '<span class="tma-portal-note">None, new clients get just their main folder.</span>') + '</div>' +
         '<div class="tma-portal-inline-add">' + ui().input({ placeholder: 'Add a subfolder (e.g. Tax)', attrs: 'data-sub-input' }) +
         ui().btn({ label: 'Add', small: true, attrs: 'data-sub-add' }) + '</div>',
         { description: 'Created automatically inside every new client’s folder.' });
@@ -3591,7 +3591,7 @@
     var el = state.el;
     if (!el) return;
     var s = data().state();
-    /* state.page is what was *asked* for — a deep link, a search result, a
+    /* state.page is what was *asked* for, a deep link, a search result, a
        stale bookmark. What actually renders is resolved here, every time, so a
        section this account may not open falls back to their profile instead of
        drawing an admin panel. */

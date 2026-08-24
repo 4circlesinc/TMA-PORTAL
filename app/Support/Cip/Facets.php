@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Sibling to {@see Buckets}, and built on the same promise: the number beside
  * a value and the table that value opens are measured by one definition, so
  * they cannot disagree. A facet reading "Rita Officer 6" that opens onto nine
- * rows is worse than offering no count at all — it is the portal telling
+ * rows is worse than offering no count at all, it is the portal telling
  * somebody there is work they then cannot find, which is the failure the
  * bucket counts were designed around and this class inherits.
  *
@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * COUNTED OVER THE WHOLE SLICE, NOT THE SCREEN
  *
- * Every count is measured over everything the reader may see — what
+ * Every count is measured over everything the reader may see, what
  * {@see ApplicationScope} allows and nothing narrower. Not the current page,
  * which would make the menu describe fifty rows out of eleven thousand; and
  * not the current search or the other filters, which would make the numbers
@@ -38,7 +38,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Deliberately, and the difference is real rather than an oversight. A bucket
  * is a question about work to pick up, and a leftover draft is nobody's work
  * yet. A facet is a question about the table in front of you, and the table
- * still lists those rows — so a provider filtered to their own firm must see
+ * still lists those rows, so a provider filtered to their own firm must see
  * the same rows the facet promised, leftovers among them. The rule that
  * matters is the one both classes keep: the count is measured through the same
  * query as the list.
@@ -61,7 +61,7 @@ class Facets
      * EVERY OFFICER, NOT ONLY THE BUSY ONES
      *
      * A filter menu is a list of the questions that can be asked, so it names
-     * every officer the firm has even when their count is zero — "who has
+     * every officer the firm has even when their count is zero, "who has
      * nothing on" is a real question, and an officer who drops off the menu
      * the moment their desk clears is a menu that changes shape under the
      * reader. Zero is shown for the same reason the status list shows a
@@ -92,7 +92,7 @@ class Facets
          *
          * A firm with thirty officers would otherwise put thirty queries
          * behind every load of a table that already has eleven thousand rows
-         * in production — the shape this module was redesigned to avoid.
+         * in production, the shape this module was redesigned to avoid.
          */
         $held = self::liveAssignments(ApplicationScope::query($reader))
             ->selectRaw('client_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
@@ -105,7 +105,7 @@ class Facets
          *
          * For staff this is the officer roster, so somebody with nothing on
          * is still offered. For everybody else it is exactly the people who
-         * appeared in the tally above — no roster, and trashed included,
+         * appeared in the tally above, no roster, and trashed included,
          * because an account in the Recycle Bin still holds its files until
          * somebody ends the assignment and dropping the name would leave its
          * count in the menu with nothing to call it.
@@ -163,7 +163,7 @@ class Facets
     /**
      * The provider firms this reader can filter by.
      *
-     * Every firm they may see, whether or not it has filed anything yet — a
+     * Every firm they may see, whether or not it has filed anything yet, a
      * firm with nothing on the table is the answer to "has Aurora sent us
      * anything", and a list that only names the busy ones cannot answer it.
      * A provider contact still sees one row, their own, because that is the
@@ -183,7 +183,7 @@ class Facets
         /*
          * ...and the firms themselves, which is a different question.
          *
-         * Staff filter across the register — but only the part of it that is
+         * Staff filter across the register, but only the part of it that is
          * really in the system: a firm whose company row is missing or in the
          * bin is not on the Service providers tab, and offering it here made
          * the menu name providers the hub said did not exist. The exception
@@ -227,8 +227,8 @@ class Facets
      *
      * Several at once is an OR, which is what a checkbox list means: a reader
      * ticking two officers is asking for either one's work, not for the files
-     * they somehow both hold. Across fields it stays an AND — Rita's files
-     * that are also Delayed — because that is what a second question added to
+     * they somehow both hold. Across fields it stays an AND. Rita's files
+     * that are also Delayed, because that is what a second question added to
      * the first one means.
      *
      * The unassigned sentinel is not a user id and cannot be resolved to one,
@@ -255,8 +255,8 @@ class Facets
             if ($wantsUnassigned) {
                 /*
                  * Nobody holds it *now*. An assignment that
-                 * has ended is not a lighter shade of assigned — the officer
-                 * has stopped working on it — so a file whose only assignment
+                 * has ended is not a lighter shade of assigned, the officer
+                 * has stopped working on it, so a file whose only assignment
                  * ran out belongs in this answer, and the live() window is
                  * what puts it there.
                  */
@@ -284,8 +284,8 @@ class Facets
     /**
      * The scoped listing joined to the live assignments on each client.
      *
-     * The same rows §8's Assigned To column draws — one list, shared with the
-     * profile's Assigned tab — so a count here and the names in the cell
+     * The same rows §8's Assigned To column draws, one list, shared with the
+     * profile's Assigned tab, so a count here and the names in the cell
      * cannot come apart.
      *
      * A join rather than whereHas because this counts rather than filters, and
@@ -311,7 +311,7 @@ class Facets
     /**
      * How many of this reader's applications nobody currently holds.
      *
-     * No live officer on the application — the same test the column makes, so
+     * No live officer on the application, the same test the column makes, so
      * a row counted here is a row whose Assigned To cell really does say
      * "Unassigned".
      */

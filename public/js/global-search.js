@@ -115,7 +115,7 @@
   /* Live portal header/sidebar search starts empty; real entries come from options.index / TMAGlobalSearchIndex. */
   const DEFAULT_INDEX = [];
 
-  /* ByeWind sample corpus — design-system interactive scenes only (never dashboard search). */
+  /* ByeWind sample corpus, design-system interactive scenes only (never dashboard search). */
   const DESIGN_DEMO_INDEX = [
     { type: 'query', label: 'Landing page design', keywords: ['landing', 'page', 'design'] },
     { type: 'user', label: 'ByeWind', avatar: 'AvatarByewind', keywords: ['byewind', 'bye', 'wind'], href: '#user-byewind' },
@@ -890,7 +890,7 @@
     }
 
     document.addEventListener('keydown', (e) => {
-      // A tag-name test misses contenteditable fields — the Messages composer
+      // A tag-name test misses contenteditable fields, the Messages composer
       // is one, so typing a URL there opened this instead of inserting the
       // slash, and every following keystroke went to the search box.
       const active = document.activeElement;
@@ -921,7 +921,7 @@
     const sidebarEmbed = !!options.sidebarEmbed;
     /* Read on every search, not captured once. The caller's index is built at
        boot, before /me answers, so the settings sections an account may reach
-       are appended to it a beat later (portal-search-index.js) — a snapshot
+       are appended to it a beat later (portal-search-index.js), a snapshot
        taken here would be the empty-handed version forever, and an
        administrator would never find their own admin pages. */
     const sourceIndex = () => DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);

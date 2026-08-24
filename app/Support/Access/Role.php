@@ -8,8 +8,8 @@ use App\Support\Clients\ClientHubSettings;
 /**
  * Who may see and do what, in one place.
  *
- * The portal has three account types on users.account_type — Client, Employee
- * and Administrator — and before this class every gate was an inline
+ * The portal has three account types on users.account_type. Client, Employee
+ * and Administrator, and before this class every gate was an inline
  * `in_array($user->account_type, ['Administrator', 'Employee'])` repeated
  * across ~28 files. That made "what can a client actually reach?" a question
  * only a grep could answer, and it meant a new page could ship with no gate at
@@ -21,7 +21,7 @@ use App\Support\Clients\ClientHubSettings;
  *
  * The same capability names travel to the browser (see MeController::show) so
  * the sidebar, the mobile menu and the global search index hide exactly what
- * the server would refuse. The browser copy is a courtesy — every capability
+ * the server would refuse. The browser copy is a courtesy, every capability
  * is still enforced server-side.
  */
 class Role
@@ -32,7 +32,7 @@ class Role
 
     /**
      * The CIP officer account type. Officers are employees in every
-     * portal-wide sense — mail, files, calendar, the client hub — they carry
+     * portal-wide sense, mail, files, calendar, the client hub, they carry
      * the whole Employee baseline (see the fallback in can()) plus the
      * officer rows in the matrix.
      *
@@ -77,11 +77,11 @@ class Role
     ];
 
     /**
-     * The types the Users page may hand out — the INTERNAL working roles,
+     * The types the Users page may hand out, the INTERNAL working roles,
      * and only them. Employee is deliberately absent (a one-way street out:
      * existing rows stay recognized and parked, nothing grants it again).
      * Client is deliberately absent too: external people are never typed by
-     * hand — they arrive through invitations sent from a client or service
+     * hand, they arrive through invitations sent from a client or service
      * provider page, always as Client accounts, and the Users page merely
      * *describes* them (Service Provider Contact / Service Provider Client /
      * Private Client) from their hub relationships.
@@ -101,7 +101,7 @@ class Role
     ];
 
     /**
-     * Staff who are not administrators — what "employees" means to the
+     * Staff who are not administrators, what "employees" means to the
      * overlay screens and the headcounts. Officers follow every Employee
      * grant (and every admin-managed Employee overlay) via can()'s baseline
      * fallback, so anywhere that counts or lists "employees" should count
@@ -115,7 +115,7 @@ class Role
     ];
 
     /**
-     * The working non-administrator staff types — the people a client or a
+     * The working non-administrator staff types, the people a client or a
      * service provider can actually be handed to.
      *
      * EMPLOYEE_LIKE is not the same question: it includes the parked Employee
@@ -136,7 +136,7 @@ class Role
      * capability => the non-administrator roles that hold it.
      *
      * An empty array means administrators only. A capability that is not
-     * listed here at all is unknown, and self::can() refuses it — so a typo
+     * listed here at all is unknown, and self::can() refuses it, so a typo
      * denies access rather than silently granting it.
      */
     private const MATRIX = [
@@ -149,7 +149,7 @@ class Role
         // Reach the Clients hub at all.
         'clients.view' => [self::EMPLOYEE],
         // See every client record, rather than only the ones you are assigned
-        // to. Employees are scoped to their live assignments — the same rows
+        // to. Employees are scoped to their live assignments, the same rows
         // that drive folder access, so what they can open and what they can
         // find agree. Enforced by App\Support\Access\ClientScope, which every
         // client query goes through; this row on its own decides nothing.
@@ -163,13 +163,13 @@ class Role
 
         /* ── CBI (Citizenship by Investment) ─────────────────────────── */
         // Admin-only while the module is in development, and additionally
-        // dark everywhere FEATURE_CBI is off — see the flag check in can().
+        // dark everywhere FEATURE_CBI is off, see the flag check in can().
         // Widen to [self::EMPLOYEE] (or per-role grants) at launch.
         'cbi.view' => [],
 
         /* ── CIP (native application-management portal) ──────────────── */
         // The CBI mirror's replacement. Every cip.* capability is dark while
-        // FEATURE_CIP is off — see the flag check in can(), which sits before
+        // FEATURE_CIP is off, see the flag check in can(), which sits before
         // the admin short-circuit so the module does not exist for anyone.
         //
         // The officer account type holds the brief's review and compliance
@@ -186,7 +186,7 @@ class Role
         // Employee cannot reach the portal at all, so granting them the
         // module would be a promise nothing can keep. External Service
         // Provider contacts and Private Clients are NOT granted here —
-        // clients hold no matrix capability, ever — they are answered by
+        // clients hold no matrix capability, ever, they are answered by
         // App\Support\Cip\CipAccess::canReach/canCreate from what they are
         // in the Client Hub. Row visibility is always ApplicationScope;
         // these rows on their own show nobody any application.
@@ -198,13 +198,13 @@ class Role
         // Administrator assigns the file").
         'cip.assign' => [],
         'cip.decide' => [self::REVIEWING_OFFICER],
-        // Document requirement and decision templates, provider codes — the
+        // Document requirement and decision templates, provider codes, the
         // module's configuration surface.
         'cip.configure' => [],
         'cip.report' => [],
 
         /* ── People and users ────────────────────────────────────────── */
-        // The Users page — the account-management table. It lists every
+        // The Users page, the account-management table. It lists every
         // account with its status, sign-in history and the approve / suspend /
         // reset / delete controls, so it is administration, not a directory.
         // This used to be granted to Employee and to gate the People section
@@ -215,7 +215,7 @@ class Role
         'users.manage' => [],
         // The People section: browse colleagues, the shared and personal
         // address books. Split out of `users.view` so the Users page could be
-        // closed without taking the directory with it, then closed too — an
+        // closed without taking the directory with it, then closed too, an
         // employee has no need to enumerate the firm.
         'directory.view' => [],
         // See colleagues' online/away presence and their work plans.
@@ -225,7 +225,7 @@ class Role
         // Use the portal mailbox (Gmail/Graph). Clients talk via Messages.
         'mail.use' => [self::EMPLOYEE],
         // The internal social feed. Reaching it at all; what a person may do
-        // *inside* a channel is decided by their membership row — see
+        // *inside* a channel is decided by their membership row, see
         // App\Support\Feed\FeedAccess.
         'feed.view' => [self::EMPLOYEE],
         // Create a new channel. Employees may; whether a client channel is
@@ -239,7 +239,7 @@ class Role
         // you administer.
         'feed.analytics' => [],
         // Start a conversation with anyone in the organization. Clients are
-        // restricted to the staff assigned to them — see MessagingController.
+        // restricted to the staff assigned to them, see MessagingController.
         'messaging.contactAll' => [self::EMPLOYEE],
 
         /* ── Files ───────────────────────────────────────────────────── */
@@ -261,12 +261,12 @@ class Role
         // the comment threads you are part of, across every file.
         'workflows.view' => [self::EMPLOYEE],
         // The Client Call Recordings area. Employees hold it but see only the
-        // calls they recorded — the wider view is the administrator's
+        // calls they recorded, the wider view is the administrator's
         // (§ CallRecordingController::index). Clients never hold it: their
         // calls are recorded FOR the firm, not shared back as media.
         'callRecordings.view' => [self::EMPLOYEE],
-        // The Overview page. Staff-wide: what it opens with — the metrics,
-        // the week planner, recent files, the firm's sign-ins — was built for
+        // The Overview page. Staff-wide: what it opens with, the metrics,
+        // the week planner, recent files, the firm's sign-ins, was built for
         // employees too (see SignInActivityController). The administration it
         // also carries (the Users tab, the Recycle Bin, the presence board)
         // stays closed through its own capabilities, mirrored in overview.js.
@@ -288,7 +288,7 @@ class Role
         'groups.manage' => [],
 
         /* ── Administration ──────────────────────────────────────────── */
-        // The Admin Overview panel on the settings rail — the plan, the trial,
+        // The Admin Overview panel on the settings rail, the plan, the trial,
         // the account limits. Split from `overview.view` when the Overview
         // *page* opened to employees, so the page could travel without the
         // firm's account summary going with it.
@@ -308,7 +308,7 @@ class Role
         'settings.clientHub' => [],
         // Firm-wide storage usage against the licence.
         'settings.storage' => [],
-        // Advanced Preferences — the firm-wide sharing and visibility defaults
+        // Advanced Preferences, the firm-wide sharing and visibility defaults
         // every account inherits.
         'settings.advanced' => [],
     ];
@@ -335,7 +335,7 @@ class Role
         'folders/all' => 'files.viewOrg',
         'folders/shared' => 'files.viewOrg',
         'overview' => 'overview.view',
-        // Firm-wide reports — usage, access, messaging, storage, and CIP.
+        // Firm-wide reports, usage, access, messaging, storage, and CIP.
         // Lives as a main page, not a settings rail section.
         'reporting' => 'settings.reporting',
         // The People section, screen by screen. These mirror portal-access.js
@@ -364,7 +364,7 @@ class Role
      * Account settings rail section => the capability needed to open it.
      *
      * /account-settings is the one settings home, so every account may load
-     * it — their profile, theme, notifications, password and two-factor all
+     * it, their profile, theme, notifications, password and two-factor all
      * live there. The rail it renders, however, also carried the firm's
      * administration: security policy, connectors, branding, billing, storage
      * and the Advanced Preferences. Those were offered to employees and
@@ -389,7 +389,7 @@ class Role
         'security-policy' => 'settings.security',
         'alert-settings' => 'settings.security',
         'device-security' => 'settings.security',
-        // "Connectors" stays open — it is where anyone links their own
+        // "Connectors" stays open, it is where anyone links their own
         // Microsoft account (Outlook, Calendar, OneDrive).
         'storage-usage' => 'settings.storage',
         'permissions' => 'settings.advanced',
@@ -418,7 +418,7 @@ class Role
     }
 
     /**
-     * The capabilities a portal page needs — all of them — or an empty list
+     * The capabilities a portal page needs, all of them, or an empty list
      * when it is open to every approved account.
      *
      * @return list<string>
@@ -475,7 +475,7 @@ class Role
 
         /*
          * CBI ships behind FEATURE_CBI. While the flag is off the module
-         * does not exist for anyone — administrators included — so this
+         * does not exist for anyone, administrators included, so this
          * check sits BEFORE the admin short-circuit. One line here keeps
          * the page gate, the sidebar row and the capability list in
          * agreement across every environment.
@@ -504,7 +504,7 @@ class Role
             return true;
         }
 
-        // Officer account types keep everything an employee holds — the CIP
+        // Officer account types keep everything an employee holds, the CIP
         // roles narrow what they may do INSIDE the module, never what the
         // rest of the portal already gave staff. This also makes the
         // admin-managed Employee overlays (client hub, permissions) apply to
@@ -517,9 +517,9 @@ class Role
      * The non-administrator roles holding a capability right now.
      *
      * The matrix is the baseline for everything. Two blocks of it may be
-     * re-shaped by a firm from the settings rail — the client-hub
+     * re-shaped by a firm from the settings rail, the client-hub
      * capabilities, and the People directory under Advanced Preferences >
-     * Permissions — so those resolve against their stored grants instead.
+     * Permissions, so those resolve against their stored grants instead.
      * Only Employee is in play in either: a client never holds a client-hub
      * capability or the staff directory, whatever is saved.
      */
@@ -537,7 +537,7 @@ class Role
     }
 
     /**
-     * Whether employees hold each client-hub capability out of the box — the
+     * Whether employees hold each client-hub capability out of the box, the
      * defaults the Client hub access screen starts from, read from the matrix
      * so the two cannot drift.
      *
@@ -549,7 +549,7 @@ class Role
     }
 
     /**
-     * Whether employees hold each of these capabilities in the matrix — the
+     * Whether employees hold each of these capabilities in the matrix, the
      * defaults an overlay screen starts from. Read from the matrix so a
      * stored grant and the baseline it overlays cannot drift apart.
      *
@@ -567,7 +567,7 @@ class Role
         return $grants;
     }
 
-    /** Every capability this user holds — the list handed to the browser. */
+    /** Every capability this user holds, the list handed to the browser. */
     public static function capabilities(?User $user): array
     {
         if ($user === null) {

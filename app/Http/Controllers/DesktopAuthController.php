@@ -43,8 +43,8 @@ class DesktopAuthController extends Controller
      * Entry point, opened in the system browser by the desktop app.
      *
      * Parks the challenge in the browser session and points `intended` at
-     * finish(), so every sign-in path — password, Google, Microsoft, and the
-     * two-factor challenge behind any of them — lands back here on success
+     * finish(), so every sign-in path, password, Google, Microsoft, and the
+     * two-factor challenge behind any of them, lands back here on success
      * without needing its own hook.
      */
     public function start(Request $request): RedirectResponse
@@ -132,8 +132,8 @@ class DesktopAuthController extends Controller
 
     /**
      * The browser tab the user is left looking at. Custom-scheme navigation
-     * has to come from a user gesture or an in-page assignment — a 302 to
-     * `tmaportal://` is dropped by most browsers — so do it in script and
+     * has to come from a user gesture or an in-page assignment, a 302 to
+     * `tmaportal://` is dropped by most browsers, so do it in script and
      * leave a button behind for when the automatic hop is blocked.
      */
     private function handoffPage(string $token): string

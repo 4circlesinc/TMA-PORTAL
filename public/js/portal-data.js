@@ -20,7 +20,7 @@
   var RETIRED_KEYS = ['superUsers', 'hideSuperGroup', 'quarantinedFiles', 'fileDrops', 'remoteUploadForms', 'folderTemplates', 'serviceTeams', 'customFields'];
   var RETIRED_SETTINGS = [
     'dlp', 'emailSettings', 'fileSettings', 'tools', 'ai', 'permissions',
-    // Rebuilt server-backed rather than removed — the stale copy would just
+    // Rebuilt server-backed rather than removed, the stale copy would just
     // sit there disagreeing with the real one.
     'deviceSecurity', 'securityPolicy', 'signInPolicy', 'alertSettings',
   ];
@@ -96,7 +96,7 @@
       },
       // Default admin home board order. Unknown ids are appended.
       dashboardTileOrder: ['recentFiles', 'email', 'cipStatus', 'favorites', 'road', 'shortcuts', 'employees', 'messages'],
-      // Legacy size map — unused after the fixed 2-column grid; kept empty for older caches.
+      // Legacy size map, unused after the fixed 2-column grid; kept empty for older caches.
       dashboardTileSizes: {},
       // Populated from the File Library (section=recent) on the dashboard mount;
       // starts empty so no placeholder filenames flash before the real data.
@@ -181,7 +181,7 @@
         }
         /* Settings pages that were removed rather than built. Their state sat
            in localStorage and nothing reads it now, but a browser that used
-           the portal before the removal still carries it — and the merge above
+           the portal before the removal still carries it, and the merge above
            only ever adds keys, so without this it would live there forever. */
         RETIRED_KEYS.forEach(function (k) {
           if (state[k] !== undefined) { delete state[k]; stripped = true; }

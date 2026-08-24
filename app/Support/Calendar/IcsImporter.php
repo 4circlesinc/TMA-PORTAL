@@ -44,7 +44,7 @@ class IcsImporter
 
         /*
          * Detached occurrences (RECURRENCE-ID) are held back until every
-         * master exists — a file may list them in any order, and attaching one
+         * master exists, a file may list them in any order, and attaching one
          * to a series that hasn't been created yet would orphan it.
          */
         $deferred = [];
@@ -130,7 +130,7 @@ class IcsImporter
         } catch (\Throwable $e) {
             // One bad event never takes the rest of the file with it.
             $result['failed']++;
-            $result['errors'][] = ($parsed['title'] ?? 'Untitled').' — '.$e->getMessage();
+            $result['errors'][] = ($parsed['title'] ?? 'Untitled').': '.$e->getMessage();
         }
     }
 
@@ -207,7 +207,7 @@ class IcsImporter
      * The identity an entry is deduplicated by.
      *
      * A UID when the file supplies one. Otherwise a hash of the fields that
-     * define the event — deliberately a last resort, and noted as such,
+     * define the event, deliberately a last resort, and noted as such,
      * because it will mis-match if any of them is edited.
      *
      * @param  array<string, mixed>  $parsed
@@ -263,7 +263,7 @@ class IcsImporter
                 'is_optional' => $attendee['optional'],
                 /*
                  * Imported responses are historical record, not something this
-                 * portal solicited — marking them notified stops a later
+                 * portal solicited, marking them notified stops a later
                  * change notice treating them as never-contacted.
                  */
                 'notified_at' => now(),

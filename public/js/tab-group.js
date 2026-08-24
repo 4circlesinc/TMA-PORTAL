@@ -65,7 +65,7 @@
 
   function initAll(scope) {
     const root = scope || document;
-    // Allow init(groupEl) — querySelectorAll only finds descendants, so a
+    // Allow init(groupEl), querySelectorAll only finds descendants, so a
     // tab group passed as the root would otherwise never be wired.
     if (root && root.nodeType === 1 && root.matches && root.matches(GROUP_SELECTOR)) {
       initGroup(root);

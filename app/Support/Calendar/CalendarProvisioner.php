@@ -56,7 +56,7 @@ class CalendarProvisioner
 
     /**
      * Put a calendar in the user's sidebar list. Idempotent, and never
-     * downgrades an existing subscription — re-adding a calendar the user has
+     * downgrades an existing subscription, re-adding a calendar the user has
      * hidden must not silently re-show it.
      */
     public static function subscribe(User $user, Calendar $calendar, bool $visible = true): CalendarSubscription
@@ -84,7 +84,7 @@ class CalendarProvisioner
      */
     public static function defaultTimezone(User $user): string
     {
-        // One resolver for the whole portal — see App\Support\UserTime.
+        // One resolver for the whole portal, see App\Support\UserTime.
         return \App\Support\UserTime::zone($user);
     }
 }

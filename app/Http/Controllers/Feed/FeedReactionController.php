@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  */
 class FeedReactionController extends Controller
 {
-    /** How long an emoji string may be — enough for a ZWJ sequence. */
+    /** How long an emoji string may be, enough for a ZWJ sequence. */
     private const MAX_EMOJI_LENGTH = 32;
 
     /** React to a post, change the reaction, or take it back. */
@@ -98,7 +98,7 @@ class FeedReactionController extends Controller
     /**
      * Who reacted, grouped by emoji (§10).
      *
-     * Everyone who reacted is named — reactions are public by design, unlike
+     * Everyone who reacted is named, reactions are public by design, unlike
      * an anonymous poll vote.
      */
     public function people(Request $request, string $uuid): JsonResponse

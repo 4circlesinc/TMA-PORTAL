@@ -17,9 +17,9 @@ use Illuminate\Validation\Rule;
  * The staff side of invitations: send one, chase it, withdraw it, and see what
  * happened to the email.
  *
- * Who may do what follows the existing capability matrix — inviting a client is
+ * Who may do what follows the existing capability matrix, inviting a client is
  * `clients.invite` (employees have it), inviting staff is `users.manage`
- * (administrators only) — so this adds no new access model of its own.
+ * (administrators only), so this adds no new access model of its own.
  */
 class InvitationController extends Controller
 {
@@ -110,7 +110,7 @@ class InvitationController extends Controller
 
         $email = Str::lower(trim($data['email']));
 
-        // A pre-existing account is fine — they accept by signing in — but a
+        // A pre-existing account is fine, they accept by signing in, but a
         // second live invitation for the same person is not.
         $duplicate = Invitation::query()
             ->where('email', $email)
@@ -124,7 +124,7 @@ class InvitationController extends Controller
 
         abort_if($duplicate, 422, 'There is already a pending invitation for this address. Resend or cancel it instead.');
 
-        // Staff invites default to the reviewing side — Employee is parked
+        // Staff invites default to the reviewing side. Employee is parked
         // and would only send the new person to the role-pending screen.
         $role = $data['role'] ?? ($type === Invitation::TYPE_STAFF ? Role::REVIEWING_OFFICER : Role::CLIENT);
 
@@ -202,7 +202,7 @@ class InvitationController extends Controller
     /**
      * A fresh link for this invitation, for staff to pass on by hand.
      *
-     * This mints a new token — the old link stops working — because the stored
+     * This mints a new token, the old link stops working, because the stored
      * digest cannot be turned back into the original. Handing out a link is
      * handing out the credential, so it is logged like a send.
      */
@@ -221,7 +221,7 @@ class InvitationController extends Controller
             'description' => $request->user()->name.' copied the invitation link for '.$invitation->email,
             'subject' => $invitation,
             'client' => $invitation->client,
-            // The token itself is deliberately absent — ActivityLogger redacts
+            // The token itself is deliberately absent. ActivityLogger redacts
             // it anyway, but it should never get as far as the logger.
             'metadata' => ['invitationId' => $invitation->uuid, 'action' => 'link_copied'],
         ]);

@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
  * machine standing beside it.
  *
  * What is new here is the roll-up. An application's status is not typed in by
- * whoever is working the checklist — it is read OFF the checklist, every time
+ * whoever is working the checklist, it is read OFF the checklist, every time
  * one of these verbs lands. After every required document has been assessed
  * the file reads Assessment feedback (§14). One document sent back then means
  * the provider side has work to do, so it moves to Update required and they
@@ -28,7 +28,7 @@ use Illuminate\Validation\ValidationException;
  * {@see settle()} is that inference, and it is deliberately an inference. It
  * drives {@see Engine} only along edges the lifecycle already allows and leaves
  * the application exactly where it is otherwise, so a reviewer clearing a
- * checklist can never push a file somewhere the map forbids — the map is the
+ * checklist can never push a file somewhere the map forbids, the map is the
  * lifecycle, and a full checklist is not an argument for leaving it.
  */
 class Review
@@ -36,7 +36,7 @@ class Review
     /**
      * Accept a document: good enough to go to the Unit.
      *
-     * Not an exit — see {@see DocumentStatus} — so an officer who notices
+     * Not an exit, see {@see DocumentStatus}, so an officer who notices
      * something later may still send it back until the package freezes.
      */
     public static function approve(CipDocument $document, User $actor): CipDocument
@@ -66,7 +66,7 @@ class Review
      *
      * The reason is not optional and cannot be made optional. "Update
      * required" on its own is a reviewer making the provider guess, and the
-     * guess costs a round trip of the turnaround time §14 is measured in — so
+     * guess costs a round trip of the turnaround time §14 is measured in, so
      * the comment and the verdict are one transaction, and neither lands
      * without the other.
      *
@@ -78,7 +78,7 @@ class Review
 
         if ($reason === '') {
             throw ValidationException::withMessages([
-                'comment' => 'Say what needs changing — this is all the provider side will be told.',
+                'comment' => 'Say what needs changing, this is all the provider side will be told.',
             ]);
         }
 
@@ -91,7 +91,7 @@ class Review
              */
             $note = DocumentComments::create($document, $actor, $reason);
 
-            // A document already sent back can be sent back again — an officer
+            // A document already sent back can be sent back again, an officer
             // adding a second reason to one they have already refused. The
             // reason is the point of the verb; the slot is where it needs to
             // be, and there is no edge for standing still.
@@ -116,7 +116,7 @@ class Review
      *
      * A null actor is the system, which is what an upload path passes. A
      * provider contact re-uploading a scan has made no judgement about the
-     * application and holds no capability to move it — the checklist moved,
+     * application and holds no capability to move it, the checklist moved,
      * and the file followed.
      */
     public static function settle(CipApplication $application, ?User $actor = null): CipApplication
@@ -127,7 +127,7 @@ class Review
          * assessed the file always passes through Assessment feedback; then
          * either Updates required (and the firm is told) or Ready to submit
          * (and the firm is told to confirm). Walking both edges in one settle
-         * is what "moves toward submission" means — leaving the file parked
+         * is what "moves toward submission" means, leaving the file parked
          * at Assessment feedback would make the all-clear a status somebody
          * still had to type.
          *
@@ -201,7 +201,7 @@ class Review
          * or "optional" would mean nothing at all.
          *
          * A required slot still in Pending upload or Application review has
-         * not been assessed, so the file waits — even if another slot has
+         * not been assessed, so the file waits, even if another slot has
          * already been sent back.
          */
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']

@@ -14,7 +14,7 @@ use Illuminate\View\View;
 /**
  * The public end of an invitation: the screen the emailed link opens.
  *
- * No login is required to reach it — that is the whole point — so the token is
+ * No login is required to reach it, that is the whole point, so the token is
  * the only credential, and every action re-reads it and re-checks that the
  * invitation is still live. The previous version of this flow redirected every
  * failure to /auth/login with a session key nothing read, which is why an
@@ -38,7 +38,7 @@ class InvitationAcceptController extends Controller
             return $this->screen($invitation, $token, $reason);
         }
 
-        // First time the link is opened — worth knowing when chasing a client
+        // First time the link is opened, worth knowing when chasing a client
         // who says they never received it.
         if ($invitation->opened_at === null) {
             $invitation->forceFill([
@@ -76,7 +76,7 @@ class InvitationAcceptController extends Controller
         }
 
         // An account created between the page loading and this submit must not
-        // be duplicated — send them down the sign-in path instead.
+        // be duplicated, send them down the sign-in path instead.
         if ($invitation->existingUser() !== null) {
             return redirect('/invite/'.$token);
         }
@@ -139,7 +139,7 @@ class InvitationAcceptController extends Controller
     /**
      * Park the invitation and send the visitor to sign in. The intended URL
      * brings them back here afterwards, so accepting is one click once they are
-     * in — without it they land on the dashboard and the invitation is lost.
+     * in, without it they land on the dashboard and the invitation is lost.
      */
     public function signin(Request $request, string $token): RedirectResponse
     {

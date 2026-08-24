@@ -16,7 +16,7 @@
     @csrf
 
     <p class="tma-auth__section-label">Notify me about</p>
-    <p class="tma-auth__section-hint">Choose how each kind of update reaches you. Approval alerts stay on in the portal. Email for each category stays on by default — turn it off later under Settings → Notifications.</p>
+    <p class="tma-auth__section-hint">Choose how each kind of update reaches you. Approval alerts stay on in the portal. Email for each category stays on by default. Turn it off later under Settings → Notifications.</p>
 
     <div class="tma-auth__pref-notify" role="table" aria-label="Notification preferences">
       <div class="tma-auth__pref-notify-row tma-auth__pref-notify-row--head" role="row">

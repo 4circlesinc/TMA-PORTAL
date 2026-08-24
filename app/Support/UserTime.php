@@ -8,14 +8,14 @@ use Illuminate\Support\Carbon;
 /**
  * The time zone a person reads the portal in (Settings → Time and language).
  *
- * Storage stays UTC and model casting is untouched — only *display* moves.
+ * Storage stays UTC and model casting is untouched, only *display* moves.
  * Shifting the application time zone per request would re-interpret every
  * stored timestamp instead of re-presenting it, which silently moves real
  * data; this converts a UTC instant to the reader's wall clock at the moment
  * it is printed, and nowhere else.
  *
  * Anything fanned out to several people at once (a broadcast message) must
- * NOT be formatted here — one string cannot be right for two zones. Those
+ * NOT be formatted here, one string cannot be right for two zones. Those
  * carry an ISO timestamp and are formatted by the browser.
  */
 final class UserTime

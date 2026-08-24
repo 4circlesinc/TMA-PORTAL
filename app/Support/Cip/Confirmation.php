@@ -12,11 +12,11 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §15 — Ready to submit, confirm, lock.
+ * §15. Ready to submit, confirm, lock.
  *
  * When every required document is Ready for submission the application
- * auto-flips here (see {@see Review::settle()}). The submitting party — the
- * service provider contact, or the private client on a PRI file — is told,
+ * auto-flips here (see {@see Review::settle()}). The submitting party, the
+ * service provider contact, or the private client on a PRI file, is told,
  * and must press Confirm submission. That press freezes the original package:
  * person folders become view-only (§17), outstanding upload links into them
  * are withdrawn, and Additional Documents stays writable. The status stays

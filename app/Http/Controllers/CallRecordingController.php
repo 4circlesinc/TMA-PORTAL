@@ -20,25 +20,25 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Client-call recording: capture and the recordings area.
  *
- * Calls between a staff member and a client — or with a service provider
- * about an applicant — are recorded for the client's file; ordinary
+ * Calls between a staff member and a client, or with a service provider
+ * about an applicant, are recorded for the client's file; ordinary
  * staff-to-staff calls never are. The capture endpoints keep that rule
  * HERE, not in the browser: start() is a question every caller may ask,
  * and only the staff side of a call that belongs on a client file gets a
- * recording id back — so no client records anyone, and no browser can be
+ * recording id back, so no client records anyone, and no browser can be
  * talked into recording a colleague.
  *
  * The audio/video itself arrives as sequenced WebM chunks while the call
  * runs (a recording that only uploads at hangup dies with a crashed tab).
- * Each chunk is stored as its own object on the files disk — R2 in
- * production — NOT appended to instance-local storage: a call can span a
+ * Each chunk is stored as its own object on the files disk. R2 in
+ * production. NOT appended to instance-local storage: a call can span a
  * deploy or an instance restart, and anything on local disk would vanish
  * mid-call. finish() assembles the pieces in sequence order into the Vault.
  * Streaming reads the disk from the ROW, never from config, the same rule
  * the attachment controller follows, so recordings survive a FILES_DISK
  * switch.
  *
- * Every call gets its OWN row — start() never resumes an earlier one. A
+ * Every call gets its OWN row, start() never resumes an earlier one. A
  * fresh MediaRecorder is a fresh WebM stream with its own init segment, so
  * "continuing" a previous row could only ever splice two incompatible
  * streams; a redial after a crash simply records again from zero.
@@ -49,7 +49,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class CallRecordingController extends Controller
 {
-    /** A single chunk is ~10s of opus/vp8 — far below this, but leave room. */
+    /** A single chunk is ~10s of opus/vp8, far below this, but leave room. */
     private const MAX_CHUNK_BYTES = 16 * 1024 * 1024;
 
     /** Where a recording's chunk objects live until finish() assembles them. */
@@ -58,7 +58,7 @@ class CallRecordingController extends Controller
         return 'call-recordings/tmp/'.$uuid;
     }
 
-    /** The disk chunks are staged on — durable in production (R2). */
+    /** The disk chunks are staged on, durable in production (R2). */
     private static function chunkDisk(): string
     {
         return config('filesystems.files_disk', 'local');
@@ -68,7 +68,7 @@ class CallRecordingController extends Controller
 
     /**
      * Arrange a recording for a connected call, if this call is one that
-     * records. Answering `recording: null` is not an error — it is the
+     * records. Answering `recording: null` is not an error, it is the
      * ordinary answer for every call that is not on a client file.
      */
     public function start(Request $request, string $uuid): JsonResponse
@@ -281,7 +281,7 @@ class CallRecordingController extends Controller
             $query->where('client_id', $clientId);
         }
 
-        // Day boundaries in the READER's zone — the table renders dates on
+        // Day boundaries in the READER's zone, the table renders dates on
         // their clock, and a filter that disagreed with the column it filters
         // would look simply broken (§ UserTime).
         $zone = UserTime::zone($user);
@@ -301,7 +301,7 @@ class CallRecordingController extends Controller
 
         if ($term = trim((string) $request->query('q', ''))) {
             $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term).'%';
-            // ilike on Postgres — plain LIKE is case-sensitive there, and a
+            // ilike on Postgres, plain LIKE is case-sensitive there, and a
             // search box that cares about capitalisation reads as broken
             // (the Clients directory learned this the hard way).
             $operator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
@@ -477,13 +477,13 @@ class CallRecordingController extends Controller
         ];
     }
 
-    /** "John Smith — Client Call — 2026-08-10 — 34m21s.webm" for downloads. */
+    /** "John Smith - Client Call - 2026-08-10 - 34m21s.webm" for downloads. */
     private function fileName(CallRecording $r): string
     {
         $secs = intdiv((int) $r->duration_ms, 1000);
         $length = sprintf('%dm%02ds', intdiv($secs, 60), $secs % 60);
-        $name = $r->client_name.' — Client Call — '
-            .($r->started_at?->format('Y-m-d H.i') ?? 'unknown').' — '.$length.'.webm';
+        $name = $r->client_name.' - Client Call - '
+            .($r->started_at?->format('Y-m-d H.i') ?? 'unknown').' - '.$length.'.webm';
 
         return str_replace(['"', '/', '\\'], '', $name);
     }

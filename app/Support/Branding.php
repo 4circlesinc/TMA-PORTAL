@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
  *
  * Edited in Account settings → Account and Reporting → Edit Company Branding,
  * stored in `portal_settings` beside the security policies (see
- * {@see SecurityPolicies}) rather than per browser — branding that only
+ * {@see SecurityPolicies}) rather than per browser, branding that only
  * applied to the administrator who typed it was the whole problem with the
  * previous localStorage version.
  *
@@ -32,7 +32,7 @@ final class Branding
      * read on *every* shell boot by every account, so it is nearly always being
      * read while it is being written: a reader that loaded the old row just
      * before a save can write it into the cache just after the save cleared it,
-     * and the firm — including the administrator who pressed Save — then keeps
+     * and the firm, including the administrator who pressed Save, then keeps
      * seeing the old branding until the entry expires. Writes refresh the entry
      * rather than only dropping it (see put()), and this bounds how long a lost
      * race can survive.
@@ -93,7 +93,7 @@ final class Branding
     /**
      * Put the appearance back to the portal's own look.
      *
-     * The account *name* is deliberately not reset — "Use Portal Defaults"
+     * The account *name* is deliberately not reset, "Use Portal Defaults"
      * sits under Edit Account Appearance, and wiping the firm's name from an
      * appearance button would be a nasty surprise.
      */

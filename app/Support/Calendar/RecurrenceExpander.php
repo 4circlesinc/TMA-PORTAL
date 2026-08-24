@@ -14,8 +14,8 @@ use Sabre\VObject\Recur\RRuleIterator;
  * How a series is stored
  * ---------------------
  * - The **master** carries `recurrence_rule` and has `series_id = null`.
- * - A **detached occurrence** — one instance that was moved or edited on its
- *   own — is a real row with `series_id` pointing at the master and
+ * - A **detached occurrence**, one instance that was moved or edited on its
+ *   own, is a real row with `series_id` pointing at the master and
  *   `recurrence_starts_at` recording which instance it replaces.
  * - `recurrence_exdates` lists instances deleted from the series.
  *

@@ -28,7 +28,7 @@ class UploadController extends BaseFilesController
             'chunkSize' => ['nullable', 'integer', 'min:1'],
             'mime' => ['nullable', 'string', 'max:191'],
             // Set to make this upload a new VERSION of an existing file rather
-            // than a new file — the only route large files have to a version.
+            // than a new file, the only route large files have to a version.
             'versionOf' => ['nullable', 'string', 'max:64'],
             'versionNote' => ['nullable', 'string', 'max:2000'],
         ]);

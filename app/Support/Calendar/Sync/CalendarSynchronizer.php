@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * The rules that matter, all from the brief:
  *
  *  - **No duplicates.** A remote event maps to a local row by
- *    (provider, external_calendar_id, external_event_id) — never by title or
+ *    (provider, external_calendar_id, external_event_id), never by title or
  *    date. A partial unique index on those columns is the backstop.
  *  - **Nothing is lost silently.** When both sides changed the same event
  *    since the last sync, the losing version is written to `conflict_snapshot`
@@ -59,7 +59,7 @@ class CalendarSynchronizer
                 $this->pull($provider, $stats);
             }
 
-            // Read-only remotes (holidays etc.) never push — pushesOut() already
+            // Read-only remotes (holidays etc.) never push, pushesOut() already
             // gates on remote_can_write === false.
             if ($this->calendar->pushesOut()) {
                 $this->push($provider, $stats);
@@ -100,7 +100,7 @@ class CalendarSynchronizer
                 return;
             }
         } catch (CalendarSyncException) {
-            // Discovery failed — leave null and continue the sync; a later
+            // Discovery failed, leave null and continue the sync; a later
             // run can heal once the provider is reachable again.
         }
     }
@@ -162,7 +162,7 @@ class CalendarSynchronizer
                 throw $e;
             }
             // The token expired: drop it and re-pull the whole window. This is
-            // why every apply is an idempotent upsert — a full re-pull must
+            // why every apply is an idempotent upsert, a full re-pull must
             // not duplicate what is already here.
             $result = $provider->changedEvents($this->calendar->external_id, null, $windowStart);
         }
@@ -223,7 +223,7 @@ class CalendarSynchronizer
 
         /*
          * The event exists both sides. Whether it changed locally is decided
-         * by content, not by a timestamp — comparing the current fingerprint
+         * by content, not by a timestamp, comparing the current fingerprint
          * to the one stored at the last sync. That is immune to clock
          * precision: an edit and a sync in the same second would otherwise
          * read as unchanged and lose the edit.
@@ -339,7 +339,7 @@ class CalendarSynchronizer
          * Candidates: anything not yet on the provider, plus a cheap
          * timestamp prefilter for possibly-changed events. The definitive
          * "did it actually change" test is by fingerprint below, so this query
-         * can safely over-select — a false positive costs one idempotent
+         * can safely over-select, a false positive costs one idempotent
          * no-op push, never a lost change.
          */
         $pending = CalendarEvent::where('calendar_id', $this->calendar->id)
@@ -355,7 +355,7 @@ class CalendarSynchronizer
         foreach ($pending as $event) {
             $fingerprint = RemoteEvent::fingerprintEvent($event);
 
-            // Already pushed and unchanged since — skip the redundant call.
+            // Already pushed and unchanged since, skip the redundant call.
             if ($event->external_event_id && $fingerprint === $event->external_local_fingerprint) {
                 continue;
             }

@@ -46,7 +46,7 @@ class FileType
         'html' => ['code', 'FileCode'],   'css' => ['code', 'FileCode'],
     ];
 
-    /** Extensions we refuse outright — server- or OS-executable. */
+    /** Extensions we refuse outright, server- or OS-executable. */
     private const BLOCKED_EXT = [
         'php', 'phtml', 'php3', 'php4', 'php5', 'php7', 'phps', 'pht', 'phar',
         'exe', 'com', 'bat', 'cmd', 'msi', 'scr', 'cpl', 'dll', 'so',

@@ -435,14 +435,14 @@
         title: 'Connect to your files',
         lead: SITE_NAME + ' has set up a secure space for you.',
         body: '<p>Hello,</p>' +
-          '<p>Create your account to see the files we’re working on together, message us directly, and follow along as things progress — all in one place.</p>' +
+          '<p>Create your account to see the files we’re working on together, message us directly, and follow along as things progress, all in one place.</p>' +
           '<p>Creating your account links it to your existing records with us automatically.</p>',
         button: 'Create your account',
       },
     }),
     makeStandardTemplate({
       id: 'client-invite-reminder', name: 'Invite reminder', category: 'Client',
-      subject: 'Reminder: finish connecting to your files', preview: 'Your invitation is still waiting — it takes about a minute.',
+      subject: 'Reminder: finish connecting to your files', preview: 'Your invitation is still waiting, it takes about a minute.',
       spec: {
         title: 'Your invitation is still waiting',
         lead: 'Setting up your account takes about a minute.',
@@ -494,7 +494,7 @@
       spec: {
         title: 'You have a new message',
         lead: 'Tanya sent you a message about an hour ago and it’s still unread.',
-        body: renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.'),
+        body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read the message',
       },
     }),
@@ -505,7 +505,7 @@
         title: 'Still waiting to hear from you',
         lead: 'We reached out yesterday and haven’t heard back.',
         body: '<p>Your message from Tanya is still waiting in the portal.</p>' +
-          renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.'),
+          renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read and reply',
       },
     }),
@@ -516,7 +516,7 @@
         title: 'A message from us is still waiting for you',
         lead: 'It’s been a full day and we haven’t heard back.',
         body: '<p>We don’t want anything important to slip through, so here’s one last reminder.</p>' +
-          renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.') +
+          renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.') +
           '<p>If now isn’t a good time, the message will be waiting whenever you’re ready.</p>',
         button: 'Open the conversation',
       },
@@ -526,9 +526,9 @@
       subject: 'Please sign: Engagement Letter 2025', preview: 'Tanya asked you to sign a document.',
       spec: {
         title: 'Tanya asked you to sign a document',
-        lead: 'You can review and sign online — no account needed.',
+        lead: 'You can review and sign online, no account needed.',
         body: renderFileLines([['Engagement-Letter-2025.pdf', 'PDF · 240 KB']]) +
-          renderQuote('Please review and sign at your earliest convenience. — Tanya') +
+          renderQuote('Please review and sign at your earliest convenience.. Tanya') +
           '<p>This link is personal to you and expires on 10 Aug 2026.</p>',
         button: 'Review & sign',
       },
@@ -611,7 +611,7 @@
       subject: 'Cancelled: Quarterly Review', preview: 'Quarterly Review was cancelled.',
       spec: {
         title: 'Quarterly Review was cancelled',
-        lead: 'Tanya cancelled this event. You don’t need to do anything — it has been taken off your calendar.',
+        lead: 'Tanya cancelled this event. You don’t need to do anything, it has been taken off your calendar.',
         body: renderDetailLines([
           ['When', 'Wed, 6 Aug 2026 · 2:00–3:00 PM'],
           ['Organizer', 'Tanya Antoine'],
@@ -662,7 +662,7 @@
           preview: t.preview,
           thumb: t.thumb,
           nodeId: t.nodeId,
-          // Emails are one responsive design — there is no separate mobile
+          // Emails are one responsive design, there is no separate mobile
           // layout; "mobile" is just the same email at a narrower width.
           hasMobile: false,
         };

@@ -43,7 +43,7 @@
 @push('scripts')
 <script>
   // Confirming from another device marks the account verified in the
-  // database — poll and reload into profile setup automatically.
+  // database, poll and reload into profile setup automatically.
   (function () {
     function check() {
       fetch('/auth/email/verification-status', {

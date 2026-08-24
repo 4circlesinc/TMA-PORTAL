@@ -12,7 +12,7 @@ use Throwable;
  *
  * Account settings > Client hub management > Custom fields defines them. The
  * values live inside the client's own `data` blob under `custom`, beside the
- * phones and addresses, rather than in a table of their own — a client record
+ * phones and addresses, rather than in a table of their own, a client record
  * is already one irregular document and this is more of the same shape.
  *
  * The definitions are the firm's, so they sit in `portal_settings` next to
@@ -112,7 +112,7 @@ class ClientCustomFields
             }
 
             $updated = $all[$i] = [
-                // The id never changes — it is what already-stored values are
+                // The id never changes, it is what already-stored values are
                 // filed under, and renaming a field must not orphan them.
                 'id' => $id,
                 'label' => trim($label),

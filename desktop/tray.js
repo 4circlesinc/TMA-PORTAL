@@ -4,7 +4,7 @@
  * The notification-area icon. Windows and Linux only.
  *
  * macOS has the Dock: an app with no windows is still visible, still clickable,
- * still quittable. Windows has nothing of the sort — close the last window with
+ * still quittable. Windows has nothing of the sort, close the last window with
  * `backgroundOnClose` on and the app is running with no icon anywhere, no way
  * to reach it, and no way to quit it short of Task Manager. It would look
  * exactly like a crash while it quietly went on ringing for calls.
@@ -61,14 +61,14 @@ function install({ onShow, onQuit, updateItem }) {
 /*
  * What the tooltip has to say, and why it says two things.
  *
- * Unread count: the taskbar button gets its own overlay separately — this is
+ * Unread count: the taskbar button gets its own overlay separately, this is
  * the one that stays visible with no window open.
  *
  * Waiting update: on macOS the menu bar relabels itself to "Install Update
  * 0.8.29…" and is on screen whether or not a window is, so a deferred update
  * announces itself permanently and for free. Windows keeps that same menu
  * inside a window that is usually hidden, and the tray copy of it only exists
- * while someone is right-clicking — so after one "Later" there was nothing on
+ * while someone is right-clicking, so after one "Later" there was nothing on
  * screen anywhere saying an update was still waiting. The tooltip is the one
  * surface Windows gives a tray app that a passing glance can reach.
  */
@@ -84,7 +84,7 @@ function paintTooltip() {
   if (waiting) parts.push(`update to ${waiting} ready`);
   if (unread > 0) parts.push(`${unread} unread`);
 
-  tray.setToolTip(parts.join(' — '));
+  tray.setToolTip(parts.join(' · '));
 }
 
 /** @param {number} count */

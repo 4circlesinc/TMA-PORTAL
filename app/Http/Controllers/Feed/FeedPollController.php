@@ -28,8 +28,8 @@ class FeedPollController extends Controller
     /**
      * Cast, change or withdraw a vote.
      *
-     * The whole ballot is sent each time — the options the voter wants held,
-     * not a delta — so a single-choice poll and a multi-select behave the same
+     * The whole ballot is sent each time, the options the voter wants held,
+     * not a delta, so a single-choice poll and a multi-select behave the same
      * way and a lost request cannot leave a half-applied vote.
      */
     public function vote(Request $request, string $uuid): JsonResponse
@@ -141,7 +141,7 @@ class FeedPollController extends Controller
     /**
      * Who voted for what.
      *
-     * Refused outright for an anonymous poll — not filtered, refused, so there
+     * Refused outright for an anonymous poll, not filtered, refused, so there
      * is no shape of request that returns a partial answer.
      */
     public function voters(Request $request, string $uuid): JsonResponse
@@ -181,7 +181,7 @@ class FeedPollController extends Controller
             $option->forceFill(['votes_count' => $option->votes()->count()])->save();
         }
 
-        // The poll's own total is distinct voters, not ballots — otherwise a
+        // The poll's own total is distinct voters, not ballots, otherwise a
         // multi-select poll reads as having more voters than it has people.
         $poll->forceFill([
             'votes_count' => $poll->votes()->distinct('user_id')->count('user_id'),

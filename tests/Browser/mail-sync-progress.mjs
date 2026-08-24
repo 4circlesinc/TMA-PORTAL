@@ -77,7 +77,7 @@ try {
   check(text.includes('Importing messages'), 'stage label is "Importing messages"');
   check(text.includes('Step 7 of 10'), 'step counter shows 7 of 10');
   check(text.includes('1,250 of ~8,420 messages'), `messages counted with the ~ estimate marker (saw: ${text.slice(0, 120)})`);
-  check(text.includes('Inbox —'), 'names the folder being imported');
+  check(text.includes('Inbox:'), 'names the folder being imported');
   check(text.includes('15%'), 'shows the real percentage');
   check(text.includes('3,180 conversations'), 'conversation total shown');
   check(text.includes('1,245 attachments (est.)'), 'attachment estimate shown and labelled');

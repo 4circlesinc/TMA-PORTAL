@@ -42,7 +42,7 @@ class CompaniesController extends Controller
         'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id',
     ];
 
-    /** Warm the company list briefly — it rides next to the client directory
+    /** Warm the company list briefly, it rides next to the client directory
      *  on hub mount and is identical for every staff reader. */
     private const INDEX_TTL_SECONDS = 60;
 
@@ -52,7 +52,7 @@ class CompaniesController extends Controller
 
         /*
          * The firm-wide cache is only right for accounts that see the whole
-         * directory — the counts and previews inside it are viewer-scoped
+         * directory, the counts and previews inside it are viewer-scoped
          * now, so a cached slice would be one officer's view served to the
          * next reader. Everyone else gets their assignment slice, computed
          * per request: a handful of rows, not worth a per-user cache.
@@ -75,7 +75,7 @@ class CompaniesController extends Controller
     {
         $companies = $query->with(['clients' => fn ($q) => $q
             // Only the columns toRecord() prints for a person. Unconstrained,
-            // this pulls each member's whole `data` blob — harmless while one
+            // this pulls each member's whole `data` blob, harmless while one
             // client belongs to a company, and a second copy of the clients
             // problem the moment the firm starts using membership.
             ->select(self::PERSON_COLUMNS)
@@ -103,7 +103,7 @@ class CompaniesController extends Controller
      * Give every company its referred-client preview, in one query.
      *
      * toRecord() falls back to a `limit 12` query per company when the relation
-     * is not loaded — sixty-four round trips to a remote database to print
+     * is not loaded, sixty-four round trips to a remote database to print
      * sixty-four short lists, which was half of this endpoint's twenty seconds.
      * Eloquent cannot eager load a per-parent limit, so the ranking is done in
      * the database and only the first rows of each company come back.
@@ -136,7 +136,7 @@ class CompaniesController extends Controller
             ->select(self::PERSON_COLUMNS)
             ->addSelect('referred_by_company_id')
             // `name, id`, not `name` alone. The caseload is full of repeated
-            // names — one referrer has 188 that appear more than once — and
+            // names, one referrer has 188 that appear more than once, and
             // ordering by name only leaves the tie to the planner, so which of
             // two "ABBAS DARWICH" rows the preview showed could change between
             // identical requests. The id settles it the same way every time.
@@ -150,7 +150,7 @@ class CompaniesController extends Controller
          * The viewer's slice, not the firm's book.
          *
          * An officer holds one applicant at Galaxy Partners; the firm has
-         * three. Their providers tab must preview — and count — the one, for
+         * three. Their providers tab must preview, and count, the one, for
          * the same reason the directory shows them the one: the rest of the
          * book is not theirs to read, and a count of three above a page that
          * shows one person reads as the page being broken.
@@ -180,7 +180,7 @@ class CompaniesController extends Controller
      * are relation closures on a company query rather than a client query of
      * their own. Somebody with clients.viewAll reads the firm's whole book;
      * everybody else reads the clients they are assigned to, here exactly as
-     * in the directory — the company page is another window onto the same
+     * in the directory, the company page is another window onto the same
      * records, not a way around the slice.
      */
     private function viewerClients(User $viewer, $query)
@@ -226,7 +226,7 @@ class CompaniesController extends Controller
             Providers::syncCode($company, $data['cipCode']);
         }
 
-        // An employee's directory is their assignments — without this row the
+        // An employee's directory is their assignments, without this row the
         // provider they just created would vanish from their own list.
         if (! CompanyScope::seesEveryCompany($request->user())) {
             CompanyStaffAssignment::create([
@@ -345,8 +345,8 @@ class CompaniesController extends Controller
          * It used to be refused only once the provider had applications, and
          * the gap put four provider firms in the bin: the CIP registry kept
          * naming them (the wizard still offered Galaxy Partners, the table
-         * still printed it) while the Service providers tab — which lists
-         * companies — showed nothing, and the Recycle Bin does not list
+         * still printed it) while the Service providers tab, which lists
+         * companies, showed nothing, and the Recycle Bin does not list
          * companies, so there was no way back from inside the portal. A firm
          * half-present like that reads as the module being broken.
          */
@@ -366,7 +366,7 @@ class CompaniesController extends Controller
         AccessSync::companyArchived($company, $request->user());
 
         /*
-         * Everyone attached to the provider can go with it — its own contacts
+         * Everyone attached to the provider can go with it, its own contacts
          * and the clients it referred alike, which is what "its people" means
          * to the person looking at the record. Left alone (the default) they
          * survive and are simply unlinked.

@@ -10,8 +10,8 @@ use Throwable;
 /**
  * Per-import pause switches for firm background imports.
  *
- * Administrators pause one source at a time — Smartsheet document import,
- * personal OneDrive sync, or a single SharePoint library — rather than one
+ * Administrators pause one source at a time. Smartsheet document import,
+ * personal OneDrive sync, or a single SharePoint library, rather than one
  * kill switch for everything. Mailbox and calendar sync are untouched.
  *
  * Stored in `portal_settings` like {@see \App\Support\Clients\ClientHubSettings}.
@@ -87,7 +87,7 @@ class ImportPause
     }
 
     /**
-     * True when this connection should not sync — OneDrive uses the service
+     * True when this connection should not sync. OneDrive uses the service
      * switch; site libraries use their own uuid entry.
      */
     public static function connection(SharePointConnection $connection): bool
@@ -117,7 +117,7 @@ class ImportPause
     }
 
     /**
-     * @deprecated Use smartsheet() / onedrive() / connection() — kept so
+     * @deprecated Use smartsheet() / onedrive() / connection(), kept so
      *   older call sites that meant “everything” still compile during the
      *   split. Prefer the specific helpers.
      */
@@ -161,7 +161,7 @@ class ImportPause
     }
 
     /**
-     * Rows for the Background Operations page — one switch per import source.
+     * Rows for the Background Operations page, one switch per import source.
      *
      * @return list<array{id: string, kind: string, name: string, detail: string, paused: bool}>
      */

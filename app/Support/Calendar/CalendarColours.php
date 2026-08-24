@@ -6,7 +6,7 @@ namespace App\Support\Calendar;
  * The approved calendar colour palette.
  *
  * Mirrors App\Support\Files\FolderColours in shape, and every hue resolves to
- * an existing design token rather than a new one — blue/green/pink/red come
+ * an existing design token rather than a new one, blue/green/pink/red come
  * straight from the folder palette and teal is the chart mint.
  *
  * The `purple` key is historical: the calendar has always named this tone

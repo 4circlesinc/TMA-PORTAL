@@ -10,7 +10,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The one path a document slot's status travels — the same machine {@see
+ * The one path a document slot's status travels, the same machine {@see
  * Engine} runs for an application, at the scale of a single requirement: a
  * FROM→TO map, a permission per destination, and one transaction that moves
  * the row and writes the append-only cip_events line together. Nothing else
@@ -27,7 +27,7 @@ class DocumentEngine
      * The audit action for a slot moving.
      *
      * A document's statuses are their own vocabulary, so they cannot go in
-     * cip_events' from_status / to_status columns — those speak {@see Status},
+     * cip_events' from_status / to_status columns, those speak {@see Status},
      * and a reviewer reading the file's history must never mistake a birth
      * certificate being approved for the application being approved. The pair
      * rides in the event meta instead, under an action of its own.
@@ -92,7 +92,7 @@ class DocumentEngine
 
         // The upload is the transition. Whoever may put a file in the slot may
         // put it into review, and the people who do most of that uploading are
-        // external accounts that hold no matrix capability — so their reach of
+        // external accounts that hold no matrix capability, so their reach of
         // the application is the whole grant, exactly as it is for the file
         // itself. An employee with no officer role sees no applications and so
         // reaches nothing here either.
@@ -101,7 +101,7 @@ class DocumentEngine
              * The creator counts, and has to.
              *
              * ApplicationScope answers for an application that EXISTS to be
-             * looked at — an external account reaches one through their firm's
+             * looked at, an external account reaches one through their firm's
              * provider or through their own client record. Neither is true
              * while the application is still being filed: the client row is
              * written later in the same transaction, so a private client
@@ -126,7 +126,7 @@ class DocumentEngine
 
     /**
      * Apply one transition: validate the edge and the actor, update the row,
-     * write the event — atomically. Throws rather than silently refusing, so
+     * write the event, atomically. Throws rather than silently refusing, so
      * a caller cannot mistake "nothing happened" for success.
      */
     public static function apply(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
@@ -167,7 +167,7 @@ class DocumentEngine
                 'toStatus' => $to,
             ]));
 
-            // Mirror into the portal-wide trail too — that copy is pruned per
+            // Mirror into the portal-wide trail too, that copy is pruned per
             // retention preference; cip_events above is the durable one.
             ActivityLogger::log([
                 'actor' => $actor,
@@ -192,12 +192,12 @@ class DocumentEngine
      *
      * This intentionally bypasses the forward-only state machine: deletion is
      * a system event, not a reviewer transition, and the machine has no backward
-     * edge because no human decision should undo a reviewer's verdict — but a
+     * edge because no human decision should undo a reviewer's verdict, but a
      * deleted file is simply gone, and a checklist that says "Application review"
      * with nothing behind it is wrong.
      *
      * Only statuses that still live in the upload/review cycle are reset (i.e.
-     * not READY_FOR_SUBMISSION — a document the reviewer accepted stays accepted
+     * not READY_FOR_SUBMISSION, a document the reviewer accepted stays accepted
      * even if someone later deletes it from the library, so the history is clear).
      */
     public static function resetAfterFileDeletion(CipDocument $slot, ?User $actor, bool $broadcast = true): void
@@ -224,7 +224,7 @@ class DocumentEngine
                 'actor' => $actor,
                 'type' => 'cip.document_file_deleted',
                 'module' => 'cip',
-                'description' => $slot->label.' file deleted on '.$application->displayNumber().' — reset to Pending upload',
+                'description' => $slot->label.' file deleted on '.$application->displayNumber().', reset to Pending upload',
                 'subject' => $slot,
                 'old' => ['status' => $from],
                 'new' => ['status' => DocumentStatus::PENDING_UPLOAD],

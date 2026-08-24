@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * an administrator the account is smaller than it is, which is the one mistake
  * a usage page must not make.
  *
- * The limit is a licence figure, not a measurement — nothing on this server can
+ * The limit is a licence figure, not a measurement, nothing on this server can
  * observe what the plan allows, so it comes from config (see config/portal.php)
  * and the page says where it came from rather than implying it was metered.
  */
@@ -56,8 +56,8 @@ class StorageUsageController extends Controller
     /**
      * Every place the portal keeps bytes, as one comparable list.
      *
-     * Order is deliberate: the two an administrator can act on — old versions
-     * and the recycle bin — sit next to the files they belong to.
+     * Order is deliberate: the two an administrator can act on, old versions
+     * and the recycle bin, sit next to the files they belong to.
      *
      * @return list<array{key: string, label: string, bytes: int, count: int, hint?: string}>
      */
@@ -136,7 +136,7 @@ class StorageUsageController extends Controller
      *
      * An upload session holds its chunks on disk until it completes or is
      * cleaned up, so what is on disk is the chunks received, not the file's
-     * declared size — a 2 GB upload abandoned after one chunk is not 2 GB.
+     * declared size, a 2 GB upload abandoned after one chunk is not 2 GB.
      *
      * @return array{bytes: int, count: int}
      */
@@ -207,7 +207,7 @@ class StorageUsageController extends Controller
 
     /**
      * Staff vs clients. Files are attributed to their owner, so a file a member
-     * of staff uploaded into a client's folder counts against staff — the
+     * of staff uploaded into a client's folder counts against staff, the
      * question this answers is who is putting bytes in, not where they landed.
      *
      * @return list<array{label: string, bytes: int, count: int}>
@@ -282,7 +282,7 @@ class StorageUsageController extends Controller
 
     /**
      * The last month, in and out. "Out" is what was moved to the bin in the
-     * window, which is space that becomes free only once it is purged — so the
+     * window, which is space that becomes free only once it is purged, so the
      * two figures are not a net change and the page does not present them as one.
      *
      * @return array{days: int, addedBytes: int, addedFiles: int, binnedBytes: int, binnedFiles: int}
@@ -311,7 +311,7 @@ class StorageUsageController extends Controller
      * Storage is sold per licence, so the default is a per-licence figure times
      * the staff accounts in use; an account on a flat allowance sets
      * PORTAL_STORAGE_LIMIT_BYTES instead. Either way `source` travels with it so
-     * the page can say what the bar is measuring against — an invented ceiling
+     * the page can say what the bar is measuring against, an invented ceiling
      * presented as fact is worse than no bar at all.
      *
      * @return array{bytes: ?int, source: string, licences: int, perLicenceBytes: int}

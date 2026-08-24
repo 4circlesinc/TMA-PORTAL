@@ -1,5 +1,5 @@
 /*
- * TMAMorph — keyed DOM reconciliation.
+ * TMAMorph, keyed DOM reconciliation.
  *
  * Why this exists
  * ---------------
@@ -8,8 +8,8 @@
  *     root.innerHTML = renderLayout(state);
  *
  * That is correct but destructive. The browser throws away every existing node
- * and builds new ones, which means on *every* state change — a delivery tick,
- * a reaction, a folder colour — the portal:
+ * and builds new ones, which means on *every* state change, a delivery tick,
+ * a reaction, a folder colour, the portal:
  *
  *   - destroys and recreates every <img>, so avatars and thumbnails re-request
  *     and visibly flash even though their src never changed;
@@ -68,7 +68,7 @@
       /*
        * A valueless marker attribute is not an identity.
        *
-       * File cards carry `data-files-row data-id="7"` — the bare marker comes
+       * File cards carry `data-files-row data-id="7"`, the bare marker comes
        * first, and treating it as the key gave every card in the grid the same
        * empty key. Only the first could then be matched; every other card was
        * rebuilt on each render, re-fetching its thumbnail. Skipping empty
@@ -88,7 +88,7 @@
   /*
    * The set of data-* attribute *names* on an element, which is what the views
    * use to say what a node is for: data-messages-compose, data-messages-row,
-   * data-home-file. Values are ignored — only the roles matter.
+   * data-home-file. Values are ignored, only the roles matter.
    */
   function roleSignature(el) {
     var attrs = el.attributes;
@@ -109,7 +109,7 @@
    * must never be reused as an element with a *different* purpose. Views bind
    * listeners by data attribute and those listeners cannot be taken off again,
    * so repurposing one button as another leaves the first handler attached and
-   * the node fires both. That is not hypothetical — the "new message" button
+   * the node fires both. That is not hypothetical, the "new message" button
    * was silently reused as the "chats" nav button, so opening the compose panel
    * also ran the nav handler and closed it again.
    *
@@ -186,8 +186,8 @@
   }
 
   /*
-   * Images are the main reason this library exists. Reassigning src — even the
-   * same string — can drop a decoded frame and re-hit the network, which is the
+   * Images are the main reason this library exists. Reassigning src, even the
+   * same string, can drop a decoded frame and re-hit the network, which is the
    * visible "avatar keeps loading" flicker. syncAttributes already skips
    * identical values; this additionally protects an image that has finished
    * loading from being reset by an equivalent-but-not-identical URL.
@@ -251,7 +251,7 @@
         match = keyed[key];
         delete keyed[key];
       } else if (!key && cursor && compatible(cursor, wanted) && !keyOf(cursor)) {
-        // Unkeyed positional reuse. Only against an unkeyed neighbour — a keyed
+        // Unkeyed positional reuse. Only against an unkeyed neighbour, a keyed
         // node belongs to a specific record and must not be repurposed.
         match = cursor;
       }
@@ -328,12 +328,12 @@
    * simply becomes a no-op for surviving nodes.
    *
    * Handlers must therefore close over values that stay valid for the life of
-   * the node — the views' `state` and `render` are created once per mount, so
+   * the node, the views' `state` and `render` are created once per mount, so
    * they do. Anything per-render must be read from the DOM at event time
    * (which the existing handlers already do via getAttribute).
    */
   function unwired(root, selector, tag) {
-    // `tag` separates two independent bindings over the same selector — the
+    // `tag` separates two independent bindings over the same selector, the
     // conversation rows take both a click and a contextmenu handler, and
     // without it the second walk would find every row already flagged by the
     // first and bind nothing at all.
@@ -380,7 +380,7 @@
    * unwired() for a single expected element.
    *
    * Returns the matching element the first time it is asked for, and null on
-   * every later render while that same element survives — so the common
+   * every later render while that same element survives, so the common
    *
    *     var btn = TMAMorph.unwiredOne(root, '[data-x]');
    *     if (btn) btn.addEventListener('click', …);

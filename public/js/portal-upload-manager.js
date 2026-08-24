@@ -66,11 +66,11 @@
          * the first time anyone adds one; dropping the lot costs a refetch
          * of whatever the reader looks at next, which the store absorbs.
          * This is the ONE choke point every File Library write goes through
-         * (uploads included — completion posts here too), which is what
+         * (uploads included, completion posts here too), which is what
          * makes the blanket rule safe to rely on.
          */
         if (opts.method && opts.method !== 'GET' && window.TMAStore) {
-          // The LISTING prefix, not files: whole — the record replica under
+          // The LISTING prefix, not files: whole, the record replica under
           // files:item / files:folder and the sync cursor live beside the
           // listings, and an own write must not wipe them: the cursor is
           // exactly how the authoritative version of this write arrives.
@@ -98,7 +98,7 @@
    * It lives HERE, in the globally loaded script, rather than in
    * portal-files.js: an import runs for minutes and the person who started it
    * will not sit on the File Library waiting. Following them across the portal
-   * is the whole point — otherwise "is it still going?" has no answer unless
+   * is the whole point, otherwise "is it still going?" has no answer unless
    * you navigate back.
    */
 
@@ -111,7 +111,7 @@
    * Minimised state, remembered across pages.
    *
    * The panel deliberately follows you around the portal, so a collapse that
-   * reset on every navigation would be worthless — you would re-minimise it on
+   * reset on every navigation would be worthless, you would re-minimise it on
    * every page.
    *
    * sessionStorage rather than localStorage: it survives navigation inside the
@@ -130,7 +130,7 @@
     try {
       if (value) sessionStorage.setItem(SYNC_COLLAPSE_KEY, '1');
       else sessionStorage.removeItem(SYNC_COLLAPSE_KEY);
-    } catch (e) { /* private browsing — it still collapses for this page */ }
+    } catch (e) { /* private browsing, it still collapses for this page */ }
   }
 
   function syncPoll() {
@@ -192,18 +192,18 @@
       /*
        * Two-phase progress: structure first, then content bytes.
        *
-       * Phase 1 — structure: folders and file records are created from Graph's
+       * Phase 1, structure: folders and file records are created from Graph's
        * delta feed. done == items mapped so far, total == folder child-count
        * sum (Graph's own figure). This finishes quickly even for 150k files.
        *
-       * Phase 2 — content: bytes are fetched from SharePoint on demand. When
+       * Phase 2, content: bytes are fetched from SharePoint on demand. When
        * structure is 100% done but contentPending > 0 the library is already
        * fully browsable; files just download on first open (or via warm-content).
        * Showing "155,629 of 155,629 items" at 100% while 140k files have no
        * bytes yet is misleading, so we surface the content phase separately.
        *
        * itemsTotal is summed from folder child counts as folders arrive, so
-       * early on it can be below the items already recorded — clamp to avoid
+       * early on it can be below the items already recorded, clamp to avoid
        * "780 of 500". Once structure is complete itemsTotal converges to items.
        */
       var structureDone = c.items || 0;
@@ -216,7 +216,7 @@
         // Phase 2: structure is in, bytes are coming.
         detail = num(structureDone) + ' items · ' + num(contentPending) + ' files still downloading';
         // Progress bar reflects content: full structure = content at 0%, so
-        // show an indeterminate bar — we don't know total bytes, only count.
+        // show an indeterminate bar, we don't know total bytes, only count.
         pct = null;
       } else {
         // Phase 1: still building the record structure.
@@ -231,7 +231,7 @@
     } else {
       isError = true;
       var f = failed[0];
-      title = f.name + ' — sync problem';
+      title = f.name + ', sync problem';
       detail = f.lastError ? String(f.lastError).slice(0, 110)
         : f.failedItems + ' item(s) could not sync';
       pct = 100;
@@ -307,7 +307,7 @@
     return el;
   }
 
-  /* Same column as sync-toasts.js — never a second fixed corner host. */
+  /* Same column as sync-toasts.js, never a second fixed corner host. */
   function syncStack() {
     if (window.TMASyncToasts && window.TMASyncToasts.host) {
       return window.TMASyncToasts.host();
@@ -346,7 +346,7 @@
 
         return;
       }
-      // Clicking a minimised chip expands it again — same as sync-toasts.js.
+      // Clicking a minimised chip expands it again, same as sync-toasts.js.
       if (syncCollapsed() && !e.target.closest('[data-sync-close]') && !e.target.closest('[data-sync-retry]')) {
         setSyncCollapsed(false);
         syncPanel.classList.remove('is-collapsed', 'tma-sync-toast--min');
@@ -358,7 +358,7 @@
         return;
       }
       if (e.target.closest('[data-sync-close]')) {
-        // Dismiss this run only — a NEW sync will show the panel again.
+        // Dismiss this run only, a NEW sync will show the panel again.
         syncDismissed = true;
         hideSyncPanel();
 

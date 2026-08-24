@@ -31,7 +31,7 @@ class FolderProvisioner
      * anything created with no obvious human owner.
      *
      * It used to be "the earliest administrator", which was simply whoever was
-     * seeded first — so thirty thousand citizenship documents were filed under
+     * seeded first, so thirty thousand citizenship documents were filed under
      * one partner's name and the Owner column read as a wall of that person.
      * That fallback is still here for an install with no service account, but
      * it is the fallback now rather than the rule.
@@ -181,7 +181,7 @@ class FolderProvisioner
      * which ones were actually created.
      *
      * Public because folder templates create folders the same way the client
-     * defaults do — see {@see FolderTemplates::apply()}. Skipping a name that
+     * defaults do, see {@see FolderTemplates::apply()}. Skipping a name that
      * is already there (rather than making "Contracts (2)") is what lets a
      * template be applied to the same folder twice without consequence.
      *

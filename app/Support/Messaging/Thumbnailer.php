@@ -171,7 +171,7 @@ class Thumbnailer
 
         // GdImage objects free themselves when they go out of scope
         // (imagedestroy is deprecated in PHP 8.5 and has had no effect since
-        // 8.0), so they are not released explicitly — same as finfo elsewhere.
+        // 8.0), so they are not released explicitly, same as finfo elsewhere.
         return $bytes ?: null;
     }
 
@@ -209,7 +209,7 @@ class Thumbnailer
                         $disk->delete($attachment->thumb_path);
                     }
                 } catch (Throwable $e) {
-                    // Missing bytes are fine — the row still goes.
+                    // Missing bytes are fine, the row still goes.
                     Log::info('Staged attachment bytes could not be deleted.', [
                         'attachment' => $attachment->uuid,
                         'reason' => $e->getMessage(),

@@ -25,7 +25,7 @@ class LegacyPageController extends Controller
      * ({@see resource_path('views/pages/dashboard.html')}).
      *
      * Hard-refreshing /email, /overview, etc. must never load a stale
-     * duplicate sidebar from resources/portal-pages — that was the source of
+     * duplicate sidebar from resources/portal-pages, that was the source of
      * the "menu keeps reverting to an old order" bug.
      */
     public const SPA_PAGES = [
@@ -41,7 +41,7 @@ class LegacyPageController extends Controller
         'email',
         'email/templates',
         // The File Library, screen by screen. The sidebar links straight to
-        // these, so anything the SPA can push must also be servable — a hard
+        // these, so anything the SPA can push must also be servable, a hard
         // refresh on /folders/all used to 404.
         'folders/all',
         'folders/personal',
@@ -82,7 +82,7 @@ class LegacyPageController extends Controller
 
     /**
      * Standalone portal HTML (not the main SPA shell). Intentionally separate
-     * layouts — classic design, onboarding, billing wizards.
+     * layouts, classic design, onboarding, billing wizards.
      */
     public const STANDALONE_PAGES = [
         'account-info',
@@ -98,14 +98,14 @@ class LegacyPageController extends Controller
         ...self::STANDALONE_PAGES,
     ];
 
-    /** One approved shell — menu order lives only here. */
+    /** One approved shell, menu order lives only here. */
     public static function spaShellPath(): string
     {
         return resource_path('views/pages/dashboard.html');
     }
 
     /**
-     * Any path under /clients — a client, a company, an edit screen.
+     * Any path under /clients, a client, a company, an edit screen.
      *
      * The shell is the same one /clients gets; clients.js reads the path and
      * opens the right screen. Gated on the same capability as /clients itself,
@@ -124,7 +124,7 @@ class LegacyPageController extends Controller
             $path = public_path($page.'/index.html');
         } elseif (in_array($page, self::SPA_PAGES, true)) {
             // A page the account may not use does not exist as far as it is
-            // concerned — 404, not 403, so the portal never advertises the
+            // concerned. 404, not 403, so the portal never advertises the
             // staff tooling a client can't reach.
             if ($page === 'clients') {
                 abort_unless($this->canViewClientsPage($request), 404);
@@ -139,7 +139,7 @@ class LegacyPageController extends Controller
             }
 
             // Hard-refreshing a portal URL gets the same shell the dashboard
-            // does, capabilities and no-store headers included — otherwise the
+            // does, capabilities and no-store headers included, otherwise the
             // sidebar would paint its six blank gaps on every page but /.
             return PortalShell::respond(self::spaShellPath(), $request->user());
         } elseif (in_array($page, self::STANDALONE_PAGES, true)) {

@@ -1,4 +1,4 @@
-/* Sync progress toasts — bottom-right cards that appear while email, calendar,
+/* Sync progress toasts, bottom-right cards that appear while email, calendar,
    OneDrive and Smartsheet document import run in the background. Always
    pinned bottom-right (independent of the notification-toast position
    preference), each card can be minimised to a chip or dismissed. Polls
@@ -16,7 +16,7 @@
   /* A sync the user just asked for is queued, not running: the job may sit for
      a few seconds before a worker picks it up, and the status would answer
      'done' the whole time. Hold the card as syncing for this long, or until
-     the server confirms a run — whichever comes first. */
+     the server confirms a run, whichever comes first. */
   var QUEUE_GRACE_MS = 20000;
 
   var SERVICES = {
@@ -66,10 +66,10 @@
       return 'Resume in Settings → Background Operations.';
     }
     if (s.state === 'error') return 'Check Settings → Connectors.';
-    // A run we started locally has no counts yet — say so rather than "0".
+    // A run we started locally has no counts yet, say so rather than "0".
     if (s.synced == null && s.total == null && s.count == null) return 'Starting…';
     if (key === 'email') {
-      // An incremental pass replays a change feed — the stored count is the
+      // An incremental pass replays a change feed, the stored count is the
       // mailbox's size, not this run's progress, so don't imply it is.
       if (s.state === 'syncing' && s.mode === 'incremental') return 'Checking for new mail…';
       return s.total
@@ -158,7 +158,7 @@
   }
 
   /*
-   * The mail page draws its own import panel — stage, ETA, retry — in the same
+   * The mail page draws its own import panel, stage, ETA, retry, in the same
    * bottom-right dock. Two cards for one mailbox is noise, and the panel is
    * the more useful of the two, so the toast stands down while it is up.
    */
@@ -188,7 +188,7 @@
           total: s.total,
           count: s.count,
           clients: s.clients,
-          // No total means there is no first-import measurement to show — the
+          // No total means there is no first-import measurement to show, the
           // run we are waiting on is an incremental one.
           mode: s.mode || (s.total == null ? 'incremental' : null),
         };
@@ -197,7 +197,7 @@
       }
     }
 
-    // Only surface done/error/paused for a service we watched syncing — a
+    // Only surface done/error/paused for a service we watched syncing, a
     // mailbox that finished importing last week doesn't need a toast on every load.
     if (!card.el && s.state !== 'syncing' && s.state !== 'paused') return;
 
@@ -234,8 +234,8 @@
 
   /*
    * The card is only removed by a 'done' payload, so anything that ends the
-   * poll loop early — the lifetime cap, a failed request, a service that stops
-   * being reported — used to leave it pinned on screen for the rest of the
+   * poll loop early, the lifetime cap, a failed request, a service that stops
+   * being reported, used to leave it pinned on screen for the rest of the
    * session with no way back except a reload. Whenever polling stops, retire
    * whatever is still showing: the Files and Mail pages own the real status.
    */
@@ -300,19 +300,19 @@
         retireAll();
       }
     }).catch(function () {
-      // Signed out, offline, or the endpoint is unavailable — stop quietly.
+      // Signed out, offline, or the endpoint is unavailable, stop quietly.
       timer = null;
       retireAll();
     });
   }
 
   /*
-   * "I just started a sync — show its card."
+   * "I just started a sync, show its card."
    *
    * The poll loop goes quiet once nothing is running, so a sync started later
    * in the session (the mailbox's Sync now, for one) would otherwise never be
    * seen. This paints the card straight away, forgives an earlier dismissal —
-   * the user asked for this run — and restarts polling to take over the counts.
+   * the user asked for this run, and restarts polling to take over the counts.
    */
   function watch(key) {
     if (!SERVICES[key] || !document.body || supersededByPagePanel(key)) return;
@@ -322,7 +322,7 @@
     card.pendingUntil = 0;
     if (card.doneTimer) { clearTimeout(card.doneTimer); card.doneTimer = null; }
 
-    // Paint first, then arm the grace — update() clears it on any 'syncing'
+    // Paint first, then arm the grace, update() clears it on any 'syncing'
     // payload, and this one is ours rather than the server's.
     update(key, { state: 'syncing' });
     card.pendingUntil = Date.now() + QUEUE_GRACE_MS;
@@ -347,7 +347,7 @@
     poll: poll,
     watch: watch,
     dismiss: dismiss,
-    // Push a status without waiting for /me/sync-status — CBI uses this so
+    // Push a status without waiting for /me/sync-status. CBI uses this so
     // the card tracks the same counts the Documents tab already fetched.
     update: update,
     // One bottom-right column for every sync card (library, mail, Smartsheet…).

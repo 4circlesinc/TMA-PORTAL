@@ -79,7 +79,7 @@ class Completer
         });
 
         // The signed copy is an ordinary library file and needs its own
-        // version history — without this it would be the only file with none.
+        // version history, without this it would be the only file with none.
         \App\Support\Files\Versions::recordInitial($signed, $request->created_by, 'Signed copy');
 
         // Show up in the library's own activity feed too, not just ours.

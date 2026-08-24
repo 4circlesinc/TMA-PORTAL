@@ -5,13 +5,13 @@
  *
  * macOS will not tint a native title bar. `backgroundColor` only paints the web
  * area before the page loads, and the frame itself is drawn by AppKit in the
- * system appearance — verified, not assumed. The only way to a coloured bar is
+ * system appearance, verified, not assumed. The only way to a coloured bar is
  * to hide the native one (`titleBarStyle: 'hidden'`) and draw our own.
  *
  * Drawing it means putting something into the portal page, which is the risky
  * part: that page is the real web app, served to browsers too. So none of this
  * lives in the portal's stylesheets. It is injected at runtime by the shell and
- * exists only inside the app — a browser never sees it, and no portal CSS file
+ * exists only inside the app, a browser never sees it, and no portal CSS file
  * can be broken by it.
  *
  * Windows works the same way with one addition: its minimise/maximise/close
@@ -28,8 +28,8 @@ const BLUE = '#03a5e9';
 
 /**
  * Every platform-dependent number in one place, taken as an argument rather
- * than read from process.platform, so the Windows layout can be built — and
- * measured by the tests — on a Mac. Getting it wrong is invisible from here:
+ * than read from process.platform, so the Windows layout can be built, and
+ * measured by the tests, on a Mac. Getting it wrong is invisible from here:
  * nothing on macOS reserves space at the right, so a Windows-only overlap
  * shows up only on Windows.
  */
@@ -47,7 +47,7 @@ function metrics(platform) {
      * What the OS draws over our strip at the right-hand end.
      *
      * On Windows the minimise/maximise/close buttons stay native and are
-     * painted on top of the window by the compositor — they are not in the page
+     * painted on top of the window by the compositor, they are not in the page
      * and no z-index reaches them. Anything the portal puts under them is both
      * invisible and unclickable, so that width has to be reserved. Three
      * caption buttons at 46px. macOS puts its traffic lights at the left, and
@@ -86,26 +86,26 @@ function buildCss(platform = process.platform) {
    *
    * The body padding moves them down, .tma-auth is min-height: 100vh, so every
    * one of them stood exactly one bar taller than the window and scrolled by
-   * exactly ${HEIGHT}px. Not "some pages are long" — sign in, register, forgot
+   * exactly ${HEIGHT}px. Not "some pages are long", sign in, register, forgot
    * password, both pending screens and the rest all fit their viewport
    * perfectly in a browser and all scrolled in the app.
    *
    * --auth-bar is the second half. auth.css sizes the card against
    * calc(100vh - var(--auth-chrome)), and builds that figure from its own
-   * chrome plus this variable — which is 0 in a browser. Setting it here is the
+   * chrome plus this variable, which is 0 in a browser. Setting it here is the
    * whole of the app's share: each of auth.css's breakpoints keeps its own
    * number and adds the bar to it, so this cannot fall out of step with them
    * the way a flat override of --auth-chrome would.
    *
    * No backticks in here: this is inside the CSS template literal, and one
-   * would end it — the same trap the script builder above carries.
+   * would end it, the same trap the script builder above carries.
    */
   .tma-auth {
     /*
      * !important on a custom property looks like belt and braces and is not.
      * insertCSS lands at a lower origin than the page's own stylesheets, so a
      * plain declaration here loses to auth.css's --auth-bar: 0px and the bar is
-     * silently left out of the budget — the page still scrolls, and the only
+     * silently left out of the budget, the page still scrolls, and the only
      * clue is that nothing changed.
      */
     --auth-bar: ${HEIGHT}px !important;
@@ -116,7 +116,7 @@ function buildCss(platform = process.platform) {
    * The portal header is restyled into the fixed blue bar, so it must not keep
    * a grid row of its own. An auto row sized to the header's old padding
    * (space-20 × 2 + search ≈ 80px) is exactly the empty white band that opened
-   * under the bar on Email after row actions — Mail has no page-title to fill
+   * under the bar on Email after row actions. Mail has no page-title to fill
    * that slot, so the hole read as blank chrome.
    */
   .tma-dash--desktop-bar {
@@ -125,7 +125,7 @@ function buildCss(platform = process.platform) {
   .tma-dash--desktop-bar .tma-dash__main {
     grid-row: 1 / -1 !important;
   }
-  /* Every app page keeps a top inset under the title bar — Email only is flush. */
+  /* Every app page keeps a top inset under the title bar. Email only is flush. */
   .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
     padding-top: var(--space-28, 28px) !important;
     padding-left: var(--space-28, 28px) !important;
@@ -147,7 +147,7 @@ function buildCss(platform = process.platform) {
 
   /*
    * Body padding moves everything in normal flow, but position:fixed anchors to
-   * the viewport and ignores it. Parts of the shell become fixed at top:0 — and
+   * the viewport and ignores it. Parts of the shell become fixed at top:0, and
    * then sit *under* the bar. The sidebar was the visible one: its logo is the
    * first thing in it, so the logo went half-missing.
    *
@@ -157,24 +157,24 @@ function buildCss(platform = process.platform) {
    * where an offset would shove them down instead.
    *
    * Deliberately absent: .tma-dash__mmenu and .tma-dash__scrim. Those are
-   * takeovers and are supposed to cover the bar — see the note above.
+   * takeovers and are supposed to cover the bar, see the note above.
    */
   @media (min-width: 1025px) {
-    /* Hover-style rail, collapsed — dashboard.css "held fixed in both states". */
+    /* Hover-style rail, collapsed, dashboard.css "held fixed in both states". */
     .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar {
       top: ${HEIGHT}px !important;
     }
   }
 
   /* The user-info drawer is fixed full-height in every state, so its offset
-     is unconditional — without it the bar covers the drawer's own toolbar. */
+     is unconditional, without it the bar covers the drawer's own toolbar. */
   .tma-user-info-overlay .tma-user-info-panel {
     top: ${HEIGHT + 16}px !important;
   }
 
   @media (max-width: 1024px) {
     /* Narrow window: the rail and rightbar become drawers, pinned below the bar.
-       The header is deliberately not in this list — see the narrow-window
+       The header is deliberately not in this list, see the narrow-window
        section at the foot of this file, where it stays the bar itself. */
     .tma-dash__sidebar,
     .tma-dash__rightbar {
@@ -184,7 +184,7 @@ function buildCss(platform = process.platform) {
 
   /*
    * Full width by default. The strip is only narrow where the portal shell
-   * exists to supply the rest of the row — on sign-in, or the error page, there
+   * exists to supply the rest of the row, on sign-in, or the error page, there
    * is no .tma-dash__header to restyle, and a 300px stub of blue against a
    * white page is not a title bar.
    */
@@ -198,7 +198,7 @@ function buildCss(platform = process.platform) {
     margin: 0 !important;
     /*
      * Above ordinary content and scrims, deliberately below the portal's
-     * full-viewport takeovers — email settings / portal modals are 300, the
+     * full-viewport takeovers, email settings / portal modals are 300, the
      * signature wizard is 280, and the layer scale runs to 2000. Those are
      * position:fixed with inset:0, so they ignore the body padding above and
      * start at the very top of the window; a bar sitting over them would clip
@@ -230,7 +230,7 @@ function buildCss(platform = process.platform) {
     /* Carved out of the drag region, or the buttons swallow their own clicks. */
     -webkit-app-region: no-drag;
     /* Never squeezed. The strip is a fixed width beside the shell, and a flex
-       item that may shrink gives up its width silently — the buttons narrow
+       item that may shrink gives up its width silently, the buttons narrow
        and the heading beside them ends up at zero. */
     flex: none;
   }
@@ -238,7 +238,7 @@ function buildCss(platform = process.platform) {
   #tma-desktop-titlebar .tma-tb-btn {
     all: unset;
     box-sizing: border-box;
-    /* Matches .tma-dash__header .tma-dash__icon-btn — same size, same radius,
+    /* Matches .tma-dash__header .tma-dash__icon-btn, same size, same radius,
        so the window controls and the header's own buttons sit on one line
        rather than looking like two toolbars that happen to touch. */
     width: 32px;
@@ -304,7 +304,7 @@ function buildCss(platform = process.platform) {
    * The first attempt moved the search and the toolbar icons into this element.
    * They would not stay: the portal reconciles .tma-dash through TMAMorph,
    * which knows nothing about nodes lifted out from under it and puts them
-   * straight back — and re-taking them every render is a tug-of-war, not a fix.
+   * straight back, and re-taking them every render is a tug-of-war, not a fix.
    * Worse, hiding the emptied header took the search and every icon with it.
    *
    * So nothing moves. The header is restyled in place into the blue strip, and
@@ -317,12 +317,12 @@ function buildCss(platform = process.platform) {
     /*
      * The caption reserve above is dropped here, and has to be. It exists to
      * keep content out from under buttons the OS draws at the *window's* right
-     * edge — but beside the shell this strip is only ${controls}px wide and
+     * edge, but beside the shell this strip is only ${controls}px wide and
      * sits at the left, nowhere near them. Kept, it ate the strip from the
      * inside: 138 of 250px reserved for buttons that are hundreds of pixels
      * away left barely enough for the three nav buttons and nothing at all for
      * the heading, so the page title was laid out at zero width. It was never
-     * missing or hidden behind anything — it was squeezed out.
+     * missing or hidden behind anything, it was squeezed out.
      */
     padding-right: 12px;
   }
@@ -347,7 +347,7 @@ function buildCss(platform = process.platform) {
     /*
      * Symmetric padding, deliberately. The header is
      * minmax(0,1fr) auto minmax(0,1fr), so its centre column is centred in
-     * the *content box* — padding the left side to clear the window controls
+     * the *content box*, padding the left side to clear the window controls
      * shrank that box from one side and pushed the search right by half of it.
      * The controls are cleared by insetting the left cell's contents instead,
      * which leaves the 1fr tracks equal and the search on the window's centre.
@@ -364,7 +364,7 @@ function buildCss(platform = process.platform) {
    * The mirror of the left inset, for the OS's own caption buttons.
    *
    * The header runs the full width of the window, so on Windows its right-hand
-   * end is underneath the native minimise/maximise/close buttons — and the last
+   * end is underneath the native minimise/maximise/close buttons, and the last
    * thing in that end is the right-panel toggle, which was therefore covered by
    * the close button and could not be clicked.
    *
@@ -399,7 +399,7 @@ function buildCss(platform = process.platform) {
   .tma-dash--desktop-bar .tma-dash__header img { filter: brightness(0) invert(1); }
 
   /*
-   * The unread counts. The class is .tma-dash__icon-btn-badge — a red pill with
+   * The unread counts. The class is .tma-dash__icon-btn-badge, a red pill with
    * white text, and a <span>, so the white knock-out above (which is scoped to
    * img) leaves it alone. A ring in the bar colour separates the pill from the
    * blue the way it was separated from the white header it was drawn for.
@@ -425,7 +425,7 @@ function buildCss(platform = process.platform) {
    * at 125% or 150% display scaling, which divides the usable CSS width: a
    * 1366px panel at 150% is 911px, so the app *maximised* is inside the phone
    * band. The window cannot go under 960px (minWidth), so the whole band this
-   * has to cover is 960-1024 — narrow, but where a good number of Windows
+   * has to cover is 960-1024, narrow, but where a good number of Windows
    * machines sit by default. It is why the bar looked stripped there while the
    * same build on a Mac looked complete.
    *
@@ -435,7 +435,7 @@ function buildCss(platform = process.platform) {
    * browser at the same width is untouched and still gets the phone layout.
    */
   /* The user-info drawer is fixed full-height in every state, so its offset
-     is unconditional — without it the bar covers the drawer's own toolbar. */
+     is unconditional, without it the bar covers the drawer's own toolbar. */
   .tma-user-info-overlay .tma-user-info-panel {
     top: ${HEIGHT + 16}px !important;
   }
@@ -495,7 +495,7 @@ function buildCss(platform = process.platform) {
     /*
      * The phone layout reserves a header's worth of space at the top of the
      * scroller, because there the header floats over it. Here the body padding
-     * already accounts for the bar — so drop the mobile header clearance, but
+     * already accounts for the bar, so drop the mobile header clearance, but
      * keep a normal content inset for Dashboard (Email stays flush).
      */
     .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
@@ -528,7 +528,7 @@ const ICONS = {
  *
  * Navigation runs through the page's own session history rather than new IPC.
  * It is the same history the Go menu drives through webContents, so Back here
- * and Back there land in the same place — and it keeps the preload's surface
+ * and Back there land in the same place, and it keeps the preload's surface
  * exactly as small as it is, which is the point of that file.
  *
  * Whether there is anywhere to go back or forward *to* is not knowable in the
@@ -555,7 +555,7 @@ function script({ canGoBack, canGoForward }) {
      * Mounted on <body>, not inside .tma-dash. The shell is a CSS grid; a child
      * without an explicit grid area is auto-placed into a fresh track. Even a
      * position:fixed node has been observed to leave an empty row after morph
-     * fights — and that row was the white band under the bar on Email. The bar
+     * fights, and that row was the white band under the bar on Email. The bar
      * owns its own click handlers, so it does not need to live under the dash
      * root that dashboard.js queries.
      */
@@ -575,7 +575,7 @@ function script({ canGoBack, canGoForward }) {
     const title = bar.querySelector('.tma-tb-title');
 
     /*
-     * Nothing is moved out of the portal's header — see the CSS note. The class
+     * Nothing is moved out of the portal's header, see the CSS note. The class
      * is all this needs to do: the header restyles itself into the blue strip,
      * and morph can rebuild its contents as often as it likes.
      *
@@ -609,7 +609,7 @@ function script({ canGoBack, canGoForward }) {
     if (!document.documentElement.dataset.tmaTbClassWatch) {
       document.documentElement.dataset.tmaTbClassWatch = '1';
       watchDashClass(dashWatch);
-      // .tma-dash is a direct child of body — only watch those replacements.
+      // .tma-dash is a direct child of body, only watch those replacements.
       new MutationObserver(() => {
         const dash = document.querySelector('.tma-dash');
         if (dash !== dashWatch) {
@@ -620,7 +620,7 @@ function script({ canGoBack, canGoForward }) {
     }
 
     /*
-     * The page's own heading, not document.title — that one is prefixed with
+     * The page's own heading, not document.title, that one is prefixed with
      * the unread count ("(388) Dashboard"), which belongs on the badge rather
      * than in the middle of the chrome.
      */
@@ -631,7 +631,7 @@ function script({ canGoBack, canGoForward }) {
       /*
        * Every backslash below is doubled, and has to be. This function is built
        * inside a template literal, where backslash-s and backslash-d are not
-       * valid escapes and the backslash is simply dropped — written singly they
+       * valid escapes and the backslash is simply dropped, written singly they
        * reach the page as plain letters and quietly match nothing, which is why
        * the unread count was never actually being stripped.
        *
@@ -643,7 +643,7 @@ function script({ canGoBack, canGoForward }) {
         || (document.title || '')
           // The unread count belongs on the badge, not in the chrome.
           .replace(/^\\(\\d+\\)\\s*/, '')
-          // And "Sign In — TM ANTOINE Advisory" is the app telling you its own
+          // And "Sign In | TM ANTOINE Advisory" is the app telling you its own
           // name inside its own window.
           .split(/\\s+[—–|]\\s+/)[0]
           .trim()
@@ -662,7 +662,7 @@ function script({ canGoBack, canGoForward }) {
       else location.reload();
     });
 
-    // The title carries the unread count — "(388) Dashboard" — so it changes
+    // The title carries the unread count, "(388) Dashboard", so it changes
     // without a navigation. Watch the element, once per document.
     if (!document.documentElement.dataset.tmaTbWatching) {
       document.documentElement.dataset.tmaTbWatching = '1';
@@ -686,7 +686,7 @@ function script({ canGoBack, canGoForward }) {
  * Repaints the Windows caption strip.
  *
  * Windows draws the minimise/maximise/close buttons itself, in a block of
- * `titleBarOverlay.color` at the top right — *over* whatever the web contents
+ * `titleBarOverlay.color` at the top right. *over* whatever the web contents
  * have painted. So that colour is only right while the thing behind it is the
  * same colour, and during startup it was not: the strip was brand blue while
  * the loading screen underneath was the darker #136da0, which put a bright blue
@@ -754,14 +754,14 @@ async function refresh(webContents) {
  *
  * insertCSS is deliberately *not* part of refresh(): a stylesheet inserted this
  * way lives as long as the document does, so re-inserting it on every in-page
- * navigation would stack a fresh copy each time — and the portal navigates by
+ * navigation would stack a fresh copy each time, and the portal navigates by
  * pushState, so that is most of them.
  */
 async function apply(webContents) {
   try {
     await webContents.insertCSS(CSS);
   } catch {
-    // As above — a page that went away takes its stylesheet with it.
+    // As above, a page that went away takes its stylesheet with it.
   }
 
   await refresh(webContents);

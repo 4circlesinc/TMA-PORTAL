@@ -12,8 +12,8 @@ use Illuminate\Support\Str;
 /**
  * Turns onboarding answers into a real user account and client record.
  *
- * The client record already exists — a staff member created it before sending
- * the invitation — so this merges into it rather than replacing it. Anything
+ * The client record already exists, a staff member created it before sending
+ * the invitation, so this merges into it rather than replacing it. Anything
  * the client did not answer is left exactly as the firm entered it; onboarding
  * is the client filling in the gaps, not overwriting the firm's own notes.
  *
@@ -31,7 +31,7 @@ final class ClientProfile
     }
 
     /**
-     * Apply every answer gathered so far. Safe to call more than once — it is
+     * Apply every answer gathered so far. Safe to call more than once, it is
      * run on completion, so a resumed flow lands the same as an unbroken one.
      */
     public static function apply(User $user, OnboardingProgress $progress): void
@@ -93,8 +93,8 @@ final class ClientProfile
             $profile['lastName'] = $name['last_name'] ?? null;
         }
 
-        // The invited address is authoritative — it is the one they just proved
-        // they can receive mail at — so it goes to the front of the list.
+        // The invited address is authoritative, it is the one they just proved
+        // they can receive mail at, so it goes to the front of the list.
         $profile['emails'] = self::upsertValue($profile['emails'] ?? [], 'work', $user->email, true);
 
         if (! empty($phone['phone'])) {

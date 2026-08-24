@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  * Two layers stack here, and keeping them apart is the whole point:
  *
  *  1. The portal's own capability model (App\Support\Access\Role) decides
- *     whether a person reaches the Feed at all — `feed.view` — and whether
+ *     whether a person reaches the Feed at all. `feed.view`, and whether
  *     they may create channels or read firm-wide analytics.
  *  2. Inside the Feed, a channel's `visibility` plus the reader's membership
  *     row decides everything else. A portal administrator is treated as a
@@ -58,7 +58,7 @@ final class FeedAccess
         return Role::can($user, 'feed.analytics');
     }
 
-    /** May this person moderate anywhere — the portal-wide override. */
+    /** May this person moderate anywhere, the portal-wide override. */
     public static function canModerateAll(?User $user): bool
     {
         return Role::can($user, 'feed.moderate');
@@ -80,7 +80,7 @@ final class FeedAccess
      * How much authority this user has in this channel, as a rung index.
      *
      * Returns -1 for a non-member. A portal-wide moderator floors at `admin`
-     * even where they hold no membership — see the class comment.
+     * even where they hold no membership, see the class comment.
      */
     public static function rank(FeedChannel $channel, ?User $user): int
     {
@@ -114,7 +114,7 @@ final class FeedAccess
     /**
      * May this user read the channel and its posts?
      *
-     * Membership always wins — a person added to a private channel keeps
+     * Membership always wins, a person added to a private channel keeps
      * seeing it. Otherwise `org` visibility opens the channel to staff, and a
      * client channel opens only to the people attached to that client.
      */
@@ -159,8 +159,8 @@ final class FeedAccess
     /**
      * May this user leave?
      *
-     * The owner may not — a channel without an owner has nobody who can
-     * restore it — and nobody may leave a default channel everyone belongs to.
+     * The owner may not, a channel without an owner has nobody who can
+     * restore it, and nobody may leave a default channel everyone belongs to.
      */
     public static function canLeave(FeedChannel $channel, ?User $user): bool
     {
@@ -176,7 +176,7 @@ final class FeedAccess
      *
      * Reading is not enough: posting needs membership *and* the rung the
      * channel's `post_policy` names. An archived channel takes no new posts
-     * from anyone, including administrators — that is what archiving means.
+     * from anyone, including administrators, that is what archiving means.
      */
     public static function canPost(FeedChannel $channel, ?User $user): bool
     {

@@ -16,7 +16,7 @@ use App\Models\User;
  * ]
  *
  * Portal delivery of the security and approvals groups can never be switched
- * off — those are administrator-required alerts (§21). The UI reflects that by
+ * off, those are administrator-required alerts (§21). The UI reflects that by
  * locking those toggles; the server enforces it here regardless of input.
  */
 final class NotificationPreferences
@@ -25,14 +25,14 @@ final class NotificationPreferences
 
     /**
      * Per-group defaults: everything on, for every module and every channel
-     * (firm decision, 2026-08-05) — with the one exception below. A person who
+     * (firm decision, 2026-08-05), with the one exception below. A person who
      * has never opened the settings hears about everything and turns off what
      * they don't want, rather than missing something because a channel was
      * quietly off.
      *
      * Two things this leans on: notification email needs a running queue
      * worker to leave the building, and desktop banners still require the
-     * browser permission prompt to be accepted — the preference being on is
+     * browser permission prompt to be accepted, the preference being on is
      * permission to ask, not a way around it.
      */
     private static function groupDefault(string $group): array
@@ -43,7 +43,7 @@ final class NotificationPreferences
             // the only ones that mirror something already delivered to the very
             // inbox we would send the notification to. "Kryshna replied to your
             // email" landing beside Kryshna's actual reply tells the reader
-            // nothing they are not already holding — one event, two mails, and
+            // nothing they are not already holding, one event, two mails, and
             // the notification is the less useful of the pair. The bell, the
             // desktop banner and the toast still announce it immediately; only
             // the email twin is opt-in.

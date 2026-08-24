@@ -156,41 +156,41 @@ class CipReportingTest extends TestCase
         ]);
 
         $pending = $this->create($admin, ['filters' => ['preset' => 'pending_review']]);
-        $this->assertSame('Applications Pending Review — All dates', $pending['name']);
+        $this->assertSame('Applications Pending Review: All dates', $pending['name']);
         $this->assertSame('1', $this->metric($pending, 'Applications'));
         $this->assertSame('Pending Review', $this->rows($pending)[0][2]);
         $this->assertNull($pending['data']['window']['from']);
         $this->assertNull($pending['data']['window']['to']);
 
         $background = $this->create($admin, ['filters' => ['preset' => 'background_check']]);
-        $this->assertSame('Applications in Background Check — All dates', $background['name']);
+        $this->assertSame('Applications in Background Check: All dates', $background['name']);
         $this->assertSame('1', $this->metric($background, 'Applications'));
         $this->assertSame('Background Check', $this->rows($background)[0][2]);
 
         $delayed = $this->create($admin, ['filters' => ['preset' => 'delayed']]);
-        $this->assertSame('Delayed Applications — All dates', $delayed['name']);
+        $this->assertSame('Delayed Applications: All dates', $delayed['name']);
         $this->assertSame('1', $this->metric($delayed, 'Applications'));
         $this->assertSame('Delayed', $this->rows($delayed)[0][2]);
 
         $grantedReport = $this->create($admin, ['filters' => ['preset' => 'granted']]);
-        $this->assertSame('Granted Applications — All dates', $grantedReport['name']);
+        $this->assertSame('Granted Applications: All dates', $grantedReport['name']);
         $this->assertSame('1', $this->metric($grantedReport, 'Applications'));
         $this->assertSame('10T1G12661P', $this->rows($grantedReport)[0][0], 'the Number column is displayNumber()');
         $this->assertSame('Approved', $this->rows($grantedReport)[0][2], 'the status chip still says Approved');
 
         $denied = $this->create($admin, ['filters' => ['preset' => 'denied']]);
-        $this->assertSame('Denied Applications — All dates', $denied['name']);
+        $this->assertSame('Denied Applications: All dates', $denied['name']);
         $this->assertSame('1', $this->metric($denied, 'Applications'));
         $this->assertSame('Denied', $this->rows($denied)[0][2]);
 
         $byProvider = $this->create($admin, ['filters' => ['preset' => 'by_provider']]);
-        $this->assertSame('Applications by Service Provider — All dates', $byProvider['name']);
+        $this->assertSame('Applications by Service Provider: All dates', $byProvider['name']);
         $this->assertSame(['Service provider', 'Applications'], $byProvider['data']['table']['columns']);
         $this->assertSame(['Galaxy', '4'], $this->rows($byProvider)[0]);
         $this->assertSame(['Horizon', '1'], $this->rows($byProvider)[1]);
 
         $byType = $this->create($admin, ['filters' => ['preset' => 'by_investment_type']]);
-        $this->assertSame('Applications by Investment Type — All dates', $byType['name']);
+        $this->assertSame('Applications by Investment Type: All dates', $byType['name']);
         $grouped = collect($this->rows($byType))->mapWithKeys(fn ($row) => [$row[0] => $row[1]])->all();
         $this->assertSame('3', $grouped['Real Estate Project']);
         $this->assertSame('1', $grouped['Enterprise Project']);
@@ -335,7 +335,7 @@ class CipReportingTest extends TestCase
             ->assertOk()
             ->streamedContent();
 
-        $this->assertStringContainsString('Granted Applications — All dates', $csv);
+        $this->assertStringContainsString('Granted Applications: All dates', $csv);
         $this->assertStringContainsString('All dates', $csv);
         $this->assertStringContainsString('Number,Applicant,Status,"Service provider","Investment type","Assigned officer",Submitted,"Decision date"', $csv);
         $this->assertStringContainsString('10T1G12661P', $csv);

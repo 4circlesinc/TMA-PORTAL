@@ -16,7 +16,7 @@ use Illuminate\Validation\Rule;
  *
  * The screen lists the firm's staff groups and lets an administrator put a
  * whole one onto a client, or take it off again. It deliberately does not
- * create teams — those are groups, managed under People > Groups, and this
+ * create teams, those are groups, managed under People > Groups, and this
  * page links there rather than growing a second place to keep membership.
  *
  * See {@see ServiceTeams} for why the fan-out writes ordinary per-person

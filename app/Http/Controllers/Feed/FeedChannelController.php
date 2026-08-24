@@ -31,7 +31,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * Channels: creating them, editing them, and who belongs to them (§2, §3, §20).
  *
  * Every route resolves a channel through FeedAccess, which 404s rather than
- * 403s for a channel the caller cannot see — a private channel's existence is
+ * 403s for a channel the caller cannot see, a private channel's existence is
  * itself information.
  */
 class FeedChannelController extends Controller
@@ -75,7 +75,7 @@ class FeedChannelController extends Controller
     /**
      * How many posts landed in each channel since the reader last opened it.
      *
-     * One grouped query for every channel at once — the sidebar shows a dot
+     * One grouped query for every channel at once, the sidebar shows a dot
      * per channel, and doing this per channel was the slowest thing on the
      * page when the same pattern was used for messaging.
      *
@@ -131,7 +131,7 @@ class FeedChannelController extends Controller
     /**
      * Create a channel.
      *
-     * The creator becomes its owner in the same transaction — a channel with
+     * The creator becomes its owner in the same transaction, a channel with
      * no owner has nobody who can manage or restore it, so the two are never
      * separate writes.
      */
@@ -160,7 +160,7 @@ class FeedChannelController extends Controller
         ]);
 
         // A company-wide channel reaches everyone, so it is an administrator's
-        // to create — an employee making one would be an org-wide announcement
+        // to create, an employee making one would be an org-wide announcement
         // channel nobody approved.
         if ($data['type'] === FeedChannel::TYPE_COMPANY) {
             Role::authorizeAdmin($user);
@@ -294,7 +294,7 @@ class FeedChannelController extends Controller
      * Replace the channel's profile picture or cover image.
      *
      * Stored through the File Library's vault like every other durable image,
-     * and the previous file is removed once the new one is written — not
+     * and the previous file is removed once the new one is written, not
      * before, so a failed upload never leaves the channel without a picture.
      */
     public function updateImage(Request $request, string $uuid, string $which): JsonResponse
@@ -671,7 +671,7 @@ class FeedChannelController extends Controller
         }
 
         // Only approved accounts, and clients only where the channel is theirs
-        // — otherwise adding a member would be a way around channel visibility.
+        //, otherwise adding a member would be a way around channel visibility.
         $users = User::query()
             ->whereIn('id', $fresh)
             ->where('status', User::STATUS_APPROVED)

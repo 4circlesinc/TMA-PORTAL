@@ -4,8 +4,8 @@
 @php
   /*
    * Say which of the three it is. "Expired" and "withdrawn" lead to different
-   * next steps — one is worth asking for a new link, the other means the firm
-   * decided it no longer needs the documents — and a visitor told only
+   * next steps, one is worth asking for a new link, the other means the firm
+   * decided it no longer needs the documents, and a visitor told only
    * "unavailable" has to email to find out which.
    */
   $copy = match ($reason) {

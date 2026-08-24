@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
  * Named sets of subfolders an administrator can drop into any folder.
  *
  * Account settings > Advanced Preferences > Folder Templates edits these, and
- * applying one is the only thing they do — a template is a shortcut for
+ * applying one is the only thing they do, a template is a shortcut for
  * "create these five folders here", nothing more. It holds no permissions and
  * owns nothing it creates.
  *
@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  * next to `clientSubfolders`, which is the same kind of thing: a list of
  * folder names waiting to be created. Both go through
  * {@see FolderProvisioner::applySubfolders()}, so a template and the client
- * defaults create folders identically — including skipping names that already
+ * defaults create folders identically, including skipping names that already
  * exist, which is what makes applying one twice harmless.
  */
 class FolderTemplates
@@ -141,7 +141,7 @@ class FolderTemplates
     /**
      * Create the template's subfolders inside a folder.
      *
-     * Returns the names actually created — a name already present is skipped,
+     * Returns the names actually created, a name already present is skipped,
      * not duplicated, so applying the same template twice is a no-op rather
      * than a second set of "Contracts (2)" folders. Callers authorize first;
      * this does not check permissions.
@@ -157,7 +157,7 @@ class FolderTemplates
      * Trim, clean and de-duplicate folder names, dropping blanks.
      *
      * Case-insensitive on the duplicate check because the folders themselves
-     * are — two entries differing only in case would collide on creation and
+     * are, two entries differing only in case would collide on creation and
      * silently produce one folder, which reads as a bug in the template.
      *
      * @return list<string>

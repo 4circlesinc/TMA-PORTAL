@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cookie;
 use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 /**
- * Post-login "Stay signed in?" prompt — separate from TrustedDevices (2FA skip).
+ * Post-login "Stay signed in?" prompt, separate from TrustedDevices (2FA skip).
  *
  * After Google, Microsoft, or email sign-in, browsers that have not answered
  * yet are asked whether they trust this device to keep them signed in.
@@ -82,7 +82,7 @@ class StaySignedIn
     /**
      * After login: show the trust prompt when unanswered, otherwise re-apply
      * remember-me when this browser already said yes (so later logins stay
-     * durable — the preference cookie alone does not keep you signed in).
+     * durable, the preference cookie alone does not keep you signed in).
      */
     public static function afterAuthenticated(Request $request): ?RedirectResponse
     {

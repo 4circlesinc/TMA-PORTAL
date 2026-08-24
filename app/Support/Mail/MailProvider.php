@@ -7,7 +7,7 @@ use App\Models\ConnectedAccount;
 /**
  * What the portal needs from a mail backend, in the portal's own vocabulary.
  *
- * Gmail and Graph disagree about almost everything — Gmail has labels where
+ * Gmail and Graph disagree about almost everything. Gmail has labels where
  * Graph has folders, Gmail syncs by historyId where Graph hands back a
  * deltaLink, Gmail wants a raw RFC822 blob where Graph wants JSON. All of
  * that is each implementation's problem; above this line a folder is a string
@@ -28,7 +28,7 @@ interface MailProvider
      * Just what has landed in one folder since a moment in time.
      *
      * The "is there new mail?" question, and nothing else. A full incremental
-     * sync walks every folder and pages through each — far too much to run on
+     * sync walks every folder and pages through each, far too much to run on
      * a five-second timer, which is what a mailbox has to feel like. This is
      * one small request against one folder, so it can.
      *
@@ -77,8 +77,8 @@ interface MailProvider
     public function star(string $remoteId, bool $starred): void;
 
     /**
-     * Gmail's IMPORTANT marker. Outlook has no equivalent — its flag already
-     * carries that meaning — so the Graph implementation is a no-op and
+     * Gmail's IMPORTANT marker. Outlook has no equivalent, its flag already
+     * carries that meaning, so the Graph implementation is a no-op and
      * reports false back through `supportsImportant()`.
      */
     public function markImportant(string $remoteId, bool $important): void;
@@ -99,7 +99,7 @@ interface MailProvider
     /**
      * Create a label/category at the provider. Returns the provider's id for
      * it, or null when this provider cannot create one (the label then lives
-     * only in the portal, which is fine — setLabel is skipped for it).
+     * only in the portal, which is fine, setLabel is skipped for it).
      */
     public function createLabel(string $name): ?string;
 
@@ -134,7 +134,7 @@ interface MailProvider
     /**
      * How many messages in each folder carry attachments, where the provider
      * can answer cheaply. Used only for the initial "N attachments found"
-     * estimate on the progress panel — a provider with no cheap answer
+     * estimate on the progress panel, a provider with no cheap answer
      * returns [] and the panel counts what the import actually finds instead.
      *
      * @return array<string, int> keyed by our folder names

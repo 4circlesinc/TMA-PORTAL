@@ -17,14 +17,14 @@ use Throwable;
 
 /**
  * Mirror → CBI domain. Pure data transformation: reads smartsheet_* tables,
- * writes cbi_* tables, touches no network. Re-runnable at any time — the
+ * writes cbi_* tables, touches no network. Re-runnable at any time, the
  * whole point of landing raw data first is that mapping mistakes are fixed
  * by editing this class and re-running (cbi:remap), never by re-walking
  * the API.
  *
  * One application per citizenship file: rows for the same applicant on the
  * master tracker, the COR/NIC/passport trackers and a closed sheet merge via
- * a dedupe key. Everything writes in bulk — the database is remote Postgres,
+ * a dedupe key. Everything writes in bulk, the database is remote Postgres,
  * and per-row writes at WAN latency would turn the initial import into
  * hours.
  */
@@ -33,7 +33,7 @@ class Mapper
     /**
      * Portal field => candidate column titles (normalised), first hit wins.
      * Misspellings ('PRE-PROOCESSING', 'ORIGNALS') are Smartsheet's, kept
-     * deliberately — this maps the sheets as they are, not as they should be.
+     * deliberately, this maps the sheets as they are, not as they should be.
      */
     private const FIELDS = [
         'applicant_number' => ['APPLICANT NUMBER'],
@@ -169,7 +169,7 @@ class Mapper
     /**
      * Map everything a sheet feeds. Called after each sheet sync and by the
      * cbi:remap command. $force re-extracts every row regardless of the
-     * unchanged-skip — without it a remap after a mapping fix would be a
+     * unchanged-skip, without it a remap after a mapping fix would be a
      * silent no-op, since sources are stamped with exactly the timestamp
      * the skip compares against.
      */
@@ -224,7 +224,7 @@ class Mapper
         });
 
         // Systematic failure guard: every row failing extraction means a bug
-        // here, not a mass departure — touch nothing downstream.
+        // here, not a mass departure, touch nothing downstream.
         if ($extracts === [] && $failed !== []) {
             Log::error('CBI extraction failed for every row; skipping map pass', [
                 'sheet' => $sheet->remote_id, 'failed' => count($failed),
@@ -263,7 +263,7 @@ class Mapper
 
         // 3. Rows that left this sheet (moved to a closed sheet, deleted)
         //    lose their source link; a sourceless application is retired.
-        //    Failed-extraction rows are exempt — they are still present.
+        //    Failed-extraction rows are exempt, they are still present.
         $stale = CbiApplicationSource::query()
             ->where('sheet_remote_id', $sheet->remote_id)
             ->whereNotIn('row_remote_id', array_merge(array_keys($extracts), $failed))
@@ -279,7 +279,7 @@ class Mapper
         }
 
         /*
-         * Retire sourceless applications — but only the ones THIS pass could
+         * Retire sourceless applications, but only the ones THIS pass could
          * have orphaned (stale rows + re-pointed keys). A global sweep raced
          * concurrently-mapping sheets: another job's application exists for
          * an instant before its first source row lands.
@@ -300,7 +300,7 @@ class Mapper
      * The bulk pipeline: resolve/create applications for every changed row,
      * re-point sources, then upsert the merged field sets in chunks. The
      * whole pass is one transaction, so a source is never stamped
-     * "processed" unless the application write it fed also landed — a
+     * "processed" unless the application write it fed also landed, a
      * half-applied pass rolls back and the retry redoes it all.
      *
      * Returns the ids of applications this pass may have orphaned (a row's
@@ -319,7 +319,7 @@ class Mapper
     /** @return list<int> */
     private static function applyWorkInner(SmartsheetSheet $sheet, array $work, $now): array
     {
-        // Resolve applications by dedupe key — including trashed ones, which
+        // Resolve applications by dedupe key, including trashed ones, which
         // a live row resurrects.
         $keys = array_values(array_unique(array_column($work, 'key')));
         $byKey = collect();
@@ -368,7 +368,7 @@ class Mapper
             }
             foreach (array_chunk(array_keys($missing), 1000) as $chunk) {
                 // withTrashed: insertOrIgnore may have collided with a swept
-                // (soft-deleted) application holding the key — a live row now
+                // (soft-deleted) application holding the key, a live row now
                 // feeds it, so it comes back rather than staying invisible.
                 $found = CbiApplication::withTrashed()->whereIn('dedupe_key', $chunk)
                     ->get(['id', 'uuid', 'dedupe_key', 'stage', 'status', 'assigned_to', 'deleted_at']);
@@ -608,7 +608,7 @@ class Mapper
         }
     }
 
-    /** Per-pass caches, reset by mapSheet() — see the staleness note there. */
+    /** Per-pass caches, reset by mapSheet(), see the staleness note there. */
     private static array $titleMaps = [];
 
     /** @var array<int|string, SmartsheetSheet|null> */
@@ -673,7 +673,7 @@ class Mapper
             return ['key' => 'D:'.$name.'|'.$dob, 'needs_review' => false];
         }
         if ($name !== '') {
-            // Name alone is a weak identity — merge, but flag for a human.
+            // Name alone is a weak identity, merge, but flag for a human.
             return ['key' => 'M:'.$name, 'needs_review' => true];
         }
 
@@ -741,7 +741,7 @@ class Mapper
 
     /**
      * Everything populated that neither the field map nor the financial bag
-     * consumed — imported for completeness, shown only in the detail view.
+     * consumed, imported for completeness, shown only in the detail view.
      */
     private static function extraValues(array $cells, SmartsheetSheet $sheet): array
     {
@@ -790,7 +790,7 @@ class Mapper
 
     /**
      * Column widths, mirroring the cbi_applications schema. Every string
-     * truncates to its column's width — an overwidth cell degrades to
+     * truncates to its column's width, an overwidth cell degrades to
      * truncation instead of aborting a whole 100-row upsert chunk.
      * Fields absent here are text columns, capped at 4000 to stay sane.
      */
@@ -865,7 +865,7 @@ class Mapper
 
     /**
      * Smartsheet row discussions become portal comments on the application
-     * the row feeds — 1,100+ threads of real case history on the master
+     * the row feeds. 1,100+ threads of real case history on the master
      * tracker alone. Upserted on the remote comment id, so edits flow
      * through and nothing ever duplicates.
      */

@@ -136,7 +136,7 @@ class FileVersionController extends BaseFilesController
     }
 
     /**
-     * Make an older version current again — by appending a new version, never
+     * Make an older version current again, by appending a new version, never
      * by removing the ones that came after it.
      */
     public function restore(Request $request, string $uuid, string $versionUuid): JsonResponse

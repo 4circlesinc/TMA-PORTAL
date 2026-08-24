@@ -33,7 +33,7 @@ use Illuminate\Support\Str;
  * Only the SHA-256 of a token is stored, so the plaintext cannot be recovered
  * after it has been emailed. Every send therefore mints a fresh token and the
  * previous link stops working. That is the deliberate trade for not holding
- * live credentials in the database — and it means "Copy link" also rotates,
+ * live credentials in the database, and it means "Copy link" also rotates,
  * because handing out a link is handing out the credential.
  */
 final class Invitations
@@ -56,7 +56,7 @@ final class Invitations
 
     /**
      * Create an invitation, or refresh the live one that already exists for
-     * this address and target. Returns the row and the plaintext token — the
+     * this address and target. Returns the row and the plaintext token, the
      * token is not stored and is never returned again.
      *
      * @param  array<string,mixed>  $attrs
@@ -67,7 +67,7 @@ final class Invitations
         $email = Str::lower(trim($attrs['email']));
 
         // One live invitation per address per target. A second ask is the same
-        // invitation being chased, not a new one — otherwise the management
+        // invitation being chased, not a new one, otherwise the management
         // screen fills with duplicates of the same request.
         $invitation = Invitation::query()
             ->where('email', $email)
@@ -118,7 +118,7 @@ final class Invitations
 
         // Reset to pending *before* the send, for two reasons: a retry after a
         // failure must not stay stuck on `failed` when this attempt works, and
-        // an inline send fires MessageSent during the call below — so the row
+        // an inline send fires MessageSent during the call below, so the row
         // has to already say `pending` for the tracker to promote it.
         $invitation->forceFill([
             'status' => Invitation::STATUS_PENDING,
@@ -137,7 +137,7 @@ final class Invitations
             );
 
             // Success is deliberately *not* written here. Handing a mailable
-            // over is not delivery — "sent" has to mean a transport accepted
+            // over is not delivery, "sent" has to mean a transport accepted
             // it, so MailTrackingServiceProvider sets that from MessageSent.
             // Only the counters are ours to record.
             //
@@ -151,7 +151,7 @@ final class Invitations
                     : ['last_sent_at' => now()],
             ))->save();
         } catch (\Throwable $e) {
-            // Nowhere to record it — no delivery row was written at all.
+            // Nowhere to record it, no delivery row was written at all.
             $invitation->forceFill([
                 'status' => Invitation::STATUS_FAILED,
                 'last_error' => mb_substr($e->getMessage(), 0, 2000),
@@ -212,7 +212,7 @@ final class Invitations
     /**
      * Accept an invitation for a brand-new account.
      *
-     * Refuses when the address already has a login — that path has to go
+     * Refuses when the address already has a login, that path has to go
      * through {@see self::acceptAs()} after signing in, so an invitation can
      * never mint a second account for someone who already has one.
      */
@@ -255,7 +255,7 @@ final class Invitations
 
     /**
      * Accept an invitation for an account that already exists. Adds the access
-     * to the account it is signed in as — it never creates anything new.
+     * to the account it is signed in as, it never creates anything new.
      */
     public static function acceptAs(Invitation $invitation, User $user): User
     {

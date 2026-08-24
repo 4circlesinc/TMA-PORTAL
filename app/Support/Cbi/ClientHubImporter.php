@@ -21,8 +21,8 @@ use Illuminate\Support\Str;
  * pass: a registered company for every distinct referral source, and a client
  * record for every applicant, linked to the company that sent them.
  *
- * Two properties matter more than speed. It is **idempotent** — an application
- * already pointing at a client is left alone — so it can run after every sync.
+ * Two properties matter more than speed. It is **idempotent**, an application
+ * already pointing at a client is left alone, so it can run after every sync.
  * And it **never merges two referral sources it cannot prove are the same**:
  * only case and whitespace are normalised away. "Golden Visa Consultants" and
  * "GOLDEN VISA CONSULTANCY" stay separate, because deciding they are one firm
@@ -61,7 +61,7 @@ class ClientHubImporter
      * Fold every distinct Referred By value into a Company.
      *
      * Runs first and on its own so the referral sources are registered before
-     * a single client points at one — the order the office asked for, and the
+     * a single client points at one, the order the office asked for, and the
      * only order in which a client can be linked as it is created.
      *
      * @return array<string, array{name: string, applications: int, created: bool}>
@@ -161,7 +161,7 @@ class ClientHubImporter
         $now = now();
         $subfolders = FileLibrarySetting::clientSubfolders();
 
-        // Sibling names under Client Files — lowercased — so uniqueness is
+        // Sibling names under Client Files, lowercased, so uniqueness is
         // settled in memory instead of one EXISTS round trip per person.
         $taken = Folder::query()
             ->where('parent_id', $root->id)
@@ -301,7 +301,7 @@ class ClientHubImporter
      * thousand applicants several hours away. A batch of 500 costs four round
      * trips in total, and the same work lands in about a minute.
      *
-     * Uid uniqueness therefore has to be settled in memory — every existing
+     * Uid uniqueness therefore has to be settled in memory, every existing
      * uid is read once up front, and each new one joins the set as it is
      * minted, so no row asks the database whether its own name is free.
      */
@@ -410,7 +410,7 @@ class ClientHubImporter
 
         /*
          * Insert and link together or not at all. Separately, a failure
-         * between the two leaves clients nobody points at — and because their
+         * between the two leaves clients nobody points at, and because their
          * applications are still unlinked, the next run would import the same
          * people again. The batch is the unit of work, so it is the
          * transaction.
@@ -464,7 +464,7 @@ class ClientHubImporter
          * The ids are cast to int and written into the statement rather than
          * bound. Both sides are primary keys this class has just read from the
          * database, so an (int) cast leaves nothing a string could smuggle
-         * through — and bound placeholders are actively wrong here: Postgres
+         * through, and bound placeholders are actively wrong here: Postgres
          * cannot infer a type for `WHEN ? THEN ?` and reads them as text,
          * which fails against a bigint column. SQLite does not care, so the
          * test suite would never have caught it.
@@ -510,7 +510,7 @@ class ClientHubImporter
     }
 
     /**
-     * The contact record. Only what the caseload actually holds — the CBI
+     * The contact record. Only what the caseload actually holds, the CBI
      * sheets carry no addresses, emails or phone numbers, and inventing empty
      * collections would make every imported client look half filled in.
      *

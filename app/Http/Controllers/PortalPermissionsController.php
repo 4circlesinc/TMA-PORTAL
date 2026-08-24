@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
  *
  * Two firm-wide defaults: whether employees see the People directory, and
  * whether client accounts may share files onward. Reading is open to anyone
- * who may open the section; writing is administrators only — the same split
+ * who may open the section; writing is administrators only, the same split
  * ClientHubSettingsController uses, and for the same reason.
  */
 class PortalPermissionsController extends Controller

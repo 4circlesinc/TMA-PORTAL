@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  *
  * Creating one hands out a write token to a stranger, so the destination and
  * every limit are settled here against the requester's own permissions and
- * then never taken from the visitor again — see App\Support\Files\FileRequests.
+ * then never taken from the visitor again, see App\Support\Files\FileRequests.
  */
 class FileRequestController extends BaseFilesController
 {
@@ -91,7 +91,7 @@ class FileRequestController extends BaseFilesController
             'recipient_name' => $data['recipientName'] ?? null,
             'allowed_extensions' => FileRequests::normalizeExtensions($data['allowedExtensions'] ?? null),
             'max_bytes' => FileRequests::normalizeMaxBytes($data['maxBytes'] ?? null),
-            // "One file only" is a limit of one, not a separate concept — the
+            // "One file only" is a limit of one, not a separate concept, the
             // upload page and the server then enforce the same single number.
             'max_files' => $allowMultiple ? (int) ($data['maxFiles'] ?? 20) : 1,
             'allow_multiple' => $allowMultiple,
@@ -216,7 +216,7 @@ class FileRequestController extends BaseFilesController
         }
 
         abort_unless($fileRequest->recipient_email, 422, 'Add an email address to send this request to.');
-        abort_unless($fileRequest->isOpen(), 422, 'This request is closed — reopen it before sending.');
+        abort_unless($fileRequest->isOpen(), 422, 'This request is closed, reopen it before sending.');
 
         $fileRequest->save();
 
@@ -284,7 +284,7 @@ class FileRequestController extends BaseFilesController
             $details[] = ['Accepted', FileRequests::describeExtensions($fileRequest->allowed_extensions)];
         }
         if ($fileRequest->password_hash !== null) {
-            $details[] = ['Password', 'Required — sent to you separately'];
+            $details[] = ['Password', 'Required, sent to you separately'];
         }
 
         $delivery = Deliveries::send(

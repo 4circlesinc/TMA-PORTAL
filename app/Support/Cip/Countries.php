@@ -8,8 +8,8 @@ namespace App\Support\Cip;
  * The government form asks for a region, and the firm decided the portal
  * should never ask a person for something it can work out: pick a country of
  * residence and the region follows. Deriving it here rather than in the
- * browser means an application filed through any surface — the wizard, an
- * import, a future API — carries the same answer, and a hand-typed region can
+ * browser means an application filed through any surface, the wizard, an
+ * import, a future API, carries the same answer, and a hand-typed region can
  * never contradict the country beside it.
  *
  * The country list is the one the portal already ships for phone codes

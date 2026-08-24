@@ -6,7 +6,7 @@ namespace App\Support\Mail;
  * Splits data:-URI images out of outgoing HTML into inline attachment parts.
  *
  * The signature importer and the compose editor both hold images as data:
- * URIs — self-contained is right for *storage*, but most receiving clients
+ * URIs, self-contained is right for *storage*, but most receiving clients
  * (Gmail above all) refuse to render data: images in mail, so a signature
  * logo sent that way arrives as a broken-image icon. Real clients send the
  * bytes as an inline attachment and reference it from the HTML by cid:,
@@ -19,7 +19,7 @@ final class InlineImages
      *
      * Identical images (a signature repeated in the quoted history, say)
      * collapse to one part referenced from every tag. Anything that does not
-     * decode is left alone — an unrenderable src beats a corrupt attachment.
+     * decode is left alone, an unrenderable src beats a corrupt attachment.
      *
      * @return array{0: string, 1: list<array{cid: string, mime: string, name: string, bytes: string}>}
      */

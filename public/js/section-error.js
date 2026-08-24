@@ -2,7 +2,7 @@
  * TMA - Section error state for failed API loads.
  * Global: window.TMASectionError
  *
- * Use when a section fails — never fall back to sample records.
+ * Use when a section fails, never fall back to sample records.
  * Keeps failures scoped to the section (not the whole page).
  */
 (function () {

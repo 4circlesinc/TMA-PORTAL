@@ -69,7 +69,7 @@ class FileWorkflowController extends BaseFilesController
              * the sender off to the Access panel mid-thought to arrange
              * something they had just asked for in plainer words. Somebody who
              * may share the file may add anyone to it and access follows the
-             * request — the person opens it and answers, and the grant is
+             * request, the person opens it and answers, and the grant is
              * recorded in Access and in the file's activity like any other.
              *
              * The refusal remains for a sender who cannot share: they would be

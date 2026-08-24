@@ -93,7 +93,7 @@
 
   /* Search reads the sidebar out of the DOM, so a nav item portal-access.js
      pruned drops out of the index for free. The settings rail has no such
-     luck — it is a static list in portal-admin.js — so without this an
+     luck, it is a static list in portal-admin.js, so without this an
      employee searching "security policy" was handed a result that opened the
      firm's policy page. */
   function allowedAdminPage(page) {
@@ -140,7 +140,7 @@
   function buildStaticIndex(rootEl) {
     var index = navLeavesFrom(rootEl).concat(settingsIndex());
 
-    /* The index is built once, at boot, before /me has answered — so at this
+    /* The index is built once, at boot, before /me has answered, so at this
        point nobody holds any capability and every admin section is filtered
        out, administrators included. The search popup keeps this array, not a
        copy, so the sections an account really may reach are pushed into it in
@@ -189,7 +189,7 @@
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
     var term = String(q || '').trim();
     if (term.length < 2) return Promise.resolve([]);
-    // Server-side search with a capped record set — never the full directory.
+    // Server-side search with a capped record set, never the full directory.
     return a.api(root() + '/portal/clients/search?q=' + encodeURIComponent(term) + '&limit=12')
       .then(function (data) {
         return mapClients(data);
@@ -240,7 +240,7 @@
      `/admin/users` is the account-management table and `/portal/people/*` is
      the directory; both are administration now, so an account holding neither
      gets no colleague results rather than a row that 403s when opened. Client
-     results are unaffected — they come from /portal/clients, which scopes
+     results are unaffected, they come from /portal/clients, which scopes
      itself to the reader's assignments. */
   function usersSource() {
     var access = window.TMAPortalAccess;

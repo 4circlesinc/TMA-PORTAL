@@ -8,7 +8,7 @@
   /*
    * Keyed DOM reconciliation (js/dom-morph.js). See dom-morph.js for why the
    * views no longer assign innerHTML, and why the wiring below binds through
-   * MORPH.unwired / unwiredOne / on — nodes survive a render now, so plain
+   * MORPH.unwired / unwiredOne / on, nodes survive a render now, so plain
    * addEventListener in a render path stacks one handler per render.
    */
   var MORPH = window.TMAMorph || {
@@ -41,7 +41,7 @@
   /*
    * The two things this page lists.
    *
-   * They shared one table, told apart by a Type column and a filter — which
+   * They shared one table, told apart by a Type column and a filter, which
    * meant the answer to "how many applications are there" was a number you
    * had to filter for, and paging through applications walked you into
    * providers. They are different records with different columns; a tab each
@@ -132,7 +132,7 @@
   var PROFILE_TABS = [
     { id: 'info', label: 'Client info' },
     // The panel lists this client's files, so it is labelled for its content.
-    // The id stays `folders` — it keys the panel, the tab state and the
+    // The id stays `folders`, it keys the panel, the tab state and the
     // File Library folder it opens onto.
     { id: 'folders', label: 'Documents' },
     { id: 'assigned', label: 'Assigned' },
@@ -163,7 +163,7 @@
   ];
 
   /* How far a staff assignment reaches. Company-only is the default on purpose
-     — the wider options are shown with what they will cover before they apply. */
+    , the wider options are shown with what they will cover before they apply. */
   var COMPANY_SCOPES = [
     { value: 'company_only', label: 'The service provider only' },
     { value: 'existing', label: 'The service provider and its current contacts' },
@@ -260,7 +260,7 @@
           throw err;
         }
         /*
-         * A write that landed makes every cached hub listing suspect — the
+         * A write that landed makes every cached hub listing suspect, the
          * same blanket rule, at the same kind of seam, as the File Library's
          * (see TMAFilesNet.fetchJSON): every client, company, assignment and
          * invitation write in the hub goes through here, and dropping the
@@ -533,7 +533,7 @@
     return (CLIENT_META[id] && CLIENT_META[id].referredByCompanyId) || '';
   }
 
-  /* The referrer's name, "Private", or nothing at all — the three answers the
+  /* The referrer's name, "Private", or nothing at all, the three answers the
      Referred by column has to tell apart. */
   function clientReferralLabel(id) {
     var meta = CLIENT_META[id] || {};
@@ -550,8 +550,8 @@
   /*
    * Which profiles are actually in hand.
    *
-   * The listing stopped carrying profiles — eleven thousand of them was nine
-   * megabytes of JSON per page load — so a missing PROFILES entry now means
+   * The listing stopped carrying profiles, eleven thousand of them was nine
+   * megabytes of JSON per page load, so a missing PROFILES entry now means
    * "not fetched yet" rather than "nothing recorded". Those are different
    * answers: most imported clients genuinely have an almost empty profile, and
    * without this flag the detail view would draw one as if it had loaded.
@@ -628,7 +628,7 @@
     var existing = directoryItemFor(id);
     var profile = cloneDraft(draft);
     delete profile.companyId;
-    // Classification is a column, not part of the contact blob — same reason
+    // Classification is a column, not part of the contact blob, same reason
     // companyId is hoisted out: the table and the filters read it directly.
     delete profile.clientType;
     delete profile.referralType;
@@ -718,7 +718,7 @@
       emails: extra.emails || [{ type: 'work', value: extra.email || '' }],
       work: extra.work || {
         // No invented title. "Team member" was a placeholder standing under
-        // every client's name as if the firm had recorded it — and a client is
+        // every client's name as if the firm had recorded it, and a client is
         // not a member of the team, which is the one thing it managed to say.
         jobTitle: extra.role || '',
         department: extra.department || '',
@@ -726,7 +726,7 @@
       },
       addresses: extra.addresses || [
         // Same rule as the job title above: an unrecorded city is blank, not
-        // "Remote" — the portal does not know where they are.
+        // "Remote", the portal does not know where they are.
         { type: 'work', street: '', city: extra.location || '', state: '', zip: '', country: '' },
       ],
       website: extra.website || '',
@@ -904,8 +904,8 @@
   /*
    * The hub is a table, and only a table.
    *
-   * It used to offer a second arrangement — a directory column beside a
-   * detail pane — reachable from a toggle in the toolbar and remembered per
+   * It used to offer a second arrangement, a directory column beside a
+   * detail pane, reachable from a toggle in the toolbar and remembered per
    * reader. Two layouts meant every screen, every render path and every
    * measurement in this file had to be right in both, and the column one was
    * a narrower table with a profile squeezed in beside it. The firm reads
@@ -1024,7 +1024,7 @@
    *
    * A reload used to land on the first tab with the folder path thrown away,
    * so somebody three folders deep in a client's documents who pressed refresh
-   * — or followed a link, or came back — started again from the top. The tab
+   *, or followed a link, or came back, started again from the top. The tab
    * and the open folder are where you are, so they belong in the URL, which is
    * also what makes a screen linkable and the back button mean something.
    *
@@ -1052,7 +1052,7 @@
     return base + (params.length ? '?' + params.join('&') : '');
   }
 
-  /* Rewrite the address for a move within the same screen — a tab, a folder.
+  /* Rewrite the address for a move within the same screen, a tab, a folder.
      Never a new history entry: the client is the destination, and stepping
      back through six folders to leave them is not "back". */
   function syncClientsDetailUrl(state) {
@@ -1065,8 +1065,8 @@
    * Is this view the page the reader is actually looking at?
    *
    * The shell keeps every view mounted and hides all but one, so this module
-   * can be re-rendered — by a live signal, by a filter set from the Dashboard
-   * card — while the reader is somewhere else entirely. Anything that writes
+   * can be re-rendered, by a live signal, by a filter set from the Dashboard
+   * card, while the reader is somewhere else entirely. Anything that writes
    * to the address bar has to ask this first.
    */
   function clientsViewShowing() {
@@ -1077,7 +1077,7 @@
     return !view || !view.hidden;
   }
 
-  /* Set while a write is waiting for the shell to finish moving — see below. */
+  /* Set while a write is waiting for the shell to finish moving, see below. */
   var listUrlRetry = false;
 
   /*
@@ -1089,15 +1089,15 @@
    * of everything else that reads it.
    *
    * The wait is the subtle part. Coming back to the hub from another view,
-   * dashboard.js shows this view and lets it render — which is where this is
-   * called from — and only then pushes /clients. So the address still says
+   * dashboard.js shows this view and lets it render, which is where this is
+   * called from, and only then pushes /clients. So the address still says
    * /files at this moment, and writing now would both aim at the wrong page
    * and replace the entry the reader would press Back to reach. Writing later
    * is safe: dashboard.js compares pathnames alone, so it leaves a /clients
    * address that already carries a query untouched.
    *
    * This used to return when the address did not parse as a clients route,
-   * which meant it never wrote at all on the way in — the filter stayed on the
+   * which meant it never wrote at all on the way in, the filter stayed on the
    * screen while the address forgot it, and a reload or a shared link lost it.
    * The property that guard was protecting is now asked directly, of the view
    * rather than of the URL.
@@ -1129,7 +1129,7 @@
    * Where the address says to be, read once at boot.
    *
    * Read eagerly, because dashboard.js rewrites the URL as it settles the
-   * route and the query is gone by the time this view mounts — the same trap
+   * route and the query is gone by the time this view mounts, the same trap
    * the File Library's deep links hit.
    */
   var BOOT_POSITION = (function () {
@@ -1138,13 +1138,13 @@
     var folder = params.get('folder') || null;
 
     // A folder can only be shown on the documents tab, so it says which tab
-    // to open — a link that carries one and not the other still works.
+    // to open, a link that carries one and not the other still works.
     return {
       tab: params.get('tab') || (folder ? 'folders' : null),
       folder: folder,
       // What the applications table opens filtered to, so a reload or a link
       // from the Dashboard's CIP card lands on the same rows. Each is checked
-      // against the server's own set before it is trusted — see
+      // against the server's own set before it is trusted, see
       // settleApplicationFacets and ensureBuckets.
       bucket: params.get('bucket') || null,
       assignee: params.get('assignee') || null,
@@ -1172,8 +1172,8 @@
    *
    * Search used to run over the profiles the browser held. The listing does not
    * carry them any more, so the database answers instead and this holds the ids
-   * it returned. `null` means no server answer is in play — the term is too
-   * short to ask about, the request is still out, or it failed — and matching
+   * it returned. `null` means no server answer is in play, the term is too
+   * short to ask about, the request is still out, or it failed, and matching
    * falls back to the names the directory does hold.
    */
   var SEARCH_HITS = null;
@@ -1192,12 +1192,12 @@
   function contactMatchesSearch(item, query) {
     var q = String(query || '').trim().toLowerCase();
     if (!q) return true;
-    // Every client's name is in hand, so it matches on the keystroke — the
+    // Every client's name is in hand, so it matches on the keystroke, the
     // round trip only adds the fields the browser no longer holds.
     if (item.name.toLowerCase().indexOf(q) !== -1) return true;
     if (SEARCH_HITS && SEARCH_HITS_TERM === q) return !!SEARCH_HITS[item.id];
     // While the server answer is in flight, a profile that happens to be
-    // loaded — the open client, one just saved — can still match locally.
+    // loaded, the open client, one just saved, can still match locally.
     var profile = profileLoaded(item.id) ? PROFILES[item.id] : null;
     if (!profile) return false;
     var parts = [
@@ -1242,8 +1242,8 @@
    *
    * One filter menu serves both tabs on this page, and every field it offers
    * asks about an application: what state it is in, whose desk it is on, whose
-   * firm filed it. A service provider is a firm — it is the answer to the
-   * third question, not a subject of any of them — so on that tab the menu has
+   * firm filed it. A service provider is a firm, it is the answer to the
+   * third question, not a subject of any of them, so on that tab the menu has
    * nothing to say and is not offered at all. Every field below starts here.
    */
   function onApplicationsTable(state) {
@@ -1253,7 +1253,7 @@
   /*
    * Where a status filter means anything.
    *
-   * The server's set is the second half of the test — if it named no buckets
+   * The server's set is the second half of the test, if it named no buckets
    * then this reader has no CIP dashboard, and a field with no values is a
    * dead end.
    */
@@ -1266,7 +1266,7 @@
    *
    * Only that the server had something to offer. It sends every officer and
    * every firm this reader may filter by, counts included where they are
-   * zero, so there is nothing left for the browser to second-guess — a
+   * zero, so there is nothing left for the browser to second-guess, a
    * dropdown that hid itself when one of its answers happened to be empty
    * would be a toolbar that changes shape as the work moves.
    */
@@ -1282,7 +1282,7 @@
    * What lights the Filter button.
    *
    * All three live on the module rather than on the state, because the server
-   * is what applies them — the listing is re-asked for, not re-matched over
+   * is what applies them, the listing is re-asked for, not re-matched over
    * rows the browser holds. To the reader they are one control, so a lit state
    * that knew about only some of what is applied would be the button telling
    * them nothing is filtered while the table says otherwise.
@@ -1389,7 +1389,7 @@
    * The Contact column.
    *
    * Prefers the value the listing sends, which the server denormalises out of
-   * the profile — the table has to draw eleven thousand rows without eleven
+   * the profile, the table has to draw eleven thousand rows without eleven
    * thousand profiles behind them. The profile is still consulted when it
    * happens to be loaded, so an open client shows an edit before the listing
    * catches up.
@@ -1401,7 +1401,7 @@
       if (fromProfile) return fromProfile;
     }
     var meta = CLIENT_META[id];
-    return (meta && meta.contact) || '—';
+    return (meta && meta.contact) || '-';
   }
 
   function clientTableColumns(item) {
@@ -1411,7 +1411,7 @@
     return {
       name: item.name,
       type: clientTypeLabel(clientTypeOf(item.id)),
-      referral: clientReferralLabel(item.id) || '—',
+      referral: clientReferralLabel(item.id) || '-',
       referrerId: referrerId,
       contact: primaryContactValue(item.id),
     };
@@ -1426,13 +1426,13 @@
    * initials on one of seven colours, picked by hashing the seed. Colour by
    * *name* rather than by the record's stored initial_color, which the
    * importer had no basis to choose and so left blue on all eleven thousand
-   * — a directory where everybody is the same colour is a directory where the
+   *, a directory where everybody is the same colour is a directory where the
    * avatar tells you nothing. Hashing means one person keeps their colour
    * across pages and reloads.
    */
   function initialsAvatarUri(name, seed) {
     var cu = window.TMACurrentUser;
-    // No name means no initials and no colour — every circle would come back
+    // No name means no initials and no colour, every circle would come back
     // an identical grey "?", which is worse than the letter we already have.
     if (!name || !cu || typeof cu.initialsFor !== 'function') return '';
 
@@ -1452,7 +1452,7 @@
       return '<img class="tma-dash__clients-avatar" style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)"' +
         ' src="' + esc(uri) + '" alt="">';
     }
-    // current-user.js not loaded on this shell — keep a readable circle.
+    // current-user.js not loaded on this shell, keep a readable circle.
     return (
       '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue"' +
       ' style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' + esc(av.initial || '?') + '</span>'
@@ -1463,8 +1463,8 @@
     return Object.keys(state.selected || {}).length;
   }
 
-  /* Employees work in the hub; how it is shaped — who may reach it, the
-     service teams, the custom fields every record inherits — is the
+  /* Employees work in the hub; how it is shaped, who may reach it, the
+     service teams, the custom fields every record inherits, is the
      administrator's call, and these three open exactly those settings
      sections. Hidden rather than left to 404 in the rail. */
   function canManageClientHub() {
@@ -1524,7 +1524,7 @@
    *
    * They sit on the same line as Create New Application, where the page title
    * was. The title said "CIP Applications" while the lit tab said
-   * "Applications" directly beneath it — the same word twice, one of them
+   * "Applications" directly beneath it, the same word twice, one of them
    * doing nothing. The tab that is lit names the page now.
    *
    * Rendered into the shell's head, so it is synced on every render the way
@@ -1546,7 +1546,7 @@
     var slot = document.querySelector('[data-page-head-tabs]');
     if (!slot) return;
 
-    // Provider contacts / private clients: applications only — no staff tabs.
+    // Provider contacts / private clients: applications only, no staff tabs.
     if (isExternalCipUser()) {
       state.listTab = 'applications';
       slot.hidden = true;
@@ -1594,7 +1594,7 @@
    *
    * Not behind the funnel. What the table can be narrowed by is part of
    * reading the table, so the three questions sit in the open where the
-   * reader can see them and see which are answered — a funnel hides both, and
+   * reader can see them and see which are answered, a funnel hides both, and
    * a filter you have to go looking for is one nobody uses.
    *
    * Each opens its own checkbox list, because the reader is choosing several
@@ -1602,7 +1602,7 @@
    * a control that closed on the first tick would make it three trips.
    *
    * Nothing is offered on the Service providers tab. All three are facts
-   * about an application — a status, an officer, a firm — and that tab lists
+   * about an application, a status, an officer, a firm, and that tab lists
    * firms, which hold none of them.
    */
   function renderTableFilterDropdowns(state) {
@@ -1622,7 +1622,7 @@
         /*
          * The button says how many are ticked rather than naming them. One
          * name would be a lie the moment there are two, and three names would
-         * push the search box off the end of the toolbar — the chips under it
+         * push the search box off the end of the toolbar, the chips under it
          * already carry the detail, each with its own remove.
          */
         return '<button type="button" class="tma-dash__filter-drop" data-cip-dropdown="' + esc(field) + '"' +
@@ -1674,7 +1674,7 @@
     label.textContent = count === 1 ? '1 Selected' : count + ' Selected';
   }
   /* Kept for the dead directory list below, which still names its filters
-     this way. Nothing on a live screen calls it — the applications table's
+     this way. Nothing on a live screen calls it, the applications table's
      filters are named from the server's own facets. */
   function referralFilterLabel(value) {
     if (value === 'company') return 'Any service provider';
@@ -1687,7 +1687,7 @@
     return '';
   }
 
-  /* What is actually applied, as removable chips under the toolbar — the
+  /* What is actually applied, as removable chips under the toolbar, the
      Users-table filter bar recipe, same as the CBI list. */
   function renderClientsFilterChips(state) {
     var filters = state.filters || {};
@@ -1699,7 +1699,7 @@
      *
      * Named from the server's own set, not from the key: a bucket the reader
      * has no dashboard for is a bucket they cannot be filtered to, and until
-     * the set lands there is no label to put on the chip — a heartbeat with
+     * the set lands there is no label to put on the chip, a heartbeat with
      * no chip reads better than a chip that says "update_required".
      */
     /*
@@ -1707,12 +1707,12 @@
      *
      * Three statuses ticked is three chips, each with its own ×, because the
      * reader's next thought is usually "not that one" rather than "none of
-     * them" — and a single chip reading "Status: 3 selected" would make
+     * them", and a single chip reading "Status: 3 selected" would make
      * removing one of them a trip back into the menu.
      *
      * Every chip is named from the server's own list. A value the reader has
      * no dashboard for cannot be filtered to, and until the lists land there
-     * is no label to put on a chip — a beat with no chip reads better than a
+     * is no label to put on a chip, a beat with no chip reads better than a
      * chip that says "update_required" or an officer's bare id.
      */
     if (onApplicationsTable(state)) {
@@ -1776,7 +1776,7 @@
   /*
    * The Type counts have to agree with what the table draws, and the table
    * draws two kinds of record. A registered company is a Company row, so it
-   * counts as one — reporting only the handful of *clients* flagged company
+   * counts as one, reporting only the handful of *clients* flagged company
    * while sixty-four company rows sat in the list made the filter look broken,
    * because picking Company then returned far more rows than the count.
    */
@@ -1833,8 +1833,8 @@
   }
 
   /*
-   * The table lists both kinds of record the hub holds — the people and the
-   * companies — because a company is a client too, and until now the only way
+   * The table lists both kinds of record the hub holds, the people and the
+   * companies, because a company is a client too, and until now the only way
    * to reach one was to already know it existed. Companies carry no checkbox:
    * the bulk actions speak to the clients endpoint, and a company is deleted
    * from its own profile, where what that would do to its people is visible.
@@ -1864,8 +1864,8 @@
   /*
    * Providers answer to the search box and nothing else.
    *
-   * The filters ask client questions — what type of record this is, who
-   * referred it — and a provider is the answer to the second, not a subject of
+   * The filters ask client questions, what type of record this is, who
+   * referred it, and a provider is the answer to the second, not a subject of
    * either. Running them here left the tab empty whenever a filter was set for
    * the other one, which reads as "there are no providers".
    */
@@ -1892,7 +1892,7 @@
   }
 
   /* Sorting the merged list. Every comparison falls back to the name so the
-     order is total — otherwise two rows sharing a type swap places on every
+     order is total, otherwise two rows sharing a type swap places on every
      re-render, which reads as the table twitching. */
   function sortTableRows(rows, sort) {
     var byName = function (a, b) { return String(a.name).localeCompare(String(b.name)); };
@@ -1950,23 +1950,23 @@
 
   /* What a company is to the firm, in one phrase. Referrals lead, because a
      referral source that has sent 4,000 files and employs nobody here would
-     otherwise read as "0 people" — the emptiest possible description of the
+     otherwise read as "0 people", the emptiest possible description of the
      busiest record in the hub. */
   function companyRowSummary(company) {
     var referred = company.referredCount || 0;
     if (referred) return referred === 1 ? '1 referred' : referred + ' referred';
     var people = company.peopleCount || 0;
     if (people) return people === 1 ? '1 person' : people + ' people';
-    return '—';
+    return '-';
   }
 
   function renderCompanyTableRow(company, index) {
-    var contact = company.email || company.phone || '—';
+    var contact = company.email || company.phone || '-';
     var people = companyRowSummary(company);
     return (
       '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-open-company="' + esc(company.id) +
       '" data-row-index="' + index + '" role="row">' +
-      // No checkbox cell either — the head has none to line up with, and an
+      // No checkbox cell either, the head has none to line up with, and an
       // empty one only indents the name away from its own column heading.
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
       '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
@@ -2015,7 +2015,7 @@
    * on a directory this size the wait is long enough to be worth furnishing.
    *
    * The widths are staggered so the block reads as a list of names rather than
-   * a bar chart — deterministic, because a re-render must not reshuffle them.
+   * a bar chart, deterministic, because a re-render must not reshuffle them.
    */
   var SKELETON_ROW_COUNT = 12;
 
@@ -2082,7 +2082,7 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist"' +
       ' aria-hidden="true">' +
       widths.map(function (w) {
-        // The real tab's own parts — label and indicator — so the underline
+        // The real tab's own parts, label and indicator, so the underline
         // group sizes this exactly as it sizes the tab that replaces it. A box
         // of my own measuring came out 16px short and the page stepped down
         // when the labels arrived.
@@ -2193,7 +2193,7 @@
     });
   }
 
-  /* Whether this reader may add a client — an empty state offering a button
+  /* Whether this reader may add a client, an empty state offering a button
      that 403s is worse than an empty state offering nothing. */
   function canManageClients() {
     var access = window.TMAPortalAccess;
@@ -2227,7 +2227,7 @@
    *
    * It used to render pages 1–5 and nothing else, so with eleven thousand
    * clients pages 6 to 111 could only be reached by pressing Next a hundred
-   * times — and the last page could not be reached at all. The window now
+   * times, and the last page could not be reached at all. The window now
    * centres on the current page and the ends are always one press away.
    */
   function renderClientsPagination(state, totalRows) {
@@ -2264,7 +2264,7 @@
     var nextDisabled = state.page >= totalPages ? ' disabled' : '';
     // Nothing has been counted yet, so "0 results · page 1 of 1" beside a
     // skeleton table is a claim about the directory rather than a report on
-    // the request — the same mistake the count above the table used to make.
+    // the request, the same mistake the count above the table used to make.
     var resultsText = state.loadState === 'ready'
       ? totalRows.toLocaleString() + (totalRows === 1 ? ' result' : ' results') +
         ' · page ' + state.page.toLocaleString() + ' of ' + totalPages.toLocaleString()
@@ -2330,7 +2330,7 @@
   }
 
   /*
-   * §8 — the main application table.
+   * §8, the main application table.
    *
    * Nine columns about an APPLICATION: its number, who it is for, who filed
    * it, how to reach them, what they are investing in, how many people travel
@@ -2339,7 +2339,7 @@
    * A separate render path from the client grid beside it, because it lists a
    * different thing. The grid's row is a client and pages in the browser out
    * of the whole directory; this row is an application, and it is paged by the
-   * server — a client with no application does not belong here, and one with
+   * server, a client with no application does not belong here, and one with
    * two would appear once.
    *
    * Built on the documented table component, the same one the CBI board uses,
@@ -2378,7 +2378,7 @@
   /*
    * Every application status the picker names, matching Status::listed().
    *
-   * Used when the listing has not yet sent its copy — the chip on a profile
+   * Used when the listing has not yet sent its copy, the chip on a profile
    * can open before the table has loaded, and an empty menu would look like
    * there was nothing to change to.
    */
@@ -2397,15 +2397,15 @@
   ];
 
   /*
-   * §9's buckets — what the applications table can be narrowed to.
+   * §9's buckets, what the applications table can be narrowed to.
    *
    * They were a row of counting chips above the table and are now the Status
    * field in its filter menu, which is where the reader already goes to narrow
    * a list. The counts they carry did not stop being useful, so each value in
-   * the menu shows its own — the same figure the Dashboard's CIP card reports,
+   * the menu shows its own, the same figure the Dashboard's CIP card reports,
    * measured once on the server.
    *
-   * Which set a reader gets is the server's to decide — an officer's four are
+   * Which set a reader gets is the server's to decide, an officer's four are
    * a work queue (CRO and Compliance share that view) and an administrator's
    * ten are a report, and the difference is scope, not presentation.
    */
@@ -2417,7 +2417,7 @@
   /*
    * The CIP provider firm behind a client-hub company, if there is one.
    *
-   * The two are separate records on purpose — provider config lives in
+   * The two are separate records on purpose, provider config lives in
    * cip_providers so that firms do not leak into the hub's client directory —
    * and the facet carries the pairing so this does not have to guess at it by
    * name. Null when the company is not a provider, or is one with nothing in
@@ -2445,21 +2445,21 @@
   }
 
   /*
-   * What the applications table is narrowed to — the whole of it, in one
+   * What the applications table is narrowed to, the whole of it, in one
    * place.
    *
    * Three lists rather than three values, because the menu is checkboxes.
    * Within a field the ticks are an OR: asking for New and Delayed asks for
    * either, which is what a reader building up a view of "everything that
-   * needs a decision" means. Across fields it is an AND — Rita's files that
-   * are also Delayed — because a second question added to the first narrows
+   * needs a decision" means. Across fields it is an AND. Rita's files that
+   * are also Delayed, because a second question added to the first narrows
    * it. The server applies exactly those rules; this only records the ticks.
    *
    * Not on `state.filters`, deliberately. That object is the dead directory's
    * client-side matcher, and these three are server-applied: the table is
    * re-asked for rather than filtered over rows the browser already holds.
    * Keeping them apart is what stops a future edit "tidying" one into the
-   * other and quietly making these inert — which is exactly what had already
+   * other and quietly making these inert, which is exactly what had already
    * happened to Referred by and Client type.
    */
   var TABLE_FILTERS = { bucket: [], assignee: [], provider: [] };
@@ -2549,20 +2549,20 @@
   }
 
   /* The counts move whenever an application does, and every CIP write already
-     raises a signal — so they are re-read rather than adjusted by hand. */
+     raises a signal, so they are re-read rather than adjusted by hand. */
   function forgetBuckets() {
     BUCKETS.loaded = false;
   }
 
   /*
-   * Open the table on one bucket, asked from outside this view — the
+   * Open the table on one bucket, asked from outside this view, the
    * Dashboard's CIP card is the caller, and window.TMAClients is the door.
    *
    * It has to work before the view exists. The card navigates first and says
    * which bucket second, so by the time this runs the clients view may not
    * have mounted; the filter is module state either way, and the mount reads
    * it when it comes up. Nothing is parked in BOOT_POSITION for the same
-   * reason — that is for what the address said at page load, and this is a
+   * reason, that is for what the address said at page load, and this is a
    * caller in the same page saying it now.
    */
   function openBucket(key) {
@@ -2571,7 +2571,7 @@
     /*
      * An unknown key is ignored rather than applied. The listing answers 404
      * to a bucket that was never on this reader's dashboard, so filtering to
-     * one would replace the table with an error — and a card that quietly
+     * one would replace the table with an error, and a card that quietly
      * does nothing is better than a card that appears to break the page.
      * Before the set has landed there is nothing to check against; the same
      * check runs again in ensureBuckets when there is.
@@ -2609,7 +2609,7 @@
      * Every server-applied filter belongs in this key.
      *
      * A field left out of it does not refetch, so the reader ticks it, the
-     * chip appears and the rows never change — which is precisely how
+     * chip appears and the rows never change, which is precisely how
      * "Referred by" came to be decoration on this table. Sort belongs here
      * too: a header click that does not change the key would paint a new
      * arrow over the same page.
@@ -2684,7 +2684,7 @@
       });
   }
 
-  /* Drop what is held so the next paint refetches — after a save, or a live
+  /* Drop what is held so the next paint refetches, after a save, or a live
      signal that somebody else changed one. */
   function forgetApplicationTable() {
     APP_TABLE.loadedKey = null;
@@ -2692,7 +2692,7 @@
 
   /*
    * One sortable header. The whole cell is the control so a click on the
-   * padding still sorts, and aria-sort lives on the th — that is the column
+   * padding still sorts, and aria-sort lives on the th, that is the column
    * header, not the button inside it.
    */
   function applicationSortHeader(key, label) {
@@ -2760,22 +2760,22 @@
       return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
         // The number leads: §7 makes it the name of the application, and the
         // internal one rides underneath once the CIP number has taken over.
-        '<td><span class="tma-cip-table__number">' + esc(a.number || '—') + '</span>' +
+        '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
         (a.cipNumber && a.internalNumber
           ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
           : '') + '</td>' +
         '<td>' + applicantCell(a) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.provider || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '-') + '</td>' +
         '<td class="tma-portal-table__muted">' +
         (a.contactEmail
           ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
             esc(a.contactEmail) + '</a>'
-          : '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.investmentType || '—') + '</td>' +
-        // "F6" — §8's own shorthand, with the arithmetic behind it on hover.
+          : '-') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
+        // "F6". §8's own shorthand, with the arithmetic behind it on hover.
         '<td><span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
-        esc(a.familyLabel || '—') + '</span></td>' +
+        esc(a.familyLabel || '-') + '</span></td>' +
         '<td>' + cipStatusChip(a) + '</td>' +
         '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
         '<td class="tma-portal-cell--menu">' +
@@ -2790,7 +2790,7 @@
   }
 
   /*
-   * Who to put on this file — the officers, as a menu on the row.
+   * Who to put on this file, the officers, as a menu on the row.
    *
    * The list is fetched when the menu opens rather than with the table: it is
    * a question about one application, and asking it for every row of fifty to
@@ -2799,7 +2799,7 @@
   /*
    * One person's face for a menu row: their photo, else their initials.
    *
-   * The portal's one avatar rule, borrowed rather than restated — a real
+   * The portal's one avatar rule, borrowed rather than restated, a real
    * upload or a provider's picture, and otherwise initials on a colour drawn
    * from the same seed the faces in the cell use, so the same person is the
    * same colour in both. Never a stock silhouette.
@@ -2816,7 +2816,7 @@
   }
 
   /* What an officer would hold this file as, from the account type the server
-     sent — the same derivation the assignment endpoint makes when a request
+     sent, the same derivation the assignment endpoint makes when a request
      names no role. */
   function officerRoleLabel(officer) {
     var role = officer && officer.role;
@@ -2844,7 +2844,7 @@
          * else, which made the same colleague read as two different things
          * depending on whether they held the file. It is a list of who could
          * be on this: the ones who already are come first, ticked, with an ×
-         * to take it off them — and clicking the row itself does nothing,
+         * to take it off them, and clicking the row itself does nothing,
          * because they are already there and a click that appears to work and
          * changes nothing is what made this feel broken.
          */
@@ -2876,7 +2876,7 @@
           items.push({ label: 'No officers to assign', static: true });
         }
 
-        // The people, as the menu's own rows — not file actions for a fake
+        // The people, as the menu's own rows, not file actions for a fake
         // file that we then overwrite. That swap measured a narrow menu and
         // placed it, then grew it off the right of the Assigned To column.
         window.TMAFileActions.menu(
@@ -2918,7 +2918,7 @@
   }
 
   /*
-   * Who is on this applicant — the CBI board's own cell.
+   * Who is on this applicant, the CBI board's own cell.
    *
    * TMAPersonCard is the component both boards share with the File Library:
    * overlapping faces, a "+N" that is itself face-shaped so the column's width
@@ -2933,7 +2933,7 @@
      * Assignment happens in the table (§8).
      *
      * The brief puts it here rather than only on the detail page, and it is
-     * the transition that starts a review — so leaving it to the profile
+     * the transition that starts a review, so leaving it to the profile
      * meant an application nobody had opened could sit at New indefinitely.
      * The cell is the shared people cell the CBI table draws: faces side by
      * side, one full name or several first names beside them. The button is
@@ -2961,13 +2961,13 @@
   /*
    * The applicant, as a face and a name.
    *
-   * Their passport photo where there is one — it is filed as the client's
-   * picture at intake — and their initials where there is not. Never an
+   * Their passport photo where there is one, it is filed as the client's
+   * picture at intake, and their initials where there is not. Never an
    * invented face: a stock silhouette on a citizenship application would be
    * the table showing somebody who does not exist.
    */
   function applicantCell(a) {
-    var name = a.applicantName || '—';
+    var name = a.applicantName || '-';
     var face = a.photo
       ? '<img class="tma-cip-table__applicant-face" src="' + esc(a.photo) + '" alt="" width="26" height="26">'
       : applicantInitials(a);
@@ -2993,13 +2993,13 @@
    * Loading, shaped like the answer.
    *
    * A bar in every cell said "nine columns of text", and the two columns that
-   * are not text — the applicant's face and the people assigned — arrived as
+   * are not text, the applicant's face and the people assigned, arrived as
    * circles that had not been there a moment before, so the row jumped and the
    * empty avatar read as a prompt to add a photo. Each column now waits in its
    * own shape: a disc where a face is coming, a chip where a status or a
    * family count is, a bar where words are.
    *
-   * Widths are staggered but deterministic — a repaint must not reshuffle
+   * Widths are staggered but deterministic, a repaint must not reshuffle
    * them, or the block shimmers like something is still arriving when nothing
    * has changed.
    */
@@ -3015,7 +3015,7 @@
     for (var i = 0; i < 8; i++) {
       rows += '<tr aria-hidden="true">' +
         '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
-        // The face, then the name — the shape the row settles into.
+        // The face, then the name, the shape the row settles into.
         '<td><span class="tma-cip-table__applicant">' + disc +
         skeletonBar(skeletonWidth(i + 1, 0.8)) + '</span></td>' +
         '<td>' + skeletonBar(skeletonWidth(i + 2, 0.7)) + '</td>' +
@@ -3170,7 +3170,7 @@
 
       var row = e.target.closest('[data-cip-open]');
       if (!row) return;
-      // The Contact email column is a mailto — its own destination.
+      // The Contact email column is a mailto, its own destination.
       if (e.target.closest('a')) return;
 
       var uid = row.getAttribute('data-cip-open');
@@ -3178,7 +3178,7 @@
       var controller = clientsMountRoot && clientsMountRoot._clientsController;
       if (!controller) return;
       // Opened on Overview: the row is an application, and that tab is its
-      // journey — the Timeline card CBI keeps on the same tab.
+      // journey, the Timeline card CBI keeps on the same tab.
       if (clientsMountState) clientsMountState.profileTab = 'overview';
       controller.navigate('detail', uid);
     });
@@ -3204,7 +3204,7 @@
     }
 
     return (
-      // The tabs live in the page head — see syncClientsHeadTabs.
+      // The tabs live in the page head, see syncClientsHeadTabs.
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
       // The grid is wider than a narrow window; without a scroller of its own
@@ -3213,13 +3213,13 @@
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
       '<div class="tma-dash__ctable tma-dash__ctable--clients' +
       // The column tracks are positional, so dropping the checkbox cell has
-      // to drop its track with it — see --noselect.
+      // to drop its track with it, see --noselect.
       (providers ? ' tma-dash__ctable--noselect' : '') +
       '" role="table" aria-label="' +
       (providers ? 'Service providers' : 'Applications') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
       // No checkbox column at all on the providers tab. A provider row carries
-      // no checkbox — the bulk actions post to the clients endpoint — so an
+      // no checkbox, the bulk actions post to the clients endpoint, so an
       // empty cell was reserving 40px of gutter to hold nothing, and the list
       // began an inch inside the table that framed it.
       (providers ? ''
@@ -3247,8 +3247,8 @@
    *
    * It began as a display-sized number in its own band above the table, which
    * read as a stray fragment sitting in whitespace rather than part of the
-   * page. Set at the left of the toolbar it does the same job — the first
-   * number the reader wants, before they touch a control — while belonging to
+   * page. Set at the left of the toolbar it does the same job, the first
+   * number the reader wants, before they touch a control, while belonging to
    * something. When a filter is on it reports both figures, because "8,210 of
    * 11,101" is the honest answer and a bare 8,210 is not.
    */
@@ -3286,7 +3286,7 @@
     return totalApplicationRecords() + COMPANIES.length;
   }
 
-  /* Applicants only — the providers have a tab and a count of their own. */
+  /* Applicants only, the providers have a tab and a count of their own. */
   function totalApplicationRecords() {
     var people = 0;
     DIRECTORY.forEach(function (group) { people += group.items.length; });
@@ -3306,7 +3306,7 @@
      * A sticky heading only sticks within its own containing block, so the
      * wrapper is what makes B rise up and push A out of the way as you scroll
      * into it. Flat siblings all pin to the same line instead and pile up
-     * there — the top one still happened to read correctly, but every heading
+     * there, the top one still happened to read correctly, but every heading
      * scrolled past stayed in the layer underneath it.
      */
     return groups.map(function (group) {
@@ -3379,7 +3379,7 @@
 
   /*
    * The directory column was a fixed 208px, which is fine for "Jane Smith" and
-   * useless for "AASHA MORSHED ABDELAZIZ ELATI" — the caseload is full of the
+   * useless for "AASHA MORSHED ABDELAZIZ ELATI", the caseload is full of the
    * latter and they wrapped to four lines. The reader sets the width instead,
    * with the same handle the Messages inbox uses.
    *
@@ -3427,7 +3427,7 @@
 
   /*
    * Sets the width variable live during a drag rather than re-rendering, and
-   * only writes the preference on release — re-rendering per pointermove would
+   * only writes the preference on release, re-rendering per pointermove would
    * rebuild the whole directory on every pixel. Re-run after each render; the
    * stored cleanup keeps listeners from stacking.
    */
@@ -3521,7 +3521,7 @@
    *
    * Editing is something you do TO a record you were looking at, so leaving it
    * puts you back in front of that record. An application edit sent you to the
-   * table instead — the client you had open, their tabs and wherever you were
+   * table instead, the client you had open, their tabs and wherever you were
    * in them, all thrown away to go back to a row you then had to find again.
    *
    * `applicationOwner` covers the case where the edit page was loaded cold, by
@@ -3564,7 +3564,7 @@
    * The way back, as an arrow.
    *
    * No label. The destination is the thing you were just looking at and the
-   * head names where you are now — a word for it was a row of chrome above
+   * head names where you are now, a word for it was a row of chrome above
    * the person's own name, which is the wrong thing to put first on a page
    * about somebody. The name it would have carried lives on as the accessible
    * label, so it is still announced.
@@ -3587,7 +3587,7 @@
    *
    * The application number and family live on the facts strip; repeating
    * them here put three names for the same file in one head. The chip is
-   * what the head still has to say that the strip does not — where this
+   * what the head still has to say that the strip does not, where this
    * file is in the lifecycle.
    */
   function renderApplicationStatus(app) {
@@ -3595,7 +3595,7 @@
   }
 
   /*
-   * The status chip itself is the control — header, Overview card, table
+   * The status chip itself is the control, header, Overview card, table
    * column. Clicking it opens the same list the row menu's Change status
    * item does, so the words on the chip are also the way to move them.
    */
@@ -3626,7 +3626,7 @@
     var subtitle = app ? '' : esc(contactProfileSubtitle(c));
 
     /*
-     * Arrow, face, name — and, on an application, the status beside the name.
+     * Arrow, face, name, and, on an application, the status beside the name.
      * Number and family are on the facts strip; a second copy under the name
      * was the same file answering twice.
      */
@@ -3649,7 +3649,7 @@
         : '') +
       inviteToolbarBtn(c, state) +
       // Edit opens the application in the form it was filed with, not the
-      // hub's contact record — the applicant IS the application here.
+      // hub's contact record, the applicant IS the application here.
       (applicationFor(c.id)
         ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-application>' +
           '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>'
@@ -3676,7 +3676,7 @@
   /*
    * Who the Message button can reach from this applicant.
    *
-   * The provider thread is the usual destination — staff talk to the firm
+   * The provider thread is the usual destination, staff talk to the firm
    * about the file. Messaging the person themselves is offered only when
    * they have a portal login.
    */
@@ -3719,7 +3719,7 @@
    *
    * The link was only a row in the info list, which meant the one thing a case
    * worker opens a CBI client's record to reach was buried under their phone
-   * numbers. Hidden from anyone without cbi.view — the module is still
+   * numbers. Hidden from anyone without cbi.view, the module is still
    * admin-only, and a button that 403s is worse than no button.
    */
   function cbiToolbarBtn(c) {
@@ -3749,7 +3749,7 @@
   function inviteToolbarBtn(c, state) {
     // Nothing to offer if they can already sign in, or if we have no address
     // to send to. Reaching the client hub at all already means `clients.invite`
-    // — and the server re-checks it regardless.
+    //, and the server re-checks it regardless.
     if (!c || c.hasLogin || !clientPrimaryEmail(c)) return '';
 
     var inv = state ? state.invitation : null;
@@ -3822,7 +3822,7 @@
   function renderElevatedDetailChrome(state) {
     var toolbar = '';
     /*
-     * Every head carries the way back itself now — an arrow on the same line
+     * Every head carries the way back itself now, an arrow on the same line
      * as the name, before whatever stands for the record. The labelled button
      * that used to sit on a row above them is gone: it spent a whole line of
      * the page saying "leave", above the name of the thing you had opened.
@@ -3865,7 +3865,7 @@
 
     /*
      * The page title is hidden only where the record's own head has been
-     * lifted INTO the page head — the narrow-window arrangement, where the two
+     * lifted INTO the page head, the narrow-window arrangement, where the two
      * would otherwise sit on the same line. Everywhere else it stays: it is
      * the header's own label and the header is not the hub's to empty.
      */
@@ -4251,7 +4251,7 @@
    * Cards, not one long scroll of headings.
    *
    * The page was a stack of labelled sections running the full width, each a
-   * line or two of content followed by a lot of nothing — a long way to travel
+   * line or two of content followed by a lot of nothing, a long way to travel
    * to learn very little. The two short ones pair up on a wide screen; the
    * lists that can grow take the full width. Empty sections show an
    * illustration rather than a sentence of apology.
@@ -4329,7 +4329,7 @@
   }
 
   /*
-   * The clients this company sent us — what a referral partner's page is for,
+   * The clients this company sent us, what a referral partner's page is for,
    * and which the page used to answer with "No people at this company yet".
    * Only the first dozen travel in the record; the rest are one click away in
    * the directory, filtered to this company.
@@ -4344,7 +4344,7 @@
       /*
        * Offered only when it can land somewhere. The destination is the
        * applications table filtered to this firm, and a company with no CIP
-       * provider behind it — or one with no applications this reader may see —
+       * provider behind it, or one with no applications this reader may see —
        * has no such table. A button that opened an empty list would read as
        * "there are none", when the truth is that this company is not a filing
        * firm.
@@ -4359,7 +4359,7 @@
    * The company at a glance, always with something in it.
    *
    * It used to drop every blank row and return nothing at all when a company
-   * had no type, industry or phone — which is every company the CBI import
+   * had no type, industry or phone, which is every company the CBI import
    * created. An empty Details card meant the top row never paired up, so the
    * page had no two-column row anywhere. The first four rows are always
    * answerable from what we hold; the rest still only appear when filled.
@@ -4392,7 +4392,7 @@
 
   /* The address an invitation would go to.
      The contact object carries `emails: [{type, value}]`, never a top-level
-     `email` — reading `c.email` silently yields undefined and makes every
+     `email`, reading `c.email` silently yields undefined and makes every
      client look like it has no address. */
   function clientPrimaryEmail(c) {
     if (!c) return '';
@@ -4419,7 +4419,7 @@
 
     /*
      * An email and a button. The role dropdown sat here preselected to
-     * "Service provider member" and that is what everyone was added as — a
+     * "Service provider member" and that is what everyone was added as, a
      * question with one answer, the same one the assign form used to ask.
      * Each member row still carries its own role controls for the day
      * somebody really is the finance contact.
@@ -4470,7 +4470,7 @@
     var loading = !!state.companyStaffLoading;
 
     /*
-     * A picker, the reach, and a button — the level dropdown is gone from
+     * A picker, the reach, and a button, the level dropdown is gone from
      * here the same way it went from the client profile's form: preselected
      * to Editor and never changed, a question with one answer. The reach
      * stays, because company-only versus every-client is a real decision
@@ -4588,7 +4588,7 @@
    * Choosing a person by their face, not their name in a system menu.
    *
    * A native <select> is drawn by the operating system, so an option can hold
-   * text and nothing else — which is why this list looked like a font menu
+   * text and nothing else, which is why this list looked like a font menu
    * while every other place the portal names staff shows them. It is the
    * documented context menu instead, with the avatars renderAssignSub already
    * uses.
@@ -4670,8 +4670,8 @@
         e.stopPropagation();
 
         input.value = pick.getAttribute('data-staff-pick');
-        // Remembered so a re-render — an assignment landing, the panel
-        // reloading — does not silently forget who was chosen.
+        // Remembered so a re-render, an assignment landing, the panel
+        // reloading, does not silently forget who was chosen.
         if (picker.querySelector('[data-clients-assign-user]')) state.assignPick = input.value;
         else state.companyStaffPick = input.value;
 
@@ -4834,7 +4834,7 @@
    *
    * Filled in by the folder panel's own listing (loadClientFolder), which runs
    * on every profile render whether or not the Documents tab is the one on
-   * show — so the number is there before anybody opens it. Counted from the
+   * show, so the number is there before anybody opens it. Counted from the
    * root listing only: drilling into a subfolder must not make the tab report
    * that subfolder's contents as the client's total.
    */
@@ -4868,7 +4868,7 @@
   /* Nested inside the label rather than beside it: the underline tab is a
      column (label above indicator), so a third child would land under the rule
      and the indicator would stop matching the width of what it underlines.
-     Zero draws nothing, the way every other count in the portal behaves — the
+     Zero draws nothing, the way every other count in the portal behaves, the
      panel behind the tab already says it is empty, in a sentence. */
   function tabCountChip(count) {
     if (!count) return '';
@@ -4893,7 +4893,7 @@
     if (!app) return PROFILE_TABS;
 
     var tabs = [
-      // The application's own facts — where it has got to — before the people
+      // The application's own facts, where it has got to, before the people
       // on it. CBI calls this Overview and keeps the Timeline card here; a
       // tab named "Application details" would sit next to "Main applicant"
       // and ask the reader which of the two was the file.
@@ -4919,7 +4919,7 @@
    * The tab to open on: the one the address asked for, else the first.
    *
    * Claimed here rather than at mount because the tabs a profile HAS depend on
-   * its application, which arrives after the first paint — asking earlier
+   * its application, which arrives after the first paint, asking earlier
    * would mean checking "documents" against a list that is only ever
    * Client info, and dropping it.
    */
@@ -4955,7 +4955,7 @@
    *
    * It used to sit as a row of dates under every tab, which put the file's
    * progress on screens that were about a person. It is a card of label/date
-   * rows — the same shape CBI draws — on Overview, which is the tab about
+   * rows, the same shape CBI draws, on Overview, which is the tab about
    * the application. Steps that have not happened yet stay on it, greyed:
    * a timeline with holes in it is how a reader tells what is still ahead.
    */
@@ -4966,7 +4966,7 @@
     return overviewList(steps.map(function (m) {
       return overviewRow(
         m.label,
-        m.date ? fmtShortDate(m.date) : '—',
+        m.date ? fmtShortDate(m.date) : '-',
         false,
         m.reached ? '' : 'tma-dash__cip-tl-ahead'
       );
@@ -5032,7 +5032,7 @@
     var people = cipFamily(app);
     var lead = familyComposition(app);
     var rows = people.map(function (p) {
-      return overviewRow(p.name || '—', p.label || '');
+      return overviewRow(p.name || '-', p.label || '');
     }).join('');
     if (!lead && !rows) return '';
     return (lead ? '<p class="tma-dash__cip-ov-lead">' + esc(lead) + '</p>' : '') +
@@ -5044,7 +5044,7 @@
     if (!people.length) return '';
     return overviewList(people.map(function (p) {
       var s = personDocStats(p);
-      return overviewRow(p.name || p.label || '—', s.filed + ' / ' + s.total);
+      return overviewRow(p.name || p.label || '-', s.filed + ' / ' + s.total);
     }).join(''));
   }
 
@@ -5093,7 +5093,7 @@
     var people = Array.isArray(app.assignedTo) ? app.assignedTo : [];
     var faces = cipAssignedFaces(app);
     var rows = people.map(function (p) {
-      return overviewRow(p.name || '—', (p.roles && p.roles[0]) || '');
+      return overviewRow(p.name || '-', (p.roles && p.roles[0]) || '');
     }).join('');
     return '<div class="tma-dash__cip-ov-assigned">' + faces + '</div>' +
       overviewList(rows);
@@ -5131,7 +5131,7 @@
   }
 
   /*
-   * The case at a glance, under every tab — CBI's facts strip.
+   * The case at a glance, under every tab. CBI's facts strip.
    *
    * Application number is `displayNumber()`: the internal number until the
    * CIP number is recorded, the CIP number after. Submitted stays on the
@@ -5186,7 +5186,7 @@
     var html =
       cipFact('Application number', app.number) +
       cipFact('Received', cipMilestoneDate(app, 'filed')) +
-      cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '—') +
+      cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
       cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
       cipFact('Investment', app.investmentType) +
       cipFact('Referred by', app.provider) +
@@ -5227,10 +5227,10 @@
    * Recording the submission, which is what enters the CIP number.
    *
    * Offered only from Ready to submit, because that is the one edge the server
-   * accepts (§16) — an action that could be pressed from anywhere and then
+   * accepts (§16), an action that could be pressed from anywhere and then
    * refused would be the interface hiding a rule it could have simply not
    * shown. A typo in a number already recorded is Edit CIP number, up in the
-   * profile head — it does not move the status and does not belong here.
+   * profile head, it does not move the status and does not belong here.
    */
   function renderSubmissionAction(state, app) {
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
@@ -5252,7 +5252,7 @@
 
   /*
    * A CIP number already recorded, but typed wrong. Lives next to the name
-   * and the other profile actions — it is a correction to this file, not a
+   * and the other profile actions, it is a correction to this file, not a
    * step in the workflow band under the tabs.
    */
   function renderCorrectNumberAction(app) {
@@ -5270,7 +5270,7 @@
 
   /*
    * §18: the Unit asked for more. Offered from the statuses a query can
-   * actually land on — Pending review, Background check, Delayed — because
+   * actually land on. Pending review, Background check, Delayed, because
    * that is the edge the server accepts. Pressing it from anywhere else and
    * then being refused would be the interface hiding a rule it could have
    * simply not shown.
@@ -5285,7 +5285,7 @@
 
   /*
    * §19: the Unit accepted the file. Offered from Pending review and
-   * Non-compliant — the two edges the server accepts into Background check.
+   * Non-compliant, the two edges the server accepts into Background check.
    */
   function renderAcceptanceAction(app) {
     if (!canRecordSubmission()) return '';
@@ -5296,7 +5296,7 @@
   }
 
   /*
-   * §21: the Unit decided. Offered from Background check and Delayed — the
+   * §21: the Unit decided. Offered from Background check and Delayed, the
    * two edges the server accepts into Approved or Denied. Date and type
    * are both asked for; either one without the other would leave a terminal
    * file whose reports cannot say when, or which way.
@@ -5357,7 +5357,7 @@
    * number, the two of them first, so a reader checking a face against a
    * number is not hunting through the rest of the answers.
    *
-   * Built to renderListItem's shape — icon, label, value — so its label lines
+   * Built to renderListItem's shape, icon, label, value, so its label lines
    * up with the labels around it and the picture with their answers. It links
    * to the archival copy: what is drawn is the 320px avatar, and somebody
    * checking a face against a passport wants the file that was actually
@@ -5374,7 +5374,7 @@
      *
      * The photo is filed into the person's folder like every other document
      * on the application, so it opens the same window the library opens —
-     * comments, versions, review, sharing, the lot — the same way the client's
+     * comments, versions, review, sharing, the lot, the same way the client's
      * Documents tab does. What is drawn on the page is still the 320px avatar;
      * the viewer is handed the file row.
      */
@@ -5409,8 +5409,8 @@
   /*
    * A filed checklist slot, opened the same way as the passport photo.
    *
-   * The slot only carries the library uuid — the viewer wants the full file
-   * row — so this uses a row we already hold (the photo, or the Documents
+   * The slot only carries the library uuid, the viewer wants the full file
+   * row, so this uses a row we already hold (the photo, or the Documents
    * tab listing) and otherwise asks the library for that one file.
    */
   function openCipFile(state, fileId, render) {
@@ -5455,7 +5455,7 @@
 
     if (window.TMAFileActions && window.TMAFileActions.open) {
       // A new version filed from the viewer is a new version of this file, and
-      // the face on the page is derived from the passport photo — so read the
+      // the face on the page is derived from the passport photo, so read the
       // application back either way.
       window.TMAFileActions.open(file, function () {
         delete APPLICATIONS[state.selectedId];
@@ -5466,7 +5466,7 @@
       return;
     }
 
-    // No viewer on this shell — the old behaviour beats doing nothing.
+    // No viewer on this shell, the old behaviour beats doing nothing.
     window.open(file.previewUrl || file.downloadUrl, '_blank', 'noopener');
   }
 
@@ -5479,7 +5479,7 @@
      * Never a card, wherever it sits.
      *
      * A dependant is already drawn as one, so a card here put a card inside a
-     * card — two rounded edges a few pixels apart. Giving the applicant's
+     * card, two rounded edges a few pixels apart. Giving the applicant's
      * version a card and the dependant's a plain block then meant the same
      * list wearing two different shapes on one page. It is a ruled section
      * everywhere instead, and the rule is what separates the documents from
@@ -5501,7 +5501,7 @@
    * One requirement, and where it has got to.
    *
    * §11 asks for the mandatory ones to be marked and §12 for the state to be
-   * legible — and the meeting was explicit that a provider must never have to
+   * legible, and the meeting was explicit that a provider must never have to
    * click through documents to find what needs work. So the state is the
    * status chip's own colour: something sent back reads as danger, something
    * settled reads as success, and a checklist can be scanned rather than
@@ -5510,7 +5510,7 @@
    * The tick still says whether a file is there at all, because "uploaded" and
    * "accepted" are different questions and a row that answered only the second
    * would hide the first. It is the documented TMA checkbox (`.tma-dash__check`),
-   * not a Phosphor circle — same glyph the rest of the portal uses.
+   * not a Phosphor circle, same glyph the rest of the portal uses.
    */
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
@@ -5550,7 +5550,7 @@
   }
 
   /* Assigning is an administrator's, plus anyone the matrix has been widened
-     to — the server decides, and this only asks whether to draw the control. */
+     to, the server decides, and this only asks whether to draw the control. */
   function canAssignApplications() {
     var access = window.TMAPortalAccess;
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
@@ -5561,7 +5561,7 @@
   /*
    * The Activity tab (§4d): what has happened to this application.
    *
-   * The sentences are the server's — cip_events holds actions and status
+   * The sentences are the server's, cip_events holds actions and status
    * codes, and turning "status_changed / review_application" into English in
    * two places would be two places for it to drift.
    */
@@ -5778,7 +5778,7 @@
     clientFolderFiles = files;
     clientFolderFolders = folders;
     if (!folders.length && !files.length) {
-      // Same illustrated empty state as File Library folders — plain grey copy
+      // Same illustrated empty state as File Library folders, plain grey copy
       // read as a broken list rather than an intentional empty folder.
       var ui = window.TMAPortalUI;
       canvas.innerHTML = '<div data-clients-folder-list>' +
@@ -5814,14 +5814,14 @@
        * Every document here rendered as the same phosphor File.svg, so a
        * folder of passports, spreadsheets and photographs looked like one
        * repeated thing. The listing already carries an `icon` chosen from the
-       * extension, which is what the File Library draws from — the icon set
+       * extension, which is what the File Library draws from, the icon set
        * was there all along, this list just was not asking for it.
        */
       var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
         ? window.TMAFileIcons.fileIconSrc(f.icon, f.name)
         : 'images/icons/phosphor/File.svg';
 
-      // Who and when, not just how big — the brief asks for both against every
+      // Who and when, not just how big, the brief asks for both against every
       // client document, and "uploaded by" is the first question about one.
       var who = f.uploadedBy && f.uploadedBy.name ? f.uploadedBy.name : null;
       var meta = [
@@ -5842,7 +5842,7 @@
 
   /* One tab's count chip, patched in place.
      Deliberately not a re-render: a render re-wires the folder panel, which
-     reloads the folder, which lands back here — a loop that never settles. */
+     reloads the folder, which lands back here, a loop that never settles. */
   function setTabCount(root, tabId, count) {
     var label = root.querySelector('[data-clients-tab="' + tabId + '"] .tma-tab__label');
     if (!label) return;
@@ -5865,7 +5865,7 @@
    * `counts.files` is what sits directly in the folder; every subfolder row
    * carries its own *recursive* fileCount (FolderTree::aggregate), so the two
    * together are every document anywhere under the client folder. Only the
-   * root listing counts — drilling into a subfolder must not make the tab
+   * root listing counts, drilling into a subfolder must not make the tab
    * report that subfolder as the client's total.
    */
   function captureClientDocCount(root, res) {
@@ -5887,7 +5887,7 @@
 
   // In-place drilling: the panel tracks where inside the client folder tree the
   // user has navigated, so folders open in place instead of leaving the profile.
-  // { rootUuid, path: [{ uuid, name }] } — path[0] is always the client folder.
+  // { rootUuid, path: [{ uuid, name }] }, path[0] is always the client folder.
   var clientFolderNav = null;
 
   function clientFolderCurrentUuid(root) {
@@ -5930,7 +5930,7 @@
    *
    * Right-clicking a file here did nothing, so a rename, a move, a share or a
    * copy link meant leaving for the library and finding the same row again.
-   * TMAFileActions.menu is the library's own menu — the same actions, the same
+   * TMAFileActions.menu is the library's own menu, the same actions, the same
    * permission rules, the same destination picker and the same confirmations —
    * handed the row this list already holds, so there is no second, drifting
    * copy of any of it. Anything it changes reloads the list.
@@ -5976,8 +5976,8 @@
          * The File Library's viewer, not a new browser tab.
          *
          * These are the same files the library lists, so opening one here used
-         * to give a bare PDF in another tab — no comments, no versions, no
-         * review controls — while opening it from the library gave the full
+         * to give a bare PDF in another tab, no comments, no versions, no
+         * review controls, while opening it from the library gave the full
          * viewer. TMAFileActions.open hands the row we already hold straight
          * to it, and the callback refreshes this list for anything the viewer
          * changed (a review moved on, a version added).
@@ -5990,7 +5990,7 @@
           return;
         }
 
-        // No viewer on this shell — the old behaviour beats doing nothing.
+        // No viewer on this shell, the old behaviour beats doing nothing.
         if (filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(fu) + '/preview'), '_blank', 'noopener');
       });
     });
@@ -6036,7 +6036,7 @@
    * A folder's contents, from the store first.
    *
    * Nothing was cached, so every step into a folder was a round trip with a
-   * blank panel until it answered — 60ms against a local database and the two
+   * blank panel until it answered. 60ms against a local database and the two
    * seconds the firm sees against Cloud Postgres through one worker. The
    * listing is painted from whatever is held and repainted when the server
    * answers, so the second visit to a folder is immediate and the first is no
@@ -6048,7 +6048,7 @@
     var uuid = wrap.getAttribute('data-folder-uuid');
     var url = filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0');
 
-    // Something just changed this folder — an upload, a rename, a delete. The
+    // Something just changed this folder, an upload, a rename, a delete. The
     // held copy describes the folder as it was a moment ago, and showing it
     // first would flash the old contents back over the new.
     if (opts && opts.changed) invalidateClientFolder(uuid);
@@ -6453,7 +6453,7 @@
     );
   }
 
-  /* Who used to look after this client. Read-only — ending an assignment keeps
+  /* Who used to look after this client. Read-only, ending an assignment keeps
      the record rather than deleting it, and this is where that record shows. */
   function renderAssignmentHistory(history) {
     if (!history || !history.length) return '';
@@ -6690,7 +6690,7 @@
       });
       /*
        * A picker and a button, nothing else. The permission-level dropdown
-       * sat here and nobody chose anything but Editor — a question with one
+       * sat here and nobody chose anything but Editor, a question with one
        * answer asked on every assignment. Everyone starts as Editor, and the
        * level can still be changed on the assigned row afterwards.
        */
@@ -6816,12 +6816,12 @@
     /*
      * The profile arrives separately from the directory listing, so the panel
      * has a name and an avatar before it has phone numbers. Drawing the record
-     * now would show an empty one — indistinguishable from a client who really
+     * now would show an empty one, indistinguishable from a client who really
      * has nothing recorded, which most imported clients are.
      *
      * The application arrives separately again, and it decides which tabs this
      * profile HAS. Drawing before it lands gave the applicant's screen the
-     * plain-client tabs — Client info, Documents, Assigned — which then swapped
+     * plain-client tabs. Client info, Documents, Assigned, which then swapped
      * for Main applicant / Sponsor / Dependents a round trip later. Not a flash
      * on the firm's connection: two seconds of the wrong screen, offering a tab
      * that does not belong to this client at all.
@@ -6838,7 +6838,7 @@
        * The tab row stays, as a shape.
        *
        * Waiting for the application means not knowing which tabs this profile
-       * has — but "not yet" is not the same as "none", and dropping the row
+       * has, but "not yet" is not the same as "none", and dropping the row
        * made it vanish and come back on every single client you opened, taking
        * the panel below it up and down with it. A row of the right height,
        * greyed, holds its place until it can be filled in.
@@ -6858,7 +6858,7 @@
 
     var c = contactFor(state.selectedId);
     var app = applicationFor(state.selectedId);
-    // The stored tab may not exist on this profile — an applicant has no
+    // The stored tab may not exist on this profile, an applicant has no
     // "Client info", and a client with no application has no "Main applicant".
     var tabIds = profileTabsFor(state).map(function (t) { return t.id; });
     var activeTab = tabIds.indexOf(state.profileTab) !== -1
@@ -6869,7 +6869,7 @@
      * Say where we ended up.
      *
      * The route sync writes the client's path and nothing else, and it runs
-     * before this — before the application has arrived and before there is a
+     * before this, before the application has arrived and before there is a
      * tab to name. So the address is brought up to date once the answer is
      * known, from the render that knows it. Not during: a history write inside
      * the string-building would fire on every repaint of the same screen.
@@ -6886,7 +6886,7 @@
      * The tabs sit above the panel, not inside it.
      *
      * They name the sections; they are not one of them. Inside, they were a
-     * row at the top of a grey surface that then held more grey surfaces — and
+     * row at the top of a grey surface that then held more grey surfaces, and
      * on a CIP application, where every panel is made of cards, that surface
      * was a card behind cards with nothing between them but a seam. Outside,
      * the tabs sit on the page and each panel is whatever it is.
@@ -6901,7 +6901,7 @@
       renderApplicationBar(state, app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
-      // of the way — the same reason a company's and the intake form's do.
+      // of the way, the same reason a company's and the intake form's do.
       '<div class="tma-dash__clients-profile' +
       (app ? ' tma-dash__clients-profile--cards' : '') +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
@@ -6926,7 +6926,7 @@
    * Say that what is on the screen has not reached the firm yet.
    *
    * An application edited with no network reads exactly like one that saved
-   * normally — that is the point of applying it locally — and without this
+   * normally, that is the point of applying it locally, and without this
    * line the reader has no way to tell, and no reason to leave the laptop on
    * long enough for the queue to run. It comes off by itself: the queue's
    * replay refetches the record, and the server's copy has no `pendingSync`.
@@ -7150,7 +7150,7 @@
     }
 
     bind('[data-clients-row]', 'client', 'data-clients-row');
-    // §8's table draws its own rows, so they carry their own hook — but the
+    // §8's table draws its own rows, so they carry their own hook, but the
     // menu, its actions and its permissions are the ones every other row uses.
     bind('[data-cip-open]', 'application', 'data-cip-open');
     bind('[data-clients-open-company]', 'company', 'data-clients-open-company');
@@ -7183,7 +7183,7 @@
          * "See all" opens the applications table filtered to this firm.
          *
          * It used to set the directory's referral filter and navigate to a
-         * table that has never consulted it — so the reader got the whole,
+         * table that has never consulted it, so the reader got the whole,
          * unfiltered list with a chip claiming otherwise. The honest
          * equivalent on a table of applications is the firm that filed them,
          * which is the Service provider filter.
@@ -7334,13 +7334,13 @@
    *
    * A status wears its tone as a dot; an officer wears their face. The portal
    * draws a colleague with their picture everywhere else, and this list is
-   * the one place a reader picks a person out of several — which is exactly
+   * the one place a reader picks a person out of several, which is exactly
    * where two similar names get confused if there is nothing to tell them
    * apart at a glance.
    *
    * "Unassigned" is not a person and does not get a face. It gets an empty
    * ring in the same place, so the names below it still line up and nothing
-   * pretends there is somebody there — a stock silhouette on a row that means
+   * pretends there is somebody there, a stock silhouette on a row that means
    * "nobody" would be the list inventing a person.
    */
   function filterItemArt(field, item) {
@@ -7441,7 +7441,7 @@
    * A filter changed: re-ask the server and redraw.
    *
    * All three are server-applied, so there is nothing to match over rows the
-   * browser already holds — the page number goes back to one because page 4 of
+   * browser already holds, the page number goes back to one because page 4 of
    * the old answer is not page 4 of the new one, and the selection is dropped
    * because the rows it referred to may not be in the new answer at all.
    */
@@ -7487,7 +7487,7 @@
          * Claimed before the panel is rebuilt.
          *
          * fillFilterField() replaces this popover's innerHTML, which orphans
-         * the button that was just clicked — and the outside-click listener on
+         * the button that was just clicked, and the outside-click listener on
          * the document runs after this one, by which time `closest()` on a
          * detached node can no longer find the popover it came from. It would
          * read the tick as a click outside and shut the panel on every tick.
@@ -7550,7 +7550,7 @@
   /* ── row context menu ───────────────────────────────
    *
    * Right-click (and long-press, which the browser reports as contextmenu on
-   * touch) on any directory row — a person or a service provider, in the
+   * touch) on any directory row, a person or a service provider, in the
    * table, the A-Z list, or a company's people list. The items are the same
    * verbs the toolbar carries; this only saves the trip.
    */
@@ -7560,8 +7560,8 @@
   var clientsCtxAnchor = null;
   var clientsAssignable = {};
 
-  /* Deleting a provider asks a real question — keep its people or take them
-     with it — which a browser confirm() cannot. Referred clients are never
+  /* Deleting a provider asks a real question, keep its people or take them
+     with it, which a browser confirm() cannot. Referred clients are never
      deleted here: they are the firm's applicants, not the provider's staff. */
   /* The record if the page already holds it, else the server's copy. A
      company button rides inside client rows too, where this list may never
@@ -7623,7 +7623,7 @@
    * §15: the service provider locks the original package.
    *
    * Said before they commit, because this is the moment documents stop being
-   * editable — staff recording the CIP number afterwards is a different verb.
+   * editable, staff recording the CIP number afterwards is a different verb.
    */
   function openConfirmSubmissionDialog(state, render) {
     var ui = window.TMAPortalUI;
@@ -7660,7 +7660,7 @@
               if (uid) forgetApplication(uid);
               forgetApplicationTable();
               forgetBuckets();
-              clientsToast('Submission confirmed — the original package is locked.', 'positive');
+              clientsToast('Submission confirmed, the original package is locked.', 'positive');
               if (typeof render === 'function') {
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
@@ -7766,7 +7766,7 @@
               forgetBuckets();
               clientsToast(correcting
                 ? 'CIP number updated'
-                : 'Submission recorded — now ' + (record ? record.number : number), 'positive');
+                : 'Submission recorded, now ' + (record ? record.number : number), 'positive');
               if (typeof render === 'function') {
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
@@ -7808,7 +7808,7 @@
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
       // On §8's table the row IS an application, so Edit means the
-      // application — the client's contact form is a different record and
+      // application, the client's contact form is a different record and
       // sending somebody there from here would be answering a question they
       // did not ask.
       {
@@ -7821,7 +7821,7 @@
     if (kind === 'application') {
       items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
     }
-    // Assigning staff is `clients.assign` — the same capability the server
+    // Assigning staff is `clients.assign`, the same capability the server
     // enforces, read through the access mirror rather than guessed from the
     // current-user store (which is not always populated by the time a row
     // is right-clicked).
@@ -7846,7 +7846,7 @@
       '</button>';
   }
 
-  /* Placed at the pointer, then pulled back inside the window — the same
+  /* Placed at the pointer, then pulled back inside the window, the same
      clamp the File Library's menu uses. */
   function placeCtxMenu(el, x, y) {
     var w = el.offsetWidth;
@@ -8216,7 +8216,7 @@
           })
             .then(function () {
               ui.closeModal();
-              clientsToast('Query recorded — the file is non-compliant.', 'positive');
+              clientsToast('Query recorded, the file is non-compliant.', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
@@ -8231,7 +8231,7 @@
 
   /*
    * §19: the day the Unit accepted the file, which is what moves it to
-   * Background check. Asked for rather than assumed — staff record it after
+   * Background check. Asked for rather than assumed, staff record it after
    * the fact as often as on the day.
    */
   function openAcceptanceDialog(applicationId, clientUid) {
@@ -8278,7 +8278,7 @@
           })
             .then(function () {
               ui.closeModal();
-              clientsToast('Accepted for processing — the file is in background check.', 'positive');
+              clientsToast('Accepted for processing, the file is in background check.', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
@@ -8414,7 +8414,7 @@
      * An application row is addressed by its client for everything except the
      * edit, which belongs to the application. Opening, assigning and deleting
      * are all questions about the person the application is for, and the hub
-     * already answers them — this only says which record is being pointed at.
+     * already answers them, this only says which record is being pointed at.
      */
     if (kind === 'application') {
       if (act === 'edit') {
@@ -8753,7 +8753,7 @@
    * This used to capture the checkbox list and the row array when it wired up.
    * The select-all box survives a re-render (that is the point of morphing),
    * so its handler was bound once and kept the very first render's nodes for
-   * ever — change the page size or turn a page and ticking it set `checked`
+   * ever, change the page size or turn a page and ticking it set `checked`
    * on elements no longer in the document. Nothing visibly happened.
    *
    * Rows are also identified by their own uid rather than by their position in
@@ -8820,7 +8820,7 @@
    * Ask the database who matches.
    *
    * Names are matched in the browser as they are typed, so the list responds to
-   * every keystroke; this fills in what the browser cannot see — nicknames, job
+   * every keystroke; this fills in what the browser cannot see, nicknames, job
    * titles, addresses, and the second and third email address. The list renders
    * once on the local answer and again when the server's arrives, which is what
    * the search spinner in the field is reporting.
@@ -8869,7 +8869,7 @@
      * The full-width list repaints whole.
      *
      * It was found by looking for the grid's own body, which the application
-     * table does not have — so typing in the search box refreshed the client
+     * table does not have, so typing in the search box refreshed the client
      * grid and left the application table showing the results of the term
      * before it. Either table on screen means this is that view.
      */
@@ -9034,7 +9034,7 @@
 
 
   /* The application form's Cancel and Add sit in the page head, which is
-     rendered outside this view's mount — so they are delegated once rather
+     rendered outside this view's mount, so they are delegated once rather
      than bound on every render. */
   var cipToolbarWired = false;
 
@@ -9071,7 +9071,7 @@
     if (state.screen === 'list' && !onProvidersTab(state)) {
       /*
        * The bucket a link asked for, claimed at the first paint of the table
-       * it filters — and claimed before the request below goes out, or the
+       * it filters, and claimed before the request below goes out, or the
        * reader would be sent the whole list and watch it narrow under them a
        * moment later.
        */
@@ -9092,7 +9092,7 @@
       if (bootedDir === 'asc' || bootedDir === 'desc') APP_TABLE.dir = bootedDir;
 
       // The Dashboard's CIP card sets the filter from outside this view, and
-      // cannot write an address for a screen that has not mounted yet — so
+      // cannot write an address for a screen that has not mounted yet, so
       // the address is settled here, where it only writes when the two
       // actually disagree.
       syncClientsListUrl(state);
@@ -9124,14 +9124,14 @@
            * "Saved" would be true of the device and false of the firm, and a
            * reader who took it the second way would close the laptop on work
            * nobody else can see yet. So the toast says where it is, and the
-           * record it hands back — the answers laid over the filed copy — is
+           * record it hands back, the answers laid over the filed copy, is
            * held locally so the profile behind them shows what they typed.
            */
           if (meta && meta.queued) {
             if (application) rememberApplication(state.selectedId, application);
             clientsToast(editing
-              ? 'Saved on this device — it will sync when you’re back online'
-              : 'Saved on this device — it will be filed when you’re back online',
+              ? 'Saved on this device, it will sync when you’re back online'
+              : 'Saved on this device, it will be filed when you’re back online',
             'warning');
             navigate('list');
 
@@ -9157,7 +9157,7 @@
     wireRowContextMenus(root, state, navigate, render);
     wireSeeAllReferred(root, state, navigate);
     // Empty and failed states show in every view, so this is wired before the
-    // per-view branches below — several of which return early.
+    // per-view branches below, several of which return early.
     wireClientsRecovery(root, state, render, navigate);
 
     if (scope === 'list') {
@@ -9636,7 +9636,7 @@
         };
 
         // Anything wider than the company itself is confirmed against what it
-        // will actually cover — the spec forbids granting broad access without
+        // will actually cover, the spec forbids granting broad access without
         // showing the administrator the consequence first.
         if (scope === 'company_only') {
           apply();
@@ -9651,7 +9651,7 @@
             (p.includesFuture ? ', and any added later' : '') + '.\n\nContinue?';
           if (window.confirm(msg)) apply();
         }).catch(function () {
-          // Preview unavailable — ask plainly rather than assigning silently.
+          // Preview unavailable, ask plainly rather than assigning silently.
           if (window.confirm('This reaches beyond the company record. Continue?')) apply();
         });
       });
@@ -9671,7 +9671,7 @@
     });
 
     // The toolbar button. Sends the first invitation, or chases an outstanding
-    // one — which is the case staff actually hit ("they never got the email").
+    // one, which is the case staff actually hit ("they never got the email").
     var inviteToolbar = MORPH.unwiredOne(root, '[data-clients-invite-toolbar]');
     if (inviteToolbar) {
       inviteToolbar.addEventListener('click', function () {
@@ -9680,7 +9680,7 @@
           applyInvitation(res);
           clientsToast(
             res && res.reminder
-              ? 'Invitation resent — the previous link no longer works'
+              ? 'Invitation resent, the previous link no longer works'
               : 'Invitation sent',
             'positive'
           );
@@ -9711,7 +9711,7 @@
         InvitationsAPI.resend(btn.getAttribute('data-clients-invite-resend')).then(function (res) {
           applyInvitation(res);
           // Resending mints a new link, so any link already sent stops working.
-          clientsToast('Invitation resent — the previous link no longer works', 'positive');
+          clientsToast('Invitation resent, the previous link no longer works', 'positive');
         }).catch(function (err) {
           btn.disabled = false;
           clientsToast((err && err.message) || 'Could not resend the invitation', 'negative');
@@ -9737,7 +9737,7 @@
           var url = res && res.url;
           if (!url) return;
           var done = function () {
-            clientsToast('Link copied — it replaces any link already sent', 'positive');
+            clientsToast('Link copied, it replaces any link already sent', 'positive');
           };
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(url).then(done, function () { window.prompt('Invitation link', url); });
@@ -9919,7 +9919,7 @@
   /*
    * The application behind a client, fetched once.
    *
-   * Its own function, and its own guard, because the profile has one too — it
+   * Its own function, and its own guard, because the profile has one too, it
    * returns early for a client whose record is already cached, and while this
    * lived inside that function a second visit never asked for the application
    * at all. The tabs then fell back to the hub's contact record and the
@@ -10011,7 +10011,7 @@
     ClientsAPI.show(id).then(function (res) {
       if (stale()) return;
       var rec = res && res.client;
-      // An empty profile is a real answer — most imported clients have one —
+      // An empty profile is a real answer, most imported clients have one —
       // so this records the fetch even when there is nothing in it.
       rememberProfile(id, rec ? rec.profile : {});
       if (rec) rememberMeta(rec);
@@ -10026,7 +10026,7 @@
       if (stale()) return;
 
       /*
-       * The server said something — a 404, a 500 — and that answer stands.
+       * The server said something, a 404, a 500, and that answer stands.
        * The replica only speaks when nothing answered at all: err.status is
        * unset exactly when fetch itself rejected, which is the offline case,
        * and on the desktop the record layer clients-sync.js filled may hold
@@ -10056,10 +10056,10 @@
         // reopening the client try again.
         //
         // Our own sentence rather than err.message, which for a 500 is the
-        // fetch layer's "Request failed" — true, and no use to the person
+        // fetch layer's "Request failed", true, and no use to the person
         // looking at an empty panel. The real error is in the console.
         // A 404 is not a failure: the record is outside this account's slice
-        // (or does not exist — the server deliberately will not say which).
+        // (or does not exist, the server deliberately will not say which).
         if (err && err.status === 404) {
           state.profileError = 'You’re not assigned to this client.';
           state.profileErrorFinal = true;
@@ -10104,7 +10104,7 @@
 
   /*
    * opts.quiet skips the redraw that shows the panel's loading state. Set when
-   * this is called from applyScreen, which is still setting the screen up — the
+   * this is called from applyScreen, which is still setting the screen up, the
    * same reason ensureAccessLoaded does not redraw up front.
    */
   function ensureAssignmentsLoaded(state, render, opts) {
@@ -10257,7 +10257,7 @@
 
   var clientsMountRoot = null;
 
-  /* The mounted view's state, for the module-level folder wiring — it runs
+  /* The mounted view's state, for the module-level folder wiring, it runs
      outside the controller and still has to say where the reader is. */
   var clientsMountState = null;
 
@@ -10324,7 +10324,7 @@
       removedIds: {},
       // 'loading' | 'ready' | 'error'. The directory used to have no third
       // state, so a request that failed was hydrated as an empty list and the
-      // page reported "No clients found" — see startClients below.
+      // page reported "No clients found", see startClients below.
       loadState: clientsLoaded ? 'ready' : 'loading',
       loadError: null,
       profileLoadingFor: null,
@@ -10497,7 +10497,7 @@
        * There were four render paths: the table, a card list, a split view
        * with a directory column, and a detail-only repaint of that split's
        * right-hand pane. Three of them existed to serve the column layout,
-       * which is gone — so the branch that chose between them is gone with it,
+       * which is gone, so the branch that chose between them is gone with it,
        * and with it the class the shell had to be told to wear.
        */
       if (state.screen === 'list') {
@@ -10515,7 +10515,7 @@
       navOpts = navOpts || {};
       var companyId = navOpts.companyId || state.companyId;
       // Editing an application is addressed by the application, not the
-      // client — one client can hold more than one over time.
+      // client, one client can hold more than one over time.
       var applicationId = navOpts.applicationId || null;
       if (screen === 'detail' || screen === 'edit' || screen === 'add') {
         contactId = contactId || state.selectedId;
@@ -10586,7 +10586,7 @@
         historyState,
         '',
         // An application edit is addressed by the application, not the client
-        // whose profile it was opened from — otherwise a refresh here would
+        // whose profile it was opened from, otherwise a refresh here would
         // ask the server for an application with a client's uid.
         screen === 'edit-application'
           ? pathForClientsScreen(screen, state.applicationId)
@@ -10722,7 +10722,7 @@
      * Load the directory.
      *
      * The failure path is the point of this. It used to be
-     * `.catch(() => ({ clients: [] }))` — a timed-out or 500ing request became
+     * `.catch(() => ({ clients: [] }))`, a timed-out or 500ing request became
      * an empty list, was hydrated as though it were the truth, and rendered as
      * "No clients found". Staff were told the firm had no clients whenever the
      * request died, which with eleven thousand of them it regularly did.
@@ -10738,7 +10738,7 @@
        * Both listings paint from the store first and repaint on the server's
        * answer, the File Library pattern. For eleven thousand clients that is
        * the difference between the hub opening and the hub asking Cloud
-       * Postgres to send the book again — and on the desktop the copy
+       * Postgres to send the book again, and on the desktop the copy
        * survives a restart, so the directory is there before the network is.
        *
        * The double hydrate is safe: hydrateClients rebuilds the in-memory
@@ -10819,8 +10819,8 @@
         if (clients && clients.clients) hydrateClients(clients.clients);
         if (companies && companies.companies) hydrateCompanies(companies.companies);
         // The store learns what the signal fetched. A colleague's write
-        // invalidates nothing in THIS tab — the clientsFetch seam only sees
-        // our own writes — so without this the store would serve their
+        // invalidates nothing in THIS tab, the clientsFetch seam only sees
+        // our own writes, so without this the store would serve their
         // yesterday's directory to tomorrow's reload.
         if (window.TMAStore) {
           if (clients) window.TMAStore.put('clients:directory', clients);
@@ -10844,7 +10844,7 @@
   }
 
   /*
-   * The same for the CIP module — §8's table, §9's chips, and whichever
+   * The same for the CIP module. §8's table, §9's chips, and whichever
    * application is open beside them.
    *
    * Its own entry rather than a second job on the directory's: a client
@@ -10879,7 +10879,7 @@
        * flicker. The old copy stays up until the new one has arrived.
        *
        * A queued edit is not refetched at all. It is the only copy of a change
-       * made offline — the server has never seen it — so reading over it would
+       * made offline, the server has never seen it, so reading over it would
        * take the reader's own work off the screen.
        */
       if (open && !(app && app.pendingSync)) {
@@ -10924,7 +10924,7 @@
    * A change made offline has just reached the server.
    *
    * The live signal that normally brings a colleague's edit back here is
-   * raised by the request, so the tab that made it skips its own echo — which
+   * raised by the request, so the tab that made it skips its own echo, which
    * is right when the change was applied on the screen a moment ago and wrong
    * for a queued one, where the screen has been showing the local copy for
    * hours and the server has only now built the real record. So the held copy
@@ -10959,7 +10959,7 @@
     // CIP card navigates here and then calls this; an unknown key is ignored.
     openBucket: openBucket,
     listDirectory: function (opts) { return ClientsAPI.list(opts); },
-    // The hub's own data layer, for lists that live outside this view — the
+    // The hub's own data layer, for lists that live outside this view, the
     // same reason TMAFileActions exists. Everything on it goes through
     // clientsFetch, so callers inherit the cache invalidation for free
     // (which is also what lets the browser tests prove the seam is real

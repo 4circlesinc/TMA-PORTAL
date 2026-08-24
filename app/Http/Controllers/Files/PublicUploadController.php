@@ -28,13 +28,13 @@ use Illuminate\Support\Facades\DB;
  *
  * Everything is keyed off the token in the URL and nothing else. The visitor
  * cannot name a folder, cannot read one, cannot list what has already been
- * uploaded, and cannot reach any file — including their own. The only write
+ * uploaded, and cannot reach any file, including their own. The only write
  * this route performs is "add these bytes to the destination the requester
  * chose", and every limit is re-read from the record on each upload rather
  * than trusted from the form.
  *
  * Transport is HTTPS end to end and the bytes land in the same vault as any
- * other upload — object storage in production, addressed by random uuid, never
+ * other upload, object storage in production, addressed by random uuid, never
  * by a path a visitor could guess.
  */
 class PublicUploadController extends Controller
@@ -174,7 +174,7 @@ class PublicUploadController extends Controller
 
             $this->notifyRequester($fileRequest, $file, (string) $request->input('name', ''));
 
-            // The same shape the ordinary path answers with — the upload page
+            // The same shape the ordinary path answers with, the upload page
             // reads it and does not care which door the file went through.
             return response()->json([
                 'name' => $file->name,
@@ -194,7 +194,7 @@ class PublicUploadController extends Controller
                 'disk' => $stored['disk'],
                 'storage_path' => $stored['path'],
                 'checksum' => $stored['checksum'],
-                // The requester owns what arrives — there is no account behind
+                // The requester owns what arrives, there is no account behind
                 // the visitor to own it, and an ownerless file would be
                 // invisible to every access rule in the library.
                 'owner_id' => $ownerId,
@@ -291,7 +291,7 @@ class PublicUploadController extends Controller
      * Tell the requester something arrived.
      *
      * In the portal always; by email only when they asked to hear about file
-     * activity. Both are best-effort — a notification that fails must not undo
+     * activity. Both are best-effort, a notification that fails must not undo
      * an upload that already succeeded, because the bytes are safely stored and
      * telling the visitor otherwise would have them send it again.
      */
@@ -342,7 +342,7 @@ class PublicUploadController extends Controller
                 immediate: true,
             );
         } catch (\Throwable) {
-            // Best effort — see above.
+            // Best effort, see above.
         }
     }
 }

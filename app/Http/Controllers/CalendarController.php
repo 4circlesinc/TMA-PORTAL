@@ -23,7 +23,7 @@ use Illuminate\Validation\Rule;
  * has, what they may do with each, and their personal show/hide and colour.
  *
  * Events live in CalendarEventController. Permission is always resolved
- * through CalendarAccess — the sidebar's hidden actions are never trusted.
+ * through CalendarAccess, the sidebar's hidden actions are never trusted.
  */
 class CalendarController extends Controller
 {
@@ -176,7 +176,7 @@ class CalendarController extends Controller
 
     /**
      * Add a calendar to the signed-in user's sidebar. Adding never transfers
-     * ownership and never grants access — the caller must already have it.
+     * ownership and never grants access, the caller must already have it.
      */
     public function subscribe(Request $request, string $uuid): JsonResponse
     {
@@ -239,7 +239,7 @@ class CalendarController extends Controller
          * the calendar.
          *
          * An owner or manager sets the *official* colour, which everyone sees
-         * — that is the rule for organization and group calendars. Anyone else
+         *, that is the rule for organization and group calendars. Anyone else
          * is only recolouring their own sidebar, so their choice is stored as
          * a personal override and is invisible to the rest of the firm.
          */
@@ -263,7 +263,7 @@ class CalendarController extends Controller
     }
 
     /**
-     * Calendars and colleagues the user could add but hasn't — what the
+     * Calendars and colleagues the user could add but hasn't, what the
      * sidebar's "Add calendar → browse" and staff search read from.
      */
     public function discover(Request $request): JsonResponse
@@ -457,7 +457,7 @@ class CalendarController extends Controller
             ->delete();
 
         // Their sidebar entry goes too, so it can't linger and 403. Only safe
-        // for a direct grant — a group member may still reach the calendar
+        // for a direct grant, a group member may still reach the calendar
         // through the group, and revokeGroup re-checks that properly.
         if (CalendarAccess::role(User::findOrFail($userId), $calendar->fresh()) === null) {
             CalendarSubscription::where('calendar_id', $calendar->id)
@@ -485,7 +485,7 @@ class CalendarController extends Controller
 
         /*
          * Drop the sidebar entry for anyone who reached this calendar only
-         * through the group — but keep it for those who also hold a direct
+         * through the group, but keep it for those who also hold a direct
          * grant, or who are in another group that still has access.
          */
         $subscribers = CalendarSubscription::where('calendar_id', $calendar->id)->pluck('user_id');
@@ -505,7 +505,7 @@ class CalendarController extends Controller
 
     /**
      * The audit trail for a calendar: who did what, when. Managers and owners
-     * only — history can reveal who a calendar was shared with.
+     * only, history can reveal who a calendar was shared with.
      */
     public function history(Request $request, string $uuid): JsonResponse
     {

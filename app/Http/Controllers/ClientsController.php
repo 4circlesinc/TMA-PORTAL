@@ -37,7 +37,7 @@ class ClientsController extends Controller
      *
      * Deliberately lean: `data` is not selected and no profile is returned.
      * The firm has eleven thousand clients and this endpoint used to hand back
-     * every full contact record on every page load — 9.6 MB of JSON, seven
+     * every full contact record on every page load. 9.6 MB of JSON, seven
      * seconds of query-and-serialise, and a 127 MB memory peak for a page that
      * shows a hundred rows. Profiles now load one at a time from show(), and
      * searching the profile happens in the database (see search()).
@@ -59,7 +59,7 @@ class ClientsController extends Controller
      * "eleven thousand clients is a large first sync" sentence was written
      * about. Same contract as the applications and files cursors: the pair is
      * `updated_at` AND the row id with an INCLUSIVE tie-break (a same-instant
-     * second change — delete then restore — must never be skipped for ever;
+     * second change, delete then restore, must never be skipped for ever;
      * the re-delivered boundary row is absorbed by the upsert), no cursor
      * means everything, and a soft-deleted row arrives as a tombstone rather
      * than an absence.
@@ -109,7 +109,7 @@ class ClientsController extends Controller
     }
 
     /**
-     * A cursor timestamp, or null — an unparseable value is no cursor at all,
+     * A cursor timestamp, or null, an unparseable value is no cursor at all,
      * because the worst case of that is re-reading a page the device already
      * holds, and the alternative is a client that can never recover from a
      * corrupt value it stored itself.
@@ -131,8 +131,8 @@ class ClientsController extends Controller
      * A short named slice for the right sidebar.
      *
      * The sidebar only ever paints six-to-ten rows. It used to pull the entire
-     * directory on every portal page to do that — the same eleven-thousand-row
-     * payload the hub needs — so opening Overview felt like opening Clients.
+     * directory on every portal page to do that, the same eleven-thousand-row
+     * payload the hub needs, so opening Overview felt like opening Clients.
      */
     public function preview(Request $request): JsonResponse
     {
@@ -186,8 +186,8 @@ class ClientsController extends Controller
                     ->orWhere('email', $op, $like)
                     ->orWhere('phone', $op, $like)
                     ->orWhere('company', $op, $like)
-                    // The rest of the searchable fields — nickname, job title,
-                    // extra emails and phones — have no column of their own.
+                    // The rest of the searchable fields, nickname, job title,
+                    // extra emails and phones, have no column of their own.
                     ->orWhereRaw($this->blobTextExpression().' '.$op.' ?', [$like]);
 
                 ClientDirectory::matchApplicationNumber($q, $term);
@@ -233,7 +233,7 @@ class ClientsController extends Controller
          *
          * Employees only. An administrator already reaches every client, so a
          * row for them would grant nothing while implying they had been picked
-         * out for this one — the same reason they are kept out of the
+         * out for this one, the same reason they are kept out of the
          * assignment list. Manager level, because creating a client is the act
          * of somebody who owns the relationship rather than observes it.
          */

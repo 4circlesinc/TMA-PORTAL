@@ -20,7 +20,7 @@ use Illuminate\Http\Request;
  * The Reviewing Officer's two verdicts (§14), addressed by document.
  *
  * By document, and never by file. Review happens on the application's own page,
- * on the checklist row the officer is reading — §14 is explicit that nobody
+ * on the checklist row the officer is reading. §14 is explicit that nobody
  * should have to go and find the upload in the File Library to say what is
  * wrong with it. The slot is the thing being judged; the file is only what
  * happens to be in it today, which is why a document sent back and re-uploaded

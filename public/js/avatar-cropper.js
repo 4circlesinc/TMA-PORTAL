@@ -1,5 +1,5 @@
 /*
- * TMAAvatarCropper — a small, dependency-free square photo cropper.
+ * TMAAvatarCropper, a small, dependency-free square photo cropper.
  *
  * The user drags to reposition and zooms (slider or wheel) inside a fixed 1:1
  * frame; on confirm we export a square JPEG. No external libraries (the portal's
@@ -15,7 +15,7 @@
   if (window.TMAAvatarCropper) return;
 
   var FRAME = 288;   // on-screen crop square (px)
-  var OUT = 640;     // exported square size (px) — server downsizes to its own
+  var OUT = 640;     // exported square size (px), server downsizes to its own
   var STYLE_ID = 'tma-cropper-style';
 
   function ensureStyle() {

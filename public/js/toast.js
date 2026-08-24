@@ -90,7 +90,7 @@
     return { scene, wrap, showToast, destroy: () => observer.disconnect() };
   }
 
-  /* Hovering a toast means the user is reading it — never yank it away
+  /* Hovering a toast means the user is reading it, never yank it away
      mid-read. The timer restarts (shorter) once the pointer leaves. */
   const HOVER_LEAVE_MS = 5000;
 
@@ -163,7 +163,7 @@
 
   function applyNotifyHostPosition(host) {
     if (!host) return;
-    // Shared sync stack owns bottom-right — don't restyle that host as notify.
+    // Shared sync stack owns bottom-right, don't restyle that host as notify.
     if (host.hasAttribute('data-sync-toast-host')) return;
     host.className = 'tma-notify-toast-host tma-notify-toast-host--' + toastPrefs.position;
   }
@@ -374,7 +374,7 @@
 
     const host = getNotifyHost();
 
-    // Only count notification cards — the shared bottom-right stack also holds
+    // Only count notification cards, the shared bottom-right stack also holds
     // sync progress toasts, which must not be trimmed by this limit.
     while (host.querySelectorAll('.tma-notify-toast').length >= NOTIFY_MAX_STACK) {
       const oldest = host.querySelector('.tma-notify-toast');
@@ -446,7 +446,7 @@
     return card;
   }
 
-  /** Settings preview — never marks as a real notification. */
+  /** Settings preview, never marks as a real notification. */
   function previewNotificationToast(overrides) {
     const item = Object.assign({
       title: 'Sample notification',

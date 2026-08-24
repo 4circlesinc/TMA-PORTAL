@@ -15,8 +15,8 @@ use Illuminate\Support\Facades\Cache;
  * ways far worse than a slow load.
  *
  * So the app compares its bundled `build` against this one and serves locally
- * only on an exact match. Anything else — a portal deploy the app has not
- * caught up with, a partial bundle, a missing file — and it falls back to the
+ * only on an exact match. Anything else, a portal deploy the app has not
+ * caught up with, a partial bundle, a missing file, and it falls back to the
  * network, which is simply how it behaved before any of this existed.
  *
  * The hash must be computed the same way on both sides. The other half is
@@ -48,7 +48,7 @@ class DesktopAssetsController extends Controller
 
     /**
      * Hashing 2,000 files is far too expensive to do per request, and the
-     * answer only changes when the code does — so it is cached for a day and
+     * answer only changes when the code does, so it is cached for a day and
      * keyed by the deploy, which clears it.
      */
     private const TTL = 86400;

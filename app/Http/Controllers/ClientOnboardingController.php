@@ -21,7 +21,7 @@ use Illuminate\View\View;
  *
  * One step per screen, answers saved as each is submitted, so closing the tab
  * on step 6 comes back to step 6. Nothing here can be reached once onboarding
- * is finished — {@see self::progress()} sends a completed account to the portal
+ * is finished. {@see self::progress()} sends a completed account to the portal
  * instead, which is what stops the back button reopening the wizard.
  */
 class ClientOnboardingController extends Controller
@@ -66,7 +66,7 @@ class ClientOnboardingController extends Controller
             ClientFlow::messages($step),
         );
 
-        // The photo is a file, not an answer — store it and remember only that
+        // The photo is a file, not an answer, store it and remember only that
         // they dealt with the step.
         if ($step === 'photo') {
             if ($request->hasFile('photo')) {
@@ -111,7 +111,7 @@ class ClientOnboardingController extends Controller
     {
         $progress = $this->progress($user);
 
-        // Every required step has to be answered — the wizard enforces this by
+        // Every required step has to be answered, the wizard enforces this by
         // ordering, but the route is still a public POST.
         foreach (ClientFlow::applicableSteps($progress) as $step) {
             if (! ClientFlow::isOptional($step) && ! $progress->hasDone($step)) {

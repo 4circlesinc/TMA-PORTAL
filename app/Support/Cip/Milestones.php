@@ -6,7 +6,7 @@ use App\Models\CipApplication;
 
 /**
  * The dates one application has reached, in the order it travels through them
- * — what §4d's Timeline card on Overview draws.
+ *, what §4d's Timeline card on Overview draws.
  *
  * Every step is answered, including the ones still ahead of the file: a
  * milestone that has not happened comes back with no date rather than being
@@ -14,8 +14,8 @@ use App\Models\CipApplication;
  * come. A list of only the dates that exist would make an application filed
  * this morning look finished.
  *
- * Plain days, never instants. These are DATE columns — the day the Unit
- * received something, not a moment in it — and every time in this portal is
+ * Plain days, never instants. These are DATE columns, the day the Unit
+ * received something, not a moment in it, and every time in this portal is
  * printed in the reader's own zone ({@see App\Support\UserTime}). A milestone
  * that read a day earlier for a colleague in another country would be an audit
  * trail disagreeing with itself, so the day is settled here and the browser is

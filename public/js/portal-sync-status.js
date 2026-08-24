@@ -1,5 +1,5 @@
 /*
- * TMA — The sync indicator.
+ * TMA. The sync indicator.
  *
  * Silent by design. Syncing, prefetching for offline, being offline, and
  * writes parked waiting for a connection are all the app doing its job, and
@@ -7,7 +7,7 @@
  * does not.
  *
  * The single thing that still surfaces is a change the server REFUSED. That
- * one is not progress — it is the reader's own work, unsendable, held by the
+ * one is not progress, it is the reader's own work, unsendable, held by the
  * queue until a person retries it or throws it away. Staying quiet about that
  * would not be tidy, it would be losing someone's edits without saying so.
  *
@@ -24,7 +24,7 @@
  * working on its own, so those two buttons are the reader's: try it again, or
  * throw it away. The queue never throws anything away by itself.
  *
- * @see portal-queue.js — the queue this reports on.
+ * @see portal-queue.js, the queue this reports on.
  */
 (function () {
   'use strict';
@@ -38,8 +38,8 @@
   }
 
   /*
-   * The replica walkers, while they walk. Still tracked — the panel and any
-   * future diagnostic want to know a walk is in flight — but deliberately no
+   * The replica walkers, while they walk. Still tracked, the panel and any
+   * future diagnostic want to know a walk is in flight, but deliberately no
    * longer painted: a first sync pulling thousands of records is housekeeping,
    * not news. Keyed per source so two walkers running at once sum rather than
    * flicker over each other.
@@ -79,14 +79,14 @@
     var taken = replicaCount();
 
     return taken > 0
-      ? 'Syncing for offline — ' + taken.toLocaleString() + ' records'
+      ? 'Syncing for offline, ' + taken.toLocaleString() + ' records'
       : 'Syncing for offline…';
   }
 
   function tone(status) {
     if (status.failed > 0) return 'attention';
     if (!status.online) return 'offline';
-    // A background download is activity, not a warning — the grey dot, the
+    // A background download is activity, not a warning, the grey dot, the
     // same neutrality as offline, rather than amber asking to be looked at.
     if (status.waiting === 0) return 'busy';
 
@@ -98,13 +98,13 @@
      * Nothing on screen for anything routine.
      *
      * Syncing, prefetching for offline, being offline, having writes parked
-     * waiting for a connection — all of it is the app doing its job, and a
+     * waiting for a connection, all of it is the app doing its job, and a
      * reader does not need a running commentary on its housekeeping. It syncs
      * in the background and says nothing.
      *
      * The one exception is a change the SERVER REFUSED. That is not progress,
      * it is work of the reader's that cannot be sent and that the queue will
-     * not throw away on its own — it needs a person to retry it or discard it.
+     * not throw away on its own, it needs a person to retry it or discard it.
      * Hiding that would not be quiet, it would be losing someone's edits
      * without telling them.
      */

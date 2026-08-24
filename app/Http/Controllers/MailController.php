@@ -34,7 +34,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  * The email page's API.
  *
  * Every write goes to the provider first and is only mirrored locally once it
- * succeeds — the mailbox is the source of truth, and a local row that claims
+ * succeeds, the mailbox is the source of truth, and a local row that claims
  * something the provider rejected would be a lie the user acts on. Reads come
  * from the mirror, so the list paints without waiting on a round trip.
  *
@@ -49,7 +49,7 @@ class MailController extends Controller
 
     /**
      * Views that are a flag rather than a place. They read like folders to the
-     * client — same listing endpoint, same paging, same badge — but they select
+     * client, same listing endpoint, same paging, same badge, but they select
      * on a column instead of on `folder`, so a starred message stays in the
      * inbox while also appearing under Starred.
      */
@@ -78,7 +78,7 @@ class MailController extends Controller
 
         // Freshen in the background; the page renders from the mirror either
         // way. Guarded because on a synchronous queue this runs inline, and a
-        // provider outage must not stop the mailbox from opening — the stored
+        // provider outage must not stop the mailbox from opening, the stored
         // sync status is how a failure gets reported.
         rescue(function () use ($account) {
             // Called as a statement, not returned: dispatch() hands back a
@@ -113,7 +113,7 @@ class MailController extends Controller
             // first paint. Fetching them separately meant the mailbox opened
             // in the default shape and then rearranged itself a moment later.
             'preferences' => $this->mailPreferences($user->preferences ?? []),
-            // Only user-created portal labels — do not surface provider-synced
+            // Only user-created portal labels, do not surface provider-synced
             // defaults (Gmail categories, etc.) in the Labels section.
             'labels' => MailLabel::where('user_id', $user->id)
                 ->where('is_system', false)
@@ -244,8 +244,8 @@ class MailController extends Controller
         $running = ! $done && ! $failed;
 
         // The watchdog. A run that has shown no life for STALL_AFTER_SECONDS
-        // is diagnosed (worker down? token dead? job failed?) and — where a
-        // retry could actually help — re-dispatched automatically.
+        // is diagnosed (worker down? token dead? job failed?) and, where a
+        // retry could actually help, re-dispatched automatically.
         $stalled = false;
         $stallReason = null;
         $retried = false;
@@ -286,7 +286,7 @@ class MailController extends Controller
         ?string $stallReason,
         bool $retried,
     ): array {
-        // Estimated time remaining, from the measured import rate — never a
+        // Estimated time remaining, from the measured import rate, never a
         // made-up number. Only offered once enough messages have landed for
         // the rate to mean something.
         $eta = null;
@@ -340,7 +340,7 @@ class MailController extends Controller
         }
 
         // Database queue: a job nobody has claimed in 30s means no worker is
-        // pulling work at all — dispatching more jobs cannot help that.
+        // pulling work at all, dispatching more jobs cannot help that.
         if (config('queue.default') === 'database') {
             $oldestWaiting = DB::table('jobs')->whereNull('reserved_at')->min('available_at');
 
@@ -396,7 +396,7 @@ class MailController extends Controller
 
     /**
      * Manual "Retry" from the progress panel: clear the failure and re-enter
-     * the pipeline. The import resumes from its stored page tokens — a retry
+     * the pipeline. The import resumes from its stored page tokens, a retry
      * never means starting the mailbox over.
      */
     public function retrySync(Request $request): JsonResponse
@@ -422,7 +422,7 @@ class MailController extends Controller
     }
 
     /**
-     * Sign out of the mailbox — and only the mailbox.
+     * Sign out of the mailbox, and only the mailbox.
      *
      * This stops mail sync and returns the email page to its "connect"
      * state, but the Microsoft/Google account itself stays connected to the
@@ -460,7 +460,7 @@ class MailController extends Controller
      *
      * Read-only: this never calls the provider. A page can reference dozens of
      * distinct senders at once, and the first version of this endpoint fetched
-     * from Microsoft Graph inline here — a burst of <img> loads meant a burst
+     * from Microsoft Graph inline here, a burst of <img> loads meant a burst
      * of blocking ~1s Graph calls, which was enough to take the whole mailbox
      * page down. Fetching now happens only in the background
      * ({@see ResolveSenderPhoto}); this just serves whatever has
@@ -468,7 +468,7 @@ class MailController extends Controller
      *
      * Addressed by hash so no email address ends up in page markup. A sender
      * with no photo (yet, or ever) gets a 404, which the UI treats as "draw
-     * initials" — never blocking on it.
+     * initials", never blocking on it.
      */
     public function senderPhoto(Request $request, string $hash): mixed
     {
@@ -479,7 +479,7 @@ class MailController extends Controller
 
         // Only serve addresses this mailbox has actually corresponded with, so
         // the endpoint can't be used to probe the directory for arbitrary people.
-        // Distinct addresses only — there are a few hundred of those against
+        // Distinct addresses only, there are a few hundred of those against
         // tens of thousands of messages.
         $email = $row?->email ?? MailMessage::where('user_id', $request->user()->id)
             ->whereNotNull('from_email')
@@ -534,7 +534,7 @@ class MailController extends Controller
 
         // Sender photos come from two places: the provider directory (a real
         // photo for a colleague) and the sender domain's brand logo (PayPal, a
-        // bank, a newsletter). Nothing here calls either — a URL is only handed
+        // bank, a newsletter). Nothing here calls either, a URL is only handed
         // out for a sender whose photo is already cached. Anyone not yet
         // resolved gets a background job queued (once per address, not per row)
         // and initials now, so the page never waits on a live lookup.
@@ -578,7 +578,7 @@ class MailController extends Controller
      * The folder predicate, written against a given table or alias.
      *
      * Conversation grouping has to apply exactly the same scope to its inner
-     * query as the listing does to its outer one — otherwise a thread whose
+     * query as the listing does to its outer one, otherwise a thread whose
      * newest message happens to sit in Sent would drop out of the Inbox.
      *
      * @param  \Illuminate\Contracts\Database\Query\Builder|Builder  $query
@@ -587,7 +587,7 @@ class MailController extends Controller
     {
         if (in_array($folder, ['important', 'starred', 'pinned'], true)) {
             // Spam, trash and drafts are excluded the way Gmail's Important
-            // view excludes them — flagged junk is still junk. Snoozed mail is
+            // view excludes them, flagged junk is still junk. Snoozed mail is
             // resting: it shows up here again when it wakes.
             $query->where($table.'.'.self::VIRTUAL_FOLDER_COLUMNS[$folder], true)
                 ->whereNotIn($table.'.folder', ['trash', 'spam', 'draft'])
@@ -602,7 +602,7 @@ class MailController extends Controller
             return;
         }
 
-        // A snoozed message hides from its real folder until it wakes — that
+        // A snoozed message hides from its real folder until it wakes, that
         // is the whole point of snoozing it.
         $query->where($table.'.folder', $folder)
             ->whereNull($table.'.snoozed_until');
@@ -669,7 +669,7 @@ class MailController extends Controller
      * The list draws its expand arrow from this, and it must be exact: an arrow
      * on a one-message conversation opens onto nothing, which reads as broken.
      * One grouped query for the whole page, over the existing
-     * (user_id, thread_id) index — never a count per row.
+     * (user_id, thread_id) index, never a count per row.
      *
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
@@ -704,7 +704,7 @@ class MailController extends Controller
      *
      * Deliberately not {@see thread}: this never touches the provider and never
      * hydrates a body. Opening a dropdown in the message list is a glance, not
-     * a read — it must cost one local query, or expanding a few conversations
+     * a read, it must cost one local query, or expanding a few conversations
      * would stall the inbox behind a queue of provider round trips.
      */
     public function conversation(Request $request, string $uuid): JsonResponse
@@ -755,7 +755,7 @@ class MailController extends Controller
     /**
      * A portal account's own photo first, then whatever the directory or brand
      * lookup has already cached. Never a live call, and never an invented
-     * picture — the UI draws initials when this returns null.
+     * picture, the UI draws initials when this returns null.
      *
      * @param  array<string, string>  $avatars
      * @param  array<string, MailSenderPhoto>  $cached
@@ -798,7 +798,7 @@ class MailController extends Controller
      * Every message in one conversation, oldest first.
      *
      * The reading pane used to show only the message that was clicked, with
-     * the rest of the conversation nowhere — replies, forwards and quoted
+     * the rest of the conversation nowhere, replies, forwards and quoted
      * history simply were not rendered. This returns the whole thread so each
      * message can be its own card.
      *
@@ -816,7 +816,7 @@ class MailController extends Controller
 
         // A message with no thread id (some providers leave it empty on
         // single-message conversations) is a thread of one rather than an
-        // error — grouping on an empty string would pull in every other
+        // error, grouping on an empty string would pull in every other
         // message that also lacks one.
         $messages = $message->thread_id
             ? MailMessage::query()
@@ -844,7 +844,7 @@ class MailController extends Controller
         return response()->json([
             'threadId' => $message->thread_id,
             // The conversation is titled by what it is about, which is the
-            // subject the *first* message set — not the "Re: Re: Fwd:" the
+            // subject the *first* message set, not the "Re: Re: Fwd:" the
             // newest reply happens to be carrying.
             'subject' => $messages->first()?->subject ?? $message->subject,
             'messages' => $this->withThreadAvatars($messages),
@@ -852,14 +852,14 @@ class MailController extends Controller
     }
 
     /**
-     * The conversation as its own window — what a double-click, or the row
+     * The conversation as its own window, what a double-click, or the row
      * menu's "Open in new window", opens.
      *
      * Server-rendered on purpose. The point of this window is that the mail is
      * *there* when it appears; booting the portal shell to fetch a thread would
      * put a loading screen in front of a message the reader has already asked
      * twice to see. Bodies still render inside a sandboxed frame, exactly as
-     * they do in the reading pane — they are attacker-controlled either way.
+     * they do in the reading pane, they are attacker-controlled either way.
      */
     public function window(Request $request, string $uuid): SymfonyResponse
     {
@@ -931,7 +931,7 @@ class MailController extends Controller
                 }
 
                 // load() refreshes the relation on this same instance, rather
-                // than fresh()'s whole new (and disconnected) copy — three
+                // than fresh()'s whole new (and disconnected) copy, three
                 // separate remote round trips used to go into what should be
                 // one open: this reload, then another to re-read what
                 // embedInlineImages had to persist on that disconnected copy
@@ -1310,7 +1310,7 @@ class MailController extends Controller
 
     /**
      * Create a portal-owned label for the Labels section. Provider defaults
-     * are not mirrored here — users only see labels they create themselves.
+     * are not mirrored here, users only see labels they create themselves.
      */
     public function createLabel(Request $request): JsonResponse
     {
@@ -1331,7 +1331,7 @@ class MailController extends Controller
             return response()->json(['message' => 'You already have a label with that name.'], 422);
         }
 
-        // Portal-owned labels only — the Labels section is for user-created
+        // Portal-owned labels only, the Labels section is for user-created
         // chips, not a mirror of the provider's default categories.
         $label = MailLabel::create([
             'uuid' => (string) Str::uuid(),
@@ -1404,7 +1404,7 @@ class MailController extends Controller
             ->firstOrFail();
 
         if (! $label->isLocalOnly()) {
-            // Best effort — a provider hiccup must not leave the label
+            // Best effort, a provider hiccup must not leave the label
             // undeletable in the portal. Gmail removes a deleted label from
             // its messages itself; Outlook keeps the category text on old
             // messages, which is also what Outlook itself does.
@@ -1421,7 +1421,7 @@ class MailController extends Controller
     }
 
     /**
-     * Recipient typeahead for To / Cc / Bcc (Phase 1 — no provider contacts).
+     * Recipient typeahead for To / Cc / Bcc (Phase 1, no provider contacts).
      *
      * Merges portal users, clients (staff only), expandable groups, and
      * addresses mined from the viewer's mirrored mailbox.
@@ -1617,7 +1617,7 @@ class MailController extends Controller
         //
         // SVG is the exception that has to be earned: it is a document that can
         // carry script and external references, not an inert picture, so it is
-        // only served inline after being stripped down — see sanitizeSvg().
+        // only served inline after being stripped down, see sanitizeSvg().
         $isSvg = $mime === 'image/svg+xml';
 
         $viewable = str_starts_with($mime, 'image/')
@@ -1661,7 +1661,7 @@ class MailController extends Controller
             $written = new MailSynchronizer($account)->quickCheck();
         } catch (MailAuthException $e) {
             // A dead grant still has to surface as the reconnect prompt, even
-            // on the background timer — otherwise the mailbox silently stops
+            // on the background timer, otherwise the mailbox silently stops
             // receiving and nothing on screen says why.
             throw $e;
         } catch (\Throwable $e) {
@@ -1692,7 +1692,7 @@ class MailController extends Controller
      * handlers, <foreignObject> with arbitrary HTML, and external references
      * that phone home. Served from our own origin those would run as us, so a
      * sender could get script execution just by attaching a logo. The response
-     * also carries `script-src 'none'` — this is the belt to that CSP's braces,
+     * also carries `script-src 'none'`, this is the belt to that CSP's braces,
      * because a Content-Security-Policy is only as good as the browser reading it.
      *
      * Deliberately a whitelist-shaped strip rather than a full parse: anything
@@ -1725,7 +1725,7 @@ class MailController extends Controller
             $svg
         ) ?? '';
 
-        // CSS can fetch too — url() in a style attribute or <style> block.
+        // CSS can fetch too, url() in a style attribute or <style> block.
         return preg_replace('#(?:@import|expression\s*\(|url\s*\(\s*["\']?\s*(?:https?:|//|javascript:))#is', '', $svg) ?? '';
     }
 
@@ -1736,8 +1736,8 @@ class MailController extends Controller
 
         // The page's live-mail timer asks for the fast path: one request
         // against the inbox rather than a walk of every folder. A full pass
-        // cannot run every five seconds — it is still going when the next one
-        // starts — so asking for one here would defeat the point.
+        // cannot run every five seconds, it is still going when the next one
+        // starts, so asking for one here would defeat the point.
         if ($request->boolean('fast')) {
             return $this->quickSync($request, $account);
         }
@@ -1745,7 +1745,7 @@ class MailController extends Controller
         // The full folder walk can outlast a web request: on a large mailbox it
         // makes enough provider round trips to blow past the gateway timeout,
         // which surfaced as a 504 on every poll. Hand it to the queue instead
-        // and answer immediately with the current mirror — SyncMailbox is
+        // and answer immediately with the current mirror. SyncMailbox is
         // unique per mailbox, so the ~1-minute poll, the mail:sync-all
         // scheduler and the "Sync now" button all collapse into one queued run.
         // The fast path above still pulls new inbox mail in live on every tick
@@ -1857,7 +1857,7 @@ class MailController extends Controller
      *
      * The provider signature is preferred when the account can read it; otherwise
      * recent Sent mail is scanned for the repeating trailer. Nothing is written
-     * back to Gmail/Outlook — the portal copy is independent after import.
+     * back to Gmail/Outlook, the portal copy is independent after import.
      */
     public function importSignature(Request $request): JsonResponse
     {
@@ -1994,7 +1994,7 @@ class MailController extends Controller
     private function normalizeSignatureLibrary(array $merged, ?array $incoming = null): array
     {
         // On reads, never treat the mirrored `signature` string as an edit of
-        // the active library entry — only real request payloads should do that.
+        // the active library entry, only real request payloads should do that.
         $hadLibrary = $incoming === null ? true : array_key_exists('signatures', $incoming);
         $hadActiveHtml = $incoming !== null && array_key_exists('signature', $incoming);
 
@@ -2066,7 +2066,7 @@ class MailController extends Controller
     private function folderCounts(int $userId): array
     {
         // Snoozed mail is hidden from its real folder, so it must not badge
-        // it either — an Inbox count including invisible rows reads as a bug.
+        // it either, an Inbox count including invisible rows reads as a bug.
         $rows = MailMessage::query()
             ->selectRaw('folder, count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
             ->where('user_id', $userId)

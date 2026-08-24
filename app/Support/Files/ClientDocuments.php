@@ -8,7 +8,7 @@ use App\Models\Folder;
  * Which files count as client documents, and therefore enter review.
  *
  * The rule is inheritance, not naming. A file is a client document if it sits
- * anywhere beneath a client folder — the client's own folder, one of the
+ * anywhere beneath a client folder, the client's own folder, one of the
  * default subfolders provisioned with it (Citizenship Applications, General
  * Citizenship Advisory, Approval Documents), or any folder a member of staff
  * creates inside those later.
@@ -20,7 +20,7 @@ use App\Models\Folder;
  */
 final class ClientDocuments
 {
-    /** Depth guard — a cycle in parent_id would otherwise hang the request. */
+    /** Depth guard, a cycle in parent_id would otherwise hang the request. */
     private const MAX_DEPTH = 32;
 
     /** Resolved client id per folder id, for the life of the request. */

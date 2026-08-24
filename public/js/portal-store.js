@@ -20,7 +20,7 @@
  *
  * Every entry is stored under the signed-in user's id. Two accounts on one
  * machine never see each other's cache, and signing in as somebody else does
- * not warm the screen with the last person's clients — a bug that would look
+ * not warm the screen with the last person's clients, a bug that would look
  * exactly like a permissions failure.
  *
  * STALE IS SAID, NOT HIDDEN
@@ -50,7 +50,7 @@
     return !!(window.TMADesktop && window.TMADesktop.isDesktop);
   }
 
-  /* The disk tier is the desktop's alone — see the note at the top. */
+  /* The disk tier is the desktop's alone, see the note at the top. */
   var persistent = isDesktop() && typeof indexedDB !== 'undefined';
 
   var memory = Object.create(null);
@@ -161,7 +161,7 @@
    * Everything held under a key prefix, as values.
    *
    * The replica's read. Records land one key per row (`files:folder:<uuid>`),
-   * and a screen assembling a listing offline needs all of them — a store
+   * and a screen assembling a listing offline needs all of them, a store
    * that could only answer for keys the caller already knows would make the
    * replica write-only. Memory wins over disk for a key held in both, since
    * memory is where fresh server answers land first.
@@ -236,7 +236,7 @@
     return writeDisk(entry);
   }
 
-  /** Forget everything whose key starts with `prefix` — one write invalidating
+  /** Forget everything whose key starts with `prefix`, one write invalidating
       the listings it changed. A missing prefix means the whole account. */
   function invalidate(prefix) {
     var start = scoped(prefix || '');
@@ -279,11 +279,11 @@
   /*
    * Adopt what was written before /me answered.
    *
-   * The first screens do not wait for the account to be known — a directory
+   * The first screens do not wait for the account to be known, a directory
    * can be fetched, and cached, before /me returns. Those entries were
    * written under the anonymous scope, and once the account arrives every
    * read looks under the account's own: without this, whatever loaded in
-   * that opening moment is not wrong, just permanently unfindable — a miss
+   * that opening moment is not wrong, just permanently unfindable, a miss
    * that costs a refetch of exactly the biggest first-paint answers. Same
    * reasoning as the write queue's claimUnstamped: the requests were made
    * with this session's cookies, so what they returned belongs to whoever
@@ -344,7 +344,7 @@
     }).catch(function (err) {
       /*
        * A failed refresh over a good cached copy is not a failure the reader
-       * needs to see — that is the offline case, and it is the whole point.
+       * needs to see, that is the offline case, and it is the whole point.
        * With nothing cached there is nothing to show, so the error travels.
        */
       if (delivered) return undefined;
@@ -363,7 +363,7 @@
     clear: clear,
     setAccount: setAccount,
     /* Whether anything survives a restart. Screens use it to decide what to
-       promise — "available offline" is a lie in a browser. */
+       promise, "available offline" is a lie in a browser. */
     persistent: persistent,
   };
 })();

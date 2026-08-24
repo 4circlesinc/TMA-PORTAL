@@ -12,7 +12,7 @@
    * Rows key on data-email-row, so only the row that changed is rewritten.
    *
    * Wiring goes through MORPH.unwired / unwiredOne / on because nodes now
-   * survive a render — plain addEventListener in a render path would stack a
+   * survive a render, plain addEventListener in a render path would stack a
    * handler per render.
    */
   var MORPH = window.TMAMorph || {
@@ -86,7 +86,7 @@
     PushPinSlash: ICON + 'PushPinSlash.svg',
     ArchiveTray: ICON + 'ArchiveTray.svg',
     Sidebar: ICON + 'SidebarSimple.svg',
-    // A proper flag, not a price-tag shape — TagChevron's notched silhouette
+    // A proper flag, not a price-tag shape. TagChevron's notched silhouette
     // read as "two icons overlapping" at toolbar size, and a tag was never
     // the right shape for "mark as important" to begin with.
     Important: ICON + 'FlagFill.svg',
@@ -139,7 +139,7 @@
       if (saved === '0') return false;
       if (saved === '1') return true;
     } catch (e) { /* ignore */ }
-    /* Closed (hidden) by default — the list-head menu button opens it. */
+    /* Closed (hidden) by default, the list-head menu button opens it. */
     return true;
   }
 
@@ -152,7 +152,7 @@
   /* ── sidebar display mode ────────────────────────────────────────
    * Three settings, one control. "Full" is the open card; "Icons only" is the
    * rail; "Hidden" takes the sidebar off screen entirely. The collapse toggle
-   * in the list head switches between Full and Hidden by default — closed
+   * in the list head switches between Full and Hidden by default, closed
    * means gone, not an icon rail. Icons only stays available from settings.
    */
   var SIDEBAR_MODES = ['full', 'icons', 'hidden'];
@@ -170,7 +170,7 @@
   }
 
   /* The sidebar the reader actually sees right now. Mobile always gets the
-   * full drawer — an icon rail in a slide-over is just a smaller drawer.
+   * full drawer, an icon rail in a slide-over is just a smaller drawer.
    * Closed on desktop means Hidden unless Icons only was chosen explicitly. */
   function effectiveSidebarMode(state) {
     if (isEmailMobile()) return 'full';
@@ -219,13 +219,13 @@
 
   /*
    * Which sidebar groups are expanded. Mirrors the Feed's sidebar, which
-   * remembers the same thing — a group someone closed should stay closed on
+   * remembers the same thing, a group someone closed should stay closed on
    * the next visit rather than springing back open.
    */
   var SIDEBAR_GROUPS_KEY = 'tma.email.sidebarGroups';
   var LIST_GROUPS_KEY = 'tma.email.listGroups';
 
-  /* Inbox list sections — open by default; closing sticks until reopened. */
+  /* Inbox list sections, open by default; closing sticks until reopened. */
   var INBOX_LIST_GROUPS = [
     { id: 'pinned', label: 'Pinned' },
     { id: 'today', label: 'Today' },
@@ -312,7 +312,7 @@
    * One collapsible sidebar section: a caret, a title, and its rows.
    *
    * The titles are hidden in the collapsed rail (there is no room for them),
-   * so the caret is not rendered there either — a control that cannot be
+   * so the caret is not rendered there either, a control that cannot be
    * labelled is a control nobody can use.
    */
   function renderEmailSidebarGroup(state, key, label, bodyHtml, actionHtml) {
@@ -497,7 +497,7 @@
   }
 
   /* The actions beside the sender, at the top of the open message. Reply all
-   * lives here rather than only at the foot of the thread — replying to
+   * lives here rather than only at the foot of the thread, replying to
    * everyone is a decision made while reading the header, not after scrolling
    * past the whole message. */
   var DETAIL_MESSAGE_ACTIONS = [
@@ -597,7 +597,7 @@
   }
 
   /* Reply goes to Reply-To (or From). Replying to mail you sent goes back to
-   * the people you wrote to — the same as Gmail and Outlook. */
+   * the people you wrote to, the same as Gmail and Outlook. */
   function replyRecipients(row) {
     if (isFromSelf(row)) {
       return uniqueAddresses((row.to || []).filter(function (a) { return !isSelfAddress(a); }));
@@ -649,7 +649,7 @@
    *
    * The reading pane shows bodies inside a sandboxed iframe; the reply quote
    * cannot (it has to travel with the reply), so active content is stripped
-   * here instead. Formatting — inline styles, tables, images, links — is
+   * here instead. Formatting, inline styles, tables, images, links, is
    * exactly what quoting exists to keep, so everything else stays.
    */
   function sanitizeQuotedEmailHtml(html) {
@@ -681,9 +681,9 @@
 
   /* What the quote block carries: the exact HTML when we have it, the plain
    * text only as a fallback. Escaped text loses every line break the moment
-   * it renders as HTML — replies used to arrive as one flattened paragraph. */
+   * it renders as HTML, replies used to arrive as one flattened paragraph. */
   function quoteBodyBlock(bodyHtml, bodyText) {
-    // The inline style is what the *receiver* sees — the sent quote travels
+    // The inline style is what the *receiver* sees, the sent quote travels
     // as this exact markup and no portal stylesheet goes with it.
     var quoteStyle = ' style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex"';
     var html = sanitizeQuotedEmailHtml((bodyHtml || '').trim());
@@ -728,7 +728,7 @@
     var isReply = mode === 'reply';
     var isForward = mode === 'forward';
     var isReplyAll = mode === 'reply-all';
-    // The message being answered, with its lazily-loaded body — the list row
+    // The message being answered, with its lazily-loaded body, the list row
     // alone only knows the snippet, and quoting the snippet is how replies
     // used to go out as one flattened paragraph.
     var quotedSource = threadMessage(state, row.id) || row;
@@ -827,7 +827,7 @@
   function openInlineCompose(state, mode) {
     if (!state.selectedId) return;
     // The open message may be one the thread carries rather than a row on the
-    // page — its cc list is what "reply all" has to answer.
+    // page, its cc list is what "reply all" has to answer.
     var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
     var to = '';
     var cc = '';
@@ -841,7 +841,7 @@
     state.inlineCompose = { mode: mode, messageId: state.selectedId, to: to, cc: cc, bodyHtml: '', sending: false };
   }
 
-  /* The loaded thread's copy of a message — the only one that carries cc, bcc
+  /* The loaded thread's copy of a message, the only one that carries cc, bcc
    * and a body. List rows never do. */
   function threadMessage(state, id) {
     if (!state.thread || !id) return null;
@@ -1085,7 +1085,7 @@
   }
 
   /*
-   * Page-level mail toolbar — sits above the folder rail, list and reading
+   * Page-level mail toolbar, sits above the folder rail, list and reading
    * pane, same role as the Files toolbar / an Outlook ribbon. New Mail and
    * Sync are always live; the rest enable once something is ticked or open.
    */
@@ -1248,7 +1248,7 @@
     });
   }
 
-  /* Folder-list toggle — lives in the page toolbar beside New Mail so it
+  /* Folder-list toggle, lives in the page toolbar beside New Mail so it
    * stays reachable when the sidebar is hidden. */
   function renderEmailSidebarMenuBtn(state) {
     if (isEmailMobile()) return '';
@@ -1293,7 +1293,7 @@
   }
 
   function emailLabels(state) {
-    // Only user-created portal labels — provider-synced defaults are excluded
+    // Only user-created portal labels, provider-synced defaults are excluded
     // server-side and again here as a safety net.
     return ((state && state.labels) || []).filter(function (label) {
       return !!(label && label.localOnly);
@@ -1513,7 +1513,7 @@
     var tones = ['blue', 'green', 'purple', 'orange', 'red', 'indigo', 'gray'];
     // data-morph-skip: the editor's fields are managed imperatively (open,
     // tone selection, error text), and the background mail poll re-renders
-    // the app — without the skip, every poll would wipe what the user typed.
+    // the app, without the skip, every poll would wipe what the user typed.
     return (
       '<div class="tma-dash__email-label-editor tma-dash__menu" data-email-label-editor data-morph-skip role="dialog"' +
       ' aria-label="Label editor" hidden>' +
@@ -1610,7 +1610,7 @@
   /* ── message store ───────────────────────────────────────────────
    * Rows come from /portal/mail/messages and live on state.rows. The old
    * hard-coded INBOX array is gone, along with the parallel readIds /
-   * starredIds / rowLabels maps that shadowed it — a row now carries its own
+   * starredIds / rowLabels maps that shadowed it, a row now carries its own
    * flags, exactly as the server sent them, so there is one source of truth
    * per message instead of four.
    */
@@ -1785,7 +1785,7 @@
     });
   }
 
-  /* The list-row id that owns the conversation drop for a message — the
+  /* The list-row id that owns the conversation drop for a message, the
    * parent itself, or the parent a child was loaded under. */
   function conversationParentForMessage(state, id) {
     if (!id) return null;
@@ -1851,7 +1851,7 @@
   }
 
   /*
-   * Tick or untick a row — and, for a conversation, everything inside it.
+   * Tick or untick a row, and, for a conversation, everything inside it.
    *
    * Selecting the conversation and then archiving it has to archive the
    * replies too; leaving them behind in the inbox is the kind of half-done
@@ -1900,7 +1900,7 @@
   }
 
   /* The conversation, in a window of its own. Server-rendered, so it opens
-   * with the mail already in it — see MailController::window. */
+   * with the mail already in it, see MailController::window. */
   function openMailInWindow(root, id, opts) {
     if (!id || !api().windowUrl) return;
 
@@ -1921,19 +1921,19 @@
    * check, folder counts, labels and a page of mail, all behind the network.
    * Opening Email used to mean watching that happen. Two things now stop it:
    *
-   *   1. Those requests leave the moment this file parses — before the shell
+   *   1. Those requests leave the moment this file parses, before the shell
    *      has finished building itself, and long before anyone clicks Email.
    *   2. What came back last time is kept in sessionStorage, so a reload
    *      paints real mail on the first frame and revalidates behind it.
    *
    * Neither ever replaces a fetch. The cache is painted and then overwritten
-   * by the live answer, so nothing here can leave stale mail on screen — it
+   * by the live answer, so nothing here can leave stale mail on screen, it
    * only decides whether the reader waits on a skeleton to find that out.
    */
   var MAIL_CACHE_KEY = 'tma.mail.warm.v1';
 
   /* Older than this and the cached page stops being "what you were just
-   * looking at" — the skeleton is more honest than an hour-old inbox. */
+   * looking at", the skeleton is more honest than an hour-old inbox. */
   var MAIL_CACHE_TTL = 10 * 60 * 1000;
 
   /* A prefetch is only worth consuming while it is still the newest thing
@@ -1995,7 +1995,7 @@
      * cannot: the store's disk tier holds it, and seedWarmFromStore below
      * puts it back into sessionStorage at the next launch so every line of
      * the machinery above works unchanged. Browsers write to the store's
-     * memory tier, which is a no-op across reloads — deliberate, and the
+     * memory tier, which is a no-op across reloads, deliberate, and the
      * firm's disk rule.
      */
     if (window.TMAStore) {
@@ -2007,9 +2007,9 @@
 
   /*
    * A fresh launch: sessionStorage is empty, the store may not be. Re-seeding
-   * the session copy — with a fresh timestamp, because across a quit the
+   * the session copy, with a fresh timestamp, because across a quit the
    * choice is a painted inbox corrected in a second versus a skeleton, and
-   * the machinery's own TTL was written for the within-session case — lets
+   * the machinery's own TTL was written for the within-session case, lets
    * readMailCache find it exactly as if the tab had never closed. The
    * account stamp rides along and is still checked on read.
    */
@@ -2138,7 +2138,7 @@
     if (!state._folderListCache) state._folderListCache = {};
     var key = state._listContext;
     if (!key || state.folder === 'templates') return;
-    // An in-flight empty skeleton is not a real listing — don't overwrite a
+    // An in-flight empty skeleton is not a real listing, don't overwrite a
     // good cache entry with one.
     if (state.loading && !rowsOf(state).length) return;
 
@@ -2190,13 +2190,13 @@
    * rather than post-filters, so results cover the whole mailbox instead of
    * only the page already in memory.
    *
-   * opts.force — skip the per-folder cache (Sync button / reconnect). */
+   * opts.force, skip the per-folder cache (Sync button / reconnect). */
   function reloadMessages(root, state, render, opts) {
     opts = opts || {};
     // Templates are portal-local and have no server listing.
     if (state.folder === 'templates') return Promise.resolve();
 
-    // Changing folder, label or search starts a new listing — page 5 of the
+    // Changing folder, label or search starts a new listing, page 5 of the
     // inbox says nothing about page 5 of Sent.
     var context = listContextKey(state);
     var switched = state._listContext !== context;
@@ -2213,7 +2213,7 @@
       } else {
         state.page = 1;
         // Another folder's mail under this folder's name would be a lie, so it
-        // goes and the skeleton takes its place — only when we have nothing
+        // goes and the skeleton takes its place, only when we have nothing
         // remembered for this folder.
         state.rows = [];
         collapseAllConversations(state);
@@ -2319,8 +2319,8 @@
   }
 
   /* How often the page asks the provider whether anything has arrived. A
-   * mailbox has to feel live, so this is the fast inbox-only check — see
-   * MailSynchronizer::quickCheck — not the full folder walk. */
+   * mailbox has to feel live, so this is the fast inbox-only check, see
+   * MailSynchronizer::quickCheck, not the full folder walk. */
   var MAIL_POLL_INTERVAL = 5000;
 
   /* How often the *full* pass runs instead: every folder, plus the reads,
@@ -2330,7 +2330,7 @@
 
   /* True while the tab has nothing to gain from being polled at all. Note this
    * no longer includes composing: mail must keep *arriving* while the user
-   * writes — only the repaint is held back (see mailRepaintShouldWait), which
+   * writes, only the repaint is held back (see mailRepaintShouldWait), which
    * is what would actually disturb them. */
   function mailPollShouldWait(state) {
     return (
@@ -2340,7 +2340,7 @@
       // A mailbox that needs reconnecting will answer 409 to every single
       // attempt. Polling it on a five-second timer produced a 409 in the
       // console every five seconds for as long as the page stayed open, and
-      // not one of them could have succeeded — reconnecting is the only thing
+      // not one of them could have succeeded, reconnecting is the only thing
       // that clears it, and the banner already says so.
       state.reconnectNeeded
     );
@@ -2385,10 +2385,10 @@
   }
 
   /* Quiet background refresh: pulls the provider's change feed since the
-   * last cursor (cheap — see MailSynchronizer::incremental) and repaints
+   * last cursor (cheap, see MailSynchronizer::incremental) and repaints
    * only if the list actually changed, so an inbox with nothing new never
    * flickers or steals the user's scroll position. No loading spinner, no
-   * error toast — the manual Sync button already covers that. */
+   * error toast, the manual Sync button already covers that. */
   function pollNewMail(root, state, render) {
     if (mailPollShouldWait(state)) {
       scheduleMailPoll(root, state, render);
@@ -2397,7 +2397,7 @@
 
     // One poll at a time. Without this a slow provider means each tick starts
     // another sync on top of the last, and the pile-up is what gets the
-    // account throttled — at which point new mail stops arriving entirely.
+    // account throttled, at which point new mail stops arriving entirely.
     if (state._mailPollBusy) {
       scheduleMailPoll(root, state, render);
       return;
@@ -2413,12 +2413,12 @@
     var full = state._mailPollTick % MAIL_FULL_SYNC_EVERY === 0;
 
     api().sync({ fast: !full }).then(function (data) {
-      // A sync that goes through means the grant is alive again — resume
+      // A sync that goes through means the grant is alive again, resume
       // polling without needing a reload.
       state.reconnectNeeded = false;
 
       // The sync response carries fresh folder counts on every tick now.
-      // Apply them here — this is what keeps the sidebar badges and the
+      // Apply them here, this is what keeps the sidebar badges and the
       // dashboard's Email nav count live, including reads and moves made in
       // Gmail/Outlook that never change this page's visible list.
       if (data && data.folders) {
@@ -2434,7 +2434,7 @@
     }).catch(function (err) {
       // A dead grant is terminal until the user reconnects, so record it and
       // let mailPollShouldWait stop the timer. Every other failure is
-      // transient — fall through to listMessages with whatever is local.
+      // transient, fall through to listMessages with whatever is local.
       if (err && err.reconnect) {
         state.reconnectNeeded = true;
         state.mailError = err.message;
@@ -2442,7 +2442,7 @@
     }).then(function () {
       // Repainting mid-compose would move the caret, so the list is left alone
       // until the compose window closes. The sync above still ran, so the mail
-      // is already stored — it just paints a moment later.
+      // is already stored, it just paints a moment later.
       if (mailRepaintShouldWait(state)) return null;
 
       return api().listMessages({
@@ -2456,13 +2456,13 @@
       if (!data) return;
 
       // A folder switch, search, or manual reload started after this poll
-      // began owns the screen now — don't stomp on it.
+      // began owns the screen now, don't stomp on it.
       if (token !== state.loadToken) return;
 
       var incoming = (data && data.messages) || [];
       if (sameMessageList(state.rows, incoming)) {
         // Nothing moved in the visible list, but the sidebar badges might
-        // have — a message read on the phone, mail landing in a folder that
+        // have, a message read on the phone, mail landing in a folder that
         // is not open. Repaint once so the counts stay honest.
         if (state._mailCountsDirty) {
           state._mailCountsDirty = false;
@@ -2489,7 +2489,7 @@
       writeMailCache(state);
       hydrateListAttachments(root, state, render, token);
     }).catch(function () {
-      // Silent — this is a background refresh, not a user action.
+      // Silent, this is a background refresh, not a user action.
     }).then(function () {
       state._mailPollBusy = false;
       scheduleMailPoll(root, state, render);
@@ -2498,7 +2498,7 @@
 
   /* The reader's saved mailbox preferences, applied to live state.
    *
-   * The server is the authority — these follow the account between machines —
+   * The server is the authority, these follow the account between machines —
    * but they are mirrored into localStorage on the way through so the *next*
    * first paint is already in the right shape instead of rearranging itself
    * once the bootstrap lands. */
@@ -2532,7 +2532,7 @@
    *
    * Separate from saveEmailPreference, which assumes the settings panel is
    * open and holds the whole preference object. These are set from the
-   * mailbox chrome — the collapse toggle, the layout switch — where it is not.
+   * mailbox chrome, the collapse toggle, the layout switch, where it is not.
    */
   function persistMailPreference(state, key, value) {
     if (state.preferences) state.preferences[key] = value;
@@ -2561,7 +2561,7 @@
 
   /* Paint what the last visit ended on, before anything is asked of the
    * network. Everything set here is replaced by the live bootstrap moments
-   * later — this only decides whether the reader watches that happen. */
+   * later, this only decides whether the reader watches that happen. */
   function hydrateFromCache(state) {
     var cached = readMailCache();
     if (!cached) return false;
@@ -2628,7 +2628,7 @@
       state.loading = false;
       state.listRefreshing = false;
       // Remembered so re-opening Email retries instead of sitting on a failure
-      // that only a browser refresh could clear — the bootstrap runs once at
+      // that only a browser refresh could clear, the bootstrap runs once at
       // app start, so a single blip used to poison the page for the session.
       state.bootstrapFailed = true;
       state.loadError = (err && err.message) || 'Could not reach the mailbox';
@@ -2640,7 +2640,7 @@
     });
   }
 
-  /* Open one message by id — used by snooze-reminder deep links. Switches to
+  /* Open one message by id, used by snooze-reminder deep links. Switches to
    * the folder the message lives in (or Snoozed while it is still resting),
    * loads that list, then opens the reading pane on it. */
   function openMailById(root, state, render, id) {
@@ -2657,7 +2657,7 @@
 
       return reloadMessages(root, state, render).then(function () {
         if (!findRow(state, msg.id)) {
-          // Off the first page — still open from the fetched record so the
+          // Off the first page, still open from the fetched record so the
           // reminder never lands on an empty reading pane.
           state.rows = [msg].concat(rowsOf(state).filter(function (r) { return r.id !== msg.id; }));
         }
@@ -2688,7 +2688,7 @@
    * rest are pulled by ensureMessageBody() as they are chosen. */
   function openMailMessage(root, state, render, id) {
     // findAnyRow, not findRow: a message opened from a conversation dropdown
-    // is not on the page — it belongs to the conversation loaded under it.
+    // is not on the page, it belongs to the conversation loaded under it.
     var row = findAnyRow(state, id);
     if (!row) return;
 
@@ -2742,7 +2742,7 @@
       state.bodyLoading = false;
       state.threadError = errorText(err) || 'This conversation could not be loaded.';
       state.threadErrorId = id;
-      // The pane says so itself — see reportMailError on why this one must
+      // The pane says so itself, see reportMailError on why this one must
       // not raise the mailbox-wide banner.
       reportMailError(state, err, { reconnectBanner: false });
       render();
@@ -2755,7 +2755,7 @@
    * Opening a message writes `read` and fetches the conversation at the same
    * moment. If the fetch wins the race it answers from a row the write has not
    * reached yet, and copying it wholesale flips the message back to unread
-   * under the reader — then back again on the next poll. Everything else in
+   * under the reader, then back again on the next poll. Everything else in
    * the record is server truth and is taken as it comes.
    */
   var OPTIMISTIC_FLAGS = ['unread', 'starred', 'important', 'pinned', 'snoozedUntil'];
@@ -2774,7 +2774,7 @@
   /* True when the loaded thread actually covers the selected message.
    *
    * Selection moves without going through openMailMessage in several places —
-   * a reload whose selected row has vanished, an archive, a folder change — and
+   * a reload whose selected row has vanished, an archive, a folder change, and
    * a thread left over from the previous message would otherwise be rendered
    * against the new one. */
   function threadCoversSelection(state) {
@@ -2790,7 +2790,7 @@
     if (state.folder === 'templates') return;
     if (!state.selectedId || state.bodyLoading) return;
     // A failure is remembered against the message it happened on, so the
-    // error is not retried in a loop — but selecting a different message
+    // error is not retried in a loop, but selecting a different message
     // still gets a fresh attempt.
     if (state.threadError && state.threadErrorId === state.selectedId) return;
     if (threadCoversSelection(state)) return;
@@ -2801,7 +2801,7 @@
   /*
    * Pull a message's body if the thread it came in did not carry one.
    *
-   * GET /thread only hydrates the message it was opened on — a long
+   * GET /thread only hydrates the message it was opened on, a long
    * conversation would otherwise be one provider round trip per message before
    * anything painted. Picking a different message from the list dropdown is
    * where the rest get fetched, one at a time and only when actually read.
@@ -2832,7 +2832,7 @@
 
   /* Read state is optimistic: the row flips immediately and the provider
    * catches up. A failed write is not worth interrupting reading for, so it
-   * is logged rather than surfaced — the next sync corrects it. */
+   * is logged rather than surfaced, the next sync corrects it. */
   function markRowRead(state, id) {
     setRowRead(state, id, true);
   }
@@ -3389,7 +3389,7 @@
    * arrays of {name, email}.
    *
    * This used to read `row.to` as if it were a single address. An empty array
-   * is truthy, so every message fell through to the "me" branch — which is why
+   * is truthy, so every message fell through to the "me" branch, which is why
    * the header said "to me" on mail addressed to a dozen people, and why the
    * details panel never showed a recipient list at all.
    */
@@ -3444,7 +3444,7 @@
   /*
    * Everyone the message went to, not just the first name on the envelope.
    *
-   * Cc and Bcc rows only appear when there is something in them — an empty
+   * Cc and Bcc rows only appear when there is something in them, an empty
    * "bcc:" on every message is noise, and on a received message a populated
    * one is unusual enough to be worth seeing.
    */
@@ -3558,7 +3558,7 @@
     avatar: null,
   };
 
-  /* The connected mailbox, which is who "me" is when replying — often
+  /* The connected mailbox, which is who "me" is when replying, often
    * different from the portal login on PROFILE. */
   var MAILBOX_EMAIL = '';
 
@@ -3583,7 +3583,7 @@
    * survives refreshes and closed tabs: the stage the sync is in, real
    * counts, an honest percentage, a measured time estimate, stall detection
    * with a Retry action, and the failure reason when there is one. It is
-   * non-blocking by design — the panel can be collapsed or dismissed and the
+   * non-blocking by design, the panel can be collapsed or dismissed and the
    * import carries on in the queue either way.
    */
   var syncPanel = null;
@@ -3594,7 +3594,7 @@
 
   /* A full sync is queued, not run inline, so the button coming back to life
    * is not evidence of anything. Hand it to the shared bottom-right sync
-   * toasts (sync-toasts.js) — the same card OneDrive and the calendar use —
+   * toasts (sync-toasts.js), the same card OneDrive and the calendar use —
    * so the mailbox reports its progress the same way from any page. The panel
    * above supersedes it while a first import is on screen. */
   function announceMailSync() {
@@ -3642,7 +3642,7 @@
     syncPanel.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-mail-sync-action]');
       if (!btn) {
-        // Minimised chip expands on click — same as sync-toasts.js.
+        // Minimised chip expands on click, same as sync-toasts.js.
         if (syncCollapsed) {
           syncCollapsed = false;
           if (syncLastData) renderSyncPanel(syncLastData);
@@ -3657,7 +3657,7 @@
       if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
       if (action === 'retry') { retryMailSync(btn); }
     });
-    // Same column as OneDrive / Smartsheet / calendar sync toasts — a second
+    // Same column as OneDrive / Smartsheet / calendar sync toasts, a second
     // fixed corner host is what made cards sit on top of each other sideways.
     var stack = (window.TMASyncToasts && window.TMASyncToasts.host)
       ? window.TMASyncToasts.host()
@@ -3683,7 +3683,7 @@
     return (n || 0).toLocaleString();
   }
 
-  /* "just now" / "20s ago" — the panel's proof it is still being fed. */
+  /* "just now" / "20s ago", the panel's proof it is still being fed. */
   function syncRelativeTime(iso) {
     if (!iso) return '';
     var secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
@@ -3708,7 +3708,7 @@
       case 'auth':
         return 'The mailbox connection needs to be reconnected before the sync can continue.';
       case 'queue':
-        return 'The background worker looks unavailable — ask an administrator to check the queue worker.';
+        return 'The background worker looks unavailable, ask an administrator to check the queue worker.';
       case 'job-failed':
         return 'The last sync step failed. Retrying resumes from where it stopped.';
       case 'job-missing':
@@ -3739,13 +3739,13 @@
         : stalled ? 'Mailbox sync delayed'
           : (p && p.stageLabel ? p.stageLabel + '…' : 'Syncing mailbox…');
 
-    // "Importing Inbox — 1,250 of ~8,420 messages"
+    // "Importing Inbox. 1,250 of ~8,420 messages"
     var meta = total
       ? syncNum(processed) + ' of ' + (estimated ? '~' : '') + syncNum(total) + ' messages'
       : syncNum(processed) + ' messages synced';
     if (p && p.currentFolder && !finished && !failed) {
       var folderName = p.currentFolder.charAt(0).toUpperCase() + p.currentFolder.slice(1);
-      meta = folderName + ' — ' + meta;
+      meta = folderName + ': ' + meta;
     }
 
     var stageLine = p && !finished && !failed
@@ -3774,7 +3774,7 @@
     }
     if (p && p.lastProgressAt) timingBits.push('updated ' + syncRelativeTime(p.lastProgressAt));
 
-    // A stalled or failed sync explains itself and offers a way out — never
+    // A stalled or failed sync explains itself and offers a way out, never
     // an endless spinner with no explanation.
     var problemHtml = '';
     if (failed) {
@@ -3793,7 +3793,7 @@
     }
 
     var hintHtml = (finished || failed) ? '' :
-      '<div class="tma-mail-sync__hint">Syncing continues in the background — you can keep using the portal.</div>';
+      '<div class="tma-mail-sync__hint">Syncing continues in the background, you can keep using the portal.</div>';
 
     var fillClass = 'tma-sync-toast__fill';
     var fillAttr = '';
@@ -3816,7 +3816,7 @@
       (finished ? ' tma-sync-toast--done' : '') +
       (failed ? ' tma-sync-toast--error' : '');
 
-    // Same chrome as the global sync toasts — Outlook mark, naked white card.
+    // Same chrome as the global sync toasts. Outlook mark, naked white card.
     panel.innerHTML =
       '<span class="tma-sync-toast__icon tma-sync-toast__icon--email">' +
         '<img src="' + BRAND + 'Outlook.svg" alt="">' +
@@ -3865,10 +3865,10 @@
 
   /* Sign out of the mailbox ONLY: stops mail sync so the page returns to the
    * "Connect your mailbox" state. The Google/Microsoft account itself stays
-   * connected to the portal — sign-in, calendar and file sync are untouched,
+   * connected to the portal, sign-in, calendar and file sync are untouched,
    * and imported mail is kept so reconnecting later is instant. Fully
    * disconnecting the account lives in Security settings. This also does NOT
-   * end the portal session — portal sign-out lives on the shell sidebar
+   * end the portal session, portal sign-out lives on the shell sidebar
    * profile, not this menu. */
   function disconnectMailbox(root, state, render) {
     var provider = state.account && state.account.provider;
@@ -3906,7 +3906,7 @@
   }
 
   /* The account chip stands for the connected mailbox, not the portal user.
-   * With no mailbox connected it must stop showing the signed-in name — that
+   * With no mailbox connected it must stop showing the signed-in name, that
    * reads as "still signed in" right after a mailbox sign-out. */
   function profileDisplay(connected) {
     return connected
@@ -4003,7 +4003,7 @@
       esc(profileAvatarSrc()) + '" alt="" width="24" height="24">' +
       '<span class="tma-dash__email-profile-meta">' +
       // The rail is too narrow for a full name and work address, so the value
-      // is on the element itself — hovering shows what the ellipsis hides.
+      // is on the element itself, hovering shows what the ellipsis hides.
       '<span class="tma-dash__email-profile-name" title="' + esc(who.name) + '">' + esc(who.name) + '</span>' +
       '<span class="tma-dash__email-profile-email" title="' + esc(who.email) + '">' + esc(who.email) + '</span>' +
       '</span>' +
@@ -4041,7 +4041,7 @@
     });
   }
 
-  /* Counts come from the server, which sees the whole mailbox — counting
+  /* Counts come from the server, which sees the whole mailbox, counting
    * loaded rows would only ever report the current page. */
   function getInboxUnreadCount(state) {
     var counts = state && state.folderCounts && state.folderCounts.inbox;
@@ -4116,7 +4116,7 @@
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
           '</div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
-      // New Mail lives in the page toolbar — keep this rail to folders/labels.
+      // New Mail lives in the page toolbar, keep this rail to folders/labels.
       renderEmailSidebarGroup(state, 'folders', 'Mailboxes', renderFolders(state)) +
       renderEmailLabelsSection(state) +
       '</div>' +
@@ -4309,7 +4309,7 @@
     );
   }
 
-  /* How much of what is on screen is ticked — drives the toolbar checkbox,
+  /* How much of what is on screen is ticked, drives the toolbar checkbox,
    * including its indeterminate state. */
   function selectionSummary(state) {
     var rows = visibleRows(state);
@@ -4332,7 +4332,7 @@
   }
 
   /* Pager for the folder listing. The mailbox mirror can hold tens of
-   * thousands of messages, so the list is a real server-side page — this shows
+   * thousands of messages, so the list is a real server-side page, this shows
    * where you are, lets you step through, and sets how many land per page. */
   function renderMailPagination(state) {
     if (state.folder === 'templates' || state.search) return '';
@@ -4394,7 +4394,7 @@
    *
    * "Loading emails…" told the reader nothing and made the pane look broken
    * for as long as it showed. These occupy the same geometry the mail will —
-   * avatar, two lines, a timestamp — so the list fills in rather than jumping.
+   * avatar, two lines, a timestamp, so the list fills in rather than jumping.
    */
   function renderListSkeleton(count) {
     var rows = '';
@@ -4452,7 +4452,7 @@
       rows + '</div>';
   }
 
-  /* Loading, disconnected, error and empty all get an honest state — never a
+  /* Loading, disconnected, error and empty all get an honest state, never a
    * placeholder message that could be mistaken for real mail. */
   function renderListState(state, rows) {
     function notice(title, body, actionHtml) {
@@ -4466,7 +4466,7 @@
     }
 
     /* The portal's shared empty state (illustration, title, one line, one
-     * action) rather than a bespoke one — see TMANoData. */
+     * action) rather than a bespoke one, see TMANoData. */
     function empty(title, subtitle, buttonLabel) {
       if (!window.TMANoData) return notice(title, subtitle);
 
@@ -4483,8 +4483,8 @@
       );
     }
 
-    // Skeletons are for "we don't know yet". Once the answer is in — no
-    // account, or an account with nothing in this folder — they would be a
+    // Skeletons are for "we don't know yet". Once the answer is in, no
+    // account, or an account with nothing in this folder, they would be a
     // lie about mail that is on its way, so the empty state takes over.
     if (state.connected === false) {
       return empty(
@@ -4515,7 +4515,7 @@
    *
    * Newlines are the only structure a text body has, so they have to survive:
    * collapsing them into one paragraph turned every plain-text message —
-   * including most automated notifications — into an unreadable wall. */
+   * including most automated notifications, into an unreadable wall. */
   function renderMessageBodyText(bodyText) {
     return (
       '<div class="tma-dash__email-body tma-dash__email-body--text">' +
@@ -4529,7 +4529,7 @@
    * Images get a thumbnail you can click to open full size; everything else is
    * a labelled row. Both go through the authenticated attachment endpoint —
    * the file is streamed from the provider, never guessed at locally. */
-  /* The message's attachments, in their own section under the body — never
+  /* The message's attachments, in their own section under the body, never
    * mixed into it. Each card previews (image thumbnail, or the file-type icon
    * from the same set the File Library uses) and offers Download and
    * Open/Preview separately, since a click should never trigger a surprise
@@ -4543,8 +4543,8 @@
     state_attachmentsByMessage[ownerId] = items;
     if (!items.length) return '';
 
-    // Gmail-style tiles: a big preview area (the real image, or — since this
-    // stack has no Imagick/Ghostscript to rasterise a PDF server-side — its
+    // Gmail-style tiles: a big preview area (the real image, or, since this
+    // stack has no Imagick/Ghostscript to rasterise a PDF server-side, its
     // first page rendered client-side via pdf.js, see wireAttachmentPdfPreviews),
     // a filename strip fixed under it, and download/open actions that only
     // appear on hover. The whole tile opens the lightbox; the hover button
@@ -4567,7 +4567,7 @@
         (isPdf ? ' data-email-attachment-pdf="' + esc(attachmentUrl(a, true)) + '"' : '') + '>' +
         '<div class="tma-dash__email-attachment-tile-preview">' + preview +
         // Hovering (or focusing) the tile covers the preview with the full
-        // filename — see .tma-dash__email-attachment-tile-caption — so a
+        // filename, see .tma-dash__email-attachment-tile-caption, so a
         // long or ambiguous name never needs a separate tooltip to read.
         '<div class="tma-dash__email-attachment-tile-caption" aria-hidden="true"><span>' + esc(a.name) + '</span></div>' +
         '<div class="tma-dash__email-attachment-tile-corner" aria-hidden="true"></div>' +
@@ -4587,9 +4587,9 @@
     }).join('');
 
     // Embedded pictures are counted separately in the heading. They stay
-    // listed — a sender pasting a real document into the body gives it a
+    // listed, a sender pasting a real document into the body gives it a
     // Content-ID exactly as a signature logo has one, and hiding the first to
-    // tidy away the second loses genuine paperwork — but saying how many of
+    // tidy away the second loses genuine paperwork, but saying how many of
     // the files are pictures already shown above stops a signature's four
     // logos reading as four documents nobody sent.
     var inlineCount = items.filter(function (a) { return a.inline; }).length;
@@ -4645,7 +4645,7 @@
       return '<img class="tma-portal-lightbox__img tma-dash__email-lightbox-img" src="' + esc(attachmentUrl(a, true)) + '" alt="' + esc(a.name) + '" data-email-lightbox-zoom>';
     }
     if (attachmentIsPdf(a)) {
-      // Painted by the shared pdf.js mounter after paint() — an iframe here
+      // Painted by the shared pdf.js mounter after paint(), an iframe here
       // used to work on Chrome but Mac Safari drops iframe PDFs entirely.
       if (window.TMAPortalLightbox && window.TMAPortalLightbox.pdfInto) {
         return '<div class="tma-lightbox__doc" data-mail-lb-doc="pdf"></div>';
@@ -4730,7 +4730,7 @@
       var zoomImg = e.target.closest('[data-email-lightbox-zoom]');
       if (zoomImg) { zoomImg.classList.toggle('is-zoomed'); return; }
       // Clicking the dim stage around the attachment (not the media itself)
-      // closes the lightbox — same expectation as clicking the backdrop.
+      // closes the lightbox, same expectation as clicking the backdrop.
       var stage = e.target.closest('[data-lb-stage]');
       if (stage && !e.target.closest('img, iframe, video, audio, .tma-portal-lightbox__nopreview, .tma-portal-lightbox__audio, .tma-lightbox__doc, a, button')) {
         closeAttachmentLightbox();
@@ -4755,13 +4755,13 @@
       section._wired = true;
 
       function openFrom(target) {
-        // The download button sits inside the tile it downloads — let its own
+        // The download button sits inside the tile it downloads, let its own
         // native download proceed rather than also opening the lightbox.
         if (target.closest('[data-email-attachment-download]')) return;
         var btn = target.closest('[data-email-attachment-open]');
         if (!btn) return;
         var index = parseInt(btn.getAttribute('data-email-attachment-open'), 10);
-        // Which message's files these are — a thread has several sections on
+        // Which message's files these are, a thread has several sections on
         // screen at once, so the owner has to come from the section itself.
         var owner = section.getAttribute('data-email-attachments-owner') || '';
         var items = state_attachmentsByMessage[owner] || [];
@@ -4770,7 +4770,7 @@
       }
 
       section.addEventListener('click', function (e) { openFrom(e.target); });
-      // The tile is a div (role="button"), which — unlike a real <button> —
+      // The tile is a div (role="button"), which, unlike a real <button> —
       // needs its own Enter/Space handling to be keyboard-operable.
       section.addEventListener('keydown', function (e) {
         if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -4821,7 +4821,7 @@
    *
    * Bootstrap already ships preferences on state.preferences; the settings
    * panel mirrors them onto state.settings once opened. Compose must see the
-   * signature from either place — otherwise a fresh page opens compose with
+   * signature from either place, otherwise a fresh page opens compose with
    * no signature until Email settings has been visited once. */
   function mailPreference(key, fallback) {
     var prefs = {};
@@ -4893,7 +4893,7 @@
   }
 
   /* pdf.js ships as ESM and weighs ~1.7 MB with its worker, so it's pulled in
-     on first use rather than at page load — see portal-work.js's identical
+     on first use rather than at page load, see portal-work.js's identical
      loader for the signature editor. Rendering the attachment's own first
      page client-side sidesteps the lack of Imagick/Ghostscript server-side. */
   var attachmentPdfjsPromise = null;
@@ -4936,7 +4936,7 @@
         });
       })
       // A corrupt/unreadable PDF, or the worker failing to load, just leaves
-      // the icon in place — never worth surfacing as an error to the user.
+      // the icon in place, never worth surfacing as an error to the user.
       .catch(function () {});
   }
 
@@ -4948,7 +4948,7 @@
     });
   }
 
-  /* Compact chips under a list row — Gmail's own inbox does exactly this: a
+  /* Compact chips under a list row. Gmail's own inbox does exactly this: a
    * small icon-and-name pill per file, not a full thumbnail, so a page of 50
    * rows never has to render dozens of image previews at once. */
   function renderRowAttachmentChips(row) {
@@ -4958,7 +4958,7 @@
     var known = row.attachmentCount;
 
     // We only know real filenames/types for messages already opened once
-    // (see toRow() — nothing here ever asks the provider for this). Anything
+    // (see toRow(), nothing here ever asks the provider for this). Anything
     // else still gets a line, just without per-file detail yet.
     if (!items.length) {
       return (
@@ -4976,7 +4976,7 @@
 
     // Each chip we have real data for opens straight into the same lightbox
     // the full message view uses (see wireListRows) instead of just opening
-    // the message — a shortcut Gmail's own inbox offers too.
+    // the message, a shortcut Gmail's own inbox offers too.
     var chips = shown.map(function (a, i) {
       return (
         '<span class="tma-dash__email-attachment-chip" title="' + esc(a.name) + '" data-email-row-attachment-open="' + i + '">' +
@@ -5069,7 +5069,7 @@
    * of screens of history they did not.
    *
    * The split happens here rather than inside the body frame, because that
-   * frame deliberately cannot run scripts — so a toggle inside it could never
+   * frame deliberately cannot run scripts, so a toggle inside it could never
    * work. Both halves are kept; nothing is discarded.
    */
 
@@ -5113,7 +5113,7 @@
     }
 
     // Outlook separates the reply from its history with a horizontal rule
-    // rather than a class, so that is worth catching too — but only when it is
+    // rather than a class, so that is worth catching too, but only when it is
     // in the back half of the message, so a rule used as decoration in a
     // newsletter is not mistaken for a quote boundary.
     if (!marker) {
@@ -5141,7 +5141,7 @@
     var main = doc.body.innerHTML;
 
     // A reply that is *only* quoted history (a bare forward, say) has nothing
-    // to collapse — hiding all of it would leave an empty message.
+    // to collapse, hiding all of it would leave an empty message.
     if (!main.replace(/<[^>]*>/g, '').trim()) return none;
 
     return { main: main, quoted: quoted.innerHTML, hasQuote: true };
@@ -5163,7 +5163,7 @@
    * was opened, and anything unread start expanded.
    */
   function renderEmailThread(state, threadActions) {
-    // Only ever the conversation the selected message is actually in — a
+    // Only ever the conversation the selected message is actually in, a
     // thread left over from the previously open message must not be painted
     // against this one. ensureThreadLoaded replaces it on the next tick.
     var thread = threadCoversSelection(state) ? state.thread : null;
@@ -5189,7 +5189,7 @@
      * The reading pane shows the message that was opened, in full.
      *
      * It used to stack the whole conversation here as collapsed cards with
-     * their own expand-all control — a second, competing way to move between
+     * their own expand-all control, a second, competing way to move between
      * messages now that the inbox row has a dropdown. Navigating a thread
      * belongs in one place, and that place is the list.
      */
@@ -5279,7 +5279,7 @@
       );
     }
 
-    // Nothing fetched yet — the card was rendered before its body arrived.
+    // Nothing fetched yet, the card was rendered before its body arrived.
     if (!message.bodyLoaded && !message.bodyHtml && !message.bodyText) {
       return renderMessageBodyText(message.body || '');
     }
@@ -5313,7 +5313,7 @@
    *
    * `sentAt` is an ISO instant; the two preformatted labels the server also
    * sends are built from a UTC Carbon, so on their own they show a 9pm message
-   * as 1am the following day for anyone west of UTC — which is how a message
+   * as 1am the following day for anyone west of UTC, which is how a message
    * ends up looking like it never arrived. */
   function formatMessageDate(message) {
     if (!message.sentAt) return message.dateLabel || message.time || '';
@@ -5376,7 +5376,7 @@
     }
 
     var lines = rowListLines(row);
-    // The conversation's subject once it has loaded — a thread is titled by
+    // The conversation's subject once it has loaded, a thread is titled by
     // what it is about, not by the "Re: Re: Fwd:" the newest reply happens to
     // carry.
     var subject = (state.thread && state.thread.subject) || lines.subject;
@@ -5407,7 +5407,7 @@
   }
 
   /* A new compose window starts blank. Only an explicitly chosen template, or
-   * a reply/forward that set one, may put a subject here — the mock's stand-in
+   * a reply/forward that set one, may put a subject here, the mock's stand-in
    * invoice subject used to be the fallback, so every blank message the user
    * started was pre-addressed about an invoice they had not mentioned. */
   function getComposeSubject(draft) {
@@ -5528,7 +5528,7 @@
       var label = item.source === 'group'
         ? esc(item.name || 'Group')
         : esc(item.name ? item.name : item.email);
-      // Email only under the name — never "Previous email" / "Organization"
+      // Email only under the name, never "Previous email" / "Organization"
       // source tags; those read as clutter next to a real face.
       var meta = item.source === 'group'
         ? esc(item.sourceLabel || 'Group')
@@ -5650,7 +5650,7 @@
       if (!items.length) { closeRecipientSuggest(); return; }
       openRecipientSuggest(input, items);
     }).catch(function () {
-      /* Suggest is best-effort — a failure just means no dropdown. */
+      /* Suggest is best-effort, a failure just means no dropdown. */
     });
   }
 
@@ -5707,7 +5707,7 @@
     if (rects && rects.length) return rects[0];
     var rect = range.getBoundingClientRect();
     if (rect && (rect.width || rect.height || rect.top || rect.left)) return rect;
-    // Empty editors often report a zero rect — fall back to the editor box.
+    // Empty editors often report a zero rect, fall back to the editor box.
     return null;
   }
 
@@ -6260,7 +6260,7 @@
       });
     });
 
-    // Compose footer/toolbar Insert image — also wired from settings path, but
+    // Compose footer/toolbar Insert image, also wired from settings path, but
     // compose windows need it even when settings is closed.
     MORPH.unwired(root, '[data-email-insert-image]').forEach(function (btn) {
       btn.addEventListener('mousedown', function (event) {
@@ -6377,7 +6377,7 @@
   ];
 
   /* Text and highlight colours. Deliberately a short, legible set rather than
-   * a full picker — this is a mail composer, not a design tool. */
+   * a full picker, this is a mail composer, not a design tool. */
   var COMPOSE_COLORS = [
     { label: 'Default', value: '#1c1c1c' },
     { label: 'Grey', value: '#667085' },
@@ -6410,7 +6410,7 @@
   ];
 
   /* opts.expand: compose windows get the expand control; the signature editor
-   * and inline reply/forward do not — there is nowhere for them to expand into.
+   * and inline reply/forward do not, there is nowhere for them to expand into.
    * opts.image: show Insert image (compose, reply/forward, and signatures). */
   function renderComposeToolbar(opts) {
     opts = opts || {};
@@ -6486,7 +6486,7 @@
    *
    * Only a template the user actually picked, plus their configured signature.
    * This used to fall through to rendering the 'invoice' template into *every*
-   * new message — a blank compose window arrived carrying a full invoice for a
+   * new message, a blank compose window arrived carrying a full invoice for a
    * client nobody had selected, which the user then had to delete by hand. */
   function defaultComposeBody(draft) {
     if (draft.templateId && window.TMAEmailTemplates) {
@@ -6620,7 +6620,7 @@
     );
   }
 
-  /* A small segmented control — the shape settings already use for a short,
+  /* A small segmented control, the shape settings already use for a short,
    * mutually exclusive set of options. */
   function settingsChoice(key, value, options) {
     return (
@@ -6691,7 +6691,7 @@
       return (
         '<div class="tma-dash__email-settings-account">' +
         settingsRow(
-          name + ' — ' + (account.email || 'unknown'),
+          name + ': ' + (account.email || 'unknown'),
           account.syncEnabled ? synced : 'Mail sync is off',
           settingsSwitch(account.syncEnabled, 'Sync mail from ' + name,
             'data-email-settings-sync="' + esc(account.provider) + '"')
@@ -7119,7 +7119,7 @@
 
   function signatureImageSize(img) {
     // Always prefer the on-screen box. Imported logos often keep a huge natural
-    // width attribute while CSS max-width shrinks them — resizing the attribute
+    // width attribute while CSS max-width shrinks them, resizing the attribute
     // then looks like a no-op until it dips under the container width.
     var width = img.clientWidth
       || parseInt(img.style.width, 10)
@@ -7383,7 +7383,7 @@
         insertSignatureImage(editor, dataUrl, width, height);
         prepareEditableImages(editor);
         persistEditableImageSelectionAfterInsert(root, state, editor, dataUrl);
-        showEmailToast(root, 'Image added — drag the handles to transform it');
+        showEmailToast(root, 'Image added, drag the handles to transform it');
       });
     });
     input.click();
@@ -7574,7 +7574,7 @@
     });
   }
 
-  /* Preferences save on change — there is no Save button to forget. */
+  /* Preferences save on change, there is no Save button to forget. */
   function saveEmailPreference(root, state, key, value) {
     if (!state.settings) return;
     state.settings.preferences[key] = value;
@@ -7784,7 +7784,7 @@
 
     // Settings tabs are re-morphed on every switch, so per-button PortalTabGroup
     // listeners die after the first click. Delegate from the email root instead
-    // — one binding for the life of the mount, active chrome comes from render.
+    //, one binding for the life of the mount, active chrome comes from render.
     if (!root._emailSettingsTabsBound) {
       root._emailSettingsTabsBound = true;
 
@@ -7953,7 +7953,7 @@
     });
 
     MORPH.unwired(root, '[data-email-pref-html]').forEach(function (editor) {
-      // Rich signature HTML — persist when the editor loses focus, not while
+      // Rich signature HTML, persist when the editor loses focus, not while
       // the toolbar is being used (mousedown on tools must not steal focus).
       editor.addEventListener('blur', function (event) {
         // Moving focus to transform controls is still "editing".
@@ -8000,11 +8000,11 @@
       // Stale imports still carrying cid: logos cannot be sized until re-imported.
       if (/cid:/i.test(editor.innerHTML) && !state._signatureCidWarned) {
         state._signatureCidWarned = true;
-        showEmailToast(root, 'This signature has mailbox images — use ' + importSignatureButtonLabel(state) + ' again to make them editable');
+        showEmailToast(root, 'This signature has mailbox images, use ' + importSignatureButtonLabel(state) + ' again to make them editable');
       }
     });
 
-    // Transform binding lives in wireEditableImageTransforms — called once
+    // Transform binding lives in wireEditableImageTransforms, called once
     // from the main render path so compose/reply/forward share it.
 
     MORPH.unwired(root, '[data-email-signature-select]').forEach(function (btn) {
@@ -8123,7 +8123,7 @@
           }
           state.settingsTab = 'sending';
           state._signatureCidWarned = false;
-          showEmailToast(root, 'Signature imported — click an image to resize it');
+          showEmailToast(root, 'Signature imported, click an image to resize it');
           render();
         }).catch(function (err) {
           btn.disabled = false;
@@ -8318,7 +8318,7 @@
     }
     // The sender's real photo, when we have one. Falls back to initials on a
     // load error so a dead URL never leaves an empty circle. Wired as a real
-    // listener (see wireListRows), not an inline onerror string — embedding a
+    // listener (see wireListRows), not an inline onerror string, embedding a
     // JSON.stringify()'d value there put literal double quotes inside this
     // double-quoted attribute, which silently truncated the handler.
     if (row.avatarUrl) {
@@ -8336,7 +8336,7 @@
         '</span>'
       );
     }
-    // No photo for this sender — draw the portal's initials avatar, coloured
+    // No photo for this sender, draw the portal's initials avatar, coloured
     // per address so each correspondent is recognisable at a glance.
     return '<span class="tma-dash__email-row-avatar">' +
       '<img src="' + esc(senderInitials(row)) + '" alt="" aria-hidden="true">' +
@@ -8391,7 +8391,7 @@
    * an arrow on a single message opens onto nothing, which reads as a bug. The
    * space is still reserved on one-message rows so senders and subjects stay
    * aligned down the column. The count itself sits beside the sender name as
-   * a badge — not under the caret.
+   * a badge, not under the caret.
    */
   function renderConversationToggle(row, state) {
     if (!hasConversation(row)) {
@@ -8550,7 +8550,7 @@
   }
 
   // Subject stands on its own line now (see .tma-dash__email-row-content in
-  // CSS) — the preview text runs in the separate .snippet line below it, not
+  // CSS), the preview text runs in the separate .snippet line below it, not
   // concatenated here with a " - " separator the way it used to be.
   function renderRowSubjectBody(lines) {
     var subject = lines.subject || '';
@@ -8567,7 +8567,7 @@
 
   function ensureEmailToast(dash) {
     // Toast lives on <body> (fixed). Looking only inside .tma-dash recreated
-    // a second host after the first move — the orphan kept --visible with no
+    // a second host after the first move, the orphan kept --visible with no
     // hide timer, so "Message pinned" never went away.
     var existing = getEmailToastEl();
     if (existing) {
@@ -8752,12 +8752,12 @@
     var now = new Date();
     var presets = [];
 
-    // Short reminders first — these are what make snooze feel like a
+    // Short reminders first, these are what make snooze feel like a
     // reminder rather than "park it until tomorrow".
     presets.push({ id: '15m', label: 'In 15 minutes', at: new Date(now.getTime() + 15 * 60e3) });
     presets.push({ id: '1h', label: 'In 1 hour', at: new Date(now.getTime() + 3600e3) });
 
-    // Later today: three hours out, on the hour — but only while that is
+    // Later today: three hours out, on the hour, but only while that is
     // still today; at 11pm "later today" would be a lie.
     var later = new Date(now.getTime() + 3 * 3600e3);
     later.setMinutes(0, 0, 0);
@@ -8796,7 +8796,7 @@
   /* ── pointer menus ───────────────────────────────────────────────
    * One popup, two callers: a right-click on a message row, and the three-dot
    * button at the top of the open message. Both offer the same actions the
-   * hover bar and the bulk toolbar already do — this is a second way to reach
+   * hover bar and the bulk toolbar already do, this is a second way to reach
    * them, not a second implementation of them.
    */
   var emailPointerMenu = null;
@@ -8819,7 +8819,7 @@
   }
 
   /*
-   * @param items  [{id, label, icon, active, danger, separator}] — a `separator`
+   * @param items  [{id, label, icon, active, danger, separator}], a `separator`
    *               entry draws a rule and is not selectable.
    * @param at     {x, y} for a pointer, or a DOM element to hang under.
    */
@@ -8945,7 +8945,7 @@
 
       if (action === 'label') {
         // The label picker hangs off a real element, so re-anchor it to the
-        // row — the menu it was opened from is already gone.
+        // row, the menu it was opened from is already gone.
         var rowEl = root.querySelector('[data-email-row="' + id + '"]');
         if (rowEl) {
           state.labelPopupRowId = id;
@@ -9498,7 +9498,7 @@
       : '<span class="tma-dash__email-row-unread-slot" aria-hidden="true"></span>';
 
     /* Conversation drop rows stay compact: unread dot, sender, snippet, time.
-       No avatar, subject, or action chrome — those belong on the parent. */
+       No avatar, subject, or action chrome, those belong on the parent. */
     if (opts.child) {
       return (
         '<div class="' + rowCls + '" data-email-row="' + esc(row.id) + '"' +
@@ -9659,7 +9659,7 @@
       return;
     }
 
-    // Spacing CSS is keyed off this class — keep it on while Email is open.
+    // Spacing CSS is keyed off this class, keep it on while Email is open.
     if (!dash.classList.contains('tma-dash--email')) {
       dash.classList.add('tma-dash--email');
     }
@@ -9742,7 +9742,7 @@
 
     var rows = filteredInbox(state);
     // Keep the list-head chrome (checkbox / bulk / filter) at a fixed height
-    // while only the body patch changes — avoids the header "bulge" on pin /
+    // while only the body patch changes, avoids the header "bulge" on pin /
     // archive updates.
     MORPH.patch(listBody, rows.length
       ? buildInboxRowsHtml(rows, state)
@@ -9820,7 +9820,7 @@
         openMailMessage(root, state, render, id);
       });
 
-      /* Double-click opens the conversation in its own window — the reading
+      /* Double-click opens the conversation in its own window, the reading
        * pane keeps the single click, so nothing is taken away. */
       rowEl.addEventListener('dblclick', function (event) {
         if (isEmailRowSelectTarget(event.target)) return;
@@ -9849,7 +9849,7 @@
     });
 
     /* The conversation arrow. Opening a conversation lists its other messages
-     * under the row and does nothing else — in particular it must not open the
+     * under the row and does nothing else, in particular it must not open the
      * thread, or a glance at what is inside would mark it read. */
     MORPH.unwired(root, '[data-email-conversation-toggle]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
@@ -9876,7 +9876,7 @@
       MORPH.on(selectAll, 'change', function () {
         var on = selectAll.checked;
         // Everything drawn, including the messages inside opened
-        // conversations — those are rows the reader can see and expects to be
+        // conversations, those are rows the reader can see and expects to be
         // covered by "select all".
         visibleRows(state).forEach(function (row) {
           if (on) state.checkedIds[row.id] = true;
@@ -10165,7 +10165,7 @@
           pinRow.pinned = nowPinned;
           resortPinnedRows(state);
           if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
-          // Patch the list only — a full render grows/shrinks the list head.
+          // Patch the list only, a full render grows/shrinks the list head.
           updateInboxList(root, state, render);
           lockEmailShellSpacing(root);
           showEmailToast(root, nowPinned ? 'Message pinned' : 'Message unpinned');
@@ -10259,7 +10259,7 @@
     wireAttachmentPdfPreviews(root);
 
     // Pager: step pages, or change how many messages a page holds. Both refetch
-    // from the server — the mailbox is far too large to page in memory.
+    // from the server, the mailbox is far too large to page in memory.
     MORPH.unwired(root, '[data-email-page]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
@@ -10316,7 +10316,7 @@
       });
 
       // Menu items live on document.body, outside root, so they need their own
-      // listener — and the same mousedown timing for the same reason.
+      // listener, and the same mousedown timing for the same reason.
       document.addEventListener('mousedown', function (event) {
         var item = event.target.closest('[data-email-compose-menu-cmd]');
         if (item) {
@@ -10438,7 +10438,7 @@
           }
           // "Sign out" here means the mailbox, not the portal: it disconnects
           // the connected provider and drops back to the connect state. The
-          // portal session stays — its sign-out is the shell sidebar profile.
+          // portal session stays, its sign-out is the shell sidebar profile.
           if (action === 'sign-out') {
             disconnectMailbox(root, state, render);
             return;
@@ -11174,7 +11174,7 @@
        *
        * The mailbox bootstraps once, at app start, alongside everything else
        * the shell wakes up. One blip there used to leave the page showing
-       * "could not reach the mailbox" for the rest of the session — the only
+       * "could not reach the mailbox" for the rest of the session, the only
        * way out was a browser refresh, which is exactly the complaint. This
        * re-boots quietly instead, keeping whatever mail is already on screen.
        */
@@ -11200,7 +11200,7 @@
 
       /* Server-backed mailbox state. Rows carry their own read/star/label
        * flags, so the old shadow maps (readIds, starredIds, rowLabels,
-       * removedIds) are gone — checkedIds stays because selection is a
+       * removedIds) are gone, checkedIds stays because selection is a
        * property of this view, not of the message. */
       rows: [],
       checkedIds: {},
@@ -11362,7 +11362,7 @@
     hydrateFromCache(state);
 
     // Paint the shell first (sidebar, chrome, whatever the cache had), then
-    // fill it from the server — the page should never look blank while it
+    // fill it from the server, the page should never look blank while it
     // waits.
     bindCurrentUser(render);
     render();
@@ -11398,14 +11398,14 @@
         if (mailNotice === 'mail-connected' || mailNotice === 'mail-error') {
           setTimeout(function () {
             showEmailToast(root, mailNotice === 'mail-connected'
-              ? 'Mailbox connected successfully — analyzing your mailbox…'
+              ? 'Mailbox connected successfully, analyzing your mailbox…'
               : (mailReason || 'The mailbox could not be connected.'));
           }, 300);
         }
       }
     } catch (e) { /* URL handling is cosmetic; never block the page on it. */ }
 
-    // New mail shows up on its own, like a real inbox — quiet background
+    // New mail shows up on its own, like a real inbox, quiet background
     // poll, no spinner, no toast.
     scheduleMailPoll(root, state, render);
     if (!root._mailPollVisibilityBound) {
@@ -11435,7 +11435,7 @@
   }
 
   /*
-   * Ask for the mailbox now — before the shell finishes building itself, and
+   * Ask for the mailbox now, before the shell finishes building itself, and
    * long before anyone clicks Email.
    *
    * This file is deferred, so the DOM is already parsed here but the portal's
@@ -11448,7 +11448,7 @@
 
   window.TMAEmail = {
     mount: mount,
-    /* Reload the mailbox in place — the shell's refresh gesture, which must
+    /* Reload the mailbox in place, the shell's refresh gesture, which must
        not re-mount and so must not close the message being read. */
     refresh: function (rootEl) {
       var root = rootEl || document.querySelector('[data-email]');
@@ -11467,7 +11467,7 @@
       if (!root || !id || !root._emailState || !root._emailRender) return;
       openMailById(root, root._emailState, root._emailRender, id);
     },
-    /* Swap a broken directory photo for a single initials tile — never leave
+    /* Swap a broken directory photo for a single initials tile, never leave
      * two circles side by side. */
     _suggestPhotoFallback: function (img) {
       if (!img || !img.parentNode) return;

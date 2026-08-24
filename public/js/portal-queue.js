@@ -1,5 +1,5 @@
 /*
- * TMA — The write queue.
+ * TMA. The write queue.
  *
  * The other half of the offline work (docs/offline-plan.md). TMAStore lets a
  * screen paint with no network; this lets a screen be *changed* with no
@@ -11,14 +11,14 @@
  *
  * Nothing here is in the way of a normal save. A caller posts as it always
  * did, and only reaches for the queue when the request could not be delivered
- * at all — a rejected fetch, or a browser that already knows it is offline.
+ * at all, a rejected fetch, or a browser that already knows it is offline.
  * A 422 is not a delivery failure, it is the server disagreeing, and queueing
  * it would turn "you missed a field" into a change that never lands.
  *
  * IT IS ON DISK IN A BROWSER TOO, AND THAT IS DELIBERATE
  *
  * The firm's decision was that the client book does not get written to a
- * browser's disk, and TMAStore honours that — its disk tier is the desktop
+ * browser's disk, and TMAStore honours that, its disk tier is the desktop
  * app alone. This queue does not, and the difference is the point: the store
  * holds a *copy* of something the server already has, so losing it costs a
  * round trip. The queue holds the only copy of work a person has done. A
@@ -37,8 +37,8 @@
  *
  * WHAT CANNOT BE REPLAYED IS SHOWN, NOT DROPPED
  *
- * An entry the server refuses on its merits — a validation error, a record
- * that has since gone, a permission that has since been taken away — is
+ * An entry the server refuses on its merits, a validation error, a record
+ * that has since gone, a permission that has since been taken away, is
  * parked as `failed` and kept. Somebody has to look at it. Deleting it would
  * be the portal quietly discarding a person's work because a rule changed
  * while they were on a plane.
@@ -67,7 +67,7 @@
   var accountId = null;
 
   /* What the last attempt learned. navigator.onLine says whether there is a
-     network, not whether the server is at the end of it — a hotel wifi that
+     network, not whether the server is at the end of it, a hotel wifi that
      has not been paid for is "online" and answers nothing. So a rejected
      request lowers this and a delivered one raises it, and `online()` is the
      two together. */
@@ -111,7 +111,7 @@
       /*
        * No disk, no queue. A private window, a full profile, a browser with
        * storage switched off: the portal still works, offline writes just are
-       * not offered — which is why every caller checks `usable()` rather than
+       * not offered, which is why every caller checks `usable()` rather than
        * assuming a save can be parked.
        */
       req.onerror = function () { resolve(null); };
@@ -226,7 +226,7 @@
    *
    * `intent` is the request, taken apart so it can survive a reload: a method,
    * a url, and the body as a list of parts. A part is `{name, value}` for a
-   * field or `{name, file, filename}` for an upload — IndexedDB stores a Blob
+   * field or `{name, file, filename}` for an upload. IndexedDB stores a Blob
    * as a Blob, so a queued scan is the actual scan and not a base64 copy of
    * it a third larger.
    *
@@ -340,7 +340,7 @@
           if (result === 'applied') { applied += 1; return step(); }
 
           // 'failed' is this entry's own problem and does not block the ones
-          // behind it — nothing later depends on a change that will never
+          // behind it, nothing later depends on a change that will never
           // land. Anything else stopped the run.
           if (result === 'failed') return step();
 
@@ -378,7 +378,7 @@
   /*
    * One entry, and what its answer means.
    *
-   * Returns 'applied', 'failed' (parked for a person), or 'stop' — the last
+   * Returns 'applied', 'failed' (parked for a person), or 'stop', the last
    * meaning the queue learned nothing about this entry, only that now is not
    * the time.
    */
@@ -459,7 +459,7 @@
 
   /* ── the failed pile ────────────────────────────────────────────── */
 
-  /** Put a parked entry back in the run — what a "Try again" button calls. */
+  /** Put a parked entry back in the run, what a "Try again" button calls. */
   function retry(id) {
     return all().then(function (entries) {
       var entry = entries.filter(function (e) { return e.id === id; })[0];
@@ -495,7 +495,7 @@
     if (next === accountId) return Promise.resolve();
     accountId = next;
 
-    // Anything written before /me answered is this reader's — stamp it, so it
+    // Anything written before /me answered is this reader's, stamp it, so it
     // stops matching the next person to sign in on this machine.
     return claimUnstamped().then(recount).then(function () { return flush(); });
   }

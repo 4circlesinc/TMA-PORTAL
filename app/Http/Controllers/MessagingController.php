@@ -93,7 +93,7 @@ class MessagingController extends Controller
          * Everyone on the list, resolved once.
          *
          * Each row shows the other person's availability and work plan, and
-         * asked one row at a time that is five queries a conversation — four
+         * asked one row at a time that is five queries a conversation, four
          * for availability, one for the work day. Thirteen seconds for the
          * Dashboard's Messages card against the firm's database.
          */
@@ -194,7 +194,7 @@ class MessagingController extends Controller
                     ->whereNull('cp.left_at');
             })
             ->whereNull('messages.deleted_at')
-            // System lines — "Voice call · missed", "Ana joined the group" —
+            // System lines, "Voice call · missed", "Ana joined the group" —
             // are history, not correspondence. Counting them put a badge on a
             // thread nobody had written in, which became obvious once calls
             // started writing one line per call.
@@ -355,7 +355,7 @@ class MessagingController extends Controller
             }
         }
 
-        // A message needs *something* — text or a file, not necessarily both.
+        // A message needs *something*, text or a file, not necessarily both.
         if ($body === '' && $staged->isEmpty()) {
             throw ValidationException::withMessages(['body' => 'A message needs some text.']);
         }
@@ -452,7 +452,7 @@ class MessagingController extends Controller
      * The conversation information panel: who it is with, what is shared, and
      * the per-user controls that belong to it.
      *
-     * Deliberately separate from the client record — this is the messaging
+     * Deliberately separate from the client record, this is the messaging
      * profile, and it must not leak fields the viewer would not otherwise see.
      */
     public function info(Request $request, string $uuid): JsonResponse
@@ -582,7 +582,7 @@ class MessagingController extends Controller
     /**
      * Every piece of media the user can see, across all of their conversations.
      *
-     * The same shelf as {@see gallery}, but not scoped to one thread — this is
+     * The same shelf as {@see gallery}, but not scoped to one thread, this is
      * the "Media" view in the inbox column, where someone looks for a photo
      * they remember receiving without remembering who sent it.
      *
@@ -619,7 +619,7 @@ class MessagingController extends Controller
             return response()->json(['items' => []]);
         }
 
-        // Links are not attachments — they live in message bodies — so they
+        // Links are not attachments, they live in message bodies, so they
         // come from their own query rather than this one.
         if ($shelf === 'links') {
             return response()->json(['items' => $this->pooledLinks($user, $cleared)]);
@@ -637,7 +637,7 @@ class MessagingController extends Controller
             ->limit(600)
             ->get()
             // Each thread's clear point is personal, so this cannot be one SQL
-            // predicate — it is a different cutoff per conversation.
+            // predicate, it is a different cutoff per conversation.
             ->filter(fn (MessageAttachment $a) => ($a->message?->id ?? 0) > ($cleared[$a->conversation_id] ?? 0))
             ->filter(fn (MessageAttachment $a) => $a->shelf() === $shelf)
             ->take(120)
@@ -667,7 +667,7 @@ class MessagingController extends Controller
      *
      * The pooled counterpart to {@see galleryLinks}. Links live in message
      * bodies rather than in the attachments table, so they need their own
-     * query — but the same rules apply: only conversations the user is still
+     * query, but the same rules apply: only conversations the user is still
      * in, and each thread's own cleared point respected individually.
      *
      * Previews are read from cache only. This list can hold a hundred links
@@ -738,7 +738,7 @@ class MessagingController extends Controller
             ->get()
             ->flatMap(function (Message $m) use ($user) {
                 return collect(LinkPreviewService::extract($m->body))->map(function (string $url) use ($m, $user) {
-                    // Only the cache is consulted here — the gallery must not
+                    // Only the cache is consulted here, the gallery must not
                     // fetch dozens of sites to render a list.
                     $preview = LinkPreview::where('url_hash', hash('sha256', $url))
                         ->where('status', 'ok')
@@ -768,7 +768,7 @@ class MessagingController extends Controller
      *
      * Rate-shaped by caching rather than by throttling: the composer asks as
      * the user types, and repeated asks for the same link are answered from
-     * the cache. Requires a session, so this is not an open proxy — and the
+     * the cache. Requires a session, so this is not an open proxy, and the
      * fetcher refuses anything that resolves to private address space.
      */
     public function linkPreview(Request $request): JsonResponse
@@ -803,7 +803,7 @@ class MessagingController extends Controller
         $data = $request->validate([
             'file' => ['required', 'file'],
             // A recorded voice note, with the length and waveform the recorder
-            // measured — the server has no media probe to derive them.
+            // measured, the server has no media probe to derive them.
             'voice' => ['sometimes', 'boolean'],
             'durationMs' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'waveform' => ['sometimes', 'nullable', 'array', 'max:200'],
@@ -829,7 +829,7 @@ class MessagingController extends Controller
     /**
      * Discard a staged attachment before it is sent.
      *
-     * Only the uploader may do this, and only while it is still staged — once
+     * Only the uploader may do this, and only while it is still staged, once
      * a message owns it, removing it means deleting the message.
      */
     public function destroyStagedAttachment(Request $request, string $uuid): JsonResponse
@@ -843,7 +843,7 @@ class MessagingController extends Controller
             ->whereNull('message_id')
             ->firstOrFail();
 
-        // Soft-delete into the admin Recycle Bin — keep bytes until purge.
+        // Soft-delete into the admin Recycle Bin, keep bytes until purge.
         $attachment->forceFill(['deleted_by' => $user->id])->save();
         $attachment->delete();
 
@@ -859,7 +859,7 @@ class MessagingController extends Controller
      * reaction pill means everywhere else. A user may hold several *different*
      * reactions on one message; the unique index enforces one row per pair.
      *
-     * Anyone who can see the conversation may react — there is no separate
+     * Anyone who can see the conversation may react, there is no separate
      * permission, but membership is still checked by messageFor().
      */
     public function react(Request $request, string $uuid): JsonResponse
@@ -1067,7 +1067,7 @@ class MessagingController extends Controller
      * Relay a WebRTC call signalling payload to the call's other participants.
      *
      * `state`, `upgrade`, `upgrade-accept`, `upgrade-decline` and `downgrade`
-     * are not part of the WebRTC handshake — they are how the two ends agree on
+     * are not part of the WebRTC handshake, they are how the two ends agree on
      * what the call currently *is*, so each side can show the other's camera as
      * off rather than as a black rectangle, and neither can start sending video
      * into a call the other has not agreed to make a video call.
@@ -1082,7 +1082,7 @@ class MessagingController extends Controller
             'type' => ['required', 'string', 'in:ring,offer,answer,ice,hangup,reject,accept,state,upgrade,upgrade-accept,upgrade-decline,downgrade'],
             'payload' => ['nullable', 'array'],
             'media' => ['nullable', 'string', 'in:audio,video'],
-            // Who placed the call, and whether it ever connected — recorded on
+            // Who placed the call, and whether it ever connected, recorded on
             // the history line so the call log can show missed vs answered and
             // incoming vs outgoing.
             'initiatorId' => ['nullable', 'integer'],
@@ -1097,7 +1097,7 @@ class MessagingController extends Controller
         $payload['fromPhoto'] = $user->avatar_url;
 
         // Fanned out to each participant's own channel as well as the
-        // conversation's — see CallSignal for why an incoming call would
+        // conversation's, see CallSignal for why an incoming call would
         // otherwise only reach someone already looking at that thread.
         $recipients = $conversation->activeParticipants()
             ->where('user_id', '!=', $user->id)
@@ -1146,7 +1146,7 @@ class MessagingController extends Controller
             Broadcaster::to(new MessageSent($system));
 
             // A missed call is the one call outcome the person it happened to
-            // may never see — they were not at the screen. It gets a
+            // may never see, they were not at the screen. It gets a
             // notification like any other arrival.
             if (! $answered) {
                 MessageNotifier::announceMissedCall(
@@ -1183,7 +1183,7 @@ class MessagingController extends Controller
      * Recent call history across all of this user's conversations.
      *
      * The Calls tab used to scan only the messages the client had already
-     * loaded, so on a fresh page load — before any conversation was opened — it
+     * loaded, so on a fresh page load, before any conversation was opened, it
      * had nothing to show. This reads the call system-lines straight from the
      * database instead, so the log is populated the moment the tab is opened.
      */
@@ -1288,8 +1288,8 @@ class MessagingController extends Controller
     /**
      * Acknowledge receipt of everything currently in a conversation.
      *
-     * Called by the client whenever messages land — on load, and on each
-     * socket arrival — including for conversations that are not open. That is
+     * Called by the client whenever messages land, on load, and on each
+     * socket arrival, including for conversations that are not open. That is
      * what "delivered" means: this account has the message, not that anyone has
      * looked at it.
      */
@@ -1646,7 +1646,7 @@ class MessagingController extends Controller
         }
 
         // The contact search is already scoped, but the id arrives from the
-        // request — re-check it here or a client could open a thread with
+        // request, re-check it here or a client could open a thread with
         // anyone by posting their user id.
         $reachable = ContactScope::visibleUserIds($user);
         if ($reachable !== null && ! in_array($other->id, $reachable, true)) {

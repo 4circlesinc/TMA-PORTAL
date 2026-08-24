@@ -86,7 +86,7 @@
         errEl.hidden = true;
         approveBtn.disabled = true; changesBtn.disabled = true;
         post('/approve', { comment: commentEl.value.trim() })
-          .then(function () { done('Approved', 'Thank you — the sender has been notified of your approval.'); })
+          .then(function () { done('Approved', 'Thank you, the sender has been notified of your approval.'); })
           .catch(function (e) { fail(e.message); });
       });
 

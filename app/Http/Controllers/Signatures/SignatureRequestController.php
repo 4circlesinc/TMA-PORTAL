@@ -117,7 +117,7 @@ class SignatureRequestController extends Controller
      * their details.
      *
      * Only approved accounts: an unapproved or pending user isn't someone you
-     * should be sending contracts to yet. Returns name/email/type only — never
+     * should be sending contracts to yet. Returns name/email/type only, never
      * phone, notes, or anything else on the profile, because this is reachable
      * by any signed-in user rather than just administrators.
      */

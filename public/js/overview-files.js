@@ -49,7 +49,7 @@
 
   function cap(s) {
     s = String(s || '');
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
   }
 
   function renderSearchBar(state) {
@@ -166,7 +166,7 @@
       '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' + escapeHtml(row.typeLabel) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--folder" data-files-open-folder="' + escapeHtml(row.folderId || '') + '">' +
-        '<span class="tma-dash__cc-truncate">' + escapeHtml(row.folder || '—') + '</span>' +
+        '<span class="tma-dash__cc-truncate">' + escapeHtml(row.folder || '-') + '</span>' +
       '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--size"><span class="tma-dash__cc-truncate">' + escapeHtml(row.size) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--uploader">' +
@@ -236,9 +236,9 @@
   function formatWhen(iso) {
     try {
       var d = new Date(iso);
-      if (isNaN(d.getTime())) return '—';
+      if (isNaN(d.getTime())) return '-';
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch (e) { return '—'; }
+    } catch (e) { return '-'; }
   }
 
   function mapApiFile(f) {
@@ -259,7 +259,7 @@
       extension: ext,
       category: category,
       typeLabel: typeLabel,
-      size: f.sizeLabel || '—',
+      size: f.sizeLabel || '-',
       bytes: f.size || 0,
       uploaded: formatWhen(f.uploadedAt || f.createdAt),
       modified: formatWhen(f.modifiedAt || f.updatedAt || f.uploadedAt),

@@ -41,15 +41,15 @@
   }
 
   /* Every row here is a real column on the account, served by /me and edited
-     on the profile page — a dash means the person has not filled it in, not
+     on the profile page, a dash means the person has not filled it in, not
      that the portal has nowhere to keep it. */
   function profileDetailsFor(me) {
     return [
-      { label: 'Company', value: (me && me.company) || '—' },
-      { label: 'Contact Phone', value: (me && me.phone) || '—' },
-      { label: 'Email', value: (me && me.email) || '—' },
-      { label: 'Job title', value: (me && me.jobTitle) || '—' },
-      { label: 'LinkedIn', value: (me && me.linkedin) || '—', link: me && me.linkedin },
+      { label: 'Company', value: (me && me.company) || '-' },
+      { label: 'Contact Phone', value: (me && me.phone) || '-' },
+      { label: 'Email', value: (me && me.email) || '-' },
+      { label: 'Job title', value: (me && me.jobTitle) || '-' },
+      { label: 'LinkedIn', value: (me && me.linkedin) || '-', link: me && me.linkedin },
     ];
   }
 
@@ -144,7 +144,7 @@
 
   /* Desktop app downloads. The build that is current changes with every
      release, so the buttons ask the server what exists rather than hard-coding
-     a filename — and a platform with no published build stays disabled instead
+     a filename, and a platform with no published build stays disabled instead
      of linking at a 404. One fetch is shared by every promo card on the page. */
   var DESKTOP_PLATFORMS = [
     { key: 'mac', label: 'macOS', logo: 'AppleLight16' },
@@ -154,7 +154,7 @@
 
   /*
    * What the OS will say the first time the app is opened, and how to get past
-   * it. Both builds are unsigned, so both platforms object — but they object
+   * it. Both builds are unsigned, so both platforms object, but they object
    * differently and the ways through share nothing, so guessing wrong is worse
    * than saying nothing. Not "right-click → Open" on the Mac: macOS 15 removed
    * that bypass for unsigned apps, leaving Privacy & Security as the only route.
@@ -163,12 +163,12 @@
     var ua = navigator.userAgent || '';
 
     if (/Windows/i.test(ua)) {
-      return 'Windows warns on first launch — choose More info, then Run anyway.';
+      return 'Windows warns on first launch, choose More info, then Run anyway.';
     }
     if (/Mac OS X|Macintosh/i.test(ua)) {
-      return 'macOS blocks the first launch — allow it in System Settings → Privacy & Security.';
+      return 'macOS blocks the first launch, allow it in System Settings → Privacy & Security.';
     }
-    return 'Your computer may block the first launch — allow the app and open it again.';
+    return 'Your computer may block the first launch, allow the app and open it again.';
   }
 
   function desktopReleases() {
@@ -203,7 +203,7 @@
       btn.classList.toggle('is-disabled', !ready);
       btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
       btn.title = ready
-        ? 'Version ' + info.version + ' — needs ' + platform.label + ' ' + info.minOs + ' or later'
+        ? 'Version ' + info.version + ', needs ' + platform.label + ' ' + info.minOs + ' or later'
         : 'No build published yet';
 
       var label = btn.querySelector('[data-desktop-label]');
@@ -1240,7 +1240,7 @@
     bindProfileUserChange(container);
   }
 
-  /* Edit Profile opens the real editor — Account settings → My profile — which
+  /* Edit Profile opens the real editor. Account settings → My profile, which
      already owns validation, the photo cropper and the PUT to /profile. A
      second form here would be a copy of all three, drifting from the day it
      shipped. In-app where the shell can route; a plain load otherwise. */

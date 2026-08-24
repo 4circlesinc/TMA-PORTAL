@@ -106,7 +106,7 @@ class Versions
             ]);
 
             // Point the file at the new bytes. The OLD blob is deliberately
-            // left on disk — that is what makes the previous version real.
+            // left on disk, that is what makes the previous version real.
             $file->update([
                 'disk' => $stored['disk'],
                 'storage_path' => $stored['path'],
@@ -123,7 +123,7 @@ class Versions
         });
 
         // An open workflow reviewed a specific revision. It is never moved onto
-        // the new one silently — it is marked superseded and its sender told.
+        // the new one silently, it is marked superseded and its sender told.
         Engine::noteNewVersion($file, $version);
 
         Activity::forFile($author->id, $file, $restoredFrom ? 'version-restored' : 'version', [
@@ -194,7 +194,7 @@ class Versions
      */
     public static function canAddVersion(User $user, FileItem $file): bool
     {
-        // A workflow that locked the file refuses new content outright — that
+        // A workflow that locked the file refuses new content outright, that
         // is what "lock during review" means. Reported separately from
         // permission so the UI can explain which one applies.
         if (Confirmation::locksFile($file)) {
@@ -221,7 +221,7 @@ class Versions
             return null;
         }
 
-        // "a approval request" — the only type here starting with a vowel is
+        // "a approval request", the only type here starting with a vowel is
         // approval, but testing the word rather than naming it keeps this
         // right for whatever gets added next.
         $article = str_contains('aeiou', substr((string) $lock->type, 0, 1)) ? 'an' : 'a';
@@ -242,7 +242,7 @@ class Versions
                 ? $author->name.' restored version '.$restoredFrom->version_number.' of '.$file->name
                 : $author->name.' uploaded version '.$version->version_number.' of '.$file->name;
 
-            // The owner, and anyone already talking about this file — the
+            // The owner, and anyone already talking about this file, the
             // people for whom the content changing under them actually matters.
             $ids = FileComment::where('file_id', $file->id)
                 ->distinct()->pluck('author_id')

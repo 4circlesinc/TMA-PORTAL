@@ -24,7 +24,7 @@ use Illuminate\Http\Request;
  *
  * DELETIONS ARE ROWS, NOT ABSENCES
  *
- * Both models soft-delete, and a soft delete bumps `updated_at` — so the
+ * Both models soft-delete, and a soft delete bumps `updated_at`, so the
  * deleted row itself arrives through the cursor, as a small tombstone rather
  * than a presented record. This is the SharePoint-bin lesson made structural:
  * the one thing a mirror must never do is infer a deletion from something no
@@ -34,14 +34,14 @@ use Illuminate\Http\Request;
  * over here: a purge (emptying the recycle bin) removes the row entirely, so
  * the tombstone a device already holds is the last it hears; and revoking a
  * share moves no row's `updated_at`, so a replica keeps records the account
- * can no longer reach until it next walks from nothing — the server refuses
+ * can no longer reach until it next walks from nothing, the server refuses
  * the actual bytes either way.
  */
 class SyncController extends BaseFilesController
 {
     /*
      * Rows per kind per page. Presented rows are heavier than they look —
-     * shares, people, review status — but the Presenter primes per page, so
+     * shares, people, review status, but the Presenter primes per page, so
      * the cost is a handful of queries per 200 rather than four per row.
      */
     private const PAGE = 200;
@@ -93,7 +93,7 @@ class SyncController extends BaseFilesController
 
         if ($time !== null) {
             /*
-             * `>=` on the id tie-break, not `>` — the row the cursor ENDED on
+             * `>=` on the id tie-break, not `>`, the row the cursor ENDED on
              * is included again when its timestamp still equals the cursor's.
              * That row can change again inside the same instant (delete then
              * restore is the concrete case), and strictly-greater would skip
@@ -131,7 +131,7 @@ class SyncController extends BaseFilesController
     /**
      * A deletion, as a record. Deliberately tiny: the device holds the full
      * row from before, and everything it needs to know now is which one and
-     * that it is gone — shipping a presented corpse would cost the Presenter
+     * that it is gone, shipping a presented corpse would cost the Presenter
      * work per deleted row for fields whose only reader is the bin.
      */
     private function tombstone(FileItem|Folder $row, string $type): array
@@ -146,7 +146,7 @@ class SyncController extends BaseFilesController
 
     /**
      * A cursor timestamp, or null. An unparseable value is no cursor at all
-     * rather than an error — the worst case is re-reading a page the device
+     * rather than an error, the worst case is re-reading a page the device
      * already holds, and the alternative is a client that can never recover
      * from a corrupt value it stored itself.
      */

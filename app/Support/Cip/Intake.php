@@ -24,7 +24,7 @@ use Illuminate\Validation\Rule;
  * One request files the whole thing: the application, its number, the main
  * applicant, a sponsor when there is one, every dependent, the folder tree
  * and the document slots. The brief's "all fields are required" is about the
- * form, but the reason it is one transaction is sturdier than that — an
+ * form, but the reason it is one transaction is sturdier than that, an
  * application with no applicant is a number nobody can act on, and a sponsor
  * that had to be added afterwards is a step somebody would skip.
  *
@@ -35,7 +35,7 @@ use Illuminate\Validation\Rule;
  *
  * Two answers are still derived rather than accepted: the region follows the
  * country of residence ({@see Countries}), and the internal number is minted
- * by {@see Numbering}. A third joins them here — a qualified dependent's
+ * by {@see Numbering}. A third joins them here, a qualified dependent's
  * ordinal, computed by {@see Dependents} from the dates of birth.
  */
 class Intake
@@ -51,7 +51,7 @@ class Intake
      * §2's own three, by template key.
      *
      * The wizard's document fields come from the requirement templates now,
-     * so what the form ASKS follows the admin screen — but what filing
+     * so what the form ASKS follows the admin screen, but what filing
      * DEMANDS stays §2's list. The brief makes exactly these three the
      * intake requirements; everything else on the checklist is completed
      * after filing, which is what the whole document-management phase is
@@ -66,8 +66,8 @@ class Intake
 
     /**
      * The upload fields one applicant type's wizard section carries, from the
-     * live templates. The photo is not among them — it has measurement rules
-     * and becomes the person's picture, so it keeps its own control — and the
+     * live templates. The photo is not among them, it has measurement rules
+     * and becomes the person's picture, so it keeps its own control, and the
      * field name is the template key in camel case, which lands the legacy
      * three on exactly the names the endpoint has always documented.
      *
@@ -112,7 +112,7 @@ class Intake
             ->firstWhere('key', DocumentTypes::PASSPORT_PHOTO);
     }
 
-    /** The shared person field set — §2's list, which §4 says a sponsor repeats. */
+    /** The shared person field set. §2's list, which §4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
         'countryOfResidence', 'occupation', 'passportNumber',
@@ -121,8 +121,8 @@ class Intake
     /**
      * @param  bool  $editing  an update, where the uploads are already on file
      *
-     * Editing keeps every answer required — §2 does not stop applying once a
-     * draft exists — but stops demanding the files, because they were handed
+     * Editing keeps every answer required. §2 does not stop applying once a
+     * draft exists, but stops demanding the files, because they were handed
      * over at creation and are sitting in the person's folder. Sending one
      * replaces it; sending nothing leaves it alone. The provider is not in the
      * list at all: its code is minted into the internal number, so changing it
@@ -160,9 +160,9 @@ class Intake
     /**
      * §2's three uploads. The photo has shape rules; the scans have limits.
      *
-     * A scan is a LIST. One requirement is not always one sheet of paper — a
+     * A scan is a LIST. One requirement is not always one sheet of paper, a
      * bio page can be a passport's two pages, a birth certificate can arrive
-     * with its translation — and a control that takes only the last file
+     * with its translation, and a control that takes only the last file
      * dropped on it quietly loses the rest. {@see normaliseDocuments()} lets a
      * single file still arrive on its own.
      */
@@ -210,7 +210,7 @@ class Intake
              *
              * Reading a file through the request memoises the whole converted
              * set, and a later write to the bag does not invalidate that cache
-             * — so the validator would go on seeing the single file we just
+             *, so the validator would go on seeing the single file we just
              * replaced, and reject it for not being an array. Both halves of
              * this have to talk to the same bag.
              */
@@ -264,7 +264,7 @@ class Intake
         return [
             'investmentType' => ['required', Rule::in(array_keys(InvestmentType::ALL))],
             // §3: "If Other is selected, the portal shall display a Specify
-            // Investment Type free-text field" — required exactly then.
+            // Investment Type free-text field", required exactly then.
             'investmentTypeOther' => [
                 'nullable', 'string', 'max:191',
                 Rule::requiredIf(fn () => request()->input('investmentType') === InvestmentType::OTHER),
@@ -278,7 +278,7 @@ class Intake
      *
      * The sponsor repeats the applicant's personal fields and their photo, so
      * they have a face in the portal like everyone else. Their bio page and
-     * birth certificate are offered but optional — §2's upload list is the
+     * birth certificate are offered but optional. §2's upload list is the
      * main applicant's, and making six files the price of starting a draft
      * would leave the sponsor as the reason nobody finishes one. The slots
      * are opened either way, so what is skipped here is still asked for.
@@ -308,7 +308,7 @@ class Intake
         return $rules;
     }
 
-    /** §5: each dependent is a name, a date of birth, a relationship — and the same uploads the settings ask of their type. */
+    /** §5: each dependent is a name, a date of birth, a relationship, and the same uploads the settings ask of their type. */
     private static function dependentRules(): array
     {
         $rules = [
@@ -322,7 +322,7 @@ class Intake
             'dependents.*.relationship' => ['required', Rule::in([
                 CipPerson::RELATIONSHIP_SPOUSE, CipPerson::RELATIONSHIP_QUALIFIED,
             ])],
-            // Offered, never demanded at filing — the same courtesy the
+            // Offered, never demanded at filing, the same courtesy the
             // sponsor's scans get. The boxes are on the form so the files
             // can travel with the person; the checklist holds the door if
             // they are skipped.
@@ -342,7 +342,7 @@ class Intake
     {
         return function ($attribute, $value, $fail) {
             if (! $value instanceof UploadedFile) {
-                $fail('Upload the passport photo again — that file did not arrive.');
+                $fail('Upload the passport photo again, that file did not arrive.');
 
                 return;
             }
@@ -443,7 +443,7 @@ class Intake
      *  - The main applicant is updated in place. There is exactly one, and
      *    replacing them would orphan their folder and their filed documents.
      *  - Turning Sponsored off removes the sponsor, and turning it back on
-     *    brings back the same person rather than a second one — the row is
+     *    brings back the same person rather than a second one, the row is
      *    soft-deleted, so their folder and anything filed in it survives being
      *    changed your mind about.
      *  - A dependant carrying a uuid is that dependant; one without is new;
@@ -632,7 +632,7 @@ class Intake
     /**
      * The uploads, once everyone has a folder to put them in.
      *
-     * The photo answers two things at once — a document slot, because §2
+     * The photo answers two things at once, a document slot, because §2
      * requires it, and the person's likeness, because that is the profile
      * picture every list draws. One upload, recorded in both places.
      *
@@ -668,8 +668,8 @@ class Intake
      * A person's scans, requirement by requirement.
      *
      * The first file answers the requirement; the rest are filed beside it.
-     * The slot is one question with one answer — the unique key on
-     * (person, type) says so — so a second scan cannot be a second slot, and
+     * The slot is one question with one answer, the unique key on
+     * (person, type) says so, so a second scan cannot be a second slot, and
      * making it a new *version* of the first would bury a separate document
      * inside another one's history. It goes in the person's folder, where a
      * reviewer opening the file list finds everything sent for that
@@ -728,8 +728,8 @@ class Intake
         /*
          * The main applicant's face is the client's face.
          *
-         * A CIP client IS the applicant — the hub record exists to hold their
-         * file — so the portrait they filed with is the picture every list,
+         * A CIP client IS the applicant, the hub record exists to hold their
+         * file, so the portrait they filed with is the picture every list,
          * row and header should draw for them. Without this the passport photo
          * showed on the application while the client the application belongs
          * to went on wearing its initials, which is the same person twice with
@@ -765,7 +765,7 @@ class Intake
              * the module contradicting itself. A firm you cannot see in the
              * hub is not a firm you can file under.
              *
-             * The PRI bucket is the one exception — private clients are not a
+             * The PRI bucket is the one exception, private clients are not a
              * firm, so no company row is required of it.
              */
             return CipProvider::query()

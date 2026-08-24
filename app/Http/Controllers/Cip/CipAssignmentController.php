@@ -51,8 +51,8 @@ class CipAssignmentController extends Controller
         ]);
 
         // Offered and accepted are the same list, so an account that is not on
-        // it — a client, a suspended officer, somebody who already holds the
-        // file — cannot be assigned by posting their id.
+        // it, a client, a suspended officer, somebody who already holds the
+        // file, cannot be assigned by posting their id.
         $officer = Assignments::assignable($application)->firstWhere('id', $data['userId']);
         abort_unless($officer, 422, 'Choose an officer who can take this application.');
 
@@ -70,7 +70,7 @@ class CipAssignmentController extends Controller
 
         /*
          * Written to the CLIENT's assignment list, which is what the Assigned
-         * tab shows and what §8's column draws — one record, so somebody put
+         * tab shows and what §8's column draws, one record, so somebody put
          * on here appears there and vice versa.
          *
          * The CIP assignment is written too, because §10 hangs off it: the
@@ -88,11 +88,11 @@ class CipAssignmentController extends Controller
         }
 
         /*
-         * The provider firm comes with the file — automatically, and scoped.
+         * The provider firm comes with the file, automatically, and scoped.
          *
          * An officer's hub is what they are assigned to, so without this the
          * application named Galaxy Partners while the officer's Service
-         * providers tab had no such firm — the firm's contact details being
+         * providers tab had no such firm, the firm's contact details being
          * exactly what a reviewer needs to chase a document. COMPANY_ONLY is
          * the point: the assignment opens the firm's own page, not its book
          * of clients, and the people lists on that page are scoped to the
@@ -118,7 +118,7 @@ class CipAssignmentController extends Controller
 
         Assignments::assign($application, $officer, $request->user(), $role);
 
-        // The officer's own worklist changes shape too — this row is what puts
+        // The officer's own worklist changes shape too, this row is what puts
         // the application on it. CLIENTS as well as CIP: the same write shows
         // up on the client's own Assigned tab.
         Live::staffAnd(Live::CIP, [$officer->id]);
@@ -128,8 +128,8 @@ class CipAssignmentController extends Controller
     }
 
     /**
-     * Take the file off somebody. The row stays as history — see
-     * {@see Assignments::end} — so the access goes without erasing the fact
+     * Take the file off somebody. The row stays as history, see
+     * {@see Assignments::end}, so the access goes without erasing the fact
      * that they held it.
      */
     public function destroy(Request $request, string $uuid, int $userId): JsonResponse
@@ -156,7 +156,7 @@ class CipAssignmentController extends Controller
         }
 
         /*
-         * The firm goes back with the last file — checked after both rows
+         * The firm goes back with the last file, checked after both rows
          * above have ended, or the file being ended would count itself as
          * still held and the firm would never come off.
          *
@@ -214,7 +214,7 @@ class CipAssignmentController extends Controller
      * Who is on this file, from the one list the Assigned tab shares.
      *
      * The application's own assignments answer only where there is no client
-     * record to share with — see the matching note in
+     * record to share with, see the matching note in
      * {@see CipApplicationController}. Kept in
      * step with §8's column on purpose: the picker and the cell it opens from
      * must never name different people.
@@ -259,7 +259,7 @@ class CipAssignmentController extends Controller
 
         return [
             /*
-             * Who is on this file, read off the client — the one list the
+             * Who is on this file, read off the client, the one list the
              * profile's Assigned tab shows and this table's picker edits.
              * Two records meant staff added in one place were invisible in
              * the other.
@@ -269,7 +269,7 @@ class CipAssignmentController extends Controller
             /*
              * Only somebody who may actually hand the file over is shown the
              * firm's officers. The provider side may see who has their
-             * application — §8's table tells them that already — but reading
+             * application. §8's table tells them that already, but reading
              * off every officer who could have had it is not theirs.
              */
             'assignable' => $canAssign

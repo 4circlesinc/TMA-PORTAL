@@ -31,7 +31,7 @@ class Presence
      * Record or renew a heartbeat.
      *
      * Returns true when this is a NEW arrival, so the caller can decide whether
-     * anyone else needs telling — a renewal every 20 seconds must not broadcast.
+     * anyone else needs telling, a renewal every 20 seconds must not broadcast.
      */
     public static function heartbeat(FileItem $file, User $user, string $sessionId, string $action = 'viewing', ?string $device = null): bool
     {
@@ -74,7 +74,7 @@ class Presence
         return true;
     }
 
-    /** Explicit departure — closing the viewer, rather than aging out. */
+    /** Explicit departure, closing the viewer, rather than aging out. */
     public static function leave(FileItem $file, string $sessionId): void
     {
         $deleted = FilePresenceSession::where('file_id', $file->id)

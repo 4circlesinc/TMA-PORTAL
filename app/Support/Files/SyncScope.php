@@ -13,25 +13,25 @@ use Illuminate\Database\Eloquent\Builder;
  * The listing endpoints never need this whole set at once: browsing shows one
  * folder's children behind a "may you open this folder" gate, and the section
  * roots come from FileAccess id lists. The sync cursor is the first caller
- * that has to answer "all of it" — a desktop pulling the library down cannot
+ * that has to answer "all of it", a desktop pulling the library down cannot
  * ask folder by folder.
  *
  * CONTAINMENT IS THE PART THE ID LISTS DON'T GIVE
  *
  * FileAccess::sharedFolderIds and systemVisibleFolderIds name the ROOTS a
- * person can reach — the org folder, their staff folder, an assigned client's
+ * person can reach, the org folder, their staff folder, an assigned client's
  * folder. Access flows downward from there (folderRole walks ancestors), so
  * the visible set is those roots plus every descendant; and a file is visible
  * when it is owned, directly shared, or sitting anywhere inside that closure.
- * Recent's `visibleFiles` never expands containment — for a non-admin it
- * quietly shows only owned and directly-shared files — which is fine for a
+ * Recent's `visibleFiles` never expands containment, for a non-admin it
+ * quietly shows only owned and directly-shared files, which is fine for a
  * recency feed and wrong for a replica.
  *
  * TRASHED ROWS ARE IN SCOPE ON PURPOSE
  *
  * The cursor's contract is "deletions are recorded, not inferred" (the
  * SharePoint bin lesson, docs/offline-plan.md). A soft delete bumps
- * updated_at, so the deleted row IS the deletion record — scope must not
+ * updated_at, so the deleted row IS the deletion record, scope must not
  * filter it out, and the expansion walks trashed branches too, or a deleted
  * subtree's files would go silently missing rather than reported deleted.
  */
@@ -91,7 +91,7 @@ class SyncScope
 
     /**
      * Administrators see the library whole, except other people's
-     * root-mirrored OneDrive space — the same carve-out the browser makes,
+     * root-mirrored OneDrive space, the same carve-out the browser makes,
      * for the same reason: FileAccess denies opening it, so replicating it
      * would only ship names nobody may click (and a citizenship client's
      * scan besides). @see BrowserController::visibleFolders
@@ -124,7 +124,7 @@ class SyncScope
     }
 
     /**
-     * Every descendant of a set of roots, trashed branches included — the
+     * Every descendant of a set of roots, trashed branches included, the
      * same BFS as FolderTree::descendantIdsWithTrashed, seeded with a set
      * instead of one folder so the whole closure costs one query per depth
      * level rather than one walk per root.

@@ -1,8 +1,8 @@
-/* TMA — CIP application intake (§2–§6)
+/* TMA. CIP application intake (§2–§6)
  *
  * The form the firm actually files with: the government's own field set, in
  * the government's own order, so what is collected here is what gets
- * submitted. One page, like every other form in the hub — the reader fills
+ * submitted. One page, like every other form in the hub, the reader fills
  * it top to bottom and sees the whole ask at once.
  *
  * Fields are keyed by the path the server validates them under —
@@ -14,7 +14,7 @@
  *
  * Three answers are never asked for. The region follows the country of
  * residence, the application number is minted server-side, and a qualified
- * dependent's number is computed from the dates of birth — the form shows all
+ * dependent's number is computed from the dates of birth, the form shows all
  * three so the reader can see what the record will say without being invited
  * to contradict it.
  *
@@ -29,15 +29,15 @@
   var MORPH = window.TMAMorph;
 
   var ICON = 'images/icons/phosphor/';
-  /* 2 inches at 300dpi — the same floor App\Support\Cip\PassportPhoto keeps. */
+  /* 2 inches at 300dpi, the same floor App\Support\Cip\PassportPhoto keeps. */
   var PHOTO_MIN_PX = 600;
   var MAX_DOCUMENT_MB = 10;
-  /* Matches Intake::MAX_DOCUMENTS_PER_SLOT — the server is the authority. */
+  /* Matches Intake::MAX_DOCUMENTS_PER_SLOT, the server is the authority. */
   var MAX_DOCUMENTS_PER_SLOT = 10;
   var MAX_DEPENDENTS = 20;
   /*
    * The document sections come from the requirement templates the admin
-   * screen edits — the server sends them with the form options, so what this
+   * screen edits, the server sends them with the form options, so what this
    * wizard asks follows the settings without a deploy. Until the options
    * land, the §2 trio stands in, which is also what an offline mount gets.
    */
@@ -114,17 +114,17 @@
        from the draft because a File cannot be re-rendered into an attribute
        the way a string can. */
     files: {},
-    /* Chosen documents — a LIST per path, because a requirement can be
+    /* Chosen documents, a LIST per path, because a requirement can be
        answered with more than one scan. Kept apart from `files` so nothing
        has to ask whether the value at a path is one file or several. */
     documents: {},
-    /* Data URLs for the photo previews only — display, never the payload. */
+    /* Data URLs for the photo previews only, display, never the payload. */
     previews: {},
     /* Paths the server already holds a file for, when editing. An answer that
-       is already filed is answered — the control asks for a replacement, and
+       is already filed is answered, the control asks for a replacement, and
        the check below stops demanding one. */
     filed: {},
-    /* Per-slot status from the server — whether a filed answer may be replaced
+    /* Per-slot status from the server, whether a filed answer may be replaced
        here or only through Upload new version in the file viewer. */
     filedMeta: {},
     /* The application being edited, or null when this is a new one. */
@@ -146,7 +146,7 @@
   function esc(s) { return ui().esc(s); }
 
   /* ── what the form owes before it can be filed ─────────────────────
-     Mirrors App\Support\Cip\Intake::rules — the server is the authority,
+     Mirrors App\Support\Cip\Intake::rules, the server is the authority,
      this only spares the reader a round trip to find out. */
   var PERSON_FIELDS = ['firstName', 'lastName', 'gender', 'dateOfBirth',
     'countryOfBirth', 'countryOfResidence', 'occupation', 'passportNumber'];
@@ -190,7 +190,7 @@
     return paths;
   }
 
-  /* Files are required in their own right — an empty one is not a blank
+  /* Files are required in their own right, an empty one is not a blank
      string, so it cannot be checked the same way. */
   function requiredFiles() {
     var paths = ['passportPhoto'];
@@ -265,7 +265,7 @@
       rows.push({ index: i, dob: dob });
     }
 
-    // Youngest first — the later the date of birth, the lower the number.
+    // Youngest first, the later the date of birth, the lower the number.
     rows.sort(function (a, b) { return a.dob < b.dob ? 1 : a.dob > b.dob ? -1 : 0; });
 
     var out = {};
@@ -288,7 +288,7 @@
    * in beside each field, so a mark can never promise something the check
    * does not enforce. It follows the form as it changes: a sponsor's fields
    * are required only once Sponsored is Yes, "Specify investment type" only
-   * once Other is picked, and a sponsor's scans never — those are offered.
+   * once Other is picked, and a sponsor's scans never, those are offered.
    */
   function isRequired(path) {
     if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
@@ -373,18 +373,18 @@
   }
 
   /*
-   * A scan, dropped or chosen — and there can be more than one.
+   * A scan, dropped or chosen, and there can be more than one.
    *
    * One requirement is not one sheet of paper: a bio page is often a
    * passport's two pages, a birth certificate arrives with its translation.
    * So the zone keeps saying "drop a file here" after the first, and what has
-   * been chosen is listed under it rather than replacing the prompt — the way
+   * been chosen is listed under it rather than replacing the prompt, the way
    * to add a second must not disappear the moment there is a first.
    *
    * No preview: a reader recognises a document by its filename and its kind,
    * and rendering the first page of a PDF here would be a viewer rather than a
    * form control. The whole zone is the button, so the target for a dropped
-   * file and the target for a click are the same shape — a drop area that is
+   * file and the target for a click are the same shape, a drop area that is
    * smaller than it looks is worse than none.
    */
   function documentField(path) {
@@ -489,7 +489,7 @@
   /*
    * A card whose name is held above it rather than inside.
    *
-   * Only the two that name a PERSON on the application — the main applicant
+   * Only the two that name a PERSON on the application, the main applicant
    * and the dependents. Those are the groupings a reader navigates by, and
    * whose fields they are wanting saying before the box rather than within
    * it. Everything else is a card with a title, which is what a card with a
@@ -583,13 +583,13 @@
 
   /*
    * §4: a sponsored application has a sponsor, asked for now rather than
-   * later — the brief calls it part of the same save, and a step that comes
+   * later, the brief calls it part of the same save, and a step that comes
    * afterwards is a step somebody leaves undone.
    */
   function sponsorCard() {
     if (!sponsored()) return '';
 
-    // A person is a person: the sponsor gets the main applicant's row — name
+    // A person is a person: the sponsor gets the main applicant's row, name
     // above the box, photo, fields one under the last, documents beside them.
     // The only difference is that their scans are not demanded to start a
     // draft.
@@ -600,7 +600,7 @@
   }
 
   /* §5: one person per dependent, with the same photo and documents the
-     settings ask of their type — spouse, under the cutoff, or over it. */
+     settings ask of their type, spouse, under the cutoff, or over it. */
   function dependentsCard() {
     var numbers = ordinals();
     var rows = '';
@@ -654,8 +654,8 @@
       documentsCard(prefix, dependentSection(i));
   }
 
-  /* The whole ask on one page. Investment first — it is whose file this is
-     and what they are filing for — then the people on it. */
+  /* The whole ask on one page. Investment first, it is whose file this is
+     and what they are filing for, then the people on it. */
   function formBody() {
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       investmentCard() +
@@ -813,7 +813,7 @@
    * Dropping a file on the zone.
    *
    * dragover has to be cancelled or the browser navigates to the file
-   * instead — which loses the half-filled form, so this is the one listener
+   * instead, which loses the half-filled form, so this is the one listener
    * here that matters more for what it prevents than what it does.
    */
   function wireDrops(root) {
@@ -847,7 +847,7 @@
   /*
    * One place documents are accepted, however they arrived.
    *
-   * They ADD to what is already there — dropping a second page must not throw
+   * They ADD to what is already there, dropping a second page must not throw
    * away the first. An oversized file is refused by name, so the reader knows
    * which one to shrink, and the files that were fine still land.
    *
@@ -917,7 +917,7 @@
   /*
    * Removing one closes the gap.
    *
-   * The paths are positional — `dependents.2.firstName` — so leaving a hole
+   * The paths are positional. `dependents.2.firstName`, so leaving a hole
    * would send the server a list with a missing index, and every later
    * dependent's answers would belong to somebody else.
    */
@@ -976,11 +976,11 @@
       var h = img.naturalHeight;
       if (w < PHOTO_MIN_PX || h < PHOTO_MIN_PX) {
         done('A passport photo has to be at least ' + PHOTO_MIN_PX + '×' + PHOTO_MIN_PX +
-          ' pixels — this one is ' + w + '×' + h + '.');
+          ' pixels, this one is ' + w + '×' + h + '.');
         return;
       }
       if (Math.abs(w - h) / Math.max(w, h) > 0.02) {
-        done('A passport photo has to be square (2×2 inches) — this one is ' + w + '×' + h + '.');
+        done('A passport photo has to be square (2×2 inches), this one is ' + w + '×' + h + '.');
         return;
       }
       done(null, dataUrl);
@@ -1025,7 +1025,7 @@
    *
    * The field paths are the form-data names, so `sponsor[firstName]` and
    * `dependents[0][dateOfBirth]` arrive as the nested arrays the validator
-   * expects — and come back keyed the same way when it objects.
+   * expects, and come back keyed the same way when it objects.
    *
    * A list rather than a FormData because the write queue has to be able to
    * put this on disk and rebuild it hours later, and a FormData cannot be
@@ -1079,7 +1079,7 @@
   /*
    * The control a server error belongs on.
    *
-   * A list's members are keyed by index — `birthCertificate.2` — and there is
+   * A list's members are keyed by index. `birthCertificate.2`, and there is
    * no control by that name, so the message would land nowhere and the form
    * would refuse to submit with nothing marked. The list itself is the control.
    */
@@ -1137,7 +1137,7 @@
         if (state.onSaving) state.onSaving(false);
 
         if (res.status === 422 && json.errors) {
-          // The server's word, field by field — already keyed to our paths,
+          // The server's word, field by field, already keyed to our paths,
           // except that one file in a list objects as `passportBioPage.0` and
           // the control it belongs to is `passportBioPage`.
           state.errors = {};
@@ -1156,12 +1156,12 @@
           return;
         }
 
-        // The caller announces this — it knows where the reader lands next.
+        // The caller announces this, it knows where the reader lands next.
         if (state.onDone) state.onDone(json.application);
       });
     }).catch(function () {
       /*
-       * Nothing was delivered. Not "the server said no" — the request never
+       * Nothing was delivered. Not "the server said no", the request never
        * arrived, which is the offline case and the whole reason the queue
        * exists. The form has already checked everything the server checks,
        * so parking it is a reasonable bet rather than a hope.
@@ -1174,7 +1174,7 @@
    * Save this application on the device instead.
    *
    * Reached only when the request could not be delivered. The reader is told
-   * plainly that it is on this machine and not yet at the firm — a "Saved"
+   * plainly that it is on this machine and not yet at the firm, a "Saved"
    * that meant two different things depending on the wifi would be the worst
    * possible outcome of this whole feature.
    */
@@ -1206,7 +1206,7 @@
       // record: the profile keys on the client, the wizard on the application.
       // And the hub caches: the replay files scans into the applicant's
       // folders and creates the client record itself, and it runs through the
-      // queue's own fetch rather than TMAFilesNet or clientsFetch — so
+      // queue's own fetch rather than TMAFilesNet or clientsFetch, so
       // neither seam that invalidates every other write ever sees this one.
       invalidate: ['cip:application:', 'cip:application-record:', 'files:listing:', 'clients:'],
     }).then(function () {
@@ -1230,7 +1230,7 @@
    * The server builds the real one; this is the same answers laid over the
    * copy the form was opened with, so the profile behind the reader shows
    * what they just typed rather than what they just replaced. It carries
-   * `pendingSync` so every screen that draws it can say so — a local copy
+   * `pendingSync` so every screen that draws it can say so, a local copy
    * that looked identical to a filed one would be a lie by omission.
    *
    * Files are deliberately not reflected. A scan chosen offline is in the
@@ -1287,7 +1287,7 @@
     return record;
   }
 
-  /* The display string for the chosen investment type — the free text once
+  /* The display string for the chosen investment type, the free text once
      somebody picked Other, the option's own label otherwise. */
   function investmentLabel() {
     var value = state.draft.investmentType || '';
@@ -1413,13 +1413,13 @@
    * Network first, unlike the read-through cache the rest of the portal
    * paints with. A form is about to be edited and then posted whole, so
    * opening it on a stale copy risks a reader overwriting a colleague's
-   * change with an answer they never saw — worth the wait. The held copy is
+   * change with an answer they never saw, worth the wait. The held copy is
    * the offline case, where the choice is that or nothing.
    *
    * Only the desktop keeps these across a restart; in a browser the store is
    * memory alone, so what can be edited with no network is what was opened
    * with one. That is the firm's decision about whose disk holds a client's
-   * details, not an oversight — see portal-store.js.
+   * details, not an oversight, see portal-store.js.
    */
   function held(key, url) {
     var ask = function () {

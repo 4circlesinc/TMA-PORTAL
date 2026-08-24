@@ -41,7 +41,7 @@ use Illuminate\Validation\Rule;
  *
  * Reach is the exception, and is not a duplicate: ApplicationScope answers
  * whether this reader may see the application at all, which the engine does
- * not ask — and answers 404 rather than 403, the portal's convention, so a
+ * not ask, and answers 404 rather than 403, the portal's convention, so a
  * stranger cannot learn an application exists by being refused it.
  */
 class CipTransitionController extends Controller
@@ -83,7 +83,7 @@ class CipTransitionController extends Controller
      * The generic endpoint exists for the transitions that are only a change of
      * state. Several are not: they carry work the state alone does not capture,
      * and each already has a verb that does it properly. Left open, this route
-     * was a way to skip every one of those preconditions — which made the
+     * was a way to skip every one of those preconditions, which made the
      * guards in the other verbs decorative rather than binding.
      *
      *  - NEW is submit(), which refuses a leftover draft whose main applicant
@@ -93,8 +93,8 @@ class CipTransitionController extends Controller
      *    that have not yet been moved.
      *  - PENDING REVIEW is {@see Submission::record()}, which
      *    records the CIP number and the submission date. Driven bare, §7's
-     *    dual-numbering rule fails silently — every surface goes on showing the
-     *    internal number for an application the Unit already holds — and since
+     *    dual-numbering rule fails silently, every surface goes on showing the
+     *    internal number for an application the Unit already holds, and since
      *    there is no edge back, the proper door is then shut for good.
      *  - GRANTED and DENIED are phase 8's decision, which writes `decision` and
      *    `decided_at`. Both are terminal, so a bare transition leaves those
@@ -110,7 +110,7 @@ class CipTransitionController extends Controller
     private function refuseIfItHasItsOwnVerb(CipApplication $application, string $status): void
     {
         if ($status === Status::NEW && $application->status === Status::DRAFT) {
-            abort(422, 'Use the submit verb to file a leftover draft — it checks the applicant\'s documents first.');
+            abort(422, 'Use the submit verb to file a leftover draft, it checks the applicant\'s documents first.');
         }
 
         if ($status === Status::PENDING_REVIEW && $application->status === Status::READY_TO_SUBMIT) {
@@ -135,7 +135,7 @@ class CipTransitionController extends Controller
      *
      * New files start at NEW, so this door is only for rows that have not yet
      * been moved. Its own endpoint because of the guard below, and open to the
-     * application's creator as well as to `cip.create` — the provider side and
+     * application's creator as well as to `cip.create`, the provider side and
      * the private client both file their own leftovers, and neither holds a
      * matrix capability. That grant lives in {@see Engine::allows()}, where the
      * rest of the lifecycle's permissions are.
@@ -152,7 +152,7 @@ class CipTransitionController extends Controller
          *
          * The first read of a file is made against the main applicant's own
          * required documents, so an application arriving without them is work
-         * nobody can start — it would go straight back out as an update
+         * nobody can start, it would go straight back out as an update
          * request. They are named rather than counted because the person
          * submitting is usually the person who has to go and find them, and
          * the list also comes back as data so the checklist can mark them
@@ -204,7 +204,7 @@ class CipTransitionController extends Controller
      * Record the Unit's decision: Approved or Denied (§21).
      *
      * Its own endpoint because of the columns below, and open only to
-     * `cip.decide` — that grant lives in {@see Engine::allows()}, where the
+     * `cip.decide`, that grant lives in {@see Engine::allows()}, where the
      * rest of the lifecycle's permissions are. The generic status route
      * refuses both targets so a bare move cannot leave `decision` and
      * `decided_at` null on a terminal file.
@@ -334,7 +334,7 @@ class CipTransitionController extends Controller
         }
 
         // Colleagues watching the table or this application see the move
-        // without reloading — the same signal every other CIP write sends.
+        // without reloading, the same signal every other CIP write sends.
         Live::staff(Live::CIP);
 
         return $application;
@@ -365,7 +365,7 @@ class CipTransitionController extends Controller
     /**
      * The application as a status screen reads it back.
      *
-     * Deliberately not the whole record — that is what
+     * Deliberately not the whole record, that is what
      * {@see CipApplicationController::show()} answers, with every person and
      * their checklists, and a transition moves none of it. What a caller needs
      * from here is where the application now is, what it is called, and what

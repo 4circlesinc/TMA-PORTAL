@@ -15,8 +15,8 @@ use App\Models\CipPerson;
  * afterwards and the list is correct again by construction.
  *
  * Youngest first: §5's worked example numbers the youngest qualified
- * dependent QD1. ⚠ The meeting transcript contradicts this once — "the oldest
- * person is always one" — and that is open client question 13. It is one
+ * dependent QD1. ⚠ The meeting transcript contradicts this once, "the oldest
+ * person is always one", and that is open client question 13. It is one
  * comparison; {@see self::YOUNGEST_FIRST} is the switch, and flipping it
  * renumbers every application the next time each is touched.
  *
@@ -68,7 +68,7 @@ class Dependents
     }
 
     /**
-     * What this person is called on the application — "Spouse", "Qualified
+     * What this person is called on the application, "Spouse", "Qualified
      * Dependent 2". One phrasing, so the folder tree, the checklist and the
      * submitted form cannot disagree.
      */

@@ -479,7 +479,7 @@ class CipIntakeTest extends TestCase
             ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->first();
         $file = FileItem::find($slot->file_id);
         $this->assertSame($sponsor->folder_id, $file->folder_id);
-        $this->assertSame('Maryam Haddad — Passport bio page.pdf', $file->name);
+        $this->assertSame('Maryam Haddad - Passport bio page.pdf', $file->name);
 
         // The main applicant's own slots are untouched by any of it: what the
         // form collected for them is filed, and a sponsor's upload did not
@@ -742,7 +742,7 @@ class CipIntakeTest extends TestCase
         // these are ordinary library objects with ordinary history.
         $file = FileItem::find($slot->file_id);
         $this->assertSame($main->folder_id, $file->folder_id);
-        $this->assertSame('John Smith — Birth certificate.pdf', $file->name);
+        $this->assertSame('John Smith - Birth certificate.pdf', $file->name);
         $this->assertDatabaseHas('file_versions', ['file_id' => $file->id, 'version_number' => 1]);
     }
 
@@ -792,8 +792,8 @@ class CipIntakeTest extends TestCase
 
         $filed = FileItem::where('folder_id', $main->folder_id)
             ->pluck('name')->all();
-        $this->assertContains('John Smith — Birth certificate.pdf', $filed);
-        $this->assertContains('John Smith — Birth certificate (2).pdf', $filed);
+        $this->assertContains('John Smith - Birth certificate.pdf', $filed);
+        $this->assertContains('John Smith - Birth certificate (2).pdf', $filed);
     }
 
     /**
@@ -827,7 +827,7 @@ class CipIntakeTest extends TestCase
         // Both sheets — the answer and the extra file beside it — in the same
         // drawer, or one requirement's papers end up in two places.
         $this->assertSame(
-            ['John Smith — Passport bio page.pdf', 'John Smith — Passport bio page (2).pdf'],
+            ['John Smith - Passport bio page.pdf', 'John Smith - Passport bio page (2).pdf'],
             FileItem::where('folder_id', $drawer->id)->orderBy('id')->pluck('name')->all(),
         );
 

@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
  * Settings → Account and Reporting → Notification History.
  *
  * "Below is a history of all email messages that have been sent from the
- * portal" — which it was not: the page filtered a localStorage array that only
+ * portal", which it was not: the page filtered a localStorage array that only
  * ever held whatever the mock UI had pushed into it. Every transactional email
  * really does leave a row behind (`email_deliveries`, written by
  * {@see App\Support\Mail\Deliveries}), so this reads that.
@@ -56,7 +56,7 @@ class NotificationHistoryController extends Controller
 
         /*
          * The picker hands over a plain calendar date, which is a day in the
-         * reader's zone — not a UTC day. Converting the boundaries rather than
+         * reader's zone, not a UTC day. Converting the boundaries rather than
          * comparing date strings is what stops an email sent at 8pm local from
          * disappearing off the day it was actually sent on.
          */

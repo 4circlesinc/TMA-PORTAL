@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 /**
  * Microsoft 365 / Outlook calendars over Graph.
  *
- * Graph's incremental sync is a `deltaLink` — a fully-formed URL returned at
+ * Graph's incremental sync is a `deltaLink`, a fully-formed URL returned at
  * the end of a delta run, followed verbatim next time. An expired one yields a
  * 410 with code 'syncStateNotFound', the signal to restart. All-day events set
  * `isAllDay`; recurrence is a structured `recurrence` object rather than an
@@ -93,7 +93,7 @@ class MicrosoftCalendarProvider implements CalendarProvider
     {
         // A stored deltaLink is followed as-is; otherwise start a delta run
         // bounded by the import window.
-        // Pass datetimes as query params (Zulu) — a bare `+00:00` in a hand-
+        // Pass datetimes as query params (Zulu), a bare `+00:00` in a hand-
         // built query string is decoded as a space and Graph returns HTTP 400.
         $url = $cursor;
         $query = [];
@@ -339,7 +339,7 @@ class MicrosoftCalendarProvider implements CalendarProvider
         }
 
         if ($response->status() === 401 || $response->status() === 403) {
-            throw new CalendarSyncException("Microsoft refused to {$what} — the connection may need reauthorising.");
+            throw new CalendarSyncException("Microsoft refused to {$what}, the connection may need reauthorising.");
         }
 
         $detail = $response->json('error.message')

@@ -15,7 +15,7 @@ use App\Support\Files\FileAccess;
  * than as a flat list of everyone.
  *
  * An organization file is readable by every member of staff. Listing them
- * individually would be hundreds of rows that say nothing — and it would go
+ * individually would be hundreds of rows that say nothing, and it would go
  * stale the moment someone is hired. So access is reported as sources
  * ("Everyone in TM Antoine Advisory and Partners", "Assigned client team",
  * "Specific people", "Sharing links"), each expandable to its members.
@@ -43,7 +43,7 @@ class AccessSources
     {
         $sources = [];
 
-        // 1. The owner — always, and never removable from here.
+        // 1. The owner, always, and never removable from here.
         if ($file->owner) {
             $sources[] = self::source(
                 key: 'owner',
@@ -56,7 +56,7 @@ class AccessSources
         }
 
         // 2. Administrators hold every capability by definition (Role::MATRIX),
-        //    so they always have access — UNLESS the file sits inside a personal
+        //    so they always have access. UNLESS the file sits inside a personal
         //    OneDrive. FileAccess bypasses the admin short-circuit for personal
         //    drives (the firm's rule: a personal drive is the owner's alone), so
         //    the panel must mirror that and not advertise admin access that the
@@ -80,7 +80,7 @@ class AccessSources
             }
         }
 
-        // 3. Whatever the containing folder chain grants on its own — the
+        // 3. Whatever the containing folder chain grants on its own, the
         //    organization-wide audience, a staff member's private folder, or a
         //    client's team. Walking the chain is what FileAccess does.
         foreach (self::chain($file->folder_id) as $folder) {
@@ -170,7 +170,7 @@ class AccessSources
      * One flat, de-duplicated roster across every source.
      *
      * The panel leads with this because it answers the question people actually
-     * ask — "who can see this?" — in one glance. The grouped sources below it
+     * ask, "who can see this?", in one glance. The grouped sources below it
      * answer the follow-up, "and why?".
      *
      * @return array{faces: list<array>, all: list<array>, total: int, extra: int, summary: string}
@@ -199,7 +199,7 @@ class AccessSources
         $people = array_values($byEmail);
 
         // The true head-count is the widest source, not the number of distinct
-        // faces we happened to preview — an org of 200 must not read as "8".
+        // faces we happened to preview, an org of 200 must not read as "8".
         $total = 0;
         foreach ($sources as $source) {
             $total = max($total, (int) $source['total']);
@@ -215,7 +215,7 @@ class AccessSources
         ];
     }
 
-    /** "Everyone in TM ANTOINE Advisory · 42 people" — the one-line answer. */
+    /** "Everyone in TM ANTOINE Advisory · 42 people", the one-line answer. */
     private static function summaryFor(array $sources, int $total): string
     {
         foreach ($sources as $source) {
@@ -264,7 +264,7 @@ class AccessSources
 
     /**
      * The access a single folder in the chain grants by its own type. Mirrors
-     * FileAccess::systemFolderRole — organization folders open to all staff, a
+     * FileAccess::systemFolderRole, organization folders open to all staff, a
      * staff folder to its subject, a client folder to that client's assignees.
      */
     private static function folderSource(Folder $folder): ?array

@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
  * The conversation on a checklist document (§13).
  *
  * Sibling to {@see \App\Http\Controllers\Files\FileCommentController}, and
- * deliberately the same shape — the difference is the subject, not the idea.
+ * deliberately the same shape, the difference is the subject, not the idea.
  *
  * 404 rather than 403 for a document the reader may not see, the portal's
  * convention: a stranger should not learn that an application exists by being
@@ -126,7 +126,7 @@ class CipDocumentCommentController extends Controller
         return $document;
     }
 
-    /** A comment on THIS document — a uuid from another thread is a 404. */
+    /** A comment on THIS document, a uuid from another thread is a 404. */
     private function comment(CipDocument $document, string $uuid): CipDocumentComment
     {
         return $document->comments()->where('uuid', $uuid)->firstOrFail();

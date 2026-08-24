@@ -37,7 +37,7 @@ use Illuminate\Support\Str;
  * anyone was renamed.
  *
  * **Owned by the service account.** Not the uploader: `folders.owner_id`
- * cascades on delete, and an owner's rights cannot be revoked — so a provider
+ * cascades on delete, and an owner's rights cannot be revoked, so a provider
  * contact owning the tree would take it with them when their account closed,
  * and would outrank Phase 7's submission lock.
  */
@@ -102,8 +102,8 @@ class Tree
              *
              * The hub's Company column and the provider tab's client count
              * both read referred_by_company_id, and a client attached to an
-             * application some way other than this method — imported, made by
-             * hand, linked before the referral was written — drifts: Galaxy
+             * application some way other than this method, imported, made by
+             * hand, linked before the referral was written, drifts: Galaxy
              * Partners showed three applications and zero clients. The filing
              * firm is the referrer, so a client an application names is
              * brought in step rather than left contradicting the table.
@@ -183,7 +183,7 @@ class Tree
 
     /**
      * One person, one repository. Renamed rather than recreated when the
-     * numbering changes — the link is the id, so the name is free to follow.
+     * numbering changes, the link is the id, so the name is free to follow.
      */
     public static function personFolder(CipPerson $person, Folder $root, ?User $actor = null): Folder
     {
@@ -231,7 +231,7 @@ class Tree
      * The public door for the requirement templates, whose `folder` column
      * says where a slot's uploads are filed ({@see DocumentSlots}). It is
      * deliberately this narrow: the caller hands over a parent and a NAME,
-     * and the child is always created under that parent — there is no path
+     * and the child is always created under that parent, there is no path
      * to walk and no other ancestor to reach, so a folder name typed on a
      * template can never file a document outside the person's own folder.
      */
@@ -243,7 +243,7 @@ class Tree
     /**
      * A child folder of this parent, found by name or created.
      *
-     * Found by name only at creation time — once it exists the id is the
+     * Found by name only at creation time, once it exists the id is the
      * link. Two applications for the same client each have their own
      * "Main Applicant" under their own application folder, so the lookup is
      * scoped to the parent and never collides.
@@ -254,7 +254,7 @@ class Tree
          * Case is folded in PHP, on both sides.
          *
          * SQL lower() and Str::lower() disagree on anything beyond ASCII —
-         * SQLite folds only A-Z — so comparing one against the other made a
+         * SQLite folds only A-Z, so comparing one against the other made a
          * drawer named "Ödeme" miss its own row and mint a duplicate sibling
          * on every batch. Drawer names are the administrator's to invent now,
          * in whatever language the firm works in, and one folder's children

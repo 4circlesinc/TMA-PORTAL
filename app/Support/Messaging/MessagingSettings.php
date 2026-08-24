@@ -32,13 +32,13 @@ class MessagingSettings
         'typingIndicator' => true,
 
         // Notifications. The two tone keys name a sound in the catalogue
-        // below, never a path — the client resolves them to files in
+        // below, never a path, the client resolves them to files in
         // public/audio, so a stored preference cannot point anywhere else.
         'notificationSounds' => true,
         'messageTone' => 'chime',
         'ringtone' => 'ringtone-1',
         // On by default like every other notification setting. The browser
-        // permission prompt is still the real gate — this only means the
+        // permission prompt is still the real gate, this only means the
         // portal may ask, and may use it once granted.
         'desktopNotifications' => true,
         'notificationPreview' => true,
@@ -52,7 +52,7 @@ class MessagingSettings
 
         // Calls. How an *answered* call is presented; an incoming call always
         // uses the answer pop-up first, whatever this says. Devices are
-        // deliberately not stored here — a camera id means nothing on another
+        // deliberately not stored here, a camera id means nothing on another
         // machine, so those stay in localStorage on the device they describe.
         'callDisplay' => self::CALL_ISLAND,
     ];

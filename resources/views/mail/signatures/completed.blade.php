@@ -25,7 +25,7 @@
     {{-- Stamping failed. Say so rather than point at an attachment that
          isn't there. --}}
     <p style="font-size:14px;line-height:22px;margin:0;color:#374151;">
-      We're still preparing the signed copy — it'll follow shortly.
+      We're still preparing the signed copy, it'll follow shortly.
     </p>
   @endif
 @endsection

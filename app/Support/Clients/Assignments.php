@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  * Assigning staff to clients, and everything that has to happen alongside it.
  *
  * An assignment is not just a row: it grants file access, it decides who gets
- * told about the client's work, and — when it ends — it has to take that access
+ * told about the client's work, and, when it ends, it has to take that access
  * away again without erasing the fact that it existed. Keeping all of that here
  * means the four things that must move together (the row, the access, the
  * audit trail, the people who are told) cannot drift apart.
@@ -73,7 +73,7 @@ final class Assignments
         });
 
         // A level or role change on a live assignment is a change, not a new
-        // ask — the person is already working with this client and does not
+        // ask, the person is already working with this client and does not
         // need welcoming again. And a caller that carries its own notice —
         // the CIP picker sends §10's formatted email about the same press —
         // silences this one, or one assignment would arrive as two emails
@@ -90,8 +90,8 @@ final class Assignments
     }
 
     /**
-     * End an assignment. The row stays — it is the record that this person
-     * looked after this client — but the access goes immediately.
+     * End an assignment. The row stays, it is the record that this person
+     * looked after this client, but the access goes immediately.
      */
     public static function end(Client $client, ClientAssignment $assignment, User $by, ?string $reason = null): ClientAssignment
     {
@@ -257,7 +257,7 @@ final class Assignments
     }
 
     /**
-     * Introduce the staff member to the client — but only once they have a
+     * Introduce the staff member to the client, but only once they have a
      * portal account, and only for the roles a client would expect to hear
      * about. Being told "your new finance contact is …" before you have even
      * created an account is noise.

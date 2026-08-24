@@ -14,7 +14,7 @@ use Throwable;
  * Account settings > Client hub management > Client hub access edits this, and
  * it is the only administrator-editable overlay on {@see Role}. The five
  * capabilities below were fixed in the matrix, so "who may reach the client
- * hub" — the question the section's own name asks — could only be answered by
+ * hub", the question the section's own name asks, could only be answered by
  * editing PHP. They are now stored per firm and read back through Role::can(),
  * which means the sidebar, the page gate, the API and the browser's capability
  * list all move together the moment a toggle is saved.
@@ -36,7 +36,7 @@ class ClientHubSettings
      * on this screen, in the order the screen lists them.
      *
      * Only Employee is ever in play. Clients hold none of these in the matrix
-     * and must not be able to acquire one — the client hub is the firm's view
+     * and must not be able to acquire one, the client hub is the firm's view
      * of its clients, not a client's view of the firm.
      */
     public const MANAGED = [

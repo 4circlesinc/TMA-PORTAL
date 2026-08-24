@@ -108,7 +108,7 @@
     window.addEventListener('focus', onWake);
     window.addEventListener('online', onWake);
     // Visible idle tabs can keep a half-open socket that never fires
-    // close/visibility events — poke health on a timer too.
+    // close/visibility events, poke health on a timer too.
     if (!this._healthTimer) {
       this._healthTimer = window.setInterval(function () {
         if (document.hidden) return;
@@ -137,7 +137,7 @@
     }
 
     this.socket.addEventListener('open', function () {
-      // Not "connected" yet — that waits for pusher:connection_established,
+      // Not "connected" yet, that waits for pusher:connection_established,
       // which carries the socket_id every private subscription needs.
       self.retries = 0;
     });
@@ -212,14 +212,14 @@
   /*
    * A pusher:error from the server. The protocol splits these by code:
    *
-   *   4000-4099  don't reconnect — the connection is misconfigured and an
+   *   4000-4099  don't reconnect, the connection is misconfigured and an
    *              identical retry will be refused identically
    *   4100-4199  reconnect after a backoff
    *   4200-4299  reconnect immediately
    *
    * Honouring the first band matters. The common case is 4009 "Origin not
    * allowed", which means this host isn't on the WebSocket cluster's allowed
-   * origins list — retrying that forever just hammers the cluster and buries
+   * origins list, retrying that forever just hammers the cluster and buries
    * the one message that explains the problem.
    */
   Realtime.prototype.handleProtocolError = function (data) {
@@ -232,7 +232,7 @@
       this.closedByUs = true;
       if (window.console) {
         console.error(
-          '[messaging] realtime disabled — the server refused the connection (' +
+          '[messaging] realtime disabled, the server refused the connection (' +
             code + ': ' + message + ').' +
             (code === 4009
               ? ' Add this origin (' + window.location.origin +

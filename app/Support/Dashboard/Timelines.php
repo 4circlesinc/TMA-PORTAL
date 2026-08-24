@@ -7,8 +7,8 @@ use Carbon\CarbonInterface;
 /**
  * Client and staff activity, merged per thread, from every channel at once.
  *
- * Portal messages and mailbox threads answer the same question — a client said
- * something, how long until someone answered — so both are folded into one
+ * Portal messages and mailbox threads answer the same question, a client said
+ * something, how long until someone answered, so both are folded into one
  * shape here and measured by one rule:
  *
  *   the clock starts on a client's *first* unanswered message and stops on the
@@ -78,7 +78,7 @@ final class Timelines
     /**
      * Clients whose last word in a thread is still hanging, and how long each
      * has been waiting. A client waiting in several threads is reported once,
-     * at their longest wait — the dashboard counts people, not tabs.
+     * at their longest wait, the dashboard counts people, not tabs.
      *
      * @return array<string, int> client key => longest wait in seconds
      */
@@ -112,7 +112,7 @@ final class Timelines
     }
 
     /**
-     * Chronological, with insertion order breaking ties — two messages sharing
+     * Chronological, with insertion order breaking ties, two messages sharing
      * a timestamp must stay in the order they were sent, or a reply can sort
      * ahead of the question it answers and register as a zero-second response.
      *

@@ -14,7 +14,7 @@ use Throwable;
  * bin, a bulk share, or a SharePoint delta that lands ten thousand files would
  * otherwise make ten thousand blocking HTTP calls to Reverb from inside one
  * request. Coalescing makes a bulk operation cost exactly what a single-row
- * one does — one event per resource — and the browser cannot tell the
+ * one does, one event per resource, and the browser cannot tell the
  * difference, since it refetches the whole list either way.
  *
  * Reach is decided here rather than at each call site, and the payload carries
@@ -22,11 +22,11 @@ use Throwable;
  *
  * Broadcasting is best-effort. A portal that cannot reach Reverb must still
  * accept writes, so failures are swallowed and the surface falls back to the
- * behaviour it has always had — updating on the next load.
+ * behaviour it has always had, updating on the next load.
  */
 final class Live
 {
-    /* Shared with TMALive.RESOURCES in public/js/portal-live.js — a name that
+    /* Shared with TMALive.RESOURCES in public/js/portal-live.js, a name that
        exists on only one side is a surface that silently never updates. */
     public const FILES = 'files';
 
@@ -47,13 +47,13 @@ final class Live
     public const ACTIVITY = 'activity';
 
     /**
-     * "Who you are changed" — account type, status, approval.
+     * "Who you are changed", account type, status, approval.
      *
      * Goes to the affected person's own channel, never a shared one. It is the
      * one signal that is about the reader rather than about a list they happen
      * to be looking at.
      */
-    /** CIP applications — the intake wizard and the module's lists. */
+    /** CIP applications, the intake wizard and the module's lists. */
     public const CIP = 'cip';
 
     public const IDENTITY = 'identity';
@@ -63,7 +63,7 @@ final class Live
 
     private static bool $flushRegistered = false;
 
-    /** Everyone on staff — the Users, Clients, People and admin tables. */
+    /** Everyone on staff, the Users, Clients, People and admin tables. */
     public static function staff(string $resource): void
     {
         self::queue($resource, 'portal.staff');
@@ -78,7 +78,7 @@ final class Live
     }
 
     /**
-     * Several people at once — the readers of a shared folder, a client's
+     * Several people at once, the readers of a shared folder, a client's
      * assigned staff, a company's members.
      *
      * @param  iterable<int, int|string|null>  $userIds
@@ -90,7 +90,7 @@ final class Live
         }
     }
 
-    /** Staff plus a specific set of people — the usual reach of a file change. */
+    /** Staff plus a specific set of people, the usual reach of a file change. */
     public static function staffAnd(string $resource, iterable $userIds): void
     {
         self::staff($resource);
@@ -101,7 +101,7 @@ final class Live
      * Send everything collected this request.
      *
      * Registered to run on terminate the first time anything is queued, so a
-     * request that changes nothing costs nothing. Safe to call directly — in a
+     * request that changes nothing costs nothing. Safe to call directly, in a
      * queued job or console command there is no terminate step, and the caller
      * flushes by hand.
      */
@@ -113,7 +113,7 @@ final class Live
         foreach ($pending as $resource => $channels) {
             try {
                 // toOthers() drops the actor, who already re-rendered. It only
-                // works when the browser sent X-Socket-ID — see the socketId()
+                // works when the browser sent X-Socket-ID, see the socketId()
                 // helper in public/js/portal-live.js.
                 broadcast(new PortalDataChanged($resource, array_values($channels)))->toOthers();
             } catch (Throwable) {

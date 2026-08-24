@@ -110,7 +110,7 @@ final class ClientDirectory
      * Widen a client search to the application numbers §7 promises.
      *
      * "Users may search using either: Internal Number, CIP Number, Applicant
-     * Name" — and a number is not a property of the client row, so the name
+     * Name", and a number is not a property of the client row, so the name
      * search alone could never answer `GAL26-00001`. Both numbers are matched,
      * not just whichever one is on display: the internal number stays in use
      * for invoices and reviews for the life of the application, so somebody

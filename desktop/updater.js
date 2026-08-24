@@ -4,7 +4,7 @@
  * Not electron-updater: that hands the install to Squirrel, which refuses to
  * replace a bundle whose code signature it cannot verify, so on an unsigned
  * build it downloads a new version and then fails at the last step. This does
- * the swap itself — download the zip, check it against the hash in the
+ * the swap itself, download the zip, check it against the hash in the
  * manifest, put the new bundle where the old one was, relaunch. Works signed
  * or unsigned, and keeps working if a certificate arrives later.
  *
@@ -77,7 +77,7 @@ function parseManifest(text) {
  *
  *   releaseNotes: "- one\n- two"    a quoted scalar with escaped newlines
  *
- * Missing notes are not an error — an older release has none, and the window
+ * Missing notes are not an error, an older release has none, and the window
  * simply hides its disclosure.
  */
 function releaseNotes(text) {
@@ -153,7 +153,7 @@ async function download(fileName, onProgress) {
   } catch (error) {
     // A connection dropped part-way ("terminated") still leaves whatever
     // arrived on disk. Retrying starts a fresh directory, so without this the
-    // partial file is stranded — one abandoned attempt was found holding 38 MB,
+    // partial file is stranded, one abandoned attempt was found holding 38 MB,
     // and an older one 323 MB.
     discard(target);
     throw error;
@@ -170,12 +170,12 @@ async function download(fileName, onProgress) {
  * the same thing: hashing from an `on('data')` listener reads each chunk the
  * moment it arrives, while the write of that same chunk completes later, and a
  * buffer reused in between leaves the file holding something the hash never
- * saw. It fails silently and looks impossible — the checksum passes and then
+ * saw. It fails silently and looks impossible, the checksum passes and then
  * the archive will not open.
  *
  * Seen in the wild on 0.8.6→0.8.7: two attempts, both exactly the right length,
- * both diverging from the real artifact at a chunk boundary — 557056 in one,
- * 1458176 in the other — and differing from each other. Verified downloads,
+ * both diverging from the real artifact at a chunk boundary. 557056 in one,
+ * 1458176 in the other, and differing from each other. Verified downloads,
  * corrupt files, "Couldn't read pkzip signature".
  *
  * The file is what ditto opens and what replaces the app, so the file is what
@@ -216,8 +216,8 @@ const unzip = (archive, into) => new Promise((resolve, reject) => {
 
 /**
  * Downloads a release and unpacks it, leaving a ready bundle in a temp dir.
- * Everything that can go wrong quietly — a truncated download, a corrupted or
- * substituted archive, a zip that is not an app — fails here, before anything
+ * Everything that can go wrong quietly, a truncated download, a corrupted or
+ * substituted archive, a zip that is not an app, fails here, before anything
  * on disk is touched.
  *
  * On Windows there is nothing to unpack: the artifact is the NSIS installer,
@@ -230,7 +230,7 @@ async function stageRelease(release, onProgress = () => {}, onPhase = () => {}) 
    * Retried, because the failures worth surviving here are transient: a
    * connection dropped part-way ("terminated"), or a file that arrives whole
    * and wrong. Both are cured by asking again, and neither is the user's
-   * problem to solve — before this, one bad download meant an error dialog and
+   * problem to solve, before this, one bad download meant an error dialog and
    * a manual reinstall for something that would have worked on a second try.
    */
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
@@ -261,7 +261,7 @@ async function stageOnce(release, onProgress, onPhase) {
     throw new Error('The downloaded update did not match its checksum.');
   }
 
-  // Past this point nothing reports a fraction — unzipping a 90 MB bundle and
+  // Past this point nothing reports a fraction, unzipping a 90 MB bundle and
   // swapping it takes real time with no way to measure it, so the screen is
   // told to stop pretending it knows how far along it is.
   onPhase('installing');
@@ -287,7 +287,7 @@ async function stageOnce(release, onProgress, onPhase) {
  * Throws away a failed attempt's temp directory.
  *
  * Each one holds a 90 MB archive plus whatever was unpacked before it failed,
- * and nothing else ever removes them — a handful of failed updates had left
+ * and nothing else ever removes them, a handful of failed updates had left
  * most of a gigabyte sitting in /var/folders.
  */
 function discard(target) {
@@ -309,13 +309,13 @@ function discard(target) {
  *
  * `--updated` is the third one, and it was missing. It is how the installer is
  * told this is an update rather than a first install, and with `oneClick: false`
- * — which is what this app builds — that is not a cosmetic distinction.
+ *, which is what this app builds, that is not a cosmetic distinction.
  * electron-builder's own NSIS templates branch on it twice in ways that matter:
  *
  *   - `setIsTryToKeepShortcuts` sets keep-shortcuts to *false* when
  *     `allowToChangeInstallationDirectory` is defined and the run is not marked
  *     as an update. So every silent update was tearing down and recreating the
- *     desktop and Start-menu shortcuts — which is how a pinned taskbar entry
+ *     desktop and Start-menu shortcuts, which is how a pinned taskbar entry
  *     gets orphaned, on an app whose first run goes out of its way to ask for
  *     that pin (taskbar-pin.js).
  *   - `_CHECK_APP_RUNNING` gives a marked update two sleeps to let this process
@@ -362,14 +362,14 @@ rm -f ${JSON.stringify(script)}
 
 let checking = false;    // a manifest fetch is in flight
 let installing = false;  // downloading or handing over to the installer
-let declined = null;     // { version, at } — the last "Later"
+let declined = null;     // { version, at }, the last "Later"
 let onStateChange = () => {};
 
 /**
  * How long a "Later" holds before the update asks again.
  *
  * It used to hold forever. `declined` was set to the version and compared for
- * the life of the process — and this process is a tray app that is designed
+ * the life of the process, and this process is a tray app that is designed
  * never to end: closing the window backgrounds it, so a machine left on runs
  * the same instance for days. One "Later", or one prompt that was never seen,
  * and the automatic offer was gone for good. From then on the only way to
@@ -387,7 +387,7 @@ const deferredUpdate = () => (declined ? declined.version : null);
  * Whether a background check should put this version up again.
  *
  * Pure, and taking the clock, so the expiry is testable without waiting three
- * hours for it. A manual check never consults this — someone who has just
+ * hours for it. A manual check never consults this, someone who has just
  * asked is owed an answer whatever they said last time.
  */
 function shouldReoffer(deferral, version, now) {
@@ -404,7 +404,7 @@ function defer(version, now = Date.now()) {
  * The dock or taskbar progress.
  *
  * `win` is the update panel once there is one. It used to always be
- * `getAllWindows()[0]` — the main portal window — which is right on macOS,
+ * `getAllWindows()[0]`, the main portal window, which is right on macOS,
  * where the progress is drawn on the Dock icon and any window will do. On
  * Windows it is drawn on that window's own taskbar button, and the main window
  * is normally hidden in the tray during an update, so the progress was being
@@ -426,7 +426,7 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
   /*
    * Read before the offer is opened, because opening it is what changes the
    * answer. Nothing of ours in the foreground means, on Windows, that the offer
-   * window will not be allowed into the foreground either — reveal() flashes
+   * window will not be allowed into the foreground either, reveal() flashes
    * the taskbar button in that case, and the banner below is the part that
    * survives being ignored.
    */
@@ -463,7 +463,7 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
     return;
   }
 
-  // Accepted, so the last "Later" is spent — and the hourly tick must not walk
+  // Accepted, so the last "Later" is spent, and the hourly tick must not walk
   // in on a download and start asking about the same version again.
   declined = null;
   installing = true;
@@ -471,7 +471,7 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
 
   try {
     // Downloading 90 MB used to happen with nothing on screen but the dock
-    // progress bar, and then the app vanished and came back — which on a slow
+    // progress bar, and then the app vanished and came back, which on a slow
     // connection is a long silence followed by what looks like a crash.
     const panel = updateWindow.show(release.version);
     progressBar(0, panel);
@@ -498,7 +498,7 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
     dialog.showMessageBox(parentWindow, {
       type: 'error',
       message: "That update couldn't be installed",
-      detail: `${error.message}\n\nYou can keep using this version — we'll try again later.`,
+      detail: `${error.message}\n\nYou can keep using this version, we'll try again later.`,
     });
   }
 }
@@ -522,7 +522,7 @@ async function checkForUpdates({ silent = true } = {}) {
    * user is in another app, the shell refuses it the foreground, and it sits
    * behind their work unseen and unanswered. So a later tick brings that same
    * window back to the front and flashes the taskbar button again rather than
-   * skipping — and never opens a second copy.
+   * skipping, and never opens a second copy.
    */
   if (updateAvailable.isOpen()) {
     updateAvailable.surface();
@@ -553,7 +553,7 @@ async function checkForUpdates({ silent = true } = {}) {
     /*
      * Released before the offer, deliberately. `checking` guards the fetch, not
      * the conversation: it used to be held across the await below, which waits
-     * on a human — so an offer nobody answered (see above) left this latched
+     * on a human, so an offer nobody answered (see above) left this latched
      * true for the life of the process and every later check, automatic *and*
      * manual, returned at the first line without doing anything. One unseen
      * prompt disabled updating entirely. The isOpen() guard above is what stops

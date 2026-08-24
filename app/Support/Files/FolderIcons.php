@@ -6,7 +6,7 @@ use App\Models\Folder;
 
 /**
  * The approved, curated set of Phosphor icons a folder's front panel may be
- * stamped with — not the full ~1600-icon library. Every name here is a
+ * stamped with, not the full ~1600-icon library. Every name here is a
  * verified single-path `fill="currentColor"` phosphor SVG (mask-friendly),
  * living at public/images/icons/phosphor/{name}.svg. Mirrored client-side
  * in public/js/folder-icons.js - keep both in sync by hand.

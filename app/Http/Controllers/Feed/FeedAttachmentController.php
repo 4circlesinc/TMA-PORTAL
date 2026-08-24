@@ -51,7 +51,7 @@ class FeedAttachmentController extends Controller
     /**
      * Discard a staged file before its post is saved.
      *
-     * Only the uploader, and only while it is still staged — once a post owns
+     * Only the uploader, and only while it is still staged, once a post owns
      * it, removing it means editing the post.
      */
     public function destroy(Request $request, string $uuid): JsonResponse
@@ -90,7 +90,7 @@ class FeedAttachmentController extends Controller
         abort_unless($disk->exists($attachment->path), 404);
 
         // Images and video are shown in place; everything else downloads.
-        // A document is never rendered inline — an HTML file served inline
+        // A document is never rendered inline, an HTML file served inline
         // from the portal's own origin would run as the portal.
         $inline = $attachment->isImage() || $attachment->isVideo() || $attachment->isAudio();
 

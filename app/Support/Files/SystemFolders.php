@@ -11,7 +11,7 @@ use App\Models\User;
  * organization / client / staff folder, and everything nested inside them) are
  * owned and created by an administrator so storage has a stable owner. Folders
  * and files both cascade on those columns, so before an account is erased for
- * good that whole subtree has to be handed to another admin — otherwise purging
+ * good that whole subtree has to be handed to another admin, otherwise purging
  * an administrator would take client and organization content with it.
  *
  * This only matters at the point of a real delete. An account sitting in the

@@ -1,4 +1,4 @@
-/* Illustration theming — swaps illustration art for its dark-mode variant.
+/* Illustration theming, swaps illustration art for its dark-mode variant.
    The SVGs are loaded as <img>, so page CSS cannot reach inside them. Instead we
    ship a parallel set under images/illustrations/dark/ where every black fill and
    stroke is white (the blue and red stay as drawn) and point the src at it while

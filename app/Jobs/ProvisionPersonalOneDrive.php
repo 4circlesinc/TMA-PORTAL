@@ -23,7 +23,7 @@ use Illuminate\Support\Str;
  * The connection carries NO portal folder (folder_id null): the drive mirrors
  * into the root of the person's own library, so "All Files" simply is their
  * OneDrive plus whatever the firm shares with them. Their OneDrive stays
- * PRIVATE — FileAccess's personal-space rule keeps other accounts (including
+ * PRIVATE. FileAccess's personal-space rule keeps other accounts (including
  * administrators) to explicit shares only.
  *
  * Uses the app-only Graph client (Files.ReadWrite.All application permission),
@@ -69,7 +69,7 @@ class ProvisionPersonalOneDrive implements ShouldQueue, ShouldBeUnique
 
         $upn = $account->email;
 
-        // One connection per drive is enough — an existing one (auto or via
+        // One connection per drive is enough, an existing one (auto or via
         // onedrive:connect) means there is nothing to provision.
         if (SharePointConnection::where('drive_kind', 'onedrive')->where('owner_upn', $upn)->exists()) {
             return;
@@ -95,7 +95,7 @@ class ProvisionPersonalOneDrive implements ShouldQueue, ShouldBeUnique
             'site_name' => $upn,
             'site_url' => $drive['webUrl'] ?? null,
             'drive_id' => $drive['id'],
-            'drive_name' => 'OneDrive — '.$upn,
+            'drive_name' => 'OneDrive, '.$upn,
             'drive_kind' => 'onedrive',
             'owner_upn' => $upn,
             'root_item_id' => null,

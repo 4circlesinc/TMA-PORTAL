@@ -5,7 +5,7 @@
  * handlers (SPA nav, settings) cannot turn the click into a soft refresh.
  *
  * A failed logout that still navigated to /auth/login used to bounce the
- * still-authenticated reader straight back into the portal — that is the
+ * still-authenticated reader straight back into the portal, that is the
  * "it just refreshed" bug, especially visible on Account settings.
  */
 (function () {

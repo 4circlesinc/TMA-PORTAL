@@ -112,7 +112,7 @@ final class Status
         return in_array($status, self::TERMINAL, true);
     }
 
-    /** Human label — also what the badges show. */
+    /** Human label, also what the badges show. */
     public static function label(string $status): string
     {
         return match ($status) {

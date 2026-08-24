@@ -24,7 +24,7 @@
     $INK = '#000000';
     $MUTED = 'rgba(0,0,0,0.40)';
     $LINE = 'rgba(0,0,0,0.10)';
-    // The live portal is portal.tmantoine*law*.com — the hardcoded
+    // The live portal is portal.tmantoine*law*.com, the hardcoded
     // portal.tmantoine.com this used to carry does not resolve (NXDOMAIN), so
     // the unsubscribe and fallback links in every email were dead. Taken from
     // APP_URL instead, which is correct in production and follows the app.
@@ -115,8 +115,8 @@
 
               @isset($quote)
                 {{--
-                  Escaped, NOT raw. This block carries text a user typed — the
-                  message on a signature request, an invitation note — and it
+                  Escaped, NOT raw. This block carries text a user typed, the
+                  message on a signature request, an invitation note, and it
                   goes out to external recipients. Rendering it unescaped let a
                   sender put markup (or a <script> tag) into somebody else's
                   inbox. Line breaks are the only formatting it needs, and

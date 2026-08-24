@@ -16,7 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * One aggregate answer to "is my stuff syncing?" — email, calendar,
+ * One aggregate answer to "is my stuff syncing?", email, calendar,
  * OneDrive and (for admins) Smartsheet document import in a single poll.
  * Drives the bottom-right sync toasts that appear right after connecting.
  * Each state is derived from the same records the feature pages read, so
@@ -58,7 +58,7 @@ class MeSyncStatusController extends Controller
     /*
      * A status poll must never be the thing that breaks. A stored token whose
      * ciphertext no longer matches APP_KEY throws on read, and one throw here
-     * used to 500 the whole endpoint — which killed the poll loop and left the
+     * used to 500 the whole endpoint, which killed the poll loop and left the
      * sync toast frozen on screen for the rest of the session. Report the
      * service as unhealthy and let the other two answer.
      */
@@ -89,7 +89,7 @@ class MeSyncStatusController extends Controller
             return ['state' => 'error', 'synced' => $synced];
         }
 
-        // The first import is the only pass with a knowable total — it walks a
+        // The first import is the only pass with a knowable total, it walks a
         // measured mailbox, so the card can show a real percentage.
         if ($account->mail_backfilled_at === null) {
             return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
@@ -131,7 +131,7 @@ class MeSyncStatusController extends Controller
                 return ['state' => 'error', 'count' => 0];
             }
 
-            // The post-connect import is still discovering calendars — but only
+            // The post-connect import is still discovering calendars, but only
             // a recent connect counts. If discovery never runs (no worker), this
             // state used to pin a "Finding your calendars…" toast for ever.
             return $account->updated_at
@@ -140,7 +140,7 @@ class MeSyncStatusController extends Controller
                 : ['state' => 'off'];
         }
 
-        // effectiveSubscriptionStatus() settles abandoned runs — a stale
+        // effectiveSubscriptionStatus() settles abandoned runs, a stale
         // 'syncing' row must not pin the toast (same trap as OneDrive below).
         $statuses = $calendars->map(fn (Calendar $c) => $c->effectiveSubscriptionStatus());
         $syncing = $statuses->filter(fn ($s) => $s === 'syncing')->count();
@@ -208,7 +208,7 @@ class MeSyncStatusController extends Controller
         $synced = $connection->items()->count();
 
         // Same arithmetic as the Files sync panel: Graph's childCount summed
-        // over every discovered folder plus the root — exact once discovery
+        // over every discovered folder plus the root, exact once discovery
         // finishes, a rising lower bound before that, null while unknown.
         $total = ($connection->items()
             ->where('item_type', 'folder')
@@ -221,7 +221,7 @@ class MeSyncStatusController extends Controller
         /*
          * `syncing` is a lock, not a fact. A run that is killed mid-pass (worker
          * restart, deploy, no worker at all) never reaches its final update and
-         * leaves the flag set for ever — which pinned a "Syncing OneDrive…"
+         * leaves the flag set for ever, which pinned a "Syncing OneDrive…"
          * toast on screen all night with 1,103 of 1,103 items already imported.
          * The synchroniser already treats a lock older than LOCK_MINUTES as
          * abandoned; the status has to read it the same way or the UI keeps
@@ -240,7 +240,7 @@ class MeSyncStatusController extends Controller
     /**
      * Smartsheet → client File Library document import (CBI).
      *
-     * Administrators only, and only while FEATURE_CBI is on — everyone else
+     * Administrators only, and only while FEATURE_CBI is on, everyone else
      * gets `off` so the toast never appears for an empty answer.
      */
     private function smartsheet($user): array

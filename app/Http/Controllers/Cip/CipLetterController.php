@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
  * The Granted and Denied letters (§23).
  *
  * Ten templates, one pair per investment type. Reading is open to anyone who
- * may reach the module; rewriting is `cip.configure` — one edit is every
+ * may reach the module; rewriting is `cip.configure`, one edit is every
  * future decision letter, which is a different order of act from recording
  * one file's outcome.
  */

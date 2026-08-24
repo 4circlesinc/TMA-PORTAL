@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
  *
  * These screens read the real directory rather than keeping their own list:
  * employees and client contacts are `users` rows, and a prospect is someone
- * who has been invited but has not signed in yet — either a live `invitations`
+ * who has been invited but has not signed in yet, either a live `invitations`
  * row or an account that still holds the automatic password
  * it was created with. Writes are deliberately not duplicated here: creating,
  * editing and deleting accounts stays in {@see AdminUsersController}, so there
@@ -131,7 +131,7 @@ class PeopleController extends Controller
 
     /**
      * People → Browse prospects: invited, not yet activated. Two sources, one
-     * list — a client invited from the Clients hub who has not accepted, and
+     * list, a client invited from the Clients hub who has not accepted, and
      * an account created for someone who has never signed in.
      */
     public function prospects(Request $request): JsonResponse
@@ -203,7 +203,7 @@ class PeopleController extends Controller
      * Which email that is depends on where they are: an account that never set
      * a password gets the activation (reset) link, because a welcome note it
      * cannot act on is useless; an active account gets the welcome postcard.
-     * Addresses that belong to neither are refused — this screen re-invites
+     * Addresses that belong to neither are refused, this screen re-invites
      * people who are already in the account, it is not a way to email
      * strangers.
      */
@@ -458,7 +458,7 @@ class PeopleController extends Controller
                 'awaitingApproval' => $u->status === User::STATUS_PENDING,
             ]);
 
-        // The unused-account half only belongs to the outstanding view — an
+        // The unused-account half only belongs to the outstanding view, an
         // "accepted invitations" list should not be padded with dormant logins.
         return in_array($status, ['waiting', 'all'], true)
             ? $invites->concat($accounts)->values()
@@ -473,7 +473,7 @@ class PeopleController extends Controller
 
     private function resendInvite(Invitation $invite, User $actor): string
     {
-        // A lapsed invitation is revived rather than refused — this screen
+        // A lapsed invitation is revived rather than refused, this screen
         // exists precisely to chase the ones that went cold.
         if ($invite->isExpired()) {
             $invite->forceFill([
@@ -496,7 +496,7 @@ class PeopleController extends Controller
 
     private function resendForUser(User $user, User $actor, ?string $note): string
     {
-        // No password of their own yet — the activation link is the only email
+        // No password of their own yet, the activation link is the only email
         // that gets them in.
         if ($user->password_auto || ! $user->hasVerifiedEmail()) {
             Password::broker()->sendResetLink(['email' => $user->email]);
@@ -541,7 +541,7 @@ class PeopleController extends Controller
         }
 
         // One phrasing for every "when did this last happen" cell in the
-        // portal — see App\Support\Presence\LastSeen.
+        // portal, see App\Support\Presence\LastSeen.
         return LastSeen::short(
             $value instanceof \DateTimeInterface ? Carbon::instance($value) : Carbon::parse($value),
             $viewer,

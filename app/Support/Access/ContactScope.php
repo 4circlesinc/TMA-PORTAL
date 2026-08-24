@@ -11,7 +11,7 @@ use App\Support\Access\Role;
  * Who a person is allowed to start a conversation with.
  *
  * Messaging used to offer every approved account in the portal to everybody,
- * which meant a client could search up — and message — another client, plus
+ * which meant a client could search up, and message, another client, plus
  * every employee they had never worked with. Staff keep the full directory;
  * a client sees only the people actually working on their account.
  *
@@ -22,7 +22,7 @@ class ContactScope
 {
     /**
      * User ids this person may start a conversation with, or null meaning
-     * "no restriction" — the caller then skips the whereIn entirely rather
+     * "no restriction", the caller then skips the whereIn entirely rather
      * than building a list of every user in the portal.
      */
     public static function visibleUserIds(User $user): ?array

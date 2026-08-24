@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * a file. This talks about a *requirement*: the slot outlives the file in it,
  * so "we need a clearer scan of this" has to survive the clearer scan
  * arriving. Hanging the conversation off the file would lose it at the moment
- * it was answered — and would put it on a library object the provider side has
+ * it was answered, and would put it on a library object the provider side has
  * no reason to be reading.
  *
  * Threading is one level, exactly as file comments do it: a reply carries the
@@ -73,8 +73,8 @@ class DocumentComments
              * it answers, not to a third level nobody will read in a table
              * cell. Taken from the id rather than by loading the root: a
              * reply already carries its root, and asking the relation for it
-             * is both a query and — when the parent IS the root, and so has no
-             * root_id — an answer of null that would strand the comment
+             * is both a query and, when the parent IS the root, and so has no
+             * root_id, an answer of null that would strand the comment
              * outside every thread.
              */
             $rootId = $parent ? ($parent->root_id ?: $parent->id) : null;
@@ -99,7 +99,7 @@ class DocumentComments
     /**
      * A thread, roots first with their replies under them.
      *
-     * Two queries whatever the size of the conversation — the roots, then
+     * Two queries whatever the size of the conversation, the roots, then
      * every reply on the document at once, matched up in memory.
      */
     public static function thread(CipDocument $document, User $viewer): array

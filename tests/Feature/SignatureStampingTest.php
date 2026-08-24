@@ -354,7 +354,7 @@ class SignatureStampingTest extends TestCase
         // Better to fail now than after someone has signed it.
         $this->actingAs($user)->postJson('/portal/signatures/'.$id.'/send')
             ->assertStatus(422)
-            ->assertJsonPath('message', 'This document can\'t be prepared for signing — it may be password-protected or damaged.');
+            ->assertJsonPath('message', 'This document can\'t be prepared for signing. It may be password-protected or damaged.');
 
         Mail::assertNothingSent();
     }

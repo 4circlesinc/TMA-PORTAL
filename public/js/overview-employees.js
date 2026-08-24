@@ -21,7 +21,7 @@
     return person.avatar || 'images/avatars/Avatar3d01.png';
   }
 
-  /* Presence chips are Online / Offline only — same as portal-home.js. */
+  /* Presence chips are Online / Offline only, same as portal-home.js. */
   function presenceTone(p) {
     if (p.statusLabel) return p.status === 'offline' ? 'offline' : 'online';
     return p.online ? 'online' : 'offline';

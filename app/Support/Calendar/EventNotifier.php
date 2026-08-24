@@ -80,7 +80,7 @@ class EventNotifier
 
     /**
      * Tell the organizer how someone replied. Silent when the organizer is the
-     * one replying — accepting your own meeting should not email you.
+     * one replying, accepting your own meeting should not email you.
      */
     public static function notifyOrganizerOfResponse(CalendarEvent $event, CalendarEventAttendee $attendee): bool
     {
@@ -130,7 +130,7 @@ class EventNotifier
 
     /**
      * The event as the templates want it. Times are rendered in the event's
-     * own zone — an invitation showing UTC to someone in Johannesburg is
+     * own zone, an invitation showing UTC to someone in Johannesburg is
      * worse than useless.
      *
      * @return array<string, mixed>

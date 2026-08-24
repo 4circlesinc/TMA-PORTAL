@@ -13,7 +13,7 @@ use Carbon\CarbonImmutable;
  *
  * A provider implementation returns rows in this shape from changedEvents(),
  * and is handed this shape to createEvent()/updateEvent(). Keeping the mapping
- * to and from CalendarEvent here — rather than in the synchronizer — means the
+ * to and from CalendarEvent here, rather than in the synchronizer, means the
  * sync engine never has to know a Google field name from a Graph one.
  *
  * Fields (all keys always present, values nullable):
@@ -47,7 +47,7 @@ class RemoteEvent
     /**
      * The columns to write when a remote event lands locally.
      *
-     * Never sets uuid, calendar_id or the external identity — those belong to
+     * Never sets uuid, calendar_id or the external identity, those belong to
      * the synchronizer, which knows which local row (if any) this maps to.
      *
      * @param  array<string, mixed>  $remote
@@ -79,7 +79,7 @@ class RemoteEvent
      * Only the fields a user would notice, so a provider bumping an internal
      * timestamp does not read as an edit. Dates are canonicalised to a single
      * UTC form so the same instant hashes identically whether it arrived as
-     * '…+00:00' or '…Z' — otherwise a pure format difference would masquerade
+     * '…+00:00' or '…Z', otherwise a pure format difference would masquerade
      * as a change and fabricate conflicts.
      *
      * @param  array<string, mixed>  $remote

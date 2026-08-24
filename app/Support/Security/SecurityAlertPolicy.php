@@ -12,7 +12,7 @@ use App\Support\SecurityPolicies;
  * Who else hears about an account-safety event, firm-wide.
  *
  * Account settings > Security > Security alert settings edits this. It sits
- * beside {@see SecurityAlerts}, which is the *personal* half — a person
+ * beside {@see SecurityAlerts}, which is the *personal* half, a person
  * choosing which of their own alerts to receive. This half is the firm's:
  * whether administrators and named contacts are told as well.
  *
@@ -27,9 +27,9 @@ use App\Support\SecurityPolicies;
  * What is here are the two the portal genuinely detects today, both already
  * recorded in `auth_events`:
  *
- *  - `newDevice` — a returning account signs in from an IP and user agent it
+ *  - `newDevice`, a returning account signs in from an IP and user agent it
  *    has never used. Detected in {@see \App\Listeners\RecordAuthEvent}.
- *  - `failedSignIns` — repeated failures against one account inside an hour.
+ *  - `failedSignIns`, repeated failures against one account inside an hour.
  *
  * If geo-IP or file scanning is added later, this is where the event belongs;
  * until then the screen only offers what it can actually do.
@@ -79,7 +79,7 @@ final class SecurityAlertPolicy
     /**
      * Tell the firm about a security event on someone's account.
      *
-     * The account owner is notified separately and always — that is
+     * The account owner is notified separately and always, that is
      * {@see SecurityAlerts}, and it is not this method's business. This adds
      * the administrators and named contacts on top, and only if the firm asked
      * for them.

@@ -3,13 +3,13 @@
  * Language: 'auto' (the default) resolves from the browser; an explicit
  * choice wins. Only shipped dictionaries are offered. The active language's
  * dictionary loads from /js/i18n/<lang>.js and is applied to the DOM on load
- * and on every SPA re-render via a MutationObserver — exact string matches
+ * and on every SPA re-render via a MutationObserver, exact string matches
  * plus a small set of patterns for dynamic text ("3 of 10 messages").
  *
  * Time: every date the portal prints goes through Date#toLocale*() or
  * Intl.DateTimeFormat. Both are wrapped so that (a) a manually chosen time
  * zone becomes the default timeZone everywhere, and (b) a non-English
- * language becomes the default locale — month names, weekday names and
+ * language becomes the default locale, month names, weekday names and
  * number order follow the language without touching each call site. With
  * auto time zone (the default) the device zone is already correct, so no
  * timeZone default is injected.

@@ -20,7 +20,7 @@ use App\Models\User;
  *  - **Everybody else sees only people who can already open it**, so a picker
  *    never becomes a directory of names the reader has no other way to see.
  *    A client can hold `full` over their own upload, and the answer to "who
- *    else is in this portal?" is not theirs to browse — the firm's other
+ *    else is in this portal?" is not theirs to browse, the firm's other
  *    clients are on that list.
  *
  * `hasAccess` travels with each person so the picker can say, before the

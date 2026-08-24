@@ -118,7 +118,7 @@ class FolderController extends BaseFilesController
 
     /**
      * Personal colour and icon preferences share one row per (user, folder).
-     * Clearing one field must not blow away the other — only drop the row
+     * Clearing one field must not blow away the other, only drop the row
      * once both are empty.
      */
     private function setPreferenceField(Folder $folder, User $user, string $column, ?string $value): void

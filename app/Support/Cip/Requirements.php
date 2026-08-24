@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * The document checklist templates (§12), and putting them onto people.
  *
- * A template is a sentence about a kind of person — "every dependent under 16
+ * A template is a sentence about a kind of person, "every dependent under 16
  * owes a birth certificate". A slot, one `cip_documents` row, is that sentence
  * about one person, plus the file that answered it once there is one.
  * Materialising is the step between the two, and the only thing that opens or
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * **Templates move forward, never backward.** A checklist already being worked
  * on gains whatever the templates have added since; it never loses an answer.
  * Withdrawing a requirement today does not unfile the passport somebody
- * scanned last week — that slot keeps its file, its version history and its
+ * scanned last week, that slot keeps its file, its version history and its
  * permissions, and merely stops being demanded. Only an *empty* slot for a
  * requirement that no longer applies is taken away, because an empty slot is a
  * question, and a question nobody is asking any more is noise on a reviewer's
@@ -40,7 +40,7 @@ class Requirements
 {
     /**
      * The active templates for one applicant type, in the order they are
-     * asked for — which is {@see CipDocumentRequirement::scopeActive()}'s
+     * asked for, which is {@see CipDocumentRequirement::scopeActive()}'s
      * order, not a second opinion about it.
      *
      * @return Collection<int, CipDocumentRequirement>
@@ -58,7 +58,7 @@ class Requirements
      * ones it no longer does.
      *
      * Idempotent, and cheap enough to call on every read: a run with nothing
-     * to change writes nothing at all. That matters more than it looks — a
+     * to change writes nothing at all. That matters more than it looks, a
      * document slot touches its application, and the offline sync cursor asks
      * "which applications have moved since?" of `cip_applications.updated_at`.
      * A materialise that re-saved unchanged rows would report every open
@@ -88,7 +88,7 @@ class Requirements
              * The person's slots are read ONCE and handed down.
              *
              * openSlot used to look its own row up, which is a query per
-             * template — and materialising an application runs it for every
+             * template, and materialising an application runs it for every
              * person on it, so a family of six against seven requirements was
              * forty-two round trips to settle a checklist that had not
              * changed. One read, keyed by the slug the template is keyed on.
@@ -101,7 +101,7 @@ class Requirements
 
             // Anything still pointing at a template outside that list is a
             // requirement this person has stopped owing. Slots with no
-            // requirement_id are left alone — see {@see self::openSlot()}.
+            // requirement_id are left alone, see {@see self::openSlot()}.
             $person->documents()
                 ->whereNotNull('requirement_id')
                 ->whereNotIn('requirement_id', $templates->pluck('id')->all())
@@ -110,8 +110,8 @@ class Requirements
         });
 
         // Re-read rather than handing back what was just built: the row the
-        // database holds carries the column defaults — a new slot's
-        // `pending_upload` status among them — and the caller is entitled to
+        // database holds carries the column defaults, a new slot's
+        // `pending_upload` status among them, and the caller is entitled to
         // the checklist as it actually stands.
         return $person->documents()->get();
     }
@@ -138,7 +138,7 @@ class Requirements
      *
      * Both the flag and the soft delete: `active` is what a listing filters
      * on, and the row staying addressable is what lets a filled slot still say
-     * what it was for. The template row itself is never hard-deleted — filled
+     * what it was for. The template row itself is never hard-deleted, filled
      * slots hold a foreign key to it, and what was asked at the time is part
      * of the record of how the application was handled.
      *
@@ -163,7 +163,7 @@ class Requirements
      * There is nothing to undelete: the empty slots were removed outright, not
      * parked, so who owes this has to be worked out from the templates again.
      * That is the sweep below, and it deliberately runs the same call every
-     * other path runs — bringing one requirement back also settles whatever
+     * other path runs, bringing one requirement back also settles whatever
      * else the templates have changed in the meantime, which is what this
      * class promises everywhere else rather than a special case here.
      */
@@ -180,7 +180,7 @@ class Requirements
     }
 
     /**
-     * This person's slot for one template — created if it is not there, and
+     * This person's slot for one template, created if it is not there, and
      * brought into line with the template if it is.
      *
      * `status` is never written from here. It belongs to the review
@@ -224,7 +224,7 @@ class Requirements
          * Cast on both sides before comparing: PDO hands bigint columns back
          * as strings on Postgres and as integers on SQLite, so a strict
          * comparison would find a difference on every run under Postgres and
-         * re-save a row nothing had touched — the exact churn this method is
+         * re-save a row nothing had touched, the exact churn this method is
          * written to avoid.
          */
         if ((int) $slot->requirement_id !== (int) $template->id) {
@@ -236,7 +236,7 @@ class Requirements
          * keeps `label` on the slot precisely so a requirement reworded in
          * March does not restate what was filed in January. So an answered
          * slot keeps the words it was answered under, and only one still
-         * waiting is brought up to date — a question that is still being asked
+         * waiting is brought up to date, a question that is still being asked
          * ought to be asked in the words the firm uses now.
          */
         if (! $slot->isFilled()) {
@@ -264,7 +264,7 @@ class Requirements
      * what takes it off {@see DocumentSlots::outstanding()} while leaving it
      * on the file.
      *
-     * Empty, it goes — and goes properly, rather than into the soft-deleted
+     * Empty, it goes, and goes properly, rather than into the soft-deleted
      * tail. `cip_documents` carries a plain unique index on (person_id, type)
      * that counts trashed rows, so a tombstone there would make the slot
      * impossible to re-open if the requirement ever came back.
@@ -285,8 +285,8 @@ class Requirements
     /**
      * Take a retired requirement off the checklists that still carry it.
      *
-     * Chunked rather than loaded whole — this walks every checklist in the
-     * module — and chunked by id specifically, because the walk deletes rows
+     * Chunked rather than loaded whole, this walks every checklist in the
+     * module, and chunked by id specifically, because the walk deletes rows
      * and an offset-paged one would step straight over whatever moved up.
      */
     private static function settle(CipDocumentRequirement $requirement): void
@@ -328,7 +328,7 @@ class Requirements
      * A checklist changes only while its application can.
      *
      * Once a file has gone to the Unit, adding a question to it or taking one
-     * away would rewrite a record somebody else is holding a copy of — so the
+     * away would rewrite a record somebody else is holding a copy of, so the
      * submission lock closes the checklist along with everything else. A
      * decided application is the same argument after the fact: what it asked
      * for is part of the history of how it was decided.

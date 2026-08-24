@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Settings → Account and Reporting → Edit Company Branding.
  *
- * Reading branding is open to every signed-in account — the whole point is
+ * Reading branding is open to every signed-in account, the whole point is
  * that the firm's name, title and colours reach everybody's browser. Editing
  * it needs `settings.branding`, which is administrators only.
  */
@@ -89,7 +89,7 @@ class BrandingController extends Controller
         ]);
     }
 
-    /** "Use Portal Defaults" — appearance only; the account name is kept. */
+    /** "Use Portal Defaults", appearance only; the account name is kept. */
     public function reset(Request $request): JsonResponse
     {
         $this->authorizeBranding($request);

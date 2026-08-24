@@ -55,7 +55,7 @@
     <aside class="gal__side">
       <div class="gal__head">
         <p class="gal__title">Email postcards</p>
-        <p class="gal__sub">Every template from <b>/email/templates</b>, rendered for review. These are the real designs — approve them and we wire them to real sends.</p>
+        <p class="gal__sub">Every template from <b>/email/templates</b>, rendered for review. These are the real designs, approve them and we wire them to real sends.</p>
       </div>
       <nav id="gal-nav"></nav>
     </aside>
@@ -72,7 +72,7 @@
       if (!T) { main.innerHTML = '<p>Templates failed to load.</p>'; return; }
 
       // Rebuild the current page's <head> (base + stylesheets) so the mobile
-      // iframe renders the same email with the same styles — a genuinely
+      // iframe renders the same email with the same styles, a genuinely
       // responsive preview, not a separate mobile design.
       var HEAD = (function () {
         var base = document.querySelector('base');
@@ -138,7 +138,7 @@
           }
           function paintMobile() {
             // Same email, rendered in a phone-width iframe so its own media
-            // queries fire — responsive, not a different design.
+            // queries fire, responsive, not a different design.
             stage.className = 'gal__stage gal__stage--mobile';
             stage.innerHTML = '<iframe class="gal__phone" title="Mobile preview"></iframe>';
             stage.querySelector('iframe').srcdoc = mobileDoc(body);

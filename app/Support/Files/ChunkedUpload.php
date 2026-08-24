@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 /**
  * Resumable chunked uploads (up to 2 GB). A file is only ever persisted once
  * every chunk has arrived, the parts are assembled, the assembled bytes pass
- * validation, and the row is saved — never before. Failed or abandoned sessions
+ * validation, and the row is saved, never before. Failed or abandoned sessions
  * leave no "completed" file record behind.
  */
 class ChunkedUpload
@@ -96,7 +96,7 @@ class ChunkedUpload
         $target = $dir.'/'.$index.'.part';
         if (! @rename($sourceTmpPath, $target)) {
             if (! @copy($sourceTmpPath, $target)) {
-                throw new FileValidationException('Upload interrupted — a chunk could not be stored.');
+                throw new FileValidationException('Upload interrupted, a chunk could not be stored.');
             }
             @unlink($sourceTmpPath);
         }
@@ -135,7 +135,7 @@ class ChunkedUpload
         $indexes = self::partsPresent($dir, $session->total_chunks);
 
         if (count($indexes) !== $session->total_chunks) {
-            throw new FileValidationException('Upload could not be completed — some parts are missing. Please retry.');
+            throw new FileValidationException('Upload could not be completed, some parts are missing. Please retry.');
         }
 
         // Detect a name conflict BEFORE assembling/storing, so the client can
@@ -160,7 +160,7 @@ class ChunkedUpload
         $out = fopen($assembled, 'wb');
         if ($out === false) {
             $session->update(['status' => UploadSession::STATUS_FAILED]);
-            throw new FileValidationException('Storage unavailable — the upload could not be assembled.');
+            throw new FileValidationException('Storage unavailable, the upload could not be assembled.');
         }
 
         for ($i = 0; $i < $session->total_chunks; $i++) {
@@ -169,7 +169,7 @@ class ChunkedUpload
             if ($in === false) {
                 fclose($out);
                 $session->update(['status' => UploadSession::STATUS_FAILED]);
-                throw new FileValidationException('Upload could not be completed — a part could not be read.');
+                throw new FileValidationException('Upload could not be completed, a part could not be read.');
             }
             stream_copy_to_stream($in, $out);
             fclose($in);
@@ -180,7 +180,7 @@ class ChunkedUpload
         if ($session->size > 0 && (filesize($assembled) ?: 0) !== $session->size) {
             self::removeDir($dir);
             $session->update(['status' => UploadSession::STATUS_FAILED]);
-            throw new FileValidationException('Upload could not be completed — the assembled file size did not match.');
+            throw new FileValidationException('Upload could not be completed, the assembled file size did not match.');
         }
 
         // Re-validate the real, assembled bytes (extension + MIME + size).

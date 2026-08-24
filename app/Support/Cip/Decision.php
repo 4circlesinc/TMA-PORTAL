@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Recording the Unit's decision (§21) — the Decision date, Granted or Denied,
+ * Recording the Unit's decision (§21), the Decision date, Granted or Denied,
  * and the automatic move to that terminal status.
  *
  * The generic status endpoint refuses GRANTED and DENIED on purpose: both are
@@ -22,8 +22,8 @@ use Illuminate\Validation\ValidationException;
  *
  * The status change goes through the engine, not around it: permission is
  * still `cip.decide`, and the outcome and its date are written before the
- * row moves. A decision lands from Background check or Delayed — the two
- * edges the map allows — not from earlier in the lifecycle.
+ * row moves. A decision lands from Background check or Delayed, the two
+ * edges the map allows, not from earlier in the lifecycle.
  */
 class Decision
 {

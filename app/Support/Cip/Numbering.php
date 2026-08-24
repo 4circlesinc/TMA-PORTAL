@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\DB;
  * Internal application numbers: [Provider Code][YY]-[Sequence], minted the
  * moment an application is created and never reused, never changed.
  *
- * The sequence advances under a row lock on cip_counters — one row per
- * (provider, year) — so two simultaneous creates cannot mint GAL26-00003
+ * The sequence advances under a row lock on cip_counters, one row per
+ * (provider, year), so two simultaneous creates cannot mint GAL26-00003
  * twice. max()+1 over cip_applications would race exactly there. Call only
  * inside the transaction that inserts the application, so a failed insert
  * rolls the counter back with it and the sequence stays gapless.

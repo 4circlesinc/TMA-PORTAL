@@ -14,7 +14,7 @@
  * text files are fetched and shown on a white sheet. Both fetch the bytes
  * themselves, so they work against attachment routes that serve documents
  * download-only (an iframe there would trigger a download instead of a
- * preview — and Mac Safari can't be trusted to paint a PDF into an iframe at
+ * preview, and Mac Safari can't be trusted to paint a PDF into an iframe at
  * all, which is why the File Library viewer moved to pdf.js too). The two
  * mounters are exported (pdfInto / textInto) so email.js's older chrome can
  * reuse them instead of keeping its iframe.
@@ -82,7 +82,7 @@
   var TEXT_EXT = /^(txt|text|csv|tsv|md|markdown|json|log|ini|yml|yaml)$/;
 
   /* Previewed as fetched text on a sheet, never handed to the browser to
-   * interpret — which is also why HTML and SVG stay out: shown as source
+   * interpret, which is also why HTML and SVG stay out: shown as source
    * they'd only confuse, rendered they'd execute in our origin. */
   function isText(item) {
     var mime = mimeOf(item);
@@ -111,7 +111,7 @@
     play: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
   };
 
-  /* pdf.js is ~1.7 MB with its worker, so it loads on first use — the same
+  /* pdf.js is ~1.7 MB with its worker, so it loads on first use, the same
    * lazy ESM import email.js and portal-files.js use for their viewers. */
   var pdfjsPromise = null;
   function loadPdfjs() {
@@ -151,7 +151,7 @@
    * Page one first, rather than the whole file first.
    *
    * This used to fetch every byte on the page and hand pdf.js the buffer,
-   * because the old file route could not answer a Range request — so opening a
+   * because the old file route could not answer a Range request, so opening a
    * 40 MB scan meant waiting for all 40 MB before the first page could be
    * drawn, and the reader watched "Loading preview…" for ten seconds to look
    * at page one. The route speaks Range now (and object storage always did),
@@ -160,7 +160,7 @@
    *
    * The whole-file read is kept as the fallback. A file that is not a PDF is
    * not a PDF either way, so only a transport failure is worth a second try —
-   * a proxy that strips Range, an ancient deploy — and there it is the same
+   * a proxy that strips Range, an ancient deploy, and there it is the same
    * code that always worked.
    */
   function loadPdfDocument(url) {
@@ -297,7 +297,7 @@
         // sends people chasing the network when the file was never a PDF.
         docStatus(host, err && err.name === 'InvalidPDFException'
           ? 'This file is not a valid PDF.'
-          : 'Could not load this PDF — download it instead.');
+          : 'Could not load this PDF, download it instead.');
       });
 
     return function () {
@@ -314,7 +314,7 @@
   }
 
   /* Text sheets stay honest about size: past 2 MB the preview is refused
-   * outright, and what does load is clipped at 200k characters — the same
+   * outright, and what does load is clipped at 200k characters, the same
    * ceiling the File Library viewer uses. Returns a cleanup function. */
   var TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
   var TEXT_PREVIEW_MAX_CHARS = 200000;
@@ -326,7 +326,7 @@
     host.classList.add('tma-lightbox__doc');
 
     if (size && size > TEXT_PREVIEW_MAX_BYTES) {
-      docStatus(host, 'Too large to preview — download it instead.');
+      docStatus(host, 'Too large to preview, download it instead.');
       return function () { dead = true; };
     }
 
@@ -346,7 +346,7 @@
       })
       .catch(function () {
         if (dead) return;
-        docStatus(host, 'Could not load this file — download it instead.');
+        docStatus(host, 'Could not load this file, download it instead.');
       });
 
     return function () {
@@ -384,7 +384,7 @@
       );
     }
 
-    // Filled in after paint by mountPdfInto / mountTextInto — building a
+    // Filled in after paint by mountPdfInto / mountTextInto, building a
     // string can't render a canvas.
     if (isPdf(item)) return '<div class="tma-lightbox__doc" data-lb-doc="pdf"></div>';
 
@@ -432,7 +432,7 @@
     );
   }
 
-  /* Replace the thumbnail with the real image once it has decoded — swapping
+  /* Replace the thumbnail with the real image once it has decoded, swapping
    * on `load` rather than on `src` means the picture never flashes empty. */
   function swapFullImage(el) {
     var img = el.querySelector('[data-lb-full]');
@@ -585,7 +585,7 @@
     current = { el: el, onKey: onKey, overflow: overflow, stageCleanup: null };
     paint();
 
-    // Entrance transition — added on the next frame so it animates in.
+    // Entrance transition, added on the next frame so it animates in.
     requestAnimationFrame(function () {
       if (current && current.el === el) el.classList.add('is-open');
     });

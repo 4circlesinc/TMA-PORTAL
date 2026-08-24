@@ -19,10 +19,10 @@ use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * The Reporting page — a main sidebar page for administrators.
+ * The Reporting page, a main sidebar page for administrators.
  *
  * The page offered "Create Report" and then filed a name and a date into
- * localStorage — no numbers, nothing to open, gone with the browser cache.
+ * localStorage, no numbers, nothing to open, gone with the browser cache.
  * A report created here is computed on the spot from the portal's own tables
  * (see {@see ReportBuilder}) and stored with its answer, so what it said in
  * July still says the same thing in September.
@@ -138,7 +138,7 @@ class ReportsController extends Controller
         return response()->json(['report' => $this->find($uid)->toRecord(withData: true)]);
     }
 
-    /** Recompute a report now — the recurring tab's "Run now", and the retry after a failure. */
+    /** Recompute a report now, the recurring tab's "Run now", and the retry after a failure. */
     public function run(Request $request, string $uid): JsonResponse
     {
         $this->authorizeReporting($request);
@@ -209,7 +209,7 @@ class ReportsController extends Controller
      * The dates a report covers.
      *
      * The preset ranges are inclusive of today, so "Last 7 days" is today plus
-     * the six before it — the reader's own days, not UTC's, or a report run at
+     * the six before it, the reader's own days, not UTC's, or a report run at
      * 9pm in Sydney would be labelled with yesterday's date.
      */
     private function window(array $data, $user): array

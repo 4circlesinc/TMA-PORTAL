@@ -85,7 +85,7 @@ class SecuritySettingsController extends Controller
     /**
      * Set (or replace) the account's phone number.
      *
-     * The same `users.phone` column My profile writes — the two screens are
+     * The same `users.phone` column My profile writes, the two screens are
      * two doors onto one number, not two numbers. Nothing here claims the
      * number is verified: verification needs an SMS gateway, and the portal
      * has none configured, so `phone_verified_at` deliberately stays null
@@ -130,7 +130,7 @@ class SecuritySettingsController extends Controller
     }
 
     /**
-     * Give an account with no password of its own one — the only way a person
+     * Give an account with no password of its own one, the only way a person
      * who joined through Google/Microsoft, or was created by an administrator,
      * can get a password without going through "forgot password".
      *
@@ -160,8 +160,8 @@ class SecuritySettingsController extends Controller
     }
 
     /**
-     * End one other session. The client never sees a real session id — that is
-     * a bearer token for that browser — so sessions are addressed by a digest
+     * End one other session. The client never sees a real session id, that is
+     * a bearer token for that browser, so sessions are addressed by a digest
      * of the id and matched back here.
      */
     public function revokeSession(Request $request, string $session): JsonResponse
@@ -184,7 +184,7 @@ class SecuritySettingsController extends Controller
         // let itself back in on the next request, so the button would look
         // like it worked and do nothing. Remember tokens belong to the
         // account, not the session, so the only way to stop that one device is
-        // to cycle the token — which asks every other remembered device to
+        // to cycle the token, which asks every other remembered device to
         // sign in again. For a security control that is the safe way to be
         // wrong, and the UI says so.
         $user = $request->user();

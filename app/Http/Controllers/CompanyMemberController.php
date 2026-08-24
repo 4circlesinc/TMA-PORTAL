@@ -19,7 +19,7 @@ use Illuminate\Validation\Rule;
  * them invited.
  *
  * Reading the list is `clients.view`; changing it is `clients.manage`, the same
- * bar as editing the client records themselves — adding somebody to a company
+ * bar as editing the client records themselves, adding somebody to a company
  * hands them access to that company's files and invoices.
  */
 class CompanyMemberController extends Controller

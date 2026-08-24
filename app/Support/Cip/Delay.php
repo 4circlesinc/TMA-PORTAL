@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Delayed applications (§20) — 180 days after Accepted for processing, with
+ * Delayed applications (§20). 180 days after Accepted for processing, with
  * no decision, the file becomes Delayed.
  *
  * The clock starts when staff record the accepted date (§19). Nothing here
@@ -30,7 +30,7 @@ class Delay
      *
      * Returns the number that moved, so the command can say what it did.
      * Live is flushed here because a console tick has no HTTP terminate step
-     * of its own — colleagues with the table open still see the move.
+     * of its own, colleagues with the table open still see the move.
      */
     public static function run(): int
     {
@@ -77,7 +77,7 @@ class Delay
     /**
      * Move one file to Delayed and tell the three named classes.
      *
-     * Returns the refreshed application, or null when it was not due — already
+     * Returns the refreshed application, or null when it was not due, already
      * delayed, already decided, or not on an edge the engine will walk.
      */
     public static function flag(CipApplication $application): ?CipApplication

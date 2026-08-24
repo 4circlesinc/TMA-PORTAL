@@ -7,8 +7,8 @@ use App\Models\Company;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The bridge between service providers as the firm sees them — company
- * records in the Client Hub — and the numbering registry the CIP module
+ * The bridge between service providers as the firm sees them, company
+ * records in the Client Hub, and the numbering registry the CIP module
  * needs. There is no separate provider screen: giving a company a CIP code
  * on its own page is what makes it a provider, and the cip_providers row is
  * invisible plumbing that carries the code and the number sequences.

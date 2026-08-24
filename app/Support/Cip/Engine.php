@@ -10,12 +10,12 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The one path an application's status travels — a FROM→TO map plus a
+ * The one path an application's status travels, a FROM→TO map plus a
  * per-transition permission, applied in a transaction that also writes the
  * append-only cip_events row. Nothing else writes cip_applications.status.
  *
  * The map is the whole lifecycle from day one. Notification fan-out attaches
- * at {@see write()} — every status change is one §22 notice, in the filing
+ * at {@see write()}, every status change is one §22 notice, in the filing
  * subject format, to the four named classes. Special-case mailers must not
  * send a second copy of the same move.
  */
@@ -38,7 +38,7 @@ class Engine
     /**
      * Entering this status needs this capability (through CipAccess, so
      * officer grants count). Submission (→ NEW) is additionally open to the
-     * application's creator — the provider side submits a leftover draft.
+     * application's creator, the provider side submits a leftover draft.
      */
     private const TRANSITION_CAPABILITIES = [
         Status::NEW => 'cip.create',
@@ -76,7 +76,7 @@ class Engine
         }
 
         // Submission is special: a leftover draft is filed by the side that
-        // wrote it, and external accounts hold no matrix capability — the
+        // wrote it, and external accounts hold no matrix capability, the
         // creator check is their whole grant. New files start at NEW, so this
         // edge is only for rows that have not yet been moved.
         if ($to === Status::NEW) {
@@ -90,7 +90,7 @@ class Engine
     }
 
     /**
-     * The edges out of here that this actor may drive — what a screen needs to
+     * The edges out of here that this actor may drive, what a screen needs to
      * know before it draws a button.
      *
      * A filter over the two questions above rather than a second reading of
@@ -111,7 +111,7 @@ class Engine
 
     /**
      * Apply one transition: validate the edge and the actor, update the row,
-     * write the event — atomically. Throws rather than silently refusing, so
+     * write the event, atomically. Throws rather than silently refusing, so
      * a caller cannot mistake "nothing happened" for success.
      */
     public static function apply(CipApplication $application, string $to, ?User $actor, array $meta = []): CipApplication

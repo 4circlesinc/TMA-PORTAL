@@ -6,7 +6,7 @@
  * filter; bulk selection. Rows open their action URL in place via the shell
  * navigator.
  *
- * The toolbar deliberately mirrors the Users table — same
+ * The toolbar deliberately mirrors the Users table, same
  * .tma-dash__toolbar / .tma-dash__tool-btn / .tma-dash__check parts, same
  * "N Selected" bulk group that appears only once something is picked.
  *
@@ -67,7 +67,7 @@
      * The one count on this screen, and the only place it is stated: how many
      * of the caller's notifications are still unread, straight from the store
      * (which is the same number the bell and the sidebar render). It is not
-     * repeated on the filter button — a badge there read as "how many rows this
+     * repeated on the filter button, a badge there read as "how many rows this
      * filter would show", which it never was.
      */
     function countLabel() {
@@ -188,7 +188,7 @@
       syncSelectAll();
     }
 
-    /* The "some but not all" state has no HTML attribute — it is a property. */
+    /* The "some but not all" state has no HTML attribute, it is a property. */
     function syncSelectAll() {
       var all = container.querySelector('[data-notifpage-selectall]');
       if (!all) return;

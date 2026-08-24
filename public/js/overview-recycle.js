@@ -71,16 +71,16 @@
   }
 
   function formatWhen(iso) {
-    if (!iso) return '—';
+    if (!iso) return '-';
     try {
       var d = new Date(iso);
-      if (isNaN(d.getTime())) return '—';
+      if (isNaN(d.getTime())) return '-';
       return d.toLocaleString(undefined, {
         month: 'short', day: 'numeric', year: 'numeric',
         hour: 'numeric', minute: '2-digit',
       });
     } catch (e) {
-      return '—';
+      return '-';
     }
   }
 
@@ -312,9 +312,9 @@
       var visual = itemVisual(item);
       var kindLabel = KIND_LABEL[item.kind] || item.kind;
       var by = item.deletedBy || {};
-      var byName = by.name || '—';
+      var byName = by.name || '-';
       var byAvatar = avatarSrc(by.avatar, byName);
-      var sizeLabel = (item.meta && item.meta.sizeLabel) || '—';
+      var sizeLabel = (item.meta && item.meta.sizeLabel) || '-';
       var iconWrap = visual.tone
         ? '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + esc(visual.tone) + '">' + visual.html + '</span>'
         : '<span class="tma-dash__overview-recycle-visual">' + visual.html + '</span>';
@@ -435,7 +435,7 @@
       var visual = itemVisual(item, 40);
       var kindLabel = KIND_LABEL[item.kind] || item.kind;
       var sizeLabel = (item.meta && item.meta.sizeLabel) || '';
-      var sub = sizeLabel && sizeLabel !== '—'
+      var sub = sizeLabel && sizeLabel !== '-'
         ? kindLabel + ' · ' + sizeLabel
         : kindLabel;
       return '<div class="tma-portal-file-card' + (checked ? ' is-selected' : '') +

@@ -90,14 +90,14 @@
     tooltip.style.removeProperty('--tooltip-arrow-offset');
   }
 
-  /* Tips portaled onto <body> whose trigger was destroyed by a morph — and any
-   * tip left on <body> after hide — must not linger. A stuck fixed tip at the
+  /* Tips portaled onto <body> whose trigger was destroyed by a morph, and any
+   * tip left on <body> after hide, must not linger. A stuck fixed tip at the
    * top of the viewport is what readers see as "mystery spacing" after a
    * star/flag/pin click. */
   function purgeOrphanPortaledTips(keep) {
     document.querySelectorAll('body > .tma-tooltip').forEach((tip) => {
       if (keep && tip === keep) return;
-      // Always blank the tip before moving it — a visible fixed tip at 0×0
+      // Always blank the tip before moving it, a visible fixed tip at 0×0
       // reads as empty space under the blue header after a row action.
       tip.classList.remove('is-portaled', 'is-visible');
       tip.setAttribute('aria-hidden', 'true');
@@ -119,8 +119,8 @@
 
   function positionTooltip(trigger, tooltip) {
     // A morph/render can destroy the trigger while the tip is still portaled
-    // on <body>. Repositioning a detached node puts it at 0×0 — the top of
-    // the page — which is exactly the stuck "ghost tooltip" users see after
+    // on <body>. Repositioning a detached node puts it at 0×0, the top of
+    // the page, which is exactly the stuck "ghost tooltip" users see after
     // clicking an email row action.
     if (!isTriggerLive(trigger)) {
       hideActive();
@@ -350,7 +350,7 @@
   function onPointerDown(event) {
     const trigger = findTrigger(event.target);
     if (!trigger) return;
-    // An action click is about to morph the list / move the row — dismiss
+    // An action click is about to morph the list / move the row, dismiss
     // any tip first so it cannot be repositioned onto a dead trigger.
     hideActive();
   }

@@ -216,7 +216,7 @@ class FileLibraryController extends Controller
         abort_unless(FolderTemplates::delete($id), 404, 'That folder template no longer exists.');
 
         // Deleting a template never touches folders it created. They are
-        // ordinary folders the moment they exist — the template is a shortcut,
+        // ordinary folders the moment they exist, the template is a shortcut,
         // not an owner, and deleting one must not delete a firm's filing.
         return response()->json(['templates' => FolderTemplates::all()]);
     }

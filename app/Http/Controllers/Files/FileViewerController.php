@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
  * metadata block.
  *
  * Deliberately three endpoints rather than one fat payload. Opening a file must
- * not wait on a firm-wide access roll-up or a long history — the preview shows
+ * not wait on a firm-wide access roll-up or a long history, the preview shows
  * immediately and each panel section loads when it is actually looked at.
  *
  * Every action re-checks `view` through FileAccess. The client hides what it

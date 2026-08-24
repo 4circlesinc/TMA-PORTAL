@@ -25,11 +25,11 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * CBI — Citizenship by Investment (development preview).
+ * CBI. Citizenship by Investment (development preview).
  *
  * Administrator-only while the module beds in. It ships in the SPA shell
  * (/cbi, with a sidebar row and the cbi.view capability) and also as a
- * chromeless preview at /dev/cbi. Every endpoint here 404s — never 403s —
+ * chromeless preview at /dev/cbi. Every endpoint here 404s, never 403s —
  * unless the FEATURE_CBI flag is on AND the caller is an administrator, so
  * to everyone else the module still does not exist. Role::can() checks the
  * same flag before its admin short-circuit, which keeps the nav row, the
@@ -43,7 +43,7 @@ class CbiController extends Controller
         abort_unless(Role::isAdmin($request->user()), 404);
     }
 
-    /** GET /dev/cbi — the standalone development preview shell. */
+    /** GET /dev/cbi, the standalone development preview shell. */
     public function page(Request $request): BinaryFileResponse
     {
         $this->gate($request);
@@ -58,10 +58,10 @@ class CbiController extends Controller
         ]);
     }
 
-    /** Warm summary aggregates briefly — mount + 15s doc polls share them. */
+    /** Warm summary aggregates briefly, mount + 15s doc polls share them. */
     private const SUMMARY_TTL_SECONDS = 20;
 
-    /** GET /portal/cbi/summary — stage counts, filter facets, sync health. */
+    /** GET /portal/cbi/summary, stage counts, filter facets, sync health. */
     public function summary(Request $request): JsonResponse
     {
         $this->gate($request);
@@ -89,7 +89,7 @@ class CbiController extends Controller
                 ->values()
                 ->all();
 
-            // Conditional aggregates in one pass — CASE works on Postgres and SQLite.
+            // Conditional aggregates in one pass. CASE works on Postgres and SQLite.
             $sheetStats = SmartsheetSheet::query()
                 ->selectRaw(
                     'sum(case when status != ? then 1 else 0 end) as sheets,'.
@@ -134,7 +134,7 @@ class CbiController extends Controller
         ]);
     }
 
-    /** GET /portal/cbi/applications — filtered, sorted, paginated list. */
+    /** GET /portal/cbi/applications, filtered, sorted, paginated list. */
     public function applications(Request $request): JsonResponse
     {
         $this->gate($request);
@@ -153,7 +153,7 @@ class CbiController extends Controller
             }
         }
         // Filtering by a person means all their spellings, so it reads the
-        // canonical column the assignee matcher writes — not the raw cell.
+        // canonical column the assignee matcher writes, not the raw cell.
         if (($assignee = (string) $request->query('assigned_to')) !== '') {
             $query->where('assigned_to_canonical', $assignee);
         }
@@ -213,7 +213,7 @@ class CbiController extends Controller
         ]);
     }
 
-    /** GET /portal/cbi/applications/{uuid} — the full application workspace. */
+    /** GET /portal/cbi/applications/{uuid}, the full application workspace. */
     public function application(Request $request, string $uuid): JsonResponse
     {
         $this->gate($request);
@@ -248,7 +248,7 @@ class CbiController extends Controller
                 ->filter(fn (SmartsheetAttachment $a) => $a->attachment_type === 'FILE' && $a->file_id === null)
                 ->count(),
             // Where those files live, so the Documents tab browses the same
-            // folder the Client hub shows — one library, two doors.
+            // folder the Client hub shows, one library, two doors.
             'folderUuid' => $application->client?->folder?->uuid,
             'comments' => $application->comments()
                 ->with('user:id,name')
@@ -293,7 +293,7 @@ class CbiController extends Controller
      * `assigned_to_canonical` is one spelling per person (see
      * App\Support\Cbi\AssigneeDirectory); the raw cell is kept alongside so a
      * reader can still see what the sheet actually said. Where the colleague
-     * has a portal account their real photo comes with them — where they have
+     * has a portal account their real photo comes with them, where they have
      * none, the name alone is enough for the browser to draw initials.
      *
      * @return array<string, mixed>|null
@@ -308,7 +308,7 @@ class CbiController extends Controller
      *
      * `assigned_to_canonical` is one spelling per person (see
      * App\Support\Cbi\AssigneeDirectory); the other roles are raw sheet text
-     * and are matched to a portal account by name where one exists — that is
+     * and are matched to a portal account by name where one exists, that is
      * what gives a face and, on the case page, somebody to message.
      *
      * @return array<int, array<string, mixed>>
@@ -482,7 +482,7 @@ class CbiController extends Controller
         ];
     }
 
-    /** POST /portal/cbi/applications/{uuid}/comments — a portal-side comment. */
+    /** POST /portal/cbi/applications/{uuid}/comments, a portal-side comment. */
     public function storeComment(Request $request, string $uuid): JsonResponse
     {
         $this->gate($request);
@@ -515,7 +515,7 @@ class CbiController extends Controller
     }
 
     /**
-     * GET /portal/cbi/attachments/{attachment} — redirect to a fresh,
+     * GET /portal/cbi/attachments/{attachment}, redirect to a fresh,
      * short-lived Smartsheet download URL. Minted per click and never
      * stored; the token stays server-side.
      */
@@ -531,7 +531,7 @@ class CbiController extends Controller
         return redirect()->away($url);
     }
 
-    /** POST /portal/cbi/sync — walk the workspace now and queue changed sheets. */
+    /** POST /portal/cbi/sync, walk the workspace now and queue changed sheets. */
     public function triggerSync(Request $request): JsonResponse
     {
         $this->gate($request);
@@ -544,7 +544,7 @@ class CbiController extends Controller
         }
 
         // After the mirror updates, file each applicant under Clients and copy
-        // Smartsheet attachments into that person's folder — the same bytes the
+        // Smartsheet attachments into that person's folder, the same bytes the
         // Documents tab and the File Library lightbox open.
         SyncCbiHub::dispatch($request->user()?->id)->delay(now()->addSeconds(30));
 
@@ -554,7 +554,7 @@ class CbiController extends Controller
         ]);
     }
 
-    /** GET /portal/cbi/sync — sheet-by-sheet sync health + recent log lines. */
+    /** GET /portal/cbi/sync, sheet-by-sheet sync health + recent log lines. */
     public function syncStatus(Request $request): JsonResponse
     {
         $this->gate($request);

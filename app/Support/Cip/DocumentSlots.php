@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
  * Uploads are owned by the firm's service account, not the person who pressed
  * Add. `files.owner_id` cascades on delete and an owner holds irrevocable
  * rights, so a provider contact owning an application's birth certificate
- * would mean their account being closed took the document with it — and would
+ * would mean their account being closed took the document with it, and would
  * give them a claim Phase 7's submission lock could not overrule.
  */
 class DocumentSlots
@@ -37,8 +37,8 @@ class DocumentSlots
      * Every slot this person owes, created empty if it is not there yet.
      *
      * The list is no longer a fixed three per role. It comes from the
-     * requirement templates the firm keeps — matched to the person's applicant
-     * type, which for a dependant means their age bracket — so widening a
+     * requirement templates the firm keeps, matched to the person's applicant
+     * type, which for a dependant means their age bracket, so widening a
      * checklist is an edit in the portal rather than a deploy.
      *
      * Idempotent, and it never disturbs a slot that has been filled. See
@@ -67,7 +67,7 @@ class DocumentSlots
         $person->loadMissing('application');
         Confirmation::guard($person->application);
 
-        // Resolved once, for the slot AND the destination — the same single
+        // Resolved once, for the slot AND the destination, the same single
         // query slotFor always ran, not a second one beside it.
         $template = self::template($person, $type);
         $slot = self::slotFor($person, $type, $template);
@@ -113,7 +113,7 @@ class DocumentSlots
      *
      * Intake and request links fill slots directly; the Documents tab and the
      * File Library do not, unless the filename matches what {@see fill()}
-     * would have given it — "{person} — {requirement label}.pdf".
+     * would have given it, "{person}. {requirement label}.pdf".
      */
     public static function adoptOrphan(FileItem $file, ?User $actor): bool
     {
@@ -237,7 +237,7 @@ class DocumentSlots
      *
      * Filling an empty requirement takes it from Pending upload into
      * Application review; re-uploading against one a reviewer sent back takes
-     * Update required to Application review again — the revision loop. Both go
+     * Update required to Application review again, the revision loop. Both go
      * through {@see DocumentEngine} rather than writing the column here, so the
      * edge is checked and the change lands in cip_events like every other.
      *
@@ -261,7 +261,7 @@ class DocumentSlots
     /**
      * A further file for a requirement already answered.
      *
-     * One requirement can take more than one sheet of paper — a bio page over
+     * One requirement can take more than one sheet of paper, a bio page over
      * two pages, a birth certificate with its translation. The slot still holds
      * the one answer (its unique key allows no second), and a second *version*
      * would bury a separate document inside another one's history, so these are
@@ -285,10 +285,10 @@ class DocumentSlots
         return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor)));
     }
 
-    /** "Ada Lovelace — Birth certificate (2).pdf" */
+    /** "Ada Lovelace - Birth certificate (2).pdf" */
     private static function documentName(CipPerson $person, string $type, string $extension, ?int $number = null): string
     {
-        return $person->fullName().' — '.DocumentTypes::label($type).
+        return $person->fullName().' - '.DocumentTypes::label($type).
             ($number ? ' ('.$number.')' : '').'.'.$extension;
     }
 
@@ -315,7 +315,7 @@ class DocumentSlots
     }
 
     /**
-     * What a person still owes — the reason a slot is a row and not a file.
+     * What a person still owes, the reason a slot is a row and not a file.
      *
      * @return array<int, string>
      */
@@ -325,7 +325,7 @@ class DocumentSlots
          * Read from the loaded checklist where the caller already has one.
          *
          * This is asked for every person on an application, and an application
-         * is a family — so on a sync page of fifty it was three hundred
+         * is a family, so on a sync page of fifty it was three hundred
          * queries against documents the same request had already fetched in
          * full. The filter is the same either way; only where it runs moves.
          */
@@ -345,16 +345,16 @@ class DocumentSlots
 
     /**
      * The template behind a type, matched the way slots are linked to
-     * requirements everywhere — the person's applicant type and the slug.
+     * requirements everywhere, the person's applicant type and the slug.
      *
      * The same match that stamps `requirement_id` onto a slot (here and in
      * {@see Requirements}), so resolving by key IS resolving the slot's own
-     * requirement — and it also answers for the intake slots that predate the
+     * requirement, and it also answers for the intake slots that predate the
      * table and carry no requirement_id at all. One query, and only on the
      * upload paths: the sync-scale readers never come through here.
      */
     /**
-     * Where an upload answering this SLOT should land — the one resolution,
+     * Where an upload answering this SLOT should land, the one resolution,
      * offered to the other doors a document can arrive through. The
      * file-request path files a visitor's upload for a slot it never opened
      * through fill(), and hardcoding the person's folder there put the same
@@ -384,7 +384,7 @@ class DocumentSlots
      * names inside it.
      *
      * The template hands over a NAME and {@see Tree::subfolder} creates the
-     * child under the person's own folder — which is the constraint made
+     * child under the person's own folder, which is the constraint made
      * structural: whatever an administrator types, an upload cannot land
      * outside the person's repository. A template naming no folder, or a type
      * with no template, files where uploads always did.
@@ -408,7 +408,7 @@ class DocumentSlots
      * Takes its label and its mandatory flag from the requirement template
      * where one exists, so a slot created by an upload reads the same as one
      * materialised from the checklist. A type with no template still gets a
-     * slot — a document the firm asked for by hand is still a document — and
+     * slot, a document the firm asked for by hand is still a document, and
      * carries the type as its label rather than nothing. The template arrives
      * from {@see fill()}, which resolved it once for this and for the filing
      * destination together.
@@ -447,16 +447,25 @@ class DocumentSlots
         return null;
     }
 
-    /** "{person} — {label}.pdf" → the label half, which is what the slot stores. */
+    /** "{person} - {label}.pdf" → the label half, which is what the slot stores. */
     private static function labelFromFilename(string $name): ?string
     {
-        $pos = mb_strpos($name, ' — ');
+        $pos = false;
+        $width = 0;
+        foreach ([' — ', ' - ', ': '] as $sep) {
+            $found = mb_strpos($name, $sep);
+            if ($found !== false) {
+                $pos = $found;
+                $width = mb_strlen($sep);
+                break;
+            }
+        }
 
         if ($pos === false) {
             return null;
         }
 
-        $tail = mb_substr($name, $pos + 3);
+        $tail = mb_substr($name, $pos + $width);
         $tail = preg_replace('/ \(\d+\)(?=\.[^.]+$)/', '', $tail) ?? $tail;
         $tail = preg_replace('/\.[^.]+$/', '', $tail) ?? $tail;
         $tail = trim($tail);

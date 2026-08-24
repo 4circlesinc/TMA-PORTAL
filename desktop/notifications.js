@@ -15,7 +15,7 @@
  *
  * This covers the *operating system's* permission only. The portal has its own
  * per-account "Desktop notifications" switch, which is what decides whether a
- * banner is ever raised — see notify-store.js. Both have to be on, and they are
+ * banner is ever raised, see notify-store.js. Both have to be on, and they are
  * genuinely different questions: one is "may this app notify you at all", the
  * other is "do you want to be told about this account's messages".
  */
@@ -50,7 +50,7 @@ function primeOnFirstRun(onClick) {
 }
 
 /**
- * Posts a notification on demand — used by the Help menu, so someone who thinks
+ * Posts a notification on demand, used by the Help menu, so someone who thinks
  * notifications are broken can find out in one click whether the problem is the
  * OS, the app, or the portal's own switch.
  */

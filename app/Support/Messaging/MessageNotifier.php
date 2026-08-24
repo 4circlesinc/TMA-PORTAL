@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * Two rules shape everything here:
  *
  *  - **One live row per conversation.** A burst of ten messages is one thing
- *    that happened — the dedupe key collapses them and the Notifier's refresh
+ *    that happened, the dedupe key collapses them and the Notifier's refresh
  *    keeps a running count, rather than burying every other module under a
  *    single chatty thread.
  *  - **Opening the conversation is acknowledgement.** Reading the thread marks
@@ -84,8 +84,8 @@ final class MessageNotifier
     /**
      * Tell whoever missed a call that they did.
      *
-     * The person who *placed* the call knows how it went — they watched it ring
-     * out — and the person who declined it chose to. So the recipient set is
+     * The person who *placed* the call knows how it went, they watched it ring
+     * out, and the person who declined it chose to. So the recipient set is
      * everyone else: in practice the callee of a call the caller gave up on.
      *
      * @param  User  $actingUser  whoever ended the call (caller or callee)
@@ -160,7 +160,7 @@ final class MessageNotifier
             ->get()
             ->reject(fn (ConversationParticipant $p) => in_array($p->user_id, $excludeUserIds, true))
             // Muting a conversation is exactly the request not to be told about
-            // it — the Messages badge still counts it, the bell stays quiet.
+            // it, the Messages badge still counts it, the bell stays quiet.
             ->reject(fn (ConversationParticipant $p) => $p->isMuted());
     }
 

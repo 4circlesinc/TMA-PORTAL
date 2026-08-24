@@ -1,5 +1,5 @@
 /*
- * TMA — Catching up on applications.
+ * TMA. Catching up on applications.
  *
  * A TMAReplica walker over `GET /portal/cip/applications/sync`. Each record
  * is filed everywhere a screen might look for it: the client profile knows a

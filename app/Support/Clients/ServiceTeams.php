@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
  * two places to keep membership right.
  *
  * What was actually missing is this: staff could only be put on a client one
- * at a time. A service team is therefore not a new object but a verb — take a
+ * at a time. A service team is therefore not a new object but a verb, take a
  * group, and give every staff member in it the same assignment to a client.
  *
  * The fan-out goes through {@see Assignments::assign()} row by row rather than
@@ -41,7 +41,7 @@ class ServiceTeams
     /**
      * Staff in a group who may hold a client assignment.
      *
-     * Clients are excluded even if somebody put one in a staff group — only
+     * Clients are excluded even if somebody put one in a staff group, only
      * internal staff can be assigned to a client, and this is the one place
      * that would otherwise be able to slip past that rule in bulk.
      *
@@ -60,7 +60,7 @@ class ServiceTeams
      * Assign every staff member of a group to a client.
      *
      * Returns the users actually assigned. A member who already holds a live
-     * assignment is still passed through — Assignments::assign() treats that
+     * assignment is still passed through. Assignments::assign() treats that
      * as a change rather than a new ask, so nobody gets welcomed twice.
      *
      * @param  array{role?: string, level: string, endsAt?: ?string, notes?: ?string}  $attrs
@@ -76,7 +76,7 @@ class ServiceTeams
                 'role' => $attrs['role'] ?? 'general',
                 'level' => $attrs['level'],
                 // Never from a team. Primary is one named person per client,
-                // and a bulk action has no way to know which one — assigning a
+                // and a bulk action has no way to know which one, assigning a
                 // team of six would otherwise leave whoever happened to be
                 // last as the client's primary contact.
                 'primary' => false,
@@ -97,7 +97,7 @@ class ServiceTeams
     /**
      * End every live assignment a group's staff hold on a client.
      *
-     * Only assignments the team would have created are ended — a person who is
+     * Only assignments the team would have created are ended, a person who is
      * on the client for their own reasons and happens to be in the group loses
      * it too, because from the client's side there is only ever one assignment
      * per person and no record of which action made it. Said plainly in the UI

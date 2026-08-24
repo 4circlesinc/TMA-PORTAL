@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Database — TM ANTOINE Advisory (dev)</title>
+  <title>Database | TM ANTOINE Advisory (dev)</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <!-- Light unless the reader explicitly chose Dark. Dark mode is unfinished, so the device colour scheme is ignored on purpose — see FOLLOW_SYSTEM_THEME in public/js/dashboard.js. -->
+  <!-- Light unless the reader explicitly chose Dark. Dark mode is unfinished, so the device colour scheme is ignored on purpose, see FOLLOW_SYSTEM_THEME in public/js/dashboard.js. -->
   <script>(function(){try{if((localStorage.getItem("tma.themeMode")||"")==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
   <style>
     :root { --db-border: var(--color-border-soft); }
@@ -82,8 +82,8 @@
               @forelse ($rows as $row)
                 <tr>
                   @foreach ($columns as $col)
-                    @php $v = $row[$col] ?? '—'; @endphp
-                    <td class="{{ $v === '—' ? 'db__null' : (str_contains($v, 'hidden') ? 'db__redacted' : '') }}">{{ $v }}</td>
+                    @php $v = $row[$col] ?? '-'; @endphp
+                    <td class="{{ $v === '-' ? 'db__null' : (str_contains($v, 'hidden') ? 'db__redacted' : '') }}">{{ $v }}</td>
                   @endforeach
                 </tr>
               @empty

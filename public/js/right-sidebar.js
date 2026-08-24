@@ -1,8 +1,8 @@
 /*
  * TMA - Right sidebar sections (§1, §5).
  *
- * Fills the existing right sidebar's three sections — Notifications, Activities,
- * Clients — with real data from the shared stores (notifications, activity) and
+ * Fills the existing right sidebar's three sections. Notifications, Activities,
+ * Clients, with real data from the shared stores (notifications, activity) and
  * the clients API. The layout, spacing, and card styles are untouched; only the
  * content is now live.
  *
@@ -183,7 +183,7 @@
       if (clients.loaded || clients.loading) return;
       clients.loading = true;
       renderClients();
-      // Preview only — the sidebar paints ≤10 rows. Pulling /portal/clients
+      // Preview only, the sidebar paints ≤10 rows. Pulling /portal/clients
       // here used to download the entire firm directory on every page.
       var limit = Math.max(CLIENTS_MAX, previewLimits().clients);
       window.TMANotifyAPI.api(ROOT + '/portal/clients/preview?limit=' + encodeURIComponent(limit)).then(function (data) {

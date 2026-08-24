@@ -83,7 +83,7 @@ class CipRequirementController extends Controller
              * The folder only moves if the request actually spoke about it.
              * The everyday add flow sends a name and nothing else, and a
              * retire-then-re-add through it must not quietly wipe the drawer
-             * an administrator had set — restored means back as it was.
+             * an administrator had set, restored means back as it was.
              */
             $changes = ['label' => $data['label']];
 
@@ -153,7 +153,7 @@ class CipRequirementController extends Controller
         return response()->json(['requirement' => $this->record($requirement->fresh())]);
     }
 
-    /** Retire it. Never a hard delete — see Requirements::retire. */
+    /** Retire it. Never a hard delete, see Requirements::retire. */
     public function destroy(Request $request, string $uuid): JsonResponse
     {
         $this->authorizeManage($request);
@@ -235,7 +235,7 @@ class CipRequirementController extends Controller
      *
      * Trimmed, and an empty answer stored as null rather than '': the column
      * means "file these uploads in a drawer of this name inside the person's
-     * folder", and a blank name is not a drawer — it is the person's folder
+     * folder", and a blank name is not a drawer, it is the person's folder
      * itself, which is what null already says.
      *
      * @param  array<string, mixed>  $data
@@ -252,7 +252,7 @@ class CipRequirementController extends Controller
      *
      * Safe because materialise never removes a slot that holds a file: the
      * worst it can do is ask for something new, which is exactly what the firm
-     * just said they wanted. Only the open ones — an application that has been
+     * just said they wanted. Only the open ones, an application that has been
      * granted or denied is finished, and adding to its checklist would be
      * rewriting history.
      */

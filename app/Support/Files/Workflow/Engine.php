@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
  *  - **A workflow reviews one specific version.** It is bound to a
  *    `file_version_id` at send time and never moves. If a newer version is
  *    uploaded while it is open, the workflow is marked as superseded and its
- *    sender is told — but its record still says exactly what was reviewed. A
+ *    sender is told, but its record still says exactly what was reviewed. A
  *    workflow that silently followed the file would make every approval
  *    meaningless.
  *  - **A decline or a changes-request halts the whole flow.** Continuing to ask
@@ -114,7 +114,7 @@ class Engine
      * Invite everyone at the lowest position that still has open steps.
      *
      * `invited_at` must be stamped here rather than at send time, or a parallel
-     * group gets invited twice when the flow later advances — the same trap the
+     * group gets invited twice when the flow later advances, the same trap the
      * signature engine hit.
      */
     public static function inviteNextGroup(FileWorkflow $workflow): void
@@ -155,7 +155,7 @@ class Engine
         abort_unless(in_array($action, Status::actionsFor($workflow->type), true), 422, 'That action does not apply here.');
 
         // "Comments required" has to be enforced here, not just hinted at in
-        // the dialog — otherwise it is decoration.
+        // the dialog, otherwise it is decoration.
         if ($workflow->require_comment && trim((string) $comment) === '') {
             abort(422, 'A comment is required for this request.');
         }
@@ -205,7 +205,7 @@ class Engine
 
         $open = $workflow->steps()->whereIn('status', ['pending', 'invited'])->count();
 
-        // "Any one of them" — the first favourable response settles it.
+        // "Any one of them", the first favourable response settles it.
         if (! $workflow->require_all) {
             return self::close($workflow, Status::successStatusFor($workflow->type), $actor);
         }
@@ -243,7 +243,7 @@ class Engine
         abort_unless($step->isOpen(), 422, 'That step has already been answered.');
         abort_if($to->id === $step->user_id, 422, 'That is already the assignee.');
         // Handing your step to somebody outside the file is allowed when you
-        // could have shared it with them — the access follows the handover.
+        // could have shared it with them, the access follows the handover.
         abort_if(AccessGrants::ensure($actor, $to, $workflow->file, 'delegation') === null, 422,
             'That person cannot open this file, and you can’t share it with them.');
 
@@ -308,7 +308,7 @@ class Engine
                 'type' => 'file.workflow_superseded',
                 'title' => 'A new version was uploaded during your '.$workflow->type.' request',
                 'message' => $file->name.' is now at version '.$version->version_number.
-                    ', but the request is still on version '.($workflow->version?->version_number ?? '—').'.',
+                    ', but the request is still on version '.($workflow->version?->version_number ?? '-').'.',
                 'subject' => $file,
                 'action_url' => '/folders/all?file='.$file->uuid,
             ]);
@@ -351,7 +351,7 @@ class Engine
     /**
      * The step this user has actually been ASKED to answer.
      *
-     * `invited` only — never `pending`. In an ordered flow a later approver's
+     * `invited` only, never `pending`. In an ordered flow a later approver's
      * step exists from the start but has not been reached yet; treating it as
      * actionable let somebody at position 3 approve before position 1 was even
      * notified, which defeats the whole point of ordering.
@@ -407,7 +407,7 @@ class Engine
             Notifier::send([
                 'user' => $workflow->created_by,
                 'type' => 'file.approval_decision',
-                'title' => $workflow->file->name.' — '.Status::label($status),
+                'title' => $workflow->file->name.': '.Status::label($status),
                 'subject' => $workflow->file,
                 'action_url' => '/folders/all?file='.$workflow->file->uuid,
             ]);

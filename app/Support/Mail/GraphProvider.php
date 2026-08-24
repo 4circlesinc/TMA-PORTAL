@@ -27,7 +27,7 @@ class GraphProvider implements MailProvider
     /** Directory lookups (other people), as opposed to the signed-in mailbox. */
     private const BASE_USERS = 'https://graph.microsoft.com/v1.0/users';
 
-    /** Fields the list rows need — Graph returns the full body otherwise. */
+    /** Fields the list rows need. Graph returns the full body otherwise. */
     private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
 
     /** Marks a cursor as "everything after this time" rather than a delta link. */
@@ -90,7 +90,7 @@ class GraphProvider implements MailProvider
 
     public function getMessage(string $remoteId): array
     {
-        // $expand pulls the attachment list in with the message itself — one
+        // $expand pulls the attachment list in with the message itself, one
         // round trip instead of two sequential ones. That second call used to
         // cost several extra seconds on every never-before-opened message,
         // which is most of them the first time a user reads their mailbox.
@@ -170,7 +170,7 @@ class GraphProvider implements MailProvider
      * This is the steady-state path. It is a plain filtered listing, so it
      * costs one small request per folder no matter how large the mailbox is.
      * The trade-off against a delta stream is that changes made in another
-     * client — a deletion, or a read/flag toggle — are not reported here; the
+     * client, a deletion, or a read/flag toggle, are not reported here; the
      * next full resync reconciles those.
      *
      * @return array{messages:array<int,array<string,mixed>>, deleted:array<int,string>, cursor:string}
@@ -187,7 +187,7 @@ class GraphProvider implements MailProvider
 
         // This runs inline in the /sync web request, so it must finish well
         // under PHP's execution limit. Each folder gets a short, single-attempt
-        // request, and the whole loop stops at a wall-clock deadline — a slow or
+        // request, and the whole loop stops at a wall-clock deadline, a slow or
         // throttling Graph then costs a bounded amount instead of stacking
         // 30s × retries per folder into a fatal timeout.
         $deadline = microtime(true) + 20.0;
@@ -207,7 +207,7 @@ class GraphProvider implements MailProvider
 
             // Ascending, so paging walks *forward* from the cursor and the
             // oldest unseen mail is read first. Descending with a $top cap —
-            // which is what this did — returns the newest 100 and leaves the
+            // which is what this did, returns the newest 100 and leaves the
             // older ones stranded behind a cursor that has already moved past
             // them, which is how a message can arrive at the provider and never
             // reach the portal at all.
@@ -230,7 +230,7 @@ class GraphProvider implements MailProvider
 
                 // A nextLink already carries its own query string. Passing even
                 // an empty query array here would hand Guzzle a replacement
-                // set and wipe the skiptoken off it — the request would come
+                // set and wipe the skiptoken off it, the request would come
                 // back as page one again, forever.
                 $response = $query === []
                     ? $this->request(timeout: 6, tries: 1)->get($url)
@@ -296,7 +296,7 @@ class GraphProvider implements MailProvider
 
     /**
      * One second before an ISO timestamp, normalised to the Zulu form the
-     * cursor uses. The overlap it creates is deliberate — re-reading a message
+     * cursor uses. The overlap it creates is deliberate, re-reading a message
      * costs an idempotent upsert, missing one costs the message.
      */
     private static function secondBefore(string $iso): string
@@ -311,7 +311,7 @@ class GraphProvider implements MailProvider
     public function changesSince(?string $cursor): array
     {
         // Starting fresh: watch from now on. Graph offers no cheap "give me a
-        // delta token" for messages — a new delta streams the whole mailbox to
+        // delta token" for messages, a new delta streams the whole mailbox to
         // reach its token, which on a large account is thousands of requests —
         // so the cursor is a timestamp instead. History comes from the backfill.
         if (! $cursor) {
@@ -436,7 +436,7 @@ class GraphProvider implements MailProvider
     public function saveDraft(array $draft, ?string $remoteId = null): string
     {
         // data:-URI images (the signature logo above all) must travel as cid:
-        // inline attachments — Outlook and Gmail render those and refuse
+        // inline attachments. Outlook and Gmail render those and refuse
         // data: URIs, which otherwise arrive as a broken-image icon.
         [$bodyHtml, $inline] = InlineImages::extract((string) ($draft['bodyHtml'] ?? ''));
 
@@ -515,7 +515,7 @@ class GraphProvider implements MailProvider
     /** Outlook has no importance marker separate from the flag. */
     public function markImportant(string $remoteId, bool $important): void
     {
-        // Intentionally empty — see supportsImportant().
+        // Intentionally empty, see supportsImportant().
     }
 
     public function supportsImportant(): bool
@@ -551,7 +551,7 @@ class GraphProvider implements MailProvider
 
     public function setLabel(string $remoteId, string $labelId, bool $applied): void
     {
-        // Categories are a whole array on the message — there is no
+        // Categories are a whole array on the message, there is no
         // add-one/remove-one call, so this is a read-modify-write.
         $current = $this->json($this->request()->get(self::BASE.'/messages/'.$remoteId, [
             '$select' => 'categories',
@@ -605,7 +605,7 @@ class GraphProvider implements MailProvider
     {
         $response = $this->request()
             // $search requires this header, and cannot be combined with
-            // $orderby — Graph sorts search hits by relevance instead.
+            // $orderby. Graph sorts search hits by relevance instead.
             ->withHeaders(['ConsistencyLevel' => 'eventual'])
             ->get(self::BASE.'/messages', [
                 '$search' => '"'.str_replace('"', '', $query).'"',
@@ -635,7 +635,7 @@ class GraphProvider implements MailProvider
             'from_name' => $from['name'] ?? null,
             'from_email' => $from['address'] ?? null,
             'to' => self::addresses($raw['toRecipients'] ?? []),
-            // CC is needed on the list path too — "sent you an email" checks
+            // CC is needed on the list path too, "sent you an email" checks
             // recipients, and shared inboxes often land as CC-only.
             'cc' => self::addresses($raw['ccRecipients'] ?? []),
             'is_read' => (bool) ($raw['isRead'] ?? false),
@@ -748,7 +748,7 @@ class GraphProvider implements MailProvider
      * run on the queue and can afford a generous per-request budget. The
      * interactive incremental sync passes a tight $timeout and $tries so a slow
      * or throttling Graph can never run a web request past PHP's execution
-     * limit — that is what turned into "Maximum execution time exceeded" 500s.
+     * limit, that is what turned into "Maximum execution time exceeded" 500s.
      */
     private function request(int $timeout = 30, int $tries = 2): PendingRequest
     {
@@ -789,7 +789,7 @@ class GraphProvider implements MailProvider
     }
 
     /**
-     * Message counts per folder, straight from Graph's folder metadata — one
+     * Message counts per folder, straight from Graph's folder metadata, one
      * request, no message enumeration. Folders Graph does not return (an
      * account with no Archive, say) are left out rather than guessed at.
      *
@@ -830,7 +830,7 @@ class GraphProvider implements MailProvider
 
     /**
      * How many messages in each folder carry attachments, from Graph's
-     * server-side count — one small request per folder, no enumeration.
+     * server-side count, one small request per folder, no enumeration.
      * Folders that refuse the count (some tenants restrict $count on mail)
      * are left out rather than guessed at.
      *
@@ -872,7 +872,7 @@ class GraphProvider implements MailProvider
      *
      * Graph `/users/{email}/photo` only works for people in the same tenant
      * (and only with User.ReadBasic.All). Personal Gmail/Yahoo addresses will
-     * always 404 there — privacy. For those, we try Outlook contacts next
+     * always 404 there, privacy. For those, we try Outlook contacts next
      * (Contacts.Read): if you've saved them with a photo in Outlook, we can
      * show it. Anything else is reported as "no photo" so the caller falls
      * through to Gravatar / initials.
@@ -897,7 +897,7 @@ class GraphProvider implements MailProvider
 
     /**
      * Outlook contact photo for an address you've saved (not the Gmail
-     * account photo — Microsoft cannot read that). Soft-fails when Contacts.Read
+     * account photo. Microsoft cannot read that). Soft-fails when Contacts.Read
      * isn't granted or the contact has no photo.
      */
     private function contactPhotoFor(string $email): ?string

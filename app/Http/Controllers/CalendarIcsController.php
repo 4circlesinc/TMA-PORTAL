@@ -24,7 +24,7 @@ use Illuminate\Validation\Rule;
 /**
  * ICS import and export.
  *
- * Import is deliberately two steps — preview, then commit — so the file's
+ * Import is deliberately two steps, preview, then commit, so the file's
  * contents can be seen and chosen from before anything is written. The parsed
  * events travel back with the commit rather than being cached server-side,
  * which keeps the flow stateless and means an abandoned preview leaves nothing
@@ -69,7 +69,7 @@ class CalendarIcsController extends Controller
         } elseif (isset($data['from'], $data['to'])) {
             /*
              * A series master is kept whenever any of it could fall in the
-             * range — its own start may be long before the window, and
+             * range, its own start may be long before the window, and
              * dropping it would export the exceptions without the series.
              */
             $from = CarbonImmutable::parse($data['from']);
@@ -209,7 +209,7 @@ class CalendarIcsController extends Controller
             $data['withAttendees'] ?? true,
         );
 
-        // Events the file itself couldn't yield count as failures too — the
+        // Events the file itself couldn't yield count as failures too, the
         // user cares how many didn't make it, not why they didn't.
         $result['failed'] += count($parsed['failed']);
         $result['errors'] = array_merge($result['errors'], $parsed['failed']);

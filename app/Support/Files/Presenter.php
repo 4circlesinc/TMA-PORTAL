@@ -18,7 +18,7 @@ use App\Support\Files\Workflow\Status;
 
 /**
  * Shapes files/folders into safe JSON for the client. Only the public uuid is
- * ever exposed — never the database id, storage path, or disk. Favourite and
+ * ever exposed, never the database id, storage path, or disk. Favourite and
  * share/assignment status are primed in bulk to avoid N+1 queries in listings.
  */
 class Presenter
@@ -31,7 +31,7 @@ class Presenter
      * item_id => the people it is shared with, as person arrays.
      *
      * The names the rest of the payload uses are derived from these rather
-     * than fetched again — the Owner column needs faces, and asking the same
+     * than fetched again, the Owner column needs faces, and asking the same
      * question twice per listing is how the client directory got slow.
      */
     private array $sharedFile = [];
@@ -53,7 +53,7 @@ class Presenter
      *
      * Every map above is *sparse*: it holds only the rows that exist, because
      * that is what a `whereIn` returns. So `$map[$id] ?? <lazy lookup>` reads
-     * "not primed" out of "primed, and this item genuinely has none" — and
+     * "not primed" out of "primed, and this item genuinely has none", and
      * since most files have no share and most folders no colour preference,
      * the fallback fired on nearly every row. Against the remote database
      * that was one ~280ms round trip per row: 50 rows of Recent cost 14s of
@@ -73,7 +73,7 @@ class Presenter
      *
      * Used to be every folder in the library. Opening a client's Documents
      * tab then loaded the whole tree into PHP before it could draw twenty
-     * rows — the path and audience walks only ever need the ancestors of
+     * rows, the path and audience walks only ever need the ancestors of
      * what is on the page.
      *
      * @var array<int, Folder>
@@ -90,7 +90,7 @@ class Presenter
 
     /**
      * The firm-wide default grant, resolved once. `false` means "not looked up
-     * yet" — null is a real answer here (the setting can be off).
+     * yet", null is a real answer here (the setting can be off).
      *
      * @var array{label: string, role: ?string}|null|false
      */
@@ -184,7 +184,7 @@ class Presenter
             'deletedAt' => optional($file->deleted_at)->toIso8601String(),
             'owner' => $this->person($file->owner),
             'uploadedBy' => $this->person($file->uploader),
-            // Everyone on the file, owner first — what the Owner column draws
+            // Everyone on the file, owner first, what the Owner column draws
             // as faces. `assignedTo` stays the bare names it has always been.
             'people' => $this->peopleOn($file->owner, $sharedWith, $fileAudience),
             'peopleTotal' => $this->peopleTotal($file->owner, $sharedWith, $fileAudience),
@@ -257,7 +257,7 @@ class Presenter
 
     /**
      * Full ancestor chain for a folder, root-first, including the folder
-     * itself — e.g. for `file()`, pass the file's direct folder and get back
+     * itself, e.g. for `file()`, pass the file's direct folder and get back
      * every containing folder down to it, so the client can render a full
      * path instead of just the immediate parent's name. Walks an in-memory
      * id => Folder map (one query total, however many items are being
@@ -290,7 +290,7 @@ class Presenter
      * document libraries are granted to every member of staff at once by the
      * folder they sit in; a client's folder is granted to whichever staff are
      * assigned to them; a personal drive is granted to nobody. There are, in
-     * fact, no individual shares at all — so a column that only listed
+     * fact, no individual shares at all, so a column that only listed
      * `shares` rows would have been empty on all forty thousand files.
      *
      * A group grant is reported as a group. Thirteen identical faces repeated
@@ -316,7 +316,7 @@ class Presenter
 
             if ($node->folder_type === Folder::TYPE_CLIENT) {
                 // Named people would be the staff assigned to that client, and
-                // the assignment is the grant — so that is what it says.
+                // the assignment is the grant, so that is what it says.
                 return ['label' => 'The assigned client team', 'role' => null, 'count' => null];
             }
 
@@ -334,7 +334,7 @@ class Presenter
         }
 
         // A personal drive is nobody else's, whatever the firm-wide default
-        // says — FileAccess stops at the same place, before even the
+        // says. FileAccess stops at the same place, before even the
         // administrator short-circuit. The drives are the user-typed roots.
         if ($top && $top->folder_type === Folder::TYPE_USER) {
             return null;
@@ -353,7 +353,7 @@ class Presenter
     /**
      * How many people a firm-wide grant actually reaches.
      *
-     * Counted once per listing, not per row — it is the same number for every
+     * Counted once per listing, not per row, it is the same number for every
      * file in it. The same figure the file viewer's access panel reports, so
      * the table and the panel do not disagree about one file.
      */
@@ -456,7 +456,7 @@ class Presenter
 
     /**
      * Default/system folders show the one admin-set colour/icon. Regular
-     * user folders show the viewer's own preference — primed in bulk by
+     * user folders show the viewer's own preference, primed in bulk by
      * prime(), with a single lazy lookup for callers that skip priming
      * (store/show/move/copy/restore/colour/icon all present one folder at
      * a time).
@@ -550,7 +550,7 @@ class Presenter
 
         return [
             // The id is what decides whether the person card's Message and
-            // call buttons work at all — without it they are drawn disabled.
+            // call buttons work at all, without it they are drawn disabled.
             'userId' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
@@ -564,8 +564,8 @@ class Presenter
      * The Owner column draws faces now, and a face needs more than a name: an
      * avatar to show, an id to reach the person by, and the role they hold
      * here to put under their name in the card. `assignedTo` still carries the
-     * bare names it always did — the Sharing column and the details panel read
-     * it — so this is additional rather than a change of shape.
+     * bare names it always did, the Sharing column and the details panel read
+     * it, so this is additional rather than a change of shape.
      *
      * @param  array<int, int>  $ids
      * @return array<int, array<int, array<string, mixed>>>
@@ -617,8 +617,8 @@ class Presenter
     /**
      * Everyone on this item, owner first.
      *
-     * The owner is a person on the record like any other — they are simply the
-     * one who is always there — so the column reads as one answer to "who has
+     * The owner is a person on the record like any other, they are simply the
+     * one who is always there, so the column reads as one answer to "who has
      * this" rather than an owner plus a separate sharing fact. A person shared
      * with who also owns it appears once, with both roles.
      *
@@ -657,20 +657,20 @@ class Presenter
          * A firm-wide grant is people too.
          *
          * Nothing here is shared person to person, so an owner and no one else
-         * was all the column ever had to draw — one face on every row, which
+         * was all the column ever had to draw, one face on every row, which
          * answers nothing. The grant reaches every member of staff, so they are
          * who it is shared with, and they are shown: the owner, then the
          * administrators, then everyone else, which is the order somebody
          * scanning for "who do I ask about this" wants them in.
          *
-         * Only the first few travel — the cell draws four and a "+N" — with the
+         * Only the first few travel, the cell draws four and a "+N", with the
          * real figure alongside so the "+N" can be honest.
          */
         /*
          * Administrators are always on it.
          *
          * They hold every capability by definition, so FileAccess hands them
-         * `full` on anything without a share existing — which made them
+         * `full` on anything without a share existing, which made them
          * invisible here, because this list was built from shares and grants.
          * A client folder is the case that showed it: carved out of the
          * firm-wide audience, so nothing filled the list and it read "one
@@ -713,7 +713,7 @@ class Presenter
     }
 
     /**
-     * How many people can reach it in total — what the "+N" counts up to.
+     * How many people can reach it in total, what the "+N" counts up to.
      *
      * @param  array<int, array<string, mixed>>  $sharedWith
      */
@@ -722,14 +722,14 @@ class Presenter
         if ($audience && ($audience['count'] ?? null)) {
             // The grant reaches every member of staff; the owner is already one
             // of them when they are staff, and is one more when they are not.
-            // Asked of the account, not of staffPeople() — that list is cut to
+            // Asked of the account, not of staffPeople(), that list is cut to
             // the handful the cell draws, so the owner may not be in it.
             $ownerIsStaff = $owner && in_array($owner->account_type, Role::STAFF, true);
 
             return $audience['count'] + (($owner && ! $ownerIsStaff) ? 1 : 0);
         }
 
-        // Administrators reach it too, so they are part of the count — the
+        // Administrators reach it too, so they are part of the count, the
         // "+N" has to add up to everyone who can open the thing.
         $ids = array_unique(array_filter(array_merge(
             [$owner?->id],
@@ -783,7 +783,7 @@ class Presenter
             $this->staffPeople = User::query()
                 ->whereIn('account_type', Role::STAFF)
                 ->where('status', User::STATUS_APPROVED)
-                // Administrator before Employee, then by name — a stable order,
+                // Administrator before Employee, then by name, a stable order,
                 // so a face does not move between one row and the next.
                 ->orderByRaw('case when account_type = ? then 0 else 1 end', [Role::ADMINISTRATOR])
                 ->orderBy('name')
@@ -821,8 +821,8 @@ class Presenter
     /**
      * Hand the slot map to the models themselves.
      *
-     * `Package::locksFile` — reached five times per row, once per ability the
-     * §17 freeze covers — reads `cipDocument` off the file and falls back to
+     * `Package::locksFile`, reached five times per row, once per ability the
+     * §17 freeze covers, reads `cipDocument` off the file and falls back to
      * a query when the relation is not loaded. It has no presenter to ask, so
      * priming our own map left it querying: 250 round trips to draw 50 rows,
      * 70 of the 104 seconds Recent took. Setting the relation is exactly what
@@ -867,7 +867,7 @@ class Presenter
      *
      * CIP slots travel {@see DocumentEngine}'s edges and need `cip.review` to
      * move; every other client document is the library's any-to-any set.
-     * Putting the slot's status in this block — not files.review_status — is
+     * Putting the slot's status in this block, not files.review_status, is
      * what keeps the chip on the row and the chip in the panel the same fact.
      *
      * @param  array<string, bool>  $perms
@@ -918,7 +918,7 @@ class Presenter
      * Derived from the workflows rather than stored on the file. A column
      * would be a second answer to a question the workflow tables already
      * answer, and the two would part company the first time a request was
-     * cancelled, expired or superseded — leaving a row reading "Approved"
+     * cancelled, expired or superseded, leaving a row reading "Approved"
      * with nothing behind it. Nothing to backfill and nothing to keep in step.
      *
      * The rule matches Engine::activeFor: the newest unfinished request, or
@@ -946,7 +946,7 @@ class Presenter
             $open = ! Status::isTerminal($row->status);
 
             // Rows arrive newest-first per file. Keep the first one seen, then
-            // let a later *open* request replace a settled one — the same
+            // let a later *open* request replace a settled one, the same
             // "unfinished wins" precedence activeFor applies.
             if (isset($out[$row->file_id]) && ! ($open && ! $out[$row->file_id]['open'])) {
                 continue;

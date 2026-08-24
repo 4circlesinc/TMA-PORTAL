@@ -20,15 +20,15 @@ use Throwable;
 /**
  * Mirrors a citizenship file's paperwork into the client's File Library folder.
  *
- * Until now the caseload knew a document existed — name, size, who attached it
- * — but the bytes stayed in Smartsheet behind a link that expires in minutes.
+ * Until now the caseload knew a document existed, name, size, who attached it
+ *, but the bytes stayed in Smartsheet behind a link that expires in minutes.
  * A client record with no papers is half a record, so this brings them across
  * and files them under the person they belong to.
  *
  * Three things shape the design:
  *
  * **It is resumable.** `smartsheet_attachments.file_id` is the record of what
- * has landed, so a run that stops — throttled, interrupted, out of time —
+ * has landed, so a run that stops, throttled, interrupted, out of time —
  * simply picks up where it left off. There is a lot to move (tens of thousands
  * of files, hundreds of gigabytes), so stopping and resuming is the normal
  * case, not the exception.
@@ -166,7 +166,7 @@ class DocumentImporter
          * URLs first, in concurrent batches, then the bytes.
          *
          * Minting a download URL costs a round trip to Smartsheet of about two
-         * and a half seconds, and there is no bulk endpoint — done one after
+         * and a half seconds, and there is no bulk endpoint, done one after
          * another that is thirteen hours of waiting before a single byte
          * moves. Fetched eight at a time it is closer to ninety minutes.
          */
@@ -344,7 +344,7 @@ class DocumentImporter
             $this->stats['imported']++;
             $this->stats['bytes'] += $stored['size'];
         } catch (SmartsheetThrottledException $e) {
-            // Not a failure — the API asking for room. Wait it out and retry
+            // Not a failure, the API asking for room. Wait it out and retry
             // this same attachment once before moving on.
             sleep(max(1, $e->retryAfter));
             try {

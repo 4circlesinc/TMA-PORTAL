@@ -15,8 +15,8 @@ use Illuminate\Support\Str;
  * to require that the file had already been shared with them: the mention was
  * silently dropped, the review request refused with "share it with them first".
  * That made the two most natural ways of pulling somebody in fail for exactly
- * the case they exist for — "can you look at this?" is most useful aimed at
- * somebody who has *not* seen it — and left the sender to go and arrange
+ * the case they exist for, "can you look at this?" is most useful aimed at
+ * somebody who has *not* seen it, and left the sender to go and arrange
  * access in a different panel before they could ask their question.
  *
  * The rule now: **whoever may share the file may add anyone to it**, whether or
@@ -28,13 +28,13 @@ use Illuminate\Support\Str;
  *
  *  - **The granter must hold `share` themselves.** That is the same permission
  *    the Access panel demands, so this adds no reach that the person did not
- *    already have — it only saves them a detour. A viewer who was invited to
+ *    already have, it only saves them a detour. A viewer who was invited to
  *    comment cannot pull in strangers.
- *  - **The grant is the smallest one that works** — `viewer`, enough to open
+ *  - **The grant is the smallest one that works**. `viewer`, enough to open
  *    the file and reply to what they were asked, and nothing more. Anybody who
  *    needs more can be given it in the Access panel, deliberately.
  *  - **It is written down.** A row in Access with the granter's name on it, an
- *    entry in the file's activity, and an entry in the portal-wide log — so
+ *    entry in the file's activity, and an entry in the portal-wide log, so
  *    access that appeared because of a mention is as visible, and as revocable,
  *    as access somebody granted by hand.
  *
@@ -50,7 +50,7 @@ class AccessGrants
     /**
      * Make sure this person can open the file, granting access if they can't.
      *
-     * @param  string  $reason  why they were added — 'mention', 'review', 'delegation'
+     * @param  string  $reason  why they were added, 'mention', 'review', 'delegation'
      * @return string|null the role they now hold, or null when the granter is
      *                     not allowed to give them one
      */
@@ -90,7 +90,7 @@ class AccessGrants
     /**
      * The share row itself.
      *
-     * An existing row is reused rather than duplicated — including one that has
+     * An existing row is reused rather than duplicated, including one that has
      * expired, which is revived rather than left in place beside a new row that
      * says something different about the same person.
      */

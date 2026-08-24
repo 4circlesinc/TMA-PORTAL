@@ -13,8 +13,8 @@ use Throwable;
 /**
  * Send a postcard and keep a record of what happened to it.
  *
- * Every transactional email that someone might later ask about — "did the
- * client ever get their invitation?" — goes through here instead of calling
+ * Every transactional email that someone might later ask about, "did the
+ * client ever get their invitation?", goes through here instead of calling
  * Mail::to()->queue() directly. The row is created first, in `queued`, and the
  * mail events promote it to `sent` only once a transport has accepted it.
  *
@@ -28,7 +28,7 @@ final class Deliveries
      *
      * @param  Model|null  $related  what the mail is about (an Invitation, a Client…)
      * @param  string|null  $template  the Postcards helper that built it
-     * @param  bool  $immediate  send inline instead of queueing — for mail that
+     * @param  bool  $immediate  send inline instead of queueing, for mail that
      *                           must not wait on a worker (see Invitations::send)
      */
     public static function send(

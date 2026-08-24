@@ -6,16 +6,16 @@ use App\Models\FileItem;
 
 /**
  * Generates and caches small image thumbnails with GD (the only image tool
- * available on this stack — no imagick/ffmpeg/ghostscript, so PDFs/videos fall
+ * available on this stack, no imagick/ffmpeg/ghostscript, so PDFs/videos fall
  * back to their type icon on the client).
  *
  * CACHED IN TWO PLACES, AND THE SECOND IS THE IMPORTANT ONE
  *
- * Local scratch is the fast path — an already-generated thumbnail is a file
+ * Local scratch is the fast path, an already-generated thumbnail is a file
  * read. But on Laravel Cloud that disk is ephemeral: it is empty after every
  * deploy and different on every container. Generating one is not cheap either,
  * because the source lives in R2 and GD needs it whole, so a miss means
- * downloading the entire original — the 12 MP photo, the 40 MB scan — just to
+ * downloading the entire original, the 12 MP photo, the 40 MB scan, just to
  * make a 400px JPEG. A folder of thirty photos did that thirty times, on every
  * container, for ever. That is why the result is also written beside the file
  * in the vault: generated once, then only ever fetched.
@@ -181,7 +181,7 @@ class Thumbnail
                 Vault::disk()->delete(self::vaultPath($file, $ext));
             } catch (\Throwable) {
                 // A thumbnail that outlives its file costs a few KB and is
-                // unreachable — never worth failing a delete over.
+                // unreachable, never worth failing a delete over.
             }
         }
     }

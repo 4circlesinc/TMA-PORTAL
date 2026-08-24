@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Builder;
  * §9's action-driven dashboards: what this reader should pick up today, and
  * how much of it there is.
  *
- * A bucket is one definition read twice — {@see self::for()} counts it and
- * {@see self::apply()} narrows the listing to it — so the chip and the table
+ * A bucket is one definition read twice. {@see self::for()} counts it and
+ * {@see self::apply()} narrows the listing to it, so the chip and the table
  * behind it cannot disagree. A chip saying eleven that opens onto nine rows is
  * worse than no chip at all: it is the dashboard telling somebody there is
  * work they then cannot find.
@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * The administrator's ten and the service provider's six are reports. They
  * count everything the reader may see, and what that is has already been
- * decided by {@see ApplicationScope} — every application for an administrator,
+ * decided by {@see ApplicationScope}, every application for an administrator,
  * one provider firm's book for a contact there, one applicant's own record for
  * a private client. Nobody's name is in the query.
  *
@@ -35,8 +35,8 @@ use Illuminate\Database\Eloquent\Builder;
  * NOTHING IS FILED AS A DRAFT
  *
  * Applications are born at NEW and land in the New Applications bucket. DRAFT
- * remains a leftover code — historical events, and any row that has not yet
- * been moved — and no set names it, so those leftovers still count nowhere.
+ * remains a leftover code, historical events, and any row that has not yet
+ * been moved, and no set names it, so those leftovers still count nowhere.
  *
  * NOT CACHED, AND MUST NOT BE
  *
@@ -63,7 +63,7 @@ class Buckets
     public const SERVICE_PROVIDER = 'service_provider';
 
     /**
-     * The statuses a file is under review in — what a reviewing officer's
+     * The statuses a file is under review in, what a reviewing officer's
      * queue is made of.
      *
      * It stops at Ready to submit on purpose. A file that has been approved
@@ -144,7 +144,7 @@ class Buckets
             'scope' => self::SCOPE_ALL,
         ],
 
-        /* The Reviewing Officer's queues — every one of them personal. */
+        /* The Reviewing Officer's queues, every one of them personal. */
 
         // The officer's whole desk, and deliberately the sum of the three
         // below: a total beside its parts is what tells them whether the day
@@ -176,7 +176,7 @@ class Buckets
     ];
 
     /**
-     * Which buckets each dashboard shows, in the order §9 lists them — the
+     * Which buckets each dashboard shows, in the order §9 lists them, the
      * order is part of the brief, not a detail for a renderer to choose.
      *
      * @var array<string, list<string>>
@@ -246,8 +246,8 @@ class Buckets
             /*
              * One grouped count per scope, not one per bucket.
              *
-             * Ten buckets over one slice is a single question — how many
-             * applications sit at each status — and asking it ten times would
+             * Ten buckets over one slice is a single question, how many
+             * applications sit at each status, and asking it ten times would
              * put ten round trips behind every dashboard load for numbers that
              * came out of the same rows. Keyed by scope because a personal
              * queue counts a different set of rows, so a set that mixes the
@@ -279,7 +279,7 @@ class Buckets
                  * The key and nothing else, on purpose. A filter spelled out
                  * as `status=` would work for the single-status buckets and
                  * silently lie for the officer queues, which are a person as
-                 * well as a status — so the listing hands this straight back
+                 * well as a status, so the listing hands this straight back
                  * to {@see self::find()} and {@see self::apply()}, the same
                  * definition the count above was measured through.
                  */
@@ -295,7 +295,7 @@ class Buckets
      *
      * Membership is checked, not just existence: a bucket that is not on this
      * reader's dashboard is not theirs to filter by, and answering with
-     * somebody else's queue — even correctly scoped, so empty — would be the
+     * somebody else's queue, even correctly scoped, so empty, would be the
      * listing offering a view nothing ever put in front of them.
      *
      * @return array{key: string, label: string, statuses: list<string>, scope: string}|null
@@ -312,7 +312,7 @@ class Buckets
     }
 
     /**
-     * Narrow an application query to one bucket — the other half of the same
+     * Narrow an application query to one bucket, the other half of the same
      * definition the count came from.
      *
      * Takes a query rather than building one so the caller keeps its own
@@ -340,8 +340,8 @@ class Buckets
      *
      * THE MULTI-STATUS ONE
      *
-     * Only the Reviewing Officer's Assigned Reviews covers several — the three
-     * states of {@see self::UNDER_REVIEW} — and a dot can only be one colour,
+     * Only the Reviewing Officer's Assigned Reviews covers several, the three
+     * states of {@see self::UNDER_REVIEW}, and a dot can only be one colour,
      * so it takes the tone of the first status in the definition. That is the
      * state the queue is named for and the one work enters it at, and the tone
      * is describing what kind of bucket this is rather than how the files in
@@ -369,8 +369,8 @@ class Buckets
      * into assigned_officer_id when a file is held in both jobs. The live
      * assignment is the authority for either role, so "mine" is whoever holds
      * the file now, not whoever the listing column happens to name. The cache
-     * is still matched so a fixture that only filled the column — and a queue
-     * that used to read only that column — keeps counting the same rows.
+     * is still matched so a fixture that only filled the column, and a queue
+     * that used to read only that column, keeps counting the same rows.
      */
     private static function scoped(Builder $query, string $scope, User $user): Builder
     {

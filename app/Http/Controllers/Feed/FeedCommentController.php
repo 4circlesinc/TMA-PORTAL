@@ -27,7 +27,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Comments and replies (§9).
  *
- * Threads are one level deep — a reply to a reply keeps the same `root_id` —
+ * Threads are one level deep, a reply to a reply keeps the same `root_id` —
  * so a post's whole comment tree loads in one query and is assembled here
  * rather than walked recursively.
  */
@@ -106,7 +106,7 @@ class FeedCommentController extends Controller
                 'author_id' => $user->id,
                 'parent_id' => $parent?->id,
                 // A reply to a reply joins its parent's thread rather than
-                // starting a deeper one — see the class comment.
+                // starting a deeper one, see the class comment.
                 'root_id' => $parent ? ($parent->root_id ?: $parent->id) : null,
                 'body' => $body,
                 'body_text' => FeedContent::flatten($body),

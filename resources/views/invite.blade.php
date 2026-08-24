@@ -1,12 +1,12 @@
 {{--
   The screen an emailed invitation link opens. One view, one `$state`:
 
-    register      — no account for this address yet; create one
-    registration-closed — no account yet, and the firm creates them itself
-    signin        — the address already has a login; sign in to accept
-    wrong-account — signed in as somebody else
-    accept        — signed in as the invited person; confirm
-    expired / accepted / cancelled / invalid / declined — dead ends, each said plainly
+    register     , no account for this address yet; create one
+    registration-closed, no account yet, and the firm creates them itself
+    signin       , the address already has a login; sign in to accept
+    wrong-account, signed in as somebody else
+    accept       , signed in as the invited person; confirm
+    expired / accepted / cancelled / invalid / declined, dead ends, each said plainly
 
   Styling is lifted unchanged from the previous client-invite screen so the
   page still matches the portal's auth screens.
@@ -42,7 +42,7 @@
     .err { margin: 0 0 16px; padding: 10px 14px; border-radius: 12px; background: #fdecec; color: #c0392b; font-size: 13px; }
     .foot { margin: 20px 0 0; text-align: center; font-size: 12px; color: var(--muted); }
     .foot a { color: var(--blue); text-decoration: none; }
-    /* The "what you're being offered" summary — Phase 2 asks the screen to
+    /* The "what you're being offered" summary. Phase 2 asks the screen to
        show the inviter, the organization and the access on offer. */
     .summary { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: #fafbfc; }
     .summary dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
@@ -81,7 +81,7 @@
 
     @elseif ($state === 'declined')
       <h1>Invitation declined</h1>
-      <p class="note">Thanks for letting us know — we won't set up an account.</p>
+      <p class="note">Thanks for letting us know. We won't set up an account.</p>
 
     @elseif ($state === 'invalid')
       <h1>This invitation link isn't valid</h1>
@@ -138,7 +138,7 @@
 
       @include('partials.invite-summary')
 
-      <p class="note">Sign in and we'll add this to the account you already have — nothing new is created.</p>
+      <p class="note">Sign in and we'll add this to the account you already have. Nothing new is created.</p>
       <form method="POST" action="{{ url('/invite/'.$token.'/signin') }}">
         @csrf
         <button class="btn" type="submit">Sign in to accept</button>

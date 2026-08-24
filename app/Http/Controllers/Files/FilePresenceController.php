@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 /**
  * Active viewers on a file.
  *
- * Reading the roster and joining it both need `view` — you cannot appear on, or
+ * Reading the roster and joining it both need `view`, you cannot appear on, or
  * see, the roster of a file you cannot open.
  */
 class FilePresenceController extends BaseFilesController

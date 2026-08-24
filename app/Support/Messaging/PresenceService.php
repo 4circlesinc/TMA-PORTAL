@@ -142,7 +142,7 @@ class PresenceService
 
         return [
             'online' => false,
-            // Rendered on the *viewer's* wall clock — "yesterday at 8:15 PM"
+            // Rendered on the *viewer's* wall clock, "yesterday at 8:15 PM"
             // is only true in one time zone, and this answer has one reader.
             'lastSeen' => LastSeen::label($presence->last_seen_at, $viewer),
             'lastSeenAt' => $presence->last_seen_at->toIso8601String(),

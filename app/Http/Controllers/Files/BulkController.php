@@ -18,7 +18,7 @@ use Illuminate\Http\Request;
 /**
  * Multi-select actions over a mixed set of files and folders. Each item is
  * authorized and processed independently, so one permission failure never
- * silently rolls back the rest — the response reports what succeeded/failed.
+ * silently rolls back the rest, the response reports what succeeded/failed.
  */
 class BulkController extends BaseFilesController
 {

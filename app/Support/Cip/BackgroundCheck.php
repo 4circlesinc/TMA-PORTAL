@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Recording acceptance for processing (§19) — the Accepted for processing
+ * Recording acceptance for processing (§19), the Accepted for processing
  * date, and the automatic move to Background check.
  *
  * The generic status endpoint refuses BACKGROUND CHECK on purpose: a bare

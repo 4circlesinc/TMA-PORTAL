@@ -46,12 +46,12 @@ class WorkflowPresenter
              * reading; the tab label is a claim about the whole file. They are
              * the same numbers the details payload reports, so the tab keeps
              * saying the same thing after a request is sent, answered or
-             * cancelled — which it did not when only /details knew the count.
+             * cancelled, which it did not when only /details knew the count.
              */
             'openCount' => FileWorkflow::where('file_id', $file->id)
                 ->whereNotIn('status', Status::TERMINAL)->count(),
             'total' => FileWorkflow::where('file_id', $file->id)->count(),
-            // Waiting on this reader specifically — the one number that means
+            // Waiting on this reader specifically, the one number that means
             // "you have something to do".
             'mineCount' => FileWorkflowStep::query()
                 ->whereIn('workflow_id', FileWorkflow::where('file_id', $file->id)->select('id'))
@@ -61,7 +61,7 @@ class WorkflowPresenter
         ];
     }
 
-    /** The status badge for a file — §23. Null when nothing has been sent. */
+    /** The status badge for a file. §23. Null when nothing has been sent. */
     public static function badge(FileItem $file): ?array
     {
         $workflow = Engine::activeFor($file);
@@ -163,7 +163,7 @@ class WorkflowPresenter
         };
     }
 
-    /** The workflow's own audit trail, oldest first — §6 "Workflow History". */
+    /** The workflow's own audit trail, oldest first. §6 "Workflow History". */
     public static function history(FileWorkflow $workflow): array
     {
         return FileWorkflowEvent::where('workflow_id', $workflow->id)

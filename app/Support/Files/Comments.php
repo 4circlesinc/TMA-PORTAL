@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  *
  *  - **A mention never reaches someone the author could not have shared with.**
  *    Mentions arrive as user ids from the composer, and the composer's
- *    suggestion list is itself filtered — but the list is a courtesy, not the
+ *    suggestion list is itself filtered, but the list is a courtesy, not the
  *    control. Every mention runs through AccessGrants before it is stored: an
  *    author who may share the file brings the named person in and access
  *    follows, while one who may not cannot notify a stranger at all (and so
@@ -64,7 +64,7 @@ class Comments
                 // the same root, so a thread never becomes an endless indent.
                 'root_id' => $parent ? ($parent->root_id ?? $parent->id) : null,
                 'body' => $body,
-                // Only a thread points at the document — a reply is about the
+                // Only a thread points at the document, a reply is about the
                 // conversation, and it inherits its thread's anchor by being
                 // in it.
                 'anchor' => $parent ? null : $anchor,
@@ -111,7 +111,7 @@ class Comments
      * Soft-delete, and blank the body.
      *
      * The row stays so replies beneath it keep their place in the thread, but
-     * the text must actually go — a "deleted" comment whose words are still in
+     * the text must actually go, a "deleted" comment whose words are still in
      * the database is not deleted in any sense the author would recognise.
      */
     public static function delete(FileComment $comment, User $actor): void
@@ -139,7 +139,7 @@ class Comments
         if ($resolved) {
             Activity::forFile($actor->id, $file, 'comment-resolved', ['comment' => $comment->uuid]);
 
-            // Tell the author their thread was closed — unless they closed it.
+            // Tell the author their thread was closed, unless they closed it.
             if ($comment->author_id !== $actor->id) {
                 self::notifyOne($comment->author_id, 'file.comment_resolved', $file, $actor,
                     $actor->name.' resolved your comment on '.$file->name);
@@ -154,7 +154,7 @@ class Comments
     /**
      * Replace a comment's mentions.
      *
-     * Somebody who cannot open the file is given access — see AccessGrants —
+     * Somebody who cannot open the file is given access, see AccessGrants —
      * provided the author is allowed to share it. Naming a colleague is how
      * people ask for a second pair of eyes, and refusing to deliver that
      * because the file had not been shared with them yet made the author go and
@@ -196,7 +196,7 @@ class Comments
     /**
      * Who hears about a new comment.
      *
-     * Mentions first and unconditionally — being named is the whole point.
+     * Mentions first and unconditionally, being named is the whole point.
      * Then the thread's other participants and the file owner, each only once,
      * and never the author of the comment itself.
      */

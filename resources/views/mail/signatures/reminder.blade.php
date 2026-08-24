@@ -28,5 +28,5 @@
 @endsection
 
 @section('foot')
-  This link is personal to you — please don't forward it.
+  This link is personal to you, please don't forward it.
 @endsection

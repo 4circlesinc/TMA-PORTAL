@@ -11,7 +11,7 @@ use App\Models\User;
  *
  * It answers "what has happened here that I have not looked at?", and needs a
  * *seen* marker to answer it, because a missed call has no per-item read state
- * of its own — it is not unread mail.
+ * of its own, it is not unread mail.
  *
  * Two rules shape this:
  *
@@ -32,7 +32,7 @@ final class TabCounts
 
     /**
      * @param  ?array<int, int>  $conversationIds  the caller's conversations,
-     *   when they have already been loaded — the chat list has them in hand,
+     *   when they have already been loaded, the chat list has them in hand,
      *   and this runs on every one of its loads.
      * @return array{calls:int}
      */

@@ -4,7 +4,7 @@
  *
  * One modal, three entry points: the Dashboard shortcut, the File Library
  * (toolbar, folder menu and File Box), and a client's Documents tab. They all
- * open the *same* dialog against the same endpoint — the alternative, three
+ * open the *same* dialog against the same endpoint, the alternative, three
  * dialogs that look alike, is how the old prototype ended up with a Dashboard
  * version that only asked for an email address and a File Box version that
  * asked for a different one, neither of which sent anything anywhere.
@@ -13,7 +13,7 @@
  * nothing else about it changes between callers.
  *
  * The destination is chosen here, while signed in, and stored on the request.
- * The public upload page never gets to name a folder — see
+ * The public upload page never gets to name a folder, see
  * App\Http\Controllers\Files\PublicUploadController.
  */
 (function () {
@@ -141,7 +141,7 @@
 
     return '' +
       // One wrapper so the destination picker can hide the whole form without
-      // destroying it — see pickDestination.
+      // destroying it, see pickDestination.
       '<div data-req-form>' +
 
       // ── what you are asking for
@@ -243,7 +243,7 @@
     return '' +
       '<div class="tma-portal-request__done">' +
       '<p class="tma-portal-request__done-title">Your upload link is ready</p>' +
-      '<p class="tma-portal-request__note">Uploads land in <strong>' + esc(req.destination.name) + '</strong> — ' +
+      '<p class="tma-portal-request__note">Uploads land in <strong>' + esc(req.destination.name) + '</strong>: ' +
       esc(rules.join(' · ')) + '.</p>' +
       '<div class="tma-portal-share__link-row">' +
       '<input type="text" class="tma-portal-share__link" data-req-link readonly value="' + esc(req.link) + '">' +
@@ -425,8 +425,8 @@
    *
    * Layered over the form rather than replacing it. Rebuilding the form
    * afterwards would be simpler to write and would silently throw away
-   * everything already typed into it — the title, the instructions, the
-   * recipient — because those live in the DOM, not in `draft`. Hiding it
+   * everything already typed into it, the title, the instructions, the
+   * recipient, because those live in the DOM, not in `draft`. Hiding it
    * instead means coming back lands on the form exactly as it was left.
    */
   function pickDestination(host, draft) {
@@ -465,7 +465,7 @@
       var p = new URLSearchParams();
       // "my" is the same section the File Library's own Move picker browses,
       // so the folders offered here are exactly the ones this account may
-      // write to — and the server re-checks that on create regardless.
+      // write to, and the server re-checks that on create regardless.
       p.set('section', 'my');
       if (current.folder) p.set('folder', current.folder);
       p.set('perPage', '200');

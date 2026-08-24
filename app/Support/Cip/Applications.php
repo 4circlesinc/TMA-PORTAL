@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Creating applications. One method so the invariant cannot be skipped: an
  * application, its internal number and its first audit row are born in one
- * transaction — a row without a number, or a number without a row, cannot
+ * transaction, a row without a number, or a number without a row, cannot
  * exist even for a moment.
  */
 class Applications

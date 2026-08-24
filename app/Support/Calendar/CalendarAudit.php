@@ -116,7 +116,7 @@ class CalendarAudit
             self::SYNC_COMPLETED => "Synced {$calendar}",
             self::SYNC_FAILED => "Sync failed for {$calendar}".(isset($context['error']) ? ': '.$context['error'] : ''),
             self::CONFLICT_DETECTED => "{$event} was changed in both places",
-            default => "{$who} — {$row->action}",
+            default => "{$who}. {$row->action}",
         };
     }
 }

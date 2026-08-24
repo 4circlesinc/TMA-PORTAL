@@ -7,7 +7,7 @@ use App\Models\CipPerson;
 /**
  * The document requirements that exist before Phase 3's template engine does.
  *
- * §2 names three uploads at intake — the passport photo, the passport bio
+ * §2 names three uploads at intake, the passport photo, the passport bio
  * page and the birth certificate. They are constants here rather than rows
  * because they have to mean the same thing on both sides of the templates
  * table: when Phase 3 seeds `cip_document_requirements`, these slugs are what

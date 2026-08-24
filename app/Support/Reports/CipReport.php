@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * CIP application reports (§25).
  *
- * One builder, seven presets. The filters are the brief's list — status,
+ * One builder, seven presets. The filters are the brief's list, status,
  * service provider, investment type, applicant, assigned officer, submission
- * date, decision date, date range — and the named examples are just those
+ * date, decision date, date range, and the named examples are just those
  * filters already filled in. Numbers come from `cip_applications` itself,
  * including withdrawn rows, so a historical grant still counts after the
  * file left the live table.
@@ -43,7 +43,7 @@ final class CipReport
         'by_investment_type' => 'Applications by Investment Type',
     ];
 
-    /** Rows kept on the stored table — enough for a sitting, not a dump of the legacy book. */
+    /** Rows kept on the stored table, enough for a sitting, not a dump of the legacy book. */
     private const LIST_CAP = 2000;
 
     /**
@@ -85,7 +85,7 @@ final class CipReport
         $preset = $filters['preset'] ?? null;
         $head = self::PRESET_LABELS[$preset] ?? 'CIP Applications';
 
-        return $head.' — '.$rangeLabel;
+        return $head.': '.$rangeLabel;
     }
 
     /* ── the question ───────────────────────────────────────────────── */
@@ -203,11 +203,11 @@ final class CipReport
             'columns' => ['Number', 'Applicant', 'Status', 'Service provider', 'Investment type', 'Assigned officer', 'Submitted', 'Decision date'],
             'rows' => $rows->map(fn ($row) => [
                 $row->cip_number ?: ($row->internal_number ?? ''),
-                trim((string) $row->applicant) !== '' ? trim((string) $row->applicant) : '—',
+                trim((string) $row->applicant) !== '' ? trim((string) $row->applicant) : '-',
                 Status::label((string) $row->status),
-                $row->provider ?: '—',
-                InvestmentType::display($row->investment_type, $row->investment_type_other) ?: '—',
-                $row->officer ?: '—',
+                $row->provider ?: '-',
+                InvestmentType::display($row->investment_type, $row->investment_type_other) ?: '-',
+                $row->officer ?: '-',
                 self::day($row->submitted_at),
                 self::day($row->decided_at),
             ])->all(),
@@ -229,9 +229,9 @@ final class CipReport
                 $label = trim((string) $row->bucket);
 
                 if ($column === 'a.investment_type') {
-                    $label = InvestmentType::label($label) ?: '—';
+                    $label = InvestmentType::label($label) ?: '-';
                 } elseif ($label === '') {
-                    $label = '—';
+                    $label = '-';
                 }
 
                 return [$label, self::number((int) $row->total)];
@@ -263,7 +263,7 @@ final class CipReport
     private static function day(mixed $value): string
     {
         if ($value === null || $value === '') {
-            return '—';
+            return '-';
         }
 
         return Carbon::parse($value)->toDateString();

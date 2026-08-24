@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
  *
  * Read-only, and there is no writing half to come. cip_events is append-only
  * and every row is written by the code that made the change, inside the same
- * transaction — a route that let a client post its own history would be a way
+ * transaction, a route that let a client post its own history would be a way
  * to write the audit without doing the thing it describes.
  *
  * The application is resolved through {@see ApplicationScope} first, so a

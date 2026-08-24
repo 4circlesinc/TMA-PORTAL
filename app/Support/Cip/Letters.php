@@ -7,7 +7,7 @@ use App\Models\CipDecisionTemplate;
 use App\Models\User;
 
 /**
- * §23 — Granted and Denied letters, one pair per investment type.
+ * §23. Granted and Denied letters, one pair per investment type.
  *
  * The filing subject is still {@see Notices::line}. This is the body the
  * administrator keeps: title and letter, with {{placeholders}} filled from
@@ -96,7 +96,7 @@ class Letters
     /**
      * The letter this application should send for this outcome.
      *
-     * An unknown or empty investment type uses Other — that is the catch-all
+     * An unknown or empty investment type uses Other, that is the catch-all
      * the form already has, and a file with no type still has to produce a
      * letter the day it is decided.
      */

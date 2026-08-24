@@ -29,7 +29,7 @@ class Sharing
         return in_array($role, self::ROLES, true) ? $role : 'viewer';
     }
 
-    /** The public link URL for a link share (token only — no path/id). */
+    /** The public link URL for a link share (token only, no path/id). */
     public static function linkUrl(Share $share): ?string
     {
         return $share->kind === 'link' ? url('/s/'.$share->token) : null;
@@ -54,7 +54,7 @@ class Sharing
                 ? ['name' => $share->targetUser?->name, 'email' => $share->targetUser?->email, 'avatar' => $share->targetUser?->avatar_url]
                 : ($share->kind === 'email' ? ['name' => $share->target_email, 'email' => $share->target_email, 'avatar' => null] : null),
             // A company share names the group it covers rather than a person —
-            // "Everyone at Acme Group", "Acme Group finance contacts" — which
+            // "Everyone at Acme Group", "Acme Group finance contacts", which
             // is what stops the Manage Access panel listing forty names.
             'company' => $share->kind === 'company' ? [
                 'id' => $share->targetCompany?->uid,
@@ -79,7 +79,7 @@ class Sharing
             return 'Everyone at '.$name;
         }
 
-        return $name.' — '.CompanyRoles::label($share->target_company_role).'s';
+        return $name.': '.CompanyRoles::label($share->target_company_role).'s';
     }
 
     public static function verifyPassword(Share $share, ?string $password): bool

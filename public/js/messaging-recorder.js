@@ -3,7 +3,7 @@
  *
  * Wraps MediaRecorder and the Web Audio API: capture, a live duration, and
  * waveform peaks sampled while recording. Peaks are measured here because the
- * server has no media probe — computing them after upload would mean decoding
+ * server has no media probe, computing them after upload would mean decoding
  * the audio again on every render instead of once, at source.
  *
  * Container support differs by browser (Chrome gives WebM/Opus, Safari MP4),
@@ -23,7 +23,7 @@
     'audio/mpeg',
   ];
 
-  /* Matches AttachmentIntake::WAVEFORM_POINTS — one bar per slot. */
+  /* Matches AttachmentIntake::WAVEFORM_POINTS, one bar per slot. */
   var WAVEFORM_POINTS = 60;
 
   /* Hard stop, mirroring the server's ceiling. */
@@ -268,7 +268,7 @@
   /*
    * Release the microphone.
    *
-   * Every track must be stopped explicitly — leaving them open keeps the
+   * Every track must be stopped explicitly, leaving them open keeps the
    * browser's recording indicator lit, which reads as the app still listening.
    */
   Recorder.prototype.release = function () {

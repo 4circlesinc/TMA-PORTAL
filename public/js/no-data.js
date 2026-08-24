@@ -2,7 +2,7 @@
  * TMA - No data empty state (Figma 32546:96126)
  * Global: window.TMANoData
  *
- * Use for production empty lists — never fill with sample records.
+ * Use for production empty lists, never fill with sample records.
  * Supports title, subtitle, optional action, compact inline mode,
  * and permission-aware messaging.
  */

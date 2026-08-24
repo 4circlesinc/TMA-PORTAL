@@ -18,12 +18,12 @@ use Illuminate\Validation\Rule;
  * to a client's folder (FileAccess reads the level), so creating and ending
  * assignments is administrator-only; staff may read who is assigned.
  *
- * The work itself lives in App\Support\Clients\Assignments — this only decides
+ * The work itself lives in App\Support\Clients\Assignments, this only decides
  * who may ask and what shape the answer takes.
  */
 class ClientAssignmentController extends Controller
 {
-    // The assignment list is employees only now — see assignableStaff. The
+    // The assignment list is employees only now, see assignableStaff. The
     // former ['Administrator', 'Employee'] constant has no other consumer.
 
     /** Staff assigned to a client, live ones first. */
@@ -51,7 +51,7 @@ class ClientAssignmentController extends Controller
      *
      * Derived rather than stored: writing a row per administrator per client
      * would need a backfill, a hook on every new client, another on every
-     * promotion to Administrator, and a cleanup on every demotion — four
+     * promotion to Administrator, and a cleanup on every demotion, four
      * chances for the table to drift out of step with the rule it is meant to
      * express. The rule lives here instead, so it is right by construction.
      */
@@ -107,7 +107,7 @@ class ClientAssignmentController extends Controller
             'notes' => $data['notes'] ?? null,
         ], $request->user());
 
-        // The assignee's own directory changes shape too — this row is what
+        // The assignee's own directory changes shape too, this row is what
         // puts the client in it.
         Live::staffAnd(Live::CLIENTS, [$staff->id]);
         ClientDirectory::flushFor($staff);
@@ -180,7 +180,7 @@ class ClientAssignmentController extends Controller
     }
 
     /**
-     * End an assignment. The row is kept as history — see Assignments::end —
+     * End an assignment. The row is kept as history, see Assignments::end —
      * so this removes the access without erasing the record.
      */
     public function destroy(Request $request, string $uid, int $userId): JsonResponse
@@ -217,7 +217,7 @@ class ClientAssignmentController extends Controller
             ->values()->all();
     }
 
-    /** Assignments that have ended — who used to look after this client. */
+    /** Assignments that have ended, who used to look after this client. */
     private function presentHistory(Client $client): array
     {
         return ClientAssignment::where('client_id', $client->id)
@@ -239,7 +239,7 @@ class ClientAssignmentController extends Controller
     }
 
     /**
-     * Staff who could be assigned — everyone internal who does not already
+     * Staff who could be assigned, everyone internal who does not already
      * hold a live assignment on this client.
      *
      * @return array<int, array<string, mixed>>
@@ -251,7 +251,7 @@ class ClientAssignmentController extends Controller
      *
      *  - anyone already assigned, or the list offers work that is done;
      *  - administrators, who reach every client already (see
-     *    ClientAssignmentController::mine) — an assignment row would grant
+     *    ClientAssignmentController::mine), an assignment row would grant
      *    nothing and imply they had been singled out for this one;
      *  - whoever created the client, who is its default assignee. Offering
      *    John a chance to assign John is the interface asking a question it

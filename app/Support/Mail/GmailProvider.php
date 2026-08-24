@@ -12,7 +12,7 @@ use RuntimeException;
  * Gmail API implementation of {@see MailProvider}.
  *
  * Two Gmail shapes leak into everything here. First, Gmail has no folders —
- * only labels — so "archive" is the absence of INBOX rather than a place.
+ * only labels, so "archive" is the absence of INBOX rather than a place.
  * Second, list endpoints return bare ids, so every listing costs a second
  * fan-out to read headers; those go out concurrently via Http::pool.
  */
@@ -56,7 +56,7 @@ class GmailProvider implements MailProvider
         // The folder is derived from each message's own labels, not from the
         // query that found it. Gmail's labels are the truth, and a message can
         // legitimately come back from a query whose folder it does not belong
-        // to — trusting the query would file it in the wrong place.
+        // to, trusting the query would file it in the wrong place.
         return [
             'messages' => $this->hydrateList($ids, null),
             'cursor' => $data['nextPageToken'] ?? null,
@@ -68,7 +68,7 @@ class GmailProvider implements MailProvider
         $timestamp = strtotime($since);
 
         // Gmail's `after:` has whole-second granularity at best, and in
-        // practice rounds to the day on some accounts — so it is used only to
+        // practice rounds to the day on some accounts, so it is used only to
         // bound the search cheaply, and the caller re-upserts whatever comes
         // back (idempotent) rather than trusting it to be exact.
         $query = [
@@ -364,7 +364,7 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * The original's RFC Message-ID and References chain — not Gmail's hex id.
+     * The original's RFC Message-ID and References chain, not Gmail's hex id.
      *
      * @return array{inReplyTo: string, references: string}
      */
@@ -410,7 +410,7 @@ class GmailProvider implements MailProvider
             'from_name' => $from['name'],
             'from_email' => $from['email'],
             'to' => self::parseAddressList($headers['to'] ?? ''),
-            // Headers are present without the body — keep CC for recipient checks.
+            // Headers are present without the body, keep CC for recipient checks.
             'cc' => self::parseAddressList($headers['cc'] ?? ''),
             'is_read' => ! in_array('UNREAD', $labels, true),
             'is_starred' => in_array('STARRED', $labels, true),
@@ -663,7 +663,7 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * Message counts per folder from Gmail's label metadata — one small request
+     * Message counts per folder from Gmail's label metadata, one small request
      * per label. Gmail has no Archive label, so that folder is simply absent.
      *
      * @return array<string, int>
@@ -686,8 +686,8 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * Gmail has no cheap "how many messages have attachments" counter — a
-     * search estimate is the closest and it is famously unreliable — so
+     * Gmail has no cheap "how many messages have attachments" counter, a
+     * search estimate is the closest and it is famously unreliable, so
      * nothing is claimed and the import counts what it actually finds.
      */
     public function attachmentCounts(): array
@@ -700,7 +700,7 @@ class GmailProvider implements MailProvider
      *
      * Gmail itself has no "get photo by email" public API. Workspace tenants
      * expose directory people; personal accounts expose saved contacts and
-     * "other contacts" (people you've emailed) — and only when the matching
+     * "other contacts" (people you've emailed), and only when the matching
      * People scopes are on the token. Arbitrary Gmail users you have never
      * interacted with cannot be looked up (Google privacy).
      */
@@ -716,7 +716,7 @@ class GmailProvider implements MailProvider
             return null;
         }
 
-        // Workspace directory first — org colleagues with profile photos.
+        // Workspace directory first, org colleagues with profile photos.
         $directory = Http::withToken($token)
             ->acceptJson()
             ->timeout(8)

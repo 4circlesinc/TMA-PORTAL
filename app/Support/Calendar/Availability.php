@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
- * Free/busy for people and groups — what the event form shows when picking a
+ * Free/busy for people and groups, what the event form shows when picking a
  * time, and the only thing an availability-only viewer is ever told.
  *
  * The rule this class exists to enforce: a busy block carries **no detail**.
@@ -62,7 +62,7 @@ class Availability
      *
      * Reads every calendar they own, then keeps only those the viewer holds at
      * least availability permission on. A calendar the viewer cannot see at
-     * all contributes nothing — not even a block — which is why the result can
+     * all contributes nothing, not even a block, which is why the result can
      * legitimately be "unknown" rather than "free".
      *
      * @return array<string, mixed>
@@ -101,7 +101,7 @@ class Availability
             ->get(['id', 'starts_at', 'ends_at', 'all_day', 'status']);
 
         $blocks = $events->map(fn (CalendarEvent $e) => [
-            // Deliberately only times and a coarse state — never a title.
+            // Deliberately only times and a coarse state, never a title.
             'startsAt' => $e->starts_at->toIso8601String(),
             'endsAt' => $e->ends_at->toIso8601String(),
             'status' => $e->status === CalendarEvent::STATUS_TENTATIVE ? self::TENTATIVE : self::BUSY,
@@ -118,7 +118,7 @@ class Availability
      * Collapse overlapping blocks so the UI draws one bar per busy stretch
      * rather than stacking every calendar's copy of the same meeting.
      *
-     * A tentative block absorbed into a confirmed one becomes busy — the
+     * A tentative block absorbed into a confirmed one becomes busy, the
      * stronger claim on the time wins.
      *
      * @param  array<int, array<string, mixed>>  $blocks
@@ -156,7 +156,7 @@ class Availability
     }
 
     /**
-     * The earliest slot of `$minutes` in which everyone is free — the "find a
+     * The earliest slot of `$minutes` in which everyone is free, the "find a
      * time" answer. Returns null when the window holds no such slot.
      *
      * @param  array<int, array<string, mixed>>  $availability  as returned by forUsers()

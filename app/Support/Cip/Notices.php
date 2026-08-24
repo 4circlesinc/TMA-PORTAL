@@ -12,7 +12,7 @@ use App\Support\Notifications\Notifier;
 use App\Support\Signatures\Presenter as SignaturePresenter;
 
 /**
- * §22 — one subject format, one recipient list, every status change.
+ * §22, one subject format, one recipient list, every status change.
  *
  * The postcard IS the email. Bells go to portal accounts with the email
  * channel off so the Notifier cannot send a second, differently-worded copy.
@@ -26,7 +26,7 @@ class Notices
      *
      * Initials are the actor who moved the file, or the assigned reviewing
      * officer when the system moved it (DELAYED). NEW APPLICATION before an
-     * assignment uses the actor — the person who filed or created it.
+     * assignment uses the actor, the person who filed or created it.
      *
      * @param  array{number:string, applicant:string, familySize:int}  $facts
      */
@@ -75,7 +75,7 @@ class Notices
                 'user' => User::find($recipient['userId']),
                 'actor' => $actor,
                 'type' => $type,
-                'title' => $facts['number'].' — '.Status::label($to),
+                'title' => $facts['number'].': '.Status::label($to),
                 'message' => self::bellMessage($application, $to, $facts),
                 'subject' => $application,
                 'action_url' => $path,

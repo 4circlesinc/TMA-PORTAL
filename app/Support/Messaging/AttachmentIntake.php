@@ -29,7 +29,7 @@ class AttachmentIntake
      * What messaging would *like* to allow per file.
      *
      * The real ceiling is whichever is smaller: this, or what PHP itself will
-     * accept — see effectiveMaxBytes(). Advertising 100 MB while
+     * accept, see effectiveMaxBytes(). Advertising 100 MB while
      * `upload_max_filesize` is 2 MB means a 5 MB photo fails with a confusing
      * error, so the limit shown to the user is always the one that will
      * actually apply.

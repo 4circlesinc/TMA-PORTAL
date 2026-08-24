@@ -23,7 +23,7 @@ class AdminSecurityController extends Controller
             // What each alert means and when it fires, from the server. The
             // screen used to describe four events the portal cannot detect;
             // sourcing the copy here is what keeps it honest about the two it
-            // can — see App\Support\Security\SecurityAlertPolicy.
+            // can, see App\Support\Security\SecurityAlertPolicy.
             'alertEvents' => [
                 [
                     'id' => 'newDevice',
@@ -33,7 +33,7 @@ class AdminSecurityController extends Controller
                 [
                     'id' => 'failedSignIns',
                     'label' => 'Repeated failed sign-ins on one account',
-                    'help' => 'Sent once, when the count is reached inside an hour — not on every attempt after it.',
+                    'help' => 'Sent once, when the count is reached inside an hour, not on every attempt after it.',
                 ],
             ],
             'failureWindowMinutes' => SecurityAlertPolicy::FAILURE_WINDOW_MINUTES,

@@ -223,7 +223,7 @@
      * One action across a selection: 'read', 'unread' or 'delete'.
      *
      * Applied locally first so the list responds to the click, then reconciled
-     * with the server's authoritative unread total — a bulk change touches too
+     * with the server's authoritative unread total, a bulk change touches too
      * many rows for a local count to be worth trusting.
      */
     function bulk(ids, action) {
@@ -257,7 +257,7 @@
         .catch(function () { return refreshCount(); });
     }
 
-    /* Realtime: a fresh notification arrived — add to the top without a refetch. */
+    /* Realtime: a fresh notification arrived, add to the top without a refetch. */
     function prepend(item) {
       if (!item || !item.id || indexOf(item.id) !== -1) return;
       state.items.unshift(item);
@@ -281,7 +281,7 @@
       changed();
 
       // A notification arriving while the user is here deserves to be seen,
-      // not just counted — surface it as a toast (dedupe lives in toast.js).
+      // not just counted, surface it as a toast (dedupe lives in toast.js).
       if (added && item && !item.read && window.TMAToast && window.TMAToast.showNotificationToast) {
         window.TMAToast.showNotificationToast(item);
       }
@@ -296,12 +296,12 @@
        */
       if (item && !item.read) desktop.notify(item);
 
-      // Let open views (email, etc.) react to a specific arrival — e.g. a
+      // Let open views (email, etc.) react to a specific arrival, e.g. a
       // snooze reminder should put the woken message back into the list.
       if (added && item) {
         try {
           window.dispatchEvent(new CustomEvent('tma:notification-arrived', { detail: item }));
-        } catch (e) { /* CustomEvent unavailable in ancient browsers — ignore. */ }
+        } catch (e) { /* CustomEvent unavailable in ancient browsers, ignore. */ }
       }
     }
 
@@ -454,12 +454,12 @@
    * Every module banners, not just messages. Which notifications a user gets
    * at all is already decided server-side by their per-type preferences, so
    * filtering again here only ever meant email, calendar and file activity
-   * reached the bell and then died there — silently, which is the worst way
+   * reached the bell and then died there, silently, which is the worst way
    * for a notification to fail.
    * ------------------------------------------------------------------- */
   /* Per-module delivery channels from Settings → Notifications ("Notify me
-     about"). Loaded once; until it arrives — or for a module the grid doesn't
-     know — the answer is "on", because a fetch hiccup must never mute a
+     about"). Loaded once; until it arrives, or for a module the grid doesn't
+     know, the answer is "on", because a fetch hiccup must never mute a
      banner the user asked for. Sound is additionally behind the global
      notification-sounds switch, as before. */
   var channelPrefs = null;
@@ -491,7 +491,7 @@
      * The window being *hidden* is not the same as the user not looking: a tab
      * that is frontmost in a window sitting behind another application reports
      * itself perfectly visible. Focus is the honest test, and the reason
-     * notifications used to seem broken — they only ever fired for a minimised
+     * notifications used to seem broken, they only ever fired for a minimised
      * or background tab.
      */
     function backgrounded() {
@@ -501,7 +501,7 @@
 
     /*
      * The user's "Notification sounds" switch, published by messages.js onto
-     * window.TMAMessagingSettings — the same channel messaging-calls.js reads
+     * window.TMAMessagingSettings, the same channel messaging-calls.js reads
      * the ringtone from. Unset means on: someone who has never opened the
      * setting should still hear their notifications.
      */
@@ -579,7 +579,7 @@
           /*
            * This used to be hard-coded silent, on the reasoning that messages.js
            * plays the tone. It only ever did so for *messages*, and only for a
-           * conversation it had already loaded — so an email, a calendar change
+           * conversation it had already loaded, so an email, a calendar change
            * or a file update raised a banner with no sound at all, and a message
            * in an unloaded thread did too.
            *
@@ -587,7 +587,7 @@
            * here as well. The OS plays it: page audio is unreliable in exactly
            * the case that matters, since a hidden window is where autoplay
            * policy and background throttling apply. messages.js stands down
-           * while we are sounding — see playIncomingMessageSound's caller.
+           * while we are sounding, see playIncomingMessageSound's caller.
            */
           // The per-module Sound column, on top of the global sounds switch.
           silent: !soundOn() || !channelOn(item.module, 'sound'),
@@ -721,7 +721,7 @@
     if (document.hidden) return;
     var rt = window.TMAMessagingRealtime;
     if (rt && typeof rt.ensureAlive === 'function') rt.ensureAlive();
-    // Always reconcile after wake — even if the socket claims health.
+    // Always reconcile after wake, even if the socket claims health.
     catchUpNotifications({ forceLoad: true });
   }
   document.addEventListener('visibilitychange', onNotifyWake);

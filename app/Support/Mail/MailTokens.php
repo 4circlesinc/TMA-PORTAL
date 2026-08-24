@@ -23,11 +23,11 @@ class MailTokens
     /**
      * Where this account's access token is cached.
      *
-     * Keyed on who the account *is* — provider plus provider id — not on its
+     * Keyed on who the account *is*, provider plus provider id, not on its
      * row id. A row id is only unique inside one database, and the cache is
      * not: a filesystem or Redis store shared between environments hands
      * `mail.access.1` to whatever happens to be account 1 in each of them.
-     * That is not hypothetical — a throwaway test database whose first
+     * That is not hypothetical, a throwaway test database whose first
      * account got id 1 picked up the real mailbox's cached token and synced a
      * live account into itself.
      */
@@ -49,7 +49,7 @@ class MailTokens
 
         // A token that will not decrypt is as dead as one that was revoked, and
         // it has to say so. Left as a raw DecryptException it surfaced as
-        // "The MAC is invalid." parked on the account — every mailbox call
+        // "The MAC is invalid." parked on the account, every mailbox call
         // failing (new mail, attachment downloads, sending) with nothing on
         // screen explaining why or suggesting what to do about it.
         //
@@ -137,7 +137,7 @@ class MailTokens
     {
         if (! $ok || empty($data['access_token'])) {
             // invalid_grant means the user revoked access or changed their
-            // password — a reconnect, not something a retry can fix.
+            // password, a reconnect, not something a retry can fix.
             $error = $data['error'] ?? 'unknown_error';
 
             if ($error === 'invalid_grant') {

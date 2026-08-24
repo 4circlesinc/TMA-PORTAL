@@ -5,7 +5,7 @@
  *
  * Menu order source of truth: resources/views/pages/dashboard.html
  * (served for / and all SPA routes via LegacyPageController::SPA_PAGES).
- * There is no user-reorderable menu preference — do not invent one in
+ * There is no user-reorderable menu preference, do not invent one in
  * localStorage. Shell version below forces browsers to drop stale HTML caches
  * when the approved order changes.
  */
@@ -16,7 +16,7 @@
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
-  /* Official order — stable data-nav / data-expand ids. Permissions may hide
+  /* Official order, stable data-nav / data-expand ids. Permissions may hide
      items but must not change relative order. Enforced on every mount so a
      stale cached shell cannot keep an old arrangement on screen. */
   var APPROVED_PRIMARY_NAV = [
@@ -171,7 +171,7 @@
    * Dark mode is still being finished, so the portal deliberately ignores the
    * device's colour scheme: light is the default everywhere and only an
    * explicit "Dark" choice turns it on. Flip this back to true once dark mode
-   * is done — and restore the "System" tile in settings.js (THEME_MODES) and
+   * is done, and restore the "System" tile in settings.js (THEME_MODES) and
    * the boot snippets in the Blade layouts / static pages at the same time.
    */
   var FOLLOW_SYSTEM_THEME = false;
@@ -203,7 +203,7 @@
   }
 
   function getAccentColor() {
-    // The accent picker was removed from Theme settings — everyone gets the
+    // The accent picker was removed from Theme settings, everyone gets the
     // TMA brand blue. Stored values from before the removal are ignored.
     return 'indigo';
   }
@@ -865,7 +865,7 @@
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';
-        // Attribute + CSS both hide it — inline display alone was getting
+        // Attribute + CSS both hide it, inline display alone was getting
         // cleared on re-renders and reopening the email top gap.
         if (hideMainChrome) mainHead.setAttribute('hidden', '');
         else mainHead.removeAttribute('hidden');
@@ -925,7 +925,7 @@
         if (emailMenuBtn) emailMenuBtn.hidden = true;
         // Clear inline padding locks from lockEmailShellSpacing so other
         // pages get their normal main gutters back. removeProperty is required
-        // — paddingTop='' does not clear setProperty(..., 'important').
+        //, paddingTop='' does not clear setProperty(..., 'important').
         var mainEl = root.querySelector('.tma-dash__main');
         if (mainEl) {
           mainEl.style.removeProperty('padding-top');
@@ -941,7 +941,7 @@
           mainHead.style.removeProperty('overflow');
           // Re-apply chromeless hide. Clearing the email lock above would
           // otherwise leave only [hidden], and .tma-dash__main-head{display:flex}
-          // beats the UA [hidden] rule — Today then reappears above the
+          // beats the UA [hidden] rule. Today then reappears above the
           // Dashboard hello row and stacks with Edit Dashboard.
           if (hideMainChrome) {
             mainHead.style.display = 'none';
@@ -1102,7 +1102,7 @@
      * pull-to-refresh gesture. Both mean "fetch this again", and both go
      * through here so every entry point behaves the same way.
      *
-     * Most views reload themselves simply by being re-mounted — activate()
+     * Most views reload themselves simply by being re-mounted, activate()
      * calls the module's mount, and the module fetches from there. The
      * exceptions are the singletons below, which mount once and are then kept
      * current by TMALive: re-mounting those re-renders the same cached rows.
@@ -1123,7 +1123,7 @@
     var currentRouteOpts = null;
 
     /* Reload the data behind a view that is already on screen and staying
-       there — no re-mount, no navigation. */
+       there, no re-mount, no navigation. */
     function refreshViewData(view) {
       var jobs = [];
       if (LIVE_BACKED_VIEWS[view] && window.TMALive && window.TMALive.refreshAll) {
@@ -1141,7 +1141,7 @@
     }
 
     /* Re-run the current route from the top: the module re-mounts and fetches
-       again. The URL is left alone — this is the page it already describes. */
+       again. The URL is left alone, this is the page it already describes. */
     function reactivateCurrentRoute() {
       if (!currentNavId) return null;
       var opts = {};
@@ -1179,7 +1179,7 @@
          re-mount below covers most views; refreshViewData at the end covers
          the ones a re-mount would not reload. */
       var repeatSelection = !opts.skipRefresh && currentNavId === navId;
-      // Navigating away is a completed interaction — release any focus-pin
+      // Navigating away is a completed interaction, release any focus-pin
       // that's keeping the hover-expand overlay open (only touches it when
       // focus is actually inside the sidebar, so this is a no-op otherwise).
       closeSidebarHoverPin();
@@ -1208,7 +1208,7 @@
           navId: navId,
           adminPage: opts.adminPage,
           folderId: opts.folderId,
-          /* A module may hold data back inside a revalidation window — right
+          /* A module may hold data back inside a revalidation window, right
              for idle navigation, wrong for somebody who has just asked for
              this page again. */
           refresh: repeatSelection || !!opts.refresh,
@@ -1232,7 +1232,7 @@
           window.TMAMessages.mount(messagesMount, {
             openDirectUserId: opts.openDirectUserId || null,
             openConversationId: opts.openConversationId || null,
-            // "Call this colleague" from outside Messages — the caller knows a
+            // "Call this colleague" from outside Messages, the caller knows a
             // person, not a conversation, so Messages resolves the thread and
             // then rings. See startConversationWith.
             startCall: opts.startCall || null,
@@ -1302,7 +1302,7 @@
     }
 
     /*
-     * Open a portal path in-place (no full reload) — the destination a
+     * Open a portal path in-place (no full reload), the destination a
      * notification, activity, or client item points at (§15, §25). Resolves the
      * path to an SPA view when this shell contains it, opening a specific record
      * where the module supports it (a client detail, the Overview activity tab).
@@ -1420,7 +1420,7 @@
       if (sub) sub.hidden = !open;
     }
 
-    /* The rail is showing icons only — no labels, and CSS hides every submenu
+    /* The rail is showing icons only, no labels, and CSS hides every submenu
        with them. Toggling a list nobody can see is a dead click. */
     function railIsIconOnly() {
       if (!sidebar || isMobileSidebar()) return false;
@@ -1485,7 +1485,7 @@
         keepDrawer: true,
         skipExpand: true,
         skipUrl: true,
-        // Back/forward is not a refresh request — the reader asked for a
+        // Back/forward is not a refresh request, the reader asked for a
         // different screen, not for this one again.
         skipRefresh: true,
       });
@@ -1564,7 +1564,7 @@
     }
 
     /* Save a look preference to the account as well as this browser.
-       Deliberately only called from the set* entry points below — the ones a
+       Deliberately only called from the set* entry points below, the ones a
        click reaches. applyUserPreferences() re-applies the same values on
        every mount, and routing those through here would push a fresh
        browser's defaults over the account's real settings before
@@ -1617,14 +1617,14 @@
 
     /* ── sidebar / rightbar toggles ────────────── */
     /* Icon-only rail: native title tooltips use the visible nav label
-       ("Signatures"), never data-title ("Signature requests") — that longer
+       ("Signatures"), never data-title ("Signature requests"), that longer
        string is the page heading and looked like a stuck gray chip over the
        Folders submenu when the rail hover-expanded. Titles are cleared as
        soon as labels are visible (hover / focus / standard expand). */
     function applyRailTitles(on) {
       root.querySelectorAll('.tma-dash__sidebar .tma-dash__nav-item').forEach(function (item) {
         if (on) {
-          // Nested submenu rows are hidden in the collapsed rail — skip them.
+          // Nested submenu rows are hidden in the collapsed rail, skip them.
           if (item.classList.contains('tma-dash__nav-item--nested')) {
             item.removeAttribute('title');
             return;
@@ -1699,7 +1699,7 @@
 
     /* One unit per gap the leftover space is split across: every gap between
        visible rows, plus the break above a divided section (it tracks the same
-       custom property). An open submenu is deliberately not a row here — see
+       custom property). An open submenu is deliberately not a row here, see
        fitNavSpacing. */
     function countNavGapUnits(sections) {
       var units = 0;
@@ -1746,7 +1746,7 @@
       var units = countNavGapUnits(sections);
       if (!units) return;
       // scrollHeight floors at the client height, so it can't report a *short*
-      // content box — measure the last section's bottom edge instead.
+      // content box, measure the last section's bottom edge instead.
       var padBottom = parseFloat(window.getComputedStyle(navEl).paddingBottom) || 0;
       var free = navEl.getBoundingClientRect().bottom - padBottom - last.getBoundingClientRect().bottom;
       /*
@@ -1761,7 +1761,7 @@
        * Measure as if every group were closed.
        *
        * Otherwise opening File Library ate the free space and this handed the
-       * shortfall to every gap in the menu — so expanding one group visibly
+       * shortfall to every gap in the menu, so expanding one group visibly
        * squeezed all the rows above and below it together, and closing it
        * spread them back out. The rail's rhythm is a property of the window's
        * height, not of which group happens to be open: a submenu now simply
@@ -1790,7 +1790,7 @@
       // browser resize and the desktop app's window being dragged taller.
       if (window.ResizeObserver) new ResizeObserver(queueNavFit).observe(navEl);
       // Rows come and go after paint: /me prunes them by role, submenus open,
-      // the shortcuts tab renders. Never watch `style` here — that is what
+      // the shortcuts tab renders. Never watch `style` here, that is what
       // fitNavSpacing writes, and it would observe its own output.
       if (window.MutationObserver) {
         new MutationObserver(queueNavFit).observe(navEl, {
@@ -1810,14 +1810,14 @@
        time the rail animates open (or peek out of the 72px icon column). */
     function onHoverRailClosed() {
       /*
-       * The hover rail is a desktop idea — below SIDEBAR_BP the sidebar is a
+       * The hover rail is a desktop idea, below SIDEBAR_BP the sidebar is a
        * full-width drawer with no rail to collapse into.
        *
        * This guard is what makes submenus tappable. isHoverRailOpen() reports
        * false on a mobile sidebar (there is no rail, so it cannot be open),
        * which read here as "the rail just closed" and collapsed every group.
        * Tapping a second group then moved focus off the first group's button,
-       * firing focusout on the sidebar and running this — so the group the tap
+       * firing focusout on the sidebar and running this, so the group the tap
        * had just opened was closed again a tick later. The first tap of a
        * session worked (nothing inside held focus yet), every one after it
        * looked completely dead.
@@ -1865,11 +1865,11 @@
         toggleNavDrawer();
       } else if (sidebar && getSidebarStyle() === 'standard') {
         // Standard style: a plain click-to-collapse rail, content shifts
-        // beside it — no hover/focus overlay involved.
+        // beside it, no hover/focus overlay involved.
         var collapsed = root.classList.toggle('is-sidebar-collapsed');
         store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
         // The icon-only rail has no room for the tabs, so it always shows the
-        // main menu — leaving the shortcuts tab active would empty the rail.
+        // main menu, leaving the shortcuts tab active would empty the rail.
         if (collapsed) {
           showList('main');
           collapseAllSubnavs();
@@ -1882,7 +1882,7 @@
         // Desktop hover style: the rail is always collapsed at rest and
         // expands as a hover overlay (see CSS). This button pins that same
         // expanded state open via focus, for mouse-click and keyboard users
-        // who aren't hovering it — it never leaves the sidebar permanently
+        // who aren't hovering it, it never leaves the sidebar permanently
         // expanded, it just closes again on the next click, on blur, or on
         // Escape.
         if (sidebar.contains(document.activeElement)) {
@@ -1911,7 +1911,7 @@
       } else {
         img.src = SIDEBAR_TOGGLE_ICON;
         btn.setAttribute('aria-label', 'Toggle sidebar');
-        // Hover sidebar style has no click toggle — only standard mode does.
+        // Hover sidebar style has no click toggle, only standard mode does.
         btn.hidden = !root.classList.contains('tma-dash--sidebar-standard');
       }
     }
@@ -1990,7 +1990,7 @@
 
     function formatTabBadgeCount(count) {
       if (!count || count <= 0) return '';
-      // Sidebar / tab-bar badges stay compact — full totals belong on the
+      // Sidebar / tab-bar badges stay compact, full totals belong on the
       // dashboard Email shortcut tile, not here.
       if (count > 99) return '99+';
       return String(count);
@@ -2027,7 +2027,7 @@
       var messagesMount = root.querySelector('[data-messages]');
       var messagesState = messagesMount && messagesMount._messagesState;
       // Unread messages *and* missed calls. The two are separate counts inside
-      // Messages — Chats and Calls each carry their own badge — but the nav
+      // Messages. Chats and Calls each carry their own badge, but the nav
       // item is one door onto both, so its number is the sum. A call nobody
       // answered is waiting for you as much as an unread message is.
       var count = window.TMAMessages.getInboxUnreadCount(messagesState);
@@ -2054,8 +2054,8 @@
       badge.className = 'tma-dash__nav-count';
       badge.setAttribute('aria-hidden', 'true');
       // The badge always sits on the icon's corner. It can't be a child of
-      // the icon itself — the icon is a masked span, and a mask clips its
-      // whole subtree, badge included — so give the icon an unmasked
+      // the icon itself, the icon is a masked span, and a mask clips its
+      // whole subtree, badge included, so give the icon an unmasked
       // wrapper the first time this item gets a count.
       var icon = el.querySelector('.tma-dash__nav-icon');
       var host = el;
@@ -2116,7 +2116,7 @@
     root._syncPendingUsersBadge = syncPendingUsersBadge;
     syncPendingUsersBadge();
 
-    // Exact inbox unread for the Email nav badge — same source as home shortcuts.
+    // Exact inbox unread for the Email nav badge, same source as home shortcuts.
     // Without this the badge stays at 0 until the mailbox view opens.
     fetch('/portal/mail', {
       credentials: 'same-origin',
@@ -2239,7 +2239,7 @@
 
       // The firm's own page title (Settings → Edit Company Branding) is the
       // name of the portal, so it stands in wherever the shell has no view
-      // heading of its own — a named view still wins, which is the point of
+      // heading of its own, a named view still wins, which is the point of
       // having one.
       var siteName = (window.TMABranding && window.TMABranding.get()
         && window.TMABranding.get().pageTitle) || 'TMA Portal';
@@ -3141,7 +3141,7 @@
         /*
          * Keep the query string. This normalises the *path* on arrival, and
          * dropping everything after the `?` while doing so threw away the
-         * deep link the reader had just followed — the File Library's open
+         * deep link the reader had just followed, the File Library's open
          * folder and file, and anything else that records where it is in the
          * URL. Page-to-page navigation still drops it, which is right: leaving
          * the library should not carry `folder=` to the next screen.

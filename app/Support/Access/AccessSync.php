@@ -14,7 +14,7 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 
 /**
- * Phase 20 — keeping access in step when the thing it hangs off goes away.
+ * Phase 20, keeping access in step when the thing it hangs off goes away.
  *
  * Most of the portal already revokes access the moment it should: assignments
  * are read through `live()` scopes, company shares resolve against current
@@ -24,9 +24,9 @@ use App\Support\Activity\ActivityLogger;
  * Three cases are not like that, because the *subject* changes rather than the
  * grant, and every grant pointing at it has to be settled:
  *
- *  - a user is suspended  — they keep rows that would work again on reinstate
- *  - a client is archived — its assignments and invitations should stop
- *  - a company is archived — the same, one level up
+ *  - a user is suspended , they keep rows that would work again on reinstate
+ *  - a client is archived, its assignments and invitations should stop
+ *  - a company is archived, the same, one level up
  *
  * Each is deliberately synchronous. The spec allows background jobs but says
  * the interface must immediately show the expected state, and for work this
@@ -39,7 +39,7 @@ final class AccessSync
      *
      * Assignments are ended rather than deleted, so reinstating somebody is a
      * deliberate re-assignment rather than a silent restoration of everything
-     * they used to reach — which is the safer default after a suspension.
+     * they used to reach, which is the safer default after a suspension.
      */
     public static function userSuspended(User $user, ?User $by = null): array
     {
@@ -75,7 +75,7 @@ final class AccessSync
             ])->save();
         }
 
-        // CIP application assignments end like client assignments — reinstate
+        // CIP application assignments end like client assignments, reinstate
         // is a deliberate re-assignment. The officer *grant* survives, like
         // company membership: the person is still a CRO, they just cannot act.
         $endedCipFiles = CipApplicationAssignment::live()->where('user_id', $user->id)->get();
@@ -89,7 +89,7 @@ final class AccessSync
              * the file, and every screen reads the copy rather than the
              * assignments table. Ending the row without refreshing it left the
              * §8 table and the officer's own work queue naming a suspended
-             * colleague — the file would have looked handled while nobody held
+             * colleague, the file would have looked handled while nobody held
              * it.
              */
             if ($assignment->application) {
@@ -195,7 +195,7 @@ final class AccessSync
             ])->save();
         }
 
-        // Members keep their rows — the company is archived, not disbanded, and
+        // Members keep their rows, the company is archived, not disbanded, and
         // un-archiving should not mean rebuilding the contact list by hand.
         $summary = [
             'assignmentsEnded' => $assignments->count(),

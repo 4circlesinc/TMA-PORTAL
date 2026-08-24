@@ -15,14 +15,14 @@
  * their scroll position, their open menu and their half-typed input, which is
  * a worse interruption than the refresh they were avoiding.
  *
- * Rides the socket messaging and notifications already opened — one connection
+ * Rides the socket messaging and notifications already opened, one connection
  * per tab, many subscriptions. That matters: the WebSocket cluster is capped
  * on *connections*, so surfaces are cheap but tabs are not.
  */
 (function () {
   'use strict';
 
-  /* Shared with App\Support\Realtime\Live — a name on one side only is a
+  /* Shared with App\Support\Realtime\Live, a name on one side only is a
      surface that silently never updates. Add to both or neither. */
   var RESOURCES = {
     FILES: 'files',
@@ -38,7 +38,7 @@
     IDENTITY: 'identity',
   };
 
-  /* Bursts are the normal case, not the exception — a bulk delete or a folder
+  /* Bursts are the normal case, not the exception, a bulk delete or a folder
      sync emits one event per row. Coalesce them into a single refetch. */
   var DEBOUNCE_MS = 300;
 
@@ -57,7 +57,7 @@
    * Add the socket id to a write's headers.
    *
    * broadcast(...)->toOthers() can only leave the actor out if it knows which
-   * socket they are — without this header the person who made the change gets
+   * socket they are, without this header the person who made the change gets
    * told about their own change and refetches on top of the render they just
    * did. Harmless, but it is a wasted round trip on every single write.
    */
@@ -78,7 +78,7 @@
    * @param {string}   resource  One of RESOURCES.
    * @param {Function} refresh   Refetch + morph. May return a promise; if it
    *                             does, overlapping runs are suppressed.
-   * @param {object}   [opts]    { active: () => boolean } — skip the refresh
+   * @param {object}   [opts]    { active: () => boolean }, skip the refresh
    *                             when the view is registered but not on screen.
    * @returns {Function} off
    */
@@ -146,7 +146,7 @@
     var list = registry[resource];
     if (!list || !list.length) return Promise.resolve();
 
-    // A background tab refetching is pure cost — nobody is looking at it, and
+    // A background tab refetching is pure cost, nobody is looking at it, and
     // with many tabs open it multiplies every write into a burst of requests.
     // Defer to the visibility handler, which catches up on the way back.
     if (document.hidden) {
@@ -172,7 +172,7 @@
     if (resource) schedule(resource);
   }
 
-  /* Refresh everything that is watching — used after a reconnect and when a
+  /* Refresh everything that is watching, used after a reconnect and when a
      hidden tab comes back, since both may have missed events entirely. */
   function refreshAll() {
     return Promise.all(Object.keys(registry).map(function (resource) {
@@ -194,7 +194,7 @@
      *
      * portal.staff is refused for a client account, and the transport leaves a
      * refused channel unsubscribed without fuss. Deciding here instead would
-     * mean a second copy of "who counts as staff" in the browser — and
+     * mean a second copy of "who counts as staff" in the browser, and
      * client-side role checks in this portal have a habit of failing towards
      * the wrong answer.
      */
@@ -204,7 +204,7 @@
     if (rt.onState) {
       rt.onState(function (state) {
         // Anything that changed while the socket was down was never delivered
-        // and never will be — the only way back to correct is to refetch.
+        // and never will be, the only way back to correct is to refetch.
         if (state === 'connected') refreshAll();
       });
     }
@@ -221,7 +221,7 @@
      *
      * Do NOT gate the retry on readyState === 'loading'. Every script in this
      * shell is deferred, and deferred scripts run *after* parsing, when
-     * readyState is already 'interactive' — that check is false exactly when
+     * readyState is already 'interactive', that check is false exactly when
      * it is needed, which is the whole bug. DOMContentLoaded has still not
      * fired at that point, so listening for it is correct; the 'complete'
      * branch only covers a view registering long after load.
@@ -245,7 +245,7 @@
     started = true;
 
     // onChange fires immediately when /me has already answered, so this costs
-    // no extra request — /me is fetched more than enough times already.
+    // no extra request. /me is fetched more than enough times already.
     window.TMACurrentUser.onChange(function (me) {
       if (!me || !me.id) return;
 
@@ -292,7 +292,7 @@
 
           /*
            * Never during a sign-out. Signing out destroys the session, so the
-           * very next /me is a different capability set — this fired, reloaded
+           * very next /me is a different capability set, this fired, reloaded
            * the page out from under sign-out.js before it could navigate, and
            * the click read as "it just refreshed the page and I am still
            * signed in". sign-out.js raises the flag before it does anything.

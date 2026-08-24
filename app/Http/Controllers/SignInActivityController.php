@@ -13,11 +13,11 @@ use Illuminate\Http\Request;
  *
  * This reads `auth_events` rather than the audit trail. Two reasons: failed
  * attempts and lockouts are only recorded there, and the audit trail is scoped
- * per-viewer by `activity.viewAll` — everyone but an administrator sees only
+ * per-viewer by `activity.viewAll`, everyone but an administrator sees only
  * their own rows, which is the opposite of what a "who signed in" card is for.
  *
  * Staff-gated, not administrator-gated: employees see the firm's sign-ins too.
- * Clients never do — they have no business seeing when staff sign in, and the
+ * Clients never do, they have no business seeing when staff sign in, and the
  * Overview page is closed to them anyway ({@see Role::PAGE_CAPABILITIES}).
  *
  * IP and device stay out of the payload. The audit trail serialises those for
@@ -28,7 +28,7 @@ class SignInActivityController extends Controller
 {
     private const LIMIT = 8;
 
-    /** Sign-ins and the attempts that failed — not sign-outs, which double the noise. */
+    /** Sign-ins and the attempts that failed, not sign-outs, which double the noise. */
     private const EVENTS = ['login', 'login_failed', 'lockout', 'social_failed'];
 
     public function __invoke(Request $request): JsonResponse
@@ -58,8 +58,8 @@ class SignInActivityController extends Controller
     }
 
     /**
-     * A failed attempt often has no user at all — Laravel's Failed event fires
-     * for an address that matches nobody — so nothing here may assume one.
+     * A failed attempt often has no user at all. Laravel's Failed event fires
+     * for an address that matches nobody, so nothing here may assume one.
      */
     private function describe(AuthEvent $event): string
     {
@@ -70,7 +70,7 @@ class SignInActivityController extends Controller
             'lockout' => $name
                 ? $name.' was locked out after too many attempts'
                 : 'An account was locked out after too many attempts',
-            // Refused by Microsoft or Google, not by us — usually the person's
+            // Refused by Microsoft or Google, not by us, usually the person's
             // own tenant. Naming it as a plain failed sign-in would send
             // whoever reads this card looking at the wrong thing entirely.
             'social_failed' => $name

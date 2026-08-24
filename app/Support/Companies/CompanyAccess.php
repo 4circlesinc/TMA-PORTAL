@@ -21,7 +21,7 @@ use App\Support\Access\Role;
  *    `can_*` flags on it.
  *
  * Everything server-side asks this class, so "why can they see that?" has one
- * place to look — and the spec's rule that a company member is *not*
+ * place to look, and the spec's rule that a company member is *not*
  * automatically a full-access user is enforced in exactly one spot.
  */
 final class CompanyAccess
@@ -77,7 +77,7 @@ final class CompanyAccess
     }
 
     /**
-     * Does this user hold a company ability — `can_view_invoices` and friends?
+     * Does this user hold a company ability. `can_view_invoices` and friends?
      *
      * Staff are answered by their assignment rather than by member flags: they
      * are not members of the client's company, they look after it.
@@ -97,7 +97,7 @@ final class CompanyAccess
                 return Role::can($user, 'clients.viewAll') && self::isReadOnly($ability);
             }
 
-            // Signing is personal — an assignment never confers it.
+            // Signing is personal, an assignment never confers it.
             if ($ability === 'can_sign_contracts') {
                 return false;
             }
@@ -145,7 +145,7 @@ final class CompanyAccess
 
     /**
      * Every user id that should receive something addressed to a company role
-     * — invoice recipients, contract signatories, booking updates.
+     *, invoice recipients, contract signatories, booking updates.
      *
      * @return array<int, int>
      */
@@ -200,7 +200,7 @@ final class CompanyAccess
     }
 
     /**
-     * What would happen if this assignment were made — the preview the spec
+     * What would happen if this assignment were made, the preview the spec
      * insists an administrator sees before broad access is granted.
      *
      * @return array<string, mixed>

@@ -6,7 +6,7 @@
  * Favourites / File Box / Recent / Recycle Bin. Table + grid views, toolbar,
  * right-click menu, multi-select bulk actions, details, and chunked uploads
  * via the global TMAUpload manager. Reuses the existing design system
- * (TMAPortalUI helpers, portal.css chrome) — no new design language.
+ * (TMAPortalUI helpers, portal.css chrome), no new design language.
  */
 (function () {
   'use strict';
@@ -106,7 +106,7 @@
    *
    * Next to the name rather than in a column of its own: most files have never
    * been sent anywhere, so a Status column would be empty down almost its whole
-   * length while taking width from the name — and a badge reads as belonging to
+   * length while taking width from the name, and a badge reads as belonging to
    * the thing it sits against, which a distant column does not.
    *
    * Nothing at all when there is no status. "Draft" against every ordinary file
@@ -152,9 +152,9 @@
   }
 
   function fmtDate(iso) {
-    if (!iso) return '—';
+    if (!iso) return '-';
     var d = new Date(iso);
-    if (isNaN(d)) return '—';
+    if (isNaN(d)) return '-';
     var now = new Date();
     var sameDay = d.toDateString() === now.toDateString();
     if (sameDay) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -162,7 +162,7 @@
   }
 
   /* Something happened that may change which folders exist or what they're
-     called — anything mirroring folders (the sidebar shortcuts) re-reads. */
+     called, anything mirroring folders (the sidebar shortcuts) re-reads. */
   function foldersChanged() {
     try { document.dispatchEvent(new CustomEvent('tma:folders-changed')); } catch (e) {}
   }
@@ -174,7 +174,7 @@
    *
    * The dashboard's Recent Files and Shared-with-me tables open this view's row
    * menu. Most actions take the item they were handed, but several re-look it
-   * up by id — toggleStar is one — and that lookup only ever searched this
+   * up by id, toggleStar is one, and that lookup only ever searched this
    * view's own data. Driven from the dashboard it found nothing and returned
    * silently: the menu opened, every item was clickable, and choosing one did
    * absolutely nothing.
@@ -193,7 +193,7 @@
   /**
    * Tell an external list its rows may have changed.
    *
-   * Only when this view is not the one on screen — otherwise every ordinary
+   * Only when this view is not the one on screen, otherwise every ordinary
    * re-render inside the File Library would also poke the dashboard.
    */
   function notifyExternal() {
@@ -235,7 +235,7 @@
   /*
    * Sizes the server will actually honour. BrowserController clamps perPage
    * to 200 as a runaway guard, so offering 250 or 500 (as the Clients
-   * directory does — it pages in the browser) produced a pager that counted
+   * directory does, it pages in the browser) produced a pager that counted
    * in pages of 250 while the server answered in pages of 200: the labels
    * lied and the last eleven pages could not be reached.
    */
@@ -266,7 +266,7 @@
    * A page turn starts at the top of the new page.
    *
    * The pager sits at the foot of the list, so by the time it is clicked the
-   * reader is scrolled to the bottom — and the next page arrived showing its
+   * reader is scrolled to the bottom, and the next page arrived showing its
    * last rows, which reads as the button having done nothing.
    */
   function scrollListingToTop() {
@@ -285,8 +285,8 @@
   }
 
   /*
-   * Which listings the store keeps. Plain browsing — a section, a folder, a
-   * sort — is what people come back to and what should open instantly; a
+   * Which listings the store keeps. Plain browsing, a section, a folder, a
+   * sort, is what people come back to and what should open instantly; a
    * search or a filter is a question asked once, and caching every variant
    * would fill the store with answers nobody returns to. The key carries the
    * whole query string, so two sorts of one folder are two entries rather
@@ -309,7 +309,7 @@
     /*
      * Guard every paint against the reader having moved on. The cached copy
      * and the server's answer land at different times, and a fast navigator
-     * can be two folders away by the second one — applied unguarded, the
+     * can be two folders away by the second one, applied unguarded, the
      * folder they left overwrites the folder they are in. (The old
      * single-answer code had the same race; the cache just made it likely
      * enough to matter.)
@@ -353,7 +353,7 @@
     var fetcher = function () { return net().fetchJSON(url); };
 
     /*
-     * A silent refresh — a live signal, a background poll — skips the cached
+     * A silent refresh, a live signal, a background poll, skips the cached
      * paint on purpose: the screen already shows something at least as new
      * (an optimistic insert may be newer than the store), and only the
      * server's answer is worth a repaint. It still writes the store, so the
@@ -370,7 +370,7 @@
 
     return request.catch(function (err) {
       // swr resolves quietly when a cached copy was already painted and only
-      // the refresh failed — that is the offline case working as designed.
+      // the refresh failed, that is the offline case working as designed.
       // Reaching here means there was nothing to show at all.
       if (listingParams().toString() !== expected) return;
       // A silent refresh is nobody's request. Replacing a working list with
@@ -403,7 +403,7 @@
    * alone: browsing inside a folder (children by parent link), the All Files
    * root (no parent), and Personal (owned by the reader). Shared,
    * favourites and recent encode questions the rows themselves cannot
-   * answer — whose share reached me, what I starred — and a wrong listing
+   * answer, whose share reached me, what I starred, and a wrong listing
    * offline is worse than a plain "not available offline".
    */
   function assembleFromReplica(expected) {
@@ -431,7 +431,7 @@
       if (!folderId && section === 'my') {
         var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
         // Whose files "Personal" means is not guessable: without /me answered
-        // (or remembered — current-user.js keeps it on the desktop), showing
+        // (or remembered, current-user.js keeps it on the desktop), showing
         // everything as "mine" would be a wrong listing, not a helpful one.
         if (!me || me.id == null) return false;
         var mine = function (rec) { return rec.owner && rec.owner.userId === me.id; };
@@ -446,7 +446,7 @@
       shownFolders.sort(compare);
       shownFiles.sort(compare);
 
-      // The breadcrumb is a walk up the parent links — the replica holds the
+      // The breadcrumb is a walk up the parent links, the replica holds the
       // ancestors by the same right it holds the folder.
       var crumb = [];
       if (folderId) {
@@ -462,8 +462,8 @@
 
       state.loading = false;
       state.error = null;
-      // Windowed the same way the server windows it — folders first, then
-      // files — so the pager below reads the same offline as online.
+      // Windowed the same way the server windows it, folders first, then
+      // files, so the pager below reads the same offline as online.
       state.total = shownFolders.length + shownFiles.length;
       var offset = (state.page - 1) * state.pageSize;
       var pageFolders = shownFolders.slice(offset, offset + state.pageSize);
@@ -489,7 +489,7 @@
 
   /* ── seamless insert ────────────────────────────────
      A newly created folder / uploaded file drops into the current listing in
-     its sorted position and flashes in — no full-library refresh. */
+     its sorted position and flashes in, no full-library refresh. */
 
   function insertItem(item) {
     if (!item || !item.id || !matchesCurrentView(item)) return;
@@ -547,7 +547,7 @@
   /* ── seamless remove / patch / rerender ─────────────
      The counterparts to insertItem(): drop an item that no longer belongs
      (deleted, moved elsewhere) or patch fields on one that's still here
-     (renamed, recoloured, resorted, sharing changed) — always local, never
+     (renamed, recoloured, resorted, sharing changed), always local, never
      a network refetch of the listing. */
 
   function removeItem(id) {
@@ -674,7 +674,7 @@
 
     /*
      * Reconciled, not replaced. Rebuilding this subtree threw away every file
-     * thumbnail and folder icon on each render — including renames, colour
+     * thumbnail and folder icon on each render, including renames, colour
      * changes and selection toggles, none of which touch the images at all.
      * Rows and cards key on their data-id, so an unchanged file is left alone.
      */
@@ -743,7 +743,7 @@
       actions += toolBtn('CloudUpload', 'upload', 'Upload files');
       actions += toolBtn('FolderNotchPlus', 'upload-folder', 'Upload folder');
       // Collecting files into this folder is the mirror of uploading into it,
-      // and it belongs to the same permission — if you can put files here you
+      // and it belongs to the same permission, if you can put files here you
       // can ask somebody else to.
       actions += toolBtn('DownloadSimple', 'request-files', 'Request files');
     }
@@ -833,7 +833,7 @@
   }
 
   /*
-   * Filter by who owns it — the Owner column's facet.
+   * Filter by who owns it, the Owner column's facet.
    *
    * The owners and their counts come from the server with each listing, and
    * are measured before the filter narrows anything, so choosing one does not
@@ -842,7 +842,7 @@
    * carry two ways of asking the same kind of question, and the dropdown
    * already shows what is applied in its own label.
    *
-   * Hidden entirely when one person owns everything in view — a filter whose
+   * Hidden entirely when one person owns everything in view, a filter whose
    * only option is "all of it" is a control that cannot do anything.
    */
   function ownerControl() {
@@ -859,7 +859,7 @@
   /* ── table view ─────────────────────────────────────── */
 
   /*
-   * The footer pager, in the portal's documented pagination component — the
+   * The footer pager, in the portal's documented pagination component, the
    * same `tma-pagination-bar--footer` the Clients directory uses, for the
    * same reason it got one: eleven thousand rows are not a listing anyone
    * scrolls, and shipping them all is what stopped the folder opening.
@@ -936,7 +936,7 @@
     /*
      * Every column is named, because the table lays out fixed: a filename is
      * arbitrarily long, and letting the browser size the Name column to fit
-     * one pushed Owner and Modified off to the right — the columns
+     * one pushed Owner and Modified off to the right, the columns
      * moved about as you browsed from folder to folder. Widths come from the
      * class on each header now, and a long name is clipped with an ellipsis.
      *
@@ -960,7 +960,7 @@
       var cls = rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '';
       var star = showStar ? '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' : '';
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
-      var size = it.type === 'folder' ? (it.sizeLabel || '—') : it.sizeLabel;
+      var size = it.type === 'folder' ? (it.sizeLabel || '-') : it.sizeLabel;
       var owner = ownerCell(it);
       var when = isRecycle() ? fmtDate(it.deletedAt) : fmtDate(it.modifiedAt || it.createdAt);
       var busySpin = busy ? '<img class="tma-portal-row-spinner" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
@@ -973,7 +973,7 @@
         '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         statusChip(it) + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
-        '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '—') + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '-') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
         '<td class="tma-portal-cell--menu"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
@@ -1049,7 +1049,7 @@
 
     // Bound once per element rather than once per render: these buttons now
     // survive reconciliation, so re-binding would stack handlers. The
-    // delegated listeners further down are safe as they are — they pass named
+    // delegated listeners further down are safe as they are, they pass named
     // functions, and addEventListener ignores an identical re-registration.
     var viewBtns = window.TMAMorph
       ? window.TMAMorph.unwired(el, '[data-files-view]')
@@ -1109,7 +1109,7 @@
     });
 
     fresh('[data-files-page-size]').forEach(function (btn) {
-      // Cycles rather than opening a listbox — the same interaction the
+      // Cycles rather than opening a listbox, the same interaction the
       // Clients directory's page-size control has.
       btn.addEventListener('click', function () {
         var idx = PAGE_SIZES.indexOf(state.pageSize);
@@ -1165,7 +1165,7 @@
     var menu = e.target.closest('[data-files-menu]');
     if (menu) { e.preventDefault(); e.stopPropagation(); var it = findItem(menu.getAttribute('data-files-menu')); if (it) { var r = menu.getBoundingClientRect(); openContextMenu(r.left, r.bottom + 4, it); } return; }
 
-    // Click anywhere on the row (name, cells, card) opens the item — but not
+    // Click anywhere on the row (name, cells, card) opens the item, but not
     // the checkbox/label (selection), the star, or the row menu.
     var row = e.target.closest('[data-files-row]');
     if (row && !e.target.closest('input, label, .tma-portal-star, [data-files-menu]')) {
@@ -1311,7 +1311,7 @@
        *
        * This listens on the window and uploads into the current folder, so
        * with a file open it would answer a drop aimed at the viewer's own
-       * version drop zone — quietly adding a *new file* to the folder behind
+       * version drop zone, quietly adding a *new file* to the folder behind
        * it instead of a new version of the thing on screen. Two very different
        * outcomes for the same gesture.
        */
@@ -1476,7 +1476,7 @@
       var f = failed[0];
       return '<div class="tma-portal-sync tma-portal-sync--error" data-sync-strip>' +
         '<img src="images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16">' +
-        '<span>' + esc(f.name) + ' — ' +
+        '<span>' + esc(f.name) + ', ' +
           esc(f.lastError ? 'sync failed' : f.failedItems + ' item(s) could not sync') + '</span>' +
         (isAdminUser() ? '<button type="button" class="tma-portal-sync__btn" data-sync-retry>Retry</button>' : '') +
       '</div>';
@@ -1490,7 +1490,7 @@
     /*
      * Dismissed for good.
      *
-     * "Citizenship Applications synced 1d ago" is not news — after the first
+     * "Citizenship Applications synced 1d ago" is not news, after the first
      * read it is just a line that never goes away. Closing it hides it
      * permanently, on the account rather than in this browser.
      *
@@ -1517,7 +1517,7 @@
    * Booleans ride in localStorage as '1'/'0', not 'true'/'false'.
    *
    * That is the codec settings.js uses for every other boolean preference, in
-   * both directions — hydration writes '1' back from the account. Writing
+   * both directions, hydration writes '1' back from the account. Writing
    * 'true' here made the sync to the server send `false` (the codec reads
    * anything that is not '1' as off), so it hid locally and un-hid itself on
    * the next device.
@@ -1584,7 +1584,7 @@
   /*
    * Set while the view is being rebuilt *from* the URL rather than changing
    * it. Reopening the viewer during a restore goes through openLightbox, which
-   * writes the URL — so without this, arriving on a link would push a copy of
+   * writes the URL, so without this, arriving on a link would push a copy of
    * the entry just landed on, and pressing Back after popstate would push a
    * forward entry and trap the reader in the viewer.
    */
@@ -1649,7 +1649,7 @@
    * panel carrying metadata, activity and access.
    *
    * The shell is painted ONCE per open. Only the region that actually changed
-   * repaints — rebuilding the whole subtree would reset the preview's scroll
+   * repaints, rebuilding the whole subtree would reset the preview's scroll
    * and zoom, drop the panel's scroll position, and re-collapse whatever the
    * reader had expanded, which §29 of the spec forbids.
    *
@@ -1667,7 +1667,7 @@
   }
 
   /* The websocket details come from /me, the same place notifications and
-   * messaging read them. Fetched once per page and remembered — including a
+   * messaging read them. Fetched once per page and remembered, including a
    * negative answer, so a portal with no socket configured does not re-ask on
    * every file that is opened. */
   var rtConfig = null;
@@ -1698,7 +1698,7 @@
   // Details stay closed until asked for; comments live in their own floating
   // column (not a tab) and are likewise opt-in.
   /*
-   * `comments: true` is not a preference any more — the discussion is part
+   * `comments: true` is not a preference any more, the discussion is part
    * of the viewer, always open, floating over the right edge. The toggle
    * taught people to lose it; the file's conversation should be as present
    * as the file.
@@ -1711,7 +1711,7 @@
    * that only grows, so a number on it measures the file's age rather than
    * anything to attend to, and Access counts people rather than work.
    *
-   * Comments are not a tab — they float beside the document.
+   * Comments are not a tab, they float beside the document.
    */
   var VIEWER_TABS = [
     { id: 'details', label: 'Details' },
@@ -1721,7 +1721,7 @@
     { id: 'access', label: 'Access' },
   ];
 
-  /* pdf.js is ESM (~1.7 MB with worker) — load on first PDF open only. */
+  /* pdf.js is ESM (~1.7 MB with worker), load on first PDF open only. */
   var pdfjsPromise = null;
 
   function loadPdfjs() {
@@ -1741,7 +1741,7 @@
     return pdfjsPromise;
   }
 
-  /* Bytes on the page, then pdf.js — see TMAPortalLightbox.pdfDocument. */
+  /* Bytes on the page, then pdf.js, see TMAPortalLightbox.pdfDocument. */
   function loadPdfDocument(url) {
     if (window.TMAPortalLightbox && typeof window.TMAPortalLightbox.pdfDocument === 'function') {
       return window.TMAPortalLightbox.pdfDocument(url);
@@ -1801,7 +1801,7 @@
      *
      * Every dark rule in the portal is written as `.tma-dash[data-theme=…]`,
      * and the viewer is appended to <body> so that it can sit above the whole
-     * shell — which also puts it outside .tma-dash, where none of those rules
+     * shell, which also puts it outside .tma-dash, where none of those rules
      * can reach it. That is why this panel stayed white in dark mode.
      *
      * Copied once at open: the theme toggle lives in the shell header, which
@@ -2029,7 +2029,7 @@
     function headMetaHtml(f) {
       var bits = [];
       if (f.category) bits.push(esc(cap(f.category)));
-      // Only worth stating once there is history to state — "Version 1" on
+      // Only worth stating once there is history to state, "Version 1" on
       // every file is noise.
       if (f.versionNumber > 1) bits.push('Version ' + f.versionNumber);
       if (f.sizeLabel) bits.push(esc(f.sizeLabel));
@@ -2078,7 +2078,7 @@
     }
 
     /**
-     * Only actions the viewer may actually perform are rendered — and every
+     * Only actions the viewer may actually perform are rendered, and every
      * one of them is re-checked server-side when it runs. Hiding a button is
      * a courtesy, never the control.
      */
@@ -2144,7 +2144,7 @@
     /**
      * The documented Tab Group (underline), not a set of buttons of our own.
      *
-     * These were a bespoke `.tma-portal-viewer__tab` — a second tab component
+     * These were a bespoke `.tma-portal-viewer__tab`, a second tab component
      * in a portal that already has one, which Rule 5 exists to prevent. The
      * label lives in its own span because the indicator is a sibling element;
      * anything writing to the button's textContent erases both.
@@ -2206,7 +2206,7 @@
        * The details panel and the bubbles share the same edge of the screen,
        * so they take turns: any details tab open puts the comments away, and
        * closing it brings them straight back. One flag stays the reader's
-       * (comments), the other is the panel's own state — visibility is
+       * (comments), the other is the panel's own state, visibility is
        * derived, never juggled.
        */
       panel.hidden = !viewerPrefs.comments || viewerPrefs.panel;
@@ -2234,7 +2234,7 @@
        *
        * So: the file's own icon and name as the subject, its type and size as
        * the caption beneath, and rows only for the three facts the name cannot
-       * carry — where it lives, whose it is, when it last changed.
+       * carry, where it lives, whose it is, when it last changed.
        */
       host.innerHTML =
         '<div class="tma-portal-viewer__card">' +
@@ -2258,7 +2258,7 @@
            * them find the tab afterwards would be a worse panel than one that
            * never mentioned it.
            *
-           * Rendered empty until the details request answers — the counts ride
+           * Rendered empty until the details request answers, the counts ride
            * along with it, so there is nothing to show and nothing to fetch.
            */
           reviewHtml(f) +
@@ -2267,7 +2267,7 @@
         /*
          * No skeleton while the extra metadata loads.
          *
-         * "More details" is a collapsed disclosure — one line when it arrives.
+         * "More details" is a collapsed disclosure, one line when it arrives.
          * Standing in for it with three placeholder rows put the largest,
          * greyest shape on the panel where almost nothing was about to appear,
          * so a slow request looked like a broken panel rather than a link that
@@ -2291,7 +2291,7 @@
      * Fetch a file's details once, whoever asks first.
      *
      * Both the Details panel and the tab counts want this, and the counts are
-     * wanted whichever tab is showing — so it can no longer live inside
+     * wanted whichever tab is showing, so it can no longer live inside
      * paintDetails. The in-flight promise is cached as well as the result:
      * opening on Comments asks for it to label the tabs while the panel asks
      * for it too, and without that they would both fetch.
@@ -2331,7 +2331,7 @@
     }
 
     /**
-     * "PDF · 176.9 KB" — the two facts that used to be a row each.
+     * "PDF · 176.9 KB", the two facts that used to be a row each.
      *
      * The extension rather than the category, uppercased: the category made
      * "Pdf", which reads as a typo for a format everybody writes as PDF. Any
@@ -2352,7 +2352,7 @@
     }
 
     /**
-     * "2 comments · 3 versions" — each one a way into its tab.
+     * "2 comments · 3 versions", each one a way into its tab.
      *
      * Zeroes are left out rather than shown as "0 comments". A file with
      * nothing on it says nothing, which is the honest answer and keeps the
@@ -2365,7 +2365,7 @@
         { act: 'comments', n: counts.comments, one: 'comment', many: 'comments' },
         { tab: 'versions', n: counts.versions, one: 'version', many: 'versions' },
         // "1 approval" counted requests still waiting, but reads as one having
-        // been given — the opposite of what the number means.
+        // been given, the opposite of what the number means.
         { tab: 'approvals', n: counts.approvals, one: 'open request', many: 'open requests' },
       ].filter(function (c) { return c.n > 0; });
 
@@ -2384,7 +2384,7 @@
     /**
      * The review state of a client document, and the way to move it on.
      *
-     * Only for files that are in a review — an ordinary library file has no
+     * Only for files that are in a review, an ordinary library file has no
      * status and gets no control, which is what keeps this from appearing on
      * every logo and template in the portal.
      *
@@ -2410,7 +2410,7 @@
       /*
        * One picker rather than a row of verbs.
        *
-       * Three buttons — Start review, Approve, Reject — read as three
+       * Three buttons. Start review, Approve, Reject, read as three
        * unrelated actions when they are one field with four possible values,
        * and they could only ever offer the moves allowed from where the
        * document already was. A picker shows the whole set, says which one is
@@ -2449,7 +2449,7 @@
      * §30 asked for this collapsed so the panel would not dump every field on
      * open. In practice the card above now carries the handful of facts people
      * actually came for, so what is left behind the disclosure is the detail
-     * somebody opening a Details tab is looking for — and a closed <details>
+     * somebody opening a Details tab is looking for, and a closed <details>
      * over an otherwise empty panel just made them click once more to reach
      * it. Kept as a <details> so it can still be collapsed.
      */
@@ -2473,7 +2473,7 @@
       '</details>';
     }
 
-    /* Repaints only the comment list — the composer keeps its text and caret. */
+    /* Repaints only the comment list, the composer keeps its text and caret. */
     function repaintComments(e) {
       var slot = lb.querySelector('[data-lb-comments]');
       if (slot && e.comments) slot.innerHTML = commentsHtml(e.comments, e);
@@ -2682,7 +2682,7 @@
     /**
      * Live comments from other people.
      *
-     * The event carries no body — only that something changed — so the panel
+     * The event carries no body, only that something changed, so the panel
      * refetches the thread and patches it in. Nothing reloads, and the reader's
      * scroll, open composer and half-typed reply all survive (§29).
      */
@@ -2720,7 +2720,7 @@
        * so they reload when opened. Refetching all three on every signal would
        * be two wasted requests for panels nobody is looking at, and leaving the
        * caches alone would show a stale list the moment the reader switched
-       * tabs — which looks more broken than never updating at all.
+       * tabs, which looks more broken than never updating at all.
        */
       rt.listen(name, 'file.detail.changed', function (payload) {
         if (!lb || !payload || payload.fileId !== current().id) return;
@@ -2730,7 +2730,7 @@
         var section = payload.section;
 
         // The counts live in the details payload, so a new version landing has
-        // to invalidate that too — otherwise the panel shows the new version
+        // to invalidate that too, otherwise the panel shows the new version
         // while the tab beside it still says how many there were before.
         e.details = null;
         loadTabCounts(f);
@@ -2764,8 +2764,8 @@
 
       /*
        * The box is summoned, not resident. By default the column is only the
-       * conversation; highlighting a spot on the document — or the comments
-       * count chip in the details panel — opens the composer in its place at
+       * conversation; highlighting a spot on the document, or the comments
+       * count chip in the details panel, opens the composer in its place at
        * the bottom, and posting puts it away again. A form that always sat
        * there made every file read as a request to say something.
        */
@@ -2814,7 +2814,7 @@
        * The details chips are rebuilt from the cached counts on every panel
        * repaint, so a count written only to the DOM survives until the reader
        * switches tabs and then silently reverts to whatever the details
-       * request last said — which, after posting a comment, is one short.
+       * request last said, which, after posting a comment, is one short.
        */
       var e = entry(current());
       if (e.details && e.details.counts) e.details.counts.comments = n;
@@ -2826,7 +2826,7 @@
     function commentsHtml(data, e) {
       var threads = (data && data.threads) || [];
       if (!threads.length) {
-        // Nothing — an empty feed is the composer waiting, and a sentence
+        // Nothing, an empty feed is the composer waiting, and a sentence
         // announcing the emptiness only pushes the box people came to type in.
         return '';
       }
@@ -2857,7 +2857,7 @@
     }
 
     /**
-     * @param {object} [opts] { root, canReply, threadId } — a reply is not a
+     * @param {object} [opts] { root, canReply, threadId }, a reply is not a
      *   thread, so it gets neither the Reply control nor Resolve.
      */
     function commentHtml(c, e, opts) {
@@ -2874,13 +2874,13 @@
        * One row, in the order they get used: reply, then resolve, then the
        * two that change what is already written.
        *
-       * Resolve only on the opening comment — resolving is something that
+       * Resolve only on the opening comment, resolving is something that
        * happens to a *thread*, so offering it against every reply was both
        * repetition and a small lie about what the button does.
        */
       /*
        * The verbs live in the bubble's top corner and show on hover: a tick
-       * to mark the thread resolved, and a ⋯ holding Edit and Delete — the
+       * to mark the thread resolved, and a ⋯ holding Edit and Delete, the
        * two that change what is already written earn a step of intent. Reply
        * keeps a visible line of its own below; it is the one verb a reader
        * came to use.
@@ -2924,7 +2924,7 @@
 
       /*
        * The face and the name head the bubble; the message runs the full
-       * width UNDER them, flush with the face's own left edge — the head
+       * width UNDER them, flush with the face's own left edge, the head
        * identifies, the body speaks, and neither is squeezed into the
        * other's column.
        */
@@ -2956,7 +2956,7 @@
      *
      * The body is plain text from the server and is escaped here before any
      * markup is added, so a comment can never inject HTML into someone else's
-     * viewer — the highlight is applied to the *escaped* string.
+     * viewer, the highlight is applied to the *escaped* string.
      */
     function decorateMentions(c) {
       var text = esc(c.body || '');
@@ -2992,7 +2992,7 @@
       var me = (window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get()) || {};
       var pending = e.pendingAnchor;
 
-      // Nothing until asked for — the button above or a highlight opens it.
+      // Nothing until asked for, the button above or a highlight opens it.
       if (!e.composerOpen && !pending) return '';
 
       return '<div class="tma-portal-viewer__composer" data-lb-composer>' +
@@ -3016,7 +3016,7 @@
         '<div class="tma-portal-viewer__composer-actions">' +
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-emoji title="Insert emoji" aria-label="Insert emoji">🙂</button>' +
           '<span class="tma-portal-viewer__composer-spacer"></span>' +
-          // Cancel and Send sit in a row with a gap — §16 asks specifically
+          // Cancel and Send sit in a row with a gap. §16 asks specifically
           // that the clear control never overlap the send control.
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-clear>Cancel</button>' +
           '<button type="button" class="tma-portal-viewer__btn" data-lb-send>Comment</button>' +
@@ -3024,7 +3024,7 @@
       '</div>';
     }
 
-    /* Draft survives a tab switch — losing half a typed comment because you
+    /* Draft survives a tab switch, losing half a typed comment because you
      * checked the file's details is exactly what §29 is about. */
     function restoreDraft(e) {
       var input = lb.querySelector('[data-lb-input]');
@@ -3186,7 +3186,7 @@
 
       var upto = input.value.slice(0, input.selectionStart);
       var m = /@([\w' -]{0,40})$/.exec(upto);
-      // The pop that belongs to THIS box — the reply box carries its own, or
+      // The pop that belongs to THIS box, the reply box carries its own, or
       // @ing in a reply would open the suggestion list under the composer.
       var box = input.closest('[data-lb-composer], .tma-portal-viewer__replybox');
       var pop = box && box.querySelector('[data-lb-mentions]');
@@ -3214,7 +3214,7 @@
     function insertMention(id, name, item) {
       var f = current();
       var e = entry(f);
-      // The box the suggestion list belongs to — composer or a reply.
+      // The box the suggestion list belongs to, composer or a reply.
       var box = item && item.closest('[data-lb-composer], .tma-portal-viewer__replybox');
       var input = (box && box.querySelector('textarea')) || lb.querySelector('[data-lb-input]');
       var pop = box && box.querySelector('[data-lb-mentions]');
@@ -3264,7 +3264,7 @@
      * A database value, said out loud.
      *
      * The approval chip printed the column verbatim, so a version sat there
-     * labelled "changes_requested" — the underscore and all. Done generically
+     * labelled "changes_requested", the underscore and all. Done generically
      * rather than as a lookup table so a status added later reads properly
      * instead of leaking through the same way this one did.
      */
@@ -3282,7 +3282,7 @@
        * Drop target as well as a button.
        *
        * The hint earns its line: dragging a file here is otherwise invisible,
-       * and the alternative — dragging onto the file list behind — adds a
+       * and the alternative, dragging onto the file list behind, adds a
        * separate file to the folder rather than a version of this one.
        */
       var head = data.canAddVersion
@@ -3326,7 +3326,7 @@
      * The review picker, from the panel's own button.
      *
      * The states, the PATCH and the picker itself are shared with the row
-     * menu — see openReviewStatusMenu. All this adds is where it hangs and
+     * menu, see openReviewStatusMenu. All this adds is where it hangs and
      * what to repaint: the panel first, then the list behind it, because
      * closing the viewer must not reveal a row still showing the badge this
      * just changed.
@@ -3342,7 +3342,7 @@
 
     /**
      * Uploading a new version. The note is asked for BEFORE the bytes go up,
-     * because §5 wants the reason recorded — and asking afterwards means a
+     * because §5 wants the reason recorded, and asking afterwards means a
      * large upload finishes with nothing to say about it.
      */
     function pickNewVersion() {
@@ -3354,7 +3354,7 @@
      * Dropping a file onto the versions panel.
      *
      * Bound once on the viewer rather than per render, since the panel is
-     * rebuilt on every tab switch and refresh — binding inside versionsHtml
+     * rebuilt on every tab switch and refresh, binding inside versionsHtml
      * would stack a listener each time.
      *
      * stopPropagation on both: the window-level folder drop is already stood
@@ -3394,7 +3394,7 @@
         // A version is one file. Saying so beats silently ignoring the rest,
         // and beats uploading five versions of the same document at once.
         if (files.length > 1) {
-          ui().toast('Drop one file — a version replaces a single document.', false);
+          ui().toast('Drop one file, a version replaces a single document.', false);
 
           return;
         }
@@ -3449,7 +3449,7 @@
       confirmModal({
         title: 'Restore version ' + number,
         message: 'This adds version ' + number + '’s content as a NEW current version. ' +
-          'Nothing is deleted — every later version stays in the history.',
+          'Nothing is deleted, every later version stays in the history.',
         prompt: { label: 'Note (optional)', placeholder: 'Why are you restoring this?' },
         confirmLabel: 'Restore',
         onConfirm: function (note) {
@@ -3476,7 +3476,7 @@
 
     /* The preview and thumbnail URLs do not change when the content does, so
      * without a cache-buster the viewer keeps showing the previous version's
-     * bytes after an upload — which reads as the upload having failed. */
+     * bytes after an upload, which reads as the upload having failed. */
     function bustPreview(f, version) {
       ['previewUrl', 'thumbUrl'].forEach(function (key) {
         if (!f[key]) return;
@@ -3527,7 +3527,7 @@
      * The Approvals tab label, on the same terms as Comments.
      *
      * The count came only from /details, which is fetched once when the viewer
-     * opens — so sending a request left the tab unnumbered, and answering the
+     * opens, so sending a request left the tab unnumbered, and answering the
      * last one left it claiming work that was finished. Both are read as the
      * request having failed. The count is written back into the cached details
      * as well as onto the label, because the tab row is rebuilt from that cache
@@ -3595,7 +3595,7 @@
        *
        * With a single reviewer the badge above already says how it went, so
        * the line read "Completed … Responded" and "Changes requested …
-       * Requested changes" — the same fact twice, in two different wordings,
+       * Requested changes", the same fact twice, in two different wordings,
        * which invites the reader to look for the difference between them.
        * With several people it is the only place you can see who did what.
        */
@@ -3663,7 +3663,7 @@
       /*
        * Type and timing as one quiet line under the headline.
        *
-       * Both were competing with the status for attention up top — a bold
+       * Both were competing with the status for attention up top, a bold
        * type name and a full timestamp on the same row as the badge, three
        * things of equal weight and no obvious reading order. They are context
        * for the sentence above, so they read as context.
@@ -3699,7 +3699,7 @@
         (w.signedFile
           ? '<p class="tma-portal-viewer__version-meta">Signed copy: ' +
             '<a href="' + esc(w.signedFile.downloadUrl) + '" download>' + esc(w.signedFile.name) + '</a>' +
-            ' — the original is unchanged.</p>'
+            ', the original is unchanged.</p>'
           : '') +
         mine +
         (w.canManage && w.isOpen
@@ -3726,7 +3726,7 @@
       confirmModal({
         title: 'Send for signature',
         message: 'This opens the signature editor, where you add recipients and place ' +
-          'the signature fields on the document. The original file is never changed — ' +
+          'the signature fields on the document. The original file is never changed, ' +
           'the signed copy is filed alongside it.',
         confirmLabel: 'Open signature editor',
         onConfirm: function () {
@@ -3778,7 +3778,7 @@
      *
      * A beginner opening this panel is asking two things: what is happening,
      * and is it on me? "Awaiting approval" against a status chip answers
-     * neither — it names an internal state and leaves them to work out who is
+     * neither, it names an internal state and leaves them to work out who is
      * holding it up. So the request leads with a sentence instead: whose turn
      * it is, by name where there is a single name to give.
      */
@@ -3945,7 +3945,7 @@
                 json: {
                   type: type,
                   // Position is the order they were picked in, which is what
-                  // the chips show — so an ordered flow matches the list.
+                  // the chips show, so an ordered flow matches the list.
                   recipients: chosen.map(function (c, i) { return { userId: c.id, position: i + 1 }; }),
                   message: host.querySelector('[data-wf-message]').value.trim() || null,
                   dueAt: due || null,
@@ -4022,7 +4022,7 @@
           var slot = lb.querySelector('[data-lb-activity]');
           if (slot) slot.innerHTML = activityHtml(data);
           // The server owns the filter list. On first paint we only had the
-          // fallback single option, so repopulate once it arrives — guarding
+          // fallback single option, so repopulate once it arrives, guarding
           // on "no options" left the dropdown stuck at just "All activity".
           var sel = lb.querySelector('[data-lb-filter]');
           if (sel && data.filters && sel.options.length !== data.filters.length) {
@@ -4154,7 +4154,7 @@
        * A title attribute said as much in a tooltip you cannot click.
        *
        * The card resolves a face through the data-tma-people wrapper below, so
-       * the people are serialised in the shape it reads — `via` already
+       * the people are serialised in the shape it reads. `via` already
        * describes how each of them reaches this file, which is the role.
        */
       var cardPeople = (shared.faces || []).map(function (p) {
@@ -4195,11 +4195,11 @@
 
       if (!people.length) { ui().toast('Nobody else has access yet'); return; }
 
-      // When access comes from a rule rather than a list — everyone on staff,
-      // the client team — say so, and be honest that the faces are a sample
+      // When access comes from a rule rather than a list, everyone on staff,
+      // the client team, say so, and be honest that the faces are a sample
       // rather than pretending the list is complete.
       var note = shared.total > people.length
-        ? '<p class="tma-portal-viewer__empty">' + esc(shared.summary) + ' — showing ' +
+        ? '<p class="tma-portal-viewer__empty">' + esc(shared.summary) + ', showing ' +
           people.length + ' of ' + shared.total + '.</p>'
         : '<p class="tma-portal-viewer__empty">' + esc(shared.summary) + '</p>';
 
@@ -4231,7 +4231,7 @@
       '</div>';
     }
 
-    // Hover reveals name, email, role and permission — §19.
+    // Hover reveals name, email, role and permission. §19.
     function personTitle(m) {
       return [m.name, m.email, m.jobTitle || m.accountType, m.role]
         .filter(Boolean).join(' · ');
@@ -4256,7 +4256,7 @@
       idx = next;
       var f = current();
 
-      // Flipping through the rail is navigation too — reloading on the third
+      // Flipping through the rail is navigation too, reloading on the third
       // file should reopen the third file, not the one first clicked.
       state.openFile = f.id;
       syncUrl();
@@ -4316,7 +4316,7 @@
       loader.src = full;
     }
 
-    /* ── PDF via pdf.js — continuous scroll, floating toolbar ── */
+    /* ── PDF via pdf.js, continuous scroll, floating toolbar ── */
 
     var PDF_ZOOM_STEP = 1.25;
     var PDF_ZOOM_MIN = 0.25;
@@ -4566,7 +4566,7 @@
       }
     }
 
-    /* Scroll to a page in the continuous view — used by left-rail clicks. */
+    /* Scroll to a page in the continuous view, used by left-rail clicks. */
     function renderPdfPage(f, pageNum) {
       var e = entry(f);
       var pdf = e.pdfDoc;
@@ -4670,7 +4670,7 @@
       }
       if (e.target.closest('[data-lb-send]')) { sendComment(); return; }
       if (e.target.closest('[data-lb-clear]')) {
-        // Cancel puts the composer away entirely — it came out for a reason
+        // Cancel puts the composer away entirely, it came out for a reason
         // that no longer holds.
         en.draft = '';
         en.pendingMentions = [];
@@ -4710,7 +4710,7 @@
         }
       }
 
-      // The bubble's ⋯ — open its little menu; any other click closes it.
+      // The bubble's ⋯, open its little menu; any other click closes it.
       var menuBtn = e.target.closest('[data-lb-commentmenu]');
       if (menuBtn) {
         var pop = lb.querySelector('[data-lb-commentmenu-pop="' + menuBtn.getAttribute('data-lb-commentmenu') + '"]');
@@ -4805,7 +4805,7 @@
           return;
         case 'comments': {
           // Adding a comment, not opening and closing: the button summons the
-          // composer — and takes the details panel with it, since the two
+          // composer, and takes the details panel with it, since the two
           // share the same edge of the screen.
           viewerPrefs.comments = true;
           viewerPrefs.panel = false;
@@ -4827,7 +4827,7 @@
       if (e.target.closest('[data-lb-input], [data-lb-replyinput]')) onComposerInput(e.target);
     });
 
-    // Enter sends, Shift+Enter makes a new line — §16.
+    // Enter sends, Shift+Enter makes a new line. §16.
     lb.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' || e.shiftKey) return;
       if (e.target.closest('[data-lb-input]')) { e.preventDefault(); sendComment(); }
@@ -4904,7 +4904,7 @@
     // guard and the favourites-view removal all behave identically here.
     //
     // toggleStar() already flips `favorite` on the very object the viewer is
-    // holding — they are the same reference. Flipping it again here turned the
+    // holding, they are the same reference. Flipping it again here turned the
     // button straight back to its old state.
     function favoriteFromViewer(f) {
       toggleStar(f.id);
@@ -4912,8 +4912,8 @@
       if (head) head.outerHTML = viewerHead(f);
     }
 
-    // Reuses the list's delete flow — same confirmation wording, same recycle
-    // semantics — then closes, since the file is no longer where we are.
+    // Reuses the list's delete flow, same confirmation wording, same recycle
+    // semantics, then closes, since the file is no longer where we are.
     function deleteFromViewer(f) {
       if (!perm(f, 'delete')) { ui().toast('You can’t delete this file'); return; }
       closeLightbox();
@@ -4922,7 +4922,7 @@
 
     /**
      * The three-dot menu is the SAME menu the file list uses, so the actions,
-     * icons, ordering and styling can never drift apart — it just adds the
+     * icons, ordering and styling can never drift apart, it just adds the
      * entries that only make sense inside the viewer.
      */
     function openViewerMenu(anchor, f) {
@@ -4954,11 +4954,11 @@
     /* When the item was opened from outside the File Library (e.g. cip-intake's
      * "Open filed document") it arrives as a bare { id } stub with no category,
      * previewUrl or permissions.  The viewer has already rendered a shell so the
-     * user sees a frame immediately — now fetch the full row and swap in the
+     * user sees a frame immediately, now fetch the full row and swap in the
      * real stage so the PDF (or image/text) loads exactly like normal. */
     (function resolveStub() {
       var f = current();
-      if (f.category) return; // already a full row — nothing to do
+      if (f.category) return; // already a full row, nothing to do
 
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id)))
         .then(function (row) {
@@ -4980,7 +4980,7 @@
           if (foot) foot.innerHTML = footHtml(full);
         })
         .catch(function () {
-          // Best-effort — if the fetch fails the viewer is still usable for
+          // Best-effort, if the fetch fails the viewer is still usable for
           // non-preview actions (download, activity, etc.).
         });
     })();
@@ -5015,7 +5015,7 @@
     var d = new Date(iso);
     if (isNaN(d)) return '';
 
-    // "Aug 18 at 3:07 AM" — the date and the moment read as one phrase.
+    // "Aug 18 at 3:07 AM", the date and the moment read as one phrase.
     var day = { month: 'short', day: 'numeric' };
     if (d.getFullYear() !== new Date().getFullYear()) day.year = 'numeric';
 
@@ -5030,7 +5030,7 @@
       switch (f.category) {
         case 'image':
           /* The thumbnail we already hold, swapped for the real file once it
-           * has decoded — a phone photo is megabytes and the stage used to sit
+           * has decoded, a phone photo is megabytes and the stage used to sit
            * empty for all of them. See swapFullImage below. */
           return '<img class="tma-portal-viewer__img' + (f.thumbUrl ? ' is-preview' : '') +
             '" src="' + esc(f.thumbUrl || f.previewUrl) + '" alt="' + esc(f.name) + '" decoding="async"' +
@@ -5069,7 +5069,7 @@
       '</div>';
   }
 
-  /** @param {boolean} [silent] Skip the URL update — see openLightbox. */
+  /** @param {boolean} [silent] Skip the URL update, see openLightbox. */
   function closeLightbox(silent) {
     if (!lb) return;
     if (!silent) {
@@ -5125,8 +5125,8 @@
   /**
    * Ask somebody outside the portal to upload into a folder.
    *
-   * Defaults to wherever the reader is standing — the toolbar button means
-   * "collect files *here*" — and to the named folder when it comes from that
+   * Defaults to wherever the reader is standing, the toolbar button means
+   * "collect files *here*", and to the named folder when it comes from that
    * folder's own menu. The shared dialog owns everything after that
    * (portal-file-requests.js); this only supplies the destination.
    */
@@ -5190,7 +5190,7 @@
           // currently open - same rule a full reload would apply.
           .then(function (f) { cache[dir] = f.id; insertItem(f); return f.id; })
           .catch(function () {
-            // Folder may already exist — fall back to the parent so files still land somewhere.
+            // Folder may already exist, fall back to the parent so files still land somewhere.
             cache[dir] = parentUuid; return parentUuid;
           });
       });
@@ -5378,7 +5378,7 @@
             btn.classList.toggle('is-selected', isSel);
             btn.setAttribute('aria-pressed', isSel);
             // The glyph is tinted from the colour, so it has to be redrawn
-            // when the colour changes — this is the whole reason the two
+            // when the colour changes, this is the whole reason the two
             // belong in one dialog.
             var glyph = btn.querySelector('.tma-portal-icon-swatch__glyph');
             if (glyph) glyph.style.backgroundColor = colours.shade(colour === 'default' ? null : colour);
@@ -5436,7 +5436,7 @@
           setBusy(item.id, true);
 
           // Only what actually changed. Chained rather than parallel so the
-          // second write sees the first — the response carries the merged row.
+          // second write sees the first, the response carries the merged row.
           var work = Promise.resolve(null);
 
           if (canColour && colour !== startColour) {
@@ -5485,7 +5485,7 @@
 
   /**
    * `opts.prompt` adds a single free-text field and passes its value to
-   * onConfirm — used for version notes, where §5 asks that the reason a
+   * onConfirm, used for version notes, where §5 asks that the reason a
    * version exists is recorded at the moment it is created.
    */
   function confirmModal(opts) {
@@ -5652,7 +5652,7 @@
 
   function renderDetails(d) {
     function row(label, value) {
-      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">' + esc(label) + '</span><span class="tma-portal-details__value">' + esc(value == null || value === '' ? '—' : value) + '</span></div>';
+      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">' + esc(label) + '</span><span class="tma-portal-details__value">' + esc(value == null || value === '' ? '-' : value) + '</span></div>';
     }
     function colourRow(item) {
       var colours = window.TMAFolderColours;
@@ -5674,13 +5674,13 @@
     rows += row('Name', d.name);
     rows += row('Type', d.type === 'folder' ? 'Folder' : (d.category ? cap(d.category) : 'File'));
     if (d.type === 'file') {
-      rows += row('Extension', d.extension ? '.' + d.extension : '—');
+      rows += row('Extension', d.extension ? '.' + d.extension : '-');
       rows += row('MIME type', d.mime);
       rows += row('Size', d.sizeLabel);
       rows += row('Location', d.folder ? d.folder.name : 'File Box');
       rows += row('Uploaded', fmtDate(d.uploadedAt));
       rows += row('Modified', fmtDate(d.modifiedAt));
-      rows += row('Uploaded by', d.uploadedBy ? d.uploadedBy.name : '—');
+      rows += row('Uploaded by', d.uploadedBy ? d.uploadedBy.name : '-');
     } else {
       rows += row('Files', d.fileCount);
       rows += row('Subfolders', d.folderCount);
@@ -5690,9 +5690,9 @@
       rows += row('Location', d.parent ? d.parent.name : 'Top level');
       rows += row('Created', fmtDate(d.createdAt));
       rows += row('Modified', fmtDate(d.modifiedAt));
-      rows += row('Created by', d.createdBy ? d.createdBy.name : '—');
+      rows += row('Created by', d.createdBy ? d.createdBy.name : '-');
     }
-    rows += row('Owner', d.owner ? d.owner.name : '—');
+    rows += row('Owner', d.owner ? d.owner.name : '-');
     rows += row('Assigned to', (d.assignedTo && d.assignedTo.length) ? d.assignedTo.join(', ') : 'No one');
     rows += row('Sharing', (d.assignedTo && d.assignedTo.length) ? 'Shared' : 'Private');
     rows += row('Favourite', d.favorite ? 'Yes' : 'No');
@@ -5733,7 +5733,7 @@
    * it is read. It used to draw the owner alone, which split the answer to
    * column saying the word "Shared". The faces put it in one place.
    *
-   * Drawn by TMAPersonCard — the same component as CBI's Assigned column — so
+   * Drawn by TMAPersonCard, the same component as CBI's Assigned column, so
    * hovering a face gives that person's roles here and a way to reach them.
    * Falls back to the owner's name alone if the component has not loaded. */
   function ownerCell(item) {
@@ -5741,9 +5741,9 @@
     var owner = item && item.owner;
 
     if (!window.TMAPersonCard) {
-      if (!owner) return '\u2014';
+      if (!owner) return '-';
       return '<span class="tma-portal-owner-cell">' +
-        '<span class="tma-portal-owner-name">' + esc(owner.name || owner.email || '\u2014') + '</span>' +
+        '<span class="tma-portal-owner-name">' + esc(owner.name || owner.email || '-') + '</span>' +
         '</span>';
     }
 
@@ -5754,7 +5754,7 @@
       max: 4,
       names: 'single',
       total: item && item.peopleTotal,
-      emptyLabel: '\u2014',
+      emptyLabel: '-',
     });
   }
 
@@ -5961,7 +5961,7 @@
   }
   function onCtxKey(e) { if (e.key === 'Escape') closeContextMenu(); }
   function onDocCtx(e) { if (ctxEl && !ctxEl.contains(e.target)) closeContextMenu(); }
-  /* A click inside either menu is the menu's own business — closing on it
+  /* A click inside either menu is the menu's own business, closing on it
      would kill the flyout before its handler ran. */
   function onCtxDocClick(e) {
     if (e.target.closest('.tma-portal-context-menu')) return;
@@ -6003,7 +6003,7 @@
    * and the row menu both call it.
    */
 
-  /* The states, in the order the process runs — the same four-status
+  /* The states, in the order the process runs, the same four-status
      workflow the CIP checklist draws, minus Pending upload (a row here is
      already a file). */
   var REVIEW_STATES = [
@@ -6013,7 +6013,7 @@
   ];
 
   /* Only a document actually in a review, and only for a reader who may move
-     it — the same two conditions the viewer's panel has always applied. */
+     it, the same two conditions the viewer's panel has always applied. */
   function canReview(item) {
     return !!(item && item.type !== 'folder' && item.review && item.review.status && item.review.canReview);
   }
@@ -6022,7 +6022,7 @@
    * Move a document to a review state.
    *
    * Sending it back asks for a reason before it goes, because the server
-   * refuses one without it — and finding that out through an error message
+   * refuses one without it, and finding that out through an error message
    * after the click would be the interface hiding a rule it could have just
    * asked about. Every other move goes straight through.
    */
@@ -6050,7 +6050,7 @@
     confirmModal({
       title: 'Request an update',
       message: 'The uploader will see why this needs changing.',
-      prompt: { label: 'Reason', placeholder: 'e.g. Expired — please send a current copy' },
+      prompt: { label: 'Reason', placeholder: 'e.g. Expired, please send a current copy' },
       confirmLabel: 'Request update',
       onConfirm: function (note) {
         if (!String(note || '').trim()) {
@@ -6104,7 +6104,7 @@
     });
   }
 
-  /** The same picker where there is no menu to hang it off — the viewer's
+  /** The same picker where there is no menu to hang it off, the viewer's
       panel button, which opens it as a menu of its own. */
   function openReviewStatusMenu(x, y, item, onDone) {
     openContextMenu(x, y, item, reviewSubmenu(item, onDone));
@@ -6117,8 +6117,8 @@
    *
    * Fetched when the flyout opens rather than with the menu: it is a request
    * per item, and right-clicking a row to rename it should not ask the server
-   * who else could have it. The server decides who may appear — see
-   * Assignable — and answers 403 to a reader who may not assign at all, which
+   * who else could have it. The server decides who may appear, see
+   * Assignable, and answers 403 to a reader who may not assign at all, which
    * is the same answer they would get for trying.
    *
    * Picking somebody grants `viewer`, the role the assign dialog opens on. The
@@ -6247,7 +6247,7 @@
      * Moving a document's review on without opening it.
      *
      * The reviewer's job is a queue of rows, and the status was reachable only
-     * from inside the viewer — so approving five documents meant opening and
+     * from inside the viewer, so approving five documents meant opening and
      * closing five of them. It opens the same picker the viewer's panel opens,
      * in place of this menu, and reloads the list behind it.
      */
@@ -6266,7 +6266,7 @@
   }
 
   /* Placed where asked, then pulled back inside the window.
-     Grows left from the point when the right edge would run off — the CIP
+     Grows left from the point when the right edge would run off, the CIP
      Assigned To column is the last one, and a menu that only clamped after
      opening as file-actions (narrow) then filling with people (wide) is how
      that picker vanished off the right of the window. */
@@ -6298,7 +6298,7 @@
         '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
     }
     /*
-     * Somebody already on the record is not a thing to click — they are a
+     * Somebody already on the record is not a thing to click, they are a
      * thing to take off. The row is inert and carries an × of its own, so
      * the only click that does nothing is the one that would have changed
      * nothing anyway.
@@ -6397,12 +6397,12 @@
 
   /**
    * `list` overrides the default item menu. The file viewer passes its own so
-   * the three-dot menu is this exact component — same actions, icons, keyboard
-   * handling and styling — rather than a second menu that drifts out of sync.
+   * the three-dot menu is this exact component, same actions, icons, keyboard
+   * handling and styling, rather than a second menu that drifts out of sync.
    *
    * Callers that are not a file (the CIP table's Assigned To picker) pass the
    * rows themselves. Without that, this would build file actions for an
-   * application uuid — a menu that cannot assign anybody, which is how that
+   * application uuid, a menu that cannot assign anybody, which is how that
    * column's control came to look broken.
    */
   function openContextMenu(x, y, item, list) {
@@ -6418,7 +6418,7 @@
     document.body.appendChild(ctxEl);
     placeMenu(ctxEl, x, y);
 
-    // The menu is z-index 500, the file viewer is 600 — opened from inside the
+    // The menu is z-index 500, the file viewer is 600, opened from inside the
     // viewer it lands *behind* it: in the DOM, readable, and entirely
     // invisible. Same lift the details modal already does from here.
     if (lb) ctxEl.style.zIndex = '700';
@@ -6652,7 +6652,7 @@
       /*
        * Reopen the viewer on the file the URL names.
        *
-       * Only if it is in the folder that was just loaded — the file parameter
+       * Only if it is in the folder that was just loaded, the file parameter
        * travels with a folder parameter, so a file that is not here means a
        * stale or hand-edited link, and silently showing a file from somewhere
        * else would be worse than showing the folder.
@@ -6683,14 +6683,14 @@
    *
    * This used to be treated as a stale link and dropped, which was wrong: the
    * browse query lists what you own or were shared with, while *access* is
-   * wider than that — the firm-wide staff default reaches files nobody ever
+   * wider than that, the firm-wide staff default reaches files nobody ever
    * shared explicitly, and they appear in no section's list. So a perfectly
    * valid link from a notification, the Workflows page or a comment landed on
    * a folder with no viewer open and no explanation.
    *
    * Ask the server for the one file instead. It authorizes the request the
    * same way it would any other, so a link to something genuinely out of reach
-   * still opens nothing — it just no longer takes reachable files with it.
+   * still opens nothing, it just no longer takes reachable files with it.
    */
   function fetchWantedFile(id) {
     return net().fetchJSON(net().url('/files/' + encodeURIComponent(id)))
@@ -6712,7 +6712,7 @@
   /*
    * Back and forward.
    *
-   * Without this the address bar would change while the page stayed put — the
+   * Without this the address bar would change while the page stayed put, the
    * reader presses Back expecting to leave the viewer and nothing happens.
    */
   window.addEventListener('popstate', function () {
@@ -6774,7 +6774,7 @@
    * Live updates: somebody else uploading, renaming, sharing or binning
    * something shows up here without a refresh.
    *
-   * Registered once rather than per mount — this module is a singleton and
+   * Registered once rather than per mount, this module is a singleton and
    * mount() only re-points state.el, so registering there would stack a new
    * watcher on every navigation. The active() check is what makes that safe:
    * the view stays registered after you navigate away, and refetching a
@@ -6793,7 +6793,7 @@
    *
    * The dashboard's Recent Files and Shared-with-me tables render the same rows
    * with the same checkboxes and the same three-dot button, but they had no
-   * behaviour behind any of it — the controls were decoration. Rather than
+   * behaviour behind any of it, the controls were decoration. Rather than
    * grow a second, drifting copy of download/move/copy/delete (with its own
    * permission rules and its own destination picker), those tables drive the
    * implementations here.
@@ -6824,7 +6824,7 @@
      *
      * The client's Documents tab used to window.open() the raw preview URL, so
      * the same PDF was a browser tab from one screen and the portal's viewer
-     * from the other — no comments, no versions, no review, and no way back
+     * from the other, no comments, no versions, no review, and no way back
      * except the back button. It is the same file, so it gets the same window.
      *
      * The item is registered as an external one first: the viewer resolves the
