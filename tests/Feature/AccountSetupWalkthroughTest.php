@@ -127,7 +127,14 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertOk()
             ->assertSee("5 of {$total}", false)
             ->assertSee('Email')
+            ->assertSee('Continue to the portal')
+            ->assertDontSee('Connect Microsoft to continue')
             ->assertDontSee('Email signature');
+
+        $this->actingAs($user)->post(route('account-setup.store', ['step' => 'email']), [
+            'layout' => 'split',
+            'sidebarMode' => 'full',
+        ])->assertRedirect('/');
     }
 
     public function test_continue_does_not_jump_to_the_portal_when_onboarding_was_already_stamped(): void

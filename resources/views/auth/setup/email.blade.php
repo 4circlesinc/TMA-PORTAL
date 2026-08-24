@@ -43,7 +43,7 @@
           <span class="tma-auth__task-name">Connect Microsoft Outlook</span>
           <span class="tma-auth__task-desc">Mail syncs into the portal — we do not connect Gmail for email.</span>
         </span>
-        <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--recommended">Required</span></span>
+        <span class="tma-auth__task-side"><span class="tma-auth__badge">Optional</span></span>
       </a>
     @endif
   </div>
@@ -87,9 +87,7 @@
     </div>
 
     <div class="tma-auth__nav-actions">
-      <button type="submit" class="tma-auth__submit tma-auth__submit--continue" @if (! $microsoft) disabled @endif>
-        {{ $microsoft ? 'Continue to portal' : 'Connect Microsoft to continue' }}
-      </button>
+      <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue to the portal</button>
     </div>
   </form>
 

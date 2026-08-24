@@ -225,12 +225,6 @@ class AccountSetupController extends Controller
 
     private function storeEmail(Request $request, User $user): void
     {
-        if (! $user->connectedAccount('microsoft')) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'microsoft' => 'Connect Microsoft Outlook before continuing.',
-            ]);
-        }
-
         $data = $request->validate([
             'layout' => ['required', Rule::in(['split', 'single'])],
             'sidebarMode' => ['required', Rule::in(['full', 'icons', 'hidden'])],
