@@ -204,21 +204,16 @@ class CipTransitionTest extends TestCase
     public function test_an_actor_without_the_capability_is_refused(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
-        $reviewer = $this->user(Role::REVIEWING_OFFICER);
+        $client = $this->user(Role::CLIENT);
 
         $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
-        Assignments::assign($application->fresh(), $reviewer, $admin);
-        $application = $application->fresh();
         $events = CipEvent::count();
 
-        // On the file, so the refusal under test is the CAPABILITY's and not
-        // the scope's 404: a Reviewing Officer may hold this application and
-        // assess its documents; moving it through compliance is somebody
-        // else's work. Delayed is still a bare status edge; Background check
-        // and Non-compliant each have a date verb of their own.
-        $this->actingAs($reviewer)
+        // External accounts without a slice of this file are told it does not
+        // exist — never that a capability they do not hold was refused.
+        $this->actingAs($client)
             ->postJson($this->statusUrl($application), ['status' => Status::DELAYED])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
         $this->assertSame($events, CipEvent::count());
@@ -294,22 +289,25 @@ class CipTransitionTest extends TestCase
     public function test_the_available_transitions_are_the_readers_own(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
-        $reviewer = $this->user(Role::REVIEWING_OFFICER);
-        $compliance = $this->user(Role::COMPLIANCE_OFFICER);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $employee = $this->user(Role::EMPLOYEE);
 
         $application = $this->at($this->application($admin), Status::ASSESSMENT_FEEDBACK);
 
-        // The same application, at the same point, offers each officer their
-        // own work and nobody else's.
+        // Officers hold both review and compliance verbs; parked employees hold
+        // neither.
         $this->assertSame(
             [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
-            Engine::availableTransitions($application, $reviewer),
+            Engine::availableTransitions($application, $officer),
         );
-        $this->assertSame([], Engine::availableTransitions($application, $compliance));
+        $this->assertSame([], Engine::availableTransitions($application, $employee));
 
         $ready = $this->at($this->application($admin), Status::READY_TO_SUBMIT);
-        $this->assertSame([Status::PENDING_REVIEW], Engine::availableTransitions($ready, $compliance));
-        $this->assertSame([Status::UPDATE_REQUIRED], Engine::availableTransitions($ready, $reviewer));
+        $this->assertEqualsCanonicalizing(
+            [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
+            Engine::availableTransitions($ready, $officer),
+        );
+        $this->assertSame([], Engine::availableTransitions($ready, $employee));
 
         // Nothing leaves a decision, whoever is asking.
         $granted = $this->at($this->application($admin), Status::GRANTED);
@@ -459,13 +457,11 @@ class CipTransitionTest extends TestCase
         ]);
     }
 
-    public function test_a_reviewer_cannot_record_a_decision(): void
+    public function test_an_officer_may_record_a_decision(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $reviewer = $this->user(Role::REVIEWING_OFFICER);
         $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
-        // Holding it is what makes this a 403 about the verb rather than the
-        // scope's 404 about the file.
         Assignments::assign($application->fresh(), $reviewer, $admin);
         $application = $application->fresh();
 
@@ -474,9 +470,7 @@ class CipTransitionTest extends TestCase
                 'decision' => Status::DENIED,
                 'decidedAt' => '2026-08-10',
             ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
-        $this->assertNull($application->fresh()->decision);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::DENIED);
     }
 }

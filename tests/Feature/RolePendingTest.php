@@ -8,11 +8,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * 'Employee' is a parked account type: the portal's working roles are the
- * brief's five (Administrator, Reviewing Officer, Compliance Officer, and
- * the external Client side). An approved account still typed Employee is
- * held on /auth/role-pending until an administrator assigns a real role —
- * and every other type passes untouched.
+ * 'Employee' is a parked account type: the portal's working roles are
+ * Administrator, CRO / Reviewing officer, and the external Client side. An
+ * approved account still typed Employee is held on /auth/role-pending until
+ * an administrator assigns a real role — and every other type passes
+ * untouched.
  */
 class RolePendingTest extends TestCase
 {
@@ -44,7 +44,7 @@ class RolePendingTest extends TestCase
 
     public function test_every_working_role_passes_the_gate(): void
     {
-        foreach ([Role::ADMINISTRATOR, Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER, Role::CLIENT] as $type) {
+        foreach ([Role::ADMINISTRATOR, Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $this->actingAs($this->user($type))->get('/')->assertOk();
         }
     }

@@ -57,15 +57,9 @@ class CipAssignmentController extends Controller
         abort_unless($officer, 422, 'Choose an officer who can take this application.');
 
         /*
-         * The job follows the account type unless the request names one: a
-         * Compliance Officer takes the file as compliance officer, and a
-         * picker that asked would be asking a question with one answer.
-         *
-         * Whichever way it arrives it has to match the type, because the role
-         * is the job and the account type is what lets somebody do it — a
-         * Compliance Officer handed the file as reviewing officer would hold
-         * an application they cannot review, the reviewer verbs being gated on
-         * `cip.review`.
+         * The job follows the request when named; otherwise the reviewing
+         * officer job is the default. Either job is held by the one officer
+         * account type (CRO / Reviewing officer).
          */
         $role = $data['role'] ?? CipAccess::officerRoles($officer)[0] ?? CipAccess::REVIEWING_OFFICER;
         abort_unless(

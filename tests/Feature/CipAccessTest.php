@@ -11,10 +11,10 @@ use Tests\TestCase;
 /**
  * The native CIP module ships dark behind FEATURE_CIP, exactly like CBI —
  * every cip.* capability is denied for everyone, administrators included,
- * while the flag is off. Officer-ness is an account type: "Reviewing
- * Officer" (the brief's CRO) and "Compliance Officer" sit beside Employee in
- * the Users dropdown, keep the whole Employee baseline across the portal,
- * and hold exactly the brief's officer bullets inside the module.
+ * while the flag is off. Officer-ness is an account type: "CRO / Reviewing
+ * officer" sits beside Administrator in the Users dropdown, keeps the whole
+ * Employee baseline across the portal, and holds the brief's review and
+ * compliance bullets inside the module.
  */
 class CipAccessTest extends TestCase
 {
@@ -50,6 +50,7 @@ class CipAccessTest extends TestCase
     {
         config(['services.cip.enabled' => true]);
 
+        // Legacy Compliance Officer rows still resolve as the joined officer.
         foreach ([Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER] as $type) {
             $officer = $this->user($type);
 
@@ -68,33 +69,33 @@ class CipAccessTest extends TestCase
         }
     }
 
-    public function test_the_reviewing_officer_holds_exactly_the_review_bullets(): void
+    public function test_the_officer_holds_the_review_and_compliance_bullets(): void
     {
         config(['services.cip.enabled' => true]);
         $cro = $this->user(Role::REVIEWING_OFFICER);
 
         // Review applications, assess documents, issue comments, request
-        // updates, approve documents for submission.
+        // updates, approve documents — and process submissions / decide.
         $this->assertTrue(CipAccess::can($cro, 'cip.review'));
+        $this->assertTrue(CipAccess::can($cro, 'cip.compliance'));
+        $this->assertTrue(CipAccess::can($cro, 'cip.decide'));
         $this->assertTrue(CipAccess::isOfficer($cro, CipAccess::REVIEWING_OFFICER));
-
-        // But not the compliance side: no processing, no decisions.
-        $this->assertFalse(CipAccess::can($cro, 'cip.compliance'));
-        $this->assertFalse(CipAccess::can($cro, 'cip.decide'));
+        $this->assertTrue(CipAccess::isOfficer($cro, CipAccess::COMPLIANCE_OFFICER));
+        $this->assertSame(
+            [CipAccess::REVIEWING_OFFICER, CipAccess::COMPLIANCE_OFFICER],
+            CipAccess::officerRoles($cro),
+        );
     }
 
-    public function test_the_compliance_officer_holds_exactly_the_compliance_bullets(): void
+    public function test_legacy_compliance_officer_rows_resolve_as_the_joined_officer(): void
     {
         config(['services.cip.enabled' => true]);
-        $compliance = $this->user(Role::COMPLIANCE_OFFICER);
+        $legacy = $this->user(Role::COMPLIANCE_OFFICER);
 
-        // Process submissions, update statuses, record decisions.
-        $this->assertTrue(CipAccess::can($compliance, 'cip.compliance'));
-        $this->assertTrue(CipAccess::can($compliance, 'cip.decide'));
-        $this->assertTrue(CipAccess::isOfficer($compliance, CipAccess::COMPLIANCE_OFFICER));
-
-        // But not the reviewer's document verbs.
-        $this->assertFalse(CipAccess::can($compliance, 'cip.review'));
+        $this->assertSame(Role::REVIEWING_OFFICER, Role::of($legacy));
+        $this->assertTrue(CipAccess::can($legacy, 'cip.review'));
+        $this->assertTrue(CipAccess::can($legacy, 'cip.compliance'));
+        $this->assertTrue(CipAccess::can($legacy, 'cip.decide'));
     }
 
     public function test_plain_employees_and_clients_hold_no_officer_verbs(): void
@@ -114,7 +115,7 @@ class CipAccessTest extends TestCase
         $this->assertFalse(CipAccess::isOfficer($client));
     }
 
-    public function test_admins_assign_the_officer_types_from_the_users_page(): void
+    public function test_admins_assign_the_officer_type_from_the_users_page(): void
     {
         config(['services.cip.enabled' => true]);
         $admin = $this->user(Role::ADMINISTRATOR);

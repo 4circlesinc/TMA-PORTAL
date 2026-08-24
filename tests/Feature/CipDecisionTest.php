@@ -202,7 +202,7 @@ class CipDecisionTest extends TestCase
             ->assertJsonPath('application.status', Status::DENIED);
     }
 
-    public function test_a_reviewing_officer_cannot_record_a_decision(): void
+    public function test_an_officer_may_record_a_decision(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($admin);
@@ -214,10 +214,8 @@ class CipDecisionTest extends TestCase
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-18',
             ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
-        $this->assertNull($application->fresh()->decision);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::GRANTED);
     }
 
     public function test_the_status_endpoint_is_not_a_way_around_recording_the_date(): void

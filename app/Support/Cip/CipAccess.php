@@ -11,16 +11,18 @@ use App\Support\Access\Role;
 /**
  * Who may do what inside the CIP module.
  *
- * Officer-ness is the account type: "Reviewing Officer" (the brief's CRO /
- * Reviewing Officer) and "Compliance Officer" sit beside Employee in the
- * Users page dropdown. Both carry the full Employee baseline everywhere in
- * the portal — the officer types only decide what they may do INSIDE the
- * CIP module, and that mapping lives in Role::MATRIX:
+ * Officer-ness is the account type: "CRO / Reviewing officer" sits beside
+ * Administrator in the Users page dropdown. Officers carry the full Employee
+ * baseline everywhere in the portal — the type only decides what they may do
+ * INSIDE the CIP module, and that mapping lives in Role::MATRIX:
  *
- *   Reviewing Officer  — cip.review (assess documents, issue comments,
- *                        request updates, approve documents for submission)
- *   Compliance Officer — cip.compliance + cip.decide (process submissions,
- *                        update statuses, record decisions)
+ *   CRO / Reviewing officer — cip.review (assess documents, issue comments,
+ *                             request updates, approve documents) plus
+ *                             cip.compliance + cip.decide (process submissions,
+ *                             update statuses, record decisions)
+ *
+ * On a given application the Administrator still assigns a reviewing-officer
+ * or compliance-officer *job*; both jobs are held by the same account type.
  *
  * This class is the module's one question-answering surface so callers never
  * compare account-type strings themselves.
@@ -31,10 +33,14 @@ class CipAccess
 
     public const COMPLIANCE_OFFICER = 'compliance_officer';
 
-    /** officer role => the account type that carries it. */
+    /**
+     * CIP assignment job => the account type that may hold it.
+     *
+     * Both jobs map to the one officer account type.
+     */
     private const ROLE_ACCOUNT_TYPES = [
         self::REVIEWING_OFFICER => Role::REVIEWING_OFFICER,
-        self::COMPLIANCE_OFFICER => Role::COMPLIANCE_OFFICER,
+        self::COMPLIANCE_OFFICER => Role::REVIEWING_OFFICER,
     ];
 
     public static function enabled(): bool
@@ -44,7 +50,7 @@ class CipAccess
 
     /**
      * Does this user hold the capability? Role::can already answers
-     * everything — the matrix rows carry the officer types, the baseline
+     * everything — the matrix rows carry the officer type, the baseline
      * fallback carries their employee reach, and the FEATURE_CIP check
      * darkens it all — this wrapper only spares callers the import.
      */
@@ -121,7 +127,7 @@ class CipAccess
             return Role::of($user) === (self::ROLE_ACCOUNT_TYPES[$role] ?? null);
         }
 
-        return in_array(Role::of($user), self::ROLE_ACCOUNT_TYPES, true);
+        return Role::of($user) === Role::REVIEWING_OFFICER;
     }
 
     /**
@@ -131,12 +137,10 @@ class CipAccess
      */
     public static function officerRoles(User $user): array
     {
-        if (! self::enabled()) {
+        if (! self::enabled() || Role::of($user) !== Role::REVIEWING_OFFICER) {
             return [];
         }
 
-        $roles = array_keys(self::ROLE_ACCOUNT_TYPES, Role::of($user), true);
-
-        return array_values($roles);
+        return [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER];
     }
 }

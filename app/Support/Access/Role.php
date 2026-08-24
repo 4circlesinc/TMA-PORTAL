@@ -31,26 +31,47 @@ class Role
     public const EMPLOYEE = 'Employee';
 
     /**
-     * The CIP officer account types. Both are employees in every portal-wide
-     * sense — mail, files, calendar, the client hub — they carry the whole
-     * Employee baseline (see the fallback in can()) plus the officer rows in
-     * the matrix. "CRO" and "Reviewing Officer" are the same role; the brief
-     * writes it "CRO / Reviewing Officers".
+     * The CIP officer account type. Officers are employees in every
+     * portal-wide sense — mail, files, calendar, the client hub — they carry
+     * the whole Employee baseline (see the fallback in can()) plus the
+     * officer rows in the matrix.
+     *
+     * Review and compliance used to be separate account types; they are one
+     * working role now. The brief's "CRO / Reviewing Officers" label is the
+     * stored value. Legacy "Reviewing Officer" / "Compliance Officer" rows
+     * still resolve through {@see self::of()}.
      */
-    public const REVIEWING_OFFICER = 'Reviewing Officer';
+    public const REVIEWING_OFFICER = 'CRO / Reviewing officer';
 
+    /**
+     * @deprecated Joined into {@see self::REVIEWING_OFFICER}. Kept so old
+     * rows and tests that still write this string resolve through of().
+     */
     public const COMPLIANCE_OFFICER = 'Compliance Officer';
 
     public const ADMINISTRATOR = 'Administrator';
 
     /**
+     * Older account_type strings that mean the same officer role.
+     *
+     * @var array<string, string>
+     */
+    private const ACCOUNT_TYPE_ALIASES = [
+        'Reviewing Officer' => self::REVIEWING_OFFICER,
+        'Compliance Officer' => self::REVIEWING_OFFICER,
+    ];
+
+    /**
      * Every account type the portal recognizes, in ascending order of reach —
-     * including the parked Employee type existing rows still carry.
+     * including the parked Employee type existing rows still carry, and the
+     * legacy officer spellings that may still sit on users.account_type
+     * before the join migration runs.
      */
     public const ALL = [
         self::CLIENT,
         self::EMPLOYEE,
         self::REVIEWING_OFFICER,
+        'Reviewing Officer',
         self::COMPLIANCE_OFFICER,
         self::ADMINISTRATOR,
     ];
@@ -67,7 +88,6 @@ class Role
      */
     public const ASSIGNABLE = [
         self::REVIEWING_OFFICER,
-        self::COMPLIANCE_OFFICER,
         self::ADMINISTRATOR,
     ];
 
@@ -76,6 +96,7 @@ class Role
         self::ADMINISTRATOR,
         self::EMPLOYEE,
         self::REVIEWING_OFFICER,
+        'Reviewing Officer',
         self::COMPLIANCE_OFFICER,
     ];
 
@@ -89,6 +110,7 @@ class Role
     public const EMPLOYEE_LIKE = [
         self::EMPLOYEE,
         self::REVIEWING_OFFICER,
+        'Reviewing Officer',
         self::COMPLIANCE_OFFICER,
     ];
 
@@ -100,9 +122,13 @@ class Role
      * type, whose accounts sit on the role-pending screen and cannot reach
      * the portal at all. Offering one of them as an assignee promises work to
      * somebody who cannot open it.
+     *
+     * Legacy spellings stay listed so whereIn('account_type', …) still finds
+     * rows that have not been rewritten yet.
      */
     public const OFFICERS = [
         self::REVIEWING_OFFICER,
+        'Reviewing Officer',
         self::COMPLIANCE_OFFICER,
     ];
 
@@ -146,16 +172,17 @@ class Role
         // FEATURE_CIP is off — see the flag check in can(), which sits before
         // the admin short-circuit so the module does not exist for anyone.
         //
-        // The officer account types hold exactly the brief's bullets:
-        //   CRO / Reviewing Officer — review applications, assess documents,
-        //   issue comments, request updates, approve documents (cip.review).
-        //   Compliance Officer — review applications, process submissions,
-        //   update statuses, record decisions (cip.compliance + cip.decide).
-        // Both inherit the Employee rows below through can()'s baseline
+        // The officer account type holds the brief's review and compliance
+        // bullets together (they used to be split across two types):
+        //   review applications, assess documents, issue comments, request
+        //   updates, approve documents (cip.review);
+        //   process submissions, update statuses, record decisions
+        //   (cip.compliance + cip.decide).
+        // Officers inherit the Employee rows below through can()'s baseline
         // fallback, so cip.view / cip.create need not repeat them.
         //
         // Reach the CIP section, and start an application. Named for the
-        // officer types rather than left on the Employee row: a parked
+        // officer type rather than left on the Employee row: a parked
         // Employee cannot reach the portal at all, so granting them the
         // module would be a promise nothing can keep. External Service
         // Provider contacts and Private Clients are NOT granted here —
@@ -163,14 +190,14 @@ class Role
         // App\Support\Cip\CipAccess::canReach/canCreate from what they are
         // in the Client Hub. Row visibility is always ApplicationScope;
         // these rows on their own show nobody any application.
-        'cip.view' => [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER],
-        'cip.create' => [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER],
+        'cip.view' => [self::REVIEWING_OFFICER],
+        'cip.create' => [self::REVIEWING_OFFICER],
         'cip.review' => [self::REVIEWING_OFFICER],
-        'cip.compliance' => [self::COMPLIANCE_OFFICER],
+        'cip.compliance' => [self::REVIEWING_OFFICER],
         // Assigning files to officers stays with administrators (§10: "The
         // Administrator assigns the file").
         'cip.assign' => [],
-        'cip.decide' => [self::COMPLIANCE_OFFICER],
+        'cip.decide' => [self::REVIEWING_OFFICER],
         // Document requirement and decision templates, provider codes — the
         // module's configuration surface.
         'cip.configure' => [],
@@ -415,8 +442,11 @@ class Role
 
     public static function of(?User $user): ?string
     {
-        return $user?->account_type;
+        $type = $user?->account_type;
+
+        return self::ACCOUNT_TYPE_ALIASES[$type] ?? $type;
     }
+
 
     public static function isAdmin(?User $user): bool
     {
@@ -479,7 +509,7 @@ class Role
         // rest of the portal already gave staff. This also makes the
         // admin-managed Employee overlays (client hub, permissions) apply to
         // officers without those screens knowing the types exist.
-        return in_array(self::of($user), [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER], true)
+        return self::of($user) === self::REVIEWING_OFFICER
             && in_array(self::EMPLOYEE, $holders, true);
     }
 

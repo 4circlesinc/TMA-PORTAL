@@ -176,7 +176,7 @@ class CipSubmissionTest extends TestCase
             ->assertJsonPath('application.number', '10T1G12661P');
     }
 
-    public function test_a_reviewing_officer_cannot_record_the_submission(): void
+    public function test_an_officer_may_record_the_submission(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->ready($admin);
@@ -188,10 +188,9 @@ class CipSubmissionTest extends TestCase
                 'cipNumber' => '10T1G12661P',
                 'submittedAt' => '2026-08-10',
             ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
-        $this->assertNull($application->fresh()->cip_number);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::PENDING_REVIEW)
+            ->assertJsonPath('application.number', '10T1G12661P');
     }
 
     public function test_the_status_endpoint_is_not_a_way_around_recording_the_number(): void

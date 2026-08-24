@@ -138,7 +138,7 @@ class CipBackgroundCheckTest extends TestCase
             ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
     }
 
-    public function test_a_reviewing_officer_cannot_record_acceptance(): void
+    public function test_an_officer_may_record_acceptance(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($admin);
@@ -149,10 +149,8 @@ class CipBackgroundCheckTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
                 'acceptedAt' => '2026-08-18',
             ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
-        $this->assertNull($application->fresh()->accepted_at);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
     }
 
     public function test_the_status_endpoint_is_not_a_way_around_recording_the_date(): void

@@ -717,7 +717,7 @@
   /* ── modals ─────────────────────────────────────── */
 
   // Same working roles the Users page offers — never the parked Employee type.
-  var ACCOUNT_TYPES = ['Reviewing Officer', 'Compliance Officer', 'Administrator'];
+  var ACCOUNT_TYPES = ['CRO / Reviewing officer', 'Administrator'];
 
   /* Create an account (employee or client contact) through /admin/users. */
   function accountModal(kind) {
@@ -728,7 +728,7 @@
         ui().field('First name', ui().input({ attrs: ' data-acct-first' })) +
         ui().field('Last name', ui().input({ attrs: ' data-acct-last' })) +
         ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email' })) +
-        (isClient ? '' : ui().field('Account type', ui().select(ACCOUNT_TYPES, 'Reviewing Officer', 'data-acct-type', 'Account type'))) +
+        (isClient ? '' : ui().field('Account type', ui().select(ACCOUNT_TYPES, 'CRO / Reviewing officer', 'data-acct-type', 'Account type'))) +
         ui().field('Phone (optional)', ui().input({ attrs: ' data-acct-phone' })) +
         ui().banner('info', 'They get an email with a link to set their own password.') +
         '<div class="tma-portal-form-actions">' + ui().btn({ label: isClient ? 'Add contact' : 'Create employee', attrs: ' data-acct-save' }) + '</div>',
@@ -746,7 +746,7 @@
             json: {
               name: (first + ' ' + last).trim(),
               email: email,
-              account_type: isClient ? 'Client' : (typeEl ? typeEl.value : 'Reviewing Officer'),
+              account_type: isClient ? 'Client' : (typeEl ? typeEl.value : 'CRO / Reviewing officer'),
               phone: host.querySelector('[data-acct-phone]').value.trim() || null,
             },
           }).then(function () {

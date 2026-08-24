@@ -76,70 +76,53 @@ class CipRoleMatrixTest extends TestCase
         }
     }
 
-    /* ── Internal: CRO / Reviewing Officers ─────────────────────────── */
+    /* ── Internal: CRO / Reviewing officers ─────────────────────────── */
 
-    public function test_reviewing_officers_hold_the_review_bullets_and_no_more(): void
+    public function test_officers_hold_the_review_and_compliance_bullets(): void
     {
         $cro = $this->user(Role::REVIEWING_OFFICER);
 
         // Review applications · assess documents · issue comments · request
-        // updates · approve documents for submission.
+        // updates · approve documents — and process submissions / decide.
         $this->assertTrue(Role::can($cro, 'cip.view'), 'a CRO must reach applications');
         $this->assertTrue(Role::can($cro, 'cip.review'));
-
-        // Not the compliance side: processing submissions, statuses, decisions.
-        $this->assertFalse(Role::can($cro, 'cip.compliance'));
-        $this->assertFalse(Role::can($cro, 'cip.decide'));
+        $this->assertTrue(Role::can($cro, 'cip.compliance'));
+        $this->assertTrue(Role::can($cro, 'cip.decide'));
     }
 
-    public function test_the_reviewer_edges_are_open_to_a_cro_and_shut_to_others(): void
+    public function test_the_reviewer_edges_are_open_to_an_officer_and_shut_to_others(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $cro = $this->user(Role::REVIEWING_OFFICER);
-        $compliance = $this->user(Role::COMPLIANCE_OFFICER);
+        $employee = $this->user(Role::EMPLOYEE);
 
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($provider, $admin);
         Engine::apply($application->fresh(), Status::REVIEW_APPLICATION, $admin);
 
-        // Approving documents for submission is the reviewer's verb.
+        // Approving documents for submission is an officer verb.
         $this->assertTrue(Engine::allows($cro, $application->fresh(), Status::ASSESSMENT_FEEDBACK));
-        $this->assertFalse(Engine::allows($compliance, $application->fresh(), Status::ASSESSMENT_FEEDBACK));
+        $this->assertFalse(Engine::allows($employee, $application->fresh(), Status::ASSESSMENT_FEEDBACK));
 
         $this->expectException(AuthorizationException::class);
-        Engine::apply($application->fresh(), Status::ASSESSMENT_FEEDBACK, $compliance);
+        Engine::apply($application->fresh(), Status::ASSESSMENT_FEEDBACK, $employee);
     }
 
-    /* ── Internal: Compliance Officers ──────────────────────────────── */
-
-    public function test_compliance_officers_hold_the_compliance_bullets_and_no_more(): void
-    {
-        $compliance = $this->user(Role::COMPLIANCE_OFFICER);
-
-        // Review applications (read) · process submissions · update statuses ·
-        // record decisions.
-        $this->assertTrue(Role::can($compliance, 'cip.view'), 'compliance must reach applications');
-        $this->assertTrue(Role::can($compliance, 'cip.compliance'));
-        $this->assertTrue(Role::can($compliance, 'cip.decide'));
-
-        // The document-review workflow belongs to the CRO.
-        $this->assertFalse(Role::can($compliance, 'cip.review'));
-    }
-
-    public function test_only_compliance_records_a_decision(): void
+    public function test_officers_may_record_a_decision(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $cro = $this->user(Role::REVIEWING_OFFICER);
-        $compliance = $this->user(Role::COMPLIANCE_OFFICER);
+        $employee = $this->user(Role::EMPLOYEE);
 
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($provider, $admin);
         $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
 
-        // §21 Decision workflow: GRANTED / DENIED.
-        $this->assertTrue(Engine::allows($compliance, $application, Status::GRANTED));
-        $this->assertFalse(Engine::allows($cro, $application, Status::GRANTED));
-        $this->assertFalse(Engine::allows($cro, $application, Status::DENIED));
+        // §21 Decision workflow: GRANTED / DENIED — held by the joined officer.
+        $this->assertTrue(Engine::allows($cro, $application, Status::GRANTED));
+        $this->assertTrue(Engine::allows($cro, $application, Status::DENIED));
+        $this->assertFalse(Engine::allows($employee, $application, Status::GRANTED));
+        $this->assertFalse(Engine::allows($employee, $application, Status::DENIED));
     }
 
     /* ── External: Service Providers and Private Clients ────────────── */

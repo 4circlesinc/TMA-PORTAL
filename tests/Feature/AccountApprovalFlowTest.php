@@ -6,6 +6,7 @@ use App\Mail\Postcard;
 use App\Models\ActivityLog;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -55,12 +56,12 @@ class AccountApprovalFlowTest extends TestCase
         $newbie = $this->pending();
         event(new Registered($newbie));
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => Role::REVIEWING_OFFICER])
             ->assertOk();
 
         $newbie->refresh();
         $this->assertSame('approved', $newbie->status);
-        $this->assertSame('Reviewing Officer', $newbie->account_type);
+        $this->assertSame(Role::REVIEWING_OFFICER, $newbie->account_type);
 
         // The user is told, and it's audited.
         $this->assertSame(1, Notification::where('user_id', $newbie->id)->where('type', 'account.approved')->count());
@@ -80,8 +81,8 @@ class AccountApprovalFlowTest extends TestCase
         $admin = $this->admin();
         $newbie = $this->pending();
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertOk();
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertStatus(422);
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => Role::REVIEWING_OFFICER])->assertOk();
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => Role::REVIEWING_OFFICER])->assertStatus(422);
     }
 
     public function test_denying_records_a_reason_notifies_and_clears_the_alert(): void
@@ -182,7 +183,7 @@ class AccountApprovalFlowTest extends TestCase
         $admin = $this->admin();
         $newbie = $this->pending();
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => Role::REVIEWING_OFFICER])
             ->assertOk();
 
         Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
@@ -216,12 +217,12 @@ class AccountApprovalFlowTest extends TestCase
     public function test_non_admins_cannot_approve_or_deny(): void
     {
         $officer = User::factory()->create([
-            'status' => 'approved', 'account_type' => 'Reviewing Officer',
+            'status' => 'approved', 'account_type' => Role::REVIEWING_OFFICER,
             'email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
         ]);
         $newbie = $this->pending();
 
-        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertStatus(403);
+        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => Role::REVIEWING_OFFICER])->assertStatus(403);
         $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/deny")->assertStatus(403);
     }
 }

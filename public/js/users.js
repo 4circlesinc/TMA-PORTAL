@@ -44,7 +44,7 @@
   /* ── real user directory (database-backed, staff-readable) ── */
   /* Filled/overwritten from GET /admin/users. Declared here so assigning
      under 'use strict' does not throw ReferenceError and blank the table. */
-  var ACCOUNT_TYPES = ['Reviewing Officer', 'Compliance Officer', 'Administrator'];
+  var ACCOUNT_TYPES = ['CRO / Reviewing officer', 'Administrator'];
   /* the design system's own avatar set - filled from the server */
   var SYSTEM_AVATARS = [];
 

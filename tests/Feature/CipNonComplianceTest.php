@@ -186,7 +186,7 @@ class CipNonComplianceTest extends TestCase
             ->assertJsonPath('application.status', Status::NON_COMPLIANT);
     }
 
-    public function test_a_reviewing_officer_cannot_record_the_query(): void
+    public function test_an_officer_may_record_the_query(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($admin);
@@ -197,10 +197,8 @@ class CipNonComplianceTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
                 'queryReceivedAt' => '2026-08-18',
             ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
-        $this->assertNull($application->fresh()->query_received_at);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::NON_COMPLIANT);
     }
 
     public function test_the_status_endpoint_is_not_a_way_around_recording_the_date(): void

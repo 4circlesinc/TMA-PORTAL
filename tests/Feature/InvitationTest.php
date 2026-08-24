@@ -338,7 +338,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/users', [
             'name' => 'Sam Fielding',
             'email' => 'sam@firm.test',
-            'account_type' => 'Reviewing Officer',
+            'account_type' => 'CRO / Reviewing officer',
             'job_title' => 'Paralegal',
         ])->assertOk();
 
@@ -347,7 +347,7 @@ class InvitationTest extends TestCase
 
         $invitation = Invitation::first();
         $this->assertSame('staff', $invitation->type);
-        $this->assertSame('Reviewing Officer', $invitation->role);
+        $this->assertSame('CRO / Reviewing officer', $invitation->role);
         $this->assertSame('Paralegal', $invitation->access['jobTitle']);
     }
 
@@ -358,7 +358,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/users', [
             'name' => 'Sam Fielding',
             'email' => 'sam@firm.test',
-            'account_type' => 'Reviewing Officer',
+            'account_type' => 'CRO / Reviewing officer',
         ]);
 
         $token = null;
@@ -377,27 +377,27 @@ class InvitationTest extends TestCase
 
         $user = User::where('email', 'sam@firm.test')->first();
         $this->assertNotNull($user);
-        $this->assertSame('Reviewing Officer', $user->account_type);
+        $this->assertSame('CRO / Reviewing officer', $user->account_type);
         $this->assertSame('approved', $user->status);
     }
 
     public function test_an_employee_cannot_invite_staff(): void
     {
         Mail::fake();
-        $employee = $this->staff('Reviewing Officer');
+        $employee = $this->staff('CRO / Reviewing officer');
 
         $this->actingAs($employee)->postJson('/portal/invitations', [
             'type' => 'staff',
             'email' => 'nope@firm.test',
             'name' => 'Nope',
-            'role' => 'Reviewing Officer',
+            'role' => 'CRO / Reviewing officer',
         ])->assertForbidden();
     }
 
     public function test_only_an_administrator_can_hand_out_administrator_access(): void
     {
         Mail::fake();
-        $employee = $this->staff('Reviewing Officer');
+        $employee = $this->staff('CRO / Reviewing officer');
         $client = $this->client();
 
         $this->actingAs($employee)->postJson('/portal/invitations', [

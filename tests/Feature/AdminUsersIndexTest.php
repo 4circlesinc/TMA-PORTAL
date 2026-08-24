@@ -42,7 +42,7 @@ class AdminUsersIndexTest extends TestCase
         $this->actingAs($admin)
             ->getJson('/admin/users')
             ->assertOk()
-            ->assertJsonPath('accountTypes', ['Reviewing Officer', 'Compliance Officer', 'Administrator']);
+            ->assertJsonPath('accountTypes', ['CRO / Reviewing officer', 'Administrator']);
     }
 
     public function test_the_directory_describes_accounts_by_what_they_are(): void
