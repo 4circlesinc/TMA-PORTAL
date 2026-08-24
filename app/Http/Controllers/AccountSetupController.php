@@ -320,7 +320,7 @@ class AccountSetupController extends Controller
         return [
             'layout' => in_array($mail['layout'] ?? '', ['split', 'single'], true) ? $mail['layout'] : 'split',
             'sidebarMode' => in_array($mail['sidebarMode'] ?? '', ['full', 'icons', 'hidden'], true)
-                ? $mail['sidebarMode'] : 'full',
+                ? $mail['sidebarMode'] : 'hidden',
             'signature' => (string) ($mail['signature'] ?? ''),
         ];
     }

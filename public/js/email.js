@@ -7438,7 +7438,7 @@
             { id: 'single', label: 'Full width' },
           ])) +
         settingsRow('Email sidebar', 'Closing the folder list hides it completely. Icons only keeps a slim rail.',
-          settingsChoice('sidebarMode', prefs.sidebarMode || 'full', [
+          settingsChoice('sidebarMode', prefs.sidebarMode || 'hidden', [
             { id: 'full', label: 'Full' },
             { id: 'hidden', label: 'Hidden' },
             { id: 'icons', label: 'Icons only' },

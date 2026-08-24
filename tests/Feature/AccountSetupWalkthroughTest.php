@@ -135,11 +135,13 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee('Email')
             ->assertSee('Continue to the portal')
             ->assertDontSee('Connect Microsoft to continue')
-            ->assertDontSee('Email signature');
+            ->assertDontSee('Email signature')
+            ->assertSee('name="layout" value="split" checked', false)
+            ->assertSee('name="sidebarMode" value="hidden" checked', false);
 
         $this->actingAs($user)->post(route('account-setup.store', ['step' => 'email']), [
             'layout' => 'split',
-            'sidebarMode' => 'full',
+            'sidebarMode' => 'hidden',
         ])->assertRedirect('/');
     }
 
