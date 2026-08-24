@@ -234,24 +234,12 @@ class AccountSetupController extends Controller
         $data = $request->validate([
             'layout' => ['required', Rule::in(['split', 'single'])],
             'sidebarMode' => ['required', Rule::in(['full', 'icons', 'hidden'])],
-            'signature' => ['nullable', 'string', 'max:100000'],
         ]);
 
         $prefs = $user->preferences ?? [];
         $mail = $prefs['mail'] ?? [];
         $mail['layout'] = $data['layout'];
         $mail['sidebarMode'] = $data['sidebarMode'];
-        if (array_key_exists('signature', $data)) {
-            $mail['signature'] = $data['signature'] ?? '';
-            if ($mail['signature'] !== '') {
-                $mail['signatures'] = [[
-                    'id' => 'default',
-                    'name' => 'Default',
-                    'html' => $mail['signature'],
-                ]];
-                $mail['activeSignatureId'] = 'default';
-            }
-        }
         $prefs['mail'] = $mail;
         $user->forceFill(['preferences' => $prefs])->save();
     }

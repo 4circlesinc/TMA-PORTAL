@@ -91,6 +91,9 @@ class AccountSetupWalkthroughTest extends TestCase
         $this->actingAs($user)
             ->get(route('account-setup.show', ['step' => 'two-factor']))
             ->assertOk()
+            ->assertSee('Set up authenticator')
+            ->assertSee('Set later')
+            ->assertDontSee('Choose your authenticator app')
             ->assertSee(route('account-setup.store', ['step' => 'two-factor']), false)
             ->assertDontSee('data-tfa-next', false);
 
@@ -123,7 +126,8 @@ class AccountSetupWalkthroughTest extends TestCase
             ->get(route('account-setup.show', ['step' => 'email']))
             ->assertOk()
             ->assertSee("5 of {$total}", false)
-            ->assertSee('Email');
+            ->assertSee('Email')
+            ->assertDontSee('Email signature');
     }
 
     public function test_continue_does_not_jump_to_the_portal_when_onboarding_was_already_stamped(): void

@@ -84,17 +84,6 @@
           @endforeach
         </div>
       </div>
-
-      <hr class="tma-auth__pref-divider" aria-hidden="true">
-
-      <div class="tma-auth__pref-group">
-        <p class="tma-auth__section-label">Signature</p>
-        <p class="tma-auth__section-hint">Optional — appended to messages you send from the portal.</p>
-        <label class="tma-auth__field">
-          <span class="tma-auth__field-label">Email signature</span>
-          <textarea class="tma-auth__input" name="signature" rows="4" placeholder="Kind regards,&#10;{{ $user->name }}">{{ old('signature', $mail['signature'] ?? '') }}</textarea>
-        </label>
-      </div>
     </div>
 
     <div class="tma-auth__nav-actions">

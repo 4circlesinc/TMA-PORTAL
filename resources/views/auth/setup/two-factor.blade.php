@@ -58,13 +58,9 @@
       </div>
     </form>
   @else
-    {{-- App picker. Optional Continue posts the same store action as every
-         other step (no code) and advances. Setup uses real GET links so it
-         still works when JavaScript does not run. --}}
-    <form id="tfa-setup" method="GET" action="{{ route('account-setup.show', ['step' => 'two-factor']) }}">
+    <form id="tfa-setup" class="tma-auth__setup-apps" method="GET" action="{{ route('account-setup.show', ['step' => 'two-factor']) }}">
       <input type="hidden" name="panel" value="scan">
-      <p class="tma-auth__section-label">Choose your authenticator app</p>
-      <div class="tma-auth__account-options" role="radiogroup" aria-label="Authenticator app">
+      <div class="tma-auth__account-options tma-auth__account-options--wide" role="radiogroup" aria-label="Authenticator app">
         @foreach ($authApps as $app)
           <label class="tma-auth__account-card tma-auth__account-card--compact">
             <input class="tma-auth__account-input" type="radio" name="app" value="{{ $app['key'] }}" {{ ($chosenApp === $app['key'] || $loop->first && ! request()->query('app')) ? 'checked' : '' }}>
@@ -83,22 +79,18 @@
           </label>
         @endforeach
       </div>
+      <div class="tma-auth__nav-actions tma-auth__nav-actions--wide">
+        <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Set up authenticator</button>
+      </div>
     </form>
 
     @if ($optional)
-      <form class="tma-auth__form" method="POST" action="{{ route('account-setup.store', ['step' => 'two-factor']) }}">
+      <form method="POST" action="{{ route('account-setup.store', ['step' => 'two-factor']) }}">
         @csrf
-        <div class="tma-auth__nav-actions">
-          <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
-        </div>
+        <p class="tma-auth__alt-link tma-auth__alt-link--wide">
+          <button type="submit" class="tma-auth__link-btn">Set later</button>
+        </p>
       </form>
-      <p class="tma-auth__alt-link">
-        <button type="submit" form="tfa-setup" class="tma-auth__link-btn">Set up authenticator</button>
-      </p>
-    @else
-      <div class="tma-auth__nav-actions">
-        <button type="submit" form="tfa-setup" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
-      </div>
     @endif
   @endif
 
