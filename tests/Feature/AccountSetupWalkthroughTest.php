@@ -126,6 +126,22 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee('Email');
     }
 
+    public function test_continue_does_not_jump_to_the_portal_when_onboarding_was_already_stamped(): void
+    {
+        $user = $this->staffMidSetup();
+        $user->forceFill(['onboarding_completed_at' => now()])->save();
+
+        $this->actingAs($user)->post(route('account-setup.store', ['step' => 'preferences']), [
+            'themeMode' => 'light',
+            'fontScale' => 3,
+            'sidebarStyle' => 'hover',
+        ])->assertRedirect(route('account-setup.show', ['step' => 'two-factor']));
+
+        $this->actingAs($user->fresh())
+            ->get('/')
+            ->assertRedirect(route('account-setup.show', ['step' => 'two-factor']));
+    }
+
     public function test_a_client_walkthrough_is_preferences_then_two_factor_then_notifications(): void
     {
         $user = User::factory()->create([

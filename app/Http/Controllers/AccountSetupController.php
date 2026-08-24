@@ -95,15 +95,7 @@ class AccountSetupController extends Controller
 
         AccountSetupFlow::advance($user, $step);
 
-        $user->refresh();
-
-        if (AccountSetupFlow::isComplete($user)) {
-            return redirect('/');
-        }
-
-        $next = AccountSetupFlow::nextAfter($step, $user);
-
-        return redirect()->route('account-setup.show', ['step' => $next ?? AccountSetupFlow::firstStep($user)]);
+        return $this->redirectAfterStep($user, $step);
     }
 
     public function skip(Request $request, string $step): RedirectResponse
@@ -115,15 +107,20 @@ class AccountSetupController extends Controller
         }
 
         AccountSetupFlow::skip($user, $step);
-        $user->refresh();
 
-        if (AccountSetupFlow::isComplete($user)) {
+        return $this->redirectAfterStep($user, $step);
+    }
+
+    private function redirectAfterStep(User $user, string $step): RedirectResponse
+    {
+        $user->refresh();
+        $next = AccountSetupFlow::nextAfter($step, $user);
+
+        if ($next === null) {
             return redirect('/');
         }
 
-        $next = AccountSetupFlow::nextAfter($step, $user);
-
-        return redirect()->route('account-setup.show', ['step' => $next ?? AccountSetupFlow::firstStep($user)]);
+        return redirect()->route('account-setup.show', ['step' => $next]);
     }
 
     /** @return array<string, mixed> */

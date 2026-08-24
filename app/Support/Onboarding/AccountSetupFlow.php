@@ -211,6 +211,15 @@ final class AccountSetupFlow
 
     public static function isComplete(User $user): bool
     {
+        $step = $user->preferences['accountSetupStep'] ?? null;
+
+        // A stamped completion date must not skip the rest of the walkthrough.
+        // Existing accounts were backfilled with onboarding_completed_at, and
+        // Continue then jumped straight to the portal.
+        if (is_string($step) && $step !== 'done' && self::exists($step)) {
+            return false;
+        }
+
         if ($user->onboarding_completed_at !== null) {
             return true;
         }
@@ -218,8 +227,6 @@ final class AccountSetupFlow
         if (! self::accountsPhaseComplete($user)) {
             return false;
         }
-
-        $step = $user->preferences['accountSetupStep'] ?? null;
 
         return $step === null || $step === 'done';
     }
