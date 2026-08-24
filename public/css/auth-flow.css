@@ -1504,28 +1504,14 @@ select.tma-auth__input {
   border: 0;
 }
 
-.tma-auth__setup-apps {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-16);
-  width: min(560px, 100%);
-}
-
-.tma-auth__setup-apps .tma-auth__account-options,
-.tma-auth__setup-apps .tma-auth__nav-actions {
+.tma-auth__form .tma-auth__account-options,
+.tma-auth__form .tma-auth__nav-actions {
   width: 100%;
   align-items: stretch;
 }
 
-.tma-auth__account-options--wide,
-.tma-auth__nav-actions--wide,
-.tma-auth__alt-link--wide {
-  width: min(560px, 100%);
-}
-
-.tma-auth__account-options--wide {
-  align-items: stretch;
+.tma-auth__form .tma-auth__qr {
+  align-self: center;
 }
 
 .tma-auth__pref-stack {
@@ -1905,49 +1891,66 @@ select.tma-auth__input {
   background: rgba(148, 163, 184, 0.18);
 }
 
-/* Notification toggles */
+/* Notification toggles — same grid + switch as Settings → Notifications */
 .tma-auth__pref-notify {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
   width: 100%;
 }
 
 .tma-auth__pref-notify-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-10);
-  padding: var(--space-12) var(--space-14);
-  border: 0.5px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
+  display: grid;
+  grid-template-columns: minmax(96px, 1.4fr) repeat(2, minmax(52px, 1fr));
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tma-auth__pref-notify-row:last-child {
+  border-bottom: 0;
+}
+
+.tma-auth__pref-notify-row--head {
+  border-bottom: 1px solid var(--color-overlay-20);
+  padding-bottom: var(--space-4);
+}
+
+.tma-auth__pref-notify-row--head span {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.tma-auth__pref-notify-row--head span:first-child {
+  text-align: left;
 }
 
 .tma-auth__pref-notify-name {
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   color: var(--color-black);
 }
 
-.tma-auth__pref-notify-toggles {
+.tma-auth__pref-notify-col {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-16);
-}
-
-.tma-auth__pref-notify-toggle {
-  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: var(--space-8);
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
-  cursor: pointer;
 }
 
-.tma-auth__pref-notify-toggle-label {
-  min-width: 56px;
+.tma-auth__pref-notify-col .tma-auth__switch-input:disabled + .tma-auth__switch-ui {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tma-auth__switch:has(.tma-auth__switch-input:disabled) {
+  cursor: not-allowed;
 }
 
 .tma-auth__pref-code {
@@ -1961,10 +1964,6 @@ select.tma-auth__input {
   font-family: ui-monospace, monospace;
   word-break: break-all;
   text-align: center;
-}
-
-[data-theme="dark"] .tma-auth__pref-notify-row {
-  background: rgba(255, 255, 255, 0.04);
 }
 
 @media (max-width: 560px) {

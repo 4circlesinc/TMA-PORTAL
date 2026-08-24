@@ -32,15 +32,17 @@
       </div>
     </form>
   @elseif ($panel === 'scan')
-    <p class="tma-auth__section-label">Scan this QR code</p>
-    <p class="tma-auth__section-hint">In your app, choose “Add account”, then scan the code below.</p>
-    <div class="tma-auth__qr" aria-live="polite">{!! $qrSvg !!}</div>
-    @if ($secretKey)
-      <p class="tma-auth__section-hint tma-auth__qr-secret">Manual key: {{ $secretKey }}</p>
-    @endif
-    <div class="tma-auth__nav-actions">
-      <a class="tma-auth__submit tma-auth__submit--previous" href="{{ $appUrl }}">Previous</a>
-      <a class="tma-auth__submit tma-auth__submit--continue" href="{{ $confirmUrl }}">Continue</a>
+    <div class="tma-auth__form">
+      <p class="tma-auth__section-label">Scan this QR code</p>
+      <p class="tma-auth__section-hint">In your app, choose “Add account”, then scan the code below.</p>
+      <div class="tma-auth__qr" aria-live="polite">{!! $qrSvg !!}</div>
+      @if ($secretKey)
+        <p class="tma-auth__section-hint tma-auth__qr-secret">Manual key: {{ $secretKey }}</p>
+      @endif
+      <div class="tma-auth__nav-actions">
+        <a class="tma-auth__submit tma-auth__submit--previous" href="{{ $appUrl }}">Previous</a>
+        <a class="tma-auth__submit tma-auth__submit--continue" href="{{ $confirmUrl }}">Continue</a>
+      </div>
     </div>
   @elseif ($panel === 'confirm')
     <form class="tma-auth__form" method="POST" action="{{ route('account-setup.store', ['step' => 'two-factor']) }}">
@@ -58,9 +60,9 @@
       </div>
     </form>
   @else
-    <form id="tfa-setup" class="tma-auth__setup-apps" method="GET" action="{{ route('account-setup.show', ['step' => 'two-factor']) }}">
+    <form id="tfa-setup" class="tma-auth__form" method="GET" action="{{ route('account-setup.show', ['step' => 'two-factor']) }}">
       <input type="hidden" name="panel" value="scan">
-      <div class="tma-auth__account-options tma-auth__account-options--wide" role="radiogroup" aria-label="Authenticator app">
+      <div class="tma-auth__account-options" role="radiogroup" aria-label="Authenticator app">
         @foreach ($authApps as $app)
           <label class="tma-auth__account-card tma-auth__account-card--compact">
             <input class="tma-auth__account-input" type="radio" name="app" value="{{ $app['key'] }}" {{ ($chosenApp === $app['key'] || $loop->first && ! request()->query('app')) ? 'checked' : '' }}>
@@ -79,7 +81,7 @@
           </label>
         @endforeach
       </div>
-      <div class="tma-auth__nav-actions tma-auth__nav-actions--wide">
+      <div class="tma-auth__nav-actions">
         <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Set up authenticator</button>
       </div>
     </form>
@@ -87,7 +89,7 @@
     @if ($optional)
       <form method="POST" action="{{ route('account-setup.store', ['step' => 'two-factor']) }}">
         @csrf
-        <p class="tma-auth__alt-link tma-auth__alt-link--wide">
+        <p class="tma-auth__alt-link">
           <button type="submit" class="tma-auth__link-btn">Set later</button>
         </p>
       </form>

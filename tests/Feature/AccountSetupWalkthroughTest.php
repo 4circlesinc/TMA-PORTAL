@@ -71,7 +71,9 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee("3 of {$total}", false)
             ->assertSee('Two-factor authentication')
             ->assertSee('Microsoft Authenticator')
-            ->assertSee('Google Authenticator');
+            ->assertSee('Google Authenticator')
+            ->assertDontSee('tma-auth__setup-apps', false)
+            ->assertDontSee('tma-auth__account-options--wide', false);
 
         $this->actingAs($user)
             ->post(route('account-setup.skip', ['step' => 'two-factor']))
@@ -81,7 +83,11 @@ class AccountSetupWalkthroughTest extends TestCase
             ->get(route('account-setup.show', ['step' => 'notifications']))
             ->assertOk()
             ->assertSee("4 of {$total}", false)
-            ->assertSee('Notifications');
+            ->assertSee('Notifications')
+            ->assertSee('Notify me about')
+            ->assertSee('Portal')
+            ->assertSee('Desktop')
+            ->assertSee('role="switch"', false);
     }
 
     public function test_optional_two_factor_continue_advances_without_a_code(): void

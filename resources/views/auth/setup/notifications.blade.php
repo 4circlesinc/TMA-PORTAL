@@ -15,41 +15,43 @@
   <form class="tma-auth__form" method="POST" action="{{ route('account-setup.store', ['step' => 'notifications']) }}">
     @csrf
 
-    <div class="tma-auth__pref-notify">
+    <p class="tma-auth__section-label">Notify me about</p>
+    <p class="tma-auth__section-hint">Choose how each kind of update reaches you. Approval alerts stay on in the portal. Email for each category stays on by default — turn it off later under Settings → Notifications.</p>
+
+    <div class="tma-auth__pref-notify" role="table" aria-label="Notification preferences">
+      <div class="tma-auth__pref-notify-row tma-auth__pref-notify-row--head" role="row">
+        <span role="columnheader"></span>
+        <span role="columnheader">Portal</span>
+        <span role="columnheader">Desktop</span>
+      </div>
       @foreach ($groups as $key => $label)
         @php $group = $prefs[$key] ?? ['portal' => true, 'desktop' => false]; @endphp
-        <div class="tma-auth__pref-notify-row">
-          <span class="tma-auth__pref-notify-name">{{ $label }}</span>
-          <div class="tma-auth__pref-notify-toggles">
-            <label class="tma-auth__pref-notify-toggle">
-              <span class="tma-auth__pref-notify-toggle-label">In portal</span>
-              <span class="tma-auth__switch">
-                @if (in_array($key, $nonSilenceable, true))
-                  <input type="hidden" name="{{ $key }}[portal]" value="1">
-                  <input class="tma-auth__switch-input" type="checkbox" checked disabled aria-label="{{ $label }} in portal (always on)">
-                @else
-                  <input type="hidden" name="{{ $key }}[portal]" value="0">
-                  <input class="tma-auth__switch-input" type="checkbox" name="{{ $key }}[portal]" value="1"
-                    {{ ($group['portal'] ?? true) ? 'checked' : '' }} aria-label="{{ $label }} in portal">
-                @endif
-                <span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
-              </span>
+        <div class="tma-auth__pref-notify-row" role="row">
+          <span class="tma-auth__pref-notify-name" role="rowheader">{{ $label }}</span>
+          <span class="tma-auth__pref-notify-col" role="cell">
+            <label class="tma-auth__switch">
+              @if (in_array($key, $nonSilenceable, true))
+                <input type="hidden" name="{{ $key }}[portal]" value="1">
+                <input class="tma-auth__switch-input" type="checkbox" checked disabled role="switch" aria-label="{{ $label }} portal (always on)">
+              @else
+                <input type="hidden" name="{{ $key }}[portal]" value="0">
+                <input class="tma-auth__switch-input" type="checkbox" name="{{ $key }}[portal]" value="1" role="switch"
+                  {{ ($group['portal'] ?? true) ? 'checked' : '' }} aria-label="{{ $label }} portal">
+              @endif
+              <span class="tma-auth__switch-ui" aria-hidden="true"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
             </label>
-            <label class="tma-auth__pref-notify-toggle">
-              <span class="tma-auth__pref-notify-toggle-label">Desktop</span>
-              <span class="tma-auth__switch">
-                <input type="hidden" name="{{ $key }}[desktop]" value="0">
-                <input class="tma-auth__switch-input" type="checkbox" name="{{ $key }}[desktop]" value="1"
-                  {{ ($group['desktop'] ?? false) ? 'checked' : '' }} aria-label="{{ $label }} on desktop">
-                <span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
-              </span>
+          </span>
+          <span class="tma-auth__pref-notify-col" role="cell">
+            <label class="tma-auth__switch">
+              <input type="hidden" name="{{ $key }}[desktop]" value="0">
+              <input class="tma-auth__switch-input" type="checkbox" name="{{ $key }}[desktop]" value="1" role="switch"
+                {{ ($group['desktop'] ?? false) ? 'checked' : '' }} aria-label="{{ $label }} desktop">
+              <span class="tma-auth__switch-ui" aria-hidden="true"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
             </label>
-          </div>
+          </span>
         </div>
       @endforeach
     </div>
-
-    <p class="tma-auth__section-hint">Email notifications for each category stay on by default. Turn them off anytime under Settings → Notifications.</p>
 
     <div class="tma-auth__nav-actions">
       <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
