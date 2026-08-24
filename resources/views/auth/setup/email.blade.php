@@ -74,7 +74,7 @@
         <div class="tma-auth__pref-mail-options tma-auth__pref-mail-options--three" role="radiogroup" aria-label="Email sidebar">
           @foreach (['full' => ['Full labels', 'Folder names visible'], 'icons' => ['Icons only', 'Compact rail'], 'hidden' => ['Hidden', 'Max reading space']] as $value => [$label, $desc])
             <label class="tma-auth__pref-mail-option tma-auth__pref-mail-option--tall">
-              <input class="tma-auth__pref-input" type="radio" name="sidebarMode" value="{{ $value }}" {{ ($mail['sidebarMode'] ?? 'hidden') === $value ? 'checked' : '' }}>
+              <input class="tma-auth__pref-input" type="radio" name="sidebarMode" value="{{ $value }}" {{ ($mail['sidebarMode'] ?? 'icons') === $value ? 'checked' : '' }}>
               <span class="tma-auth__pref-mail-preview tma-auth__pref-mail-sidebar-preview tma-auth__pref-mail-sidebar-preview--{{ $value }}" aria-hidden="true"></span>
               <span class="tma-auth__pref-sidebar-copy">
                 <span class="tma-auth__pref-sidebar-label">{{ $label }}</span>

@@ -137,12 +137,26 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertDontSee('Connect Microsoft to continue')
             ->assertDontSee('Email signature')
             ->assertSee('name="layout" value="split" checked', false)
-            ->assertSee('name="sidebarMode" value="hidden" checked', false);
+            ->assertSee('name="sidebarMode" value="icons" checked', false);
 
         $this->actingAs($user)->post(route('account-setup.store', ['step' => 'email']), [
             'layout' => 'split',
-            'sidebarMode' => 'hidden',
+            'sidebarMode' => 'icons',
         ])->assertRedirect('/');
+    }
+
+    public function test_email_setup_selects_icons_even_when_full_was_already_saved(): void
+    {
+        $user = $this->staffMidSetup([
+            'accountSetupStep' => 'email',
+            'mail' => ['layout' => 'split', 'sidebarMode' => 'full'],
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('account-setup.show', ['step' => 'email']))
+            ->assertOk()
+            ->assertSee('name="sidebarMode" value="icons" checked', false)
+            ->assertDontSee('name="sidebarMode" value="full" checked', false);
     }
 
     public function test_continue_does_not_jump_to_the_portal_when_onboarding_was_already_stamped(): void
