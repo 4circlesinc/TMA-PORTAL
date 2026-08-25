@@ -44,6 +44,7 @@ class LegacyPageController extends Controller
         // these, so anything the SPA can push must also be servable, a hard
         // refresh on /folders/all used to 404.
         'folders/all',
+        'folders/clients',
         'folders/personal',
         'folders/shared',
         'folders/shared-with-me',

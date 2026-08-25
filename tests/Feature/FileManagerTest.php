@@ -532,6 +532,60 @@ class FileManagerTest extends TestCase
             ->assertJsonPath('files.0.name', 'welcome.pdf');
     }
 
+    public function test_the_clients_section_lists_assigned_client_folders_only(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        $staff = $this->approvedUser(['account_type' => 'CRO / Reviewing officer']);
+        $other = $this->approvedUser();
+
+        $client = Client::create([
+            'uid' => 'acme-clients-nav',
+            'name' => 'Acme Co',
+            'email' => 'owner@acme.test',
+            'initial' => 'A',
+            'initial_color' => 'blue',
+            'data' => [],
+        ]);
+        $clientFolder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Acme Co',
+            'folder_type' => Folder::TYPE_CLIENT,
+            'client_id' => $client->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passports',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $clientFolder->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        ClientAssignment::create([
+            'client_id' => $client->id,
+            'user_id' => $staff->id,
+            'role' => 'general',
+            'permission_level' => 'editor',
+            'is_primary' => true,
+            'status' => ClientAssignment::STATUS_ACTIVE,
+            'assigned_by' => $admin->id,
+        ]);
+
+        $this->actingAs($staff)->getJson('/portal/files/?section=clients')
+            ->assertOk()
+            ->assertJsonPath('folders.0.name', 'Acme Co')
+            ->assertJsonCount(1, 'folders');
+
+        $this->actingAs($admin)->getJson('/portal/files/?section=clients')
+            ->assertOk()
+            ->assertJsonPath('folders.0.name', 'Acme Co');
+
+        $this->actingAs($other)->getJson('/portal/files/?section=clients')
+            ->assertOk()
+            ->assertJsonCount(0, 'folders');
+    }
+
     private function folder(User $user, string $name, ?Folder $parent = null): Folder
     {
         return Folder::create([

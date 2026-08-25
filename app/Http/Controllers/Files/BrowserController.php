@@ -13,14 +13,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The one listing endpoint behind every file area (All / My / Shared with me /
- * Shared folders / Favourites / File Box / Recent / Recycle bin). Search,
- * sort, filter and pagination all run in the database, the browser never
- * receives the whole table.
+ * The one listing endpoint behind every file area (All / Clients / My /
+ * Shared with me / Shared folders / Favourites / File Box / Recent /
+ * Recycle bin). Search, sort, filter and pagination all run in the database,
+ * the browser never receives the whole table.
  */
 class BrowserController extends BaseFilesController
 {
-    private const SECTIONS = ['all', 'my', 'shared', 'shared-folders', 'favorites', 'filebox', 'recent', 'recycle'];
+    private const SECTIONS = ['all', 'my', 'shared', 'shared-folders', 'favorites', 'filebox', 'recent', 'recycle', 'clients'];
 
     public function index(Request $request): JsonResponse
     {
@@ -254,6 +254,14 @@ class BrowserController extends BaseFilesController
             'recycle' => [
                 $this->trashedTopFolders($user),
                 $this->trashedTopFiles($user),
+            ],
+            'clients' => [
+                // The main folder for each client this account may open, not
+                // the "Clients" root (that root lists every client and is
+                // administrator-only). Staff see assigned clients, a provider
+                // contact sees the folders their firm filed.
+                $this->visibleFolders($user)->where('folder_type', Folder::TYPE_CLIENT),
+                null,
             ],
             default => [ // 'all'
                 $this->visibleFolders($user)->whereNull('parent_id'),

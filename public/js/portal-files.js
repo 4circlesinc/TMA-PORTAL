@@ -2,7 +2,7 @@
  * TMA - File & Folder manager view (registers the 'folders' view).
  *
  * Real, server-backed replacement for the localStorage folders prototype.
- * Sections: All Files / My Files / Shared with me / Shared Folders /
+ * Sections: All Files / Clients / My Files / Shared with me / Shared Folders /
  * Favourites / File Box / Recent / Recycle Bin. Table + grid views, toolbar,
  * right-click menu, multi-select bulk actions, details, and chunked uploads
  * via the global TMAUpload manager. Reuses the existing design system
@@ -37,6 +37,7 @@
 
   var NAV_SECTION = {
     'folders-all': 'all',
+    'folders-clients': 'clients',
     'folders-personal': 'my',
     'folders-sharedwithme': 'shared',
     'folders-shared': 'shared-folders',
@@ -48,6 +49,12 @@
 
   var SECTIONS = {
     all: { title: 'All Files', desc: 'All files and folders you can access.', empty: 'No files yet' },
+    clients: {
+      title: 'Clients',
+      desc: 'Client folders you can open.',
+      empty: 'No client folders yet',
+      emptyHint: 'Folders for the clients you work with will appear here.',
+    },
     my: { title: 'My Files', desc: 'Files and folders you own.', empty: 'You haven’t created any files yet' },
     shared: { title: 'Shared with me', desc: 'Items other people have shared with you.', empty: 'Nothing has been shared with you yet' },
     'shared-folders': { title: 'Shared Folders', desc: 'Folders with active sharing or assigned people.', empty: 'No shared folders yet' },
@@ -703,7 +710,13 @@
       ? ui().btn({ label: 'Upload files', icon: 'ArrowLineUp', attrs: ' data-files-action="upload"' })
       : '';
     if (isRecycle()) btn = '';
-    return ui().emptyState({ title: meta.empty, subtitle: canCreateHere() ? 'Create a folder or upload files to get started.' : '', button: btn });
+    return ui().emptyState({
+      title: meta.empty,
+      subtitle: canCreateHere()
+        ? 'Create a folder or upload files to get started.'
+        : (meta.emptyHint || ''),
+      button: btn,
+    });
   }
 
   function renderBreadcrumb() {

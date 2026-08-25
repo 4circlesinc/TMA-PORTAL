@@ -162,6 +162,30 @@ class CipProviderFolderAccessTest extends TestCase
         );
     }
 
+    public function test_the_file_library_clients_section_lists_the_firm_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        [, $outsider] = $this->providerWithContact('BLU');
+        ['root' => $root] = $this->filing($galaxy, $staff, 'Chen', 'Wei');
+
+        $names = collect(
+            $this->actingAs($gil)->getJson('/portal/files/?section=clients')
+                ->assertOk()->json('folders')
+        )->pluck('name');
+
+        $this->assertTrue($names->contains('Chen Wei'));
+        $this->assertContains(
+            $root->uuid,
+            collect($this->actingAs($gil)->getJson('/portal/files/?section=clients')->json('folders'))
+                ->pluck('id')->all()
+        );
+
+        $this->actingAs($outsider)->getJson('/portal/files/?section=clients')
+            ->assertOk()
+            ->assertJsonCount(0, 'folders');
+    }
+
     public function test_a_linked_portal_login_does_not_open_the_whole_folder(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

@@ -98,7 +98,7 @@ class EmployeeReachTest extends TestCase
             'billing-details/card', 'calendar', 'call-recordings',
             'choose-account-type',
             'classic', 'clients', 'email', 'email/templates', 'folders/all',
-            'folders/favorites', 'folders/filebox', 'folders/personal',
+            'folders/clients', 'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',
             'folders/shared-with-me', 'overview', 'projects', 'projects/all',
             'projects/closed', 'projects/recently_deleted',
@@ -111,7 +111,7 @@ class EmployeeReachTest extends TestCase
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'billing-details',
             'billing-details/card', 'calendar', 'choose-account-type',
-            'classic', 'folders/favorites', 'folders/filebox',
+            'classic', 'folders/clients', 'folders/favorites', 'folders/filebox',
             'folders/personal', 'folders/recent', 'folders/recycle',
             'folders/shared-with-me', 'projects', 'projects/all',
             'projects/closed', 'projects/recently_deleted',
