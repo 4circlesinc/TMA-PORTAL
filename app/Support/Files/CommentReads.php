@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\FileComment;
+use App\Models\FileCommentMention;
 use App\Models\FileCommentRead;
 use App\Models\FileItem;
 use App\Models\User;
@@ -96,6 +97,70 @@ final class CommentReads
     }
 
     /**
+     * Everything a row indicator needs about a set of files, in three queries
+     * for the whole page.
+     *
+     * `open` is conversations still going, `unread` is the part of that this
+     * reader has not seen, `mentionsMe` is whether any of it names them. A file
+     * with nothing to say is left out entirely rather than returned as zeroes,
+     * so a caller can treat absence as "draw nothing".
+     *
+     * The File Library listing, a client's Documents tab and the CIP document
+     * checklist all draw the same chip, so they all read it from here.
+     *
+     * @param  list<int>  $fileIds
+     * @return array<int, array{open: int, unread: int, mentionsMe: bool}>
+     */
+    public static function flagsForFiles(User $user, array $fileIds): array
+    {
+        $fileIds = array_values(array_unique(array_filter($fileIds)));
+
+        if ($fileIds === []) {
+            return [];
+        }
+
+        $open = FileComment::query()
+            ->whereIn('file_id', $fileIds)
+            ->whereNull('parent_id')
+            ->whereNull('resolved_at')
+            ->groupBy('file_id')
+            ->selectRaw('file_id, COUNT(*) as n')
+            ->pluck('n', 'file_id');
+
+        $unread = self::unreadByFile($user, $fileIds);
+
+        $mentions = FileCommentMention::query()
+            ->where('file_comment_mentions.user_id', $user->id)
+            ->whereHas('comment', fn ($q) => $q
+                ->whereIn('file_id', $fileIds)
+                ->whereIn('root_id', fn ($sub) => $sub->select('id')
+                    ->from('file_comments')
+                    ->whereNull('resolved_at')
+                    ->whereNull('deleted_at')))
+            ->with('comment:id,file_id')
+            ->get()
+            ->pluck('comment.file_id')
+            ->filter()
+            ->flip();
+
+        $out = [];
+
+        foreach ($fileIds as $id) {
+            $count = (int) ($open[$id] ?? 0);
+            $new = (int) ($unread[$id] ?? 0);
+            $mentioned = $mentions->has($id);
+
+            if ($count === 0 && $new === 0 && ! $mentioned) {
+                continue;
+            }
+
+            $out[$id] = ['open' => $count, 'unread' => $new, 'mentionsMe' => $mentioned];
+        }
+
+        return $out;
+    }
+
+    /**
      * Unread threads per file, for a listing's row indicators.
      *
      * One query for the page rather than one per row.
@@ -116,6 +181,64 @@ final class CommentReads
             ->pluck('n', 'fid')
             ->map(fn ($n) => (int) $n)
             ->all();
+    }
+
+    /**
+     * Unread threads anywhere beneath each folder, for a folder row.
+     *
+     * A folder is a lid: the Client documents panel lists "Dependent 2 — 5
+     * files" and nothing about it says one of those five has a question waiting
+     * on it. This is what lets the row say so without opening it.
+     *
+     * Counted over the whole subtree, because that is what a closed folder
+     * hides, and de-duplicated by thread so a conversation spanning two files
+     * is one thing to go and read.
+     *
+     * @param  list<int>  $folderIds
+     * @return array<int, int> folder id => unread thread count beneath it
+     */
+    public static function unreadByFolder(User $user, array $folderIds): array
+    {
+        $subtrees = FolderTree::subtreeMap($folderIds);
+
+        if ($subtrees === []) {
+            return [];
+        }
+
+        $all = array_values(array_unique(array_merge(...array_values($subtrees))));
+
+        if ($all === []) {
+            return [];
+        }
+
+        // thread id => the folders it sits in, so a root can count its own.
+        $threads = self::unreadQuery($user)
+            ->join('files', 'files.id', '=', 'file_comments.file_id')
+            ->whereIn('files.folder_id', $all)
+            ->whereNull('files.deleted_at')
+            ->distinct()
+            ->pluck('files.folder_id', 'file_comments.root_id');
+
+        if ($threads->isEmpty()) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach ($subtrees as $rootId => $ids) {
+            $inside = array_flip($ids);
+            $count = 0;
+            foreach ($threads as $folderId) {
+                if (isset($inside[$folderId])) {
+                    $count++;
+                }
+            }
+            if ($count > 0) {
+                $out[$rootId] = $count;
+            }
+        }
+
+        return $out;
     }
 
     /**

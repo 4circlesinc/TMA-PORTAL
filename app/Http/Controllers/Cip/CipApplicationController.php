@@ -31,6 +31,7 @@ use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
+use App\Support\Files\CommentReads;
 use App\Support\Files\Presenter;
 use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
@@ -1130,6 +1131,13 @@ class CipApplicationController extends Controller
     {
         $photoFile = $this->photoFileModel($person);
 
+        // One lookup for this person's whole checklist rather than one per
+        // line: a main applicant owes a dozen documents.
+        $slotComments = CommentReads::flagsForFiles(
+            $presenter->viewer(),
+            $person->documents->map(fn ($slot) => $slot->file?->id)->filter()->all()
+        );
+
         return [
             'id' => $person->uuid,
             'role' => $person->role,
@@ -1175,7 +1183,7 @@ class CipApplicationController extends Controller
                     $slot->id,
                 ])
                 ->values()
-                ->map(function ($slot) {
+                ->map(function ($slot) use ($slotComments) {
                     DocumentSlots::reconcile($slot, null, false);
                     $slot->refresh();
                     $slot->loadMissing('file');
@@ -1198,6 +1206,11 @@ class CipApplicationController extends Controller
                         'statusLabel' => DocumentStatus::label($status),
                         'statusTone' => DocumentStatus::tone($status),
                         'fileId' => $slot->isFilled() ? $slot->file?->uuid : null,
+                        // The same chip the File Library and the Documents tab
+                        // draw, from the same source, so a checklist line and
+                        // the file behind it can never disagree about whether
+                        // there is a conversation waiting.
+                        'comments' => $slot->file ? ($slotComments[$slot->file->id] ?? null) : null,
                         'fileName' => $slot->isFilled() ? $slot->file?->name : null,
                         'fileSize' => $slot->isFilled() ? $slot->file?->size : null,
                         'fileExt' => $slot->isFilled() && $slot->file

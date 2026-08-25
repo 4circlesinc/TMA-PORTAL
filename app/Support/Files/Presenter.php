@@ -3,8 +3,6 @@
 namespace App\Support\Files;
 
 use App\Models\CipDocument;
-use App\Models\FileComment;
-use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\FileWorkflow;
@@ -53,6 +51,9 @@ class Presenter
 
     /** file id => ['open' => int, 'unread' => int, 'mentionsMe' => bool] */
     private array $commentFile = [];
+
+    /** folder id => unread comment threads anywhere beneath it */
+    private array $commentFolder = [];
 
     /**
      * Whether {@see self::prime()} has run for this page of items.
@@ -119,6 +120,19 @@ class Presenter
     public function __construct(private User $viewer) {}
 
     /**
+     * Who this presenter is speaking to.
+     *
+     * Anything measured "for the reader" — read state, favourites, what they
+     * may do — has to be measured for the same person the rows were shaped
+     * for, so callers building a payload alongside one ask it rather than
+     * carrying a second User around and risking the two drifting apart.
+     */
+    public function viewer(): User
+    {
+        return $this->viewer;
+    }
+
+    /**
      * @param  FileItem[]  $files
      * @param  Folder[]  $folders
      */
@@ -142,6 +156,7 @@ class Presenter
         $this->statusFile = $this->statusMap($fileIds);
         $this->cipFile = $this->cipMap($fileIds);
         $this->commentFile = $this->commentMap($fileIds);
+        $this->commentFolder = CommentReads::unreadByFolder($this->viewer, $folderIds);
         $this->primed = true;
         $this->attachCipSlots($files);
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
@@ -242,6 +257,11 @@ class Presenter
             'folderType' => $folder->folder_type,
             'colour' => $this->effectiveColour($folder),
             'iconName' => $this->effectiveIcon($folder),
+            // What the closed folder is hiding: threads beneath it this reader
+            // has not seen. Null when there is nothing to say.
+            'comments' => isset($this->commentFolder[$folder->id])
+                ? ['unread' => $this->commentFolder[$folder->id]]
+                : null,
             'fileCount' => $stats['fileCount'],
             'folderCount' => $stats['folderCount'],
             'size' => $stats['size'],
@@ -922,6 +942,12 @@ class Presenter
         ];
     }
 
+    /** @see CommentReads::flagsForFiles — one definition, three surfaces. */
+    private function commentMap(array $fileIds): array
+    {
+        return CommentReads::flagsForFiles($this->viewer, $fileIds);
+    }
+
     /**
      * The review state of many files, in one query.
      *
@@ -939,68 +965,6 @@ class Presenter
      * @param  int[]  $fileIds
      * @return array<int, array{status:string,label:string,tone:string}>
      */
-    /**
-     * Open comment threads per file, and whether any of them names the viewer.
-     *
-     * Two grouped queries for the whole page rather than one per row: a folder
-     * of two hundred files draws this indicator on every one of them.
-     *
-     * "Open" is an unresolved root thread. Replies are not counted separately —
-     * a thread is one conversation, and a badge that climbed as people replied
-     * would say a file needs more attention the more it had already had. The
-     * mention flag follows Hub::counts: a mention inside a reply is judged by
-     * whether its thread is still open, so resolving the thread clears it.
-     *
-     * @param  list<int>  $fileIds
-     * @return array<int, array{open: int, unread: int, mentionsMe: bool}>
-     */
-    private function commentMap(array $fileIds): array
-    {
-        if (! $fileIds) {
-            return [];
-        }
-
-        $open = FileComment::query()
-            ->whereIn('file_id', $fileIds)
-            ->whereNull('parent_id')
-            ->whereNull('resolved_at')
-            ->groupBy('file_id')
-            ->selectRaw('file_id, COUNT(*) as n')
-            ->pluck('n', 'file_id');
-
-        $unread = CommentReads::unreadByFile($this->viewer, $fileIds);
-
-        $mine = FileCommentMention::query()
-            ->where('file_comment_mentions.user_id', $this->viewer->id)
-            ->whereHas('comment', fn ($q) => $q
-                ->whereIn('file_id', $fileIds)
-                ->whereIn('root_id', fn ($sub) => $sub->select('id')
-                    ->from('file_comments')
-                    ->whereNull('resolved_at')
-                    ->whereNull('deleted_at')))
-            ->with('comment:id,file_id')
-            ->get()
-            ->pluck('comment.file_id')
-            ->filter()
-            ->flip();
-
-        $out = [];
-
-        foreach ($fileIds as $id) {
-            $count = (int) ($open[$id] ?? 0);
-            $new = (int) ($unread[$id] ?? 0);
-            $mentioned = $mine->has($id);
-
-            if ($count === 0 && $new === 0 && ! $mentioned) {
-                continue;
-            }
-
-            $out[$id] = ['open' => $count, 'unread' => $new, 'mentionsMe' => $mentioned];
-        }
-
-        return $out;
-    }
-
     private function statusMap(array $fileIds): array
     {
         if (! $fileIds) {

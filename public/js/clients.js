@@ -5785,6 +5785,7 @@
         : '') +
       '</span>';
     var chip =
+      clientCommentChip(d) +
       '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
       ' tma-portal-status--inline">' + esc(status) + '</span>';
     var body = opens
@@ -6008,8 +6009,15 @@
       ' tma-portal-status--inline">' + esc(s.label) + '</span>';
   }
 
-  /* Same indicator the File Library draws, from the same listing field: a
-     document with a conversation open on it says so wherever it is listed. */
+  /*
+   * The same indicator the File Library draws, from the same listing field, so
+   * a document says the same thing wherever it is listed — a row in the client's
+   * Documents tab, a line on the checklist, or the folder it is filed in.
+   *
+   * A folder reports only `unread`, and it means "somewhere beneath this": a
+   * closed folder is not claiming to summarise the conversations inside it,
+   * only to say whether any of them are waiting on you.
+   */
   function clientCommentChip(f) {
     var c = f && f.comments;
     if (!c) return '';
@@ -6082,7 +6090,8 @@
         : '<img src="' + (window.TMAFolderColours ? window.TMAFolderColours.iconSrc(folderBase, f.colour) : ICONS[folderBase]) + '" alt="">';
       html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
-        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) + '</span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
+          clientCommentChip(f) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
         '</button>';

@@ -238,6 +238,52 @@ class FolderTree
         return $out;
     }
 
+    /**
+     * Every folder id beneath each of these, keyed by the one it came from.
+     *
+     * The same walk aggregateMany does — one recursive pass rather than a
+     * query per level per folder — exposed so callers that need to ask
+     * something else about a subtree (what is unread in it, say) do not have
+     * to write the descent again and get a different answer.
+     *
+     * The root is included in its own list: a document filed directly in a
+     * client folder is as much "in" it as one three levels down.
+     *
+     * @param  list<int>  $rootIds
+     * @return array<int, list<int>> root id => folder ids in its subtree
+     */
+    public static function subtreeMap(array $rootIds): array
+    {
+        $rootIds = array_values(array_unique(array_filter($rootIds)));
+
+        if ($rootIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($rootIds), '?'));
+        $rows = DB::select(
+            "with recursive tree(root_id, id, depth) as (
+                 select id, id, 0 from folders
+                  where id in ($placeholders)
+                 union all
+                 select t.root_id, f.id, t.depth + 1
+                   from folders f
+                   join tree t on f.parent_id = t.id
+                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH."
+             )
+             select root_id, id from tree",
+            $rootIds,
+        );
+
+        $out = array_fill_keys($rootIds, []);
+
+        foreach ($rows as $row) {
+            $out[(int) $row->root_id][] = (int) $row->id;
+        }
+
+        return $out;
+    }
+
     /** All descendant folder ids (not including the folder itself). */
     public static function descendantIds(Folder $folder): array
     {
