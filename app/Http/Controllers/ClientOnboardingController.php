@@ -51,6 +51,12 @@ class ClientOnboardingController extends Controller
             return redirect()->route('onboarding.show', ['step' => $step]);
         }
 
+        if (! ClientFlow::applies($step, $progress)) {
+            return redirect()->route('onboarding.show', [
+                'step' => ClientFlow::nextUnfinished($progress),
+            ]);
+        }
+
         return view('onboarding.client', $this->viewData($user, $progress, $step));
     }
 

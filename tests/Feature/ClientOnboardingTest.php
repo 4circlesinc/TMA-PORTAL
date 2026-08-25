@@ -84,11 +84,14 @@ class ClientOnboardingTest extends TestCase
                 'phone' => '+1 555 123 4567',
                 'preferred_contact' => 'Email',
             ],
-            'access' => [],
+            'calendar' => [],
             'terms' => ['accept_terms' => '1'],
         ], $overrides);
 
         foreach ($answers as $step => $payload) {
+            if ($step === 'calendar' && ! ClientFlow::calendarAvailable()) {
+                continue;
+            }
             $this->actingAs($user)->post("/onboarding/{$step}", $payload);
         }
     }
@@ -196,8 +199,18 @@ class ClientOnboardingTest extends TestCase
     public function test_every_applicable_step_renders(): void
     {
         [$user] = $this->client();
+        $progress = OnboardingProgress::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'flow' => OnboardingProgress::FLOW_CLIENT,
+                'current_step' => 'welcome',
+                'completed_steps' => [],
+                'answers' => [],
+                'started_at' => now(),
+            ],
+        );
 
-        foreach (ClientFlow::stepKeys() as $step) {
+        foreach (ClientFlow::applicableSteps($progress) as $step) {
             $this->actingAs($user)->get("/onboarding/{$step}")
                 ->assertOk()
                 ->assertSee(' complete', false)
@@ -207,18 +220,20 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/you')->assertSee('tma-auth__stack', false);
     }
 
-    public function test_the_access_step_lists_cip_when_the_module_is_on(): void
+    public function test_the_terms_step_lists_cip_when_the_module_is_on(): void
     {
         [$user] = $this->client();
 
         config(['services.cip.enabled' => true]);
-        $this->actingAs($user)->get('/onboarding/access')
+        $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
+            ->assertSee('Included with this account')
             ->assertSee('CIP Applications')
-            ->assertSee('Manage your CIP applications.');
+            ->assertSee('Manage your CIP applications.')
+            ->assertSee('Terms of Service');
 
         config(['services.cip.enabled' => false]);
-        $this->actingAs($user)->get('/onboarding/access')
+        $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
             ->assertDontSee('CIP Applications');
     }
@@ -226,9 +241,47 @@ class ClientOnboardingTest extends TestCase
     public function test_related_questions_share_a_screen(): void
     {
         $this->assertSame(
-            ['welcome', 'you', 'contact', 'access', 'terms'],
+            ['welcome', 'you', 'contact', 'calendar', 'terms'],
             ClientFlow::stepKeys(),
         );
+    }
+
+    public function test_calendar_connect_is_its_own_step_when_a_provider_is_configured(): void
+    {
+        [$user] = $this->client();
+        config([
+            'services.google.client_id' => 'test-client-id.apps.googleusercontent.com',
+            'services.microsoft.client_id' => null,
+        ]);
+
+        $this->actingAs($user)->get('/onboarding/calendar')
+            ->assertOk()
+            ->assertSee('Connect a calendar')
+            ->assertSee('Connect Google')
+            ->assertDontSee('Included with this account');
+
+        $this->actingAs($user)->get('/onboarding/terms')
+            ->assertOk()
+            ->assertSee('Included with this account')
+            ->assertSee('I agree to the');
+    }
+
+    public function test_calendar_is_skipped_when_no_provider_is_configured(): void
+    {
+        [$user] = $this->client();
+        config([
+            'services.google.client_id' => null,
+            'services.microsoft.client_id' => null,
+        ]);
+
+        $this->actingAs($user)->get('/onboarding/calendar')
+            ->assertRedirect(route('onboarding.show', ['step' => 'welcome']));
+
+        $this->actingAs($user)->post('/onboarding/contact', [
+            'email_confirmed' => '1',
+            'phone' => '+1 555 123 4567',
+            'preferred_contact' => 'Email',
+        ])->assertRedirect(route('onboarding.show', ['step' => 'terms']));
     }
 
     public function test_old_step_urls_open_the_joined_screen(): void
@@ -240,11 +293,11 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/phone')
             ->assertRedirect(route('onboarding.show', ['step' => 'contact']));
         $this->actingAs($user)->get('/onboarding/account-type')
-            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
+            ->assertRedirect(route('onboarding.show', ['step' => 'terms']));
         $this->actingAs($user)->get('/onboarding/work')
-            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
-        $this->actingAs($user)->get('/onboarding/calendar')
-            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
+            ->assertRedirect(route('onboarding.show', ['step' => 'terms']));
+        $this->actingAs($user)->get('/onboarding/access')
+            ->assertRedirect(route('onboarding.show', ['step' => 'terms']));
     }
 
     public function test_old_one_question_progress_skips_joined_screens_already_answered(): void
@@ -330,7 +383,9 @@ class ClientOnboardingTest extends TestCase
             'uses_whatsapp' => '1',
             'whatsapp' => '+1 555 999 0000',
             'preferred_contact' => 'WhatsApp',
-        ])->assertRedirect(route('onboarding.show', ['step' => 'access']));
+        ])->assertRedirect(route('onboarding.show', [
+            'step' => ClientFlow::calendarAvailable() ? 'calendar' : 'terms',
+        ]));
 
         $this->assertSame('+1 555 999 0000', OnboardingProgress::where('user_id', $user->id)->first()->answers('contact')['whatsapp']);
     }

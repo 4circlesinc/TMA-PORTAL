@@ -24,7 +24,7 @@ final class ClientFlow
         'welcome' => ['title' => 'Welcome', 'optional' => true],
         'you' => ['title' => 'About you'],
         'contact' => ['title' => 'How we reach you'],
-        'access' => ['title' => 'Your access', 'optional' => true],
+        'calendar' => ['title' => 'Connect a calendar', 'optional' => true],
         'terms' => ['title' => 'Terms and privacy'],
     ];
 
@@ -40,12 +40,12 @@ final class ClientFlow
         'phone' => 'contact',
         'whatsapp' => 'contact',
         'contact-preference' => 'contact',
-        'work' => 'access',
-        'account-type' => 'access',
-        'company' => 'access',
-        'address' => 'access',
-        'contacts' => 'access',
-        'calendar' => 'access',
+        'work' => 'terms',
+        'account-type' => 'terms',
+        'company' => 'terms',
+        'address' => 'terms',
+        'contacts' => 'terms',
+        'access' => 'terms',
         'done' => 'terms',
     ];
 
@@ -85,7 +85,15 @@ final class ClientFlow
 
     public static function applies(string $step, OnboardingProgress $progress): bool
     {
-        return self::exists($step);
+        if (! self::exists($step)) {
+            return false;
+        }
+
+        if ($step === 'calendar') {
+            return self::calendarAvailable();
+        }
+
+        return true;
     }
 
     /** Only offer calendar connect where a provider is actually configured. */
@@ -102,7 +110,10 @@ final class ClientFlow
      */
     public static function applicableSteps(OnboardingProgress $progress): array
     {
-        return self::stepKeys();
+        return array_values(array_filter(
+            self::stepKeys(),
+            fn (string $step) => self::applies($step, $progress),
+        ));
     }
 
     /**
@@ -120,6 +131,8 @@ final class ClientFlow
             'contact' => $progress->hasDone('email')
                 && $progress->hasDone('phone')
                 && $progress->hasDone('contact-preference'),
+            // The old combined access screen already offered calendar connect.
+            'calendar' => $progress->hasDone('access'),
             'terms' => $progress->hasDone('done'),
             default => false,
         };
