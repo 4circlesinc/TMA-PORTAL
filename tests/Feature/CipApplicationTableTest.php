@@ -396,6 +396,39 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(['Omar Reviewer', ''], $names);
     }
 
+    public function test_a_deleted_portal_login_is_not_shown_as_the_contact_email(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff, $this->provider($staff), 0, false);
+
+        $login = User::create([
+            'name' => 'Chen Wei',
+            'email' => 'chen@example.com',
+            'password' => bcrypt('password12345'),
+        ]);
+        $login->forceFill([
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ])->save();
+
+        $application->client->forceFill(['user_id' => $login->id])->save();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonPath('applications.0.contactEmail', 'chen@example.com');
+
+        $this->actingAs($staff)->deleteJson("/admin/users/{$login->id}")->assertOk();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonPath('applications.0.contactEmail', null);
+    }
+
     private function named(CipApplication $application, string $first, string $last): CipApplication
     {
         $application->people()

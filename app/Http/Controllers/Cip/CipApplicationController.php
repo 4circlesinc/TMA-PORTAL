@@ -309,7 +309,8 @@ class CipApplicationController extends Controller
         $query = ApplicationScope::query($user)
             ->with([
                 'provider:id,uuid,name,code',
-                'client:id,uid,name,email,phone,photo_url,initial,initial_color',
+                'client:id,uid,name,email,phone,photo_url,initial,initial_color,user_id',
+                'client.user:id',
                 'assignedOfficer:id,name,email,avatar_url',
                 // Live only, with their people: the column names who holds the
                 // file now, and an ended assignment is somebody who has
@@ -629,7 +630,7 @@ class CipApplicationController extends Controller
              * ask on this row.
              */
             'contactPerson' => $client?->name,
-            'contactEmail' => $client?->email,
+            'contactEmail' => $client?->contactEmail(),
             'investmentType' => InvestmentType::display(
                 $application->investment_type,
                 $application->investment_type_other,

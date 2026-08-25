@@ -59,6 +59,42 @@ class Client extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** A live portal login, not one sitting in the Recycle Bin. */
+    public function hasLiveLogin(): bool
+    {
+        if ($this->user_id === null) {
+            return false;
+        }
+
+        if ($this->relationLoaded('user')) {
+            return $this->user !== null;
+        }
+
+        return $this->user()->exists();
+    }
+
+    /**
+     * Mailbox for the Contact column.
+     *
+     * Deleted portal accounts keep a copy of their address on this row so a
+     * restore can bring the login back. The directory must not keep advertising
+     * that mailbox as a contact.
+     */
+    public function contactEmail(): ?string
+    {
+        if ($this->user_id && ! $this->hasLiveLogin()) {
+            return null;
+        }
+
+        return $this->email ?: null;
+    }
+
+    /** Contact column: email when the login still exists, otherwise phone. */
+    public function directoryContact(): ?string
+    {
+        return $this->contactEmail() ?: ($this->phone ?: null);
+    }
+
     /** The client's permanent main folder in the File Library. */
     public function folder(): BelongsTo
     {
@@ -133,8 +169,8 @@ class Client extends Model
             'photo' => $this->photo_url,
             'profile' => $this->data ?? [],
             'folderUuid' => $this->folder?->uuid,
-            'hasLogin' => $this->user_id !== null,
-            'userId' => $this->user_id,
+            'hasLogin' => $this->hasLiveLogin(),
+            'userId' => $this->hasLiveLogin() ? $this->user_id : null,
             'companyId' => $company?->uid,
             'companyName' => $company?->name ?? $this->company,
             'clientType' => $this->client_type ?? 'private',
@@ -182,8 +218,8 @@ class Client extends Model
             // the fallback, not the other way round.
             'photo' => $this->photo_url,
             'folderUuid' => $this->folder?->uuid,
-            'hasLogin' => $this->user_id !== null,
-            'userId' => $this->user_id,
+            'hasLogin' => $this->hasLiveLogin(),
+            'userId' => $this->hasLiveLogin() ? $this->user_id : null,
             'companyId' => $company?->uid,
             'companyName' => $company?->name ?? $this->company,
             'clientType' => $this->client_type ?? 'private',
@@ -194,7 +230,7 @@ class Client extends Model
             // The Contact column, from the denormalised copies rather than the
             // blob. Every write goes through ClientsController::columns(),
             // which keeps both in step with the profile.
-            'contact' => $this->email ?: ($this->phone ?: null),
+            'contact' => $this->directoryContact(),
         ];
     }
 }

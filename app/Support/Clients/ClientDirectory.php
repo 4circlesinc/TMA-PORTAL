@@ -178,6 +178,7 @@ final class ClientDirectory
                 'folder:id,uuid',
                 'companyRecord:id,uid,name',
                 'referredByCompany:id,uid,name',
+                'user:id',
             ]);
     }
 

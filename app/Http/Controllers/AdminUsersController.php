@@ -14,6 +14,7 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
+use App\Support\Clients\ClientDirectory;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
@@ -24,6 +25,7 @@ use App\Support\Presence\LastSeen;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -617,6 +619,12 @@ class AdminUsersController extends Controller
 
         $user->forceFill(['deleted_by' => $actor->id])->save();
         $user->delete();
+
+        ClientDirectory::flush();
+        Cache::forget('companies.directory');
+        Live::staff(Live::CLIENTS);
+        Live::staff(Live::COMPANIES);
+        Live::staff(Live::CIP);
 
         ActivityLogger::log([
             'actor' => $actor,

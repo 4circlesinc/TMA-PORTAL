@@ -169,4 +169,32 @@ class UserRecycleBinTest extends TestCase
 
         $this->actingAs($officer)->getJson('/portal/admin/recycle-bin?kind=user')->assertForbidden();
     }
+
+    public function test_deleting_an_account_hides_its_email_from_the_client_contact_column(): void
+    {
+        $admin = $this->user('Administrator');
+        $login = $this->user('Client', [
+            'name' => 'I Graphix',
+            'email' => 'igraphixmktgco@gmail.com',
+        ]);
+
+        Client::create([
+            'uid' => 'igraphix',
+            'name' => 'I Graphix',
+            'email' => 'igraphixmktgco@gmail.com',
+            'user_id' => $login->id,
+            'data' => [],
+        ]);
+
+        $this->actingAs($admin)->getJson('/portal/clients')
+            ->assertOk()
+            ->assertJsonPath('clients.0.contact', 'igraphixmktgco@gmail.com');
+
+        $this->actingAs($admin)->deleteJson("/admin/users/{$login->id}")->assertOk();
+
+        $this->actingAs($admin)->getJson('/portal/clients')
+            ->assertOk()
+            ->assertJsonPath('clients.0.contact', null)
+            ->assertJsonMissing(['contact' => 'igraphixmktgco@gmail.com']);
+    }
 }

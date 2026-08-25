@@ -79,6 +79,7 @@ class CompaniesController extends Controller
             // client belongs to a company, and a second copy of the clients
             // problem the moment the firm starts using membership.
             ->select(self::PERSON_COLUMNS)
+            ->with('user:id')
             ->orderBy('name')
             ->orderBy('id')])
             // Every count the record prints, aggregated in the listing query.
@@ -93,6 +94,7 @@ class CompaniesController extends Controller
             ->get();
 
         $this->attachReferredPreviews($companies, $viewer);
+        $this->hideDeletedUserContactEmails($companies);
 
         return [
             'companies' => $companies->map->toRecord()->values()->all(),
@@ -121,6 +123,32 @@ class CompaniesController extends Controller
                 'referredClients',
                 $previews[$company->id] ?? new EloquentCollection,
             );
+        }
+    }
+
+    /**
+     * A company Contact line that is only a deleted person's mailbox should
+     * not keep advertising it after the account went to the Recycle Bin.
+     *
+     * @param  Collection<int, Company>  $companies
+     */
+    private function hideDeletedUserContactEmails(Collection $companies): void
+    {
+        $emails = $companies->pluck('email')->filter()->unique()->values()->all();
+        if ($emails === []) {
+            return;
+        }
+
+        $dead = User::onlyTrashed()
+            ->whereIn('email', $emails)
+            ->pluck('email')
+            ->map(fn ($email) => strtolower((string) $email))
+            ->all();
+
+        foreach ($companies as $company) {
+            if ($company->email && in_array(strtolower($company->email), $dead, true)) {
+                $company->setAttribute('email', null);
+            }
         }
     }
 

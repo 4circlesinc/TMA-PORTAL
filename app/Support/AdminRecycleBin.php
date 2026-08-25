@@ -10,6 +10,7 @@ use App\Models\Group;
 use App\Models\MessageAttachment;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Clients\ClientDirectory;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Presenter;
@@ -17,6 +18,7 @@ use App\Support\Files\SystemFolders;
 use App\Support\Files\Thumbnail;
 use App\Support\Files\Vault;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -502,6 +504,9 @@ class AdminRecycleBin
 
         $user->restore();
         $user->forceFill(['deleted_by' => null])->save();
+
+        ClientDirectory::flush();
+        Cache::forget('companies.directory');
     }
 
     private static function purgeUser(string $id): void

@@ -114,6 +114,10 @@ class CompanyMember extends Model
 
     public function displayEmail(): ?string
     {
+        if ($this->user_id && $this->user === null) {
+            return null;
+        }
+
         return $this->user?->email ?: $this->email;
     }
 

@@ -168,8 +168,8 @@ class Company extends Model
                 'name' => $c->name,
                 'initial' => $c->initial,
                 'initialColor' => $c->initial_color,
-                'email' => $c->email,
-                'hasLogin' => $c->user_id !== null,
+                'email' => $c->contactEmail(),
+                'hasLogin' => $c->hasLiveLogin(),
             ])->values()->all(),
         ];
     }
