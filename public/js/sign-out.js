@@ -25,11 +25,6 @@
     try { sessionStorage.setItem(FLAG, '1'); } catch (e) { /* private mode */ }
   }
 
-  function clearLeaving() {
-    window.__TMA_SIGNING_OUT = false;
-    try { sessionStorage.removeItem(FLAG); } catch (e) { /* private mode */ }
-  }
-
   function wipe() {
     if (!window.TMAStore || !window.TMAStore.clear) return Promise.resolve();
 
@@ -99,8 +94,10 @@
   }
 
   function goLogin() {
-    clearLeaving();
-    window.location.replace('/auth/login');
+    // Keep the signing-out flag until the login page loads. Clearing it here
+    // left a window where a 401 from /me could still append return=/settings.
+    // Auth layout drops the flag so the next portal visit does not sign out.
+    window.location.replace('/auth/login?from=logout');
   }
 
   function signOut() {

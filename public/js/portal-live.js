@@ -298,6 +298,7 @@
            * signed in". sign-out.js raises the flag before it does anything.
            */
           if (window.__TMA_SIGNING_OUT) return;
+          try { if (sessionStorage.getItem('tma.signing-out') === '1') return; } catch (e) { /* private mode */ }
 
           if (next !== current) window.location.reload();
         })

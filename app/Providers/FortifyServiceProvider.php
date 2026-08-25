@@ -13,6 +13,7 @@ use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Models\User;
 use App\Support\AuthenticatorApp;
+use App\Support\SafeIntended;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -43,10 +44,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Fortify::loginView(function (Request $request) {
-            $return = $request->query('return');
-            if (is_string($return) && str_starts_with($return, '/') && ! str_starts_with($return, '//')) {
-                $request->session()->put('url.intended', $return);
-            }
+            SafeIntended::captureFromLogin($request);
 
             return view('auth.login');
         });

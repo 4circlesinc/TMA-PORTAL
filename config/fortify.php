@@ -98,7 +98,7 @@ return [
 
     'redirects' => [
         'login' => '/',
-        'logout' => '/auth/login',
+        'logout' => '/auth/login?from=logout',
         'password-reset' => '/auth/login?reset=1',
         'email-verification' => '/auth/profile-setup',
     ],

@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Http\Request;
+
 /**
  * Intended URLs after login / register / verify.
  *
@@ -48,5 +50,29 @@ final class SafeIntended
         }
 
         return false;
+    }
+
+    /**
+     * Login page query string. Signing out uses ?from=logout so a 401 from
+     * Settings cannot park that page as the post-login destination.
+     */
+    public static function captureFromLogin(Request $request): void
+    {
+        if ($request->query('from') === 'logout') {
+            $request->session()->forget('url.intended');
+
+            return;
+        }
+
+        $return = $request->query('return');
+        if (! is_string($return) || $return === '' || ! str_starts_with($return, '/') || str_starts_with($return, '//')) {
+            return;
+        }
+
+        if (self::isUnsafe($return)) {
+            return;
+        }
+
+        $request->session()->put('url.intended', $return);
     }
 }
