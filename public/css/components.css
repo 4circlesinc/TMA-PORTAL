@@ -48,6 +48,22 @@
  * would stop matching the width of what it underlines. Same chip recipe as
  * the file-count pill on the client folder rows, at tab scale.
  */
+/* Something behind this tab is waiting for the reader.
+ *
+ * Beside the count, not instead of it: the count says how much is in there and
+ * the dot says some of it is new. Same red as every other unread mark in the
+ * portal, so it means the same thing here as it does in the sidebar. */
+.tma-tab__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--color-unread, #ff4747);
+  vertical-align: middle;
+  flex: none;
+}
+
 .tma-tab__count {
   display: inline-flex;
   align-items: center;

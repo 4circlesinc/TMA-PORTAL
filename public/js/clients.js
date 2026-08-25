@@ -3176,10 +3176,14 @@
     }
     var label = 'Waiting on you: ' + reasons.join(' and ');
 
+    /*
+     * Both icons carry the dot's colour, because they are saying the same
+     * thing it is: this is unread. `attention` only exists when something is
+     * unread, so there is no read state for these to draw.
+     */
     var icons = '';
     if (comments) {
-      icons += '<span class="tma-cip-table__flag' + (at.mentionsMe ? ' tma-cip-table__flag--mine' : '') +
-        '" title="' + esc(label) + '">' +
+      icons += '<span class="tma-cip-table__flag" title="' + esc(label) + '">' +
         '<span class="tma-cip-table__flag-icon tma-cip-table__flag-icon--comment" aria-hidden="true"></span>' +
         '</span>';
     }
@@ -5188,13 +5192,42 @@
     return tabs.length ? tabs[0].id : 'info';
   }
 
+  /*
+   * A dot on the tab that holds the unread conversation.
+   *
+   * The count chip beside a tab label says how much is in there; this says
+   * some of it is waiting for you. Without it the only way to find a comment
+   * was to open every tab, which is the thing an indicator exists to stop.
+   *
+   * Documents only, because that is where files and their threads live — a dot
+   * on Overview would be true and useless, since it would never say where to go.
+   */
+  function profileTabDot(state, tabId) {
+    if (tabId !== 'folders') return '';
+
+    var app = applicationFor(state.selectedId);
+    var at = app && app.attention;
+    if (!at || !at.comments) return '';
+
+    var label = at.comments === 1
+      ? '1 unread comment'
+      : at.comments + ' unread comments';
+
+    return '<span class="tma-tab__dot" role="img" aria-label="' + esc(label) +
+      '" title="' + esc(label) + '"></span>';
+  }
+
   function renderProfileTabs(state, activeTab) {
     return profileTabsFor(state).map(function (tab) {
       var active = tab.id === activeTab;
       return (
         '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
         ' aria-selected="' + (active ? 'true' : 'false') + '" data-clients-tab="' + esc(tab.id) + '">' +
+        // Dot before the count, because setTabCount patches the count in
+        // afterwards by appending to the label — rendering them the other way
+        // round put the dot on either side depending on which arrived first.
         '<span class="tma-tab__label">' + esc(tab.label) +
+        profileTabDot(state, tab.id) +
         tabCountChip(profileTabCount(state, tab.id)) + '</span>' +
         '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
         '</button>'
@@ -6027,16 +6060,13 @@
     if (!unread && !open) return '';
 
     var count = unread || open;
-    var mine = unread > 0 && !!c.mentionsMe;
     var label = unread
       ? (c.mentionsMe
         ? 'Unread comment naming you'
         : (unread === 1 ? '1 unread comment thread' : unread + ' unread comment threads'))
       : (open === 1 ? '1 open comment thread' : open + ' open comment threads');
 
-    var cls = 'tma-portal-comment-flag' +
-      (unread ? ' tma-portal-comment-flag--unread' : '') +
-      (mine ? ' tma-portal-comment-flag--mine' : '');
+    var cls = 'tma-portal-comment-flag' + (unread ? ' tma-portal-comment-flag--unread' : '');
 
     return '<span class="' + cls + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
       '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +

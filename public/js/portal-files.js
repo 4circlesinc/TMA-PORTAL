@@ -145,25 +145,24 @@
     if (!unread && !open) return '';
 
     /*
-     * Two tiers, and the difference is whether it is about you.
+     * Two tiers, and the difference is whether you have seen it.
      *
-     * Unread is loud: there is something here you have not seen, and it goes
-     * quiet the moment you open the file. Open-but-read is a quiet note that a
-     * conversation is still going — worth knowing, not worth chasing. Before
-     * there was a read marker every open thread was loud for ever, including
-     * to the person who wrote it.
+     * Unread is red and meant to be found from across a list. Open-but-read is
+     * a quiet grey note that the conversation is still going — worth knowing,
+     * not worth chasing. Before there was a read marker every open thread was
+     * loud for ever, including to the person who wrote it.
+     *
+     * Whether it names you is in the tooltip. A second colour for that would
+     * make the reader learn a palette to find out what one hover says.
      */
     var count = unread || open;
-    var mine = unread > 0 && !!c.mentionsMe;
     var label = unread
       ? (c.mentionsMe
         ? 'Unread comment naming you'
         : (unread === 1 ? '1 unread comment thread' : unread + ' unread comment threads'))
       : (open === 1 ? '1 open comment thread' : open + ' open comment threads');
 
-    var cls = 'tma-portal-comment-flag' +
-      (unread ? ' tma-portal-comment-flag--unread' : '') +
-      (mine ? ' tma-portal-comment-flag--mine' : '');
+    var cls = 'tma-portal-comment-flag' + (unread ? ' tma-portal-comment-flag--unread' : '');
 
     return '<span class="' + cls + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
       '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +

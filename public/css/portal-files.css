@@ -1136,18 +1136,20 @@
   mask-size: contain;
 }
 
-/* Something here you have not read. Quiet chips are conversations you have
-   already seen that happen to still be open. */
+/* Something here you have not read.
+ *
+ * The same red the sidebar counts use, because it is the same claim: there is
+ * work here nobody has looked at. A bolder weight on the same grey was the
+ * first attempt and it read as ordinary — in a list of twenty rows the eye
+ * needs a colour to land on, not a heavier font.
+ *
+ * Whether it names you is in the tooltip rather than a second colour. Two
+ * shades of "unread" would ask the reader to learn a palette to find out
+ * something one hover answers. */
 .tma-portal-comment-flag--unread {
-  color: var(--color-text-primary, #111827);
-  background: var(--color-hover, rgba(17, 24, 39, 0.08));
-  font-weight: 700;
-}
-
-/* Unread and it names you: the one case that is about this reader. */
-.tma-portal-comment-flag--mine {
   color: #fff;
-  background: #2563eb;
+  background: var(--color-unread, #ff4747);
+  font-weight: 700;
 }
 
 .tma-portal-status--success { background: #16a34a; }

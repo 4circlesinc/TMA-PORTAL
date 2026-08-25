@@ -210,9 +210,10 @@ class CipApplicationController extends Controller
         $last = $page->last();
 
         $presenter = self::presenterFor($user, $page);
+        $attention = Attention::forClients($user, $page->pluck('client_id')->filter()->all());
 
         return response()->json([
-            'applications' => $page->map(fn ($application) => $this->record($application, $user, $presenter))->all(),
+            'applications' => $page->map(fn ($application) => $this->record($application, $user, $presenter, $attention))->all(),
             /*
              * Where to carry on from. The caller stores this and hands it back
              * next time; it is deliberately opaque prose-free data rather than
@@ -959,7 +960,12 @@ class CipApplicationController extends Controller
         ]);
     }
 
-    private function record($application, User $viewer, ?Presenter $presenter = null): array
+    /**
+     * @param  ?array<int, array{comments: int, mentionsMe: bool, messages: int}>  $attention
+     *                                Primed by the caller when it is drawing more than one
+     *                                application; measured here for a single record.
+     */
+    private function record($application, User $viewer, ?Presenter $presenter = null, ?array $attention = null): array
     {
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
@@ -1030,6 +1036,22 @@ class CipApplicationController extends Controller
             // and, because the steps it has not reached are answered too —
             // how far it has left to go.
             'milestones' => Milestones::for($application),
+            /*
+             * Whether anything on this file is waiting for the reader — the
+             * same block the applications table draws a dot from. On the
+             * profile it is what puts a dot on the Documents tab, so the
+             * conversation is findable before anybody opens the tab it is in.
+             */
+            /*
+             * Primed by the caller where there is a page of these — measuring
+             * it per record turned the sync listing into three queries per
+             * application, which CipSyncScaleTest exists to catch.
+             */
+            'attention' => $application->client_id
+                ? ($attention !== null
+                    ? ($attention[$application->client_id] ?? null)
+                    : (Attention::forClients($viewer, [$application->client_id])[$application->client_id] ?? null))
+                : null,
             'assignedOfficer' => $this->officer($application),
             // The same people the table column and Assigned tab name, faces
             // on the facts strip under every tab, not a second list.

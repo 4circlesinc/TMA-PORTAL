@@ -35491,15 +35491,13 @@ span.tma-dash__messages-profile-avatar {
   flex: none;
 }
 
+/* The same red as the dot on the face, because it is the same claim. The dot
+   is what you notice across a table; the icon says which kind it is. */
 .tma-cip-table__flag {
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-secondary);
+  color: var(--color-unread, #ff4747);
 }
-
-/* Named in the thread: the one case that is about the reader, so the one case
-   that earns colour. */
-.tma-cip-table__flag--mine { color: #2563eb; }
 
 .tma-cip-table__flag-icon {
   width: 14px;
