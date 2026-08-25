@@ -207,6 +207,22 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/you')->assertSee('tma-auth__stack', false);
     }
 
+    public function test_the_access_step_lists_cip_when_the_module_is_on(): void
+    {
+        [$user] = $this->client();
+
+        config(['services.cip.enabled' => true]);
+        $this->actingAs($user)->get('/onboarding/access')
+            ->assertOk()
+            ->assertSee('CIP Applications')
+            ->assertSee('Manage your CIP applications.');
+
+        config(['services.cip.enabled' => false]);
+        $this->actingAs($user)->get('/onboarding/access')
+            ->assertOk()
+            ->assertDontSee('CIP Applications');
+    }
+
     public function test_related_questions_share_a_screen(): void
     {
         $this->assertSame(

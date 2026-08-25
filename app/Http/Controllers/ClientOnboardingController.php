@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
+use App\Support\Cip\CipAccess;
 use App\Support\Notifications\Notifier;
 use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\Onboarding\ClientFlow;
@@ -213,6 +214,7 @@ class ClientOnboardingController extends Controller
             'optional' => ClientFlow::isOptional($step),
             'contactMethods' => ClientFlow::CONTACT_METHODS,
             'calendarAvailable' => ClientFlow::calendarAvailable(),
+            'cipAvailable' => CipAccess::canReach($user),
             'google' => $user->connectedAccount('google'),
             'microsoft' => $user->connectedAccount('microsoft'),
             'assignedStaff' => $client

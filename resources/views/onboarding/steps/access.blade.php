@@ -70,6 +70,15 @@
           </span>
         </div>
       @endforeach
+      @if ($cipAvailable)
+        <div class="tma-auth__task">
+          <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/IdentificationCard.svg" alt="" width="16" height="16"></span>
+          <span class="tma-auth__task-copy">
+            <span class="tma-auth__task-name">CIP Applications</span>
+            <span class="tma-auth__task-desc">Manage your CIP applications.</span>
+          </span>
+        </div>
+      @endif
       @unless ($calendarAvailable)
         <div class="tma-auth__task">
           <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/CalendarBlank.svg" alt="" width="16" height="16"></span>
