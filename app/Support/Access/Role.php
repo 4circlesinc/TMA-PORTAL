@@ -259,6 +259,8 @@ class Role
         'templates.view' => [self::EMPLOYEE],
         // The Workflows section: requests waiting on you or sent by you, and
         // the comment threads you are part of, across every file.
+        // Service-provider contacts reach the same pages without holding
+        // this capability, see LegacyPageController::canViewWorkflowsPage.
         'workflows.view' => [self::EMPLOYEE],
         // The Client Call Recordings area. Employees hold it but see only the
         // calls they recorded, the wider view is the administrator's
@@ -355,6 +357,8 @@ class Role
         'templates' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
+        // Also served to CIP service-provider contacts, scoped by FileAccess
+        // (inbox and sent, not the firm-wide All tab).
         'workflows' => 'workflows.view',
         'workflows/feedback' => 'workflows.view',
     ];

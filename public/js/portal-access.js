@@ -109,6 +109,9 @@
     // Service-provider / private-client CIP reach: keep Applications nav
     // without granting the staff clients.view capability.
     if (capability === 'clients.view' && cipReach) return true;
+    // Service-provider contacts keep Workflows without workflows.view.
+    // Generic clients still do not see it.
+    if (capability === 'workflows.view' && providerContact) return true;
     return caps.indexOf(capability) !== -1;
   }
 

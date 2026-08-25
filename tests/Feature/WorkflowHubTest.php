@@ -321,7 +321,7 @@ class WorkflowHubTest extends TestCase
         $this->assertNotContains('Payroll.txt', $names);
     }
 
-    /** The Workflows section is staff tooling; a client has no page for it. */
+    /** The Workflows section is staff tooling; a generic client has no page for it. */
     public function test_the_workflows_page_is_closed_to_clients(): void
     {
         $client = $this->user('Client', 'cliff@example.com', 'Cliff Client');

@@ -219,6 +219,21 @@ class CipProviderFolderAccessTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_a_provider_contact_reaches_the_workflows_page(): void
+    {
+        [, $gil] = $this->providerWithContact('GAL');
+        $stranger = $this->user(Role::CLIENT);
+
+        $this->actingAs($gil)->get('/workflows')->assertOk();
+        $this->actingAs($gil)->get('/workflows/feedback')->assertOk();
+        $this->actingAs($stranger)->get('/workflows')->assertNotFound();
+        $this->actingAs($stranger)->get('/workflows/feedback')->assertNotFound();
+
+        $this->actingAs($gil)->getJson('/portal/files/workflows?scope=inbox')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', false);
+    }
+
     public function test_a_linked_portal_login_does_not_open_the_whole_folder(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

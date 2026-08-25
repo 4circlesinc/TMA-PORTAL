@@ -127,6 +127,8 @@ class LegacyPageController extends Controller
                 abort_unless($this->canViewClientsPage($request), 404);
             } elseif ($page === 'folders/all') {
                 abort_unless($this->canViewAllFilesPage($request), 404);
+            } elseif ($page === 'workflows' || $page === 'workflows/feedback') {
+                abort_unless($this->canViewWorkflowsPage($request), 404);
             } else {
                 abort_unless(Role::canViewPage($request->user(), $page), 404);
             }
@@ -180,5 +182,18 @@ class LegacyPageController extends Controller
         $user = $request->user();
 
         return Role::canViewPage($user, 'folders/all') || CipAccess::canReach($user);
+    }
+
+    /**
+     * Workflows is staff tooling in the matrix. Service-provider contacts
+     * still need the inbox of requests on the client files they can open,
+     * without holding `workflows.view` (that would also open it to every
+     * other Client account).
+     */
+    private function canViewWorkflowsPage(Request $request): bool
+    {
+        $user = $request->user();
+
+        return Role::canViewPage($user, 'workflows') || CipAccess::isProviderContact($user);
     }
 }
