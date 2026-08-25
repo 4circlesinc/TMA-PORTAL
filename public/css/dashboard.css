@@ -18323,6 +18323,23 @@ button.tma-cip-status-chip:focus-visible {
   color: var(--color-text-primary);
 }
 
+/*
+ * The comment chip is appended straight onto the end of the name's text — see
+ * clientCommentChip — and unlike the status chip beside it, which carries
+ * --inline, it has no margin of its own. So "Main Applicant" and its count ran
+ * together into one word.
+ *
+ * A margin here rather than a flex gap on the name: the name is a bare text
+ * node sitting next to an element, and turning that into a flex row would make
+ * it an anonymous item, which cannot take min-width: 0 — a long folder name
+ * would then refuse to shrink and push the chip out of the row. The same 8px
+ * the File Library's own name cell and the checklist row already use for this
+ * exact pairing.
+ */
+.tma-dash__clients-folder-name .tma-portal-comment-flag {
+  margin-left: var(--space-8);
+}
+
 .tma-dash__clients-folder-meta {
   font-size: var(--text-size-12);
   line-height: 16px;
