@@ -235,7 +235,7 @@ final class AccountSetupFlow
     public static function accountsPhaseComplete(User $user): bool
     {
         // The preference flag is what staff getting-started stamps. A client
-        // who touched that screen must still finish the 13-step wizard.
+        // who touched that screen must still finish the client wizard.
         if (Role::isClient($user)) {
             return OnboardingProgress::query()
                 ->where('user_id', $user->id)

@@ -79,14 +79,18 @@ class ClientOnboardingTest extends TestCase
     {
         $answers = array_merge([
             'welcome' => [],
-            'name' => ['first_name' => 'Dana', 'last_name' => 'Reed'],
-            'photo' => [],
-            'email' => ['email_confirmed' => '1'],
-            'phone' => ['phone' => '+1 555 123 4567'],
-            'account-type' => ['account_type' => 'individual'],
-            'address' => ['street' => '1 Bay Street', 'city' => 'Castries', 'country' => 'Saint Lucia'],
-            'contact-preference' => ['preferred_contact' => 'Email'],
-            'contacts' => [],
+            'you' => ['first_name' => 'Dana', 'last_name' => 'Reed'],
+            'contact' => [
+                'email_confirmed' => '1',
+                'phone' => '+1 555 123 4567',
+                'preferred_contact' => 'Email',
+            ],
+            'work' => [
+                'account_type' => 'individual',
+                'street' => '1 Bay Street',
+                'city' => 'Castries',
+                'country' => 'Saint Lucia',
+            ],
             'access' => [],
             'terms' => ['accept_terms' => '1'],
         ], $overrides);
@@ -139,7 +143,7 @@ class ClientOnboardingTest extends TestCase
         // Straight into the wizard, not profile-setup.
         $this->actingAs($invited)->get('/')->assertRedirect(route('onboarding.index'));
 
-        $this->walk($invited, ['name' => ['first_name' => 'Bruce', 'last_name' => 'Wayne']]);
+        $this->walk($invited, ['you' => ['first_name' => 'Bruce', 'last_name' => 'Wayne']]);
         $this->actingAs($invited)->post('/onboarding-complete')
             ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
         $this->completeAccountSetup($invited);
@@ -201,22 +205,51 @@ class ClientOnboardingTest extends TestCase
     {
         [$user] = $this->client();
 
-        // Answer the two steps that unlock the conditional ones.
-        $this->actingAs($user)->post('/onboarding/phone', [
-            'phone' => '+1 555 123 4567', 'uses_whatsapp' => '1',
-        ]);
-        $this->actingAs($user)->post('/onboarding/account-type', ['account_type' => 'company']);
-
         foreach (ClientFlow::stepKeys() as $step) {
-            if ($step === 'calendar' && ! ClientFlow::calendarAvailable()) {
-                continue;
-            }
-
             $this->actingAs($user)->get("/onboarding/{$step}")
                 ->assertOk()
                 ->assertSee(' complete', false)
                 ->assertDontSee('Step ', false);
         }
+    }
+
+    public function test_related_questions_share_a_screen(): void
+    {
+        $this->assertSame(
+            ['welcome', 'you', 'contact', 'work', 'access', 'terms'],
+            ClientFlow::stepKeys(),
+        );
+    }
+
+    public function test_old_step_urls_open_the_joined_screen(): void
+    {
+        [$user] = $this->client();
+
+        $this->actingAs($user)->get('/onboarding/name')
+            ->assertRedirect(route('onboarding.show', ['step' => 'you']));
+        $this->actingAs($user)->get('/onboarding/phone')
+            ->assertRedirect(route('onboarding.show', ['step' => 'contact']));
+        $this->actingAs($user)->get('/onboarding/account-type')
+            ->assertRedirect(route('onboarding.show', ['step' => 'work']));
+        $this->actingAs($user)->get('/onboarding/calendar')
+            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
+    }
+
+    public function test_old_one_question_progress_skips_joined_screens_already_answered(): void
+    {
+        [$user] = $this->client();
+
+        OnboardingProgress::create([
+            'user_id' => $user->id,
+            'flow' => OnboardingProgress::FLOW_CLIENT,
+            'current_step' => 'photo',
+            'completed_steps' => ['welcome', 'name'],
+            'answers' => ['name' => ['first_name' => 'Dana', 'last_name' => 'Reed']],
+            'started_at' => now(),
+        ]);
+
+        $this->actingAs($user)->get('/onboarding')
+            ->assertRedirect(route('onboarding.show', ['step' => 'contact']));
     }
 
     // ------------------------------------------------------- saving + resuming
@@ -226,31 +259,31 @@ class ClientOnboardingTest extends TestCase
         [$user] = $this->client();
 
         $this->actingAs($user)->post('/onboarding/welcome');
-        $this->actingAs($user)->post('/onboarding/name', [
+        $this->actingAs($user)->post('/onboarding/you', [
             'first_name' => 'Dana', 'middle_name' => 'M', 'last_name' => 'Reed',
-        ])->assertRedirect(route('onboarding.show', ['step' => 'photo']));
+        ])->assertRedirect(route('onboarding.show', ['step' => 'contact']));
 
         $progress = OnboardingProgress::where('user_id', $user->id)->first();
-        $this->assertTrue($progress->hasDone('name'));
-        $this->assertSame('Dana', $progress->answers('name')['first_name']);
+        $this->assertTrue($progress->hasDone('you'));
+        $this->assertSame('Dana', $progress->answers('you')['first_name']);
 
         // Coming back lands on the next unfinished step, not the beginning.
         $this->actingAs($user)->get('/onboarding')
-            ->assertRedirect(route('onboarding.show', ['step' => 'photo']));
+            ->assertRedirect(route('onboarding.show', ['step' => 'contact']));
 
         // And revisiting an answered step shows what they typed.
-        $this->actingAs($user)->get('/onboarding/name')->assertOk()->assertSee('Dana');
+        $this->actingAs($user)->get('/onboarding/you')->assertOk()->assertSee('Dana');
     }
 
     public function test_a_required_step_refuses_an_empty_answer(): void
     {
         [$user] = $this->client();
 
-        $this->actingAs($user)->post('/onboarding/name', ['first_name' => '', 'last_name' => ''])
+        $this->actingAs($user)->post('/onboarding/you', ['first_name' => '', 'last_name' => ''])
             ->assertSessionHasErrors(['first_name', 'last_name']);
 
         $this->assertFalse(
-            OnboardingProgress::where('user_id', $user->id)->first()?->hasDone('name') ?? false
+            OnboardingProgress::where('user_id', $user->id)->first()?->hasDone('you') ?? false
         );
     }
 
@@ -259,39 +292,48 @@ class ClientOnboardingTest extends TestCase
         [$user] = $this->client();
 
         $this->actingAs($user)->post('/onboarding/welcome');
-        $this->actingAs($user)->post('/onboarding/name', ['first_name' => 'Dana', 'last_name' => 'Reed']);
+        $this->actingAs($user)->post('/onboarding/you', ['first_name' => 'Dana', 'last_name' => 'Reed']);
 
-        $this->actingAs($user)->post('/onboarding/photo/back')
-            ->assertRedirect(route('onboarding.show', ['step' => 'name']));
+        $this->actingAs($user)->post('/onboarding/contact/back')
+            ->assertRedirect(route('onboarding.show', ['step' => 'you']));
 
         $progress = OnboardingProgress::where('user_id', $user->id)->first();
-        $this->assertSame('Reed', $progress->answers('name')['last_name']);
+        $this->assertSame('Reed', $progress->answers('you')['last_name']);
     }
 
     // ------------------------------------------------------ conditional steps
 
-    public function test_company_details_are_only_asked_of_a_company(): void
+    public function test_company_details_are_only_required_for_a_company(): void
     {
         [$user] = $this->client();
 
-        $this->actingAs($user)->post('/onboarding/account-type', ['account_type' => 'individual']);
-        $this->actingAs($user)->get('/onboarding/company')->assertRedirect();
+        $this->actingAs($user)->post('/onboarding/work', [
+            'account_type' => 'individual',
+        ])->assertRedirect(route('onboarding.show', ['step' => 'access']));
 
-        $this->actingAs($user)->post('/onboarding/account-type', ['account_type' => 'company']);
-        $this->actingAs($user)->get('/onboarding/company')->assertOk()->assertSee('Company name');
+        $this->actingAs($user)->post('/onboarding/work', [
+            'account_type' => 'company',
+        ])->assertSessionHasErrors(['company_name']);
     }
 
-    public function test_whatsapp_is_only_asked_when_they_say_they_use_it(): void
+    public function test_whatsapp_is_collected_on_the_contact_screen(): void
     {
         [$user] = $this->client();
 
-        $this->actingAs($user)->post('/onboarding/phone', ['phone' => '+1 555 123 4567']);
-        $this->actingAs($user)->get('/onboarding/whatsapp')->assertRedirect();
+        $this->actingAs($user)->get('/onboarding/contact')
+            ->assertOk()
+            ->assertSee('I use WhatsApp')
+            ->assertSee('WhatsApp number');
 
-        $this->actingAs($user)->post('/onboarding/phone', [
-            'phone' => '+1 555 123 4567', 'uses_whatsapp' => '1',
-        ]);
-        $this->actingAs($user)->get('/onboarding/whatsapp')->assertOk();
+        $this->actingAs($user)->post('/onboarding/contact', [
+            'email_confirmed' => '1',
+            'phone' => '+1 555 123 4567',
+            'uses_whatsapp' => '1',
+            'whatsapp' => '+1 555 999 0000',
+            'preferred_contact' => 'WhatsApp',
+        ])->assertRedirect(route('onboarding.show', ['step' => 'work']));
+
+        $this->assertSame('+1 555 999 0000', OnboardingProgress::where('user_id', $user->id)->first()->answers('contact')['whatsapp']);
     }
 
     // -------------------------------------------------------- what it writes
@@ -301,12 +343,23 @@ class ClientOnboardingTest extends TestCase
         [$user, $client] = $this->client();
 
         $this->walk($user, [
-            'name' => ['first_name' => 'Dana', 'middle_name' => 'M', 'last_name' => 'Reed-Smith'],
-            'phone' => ['phone' => '+1 758 555 0101', 'uses_whatsapp' => '1'],
-            'whatsapp' => ['whatsapp' => '+1 758 555 0202'],
-            'contacts' => ['contacts' => [
-                ['name' => 'Alex Fox', 'email' => 'alex@acme.test', 'role' => 'Finance contact'],
-            ]],
+            'you' => ['first_name' => 'Dana', 'middle_name' => 'M', 'last_name' => 'Reed-Smith'],
+            'contact' => [
+                'email_confirmed' => '1',
+                'phone' => '+1 758 555 0101',
+                'uses_whatsapp' => '1',
+                'whatsapp' => '+1 758 555 0202',
+                'preferred_contact' => 'Email',
+            ],
+            'work' => [
+                'account_type' => 'individual',
+                'street' => '1 Bay Street',
+                'city' => 'Castries',
+                'country' => 'Saint Lucia',
+                'contacts' => [
+                    ['name' => 'Alex Fox', 'email' => 'alex@acme.test', 'role' => 'Finance contact'],
+                ],
+            ],
         ]);
         $this->actingAs($user)->post('/onboarding-complete')
             ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
@@ -339,8 +392,7 @@ class ClientOnboardingTest extends TestCase
         $existing = Company::create(['uid' => 'acme-group', 'name' => 'Acme Group']);
 
         $this->walk($user, [
-            'account-type' => ['account_type' => 'company'],
-            'company' => ['company_name' => 'acme group', 'company_role' => 'Director'],
+            'work' => ['account_type' => 'company', 'company_name' => 'acme group', 'company_role' => 'Director'],
         ]);
         $this->actingAs($user)->post('/onboarding-complete');
 
@@ -355,8 +407,7 @@ class ClientOnboardingTest extends TestCase
         [$user, $client] = $this->client();
 
         $this->walk($user, [
-            'account-type' => ['account_type' => 'company'],
-            'company' => ['company_name' => 'Fresh Ventures Ltd', 'company_website' => 'fresh.test'],
+            'work' => ['account_type' => 'company', 'company_name' => 'Fresh Ventures Ltd', 'company_website' => 'fresh.test'],
         ]);
         $this->actingAs($user)->post('/onboarding-complete');
 
@@ -433,17 +484,21 @@ class ClientOnboardingTest extends TestCase
         Storage::fake('public');
         [$user] = $this->client();
 
-        $this->actingAs($user)->post('/onboarding/photo', [
+        $this->actingAs($user)->post('/onboarding/you', [
             'photo' => UploadedFile::fake()->image('me.jpg', 400, 400),
+            'first_name' => 'Dana',
+            'last_name' => 'Reed',
         ])->assertRedirect();
 
         $this->assertNotNull($user->fresh()->avatar_url);
 
-        // And skipping is allowed — it is an optional step.
         [$other] = $this->client(['email' => 'other@example.test']);
-        $this->actingAs($other)->post('/onboarding/photo')->assertRedirect();
+        $this->actingAs($other)->post('/onboarding/you', [
+            'first_name' => 'Other',
+            'last_name' => 'Person',
+        ])->assertRedirect();
         $this->assertTrue(
-            OnboardingProgress::where('user_id', $other->id)->first()->hasDone('photo')
+            OnboardingProgress::where('user_id', $other->id)->first()->hasDone('you')
         );
     }
 }

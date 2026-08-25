@@ -5,7 +5,7 @@
 @push('scripts')
   <script src="/js/phone-input.js"></script>
   <script src="/js/avatar-cropper.js"></script>
-  @if ($step === 'photo')
+  @if ($step === 'you')
     {{-- avatar-cropper.js only exposes an API; without this the picture picked
          is submitted uncropped and the round preview never changes. --}}
     <script>

@@ -19,8 +19,8 @@ use Illuminate\View\View;
 /**
  * The guided onboarding a client walks through after accepting their invitation.
  *
- * One step per screen, answers saved as each is submitted, so closing the tab
- * on step 6 comes back to step 6. Nothing here can be reached once onboarding
+ * One screen per topic, answers saved as each is submitted, so closing the tab
+ * on step 4 comes back to step 4. Nothing here can be reached once onboarding
  * is finished. {@see self::progress()} sends a completed account to the portal
  * instead, which is what stops the back button reopening the wizard.
  */
@@ -39,14 +39,15 @@ class ClientOnboardingController extends Controller
         $user = $request->user();
         $progress = $this->progress($user);
 
+        $requested = $step;
+        $step = ClientFlow::resolve($step) ?? $step;
+
         if (! ClientFlow::exists($step)) {
             return redirect()->route('onboarding.index');
         }
 
-        // A step that no longer applies (company details, after switching back
-        // to Individual) must not be reachable by typing its URL.
-        if (! ClientFlow::applies($step, $progress)) {
-            return redirect()->route('onboarding.show', ['step' => ClientFlow::nextUnfinished($progress)]);
+        if ($requested !== $step) {
+            return redirect()->route('onboarding.show', ['step' => $step]);
         }
 
         return view('onboarding.client', $this->viewData($user, $progress, $step));
@@ -57,6 +58,8 @@ class ClientOnboardingController extends Controller
         $user = $request->user();
         $progress = $this->progress($user);
 
+        $step = ClientFlow::resolve($step) ?? $step;
+
         if (! ClientFlow::exists($step) || ! ClientFlow::applies($step, $progress)) {
             return redirect()->route('onboarding.index');
         }
@@ -66,18 +69,17 @@ class ClientOnboardingController extends Controller
             ClientFlow::messages($step),
         );
 
-        // The photo is a file, not an answer, store it and remember only that
-        // they dealt with the step.
-        if ($step === 'photo') {
+        if ($step === 'you') {
             if ($request->hasFile('photo')) {
                 $user->forceFill([
                     'avatar_url' => AvatarService::storeUploaded($request->file('photo'), $user->avatar_url),
                 ])->save();
             }
-            $values = ['uploaded' => $request->hasFile('photo') || $user->avatar_url !== null];
+            unset($values['photo']);
+            $values['uploaded'] = $user->fresh()->avatar_url !== null;
         }
 
-        if ($step === 'contacts') {
+        if ($step === 'work') {
             $values['contacts'] = array_values(array_filter(
                 $values['contacts'] ?? [],
                 fn ($row) => ! empty($row['name']) || ! empty($row['email']),
@@ -113,8 +115,16 @@ class ClientOnboardingController extends Controller
 
         // Every required step has to be answered, the wizard enforces this by
         // ordering, but the route is still a public POST.
+        if ($progress->isComplete()) {
+            AccountSetupFlow::begin($user);
+
+            return redirect()->route('account-setup.show', [
+                'step' => AccountSetupFlow::firstStep($user->fresh()),
+            ]);
+        }
+
         foreach (ClientFlow::applicableSteps($progress) as $step) {
-            if (! ClientFlow::isOptional($step) && ! $progress->hasDone($step)) {
+            if (! ClientFlow::isOptional($step) && ! ClientFlow::hasFinished($progress, $step)) {
                 return redirect()->route('onboarding.show', ['step' => $step])
                     ->withErrors(['step' => 'Please finish this step first.']);
             }
@@ -182,6 +192,7 @@ class ClientOnboardingController extends Controller
     public function back(Request $request, string $step): RedirectResponse
     {
         $progress = $this->progress($request->user());
+        $step = ClientFlow::resolve($step) ?? $step;
         $previous = ClientFlow::before($step, $progress);
 
         return redirect()->route('onboarding.show', [

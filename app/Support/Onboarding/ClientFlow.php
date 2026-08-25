@@ -6,20 +6,11 @@ use App\Models\OnboardingProgress;
 use App\Models\User;
 
 /**
- * The client onboarding flow: which steps exist, which ones apply to a given
- * person, and what each one accepts.
+ * The client onboarding flow: which steps exist, which ones apply, and what
+ * each one accepts.
  *
- * One definition drives everything, the step order, the progress dots, the
- * validation, the review screen and the "what's left" calculation, so a step
- * cannot appear in the wizard but be missing from the count, or be validated
- * differently from the way it is rendered.
- *
- * Three steps are conditional, per the spec's "where applicable":
- *   - company   only when the person said they are a company
- *   - whatsapp  only when they said they use WhatsApp
- *   - calendar  only when a provider is actually configured in this environment
- * A step that stops applying keeps its stored answer (so switching back does
- * not lose it) but drops out of the count and is skipped when navigating.
+ * Related questions share a screen so the person is not walked through a
+ * dozen one-field pages. Older step URLs still resolve to the joined screen.
  */
 final class ClientFlow
 {
@@ -31,20 +22,31 @@ final class ClientFlow
      */
     private const STEPS = [
         'welcome' => ['title' => 'Welcome', 'optional' => true],
-        'name' => ['title' => 'Your name'],
-        'photo' => ['title' => 'Photo or logo', 'optional' => true],
-        'email' => ['title' => 'Confirm email'],
-        'phone' => ['title' => 'Phone number'],
-        'whatsapp' => ['title' => 'WhatsApp', 'optional' => true],
-        'account-type' => ['title' => 'Individual or company'],
-        'company' => ['title' => 'Company details'],
-        'address' => ['title' => 'Address', 'optional' => true],
-        'contact-preference' => ['title' => 'Preferred contact'],
-        'contacts' => ['title' => 'Additional contacts', 'optional' => true],
-        'calendar' => ['title' => 'Calendar', 'optional' => true],
+        'you' => ['title' => 'About you'],
+        'contact' => ['title' => 'How we reach you'],
+        'work' => ['title' => 'Your details'],
         'access' => ['title' => 'Your access', 'optional' => true],
         'terms' => ['title' => 'Terms and privacy'],
-        'done' => ['title' => 'All set', 'optional' => true],
+    ];
+
+    /**
+     * Old one-question URLs, mapped to the screen that now holds them.
+     *
+     * @var array<string, string>
+     */
+    public const LEGACY_STEPS = [
+        'name' => 'you',
+        'photo' => 'you',
+        'email' => 'contact',
+        'phone' => 'contact',
+        'whatsapp' => 'contact',
+        'contact-preference' => 'contact',
+        'account-type' => 'work',
+        'company' => 'work',
+        'address' => 'work',
+        'contacts' => 'work',
+        'calendar' => 'access',
+        'done' => 'terms',
     ];
 
     public const CONTACT_METHODS = ['Email', 'Phone', 'WhatsApp', 'Portal messages'];
@@ -62,6 +64,15 @@ final class ClientFlow
         return array_key_exists($step, self::STEPS);
     }
 
+    public static function resolve(string $step): ?string
+    {
+        if (self::exists($step)) {
+            return $step;
+        }
+
+        return self::LEGACY_STEPS[$step] ?? null;
+    }
+
     public static function title(string $step): string
     {
         return self::STEPS[$step]['title'] ?? ucfirst($step);
@@ -72,20 +83,12 @@ final class ClientFlow
         return (bool) (self::STEPS[$step]['optional'] ?? false);
     }
 
-    /**
-     * Does this step apply to this person, given what they have answered?
-     */
     public static function applies(string $step, OnboardingProgress $progress): bool
     {
-        return match ($step) {
-            'company' => (($progress->answers('account-type')['account_type'] ?? null) === 'company'),
-            'whatsapp' => (bool) ($progress->answers('phone')['uses_whatsapp'] ?? false),
-            'calendar' => self::calendarAvailable(),
-            default => true,
-        };
+        return self::exists($step);
     }
 
-    /** Only offer the calendar step where a provider is actually configured. */
+    /** Only offer calendar connect where a provider is actually configured. */
     public static function calendarAvailable(): bool
     {
         return (bool) config('services.google.client_id')
@@ -99,25 +102,45 @@ final class ClientFlow
      */
     public static function applicableSteps(OnboardingProgress $progress): array
     {
-        return array_values(array_filter(
-            self::stepKeys(),
-            fn (string $step) => self::applies($step, $progress),
-        ));
+        return self::stepKeys();
+    }
+
+    /**
+     * Whether this joined screen is already done, including people who
+     * finished the old one-question steps that now live here.
+     */
+    public static function hasFinished(OnboardingProgress $progress, string $step): bool
+    {
+        if ($progress->hasDone($step)) {
+            return true;
+        }
+
+        return match ($step) {
+            'you' => $progress->hasDone('name'),
+            'contact' => $progress->hasDone('email')
+                && $progress->hasDone('phone')
+                && $progress->hasDone('contact-preference'),
+            'work' => $progress->hasDone('account-type')
+                && $progress->hasDone('address')
+                && $progress->hasDone('contacts'),
+            'terms' => $progress->hasDone('done'),
+            default => false,
+        };
     }
 
     /** The first applicable step the person has not finished. */
     public static function nextUnfinished(OnboardingProgress $progress): string
     {
         foreach (self::applicableSteps($progress) as $step) {
-            if (! $progress->hasDone($step)) {
+            if (! self::hasFinished($progress, $step)) {
                 return $step;
             }
         }
 
-        return 'done';
+        return 'terms';
     }
 
-    /** The step after this one, skipping any that no longer apply. */
+    /** The step after this one. */
     public static function after(string $step, OnboardingProgress $progress): ?string
     {
         $steps = self::applicableSteps($progress);
@@ -130,7 +153,7 @@ final class ClientFlow
         return $steps[$at + 1] ?? null;
     }
 
-    /** The step before this one, skipping any that no longer apply. */
+    /** The step before this one. */
     public static function before(string $step, OnboardingProgress $progress): ?string
     {
         $steps = self::applicableSteps($progress);
@@ -140,7 +163,7 @@ final class ClientFlow
             return null;
         }
 
-        return $steps[$at - 1] ?? null;
+        return $steps[$at - 1];
     }
 
     /** Position (1-based) and total, for the progress indicator. */
@@ -152,7 +175,7 @@ final class ClientFlow
         return [
             'index' => $at === false ? 1 : $at + 1,
             'total' => count($steps),
-            'done' => count(array_intersect($progress->done(), $steps)),
+            'done' => count(array_filter($steps, fn (string $key) => self::hasFinished($progress, $key))),
         ];
     }
 
@@ -164,43 +187,29 @@ final class ClientFlow
     public static function rules(string $step): array
     {
         return match ($step) {
-            'name' => [
+            'you' => [
                 'first_name' => ['required', 'string', 'max:100'],
                 'middle_name' => ['nullable', 'string', 'max:100'],
                 'last_name' => ['required', 'string', 'max:100'],
-            ],
-            'photo' => [
                 'photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],
             ],
-            'email' => [
+            'contact' => [
                 'email_confirmed' => ['accepted'],
-            ],
-            'phone' => [
                 'phone' => array_merge(['required'], array_slice(self::PHONE_RULE, 1)),
                 'uses_whatsapp' => ['nullable', 'boolean'],
-            ],
-            'whatsapp' => [
                 'whatsapp' => self::PHONE_RULE,
+                'preferred_contact' => ['required', 'in:'.implode(',', self::CONTACT_METHODS)],
             ],
-            'account-type' => [
+            'work' => [
                 'account_type' => ['required', 'in:individual,company'],
-            ],
-            'company' => [
-                'company_name' => ['required', 'string', 'max:255'],
+                'company_name' => ['required_if:account_type,company', 'nullable', 'string', 'max:255'],
                 'company_role' => ['nullable', 'string', 'max:120'],
                 'company_website' => ['nullable', 'string', 'max:255'],
-            ],
-            'address' => [
                 'street' => ['nullable', 'string', 'max:255'],
                 'city' => ['nullable', 'string', 'max:120'],
                 'region' => ['nullable', 'string', 'max:120'],
                 'postcode' => ['nullable', 'string', 'max:32'],
                 'country' => ['nullable', 'string', 'max:120'],
-            ],
-            'contact-preference' => [
-                'preferred_contact' => ['required', 'in:'.implode(',', self::CONTACT_METHODS)],
-            ],
-            'contacts' => [
                 'contacts' => ['nullable', 'array', 'max:10'],
                 'contacts.*.name' => ['nullable', 'string', 'max:120'],
                 'contacts.*.email' => ['nullable', 'email', 'max:255'],
@@ -217,21 +226,24 @@ final class ClientFlow
     public static function messages(string $step): array
     {
         return match ($step) {
-            'email' => ['email_confirmed.accepted' => 'Please confirm this is the right email address.'],
+            'contact' => [
+                'email_confirmed.accepted' => 'Please confirm this is the right email address.',
+                'phone.regex' => 'Enter a phone number, like +1 555 123 4567.',
+                'whatsapp.regex' => 'Enter a WhatsApp number, like +1 555 123 4567.',
+                'preferred_contact.required' => 'Choose how you would like us to reach you.',
+            ],
+            'work' => [
+                'account_type.required' => 'Choose whether this account is for you or a company.',
+                'company_name.required_if' => 'Enter the company name.',
+            ],
             'terms' => ['accept_terms.accepted' => 'Please accept the Terms and Privacy Policy to finish.'],
-            'phone' => ['phone.regex' => 'Enter a phone number, like +1 555 123 4567.'],
-            'whatsapp' => ['whatsapp.regex' => 'Enter a WhatsApp number, like +1 555 123 4567.'],
-            'account-type' => ['account_type.required' => 'Choose whether this account is for you or a company.'],
-            'contact-preference' => ['preferred_contact.required' => 'Choose how you would like us to reach you.'],
             default => [],
         };
     }
 
     /**
      * The values a step should start with, what they answered before, falling
-     * back to what we already know about them. This is what makes the flow
-     * feel like it remembers, and it is why the invited client is not asked to
-     * retype the name and email the staff member already entered.
+     * back to what we already know about them.
      */
     public static function defaults(string $step, User $user, OnboardingProgress $progress): array
     {
@@ -245,24 +257,37 @@ final class ClientFlow
         $profile = $client?->data ?? [];
 
         return match ($step) {
-            'name' => [
+            'you' => array_merge([
                 'first_name' => $user->first_name ?: ($profile['firstName'] ?? ''),
                 'middle_name' => $user->middle_name ?: ($profile['middleName'] ?? ''),
                 'last_name' => $user->last_name ?: ($profile['lastName'] ?? ''),
-            ],
-            'phone' => ['phone' => $user->phone ?: ($client?->phone ?? '')],
-            'account-type' => [
-                'account_type' => ($client?->company_id || ! empty($profile['work']['company']))
-                    ? 'company'
-                    : 'individual',
-            ],
-            'company' => [
-                'company_name' => $client?->companyRecord?->name
-                    ?: ($profile['work']['company'] ?? ''),
-                'company_role' => $profile['work']['jobTitle'] ?? '',
-                'company_website' => $client?->companyRecord?->website ?? '',
-            ],
-            'address' => self::firstAddress($profile),
+            ], $progress->answers('name')),
+            'contact' => array_merge(
+                [
+                    'phone' => $user->phone ?: ($client?->phone ?? ''),
+                    'preferred_contact' => $profile['preferredContact'] ?? 'Email',
+                ],
+                $progress->answers('phone'),
+                $progress->answers('whatsapp'),
+                $progress->answers('email'),
+                $progress->answers('contact-preference'),
+            ),
+            'work' => array_merge(
+                [
+                    'account_type' => ($client?->company_id || ! empty($profile['work']['company']))
+                        ? 'company'
+                        : 'individual',
+                    'company_name' => $client?->companyRecord?->name
+                        ?: ($profile['work']['company'] ?? ''),
+                    'company_role' => $profile['work']['jobTitle'] ?? '',
+                    'company_website' => $client?->companyRecord?->website ?? '',
+                ],
+                self::firstAddress($profile),
+                $progress->answers('account-type'),
+                $progress->answers('company'),
+                $progress->answers('address'),
+                $progress->answers('contacts'),
+            ),
             default => [],
         };
     }

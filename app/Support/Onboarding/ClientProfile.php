@@ -44,8 +44,9 @@ final class ClientProfile
 
     private static function applyToUser(User $user, OnboardingProgress $progress): void
     {
-        $name = $progress->answers('name');
-        $phone = $progress->answers('phone');
+        $name = self::bag($progress, 'you', 'name');
+        $phone = self::bag($progress, 'contact', 'phone');
+        $company = self::bag($progress, 'work', 'company');
 
         $attrs = [];
 
@@ -62,8 +63,8 @@ final class ClientProfile
             $attrs['phone'] = $phone['phone'];
         }
 
-        if (! empty($progress->answers('company')['company_role'])) {
-            $attrs['job_title'] = $progress->answers('company')['company_role'];
+        if (! empty($company['company_role'])) {
+            $attrs['job_title'] = $company['company_role'];
         }
 
         if ($attrs !== []) {
@@ -80,12 +81,15 @@ final class ClientProfile
         }
 
         $profile = $client->data ?? [];
-        $name = $progress->answers('name');
-        $phone = $progress->answers('phone');
-        $whatsapp = $progress->answers('whatsapp');
-        $address = $progress->answers('address');
-        $company = $progress->answers('company');
-        $isCompany = ($progress->answers('account-type')['account_type'] ?? null) === 'company';
+        $name = self::bag($progress, 'you', 'name');
+        $phone = self::bag($progress, 'contact', 'phone');
+        $contact = self::bag($progress, 'contact', 'contact-preference');
+        $whatsapp = self::bag($progress, 'contact', 'whatsapp');
+        $work = self::bag($progress, 'work', 'address');
+        $company = self::bag($progress, 'work', 'company');
+        $isCompany = ($work['account_type'] ?? $progress->answers('account-type')['account_type'] ?? null) === 'company';
+        $address = $work;
+        $extraContacts = $work['contacts'] ?? $progress->answers('contacts')['contacts'] ?? [];
 
         if (! empty($name['first_name'])) {
             $profile['firstName'] = $name['first_name'];
@@ -105,16 +109,23 @@ final class ClientProfile
             $profile['phones'] = self::upsertValue($profile['phones'] ?? [], 'whatsapp', $whatsapp['whatsapp']);
         }
 
-        if ($address && array_filter($address)) {
+        $hasAddress = array_filter([
+            $address['street'] ?? null,
+            $address['city'] ?? null,
+            $address['region'] ?? null,
+            $address['postcode'] ?? null,
+            $address['country'] ?? null,
+        ]);
+        if ($hasAddress) {
             $profile['addresses'] = self::upsertAddress($profile['addresses'] ?? [], $address);
         }
 
-        if (! empty($progress->answers('contact-preference')['preferred_contact'])) {
-            $profile['preferredContact'] = $progress->answers('contact-preference')['preferred_contact'];
+        if (! empty($contact['preferred_contact'])) {
+            $profile['preferredContact'] = $contact['preferred_contact'];
         }
 
         $extra = array_values(array_filter(
-            $progress->answers('contacts')['contacts'] ?? [],
+            $extraContacts,
             fn ($row) => ! empty($row['name']) || ! empty($row['email']),
         ));
         if ($extra !== []) {
@@ -152,6 +163,19 @@ final class ClientProfile
         }
 
         $client->forceFill($columns)->save();
+    }
+
+    /**
+     * Answers from a joined screen, falling back to the old one-question key
+     * so a half-finished wizard still applies.
+     *
+     * @return array<string, mixed>
+     */
+    private static function bag(OnboardingProgress $progress, string $joined, string $legacy): array
+    {
+        $fresh = $progress->answers($joined);
+
+        return $fresh !== [] ? $fresh : $progress->answers($legacy);
     }
 
     /**
