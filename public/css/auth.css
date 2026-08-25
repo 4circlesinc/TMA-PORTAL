@@ -823,6 +823,26 @@ body:has(.tma-auth__card--tall) {
   text-decoration: underline;
 }
 
+.tma-auth__legal {
+  width: min(384px, 100%);
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tma-auth__legal a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tma-auth__legal a:hover {
+  color: var(--color-text-primary);
+}
+
 .tma-auth__field--360,
 .tma-auth__submit--360 {
   width: min(360px, 100%);

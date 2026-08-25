@@ -227,10 +227,11 @@ class ClientOnboardingTest extends TestCase
         config(['services.cip.enabled' => true]);
         $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
-            ->assertSee('Included with this account')
+            ->assertSee('Your account')
             ->assertSee('CIP Applications')
             ->assertSee('Manage your CIP applications.')
-            ->assertSee('Terms of Service');
+            ->assertSee('By continuing you agree')
+            ->assertDontSee('Terms and privacy', false);
 
         config(['services.cip.enabled' => false]);
         $this->actingAs($user)->get('/onboarding/terms')
@@ -262,8 +263,9 @@ class ClientOnboardingTest extends TestCase
 
         $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
-            ->assertSee('Included with this account')
-            ->assertSee('I agree to the');
+            ->assertSee('Your account')
+            ->assertSee('By continuing you agree')
+            ->assertDontSee('I agree to the', false);
     }
 
     public function test_calendar_is_skipped_when_no_provider_is_configured(): void

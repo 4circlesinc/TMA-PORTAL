@@ -1,14 +1,14 @@
-@include('onboarding.steps._icon', ['icon' => 'FileText'])
+@include('onboarding.steps._icon', ['icon' => 'ShieldCheck'])
 <div class="tma-auth__intro">
-  <h1 class="tma-auth__title" id="onboarding-title">Terms and privacy</h1>
-  <p class="tma-auth__subtitle">What this account includes, and the terms we need you to agree to.</p>
+  <h1 class="tma-auth__title" id="onboarding-title">Your account</h1>
+  <p class="tma-auth__subtitle">What you can do here.</p>
 </div>
 @include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
+  <input type="hidden" name="accept_terms" value="1">
 
   <div class="tma-auth__group">
-    <p class="tma-auth__section-label">Included with this account</p>
     <div class="tma-auth__checklist">
       @foreach ([
         ['FolderNotch', 'Your files', 'Documents we share with you, and anything you upload.'],
@@ -54,12 +54,19 @@
     </div>
   @endif
 
-  <label class="tma-auth__check">
-    <input type="checkbox" name="accept_terms" value="1" required @checked(old('accept_terms', $values['accept_terms'] ?? false))>
-    <span>I agree to the <a href="{{ url('/terms-of-service') }}" target="_blank" rel="noopener">Terms of Service</a>
-      and the <a href="{{ url('/privacy-policy') }}" target="_blank" rel="noopener">Privacy Policy</a>.</span>
-  </label>
-  @error('accept_terms')<span class="tma-auth__field-msg">{{ $message }}</span>@enderror
-  @include('onboarding.steps._nav', ['label' => 'Agree and continue'])
+  <div class="tma-auth__nav-actions">
+    <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
+  </div>
+  <p class="tma-auth__legal">
+    By continuing you agree to the
+    <a href="{{ url('/terms-of-service') }}" target="_blank" rel="noopener">Terms of Service</a>
+    and
+    <a href="{{ url('/privacy-policy') }}" target="_blank" rel="noopener">Privacy Policy</a>.
+  </p>
+  @if ($previous)
+    <p class="tma-auth__alt-link">
+      <button type="submit" form="onboarding-back" class="tma-auth__link-btn">Back</button>
+    </p>
+  @endif
 </form>
 @include('onboarding.steps._back-form')

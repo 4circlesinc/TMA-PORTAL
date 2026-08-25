@@ -1527,7 +1527,8 @@ select.tma-auth__input {
 
 .tma-auth__form .tma-auth__account-options,
 .tma-auth__form .tma-auth__nav-actions,
-.tma-auth__form .tma-auth__checklist {
+.tma-auth__form .tma-auth__checklist,
+.tma-auth__form .tma-auth__legal {
   width: 100%;
   align-items: stretch;
 }

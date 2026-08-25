@@ -25,7 +25,7 @@ final class ClientFlow
         'you' => ['title' => 'About you'],
         'contact' => ['title' => 'How we reach you'],
         'calendar' => ['title' => 'Connect a calendar', 'optional' => true],
-        'terms' => ['title' => 'Terms and privacy'],
+        'terms' => ['title' => 'Your account'],
     ];
 
     /**
