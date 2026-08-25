@@ -2682,10 +2682,58 @@
   text-overflow: ellipsis;
 }
 
+/* ── Shortcuts, as frosted glass ──────────────────────────────────────────
+ *
+ * Twelve tiles of white glass on a coloured wash: the card is the only warm
+ * thing on a board of white panels, which is the point — Shortcuts is the tile
+ * a reader goes to *do* something from, and it earns being the one that looks
+ * different.
+ *
+ * THE WASH IS THE APPLICATION'S OWN PALETTE
+ *
+ * Four soft radials, one to a corner, over the card's normal fill: the brand
+ * blue and its deep partner on one diagonal, mint and orange from the accent
+ * palette on the other. Every colour is a token from tokens.css rather than a
+ * hex picked for this card, so the wash follows a rebrand instead of outliving
+ * it. Mixed with `transparent` rather than baked as rgba for the same reason —
+ * the token can be any format and this still resolves.
+ *
+ * The two accent tokens are mixed harder than the two brand ones because they
+ * are already pastels (#6be6d3, #ffb55b) where the brand blues are saturated;
+ * matched percentages leave a card that is blue in two corners and barely
+ * tinted in the other two.
+ *
+ * WHY THE TILES BLUR
+ *
+ * `backdrop-filter` is what makes the glass read as glass: the tile is
+ * translucent, so the wash behind it shows through, and blurring it means the
+ * icon sits on a soft field instead of on whatever gradient stripe happens to
+ * be under that corner. The design system already names this effect —
+ * --blur-16 is "Glass 1", --shadow-glass-1 is its drop — so the card is
+ * assembled from documented parts rather than invented ones. Where
+ * backdrop-filter is unsupported the tile is simply a flat translucent white,
+ * which is a slightly plainer card and nothing worse.
+ *
+ * --color-white rather than a literal, throughout: it inverts with the theme,
+ * so the glass darkens with the card instead of staying a white slab on it.
+ */
+.tma-portal-panel--shortcuts {
+  border: 1px solid var(--color-border-soft);
+  background:
+    radial-gradient(60% 55% at 12% 14%, color-mix(in srgb, var(--color-primary) 30%, transparent), transparent 70%),
+    radial-gradient(55% 50% at 88% 10%, color-mix(in srgb, var(--color-mint) 42%, transparent), transparent 70%),
+    radial-gradient(55% 55% at 15% 90%, color-mix(in srgb, var(--color-orange) 40%, transparent), transparent 70%),
+    radial-gradient(60% 55% at 88% 86%, color-mix(in srgb, var(--color-primary-dark) 26%, transparent), transparent 70%),
+    var(--color-bg-card);
+  box-shadow: var(--shadow-glass-1);
+}
+
 .tma-portal-shortcuts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-8);
+  /* Generous down, tight across: the labels are what need the room, and four
+     columns of a third-width card leave a tile about 20px of side margin. */
+  gap: var(--space-20) var(--space-6);
   width: 100%;
   min-width: 0;
 }
@@ -2695,39 +2743,99 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-12) var(--space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-12);
   background: none;
   font-family: inherit;
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
   color: var(--color-black);
   text-align: center;
   cursor: pointer;
 }
 
-.tma-portal-shortcut:hover { background: var(--color-hover); }
+/* The ring goes round the whole cell, tile and label together, because the
+   whole cell is the button. Offset so it clears the tile's own edge. */
+.tma-portal-shortcut:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-14);
+}
 
 .tma-portal-shortcut__icon {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-12);
-  background: var(--color-bg-tag);
+  flex: none;
+  width: 56px;
+  height: 56px;
+  box-sizing: border-box;
+  border-radius: var(--radius-16);
+  border: 1px solid color-mix(in srgb, var(--color-white) 90%, transparent);
+  background: color-mix(in srgb, var(--color-white) 62%, transparent);
+  -webkit-backdrop-filter: var(--blur-16);
+  backdrop-filter: var(--blur-16);
+  box-shadow: var(--shadow-glass-1);
+  transition: background-color var(--transition-base);
 }
 
-.tma-portal-shortcut__icon img { width: 20px; height: 20px; }
+/* The glass clears rather than the cell washing: the hover happens where the
+   pointer is, on the thing that looks pressable. */
+.tma-portal-shortcut:hover .tma-portal-shortcut__icon {
+  background: color-mix(in srgb, var(--color-white) 85%, transparent);
+}
+
+/*
+ * The glyph.
+ *
+ * A masked span, not an <img>: the phosphor art is fill="currentColor", which
+ * through an <img> resolves to flat black and cannot be tinted — the same
+ * reason the sidebar nav icons are masked spans. The art is named per shortcut
+ * below rather than inline, so the relative url() resolves against this
+ * stylesheet (/css/ -> /images/) and so the inliner can fold it into a data:
+ * URI; inline, twelve icons would be twelve requests the dashboard waits on.
+ *
+ * The default is a plain document in the default ink, which is what a shortcut
+ * added to SHORTCUTS without a block below gets: visibly wrong, rather than an
+ * empty tile nobody notices.
+ */
+.tma-portal-shortcut__art {
+  display: block;
+  width: 24px;
+  height: 24px;
+  background-color: var(--tma-sc-ink, var(--color-primary-dark));
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/File.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/File.svg */
+}
+
+/* Dark: the inks below are chosen to carry on white glass, and the glass goes
+   dark with the theme. Lifted toward the page rather than re-picked twelve
+   times, so the hues stay recognisably the same tiles. */
+.tma-dash[data-theme="dark"] .tma-portal-shortcut__art {
+  background-color: color-mix(in srgb, var(--tma-sc-ink, var(--color-primary)) 45%, #fff);
+}
+
+.tma-portal-shortcut__label {
+  max-width: 88px;
+  font-size: var(--text-size-11, 11px);
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--color-black);
+}
 
 /* Count badge on a shortcut tile (Email / Calendar / Users).
    Grows with the number — exact totals like 27,000, never capped at 99+. */
 .tma-portal-shortcut__count {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -7px;
+  right: -9px;
   min-width: 18px;
   height: 18px;
   padding: 0 6px;
@@ -2744,10 +2852,114 @@
   line-height: 1;
   white-space: nowrap;
   max-width: none;
+  box-shadow: var(--shadow-drop-1);
 }
 /* The display rule above beats the plain `hidden` attribute, so hide it here
  * when there's no count to show. */
 .tma-portal-shortcut__count[hidden] { display: none; }
+
+/*
+ * Loading. The placeholder wears the tile's own class so the box, the radius
+ * and the grid position are the real ones and only the glass is missing —
+ * .tma-skeleton lands after this file and paints over the translucent fill.
+ * The label line is the width a short label takes; the tile below it is what
+ * holds the row's height, so the grid does not resettle when the real ones
+ * arrive.
+ */
+.tma-portal-shortcut--skeleton { pointer-events: none; }
+
+.tma-portal-shortcut--skeleton .tma-portal-shortcut__icon {
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.tma-portal-shortcut--skeleton .tma-skeleton--text { width: 70%; height: 11px; }
+
+/*
+ * One block per shortcut: the glyph it draws and the ink it draws in.
+ *
+ * Keyed by the id in SHORTCUTS (portal-home.js), which is a fixed vocabulary —
+ * see the note there for why the art cannot travel in the array. The inks are
+ * deep on purpose: they sit on white glass over a pale wash, and a mid-tone
+ * icon on that ground is a smudge rather than a symbol.
+ */
+.tma-portal-shortcut--email { --tma-sc-ink: #0369a1; }
+.tma-portal-shortcut--email .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='256'%20height='256'%20viewBox='0%200%20256%20256'%20fill='none'%3E%3Cpath%20d='M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM203.43,64,128,133.15,52.57,64ZM216,192H40V74.19l82.59,75.71a8,8,0,0,0,10.82,0L216,74.19V192Z'%20fill='%23141414'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/EnvelopeSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='256'%20height='256'%20viewBox='0%200%20256%20256'%20fill='none'%3E%3Cpath%20d='M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM203.43,64,128,133.15,52.57,64ZM216,192H40V74.19l82.59,75.71a8,8,0,0,0,10.82,0L216,74.19V192Z'%20fill='%23141414'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/EnvelopeSimple.svg */
+}
+
+.tma-portal-shortcut--messages { --tma-sc-ink: #6d28d9; }
+.tma-portal-shortcut--messages .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232.07,186.76a80,80,0,0,0-62.5-114.17A80,80,0,1,0,23.93,138.76l-7.27,24.71a16,16,0,0,0,19.87,19.87l24.71-7.27a80.39,80.39,0,0,0,25.18,7.35,80,80,0,0,0,108.34,40.65l24.71,7.27a16,16,0,0,0,19.87-19.86ZM62,159.5a8.28,8.28,0,0,0-2.26.32L32,168l8.17-27.76a8,8,0,0,0-.63-6,64,64,0,1,1,26.26,26.26A8,8,0,0,0,62,159.5Zm153.79,28.73L224,216l-27.76-8.17a8,8,0,0,0-6,.63,64.05,64.05,0,0,1-85.87-24.88A79.93,79.93,0,0,0,174.7,89.71a64,64,0,0,1,41.75,92.48A8,8,0,0,0,215.82,188.23Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatsCircle.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232.07,186.76a80,80,0,0,0-62.5-114.17A80,80,0,1,0,23.93,138.76l-7.27,24.71a16,16,0,0,0,19.87,19.87l24.71-7.27a80.39,80.39,0,0,0,25.18,7.35,80,80,0,0,0,108.34,40.65l24.71,7.27a16,16,0,0,0,19.87-19.86ZM62,159.5a8.28,8.28,0,0,0-2.26.32L32,168l8.17-27.76a8,8,0,0,0-.63-6,64,64,0,1,1,26.26,26.26A8,8,0,0,0,62,159.5Zm153.79,28.73L224,216l-27.76-8.17a8,8,0,0,0-6,.63,64.05,64.05,0,0,1-85.87-24.88A79.93,79.93,0,0,0,174.7,89.71a64,64,0,0,1,41.75,92.48A8,8,0,0,0,215.82,188.23Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatsCircle.svg */
+}
+
+.tma-portal-shortcut--feed { --tma-sc-ink: #c2410c; }
+.tma-portal-shortcut--feed .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M88,112a8,8,0,0,1,8-8h80a8,8,0,0,1,0,16H96A8,8,0,0,1,88,112Zm8,40h80a8,8,0,0,0,0-16H96a8,8,0,0,0,0,16ZM232,64V184a24,24,0,0,1-24,24H32A24,24,0,0,1,8,184.11V88a8,8,0,0,1,16,0v96a8,8,0,0,0,16,0V64A16,16,0,0,1,56,48H216A16,16,0,0,1,232,64Zm-16,0H56V184a23.84,23.84,0,0,1-1.37,8H208a8,8,0,0,0,8-8Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Newspaper.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M88,112a8,8,0,0,1,8-8h80a8,8,0,0,1,0,16H96A8,8,0,0,1,88,112Zm8,40h80a8,8,0,0,0,0-16H96a8,8,0,0,0,0,16ZM232,64V184a24,24,0,0,1-24,24H32A24,24,0,0,1,8,184.11V88a8,8,0,0,1,16,0v96a8,8,0,0,0,16,0V64A16,16,0,0,1,56,48H216A16,16,0,0,1,232,64Zm-16,0H56V184a23.84,23.84,0,0,1-1.37,8H208a8,8,0,0,0,8-8Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Newspaper.svg */
+}
+
+.tma-portal-shortcut--calendar { --tma-sc-ink: #b91c1c; }
+.tma-portal-shortcut--calendar .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CalendarBlank.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CalendarBlank.svg */
+}
+
+.tma-portal-shortcut--users { --tma-sc-ink: #0f766e; }
+.tma-portal-shortcut--users .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Users.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Users.svg */
+}
+
+.tma-portal-shortcut--share-files { --tma-sc-ink: #15803d; }
+.tma-portal-shortcut--share-files .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M229.66,109.66l-48,48a8,8,0,0,1-11.32-11.32L204.69,112H165a88,88,0,0,0-85.23,66,8,8,0,0,1-15.5-4A103.94,103.94,0,0,1,165,96h39.71L170.34,61.66a8,8,0,0,1,11.32-11.32l48,48A8,8,0,0,1,229.66,109.66ZM192,208H40V88a8,8,0,0,0-16,0V216a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Share.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M229.66,109.66l-48,48a8,8,0,0,1-11.32-11.32L204.69,112H165a88,88,0,0,0-85.23,66,8,8,0,0,1-15.5-4A103.94,103.94,0,0,1,165,96h39.71L170.34,61.66a8,8,0,0,1,11.32-11.32l48,48A8,8,0,0,1,229.66,109.66ZM192,208H40V88a8,8,0,0,0-16,0V216a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Share.svg */
+}
+
+.tma-portal-shortcut--request-files { --tma-sc-ink: #1d4ed8; }
+.tma-portal-shortcut--request-files .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/DownloadSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/DownloadSimple.svg */
+}
+
+.tma-portal-shortcut--new-user-folders { --tma-sc-ink: #4338ca; }
+.tma-portal-shortcut--new-user-folders .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M256,136a8,8,0,0,1-8,8H232v16a8,8,0,0,1-16,0V144H200a8,8,0,0,1,0-16h16V112a8,8,0,0,1,16,0v16h16A8,8,0,0,1,256,136Zm-57.87,58.85a8,8,0,0,1-12.26,10.3C165.75,181.19,138.09,168,108,168s-57.75,13.19-77.87,37.15a8,8,0,0,1-12.25-10.3c14.94-17.78,33.52-30.41,54.17-37.17a68,68,0,1,1,71.9,0C164.6,164.44,183.18,177.07,198.13,194.85ZM108,152a52,52,0,1,0-52-52A52.06,52.06,0,0,0,108,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/UserPlus.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M256,136a8,8,0,0,1-8,8H232v16a8,8,0,0,1-16,0V144H200a8,8,0,0,1,0-16h16V112a8,8,0,0,1,16,0v16h16A8,8,0,0,1,256,136Zm-57.87,58.85a8,8,0,0,1-12.26,10.3C165.75,181.19,138.09,168,108,168s-57.75,13.19-77.87,37.15a8,8,0,0,1-12.25-10.3c14.94-17.78,33.52-30.41,54.17-37.17a68,68,0,1,1,71.9,0C164.6,164.44,183.18,177.07,198.13,194.85ZM108,152a52,52,0,1,0-52-52A52.06,52.06,0,0,0,108,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/UserPlus.svg */
+}
+
+.tma-portal-shortcut--shared-folders { --tma-sc-ink: #b45309; }
+.tma-portal-shortcut--shared-folders .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M214.61,198.62a32,32,0,1,0-45.23,0,40,40,0,0,0-17.11,23.32,8,8,0,0,0,5.67,9.79A8.15,8.15,0,0,0,160,232a8,8,0,0,0,7.73-5.95C170.56,215.42,180.54,208,192,208s21.44,7.42,24.27,18.05a8,8,0,1,0,15.46-4.11A40,40,0,0,0,214.61,198.62ZM192,160a16,16,0,1,1-16,16A16,16,0,0,1,192,160Zm40-72v32a8,8,0,0,1-16,0V88H130.67a16.12,16.12,0,0,1-9.6-3.2L93.33,64H40V200h80a8,8,0,0,1,0,16H40a16,16,0,0,1-16-16V64A16,16,0,0,1,40,48H93.33a16.12,16.12,0,0,1,9.6,3.2L130.67,72H216A16,16,0,0,1,232,88Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/FolderSimpleUser.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M214.61,198.62a32,32,0,1,0-45.23,0,40,40,0,0,0-17.11,23.32,8,8,0,0,0,5.67,9.79A8.15,8.15,0,0,0,160,232a8,8,0,0,0,7.73-5.95C170.56,215.42,180.54,208,192,208s21.44,7.42,24.27,18.05a8,8,0,1,0,15.46-4.11A40,40,0,0,0,214.61,198.62ZM192,160a16,16,0,1,1-16,16A16,16,0,0,1,192,160Zm40-72v32a8,8,0,0,1-16,0V88H130.67a16.12,16.12,0,0,1-9.6-3.2L93.33,64H40V200h80a8,8,0,0,1,0,16H40a16,16,0,0,1-16-16V64A16,16,0,0,1,40,48H93.33a16.12,16.12,0,0,1,9.6,3.2L130.67,72H216A16,16,0,0,1,232,88Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/FolderSimpleUser.svg */
+}
+
+.tma-portal-shortcut--favorites { --tma-sc-ink: #be185d; }
+.tma-portal-shortcut--favorites .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M239.18,97.26A16.38,16.38,0,0,0,224.92,86l-59-4.76L143.14,26.15a16.36,16.36,0,0,0-30.27,0L90.11,81.23,31.08,86a16.46,16.46,0,0,0-9.37,28.86l45,38.83L53,211.75a16.38,16.38,0,0,0,24.5,17.82L128,198.49l50.53,31.08A16.4,16.4,0,0,0,203,211.75l-13.76-58.07,45-38.83A16.43,16.43,0,0,0,239.18,97.26Zm-15.34,5.47-48.7,42a8,8,0,0,0-2.56,7.91l14.88,62.8a.37.37,0,0,1-.17.48c-.18.14-.23.11-.38,0l-54.72-33.65a8,8,0,0,0-8.38,0L69.09,215.94c-.15.09-.19.12-.38,0a.37.37,0,0,1-.17-.48l14.88-62.8a8,8,0,0,0-2.56-7.91l-48.7-42c-.12-.1-.23-.19-.13-.5s.18-.27.33-.29l63.92-5.16A8,8,0,0,0,103,91.86l24.62-59.61c.08-.17.11-.25.35-.25s.27.08.35.25L153,91.86a8,8,0,0,0,6.75,4.92l63.92,5.16c.15,0,.24,0,.33.29S224,102.63,223.84,102.73Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Star.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M239.18,97.26A16.38,16.38,0,0,0,224.92,86l-59-4.76L143.14,26.15a16.36,16.36,0,0,0-30.27,0L90.11,81.23,31.08,86a16.46,16.46,0,0,0-9.37,28.86l45,38.83L53,211.75a16.38,16.38,0,0,0,24.5,17.82L128,198.49l50.53,31.08A16.4,16.4,0,0,0,203,211.75l-13.76-58.07,45-38.83A16.43,16.43,0,0,0,239.18,97.26Zm-15.34,5.47-48.7,42a8,8,0,0,0-2.56,7.91l14.88,62.8a.37.37,0,0,1-.17.48c-.18.14-.23.11-.38,0l-54.72-33.65a8,8,0,0,0-8.38,0L69.09,215.94c-.15.09-.19.12-.38,0a.37.37,0,0,1-.17-.48l14.88-62.8a8,8,0,0,0-2.56-7.91l-48.7-42c-.12-.1-.23-.19-.13-.5s.18-.27.33-.29l63.92-5.16A8,8,0,0,0,103,91.86l24.62-59.61c.08-.17.11-.25.35-.25s.27.08.35.25L153,91.86a8,8,0,0,0,6.75,4.92l63.92,5.16c.15,0,.24,0,.33.29S224,102.63,223.84,102.73Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Star.svg */
+}
+
+.tma-portal-shortcut--feedback-approval { --tma-sc-ink: #047857; }
+.tma-portal-shortcut--feedback-approval .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M149.61,85.71l-89.6,88a8,8,0,0,1-11.22,0L10.39,136a8,8,0,1,1,11.22-11.41L54.4,156.79l84-82.5a8,8,0,1,1,11.22,11.42Zm96.1-11.32a8,8,0,0,0-11.32-.1l-84,82.5-18.83-18.5a8,8,0,0,0-11.21,11.42l24.43,24a8,8,0,0,0,11.22,0l89.6-88A8,8,0,0,0,245.71,74.39Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Checks.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M149.61,85.71l-89.6,88a8,8,0,0,1-11.22,0L10.39,136a8,8,0,1,1,11.22-11.41L54.4,156.79l84-82.5a8,8,0,1,1,11.22,11.42Zm96.1-11.32a8,8,0,0,0-11.32-.1l-84,82.5-18.83-18.5a8,8,0,0,0-11.21,11.42l24.43,24a8,8,0,0,0,11.22,0l89.6-88A8,8,0,0,0,245.71,74.39Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Checks.svg */
+}
+
+.tma-portal-shortcut--send-signature { --tma-sc-ink: #7e22ce; }
+.tma-portal-shortcut--send-signature .tma-portal-shortcut__art {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Signature.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Signature.svg */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-portal-shortcut__icon { transition: none; }
+}
 
 /* Real image thumbnails in the dashboard file rows (Recent Files / Favorites). */
 .tma-portal-file-row__thumb { object-fit: cover; border-radius: 4px; }
@@ -2804,8 +3016,8 @@
 .tma-portal-tpl-card__preview img { width: 44px; height: 44px; opacity: 0.7; }
 
 /* Module cards (the People home) — a card you click, not a template preview.
- * They use the portal's standard icon tile, the same 44px box as
- * .tma-portal-shortcut__icon, instead of the oversized 96px preview band. */
+ * They use the portal's standard 44px icon tile instead of the oversized 96px
+ * preview band. */
 .tma-portal-tpl-card--module {
   cursor: pointer;
   text-align: left;

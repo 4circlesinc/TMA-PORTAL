@@ -22,19 +22,36 @@
     return 'images/icons/phosphor/File.svg';
   }
 
+  /*
+   * The Shortcuts board: what each tile is called, what it opens, and who is
+   * offered it.
+   *
+   * What is deliberately *not* here is the glyph and the colour. Each tile
+   * draws its icon as a masked span so it can be tinted — a phosphor <img> is
+   * fill="currentColor" art, which through an <img> resolves to flat black and
+   * cannot be recoloured — and the mask has to be named in a stylesheet rather
+   * than inline, because that is the only form scripts/inline_icon_masks.py
+   * can reach. Twelve inline masks would be twelve requests the dashboard has
+   * to wait on; inlined, they cost none.
+   *
+   * So each tile's art and ink live together in one block per `id` in
+   * portal.css (.tma-portal-shortcut--<id>). A shortcut added here without one
+   * there still works and still opens: it falls back to a plain document
+   * glyph in the default ink, which is visibly wrong rather than invisible.
+   */
   var SHORTCUTS = [
-    { id: 'email', label: 'Email', icon: 'EnvelopeSimple', count: 'email', cap: 'mail.use', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
-    { id: 'messages', label: 'Messages', icon: 'ChatsCircle', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
-    { id: 'feed', label: 'Feed', icon: 'Newspaper', count: 'feed', cap: 'feed.view', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
-    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlank', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
-    { id: 'users', label: 'Users', icon: 'Users', count: 'users', cap: 'users.view', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
-    { id: 'share-files', label: 'Share Files', icon: 'Share', cap: 'files.viewOrg' },
-    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple', cap: 'files.viewOrg' },
-    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus', cap: 'users.manage' },
-    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', cap: 'files.viewOrg', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
-    { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Comments', icon: 'Checks', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
-    { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
+    { id: 'email', label: 'Email', count: 'email', cap: 'mail.use', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'messages', label: 'Messages', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
+    { id: 'feed', label: 'Feed', count: 'feed', cap: 'feed.view', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
+    { id: 'calendar', label: 'Calendar', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
+    { id: 'users', label: 'Users', count: 'users', cap: 'users.view', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
+    { id: 'share-files', label: 'Share Files', cap: 'files.viewOrg' },
+    { id: 'request-files', label: 'Request Files', cap: 'files.viewOrg' },
+    { id: 'new-user-folders', label: 'Create New User', cap: 'users.manage' },
+    { id: 'shared-folders', label: 'Shared Folders', cap: 'files.viewOrg', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
+    { id: 'favorites', label: 'Favorites', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
+    { id: 'feedback-approval', label: 'Feedback and Comments', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
+    { id: 'send-signature', label: 'Send for Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
 
   /*
@@ -335,27 +352,49 @@
   function renderShortcuts() {
     var shown = visibleShortcuts();
     if (!shown.length) return '';
+
+    /*
+     * The loading tile is the real tile with the glass taken out: the same
+     * 56px box at the same radius, above the same label line, so the grid does
+     * not resettle when the counts land. The board's *shape* is already known
+     * here — visibleShortcuts() is answered from the boot capability list, not
+     * from a request — so the placeholder is the right length as well.
+     *
+     * The measurements are the stylesheet's, not inline. An inline width
+     * outranks anything a selector can say, and the loading tile and the real
+     * one have to agree about a number that is written down once.
+     */
     if (!homeFilesLoaded) {
       var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
-        '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
-        '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
+        '<span class="tma-portal-shortcut__icon tma-skeleton"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text"></span></div>';
       return tileShell(
         'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
         '<div class="tma-portal-shortcuts">' + new Array(shown.length).fill(tile).join('') + '</div>',
-        '', true
+        'tma-portal-panel--shortcuts', true
       );
     }
+
     return tileShell(
       'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
       '<div class="tma-portal-shortcuts">' +
       shown.map(function (sc) {
-        return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
-          '<span class="tma-portal-shortcut__icon"><img src="images/icons/phosphor/' + sc.icon + '.svg" alt="">' +
+        /*
+         * The id is a class as well as a hook. It is what portal.css hangs
+         * this tile's glyph and ink on — see the note on SHORTCUTS above for
+         * why the art cannot be named here — and the ids are a fixed
+         * vocabulary in that array, so nothing arbitrary reaches the markup.
+         */
+        return '<button type="button" class="tma-portal-shortcut tma-portal-shortcut--' + ui().esc(sc.id) +
+          '" data-home-shortcut="' + ui().esc(sc.id) + '">' +
+          '<span class="tma-portal-shortcut__icon">' +
+          '<span class="tma-portal-shortcut__art" aria-hidden="true"></span>' +
           (sc.count ? '<span class="tma-portal-shortcut__count" data-home-shortcut-count="' + sc.count + '" hidden></span>' : '') +
           '</span>' +
-          '<span>' + ui().esc(sc.label) + '</span></button>';
+          '<span class="tma-portal-shortcut__label">' + ui().esc(sc.label) + '</span></button>';
       }).join('') +
-      '</div>'
+      '</div>',
+      'tma-portal-panel--shortcuts'
     );
   }
 
