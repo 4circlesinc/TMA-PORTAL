@@ -6,7 +6,10 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FolderProvisioner;
 use App\Support\Files\SyncScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -263,11 +266,42 @@ class BrowserController extends BaseFilesController
                 $this->visibleFolders($user)->where('folder_type', Folder::TYPE_CLIENT),
                 null,
             ],
-            default => [ // 'all'
-                $this->visibleFolders($user)->whereNull('parent_id'),
-                $this->visibleFiles($user)->whereNull('folder_id'),
-            ],
+            default => $this->allSectionQueries($user),
         };
+    }
+
+    /**
+     * All Files. Staff see the organization tree. External CIP accounts see
+     * only the Clients library, never Staff Files or anyone else's drive.
+     *
+     * @return array{0: ?Builder, 1: ?Builder}
+     */
+    private function allSectionQueries(User $user): array
+    {
+        if (! Role::can($user, 'files.viewOrg')) {
+            $root = $this->clientsRootFor($user);
+
+            return [
+                Folder::query()->where('id', $root?->id ?: 0),
+                null,
+            ];
+        }
+
+        return [
+            $this->visibleFolders($user)->whereNull('parent_id'),
+            $this->visibleFiles($user)->whereNull('folder_id'),
+        ];
+    }
+
+    private function clientsRootFor(User $user): ?Folder
+    {
+        if (! CipAccess::canReach($user)) {
+            return null;
+        }
+
+        $root = FolderProvisioner::clientsRoot();
+
+        return FileAccess::can($user, 'view', $root) ? $root : null;
     }
 
     /* ── visibility scopes ─────────────────────────── */

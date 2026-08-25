@@ -328,10 +328,9 @@ class Role
         'clients' => 'clients.view',
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
-        // The File Library. Only the two organization-wide views are gated —
-        // a client's own folders, what was shared with them, their favourites,
-        // recent and recycle bin are theirs. Mirrors portal-access.js, which
-        // hides exactly these two rows.
+        // The File Library. Shared Folders stays staff-only. All Files is
+        // also served to CIP-reach accounts (provider contacts / private
+        // clients), scoped to the Clients folder, see LegacyPageController.
         'folders/all' => 'files.viewOrg',
         'folders/shared' => 'files.viewOrg',
         'overview' => 'overview.view',

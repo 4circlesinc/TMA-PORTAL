@@ -120,8 +120,13 @@
      both. The mobile rows use data-mrow but the same ids. */
   function pruneNavItems(scope) {
     scope.querySelectorAll('[data-nav]').forEach(function (el) {
-      var need = NAV_CAPABILITIES[el.getAttribute('data-nav')];
-      if (need && !can(need)) remove(el);
+      var nav = el.getAttribute('data-nav');
+      var need = NAV_CAPABILITIES[nav];
+      if (!need) return;
+      // All Files is also for CIP-reach accounts. Shared Folders stays
+      // staff-only, so this must not reuse can('files.viewOrg').
+      if (nav === 'folders-all' && (can(need) || cipReach)) return;
+      if (!can(need)) remove(el);
     });
   }
 

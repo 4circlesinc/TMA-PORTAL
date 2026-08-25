@@ -219,7 +219,13 @@
 
   function canCreateHere() {
     if (isRecycle() || state.section === 'recent' || state.section === 'shared') return false;
-    if (state.folder) return true; // browsing inside a folder
+    var staffLibrary = window.TMAPortalAccess && window.TMAPortalAccess.can('files.viewOrg');
+    if (state.section === 'all' && !staffLibrary) {
+      if (!state.folder) return false;
+      // The Clients root is view-only; files go in a client folder under it.
+      if ((state.breadcrumb || []).length <= 1) return false;
+    }
+    if (state.folder) return true;
     return !!UPLOADABLE[state.section];
   }
 

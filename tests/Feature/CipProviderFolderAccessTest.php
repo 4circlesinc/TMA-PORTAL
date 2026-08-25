@@ -19,6 +19,7 @@ use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -184,6 +185,38 @@ class CipProviderFolderAccessTest extends TestCase
         $this->actingAs($outsider)->getJson('/portal/files/?section=clients')
             ->assertOk()
             ->assertJsonCount(0, 'folders');
+    }
+
+    public function test_all_files_for_a_provider_contact_is_only_the_clients_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        $stranger = $this->user(Role::CLIENT);
+        $this->filing($galaxy, $staff, 'Chen', 'Wei');
+
+        $this->actingAs($gil)->get('/folders/all')->assertOk();
+        $this->actingAs($stranger)->get('/folders/all')->assertNotFound();
+
+        $listed = collect(
+            $this->actingAs($gil)->getJson('/portal/files/?section=all')
+                ->assertOk()->json('folders')
+        );
+        $this->assertSame(['Clients'], $listed->pluck('name')->all());
+
+        $clientsRoot = FolderProvisioner::clientsRoot();
+        $this->assertTrue(FileAccess::can($gil, 'view', $clientsRoot));
+        $this->assertFalse(FileAccess::can($gil, 'upload', $clientsRoot));
+
+        $inside = collect(
+            $this->actingAs($gil)->getJson('/portal/files/?section=all&folder='.$clientsRoot->uuid)
+                ->assertOk()->json('folders')
+        )->pluck('name');
+        $this->assertTrue($inside->contains('Chen Wei'));
+
+        $staffRoot = FolderProvisioner::staffRoot();
+        $this->assertFalse(FileAccess::can($gil, 'view', $staffRoot));
+        $this->actingAs($gil)->getJson('/portal/files/?section=all&folder='.$staffRoot->uuid)
+            ->assertForbidden();
     }
 
     public function test_a_linked_portal_login_does_not_open_the_whole_folder(): void

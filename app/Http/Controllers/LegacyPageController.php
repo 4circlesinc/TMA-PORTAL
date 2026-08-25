@@ -129,6 +129,8 @@ class LegacyPageController extends Controller
             // staff tooling a client can't reach.
             if ($page === 'clients') {
                 abort_unless($this->canViewClientsPage($request), 404);
+            } elseif ($page === 'folders/all') {
+                abort_unless($this->canViewAllFilesPage($request), 404);
             } else {
                 abort_unless(Role::canViewPage($request->user(), $page), 404);
             }
@@ -170,5 +172,17 @@ class LegacyPageController extends Controller
         $user = $request->user();
 
         return Role::canViewPage($user, 'clients') || CipAccess::canReach($user);
+    }
+
+    /**
+     * All Files is the organization tree for staff. External CIP accounts
+     * (provider contacts and private clients) get the same page, scoped to
+     * the Clients folder, so the sidebar is not missing All Files for them.
+     */
+    private function canViewAllFilesPage(Request $request): bool
+    {
+        $user = $request->user();
+
+        return Role::canViewPage($user, 'folders/all') || CipAccess::canReach($user);
     }
 }

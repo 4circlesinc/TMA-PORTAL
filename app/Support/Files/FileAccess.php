@@ -14,6 +14,7 @@ use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Package;
 use App\Support\Companies\CompanyAccess;
@@ -102,6 +103,11 @@ class FileAccess
         $roles = [self::shareRole($user, 'file', $file->id)];
         foreach (self::chainFolders($file->folder_id) as $folder) {
             $roles[] = self::shareRole($user, 'folder', $folder->id);
+            // The Clients container is a door into All Files, not a grant over
+            // every client tree sitting under it.
+            if (self::isClientsRoot($folder)) {
+                continue;
+            }
             $roles[] = self::systemFolderRole($user, $folder);
         }
 
@@ -331,6 +337,9 @@ class FileAccess
         $roles = [];
         foreach (self::chainFolders($folder->id) as $f) {
             $roles[] = self::shareRole($user, 'folder', $f->id);
+            if (self::isClientsRoot($f) && $f->id !== $folder->id) {
+                continue;
+            }
             $roles[] = self::systemFolderRole($user, $f);
         }
 
@@ -382,7 +391,23 @@ class FileAccess
             return FolderAccess::folderRole($user, $folder);
         }
 
+        // The Clients library root, so All Files has somewhere to land.
+        // Viewer only: they may open it, they may not file next to every
+        // client. Staff Files stays closed. Children are still filtered by
+        // the TYPE_CLIENT rules above, so another firm's folders stay hidden.
+        if (self::isClientsRoot($folder) && ! self::isStaff($user) && CipAccess::canReach($user)) {
+            return 'viewer';
+        }
+
         return null;
+    }
+
+    /** The firm-wide Clients container, not a person folder and not Staff Files. */
+    public static function isClientsRoot(Folder $folder): bool
+    {
+        return $folder->folder_type === Folder::TYPE_ROOT
+            && $folder->parent_id === null
+            && in_array($folder->name, [FolderProvisioner::ROOT_CLIENTS, FolderProvisioner::ROOT_CLIENTS_LEGACY], true);
     }
 
     /**
