@@ -188,6 +188,50 @@ app.whenReady().then(async () => {
   check('collapsed: the rail logo is hidden, not clipped', collapsed.logoHidden, true);
   check('collapsed: page does not scroll', collapsed.overflow, 0);
 
+  /*
+   * The bar has to move the window. The injected strip is only a left-hand
+   * stub beside the shell; the rest of the blue is the portal header, and
+   * Chromium hit-tests the node under the cursor, not its ancestor. So the
+   * header cells, the heading and the empty gaps must be drag, and every
+   * control that still needs a click must opt out.
+   */
+  const drag = await win.webContents.executeJavaScript(`
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve((() => {
+      const region = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? getComputedStyle(el).getPropertyValue('-webkit-app-region') : null;
+      };
+      return {
+        bar: region('#tma-desktop-titlebar'),
+        sep: region('#tma-desktop-titlebar .tma-tb-sep'),
+        nav: region('#tma-desktop-titlebar .tma-tb-nav'),
+        back: region('[data-tb="back"]'),
+        header: region('.tma-dash__header'),
+        headerLeft: region('.tma-dash__header-left'),
+        headerCenter: region('.tma-dash__header-center'),
+        headerRight: region('.tma-dash__header-right'),
+        search: region('.tma-dash__search'),
+        theme: region('[data-action="toggle-theme"]'),
+        presence: region('[data-presence-header]'),
+        icons: region('.tma-dash__header-icons'),
+      };
+    })()))))
+  `, true);
+
+  check('drag: the titlebar is a drag handle', drag.bar, 'drag');
+  check('drag: the heading is a drag handle', drag.title, 'drag');
+  check('drag: the separator is a drag handle', drag.sep, 'drag');
+  check('drag: the nav cluster is not a drag handle', drag.nav, 'no-drag');
+  check('drag: a nav button is not a drag handle', drag.back, 'no-drag');
+  check('drag: the portal header is a drag handle', drag.header, 'drag');
+  check('drag: the header left cell is a drag handle', drag.headerLeft, 'drag');
+  check('drag: the header centre cell is a drag handle', drag.headerCenter, 'drag');
+  check('drag: the header right cell is a drag handle', drag.headerRight, 'drag');
+  check('drag: search still receives clicks', drag.search, 'no-drag');
+  check('drag: the theme button still receives clicks', drag.theme, 'no-drag');
+  check('drag: the presence pill still receives clicks', drag.presence, 'no-drag');
+  check('drag: the icon cluster still receives clicks', drag.icons, 'no-drag');
+
   /* ── the auth pages ──────────────────────────────────────────────────────
    *
    * The bug: .tma-dash is shrunk by the bar above and .tma-auth was not, so
@@ -241,6 +285,24 @@ app.whenReady().then(async () => {
   check('auth: and the budget is still composed, not overridden',
     authAfter.chromeRaw.includes('var(--auth-bar)') || authAfter.chromeRaw.includes('calc'), true);
 
+  const authDrag = await authWin.webContents.executeJavaScript(`
+    (() => {
+      const region = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? getComputedStyle(el).getPropertyValue('-webkit-app-region') : null;
+      };
+      return {
+        bar: region('#tma-desktop-titlebar'),
+        title: region('#tma-desktop-titlebar .tma-tb-title'),
+        nav: region('#tma-desktop-titlebar .tma-tb-nav'),
+      };
+    })()
+  `, true);
+
+  check('auth: the titlebar is a drag handle', authDrag.bar, 'drag');
+  check('auth: the heading is a drag handle', authDrag.title, 'drag');
+  check('auth: the nav cluster is not a drag handle', authDrag.nav, 'no-drag');
+
   authWin.destroy();
 
   /*
@@ -276,6 +338,10 @@ app.whenReady().then(async () => {
           document.querySelector('.tma-dash__search').getBoundingClientRect().left
           + document.querySelector('.tma-dash__search').getBoundingClientRect().width / 2
         ),
+        headerDrag: getComputedStyle(document.querySelector('.tma-dash__header'))
+          .getPropertyValue('-webkit-app-region'),
+        searchDrag: getComputedStyle(document.querySelector('.tma-dash__search'))
+          .getPropertyValue('-webkit-app-region'),
       };
     })()))))
   `, true);
@@ -292,6 +358,8 @@ app.whenReady().then(async () => {
   );
   // The insets are on the cells, so the search stays on the window's centre.
   check('windows: search is still centred', Math.abs(windows.searchCentre - WIDTH / 2) <= 2, true);
+  check('windows: the header is a drag handle', windows.headerDrag, 'drag');
+  check('windows: search still receives clicks', windows.searchDrag, 'no-drag');
 
   /*
    * The narrow window, which is the one that shipped looking stripped.

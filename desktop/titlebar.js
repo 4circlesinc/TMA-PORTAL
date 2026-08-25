@@ -217,10 +217,18 @@ function buildCss(platform = process.platform) {
     padding: 0 ${Math.max(caption, 12)}px 0 ${barPadLeft}px;
     font: 600 13px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
     letter-spacing: 0.01em;
-    /* The whole strip is the drag handle, standing in for the frame we hid. */
+    /* The whole strip is the drag handle, standing in for the frame we hid.
+       Hit-testing uses the node under the cursor, not the ancestor, so the
+       heading and separator have to say drag of their own or clicking the
+       words "Dashboard" does nothing. */
     -webkit-app-region: drag;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  #tma-desktop-titlebar .tma-tb-sep,
+  #tma-desktop-titlebar .tma-tb-title {
+    -webkit-app-region: drag;
   }
 
   #tma-desktop-titlebar .tma-tb-nav {
@@ -237,6 +245,8 @@ function buildCss(platform = process.platform) {
 
   #tma-desktop-titlebar .tma-tb-btn {
     all: unset;
+    /* all:unset above wipes app-region; keep clicks on the buttons themselves. */
+    -webkit-app-region: no-drag;
     box-sizing: border-box;
     /* Matches .tma-dash__header .tma-dash__icon-btn, same size, same radius,
        so the window controls and the header's own buttons sit on one line
@@ -354,6 +364,7 @@ function buildCss(platform = process.platform) {
      */
     padding: 0 14px !important;
     gap: 12px;
+    -webkit-app-region: drag;
   }
 
   .tma-dash--desktop-bar .tma-dash__header-left {
@@ -376,6 +387,38 @@ function buildCss(platform = process.platform) {
    */
   .tma-dash--desktop-bar .tma-dash__header-right {
     padding-right: ${Math.max(caption - 14, 0)}px;
+  }
+
+  /*
+   * The portal header is the rest of the blue strip. The injected
+   * #tma-desktop-titlebar is only ${controls}px wide beside the shell, so
+   * without drag on this header a click-and-hold on most of the bar — the
+   * gaps around search, the empty 1fr tracks, the padding under the Windows
+   * caption buttons — does not move the window. That is the frame we hid, on
+   * both operating systems.
+   *
+   * app-region is resolved on the hit-tested node. The three cells fill the
+   * strip, so they need drag of their own; a parent-only rule leaves them as
+   * a dead zone. Every control that must still receive clicks opts out.
+   */
+  .tma-dash--desktop-bar .tma-dash__header,
+  .tma-dash--desktop-bar .tma-dash__header-left,
+  .tma-dash--desktop-bar .tma-dash__header-center,
+  .tma-dash--desktop-bar .tma-dash__header-right {
+    -webkit-app-region: drag;
+  }
+
+  .tma-dash--desktop-bar .tma-dash__header button,
+  .tma-dash--desktop-bar .tma-dash__header a,
+  .tma-dash--desktop-bar .tma-dash__header input,
+  .tma-dash--desktop-bar .tma-dash__header textarea,
+  .tma-dash--desktop-bar .tma-dash__header select,
+  .tma-dash--desktop-bar .tma-dash__header [role="button"],
+  .tma-dash--desktop-bar .tma-dash__search,
+  .tma-dash--desktop-bar .tma-dash__email-search,
+  .tma-dash--desktop-bar .tma-dash__header-presence,
+  .tma-dash--desktop-bar .tma-dash__header-icons {
+    -webkit-app-region: no-drag;
   }
 
   /* The heading lives in the controls strip, so the crumb is a duplicate. */
