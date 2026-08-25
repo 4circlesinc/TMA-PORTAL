@@ -211,6 +211,9 @@ class ClientOnboardingTest extends TestCase
                 ->assertSee(' complete', false)
                 ->assertDontSee('Step ', false);
         }
+
+        $this->actingAs($user)->get('/onboarding/you')->assertSee('tma-auth__stack', false);
+        $this->actingAs($user)->get('/onboarding/work')->assertSee('tma-auth__stack', false);
     }
 
     public function test_related_questions_share_a_screen(): void

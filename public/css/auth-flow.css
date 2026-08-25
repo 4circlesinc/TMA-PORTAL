@@ -1292,14 +1292,25 @@ a.tma-flowmap__name:hover {
 /* inputs, otp digits, option tiles - auth.css hardcodes light rgba() */
 [data-theme="dark"] .tma-auth .tma-auth__field,
 [data-theme="dark"] .tma-auth .tma-auth__otp-digit,
-[data-theme="dark"] .tma-auth .tma-auth__team-size-option {
+[data-theme="dark"] .tma-auth .tma-auth__team-size-option,
+[data-theme="dark"] .tma-auth .tma-auth__stack {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.16);
 }
 
 [data-theme="dark"] .tma-auth .tma-auth__field:focus-within,
-[data-theme="dark"] .tma-auth .tma-auth__otp-digit:focus {
+[data-theme="dark"] .tma-auth .tma-auth__otp-digit:focus,
+[data-theme="dark"] .tma-auth .tma-auth__stack:focus-within {
   border-color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__stack > .tma-auth__field {
+  background: transparent;
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__stack > .tma-auth__field + .tma-auth__field,
+[data-theme="dark"] .tma-auth .tma-auth__stack > .tma-auth__field-msg + .tma-auth__field {
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 [data-theme="dark"] .tma-auth .tma-auth__field--error,

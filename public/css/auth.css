@@ -192,6 +192,40 @@
   border-color: rgba(0, 0, 0, 0.4);
 }
 
+/* Related inputs share one rounded block instead of three separate pills. */
+.tma-auth__stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 0.5px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-16);
+  background: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.tma-auth__stack:focus-within {
+  border-color: rgba(0, 0, 0, 0.4);
+}
+
+.tma-auth__stack > .tma-auth__field {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tma-auth__stack > .tma-auth__field + .tma-auth__field,
+.tma-auth__stack > .tma-auth__field-msg + .tma-auth__field {
+  border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-auth__stack > .tma-auth__field--error {
+  box-shadow: inset 2px 0 0 var(--color-red);
+}
+
+.tma-auth__stack > .tma-auth__field-msg {
+  padding: 0 var(--space-12) var(--space-8);
+}
+
 .tma-auth__field--password {
   gap: var(--space-8);
 }
