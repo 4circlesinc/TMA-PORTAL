@@ -2689,46 +2689,32 @@
  * a reader goes to *do* something from, and it earns being the one that looks
  * different.
  *
- * THE WASH IS THE TWO BRAND BLUES
+ * THE CARD IS AN ORDINARY CARD
  *
- * Two soft radials over the card's normal fill and nothing else: the light
- * primary along the top edge, the dark one along the bottom. Both are tokens
- * from tokens.css rather than hexes picked for this card, so the wash follows
- * a rebrand instead of outliving it, and mixed with `transparent` rather than
- * baked as rgba for the same reason — the token can be any format and this
- * still resolves.
+ * No wash, no border: the panel is the same fill as Recent Files and Employees
+ * beside it, so the board reads as one set of cards. Everything that makes
+ * this widget its own thing happens inside, on the tiles.
  *
- * The dark blue is mixed lighter than the light one. At matched strengths
- * #136da0 reads as a grey band across the foot of the card rather than as the
- * same colour family arriving from below.
+ * WHAT MAKES A TILE GLASS ON A FLAT CARD
  *
- * No border. The wash already separates this card from the board, and a
- * hairline around a gradient draws the edge of the *panel* rather than the
- * shape of the glass — the one thing on the card that is meant to have edges
- * is the tiles.
+ * Three things, and the *fill alone is not one of them*. Translucent white on
+ * a near-white card is a difference of a few per cent that nobody can see, so
+ * the tile is defined by its lit edge and the shadow under it — a bright
+ * hairline along the top and a soft drop below, which is how a pane of glass
+ * lying on a surface reads. The fill sits high (translucent, not transparent)
+ * so the tile still lifts off the card rather than disappearing into it.
  *
- * WHY THE TILES BLUR
- *
- * `backdrop-filter` is what makes the glass read as glass: the tile is
- * translucent, so the wash behind it shows through, and blurring it means the
- * icon sits on a soft field instead of on whatever gradient stripe happens to
- * be under that corner. The design system already names this effect —
- * --blur-16 is "Glass 1", --shadow-glass-1 is its drop — so the card is
- * assembled from documented parts rather than invented ones. Where
- * backdrop-filter is unsupported the tile is simply a flat translucent white,
- * which is a slightly plainer card and nothing worse.
+ * The blur stays even though there is now a flat colour behind it. It costs
+ * one composited layer and it is what keeps the treatment honest the moment
+ * anything textured ends up under a tile — a wash, a photo, a themed board.
+ * The design system already names the effect: --blur-16 is "Glass 1",
+ * --shadow-glass-1 is its drop, so the tile is assembled from documented
+ * parts. Where backdrop-filter is unsupported the tile is simply a flat
+ * translucent white, which is a slightly plainer tile and nothing worse.
  *
  * --color-white rather than a literal, throughout: it inverts with the theme,
  * so the glass darkens with the card instead of staying a white slab on it.
  */
-.tma-portal-panel--shortcuts {
-  background:
-    radial-gradient(85% 60% at 50% 0%, color-mix(in srgb, var(--color-primary) 34%, transparent), transparent 72%),
-    radial-gradient(85% 62% at 50% 100%, color-mix(in srgb, var(--color-primary-dark) 40%, transparent), transparent 74%),
-    var(--color-bg-card);
-  box-shadow: var(--shadow-glass-1);
-}
-
 .tma-portal-shortcuts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2773,18 +2759,20 @@
   height: 44px;
   box-sizing: border-box;
   border-radius: var(--radius-12);
-  border: 1px solid color-mix(in srgb, var(--color-white) 90%, transparent);
-  background: color-mix(in srgb, var(--color-white) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-white) 92%, transparent);
+  background: color-mix(in srgb, var(--color-white) 78%, transparent);
   -webkit-backdrop-filter: var(--blur-16);
   backdrop-filter: var(--blur-16);
-  box-shadow: var(--shadow-glass-1);
+  /* The drop is doing the work the fill cannot on a flat card: without it a
+     translucent white square on a near-white panel has no edge at all. */
+  box-shadow: var(--shadow-glass-1), var(--shadow-drop-1);
   transition: background-color var(--transition-base);
 }
 
 /* The glass clears rather than the cell washing: the hover happens where the
    pointer is, on the thing that looks pressable. */
 .tma-portal-shortcut:hover .tma-portal-shortcut__icon {
-  background: color-mix(in srgb, var(--color-white) 85%, transparent);
+  background: var(--color-white);
 }
 
 /*

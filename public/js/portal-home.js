@@ -371,7 +371,7 @@
       return tileShell(
         'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
         '<div class="tma-portal-shortcuts">' + new Array(shown.length).fill(tile).join('') + '</div>',
-        'tma-portal-panel--shortcuts', true
+        '', true
       );
     }
 
@@ -393,8 +393,7 @@
           '</span>' +
           '<span class="tma-portal-shortcut__label">' + ui().esc(sc.label) + '</span></button>';
       }).join('') +
-      '</div>',
-      'tma-portal-panel--shortcuts'
+      '</div>'
     );
   }
 
