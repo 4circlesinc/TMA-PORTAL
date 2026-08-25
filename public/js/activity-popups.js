@@ -210,15 +210,36 @@
       });
     }
 
+    /*
+     * The top of the window is not always the top of the space a popup may
+     * use. The desktop app hides the native frame and draws its own blue title
+     * bar fixed across the top, paying for it with padding on <body> — and
+     * position:fixed ignores body padding, so anything that pins itself to the
+     * viewport has to read that band back or it opens underneath the bar.
+     * Measure the strip itself where it exists; fall back to the padding it
+     * charges, which is 0 in an ordinary browser tab.
+     */
+    function topChromeBottom() {
+      var bar = document.getElementById('tma-desktop-titlebar');
+      if (bar) {
+        var barRect = bar.getBoundingClientRect();
+        if (barRect.height) return barRect.bottom;
+      }
+      return parseFloat(getComputedStyle(document.body).paddingTop) || 0;
+    }
+
     function applySinglePopupHeight(top) {
       clearPopupHeights();
       var panel = state.notifications ? notificationsPanel : (state.activities ? activitiesPanel : null);
       if (!panel || panel.hidden) return;
       var margin = 16, shadowRoom = 28, hostPadding = 40;
       var available = window.innerHeight - top - margin - shadowRoom - hostPadding;
-      var minHeight = Math.max(320, Math.min(available, 560));
-      panel.style.minHeight = minHeight + 'px';
-      panel.style.height = minHeight + 'px';
+      // Capped by the room actually under the trigger. The old floor of 320
+      // was taller than a short window could hold, and the overflow it created
+      // was then paid for by sliding the panel up — under the title bar.
+      var height = Math.max(0, Math.min(available, 560));
+      panel.style.minHeight = height + 'px';
+      panel.style.height = height + 'px';
     }
 
     function positionPopups() {
@@ -247,22 +268,27 @@
 
       var rect = icons.getBoundingClientRect();
       var margin = 16, shadowRoom = 28;
-      var top = Math.round(rect.bottom + 8);
+      var minTop = Math.max(margin, Math.round(topChromeBottom()));
+      var top = Math.max(minTop, Math.round(rect.bottom + 8));
 
       host.style.top = top + 'px';
       host.style.right = Math.round(window.innerWidth - rect.right) + 'px';
       host.style.left = 'auto';
       host.style.bottom = 'auto';
 
+      // Height before measurement, or the panel is measured at its full
+      // content height, "overflows", and gets shifted up to make room it did
+      // not need once it had been clamped.
+      applySinglePopupHeight(top);
+
       var hostRect = host.getBoundingClientRect();
       var maxBottom = window.innerHeight - margin - shadowRoom;
       var overflow = hostRect.bottom - maxBottom;
       if (overflow > 0) {
-        top = Math.max(margin, top - overflow);
+        top = Math.max(minTop, top - overflow);
         host.style.top = top + 'px';
+        applySinglePopupHeight(top);
       }
-
-      applySinglePopupHeight(top);
     }
 
     function closeAll() {
