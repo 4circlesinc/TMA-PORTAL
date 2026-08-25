@@ -24,7 +24,6 @@ final class ClientFlow
         'welcome' => ['title' => 'Welcome', 'optional' => true],
         'you' => ['title' => 'About you'],
         'contact' => ['title' => 'How we reach you'],
-        'work' => ['title' => 'Your details'],
         'access' => ['title' => 'Your access', 'optional' => true],
         'terms' => ['title' => 'Terms and privacy'],
     ];
@@ -41,10 +40,11 @@ final class ClientFlow
         'phone' => 'contact',
         'whatsapp' => 'contact',
         'contact-preference' => 'contact',
-        'account-type' => 'work',
-        'company' => 'work',
-        'address' => 'work',
-        'contacts' => 'work',
+        'work' => 'access',
+        'account-type' => 'access',
+        'company' => 'access',
+        'address' => 'access',
+        'contacts' => 'access',
         'calendar' => 'access',
         'done' => 'terms',
     ];
@@ -120,9 +120,6 @@ final class ClientFlow
             'contact' => $progress->hasDone('email')
                 && $progress->hasDone('phone')
                 && $progress->hasDone('contact-preference'),
-            'work' => $progress->hasDone('account-type')
-                && $progress->hasDone('address')
-                && $progress->hasDone('contacts'),
             'terms' => $progress->hasDone('done'),
             default => false,
         };
@@ -200,21 +197,6 @@ final class ClientFlow
                 'whatsapp' => self::PHONE_RULE,
                 'preferred_contact' => ['required', 'in:'.implode(',', self::CONTACT_METHODS)],
             ],
-            'work' => [
-                'account_type' => ['required', 'in:individual,company'],
-                'company_name' => ['required_if:account_type,company', 'nullable', 'string', 'max:255'],
-                'company_role' => ['nullable', 'string', 'max:120'],
-                'company_website' => ['nullable', 'string', 'max:255'],
-                'street' => ['nullable', 'string', 'max:255'],
-                'city' => ['nullable', 'string', 'max:120'],
-                'region' => ['nullable', 'string', 'max:120'],
-                'postcode' => ['nullable', 'string', 'max:32'],
-                'country' => ['nullable', 'string', 'max:120'],
-                'contacts' => ['nullable', 'array', 'max:10'],
-                'contacts.*.name' => ['nullable', 'string', 'max:120'],
-                'contacts.*.email' => ['nullable', 'email', 'max:255'],
-                'contacts.*.role' => ['nullable', 'string', 'max:120'],
-            ],
             'terms' => [
                 'accept_terms' => ['accepted'],
             ],
@@ -231,10 +213,6 @@ final class ClientFlow
                 'phone.regex' => 'Enter a phone number, like +1 555 123 4567.',
                 'whatsapp.regex' => 'Enter a WhatsApp number, like +1 555 123 4567.',
                 'preferred_contact.required' => 'Choose how you would like us to reach you.',
-            ],
-            'work' => [
-                'account_type.required' => 'Choose whether this account is for you or a company.',
-                'company_name.required_if' => 'Enter the company name.',
             ],
             'terms' => ['accept_terms.accepted' => 'Please accept the Terms and Privacy Policy to finish.'],
             default => [],
@@ -272,37 +250,7 @@ final class ClientFlow
                 $progress->answers('email'),
                 $progress->answers('contact-preference'),
             ),
-            'work' => array_merge(
-                [
-                    'account_type' => ($client?->company_id || ! empty($profile['work']['company']))
-                        ? 'company'
-                        : 'individual',
-                    'company_name' => $client?->companyRecord?->name
-                        ?: ($profile['work']['company'] ?? ''),
-                    'company_role' => $profile['work']['jobTitle'] ?? '',
-                    'company_website' => $client?->companyRecord?->website ?? '',
-                ],
-                self::firstAddress($profile),
-                $progress->answers('account-type'),
-                $progress->answers('company'),
-                $progress->answers('address'),
-                $progress->answers('contacts'),
-            ),
             default => [],
         };
-    }
-
-    /** @return array<string, string> */
-    private static function firstAddress(array $profile): array
-    {
-        $first = ($profile['addresses'] ?? [])[0] ?? [];
-
-        return [
-            'street' => $first['street'] ?? ($first['value'] ?? ''),
-            'city' => $first['city'] ?? '',
-            'region' => $first['region'] ?? '',
-            'postcode' => $first['postcode'] ?? '',
-            'country' => $first['country'] ?? '',
-        ];
     }
 }

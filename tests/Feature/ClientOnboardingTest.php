@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Mail\Postcard;
 use App\Models\Client;
 use App\Models\ClientAssignment;
-use App\Models\Company;
 use App\Models\OnboardingProgress;
 use App\Models\User;
 use App\Support\Onboarding\ClientFlow;
@@ -85,12 +84,6 @@ class ClientOnboardingTest extends TestCase
                 'phone' => '+1 555 123 4567',
                 'preferred_contact' => 'Email',
             ],
-            'work' => [
-                'account_type' => 'individual',
-                'street' => '1 Bay Street',
-                'city' => 'Castries',
-                'country' => 'Saint Lucia',
-            ],
             'access' => [],
             'terms' => ['accept_terms' => '1'],
         ], $overrides);
@@ -153,7 +146,6 @@ class ClientOnboardingTest extends TestCase
         $this->assertNotNull($invited->fresh()->onboarding_completed_at);
         // The firm's own note survived the client filling in their details.
         $this->assertSame('Referred by Lucius', $record->fresh()->data['notes']);
-        $this->assertSame('Castries', $record->fresh()->data['addresses'][0]['city']);
     }
 
     // ------------------------------------------------------------- entry point
@@ -213,13 +205,12 @@ class ClientOnboardingTest extends TestCase
         }
 
         $this->actingAs($user)->get('/onboarding/you')->assertSee('tma-auth__stack', false);
-        $this->actingAs($user)->get('/onboarding/work')->assertSee('tma-auth__stack', false);
     }
 
     public function test_related_questions_share_a_screen(): void
     {
         $this->assertSame(
-            ['welcome', 'you', 'contact', 'work', 'access', 'terms'],
+            ['welcome', 'you', 'contact', 'access', 'terms'],
             ClientFlow::stepKeys(),
         );
     }
@@ -233,7 +224,9 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/phone')
             ->assertRedirect(route('onboarding.show', ['step' => 'contact']));
         $this->actingAs($user)->get('/onboarding/account-type')
-            ->assertRedirect(route('onboarding.show', ['step' => 'work']));
+            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
+        $this->actingAs($user)->get('/onboarding/work')
+            ->assertRedirect(route('onboarding.show', ['step' => 'access']));
         $this->actingAs($user)->get('/onboarding/calendar')
             ->assertRedirect(route('onboarding.show', ['step' => 'access']));
     }
@@ -304,20 +297,7 @@ class ClientOnboardingTest extends TestCase
         $this->assertSame('Reed', $progress->answers('you')['last_name']);
     }
 
-    // ------------------------------------------------------ conditional steps
-
-    public function test_company_details_are_only_required_for_a_company(): void
-    {
-        [$user] = $this->client();
-
-        $this->actingAs($user)->post('/onboarding/work', [
-            'account_type' => 'individual',
-        ])->assertRedirect(route('onboarding.show', ['step' => 'access']));
-
-        $this->actingAs($user)->post('/onboarding/work', [
-            'account_type' => 'company',
-        ])->assertSessionHasErrors(['company_name']);
-    }
+    // ------------------------------------------------------ contact extras
 
     public function test_whatsapp_is_collected_on_the_contact_screen(): void
     {
@@ -334,7 +314,7 @@ class ClientOnboardingTest extends TestCase
             'uses_whatsapp' => '1',
             'whatsapp' => '+1 555 999 0000',
             'preferred_contact' => 'WhatsApp',
-        ])->assertRedirect(route('onboarding.show', ['step' => 'work']));
+        ])->assertRedirect(route('onboarding.show', ['step' => 'access']));
 
         $this->assertSame('+1 555 999 0000', OnboardingProgress::where('user_id', $user->id)->first()->answers('contact')['whatsapp']);
     }
@@ -354,15 +334,6 @@ class ClientOnboardingTest extends TestCase
                 'whatsapp' => '+1 758 555 0202',
                 'preferred_contact' => 'Email',
             ],
-            'work' => [
-                'account_type' => 'individual',
-                'street' => '1 Bay Street',
-                'city' => 'Castries',
-                'country' => 'Saint Lucia',
-                'contacts' => [
-                    ['name' => 'Alex Fox', 'email' => 'alex@acme.test', 'role' => 'Finance contact'],
-                ],
-            ],
         ]);
         $this->actingAs($user)->post('/onboarding-complete')
             ->assertRedirect(route('account-setup.show', ['step' => 'preferences']));
@@ -378,8 +349,6 @@ class ClientOnboardingTest extends TestCase
         $profile = $client->fresh()->data;
         $this->assertSame('Dana', $profile['firstName']);
         $this->assertSame('Email', $profile['preferredContact']);
-        $this->assertSame('Castries', $profile['addresses'][0]['city']);
-        $this->assertSame('Alex Fox', $profile['additionalContacts'][0]['name']);
 
         // Both numbers are kept, typed.
         $types = array_column($profile['phones'], 'type');
@@ -387,37 +356,6 @@ class ClientOnboardingTest extends TestCase
         $this->assertContains('whatsapp', $types);
 
         $this->assertSame('+1 758 555 0101', $client->fresh()->phone);
-    }
-
-    public function test_choosing_company_creates_or_reuses_one_company_record(): void
-    {
-        [$user, $client] = $this->client();
-        $existing = Company::create(['uid' => 'acme-group', 'name' => 'Acme Group']);
-
-        $this->walk($user, [
-            'work' => ['account_type' => 'company', 'company_name' => 'acme group', 'company_role' => 'Director'],
-        ]);
-        $this->actingAs($user)->post('/onboarding-complete');
-
-        // Matched by name rather than creating a second Acme Group.
-        $this->assertSame(1, Company::count());
-        $this->assertSame($existing->id, $client->fresh()->company_id);
-        $this->assertSame('Director', $user->fresh()->job_title);
-    }
-
-    public function test_a_new_company_is_created_when_there_is_no_match(): void
-    {
-        [$user, $client] = $this->client();
-
-        $this->walk($user, [
-            'work' => ['account_type' => 'company', 'company_name' => 'Fresh Ventures Ltd', 'company_website' => 'fresh.test'],
-        ]);
-        $this->actingAs($user)->post('/onboarding-complete');
-
-        $company = Company::first();
-        $this->assertSame('Fresh Ventures Ltd', $company->name);
-        $this->assertSame('fresh-ventures-ltd', $company->uid);
-        $this->assertSame($company->id, $client->fresh()->company_id);
     }
 
     public function test_the_firms_own_notes_are_not_overwritten(): void

@@ -20,7 +20,7 @@ use Illuminate\View\View;
  * The guided onboarding a client walks through after accepting their invitation.
  *
  * One screen per topic, answers saved as each is submitted, so closing the tab
- * on step 4 comes back to step 4. Nothing here can be reached once onboarding
+ * on step 3 comes back to step 3. Nothing here can be reached once onboarding
  * is finished. {@see self::progress()} sends a completed account to the portal
  * instead, which is what stops the back button reopening the wizard.
  */
@@ -77,13 +77,6 @@ class ClientOnboardingController extends Controller
             }
             unset($values['photo']);
             $values['uploaded'] = $user->fresh()->avatar_url !== null;
-        }
-
-        if ($step === 'work') {
-            $values['contacts'] = array_values(array_filter(
-                $values['contacts'] ?? [],
-                fn ($row) => ! empty($row['name']) || ! empty($row['email']),
-            ));
         }
 
         $progress->remember($step, $values);
