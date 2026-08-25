@@ -2089,8 +2089,11 @@
   overflow-y: visible;
 }
 
-/* Recent email — show ~4 rows upfront; scroll for the rest (up to 8). */
-.tma-portal-email-list {
+/* Recent email — show ~4 rows upfront; scroll for the rest (up to 8).
+   Requests and Comments scroll the same way: ten rows would otherwise make
+   one column of the board twice the height of the other two. */
+.tma-portal-email-list,
+.tma-portal-work-list {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -2105,7 +2108,8 @@
   padding: 0 4px;
 }
 
-.tma-portal-email-list::-webkit-scrollbar {
+.tma-portal-email-list::-webkit-scrollbar,
+.tma-portal-work-list::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
@@ -2123,13 +2127,16 @@
 }
 
 .tma-portal-panel--email > .tma-portal-panel__body,
-.tma-portal-panel--messages > .tma-portal-panel__body {
+.tma-portal-panel--messages > .tma-portal-panel__body,
+.tma-portal-panel--work > .tma-portal-panel__body {
   min-height: 0;
 }
 
-/* Recent email + recent chat rows on the home dashboard */
+/* Recent email, recent chat, request and comment rows on the home dashboard */
 .tma-portal-email-row,
-.tma-portal-chat-row {
+.tma-portal-chat-row,
+.tma-portal-request-row,
+.tma-portal-comment-row {
   display: flex;
   align-items: flex-start;
   gap: var(--space-12);
@@ -2147,10 +2154,13 @@
 }
 
 .tma-portal-email-row:hover,
-.tma-portal-chat-row:hover { background: var(--color-hover); }
+.tma-portal-chat-row:hover,
+.tma-portal-request-row:hover,
+.tma-portal-comment-row:hover { background: var(--color-hover); }
 
 .tma-portal-email-row.is-unread .tma-portal-email-row__subject,
-.tma-portal-chat-row.is-unread .tma-portal-chat-row__preview {
+.tma-portal-chat-row.is-unread .tma-portal-chat-row__preview,
+.tma-portal-comment-row.is-mention .tma-portal-comment-row__body {
   font-weight: 700;
 }
 
@@ -2158,7 +2168,9 @@
   color: var(--color-black);
 }
 
-.tma-portal-email-row__avatar {
+.tma-portal-email-row__avatar,
+.tma-portal-request-row__avatar,
+.tma-portal-comment-row__avatar {
   flex-shrink: 0;
   width: 32px;
   height: 32px;
@@ -2242,7 +2254,9 @@
 }
 
 .tma-portal-email-row__meta,
-.tma-portal-chat-row__meta {
+.tma-portal-chat-row__meta,
+.tma-portal-request-row__meta,
+.tma-portal-comment-row__meta {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -2251,7 +2265,9 @@
 }
 
 .tma-portal-email-row__top,
-.tma-portal-chat-row__top {
+.tma-portal-chat-row__top,
+.tma-portal-request-row__top,
+.tma-portal-comment-row__top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -2260,7 +2276,9 @@
 }
 
 .tma-portal-email-row__sender,
-.tma-portal-chat-row__name {
+.tma-portal-chat-row__name,
+.tma-portal-request-row__type,
+.tma-portal-comment-row__author {
   flex: 1;
   font-size: var(--text-size-13, 13px);
   font-weight: 600;
@@ -2272,7 +2290,9 @@
 }
 
 .tma-portal-email-row__time,
-.tma-portal-chat-row__time {
+.tma-portal-chat-row__time,
+.tma-portal-request-row__time,
+.tma-portal-comment-row__time {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--color-text-secondary);
@@ -2280,7 +2300,11 @@
 
 .tma-portal-email-row__subject,
 .tma-portal-email-row__snippet,
-.tma-portal-chat-row__preview {
+.tma-portal-chat-row__preview,
+.tma-portal-request-row__file,
+.tma-portal-request-row__headline,
+.tma-portal-comment-row__body,
+.tma-portal-comment-row__file {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   white-space: nowrap;
@@ -2291,6 +2315,22 @@
 .tma-portal-email-row__subject { color: var(--color-black); }
 .tma-portal-email-row__snippet { color: var(--color-text-secondary); }
 .tma-portal-chat-row__preview { color: var(--color-text-secondary); }
+
+/* The comment itself leads; the file is the context underneath it, which is
+   the order the Workflows page tells these two in. */
+.tma-portal-comment-row__body { color: var(--color-black); }
+.tma-portal-comment-row__file { color: var(--color-text-secondary); }
+.tma-portal-request-row__file { color: var(--color-black); }
+
+/* Whose turn it is, in the same three tones the Workflows card headline uses,
+   so a request reads the same on the board as it does on the page. */
+.tma-portal-request-row__headline {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-request-row__headline--action { color: var(--color-primary-dark); }
+.tma-portal-request-row__headline--danger { color: var(--color-red); }
 
 .tma-portal-employee {
   display: flex;

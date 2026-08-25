@@ -37,6 +37,7 @@ use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
+use App\Http\Controllers\DashboardWorkController;
 use App\Http\Controllers\Design\MailPreviewController;
 use App\Http\Controllers\DesktopAssetsController;
 use App\Http\Controllers\DesktopAuthController;
@@ -151,6 +152,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     // Team presence board on the portal home (online + work-plan status).
     Route::get('/portal/dashboard/staff', StaffPresenceController::class)
         ->name('dashboard.staff');
+
+    // Requests and comments tiles on the portal home. Read-only, and the same
+    // reads the Workflows section uses — see DashboardWorkController.
+    Route::get('/portal/dashboard/work', DashboardWorkController::class)
+        ->name('dashboard.work');
 
     // Recent sign-ins across the firm, for the Overview card. Staff-gated
     // inside the controller — clients never see who signed in.

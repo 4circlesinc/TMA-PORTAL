@@ -134,7 +134,7 @@
    * stamps loaded-empty, and a guard on "loaded" then throws the snapshot
    * away in favour of an empty tile.
    */
-  var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false, cip: false };
+  var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false, cip: false, work: false };
 
   /*
    * ── Warm boot ─────────────────────────────────────────────────────
@@ -206,6 +206,17 @@
       if (!snap || homeReal.chats) return;
       homeChats = snap;
       homeChatsLoaded = true;
+      remount();
+    });
+
+    window.TMAStore.get('home:work').then(function (snap) {
+      if (!snap || homeReal.work) return;
+      homeWork = snap;
+      // Which lists the kept answer holds, or the tiles it does hold would
+      // paint a skeleton over rows that are perfectly good until the
+      // revalidation lands.
+      homeWorkWant = Array.isArray(snap.want) ? snap.want.slice() : [];
+      homeWorkLoaded = true;
       remount();
     });
 
@@ -1298,6 +1309,315 @@
     }
   }
 
+  /* ── Requests & Comments ───────────────────────────────────────────
+   *
+   * The Workflows section's two default tabs, on the board: what is waiting on
+   * you, and the latest discussion that concerns you.
+   *
+   * Both tiles are drawn from one request. They are gated by the same
+   * capability, refresh on the same signal, and the server builds them from
+   * the same reads the Workflows page uses, so a row here and the page it
+   * opens onto can never disagree about what is yours. A tile the reader
+   * turned off is left out of the `want` list and costs nothing.
+   */
+  var homeWorkLoaded = false;
+  var homeWork = null;
+  var homeWorkInflight = null;
+  var homeWorkTimer = null;
+  var homeWorkAt = 0;
+  /* Which lists the answer we are holding was actually built from. A tile
+     switched on after the last request went out has an empty list for a
+     reason that is nothing to do with the reader, and must not say so. */
+  var homeWorkWant = [];
+  var homeWorkRetry = false;
+
+  /* Comments and requests are not broadcast on any live channel, so the board
+     polls, at the same cadence as presence and the inbox. */
+  var WORK_FRESH_MS = 60000;
+
+  /* Short enough to sit at the end of a row: "just now", "12 min ago",
+     "3h ago", "5d ago". Same shape the File Library's sync line uses. */
+  function workAgo(iso) {
+    if (!iso) return '';
+    var secs = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (!isFinite(secs)) return '';
+    if (secs < 60) return 'just now';
+    if (secs < 3600) return Math.round(secs / 60) + ' min ago';
+    if (secs < 86400) return Math.round(secs / 3600) + 'h ago';
+    return Math.round(secs / 86400) + 'd ago';
+  }
+
+  /* The file a row is about, and the way back to it. Both halves are needed:
+     the File Library loads a folder, then looks for the file inside it. */
+  function workFileAttrs(file) {
+    if (!file || !file.id) return '';
+    return ' data-home-work-file="' + ui().esc(file.id) + '"' +
+      (file.folderId ? ' data-home-work-folder="' + ui().esc(file.folderId) + '"' : '');
+  }
+
+  function workAvatarHtml(person, cls) {
+    var src = avatarSrcFor(person || {});
+    return '<img class="' + cls + '" src="' + ui().esc(src) + '" alt="" width="32" height="32" loading="lazy">';
+  }
+
+  function commentRow(c) {
+    var file = c.file || {};
+    var body = c.deleted ? 'This comment was deleted.' : (c.body || '');
+
+    return '<button type="button" class="tma-portal-comment-row' + (c.mentionsMe ? ' is-mention' : '') + '"' +
+      ' data-key="work-comment-' + ui().esc(c.id) + '"' +
+      workFileAttrs(file) + '>' +
+      workAvatarHtml(c.author, 'tma-portal-comment-row__avatar') +
+      '<span class="tma-portal-comment-row__meta">' +
+      '<span class="tma-portal-comment-row__top">' +
+      '<span class="tma-portal-comment-row__author">' +
+      ui().esc((c.author && c.author.name) || 'Someone') + '</span>' +
+      '<span class="tma-portal-comment-row__time">' + ui().esc(workAgo(c.createdAt)) + '</span>' +
+      '</span>' +
+      '<span class="tma-portal-comment-row__body">' + ui().esc(body) + '</span>' +
+      (file.name ? '<span class="tma-portal-comment-row__file">' + ui().esc(file.name) + '</span>' : '') +
+      '</span></button>';
+  }
+
+  /* Is this tile's list part of the answer we are holding? */
+  function workListReady(id) {
+    return homeWorkLoaded && homeWorkWant.indexOf(id) !== -1;
+  }
+
+  function renderComments() {
+    if (!workListReady('comments')) {
+      return tileShell(
+        'comments', 'panel-comments', 'Comments', panelHead('Comments'),
+        skeletonFileRows(4), 'tma-portal-panel--work', true
+      );
+    }
+
+    var items = (homeWork && homeWork.comments) || [];
+    var unread = homeWork && homeWork.counts ? (homeWork.counts.unread || 0) : 0;
+    var rows = items.map(commentRow).join('');
+
+    return tileShell(
+      'comments', 'panel-comments', 'Comments',
+      panelHead('Comments', unread ? unread + ' unread' : ''),
+      rows
+        ? '<div class="tma-portal-work-list">' + rows + '</div>'
+        : '<p class="tma-portal-panel__note">No comments involving you yet.</p>',
+      'tma-portal-panel--work'
+    );
+  }
+
+  function requestRow(r) {
+    var file = r.file || {};
+    var headline = r.headline || {};
+    var tone = headline.tone === 'action' || headline.tone === 'danger' ? headline.tone : '';
+
+    return '<button type="button" class="tma-portal-request-row"' +
+      ' data-key="work-request-' + ui().esc(r.id) + '"' +
+      workFileAttrs(file) + '>' +
+      workAvatarHtml(r.sender, 'tma-portal-request-row__avatar') +
+      '<span class="tma-portal-request-row__meta">' +
+      '<span class="tma-portal-request-row__top">' +
+      '<span class="tma-portal-request-row__type">' + ui().esc(r.typeLabel || 'Request') + '</span>' +
+      '<span class="tma-portal-request-row__time">' + ui().esc(workAgo(r.sentAt)) + '</span>' +
+      '</span>' +
+      (file.name ? '<span class="tma-portal-request-row__file">' + ui().esc(file.name) + '</span>' : '') +
+      '<span class="tma-portal-request-row__headline' +
+      (tone ? ' tma-portal-request-row__headline--' + tone : '') + '">' +
+      ui().esc(headline.text || r.statusLabel || '') + '</span>' +
+      '</span></button>';
+  }
+
+  function renderRequests() {
+    if (!workListReady('requests')) {
+      return tileShell(
+        'requests', 'panel-requests', 'Requests', panelHead('Requests'),
+        skeletonFileRows(4), 'tma-portal-panel--work', true
+      );
+    }
+
+    var items = (homeWork && homeWork.requests) || [];
+    var waiting = homeWork && homeWork.counts ? (homeWork.counts.waiting || 0) : 0;
+    var rows = items.map(requestRow).join('');
+
+    return tileShell(
+      'requests', 'panel-requests', 'Requests',
+      panelHead('Requests', waiting ? waiting + ' waiting' : ''),
+      rows
+        ? '<div class="tma-portal-work-list">' + rows + '</div>'
+        : '<p class="tma-portal-panel__note">Nothing is waiting on you.</p>',
+      'tma-portal-panel--work'
+    );
+  }
+
+  /* Same rows, same numbers, leave both tiles alone — every loader on this
+     board answers on every visit, and each answer would otherwise repaint. */
+  function workSignature(payload) {
+    if (!payload) return '';
+    if (payload.enabled === false) return 'disabled';
+    var counts = payload.counts || {};
+
+    return [
+      counts.waiting || 0, counts.unread || 0,
+      (payload.requests || []).map(function (r) {
+        return [r.id, r.status || '', r.answered, ((r.headline || {}).text || '')].join(':');
+      }).join('|'),
+      (payload.comments || []).map(function (c) {
+        return [c.id, c.resolved ? 1 : 0, c.editedAt || '', c.deleted ? 1 : 0].join(':');
+      }).join('|'),
+    ].join('~');
+  }
+
+  /* Which tiles are on screen. Asking for a tile the reader turned off is a
+     page of rows and a per-file access walk nobody will ever see. */
+  function wantedWorkTiles() {
+    var show = tiles();
+    var want = [];
+    if (show.requests !== false) want.push('requests');
+    if (show.comments !== false) want.push('comments');
+    return want;
+  }
+
+  function loadHomeWork(el, opts) {
+    opts = opts || {};
+    if (homeWorkInflight) return;
+
+    var want = wantedWorkTiles();
+    if (!want.length) return;
+
+    var before = workSignature(homeWork);
+
+    homeWorkInflight = fetch('/portal/dashboard/work?want=' + want.join(','), {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (json) {
+        homeWorkInflight = null;
+        var wasLoaded = homeWorkLoaded;
+        homeWorkLoaded = true;
+
+        if (json) {
+          homeWork = json;
+          homeWorkWant = Array.isArray(json.want) ? json.want.slice() : want.slice();
+          homeWorkAt = Date.now();
+          homeReal.work = true;
+          keepWarm('work', json);
+          publishWorkCounts(json.counts);
+        } else if (!homeWork) {
+          // A failed request is the skeleton coming down, not an answer: it is
+          // neither kept warm nor allowed to outrank what the store held. The
+          // tiles settle into their empty state rather than spinning, the same
+          // bargain every other tile on this board makes, and the poll behind
+          // them corrects it as soon as the network is back.
+          homeWork = { enabled: true, want: want.slice(), requests: [], comments: [], counts: null };
+          homeWorkWant = want.slice();
+        }
+
+        if ((!wasLoaded || workSignature(homeWork) !== before) && el && el.isConnected) {
+          mount(el, { fromLoad: true });
+        }
+
+        // A tile was switched on while this request was in the air, so what
+        // just landed is already the wrong shape. Ask once more, for the board
+        // as it is now.
+        if (homeWorkRetry) {
+          homeWorkRetry = false;
+          if (el && el.isConnected) loadHomeWork(el, { skipTimer: true });
+        }
+      });
+
+    if (!homeWorkTimer && !opts.skipTimer) {
+      homeWorkTimer = setInterval(function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        // A hidden tab polling is pure cost; the visibilitychange handler
+        // below catches up on the way back.
+        if (document.visibilityState === 'hidden') return;
+        if (homeWorkInflight) return;
+        if (homeWork && homeWork.enabled === false) return;
+        loadHomeWork(mountEl, { skipTimer: true });
+      }, WORK_FRESH_MS);
+    }
+
+    if (!window.__tmaHomeWorkLiveBound) {
+      window.__tmaHomeWorkLiveBound = true;
+
+      // The Workflows page republishes these after every answer given there,
+      // and answering something is exactly when this board is stale. Our own
+      // publish is skipped, or every load would schedule the next one.
+      document.addEventListener('tma-workflow-counts', function () {
+        if (publishingWorkCounts) return;
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        homeWorkAt = 0;
+        loadHomeWork(mountEl, { skipTimer: true });
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        loadHomeWork(mountEl, { skipTimer: true });
+      });
+    }
+  }
+
+  /*
+   * A work tile the reader has just switched on.
+   *
+   * Its list was left out of the last request's `want`, so it is empty because
+   * nobody asked for it. Left alone the tile would sit on "Nothing is waiting
+   * on you" until the poll came round, which is a wrong answer, not a stale one.
+   */
+  function refreshWorkForTiles() {
+    // Switching one OFF needs nothing: the tile leaves the board and the list
+    // we are holding is still correct for the ones that stayed.
+    var missing = wantedWorkTiles().some(function (id) {
+      return homeWorkWant.indexOf(id) === -1;
+    });
+    if (!missing) return;
+
+    var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+    if (!el || !el.isConnected) return;
+
+    homeWorkAt = 0;
+    if (homeWorkInflight) { homeWorkRetry = true; return; }
+    loadHomeWork(el, { skipTimer: true });
+  }
+
+  /* Hand the counts to the shell so the Workflows badge agrees with the tiles
+     it sits beside — the same event the Workflows page raises.
+     Dispatch is synchronous, so the flag is set for exactly the listeners this
+     call runs, which is what keeps the listener above off its own tail. */
+  var publishingWorkCounts = false;
+
+  function publishWorkCounts(counts) {
+    if (!counts) return;
+    publishingWorkCounts = true;
+    try {
+      document.dispatchEvent(new CustomEvent('tma-workflow-counts', { detail: counts }));
+    } catch (e) { /* an old engine simply keeps the figure taken at boot */ } finally {
+      publishingWorkCounts = false;
+    }
+  }
+
+  /*
+   * Back to the file, with its viewer open.
+   *
+   * A full navigation rather than an in-place view swap, for the reason the
+   * Workflows page gives: the File Library reads the folder and the file from
+   * the URL on mount, and there is no way to hand it both through the SPA
+   * router without it clearing one of them.
+   */
+  function openWorkFile(fileId, folderId) {
+    if (!fileId) return;
+    var root = window.__TMA_SITE_ROOT || '';
+    var params = new URLSearchParams();
+    if (folderId) params.set('folder', folderId);
+    params.set('file', fileId);
+    window.location.assign(root + '/folders/all?' + params.toString());
+  }
+
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
@@ -1323,6 +1643,14 @@
       // the original board. Whether there is anything to draw is a separate
       // question, and the server answers that one, see renderCipStatus.
       cipStatus: function () { return show.cipStatus !== false ? renderCipStatus() : ''; },
+      // Both work tiles live behind the Workflows section's own capability:
+      // every row they draw opens onto a page a client account cannot reach.
+      requests: function () {
+        return show.requests !== false && canReach('workflows.view') ? renderRequests() : '';
+      },
+      comments: function () {
+        return show.comments !== false && canReach('workflows.view') ? renderComments() : '';
+      },
     };
     return tileOrder().map(function (id) {
       return renderers[id] ? renderers[id]() : '';
@@ -1571,14 +1899,21 @@
      * member without CIP gets an empty panel.
      */
     { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', cipCard: true },
+    { id: 'requests', label: 'Requests', desc: 'Reviews, approvals and signatures waiting on you.', preview: 'requests', cap: 'workflows.view' },
+    { id: 'comments', label: 'Comments', desc: 'The latest discussion on files that involve you.', preview: 'comments', cap: 'workflows.view' },
   ];
 
   // Shipped default board (3 equal columns, masonry):
   //   Recent Files → Favorites
   //   Recent Email → What's on the road?
   //   CIP Applications → Shortcuts → Employees
-  // Messages then lands in whichever column is shortest.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'cipStatus', 'favorites', 'road', 'shortcuts', 'employees', 'messages'];
+  // Messages, Requests and Comments then land in whichever column is shortest,
+  // in that order — they are listed last so adding them left the three columns
+  // above exactly where the board already had them.
+  var DEFAULT_TILE_ORDER = [
+    'recentFiles', 'email', 'cipStatus', 'favorites', 'road',
+    'shortcuts', 'employees', 'messages', 'requests', 'comments',
+  ];
 
   // Every tile is one column of the 3-up board, nothing spans full width.
   var TILE_SPAN = {
@@ -1590,6 +1925,8 @@
     shortcuts: 'third',
     road: 'third',
     cipStatus: 'third',
+    requests: 'third',
+    comments: 'third',
   };
 
   var TILE_GAP = 20;
@@ -1917,7 +2254,8 @@
   // the account save keeps every other browser in sync.
   // 16 re-applies CIP → Shortcuts after the server whitelist started accepting
   // cipStatus/messages (older saves had stripped them and put CIP at the end).
-  var DASHBOARD_LAYOUT_GEN = 16;
+  // 17 adds the Requests and Comments tiles to boards saved before they existed.
+  var DASHBOARD_LAYOUT_GEN = 17;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -1928,6 +2266,7 @@
     s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
       recentFiles: true, email: true, shortcuts: true, employees: true,
       favorites: true, road: true, messages: true, cipStatus: true,
+      requests: true, comments: true,
     });
     delete s.dashboardTiles.tutorials;
     s.dashboardLayoutGen = DASHBOARD_LAYOUT_GEN;
@@ -2008,6 +2347,8 @@
     if (s.dashboardTiles.messages == null) s.dashboardTiles.messages = true;
     if (s.dashboardTiles.road == null) s.dashboardTiles.road = true;
     if (s.dashboardTiles.cipStatus == null) s.dashboardTiles.cipStatus = true;
+    if (s.dashboardTiles.requests == null) s.dashboardTiles.requests = true;
+    if (s.dashboardTiles.comments == null) s.dashboardTiles.comments = true;
     return s.dashboardTiles;
   }
 
@@ -2061,12 +2402,24 @@
           '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title" style="width:12px"></span>' +
           '</span>';
       }
-    } else if (kind === 'employees' || kind === 'email' || kind === 'messages') {
+    } else if (kind === 'employees' || kind === 'email' || kind === 'messages' || kind === 'comments') {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
       for (var e = 0; e < 3; e++) {
         inner += '<span class="tma-portal-tilerow__preview-line">' +
           '<span class="tma-portal-tilerow__preview-dot"></span>' +
           '<span class="tma-portal-tilerow__preview-bar"></span></span>';
+      }
+    } else if (kind === 'requests') {
+      // The comments thumbnail with a stub on the right for the status line,
+      // which is the one thing that tells the two tiles apart at 96px wide.
+      // Same borrowed --title modifier the CIP thumbnail uses for its numbers.
+      inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
+      for (var q = 0; q < 3; q++) {
+        inner += '<span class="tma-portal-tilerow__preview-line">' +
+          '<span class="tma-portal-tilerow__preview-dot"></span>' +
+          '<span class="tma-portal-tilerow__preview-bar"></span>' +
+          '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title" style="width:18px"></span>' +
+          '</span>';
       }
     } else {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>' +
@@ -2122,6 +2475,7 @@
           s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, draft);
           data().save();
           queueLayoutServerSave();
+          refreshWorkForTiles();
           ui().closeModal();
           ui().toast('Dashboard updated');
           rerender();
@@ -2637,6 +2991,15 @@
       });
     });
 
+    pick('[data-home-work-file]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        openWorkFile(
+          b.getAttribute('data-home-work-file'),
+          b.getAttribute('data-home-work-folder')
+        );
+      });
+    });
+
     pick('[data-home-cip-bucket]').forEach(function (b) {
       b.addEventListener('click', function () {
         openCipBucket(b.getAttribute('data-home-cip-bucket'));
@@ -2696,6 +3059,9 @@
       if (canReach('mail.use') && (force || !homeEmailLoaded || stale(homeEmailAt))) loadHomeEmail(el);
       if (force || !homeChatsLoaded || stale(homeChatsAt)) loadHomeChats(el);
       if (force || !homeCipLoaded || stale(homeCipAt, CIP_FRESH_MS)) loadHomeCip(el);
+      if (canReach('workflows.view') && (force || !homeWorkLoaded || stale(homeWorkAt, WORK_FRESH_MS))) {
+        loadHomeWork(el);
+      }
       if (window.TMAPortalHomeLibrary) {
         // Only forced on an explicit refresh. A forced load replaced
         // state.defaults with preview-less folders straight away, so every card

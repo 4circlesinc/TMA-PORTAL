@@ -1164,6 +1164,69 @@ node tests/Browser/notify-toasts.mjs
   and clicks a row: the Messages view must open *on that conversation*, which is
   the whole point of the tile. Needs a staff account with a few conversations —
   the messaging seed at the end of this file provides them.
+- **`dashboard-work.mjs`** — the home board's Requests and Comments tiles. The
+  lists themselves are `DashboardWorkTest`'s subject; what only a browser can
+  check is the reading and the one rule the tiles must not break. It reads back
+  every rendered row (type, file, whose turn it is, author, body, time), takes
+  the *computed* colour of the request headline and the *computed* weight of a
+  comment naming you, because both are the whole difference between "waiting on
+  you" and "somebody else's problem" and both live only in the cascade. Then it
+  calls the tile's own endpoint and re-reads the Workflows counts either side:
+  a tile that refreshes on a timer must never mark a thread read, or a board
+  left open all day empties the badge for conversations nobody opened. Finally
+  it clicks a comment, which has to land on `/folders/all?folder=…&file=…` —
+  the file the comment is about, not the Workflows page.
+
+  Needs a staff account with something waiting on it and a thread or two naming
+  it — the fixture below. Rebuild the bundle first: the shell serves
+  `public/build`, so a stale bundle renders the new tiles with none of their
+  CSS, which looks exactly like a broken stylesheet rather than a stale build.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+    \$me = App\Models\User::where('email', 'e2e@example.com')->first();
+    // The other side of every row. Not an Administrator: the sender has to be
+    // somebody the reader can actually be waiting on.
+    \$ada = App\Models\User::firstOrCreate(['email' => 'ada@example.com'],
+      ['name' => 'Ada Reviewer', 'password' => Hash::make('password12345')]);
+    \$ada->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(),
+      'onboarding_completed_at' => now(), 'status' => 'approved',
+      'account_type' => 'Reviewing Officer'])->save();
+    \$folder = App\Models\Folder::create(['uuid' => (string) Str::uuid(), 'name' => 'Shared',
+      'owner_id' => \$ada->id, 'created_by' => \$ada->id,
+      'folder_type' => App\Models\Folder::TYPE_ORGANIZATION,
+      'audience' => 'all_staff', 'audience_role' => 'editor']);
+    @mkdir(storage_path('app/private/vault'), 0775, true);
+    file_put_contents(storage_path('app/private/vault/e2e-work.txt'), 'draft one');
+    \$files = collect(['Engagement Letter.pdf', 'Due Diligence.docx', 'Fee Schedule.xlsx'])
+      ->map(fn (\$n) => App\Models\FileItem::create(['uuid' => (string) Str::uuid(), 'name' => \$n,
+        'extension' => pathinfo(\$n, PATHINFO_EXTENSION), 'mime_type' => 'text/plain', 'size' => 9,
+        'disk' => 'local', 'storage_path' => 'vault/e2e-work.txt', 'folder_id' => \$folder->id,
+        'owner_id' => \$ada->id, 'uploaded_by' => \$ada->id]));
+
+    foreach ([['approval', 'awaiting_approval', 'approver', 0], ['review', 'under_review', 'reviewer', 1]] as \$r) {
+      \$wf = App\Models\FileWorkflow::create(['uuid' => (string) Str::uuid(),
+        'file_id' => \$files[\$r[3]]->id, 'type' => \$r[0], 'status' => \$r[1],
+        'created_by' => \$ada->id, 'message' => 'Please look before Friday']);
+      App\Models\FileWorkflowStep::create(['uuid' => (string) Str::uuid(),
+        'workflow_id' => \$wf->id, 'user_id' => \$me->id, 'role' => \$r[2],
+        'position' => 1, 'status' => 'pending']);
+    }
+
+    foreach (['Can you confirm the fee cap in clause 4?', 'Source of funds letter is missing a page.',
+              'Numbers agree with the engagement letter now.'] as \$i => \$body) {
+      \$c = App\Models\FileComment::create(['uuid' => (string) Str::uuid(),
+        'file_id' => \$files[\$i]->id, 'author_id' => \$ada->id, 'body' => \$body]);
+      // root_id is what every unread and thread query keys on; a comment
+      // inserted without one is invisible to both.
+      \$c->forceFill(['root_id' => \$c->id])->save();
+      App\Models\FileCommentMention::create(['comment_id' => \$c->id, 'user_id' => \$me->id]);
+    }
+  "
+
+  npm run build
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/dashboard-work.mjs shot.png
+  ```
 - **`sidebar-logo.mjs`** — which logo the sidebar shows. The rule is one
   sentence (open = wordmark, collapsed rail = mark) but there are four states
   across two sidebar styles, and the hover overlay was showing the mark while

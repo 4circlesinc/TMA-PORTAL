@@ -79,7 +79,7 @@ final class Hub
     private const OVERSCAN = 60;
 
     /**
-     * @param  array{scope?:string,type?:string,state?:string,q?:string,cursor?:int}  $filters
+     * @param  array{scope?:string,type?:string,state?:string,q?:string,cursor?:int,limit?:int}  $filters
      * @return array{items:array,nextCursor:?int,counts:array,canSeeAll:bool}
      */
     public static function requests(User $viewer, array $filters = []): array
@@ -110,10 +110,11 @@ final class Hub
 
         $visible = self::filterByAccess($viewer, $rows, fn (FileWorkflow $w) => $w->file);
 
-        $page = $visible->take(self::PAGE);
+        $limit = self::pageSize($filters);
+        $page = $visible->take($limit);
         // Only claim there is more when this page was actually full; a short
         // page after access filtering means the query is exhausted.
-        $more = $rows->count() >= self::OVERSCAN && $visible->count() > self::PAGE;
+        $more = $rows->count() >= self::OVERSCAN && $visible->count() > $limit;
 
         $paths = self::folderPaths($page->map(fn (FileWorkflow $w) => $w->file)->all());
 
@@ -126,10 +127,11 @@ final class Hub
     }
 
     /**
-     * @param  array{scope?:string,q?:string,cursor?:int}  $filters
+     * @param  array{scope?:string,q?:string,cursor?:int,limit?:int}  $filters
+     * @param  bool  $markRead  whether returning these rows counts as having read them
      * @return array{items:array,nextCursor:?int,counts:array,canSeeAll:bool}
      */
-    public static function comments(User $viewer, array $filters = []): array
+    public static function comments(User $viewer, array $filters = [], bool $markRead = true): array
     {
         $scope = in_array($filters['scope'] ?? '', self::COMMENT_SCOPES, true)
             ? $filters['scope']
@@ -185,8 +187,9 @@ final class Hub
 
         $visible = self::filterByAccess($viewer, $rows, fn (FileComment $c) => $c->file);
 
-        $page = $visible->take(self::PAGE);
-        $more = $visible->count() > self::PAGE;
+        $limit = self::pageSize($filters);
+        $page = $visible->take($limit);
+        $more = $visible->count() > $limit;
 
         $paths = self::folderPaths($page->map(fn (FileComment $c) => $c->file)->all());
         $mentions = self::mentionNames($page->pluck('id'));
@@ -197,8 +200,14 @@ final class Hub
          * Every thread here is drawn in full, body and all, so this page IS
          * the reading. Marked after the rows are shaped and before the counts
          * are taken, or the badge would still be claiming what is on screen.
+         *
+         * A caller that only shows a line of each thread — the home board's
+         * tile — passes false. Anything else and a dashboard left open all day
+         * would silently empty the Workflows badge nobody had looked at.
          */
-        CommentReads::markThreadsRead($viewer, $page->map(fn (FileComment $c) => $c->root_id ?? $c->id));
+        if ($markRead) {
+            CommentReads::markThreadsRead($viewer, $page->map(fn (FileComment $c) => $c->root_id ?? $c->id));
+        }
 
         return [
             'items' => $items,
@@ -271,6 +280,22 @@ final class Hub
     }
 
     /* ── queries ──────────────────────────────────────────────── */
+
+    /**
+     * How many rows the caller wants back, capped at the page size.
+     *
+     * The cap is the point: the overscan above is sized for one page, so a
+     * caller asking for more than PAGE would be handed a page that quietly
+     * stops short of what it asked for.
+     *
+     * @param  array{limit?:int}  $filters
+     */
+    private static function pageSize(array $filters): int
+    {
+        $limit = (int) ($filters['limit'] ?? self::PAGE);
+
+        return max(1, min(self::PAGE, $limit));
+    }
 
     private static function baseQuery(User $viewer, string $scope, array $filters): Builder
     {
