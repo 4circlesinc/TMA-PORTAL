@@ -2723,6 +2723,22 @@
   gap: var(--space-16) var(--space-6);
   width: 100%;
   min-width: 0;
+  /*
+   * Room above the first row for the count badges, which hang 6px over the
+   * top corner of their tile.
+   *
+   * They were being cut in half, and the reason is a trap worth naming: the
+   * panel and its body carry `overflow-x: hidden` (and again with !important
+   * in dashboard-tma-overrides.css) to stop wide content dragging the shell
+   * sideways. CSS does not let one axis be hidden while the other stays
+   * visible — the visible one computes to `auto` — so those boxes clip
+   * vertically as well, and anything reaching above the grid's top edge is
+   * lost. The badge cannot escape the box, so the box is given the room.
+   *
+   * Only the top needs it. A tile is 44px in a column about 15px wider, so
+   * the badge on the last column has slack to hang into already.
+   */
+  padding-top: var(--space-8);
 }
 
 .tma-portal-shortcut {
