@@ -34,6 +34,7 @@
     PROJECTS: 'projects',
     SIGNATURES: 'signatures',
     ACTIVITY: 'activity',
+    WORKFLOWS: 'workflows',
     CIP: 'cip',
     IDENTITY: 'identity',
   };

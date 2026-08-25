@@ -1420,6 +1420,9 @@
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
         'X-XSRF-TOKEN': prefXsrf(),
+        // This write signals the reader's own other tabs; the header is what
+        // lets toOthers() skip this one, which has already drawn the change.
+        'X-Socket-ID': (window.TMAMessagingRealtime && window.TMAMessagingRealtime.socketId) || '',
       },
     })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -1537,10 +1540,12 @@
 
   function loadHomeWork(el, opts) {
     opts = opts || {};
-    if (homeWorkInflight) return;
+    // Returned rather than dropped: TMALive uses the promise to suppress
+    // overlapping runs, and a burst of comments is one signal per write.
+    if (homeWorkInflight) return homeWorkInflight;
 
     var want = wantedWorkTiles();
-    if (!want.length) return;
+    if (!want.length) return null;
 
     var before = workSignature(homeWork);
 
@@ -1585,6 +1590,8 @@
         }
       });
 
+    var settled = homeWorkInflight;
+
     if (!homeWorkTimer && !opts.skipTimer) {
       homeWorkTimer = setInterval(function () {
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
@@ -1618,6 +1625,8 @@
         loadHomeWork(mountEl, { skipTimer: true });
       });
     }
+
+    return settled;
   }
 
   /*
@@ -3087,6 +3096,7 @@
     fillShortcutCounts(el);
     watchLiveFiles();
     watchLiveCip();
+    watchLiveWork();
 
     /*
      * Revalidate on a genuine mount, but only what has actually gone stale.
@@ -3185,6 +3195,49 @@
         var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
         return !!view && !view.hidden;
       },
+    });
+  }
+
+  /*
+   * A comment is written, or a request is answered → the two work tiles move,
+   * and nothing else on this board does.
+   *
+   * Its own registration for the same reason CIP keeps one: somebody answering
+   * an approval does not touch Recent Files, and an upload does not move a
+   * conversation. One shared entry would make every write on either side
+   * refetch the other's.
+   *
+   * The 60-second poll below stays as the backstop. This is the path that
+   * makes the tiles live; the timer is what covers a portal that cannot reach
+   * Reverb at all, which is a configuration this app has shipped in more than
+   * once.
+   */
+  var liveWorkBound = false;
+  function watchLiveWork() {
+    if (liveWorkBound || !window.TMALive) return;
+    liveWorkBound = true;
+
+    window.TMALive.register(window.TMALive.RESOURCES.WORKFLOWS, function () {
+      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+      if (!el || !el.isConnected) return null;
+
+      // Force past the freshness window: this is a signal that something
+      // actually changed, not a speculative revalidation.
+      homeWorkAt = 0;
+
+      /*
+       * Off screen, zeroing that window IS the job — which is why this does
+       * the check itself rather than handing TMALive an `active` guard. The
+       * guard returns before any of this runs, so a comment written while the
+       * reader was in Email left the board thinking it was fresh, and walking
+       * back in under the minute showed them yesterday's tile. Refetching a
+       * board nobody is looking at is still pure cost; mount() asks on the way
+       * back instead.
+       */
+      var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
+      if (!view || view.hidden) return null;
+
+      return loadHomeWork(el, { skipTimer: true });
     });
   }
 

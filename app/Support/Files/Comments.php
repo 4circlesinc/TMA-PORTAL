@@ -8,6 +8,7 @@ use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Notifications\Notifier;
+use App\Support\Realtime\Live;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -89,6 +90,7 @@ class Comments
 
         self::notify($comment->fresh(), $file, $author, $parent);
         self::broadcast($file, $comment, 'created');
+        self::signal($file, $comment->fresh());
 
         /*
          * Writing in a thread means you have read it.
@@ -113,6 +115,7 @@ class Comments
         });
 
         self::broadcast($file, $comment->fresh(), 'updated');
+        self::signal($file, $comment->fresh());
 
         return $comment->fresh();
     }
@@ -135,6 +138,7 @@ class Comments
         });
 
         self::broadcast($file, $comment, 'deleted');
+        self::signal($file, $comment);
     }
 
     public static function resolve(FileComment $comment, User $actor, bool $resolved): FileComment
@@ -162,6 +166,7 @@ class Comments
         }
 
         self::broadcast($file, $comment->fresh(), 'updated');
+        self::signal($file, $comment->fresh());
 
         return $comment->fresh();
     }
@@ -292,6 +297,73 @@ class Comments
      * its own event and inserts the comment a second time, on top of the
      * optimistic copy it already rendered.
      */
+    /**
+     * Tell the lists this changed — the Workflows section and the home board's
+     * Comments tile.
+     *
+     * Not the same thing as broadcast() above, which carries the comment to
+     * people who have this one file open. This carries nothing at all: it says
+     * "a conversation you are part of moved", and each reader refetches through
+     * their own scoped endpoint. Keep them separate — a viewer needs the row,
+     * and a list must never be handed one.
+     */
+    private static function signal(FileItem $file, FileComment $comment): void
+    {
+        Live::users(Live::WORKFLOWS, self::reach($file, $comment));
+
+        /*
+         * And the indicators outside Workflows, which read the same numbers.
+         *
+         * The File Library draws a chip on the file's row and on the folder
+         * holding it, so the people the conversation concerns need their
+         * listings to say so without a reload. The staff room does not: every
+         * comment in the firm signalling every staff tab is the refetch storm
+         * WORKFLOWS is scoped to avoid, and a chip on a file nobody has open
+         * is not worth it.
+         */
+        Live::users(Live::FILES, self::reach($file, $comment));
+
+        /*
+         * CIP is the exception, and staff-wide on purpose. The dot on the
+         * applications table is drawn for a reader who is not looking at the
+         * file, is not in the thread, and may not know the conversation
+         * exists — being told is the entire point of it. The module is
+         * staff-only, so the staff room IS its audience.
+         */
+        $file->loadMissing('cipDocument');
+
+        if ($file->cipDocument) {
+            Live::staff(Live::CIP);
+        }
+    }
+
+    /**
+     * Everyone whose lists change when this comment does: the thread's other
+     * authors, the file's owner, and anybody named in it.
+     *
+     * That is {@see \App\Support\Files\Workflow\Hub::concernsMe} said in ids
+     * rather than in SQL, and it is deliberately NOT access-checked the way
+     * notify()'s recipients are. The signal carries no rows, so the worst an
+     * over-wide reach can do is make somebody refetch a list that comes back
+     * exactly as it was. Checking would cost a User lookup and an access walk
+     * per participant on every comment written, to prevent nothing.
+     *
+     * @return list<int>
+     */
+    private static function reach(FileItem $file, FileComment $comment): array
+    {
+        return FileComment::query()
+            ->where('file_id', $file->id)
+            ->distinct()
+            ->pluck('author_id')
+            ->push($file->owner_id)
+            ->merge($comment->mentions()->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private static function broadcast(FileItem $file, FileComment $comment, string $action): void
     {
         try {

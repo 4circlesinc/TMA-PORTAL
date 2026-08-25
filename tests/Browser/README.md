@@ -1253,6 +1253,52 @@ node tests/Browser/notify-toasts.mjs
   npm run build
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/dashboard-work.mjs shot.png
   ```
+- **`dashboard-live.mjs`** — the same two tiles updating themselves. Two live
+  sessions and Reverb: one reader sits on the board, somebody else writes, and
+  the tiles have to move without a reload.
+
+  Every wait is bounded at 15 seconds, well under the 60-second poll the tiles
+  keep as a backstop, because a run that passed on the timer would prove
+  nothing about the signal — which is the entire subject. It also asserts both
+  sessions actually got a socket, so a run with Reverb down fails loudly
+  instead of quietly reporting on the fallback. In practice each of these
+  lands in well under a second.
+
+  Four paths, chosen because each is one somebody else's write has to reach:
+
+  - a comment naming the reader appears in the Comments tile;
+  - a request sent to them appears in the Requests tile;
+  - the sender **cancelling** it takes the row back off. Cancelled rather than
+    answered on purpose: the tile shows what is waiting on *you*, so only
+    another person's write can make a row leave it without the reader's own
+    browser having changed anything. The answering side is PHPUnit's
+    (`DashboardWorkTest::test_answering_a_request_signals_the_people_on_it`).
+  - a comment written **while the board is off screen** shows up on the way
+    back. The board deliberately does not refetch a view nobody is looking at,
+    but it must not conclude it is still fresh either: with an `active` guard
+    handed to TMALive the freshness window was never touched, so returning
+    inside the minute showed the old tile.
+
+  Needs Reverb, the app pointed at it, and two staff accounts sharing a folder
+  with files in it — the second half of the `dashboard-work.mjs` fixture above
+  provides the accounts and files; this one writes everything else itself.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
+    REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \
+    php artisan reverb:start --host=127.0.0.1 --port=8080 &
+
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
+    BROADCAST_CONNECTION=reverb REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \
+    php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
+
+  npm run build
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/dashboard-live.mjs
+  ```
+
+  To confirm the assertions are real rather than the tiles being fast, run the
+  app with `BROADCAST_CONNECTION=log`: no socket, and neither tile ever moves.
+
 - **`sidebar-logo.mjs`** — which logo the sidebar shows. The rule is one
   sentence (open = wordmark, collapsed rail = mark) but there are four states
   across two sidebar styles, and the hover overlay was showing the mark while

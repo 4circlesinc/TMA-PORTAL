@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Events\PortalDataChanged;
 use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -223,6 +226,154 @@ class DashboardWorkTest extends TestCase
             ->assertJsonCount(10, 'comments')
             // Newest first, so the tile leads with what just happened.
             ->assertJsonPath('comments.0.body', 'Point 11');
+    }
+
+    /**
+     * The channels a piece of work signalled, so a test can ask "did this
+     * reach that person" rather than only "did something fire".
+     *
+     * @return array<string, list<string>> resource => channel names
+     */
+    private function signals(callable $work): array
+    {
+        Event::fake([PortalDataChanged::class]);
+
+        $work();
+        // Signals are collected per request and sent on terminate; the test
+        // kernel never terminates, so flush by hand.
+        Live::flush();
+
+        $out = [];
+
+        foreach (Event::dispatched(PortalDataChanged::class) as $dispatched) {
+            $event = $dispatched[0];
+            foreach ($event->broadcastOn() as $channel) {
+                $out[$event->resource][] = (string) $channel->name;
+            }
+        }
+
+        return $out;
+    }
+
+    private function reached(array $signals, User $user): bool
+    {
+        foreach ($signals[Live::WORKFLOWS] ?? [] as $channel) {
+            if (str_ends_with($channel, 'User.'.$user->id)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The tiles are live, which means the writing half has to say so.
+     *
+     * Both tiles read one endpoint, so both ride one resource: a comment and
+     * an approval each mean "ask again". The listening half is portal-home.js,
+     * covered by dashboard-work.mjs.
+     */
+    public function test_a_comment_signals_everybody_the_thread_concerns(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
+        $file = $this->sharedFile($ada);
+
+        $signals = $this->signals(function () use ($ada, $ben, $file) {
+            $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => 'Ben, can you check clause 4?',
+                'mentions' => [$ben->id],
+            ])->assertCreated();
+        });
+
+        $this->assertArrayHasKey(Live::WORKFLOWS, $signals);
+        // The person named in it, and the author, whose own other tabs are
+        // showing the same board.
+        $this->assertTrue($this->reached($signals, $ben), 'the person named should be signalled');
+        $this->assertTrue($this->reached($signals, $ada), 'the author should be signalled');
+        /*
+         * And nobody else. A signal per staff member on every comment written
+         * anywhere in the firm would have every open board refetching all day
+         * for conversations it is never going to draw.
+         */
+        $this->assertFalse($this->reached($signals, $cara), 'an uninvolved colleague should not be');
+    }
+
+    /** Answering one moves the sender's tile, not just the responder's. */
+    public function test_answering_a_request_signals_the_people_on_it(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
+        $file = $this->sharedFile($ada);
+
+        $sent = $this->signals(function () use ($ada, $ben, $file) {
+            $this->actingAs($ada)
+                ->postJson("/portal/files/files/{$file->uuid}/workflows", [
+                    'type' => 'approval',
+                    'recipients' => [['userId' => $ben->id]],
+                ])->assertCreated();
+        });
+
+        $this->assertTrue($this->reached($sent, $ben), 'the person asked should be signalled');
+        $this->assertFalse($this->reached($sent, $cara), 'somebody not on the request should not be');
+
+        $workflow = $this->actingAs($ben)
+            ->getJson('/portal/dashboard/work')->assertOk()->json('requests.0.id');
+
+        $answered = $this->signals(function () use ($ben, $file, $workflow) {
+            $this->actingAs($ben)
+                ->postJson("/portal/files/files/{$file->uuid}/workflows/{$workflow}/respond", [
+                    'action' => 'approve',
+                ])->assertOk();
+        });
+
+        // The sender is the one waiting to hear, so their board has to move.
+        $this->assertTrue($this->reached($answered, $ada), 'the sender should be signalled');
+    }
+
+    /** Reading is a change too, but only to the reader's own tabs. */
+    public function test_reading_a_thread_signals_only_the_reader(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $comment = $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Ben — thoughts?',
+            'mentions' => [$ben->id],
+        ])->assertCreated()->json();
+
+        $signals = $this->signals(function () use ($ben, $comment) {
+            $this->actingAs($ben)
+                ->postJson("/portal/files/workflows/comments/{$comment['id']}/read")
+                ->assertOk();
+        });
+
+        $this->assertTrue($this->reached($signals, $ben), 'the reader\'s own tabs should be signalled');
+        // Nothing about the thread changed for anyone else.
+        $this->assertFalse($this->reached($signals, $ada), 'nobody else should hear about it');
+    }
+
+    /** Asking for the tiles must never signal — that is a refetch loop. */
+    public function test_loading_the_board_signals_nothing(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Ben, can you check clause 4?',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $signals = $this->signals(function () use ($ben) {
+            $this->actingAs($ben)->getJson('/portal/dashboard/work')->assertOk();
+            $this->actingAs($ben)->getJson('/portal/dashboard/work')->assertOk();
+        });
+
+        $this->assertSame([], $signals);
     }
 
     /**

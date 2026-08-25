@@ -47,6 +47,18 @@ final class Live
     public const ACTIVITY = 'activity';
 
     /**
+     * Requests and discussion across files — the Workflows section, and the
+     * two tiles on the home board that read from it.
+     *
+     * One name for both because they are one surface: the tiles are built from
+     * a single endpoint, so a comment and an approval both mean "ask again".
+     * Reach is the people the row concerns, never the staff room: every
+     * comment in the firm signalling every staff tab would have a board
+     * refetching all day for conversations it is not going to draw.
+     */
+    public const WORKFLOWS = 'workflows';
+
+    /**
      * "Who you are changed", account type, status, approval.
      *
      * Goes to the affected person's own channel, never a shared one. It is the
@@ -105,6 +117,37 @@ final class Live
      * queued job or console command there is no terminate step, and the caller
      * flushes by hand.
      */
+    /**
+     * Throw away what has been collected without sending it.
+     *
+     * For tests. Signals are gathered in a static buffer and sent on
+     * terminate, which no test kernel reaches, so whatever one test queued was
+     * still sitting there when the next one opened its Event::fake window and
+     * read it as the work's doing. Every signal assertion was therefore
+     * order-dependent, and passed alone while failing in a full run.
+     *
+     * Nothing in the application calls this: dropping a signal on purpose is
+     * only ever right when there is no browser to tell.
+     */
+    public static function discard(): void
+    {
+        self::$pending = [];
+
+        /*
+         * And the latch, or the next test can never flush at all.
+         *
+         * queue() registers its terminating callback once per process and
+         * clears the latch when the callback runs. A test that queues without
+         * ever terminating (a service called directly, no HTTP request) leaves
+         * the latch raised on an app instance that has since been thrown away,
+         * so every later test takes the early return and registers nothing.
+         * Their signals then pile up in the static until something else
+         * flushes by hand, which is how a signal from three tests ago ends up
+         * inside a fourth one's assertion.
+         */
+        self::$flushRegistered = false;
+    }
+
     public static function flush(): void
     {
         $pending = self::$pending;

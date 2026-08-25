@@ -6,6 +6,7 @@ use App\Models\FileComment;
 use App\Support\Files\CommentReads;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Workflow\Hub;
+use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -75,6 +76,11 @@ class WorkflowHubController extends BaseFilesController
         FileAccess::authorize($user, 'view', $row->file);
 
         CommentReads::markThreadsRead($user, [$row->root_id ?? $row->id]);
+
+        // Only this reader: nobody else's lists moved. Their other tabs did,
+        // though — a thread read on the Workflows page must not still be bold
+        // on the board open next to it.
+        Live::user(Live::WORKFLOWS, $user->id);
 
         return response()->json(['counts' => Hub::counts($user)]);
     }

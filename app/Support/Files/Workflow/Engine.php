@@ -13,6 +13,7 @@ use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Versions;
 use App\Support\Notifications\Notifier;
+use App\Support\Realtime\Live;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -106,6 +107,7 @@ class Engine
         ]);
 
         self::inviteNextGroup($workflow->fresh());
+        self::signal($workflow->fresh());
 
         return $workflow->fresh();
     }
@@ -186,7 +188,10 @@ class Engine
             default => 'approval-sent',
         }, ['workflow' => $workflow->uuid, 'comment' => $comment]);
 
-        return self::advance($workflow->fresh(), $actor, $action);
+        $advanced = self::advance($workflow->fresh(), $actor, $action);
+        self::signal($advanced);
+
+        return $advanced;
     }
 
     /**
@@ -226,7 +231,10 @@ class Engine
     {
         abort_if(Status::isTerminal($workflow->status), 422, 'This request is already closed.');
 
-        return self::close($workflow, Status::CANCELLED, $actor);
+        $closed = self::close($workflow, Status::CANCELLED, $actor);
+        self::signal($closed);
+
+        return $closed;
     }
 
     /**
@@ -259,6 +267,9 @@ class Engine
 
         self::log($workflow, $actor, 'delegated', null, ['to' => $to->name, 'step' => $step->uuid]);
         self::notifyStep($workflow, $step->fresh());
+        // After the update, so the person handed the step is in the reach and
+        // sees it arrive; the one who handed it over sees it leave.
+        self::signal($workflow->fresh());
 
         return $step->fresh();
     }
@@ -312,6 +323,10 @@ class Engine
                 'subject' => $file,
                 'action_url' => '/folders/all?file='.$file->uuid,
             ]);
+
+            // The row now says which version overtook it, so the lists showing
+            // it are out of date.
+            self::signal($workflow);
         }
     }
 
@@ -365,6 +380,28 @@ class Engine
     }
 
     /* ── plumbing ────────────────────────────────────────────────── */
+
+    /**
+     * Tell the lists this request moved — the Workflows section, and the home
+     * board's Requests tile.
+     *
+     * Reach is exactly the people on the record: whoever sent it and whoever
+     * was asked, including anyone a step was handed to. No staff room, because
+     * a request is somebody's specific business, not the firm's news; and no
+     * rows in the payload, so each of them refetches through the endpoint that
+     * already decides what they may see.
+     */
+    private static function signal(FileWorkflow $workflow): void
+    {
+        $workflow->loadMissing('steps');
+
+        Live::users(Live::WORKFLOWS, $workflow->steps
+            ->pluck('user_id')
+            ->push($workflow->created_by)
+            ->filter()
+            ->unique()
+            ->all());
+    }
 
     public static function log(FileWorkflow $workflow, ?User $actor, string $action, ?string $detail = null, array $meta = []): void
     {
