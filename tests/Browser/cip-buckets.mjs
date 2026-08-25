@@ -14,10 +14,10 @@ import { chromium } from 'playwright';
  * saying six that opens onto nine rows is worse than no chip: it is the
  * portal telling somebody there is work they then cannot find.
  *
- * The card shows the queues holding work first and folds the ones sitting at
- * zero away behind a line, so this seed — every bucket busy — is deliberately
- * the case where nothing folds: ten rows, no toggle. The fold itself is a
- * class on state, checked in step 1b by emptying the card's data rather than
+ * The card is a strip of every stage over rows for only the occupied ones, so
+ * this seed — every bucket busy — is deliberately the case where the two
+ * halves are the same length: ten segments, ten rows. What happens when a
+ * stage empties is checked in step 1b by emptying the card's data rather than
  * by seeding a second book.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
@@ -81,7 +81,7 @@ try {
       count: li.querySelector('.tma-portal-cip__pill')?.innerText.trim() || '',
       // The tone lives on the row now: the dot and the count pill both read
       // it, and a colour named twice is a colour that can disagree with itself.
-      tone: [...li.classList].find(c => c.startsWith('tma-portal-cip__row--')) || '',
+      tone: [...li.classList].find(c => c.startsWith('tma-portal-cip__tone--')) || '',
     })));
 
   check(rows.length === EXPECTED.length, `${EXPECTED.length} rows (${rows.length})`);
@@ -120,40 +120,90 @@ try {
   check(flatPills === 0, `every count pill is filled (${flatPills} blank)`);
 
   /*
-   * The figure the card leads on. 32 across the ten buckets, and the DRAFT is
-   * the evidence: it is the administrator's application too, so a total that
-   * counted the book rather than the buckets would read 33.
+   * The strip: one segment per bucket, in the same order, every one of them a
+   * control. It is the only way to reach a stage holding nothing, so a
+   * segment that stopped being pressable would quietly cost the reader six of
+   * the ten buckets on a normal morning.
    */
-  const total = await page.evaluate(() => {
-    const el = document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__total');
+  const track = await page.evaluate(() => {
+    const segs = [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__seg')];
     return {
-      figure: el?.querySelector('b')?.innerText.trim() || '',
-      noun: el?.querySelector('span')?.innerText.trim() || '',
+      n: segs.length,
+      keys: segs.map(s => s.getAttribute('data-home-cip-bucket')),
+      lit: segs.filter(s => s.classList.contains('is-on')).length,
+      named: segs.filter(s => (s.getAttribute('aria-label') || '').trim()).length,
+      // The bar is a pseudo-element; what must be big enough to hit is the
+      // button around it.
+      hit: Math.min(...segs.map(s => s.getBoundingClientRect().height)),
+      painted: segs.filter(s => {
+        const bg = getComputedStyle(s, '::after').backgroundColor;
+        return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+      }).length,
     };
   });
-  check(total.figure === '32', `the total reads 32 (got "${total.figure}")`);
-  check(total.noun === 'applications', `and says what it counts (got "${total.noun}")`);
+  check(track.n === EXPECTED.length, `${EXPECTED.length} segments (${track.n})`);
+  check(track.keys.join() === rows.map(r => r.key).join(), 'in the same order as the rows');
+  check(track.lit === EXPECTED.length, `every busy stage is lit (${track.lit})`);
+  check(track.named === track.n, `every segment says what it is (${track.named}/${track.n})`);
+  check(track.painted === track.n, `and every one is painted (${track.painted}/${track.n})`);
+  check(track.hit >= 16, `each is big enough to hit (${track.hit}px)`);
 
-  // Every bucket is busy in this seed, so there is nothing to fold and no
-  // line offering to.
-  const toggles = await page.$$('[data-tile-id="cipStatus"] [data-home-cip-zeros]');
-  check(toggles.length === 0, `no "stages clear" line when every queue has work (${toggles.length})`);
-
-  step('1b', 'The queues sitting at zero fold away behind one line');
   /*
-   * Driven through the card's own data rather than a second seeded book: the
-   * fold is a property of the render, and re-seeding ten statuses to prove it
-   * would test the fixture. The dashboard endpoint is answered with the real
-   * payload minus most of its counts, then the card is asked to repaint.
+   * The three figures under the rule. 32 across the ten buckets, and the DRAFT
+   * is the evidence: it is the administrator's application too, so a total
+   * that counted the book rather than the buckets would read 33.
+   */
+  const stats = await page.evaluate(() =>
+    document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__stats')
+      ?.innerText.replace(/\s+/g, ' ').trim() || '');
+  check(/Occupied 10/.test(stats), `Occupied 10 (got "${stats}")`);
+  check(/Clear 0/.test(stats), `Clear 0 (got "${stats}")`);
+  check(/Total 32/.test(stats), `Total 32 (got "${stats}")`);
+
+  step('1b', 'A stage sitting at zero keeps its segment and loses its row');
+  /*
+   * Driven through the card's own data rather than a second seeded book: which
+   * stages get a row is a property of the render, and re-seeding ten statuses
+   * to prove it would test the fixture. The dashboard endpoint is answered
+   * with the real payload minus most of its counts, then the card repaints.
    */
   await page.route('**/portal/cip/dashboard', async route => {
     const res = await route.fetch();
     const body = await res.json();
-    body.buckets = body.buckets.map((b, i) => (i === 0 ? b : { ...b, count: 0 }));
-    body.total = body.buckets[0].count;
+    body.buckets = body.buckets.map((b, i) => (i === 4 ? b : { ...b, count: 0 }));
+    body.total = body.buckets[4].count;
     await route.fulfill({ response: res, json: body });
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
+  await page.waitForTimeout(1500);
+
+  const quiet = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    const segs = [...card.querySelectorAll('.tma-portal-cip__seg')];
+    return {
+      rows: card.querySelectorAll('.tma-portal-cip__row').length,
+      idx: card.querySelector('.tma-portal-cip__idx')?.innerText.trim() || '',
+      segs: segs.length,
+      lit: segs.filter(s => s.classList.contains('is-on')).length,
+      stats: card.querySelector('.tma-portal-cip__stats')?.innerText.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
+  check(quiet.rows === 1, `only the stage holding work keeps a row (${quiet.rows})`);
+  check(quiet.idx === '05', `and its row is numbered for its place in the set (got "${quiet.idx}")`);
+  check(quiet.segs === EXPECTED.length, `all ten stages still have a segment (${quiet.segs})`);
+  check(quiet.lit === 1, `one of them lit (${quiet.lit})`);
+  check(/Occupied 1/.test(quiet.stats) && /Clear 9/.test(quiet.stats),
+    `the stats say 1 occupied, 9 clear (got "${quiet.stats}")`);
+
+  // A stage with nothing in it is still openable — through its segment, which
+  // is the whole reason the segments are buttons.
+  await page.click('[data-tile-id="cipStatus"] [data-home-cip-bucket="denied"]');
+  await page.waitForTimeout(3000);
+  check(/bucket=denied/.test(page.url()), `an empty stage still opens its list (${page.url()})`);
+
+  await page.unroute('**/portal/cip/dashboard');
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
   await page.waitForTimeout(1500);
 
