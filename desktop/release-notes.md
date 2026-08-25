@@ -1,2 +1,1 @@
-- PDFs open in the app again — every document viewer was quietly failing, in the File Library, messages, mail attachments and signing alike
-- Files open far faster: a photo appears straight away, a long scan starts on its first page instead of downloading in full, and opening the same file twice is instant
+- Click and hold the blue title bar to move the window, on Mac and Windows — empty space around Search and the page title now drags, while buttons stay clickable
