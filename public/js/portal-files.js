@@ -3278,7 +3278,10 @@
             return '<button type="button" class="tma-portal-viewer__mention-item" data-lb-mention="' + p.id + '"' +
               ' data-name="' + esc(p.name) + '">' +
               '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="22" height="22">' +
-              '<span><strong>' + esc(p.name) + '</strong><span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span>' +
+              '<span class="tma-portal-viewer__mention-ident">' +
+                '<strong>' + esc(p.name) + '</strong>' +
+                '<span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span>' +
+              '</span>' +
               grantNoteHtml(p) +
             '</button>';
           }).join('');
