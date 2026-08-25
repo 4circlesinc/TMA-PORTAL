@@ -210,6 +210,20 @@
     return store.get('tma.sidebarStyle', '') === 'standard' ? 'standard' : 'hover';
   }
 
+  /*
+   * A capability this account holds, from the boot list the shell serves in
+   * the document (App\Support\PortalShell), so it can be asked before /me.
+   *
+   * No access module at all means an older shell that never gated anything;
+   * carry on and let the server refuse, a portal missing a view is a worse
+   * failure than a request that comes back 403.
+   */
+  function mayMount(capability) {
+    var access = window.TMAPortalAccess;
+
+    return !access || access.can(capability);
+  }
+
   function mount(root) {
     if (!root) return;
 
@@ -1203,7 +1217,7 @@
           refresh: repeatSelection || !!opts.refresh,
         });
       }
-      if (viewName === 'email' && window.TMAEmail) {
+      if (viewName === 'email' && window.TMAEmail && mayMount('mail.use')) {
         var emailMount = root.querySelector('[data-email]');
         if (emailMount) {
           var emailPath = normalizePath(window.location.pathname);
@@ -1228,7 +1242,7 @@
           });
         }
       }
-      if (viewName === 'feed' && window.TMAFeed) {
+      if (viewName === 'feed' && window.TMAFeed && mayMount('feed.view')) {
         var feedMount = root.querySelector('[data-feed]');
         if (feedMount) window.TMAFeed.mount(feedMount);
       }
@@ -2201,8 +2215,10 @@
     syncWorkflowCounts();
 
     // Exact inbox unread for the Email nav badge, same source as home shortcuts.
-    // Without this the badge stays at 0 until the mailbox view opens.
-    fetch('/portal/mail', {
+    // Without this the badge stays at 0 until the mailbox view opens. Skipped
+    // for an account without a mailbox: portal-access.js has already removed
+    // the row this counts for, and /portal/mail answers 403.
+    if (mayMount('mail.use')) fetch('/portal/mail', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     })
@@ -3070,13 +3086,29 @@
     // Fill the right sidebar's three sections with live data (§1, §5).
     if (window.TMARightSidebar) window.TMARightSidebar.mount(root);
 
+    /*
+     * The feature views boot with the shell, not when they are opened: the
+     * mailbox, Messages and the Feed are each expected to carry a badge and to
+     * be ready the moment somebody clicks them, which means asking the server
+     * before anyone has asked for the view.
+     *
+     * So each one has to be gated. The view markup is static HTML shared by
+     * every account, and an account without the capability used to boot a
+     * mailbox it may not read: /portal/mail answers 403 "You do not have
+     * access to this.", and email.js reports a failed bootstrap as a toast.
+     * That is how a service-provider contact got a permission error on the
+     * Dashboard, on every refresh, for a page they never opened. Their nav
+     * rows are gone too (portal-access.js), so there is nothing to be ready
+     * for either. Messages carries no capability: it is how clients talk to
+     * the firm.
+     */
     var usersRoot = root.querySelector('[data-users]');
-    if (usersRoot && window.TMAUsers) {
+    if (usersRoot && window.TMAUsers && mayMount('users.view')) {
       window.TMAUsers.mount(usersRoot);
     }
 
     var emailRoot = root.querySelector('[data-email]');
-    if (emailRoot && window.TMAEmail) {
+    if (emailRoot && window.TMAEmail && mayMount('mail.use')) {
       window.TMAEmail.mount(emailRoot);
       syncTabBarBadges();
     }
@@ -3088,13 +3120,15 @@
     }
 
     var feedRoot = root.querySelector('[data-feed]');
-    if (feedRoot && window.TMAFeed) {
+    if (feedRoot && window.TMAFeed && mayMount('feed.view')) {
       window.TMAFeed.mount(feedRoot);
       syncTabBarBadges();
     }
 
+    // can() answers this one for CIP reach too, so a service-provider contact
+    // keeps the Applications table without holding staff's clients.view.
     var clientsRoot = root.querySelector('[data-clients]');
-    if (clientsRoot && window.TMAClients) {
+    if (clientsRoot && window.TMAClients && mayMount('clients.view')) {
       window.TMAClients.mount(clientsRoot);
     }
 

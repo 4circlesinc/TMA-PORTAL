@@ -226,6 +226,67 @@ class PortalAccessTest extends TestCase
         $this->assertSame(Role::settingsPageCapabilities(), $mirror);
     }
 
+    public function test_the_shell_does_not_boot_a_view_the_account_cannot_reach(): void
+    {
+        /*
+         * dashboard.js boots the mailbox, the Feed, Users and the client hub
+         * with the shell rather than when they are opened, because each is
+         * expected to carry a badge and to be ready the moment it is clicked.
+         * That means each one asks the server before anybody has asked for the
+         * view, and the view markup is static HTML shared by every account.
+         *
+         * Ungated, an account without the capability booted a mailbox it may
+         * not read, and /portal/mail's "You do not have access to this."
+         * arrived as a toast on the Dashboard, on every refresh, for a page
+         * the reader never opened.
+         */
+        $lines = explode("\n", (string) file_get_contents(public_path('js/dashboard.js')));
+
+        $gated = [
+            'data-users' => 'users.view',
+            'data-email' => 'mail.use',
+            'data-feed' => 'feed.view',
+            'data-clients' => 'clients.view',
+        ];
+
+        foreach ($gated as $selector => $capability) {
+            $this->assertContains(
+                $capability,
+                Role::capabilityNames(),
+                $selector.' is gated on an unknown capability: '.$capability
+            );
+
+            /*
+             * Mount sites, not merely lookups: the shell reads [data-email] in
+             * several places to ask what the mailbox already knows, and only
+             * the calls that start it need the gate. Every one of them does,
+             * the boot pass and the one that runs on navigation, so that a
+             * view left unmounted at boot is not quietly started later.
+             */
+            $mounts = 0;
+            foreach ($lines as $i => $line) {
+                if (! str_contains($line, '.mount(')) {
+                    continue;
+                }
+
+                $guard = implode("\n", array_slice($lines, max(0, $i - 3), 3));
+
+                if (! str_contains($guard, "querySelector('[".$selector."]')")) {
+                    continue;
+                }
+
+                $mounts++;
+                $this->assertStringContainsString(
+                    "mayMount('".$capability."')",
+                    $guard,
+                    'A mount of ['.$selector.'] is not gated on '.$capability
+                );
+            }
+
+            $this->assertGreaterThan(0, $mounts, 'dashboard.js no longer mounts ['.$selector.']');
+        }
+    }
+
     public function test_an_unknown_capability_is_denied_rather_than_assumed(): void
     {
         // A typo must fail closed. Administrators are the deliberate exception:

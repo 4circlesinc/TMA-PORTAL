@@ -37,11 +37,18 @@
     { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
 
-  function visibleShortcuts() {
+  /*
+   * A capability this account holds, decided from the boot list the shell
+   * serves in the document rather than from /me, so a panel the server would
+   * refuse is never painted and then emptied.
+   */
+  function canReach(capability) {
     var access = window.TMAPortalAccess;
-    return SHORTCUTS.filter(function (sc) {
-      return !sc.cap || (access && access.can(sc.cap));
-    });
+    return !capability || (!!access && access.can(capability));
+  }
+
+  function visibleShortcuts() {
+    return SHORTCUTS.filter(function (sc) { return canReach(sc.cap); });
   }
 
   function navigate(nav) {
@@ -1262,7 +1269,11 @@
 
   function renderHomeGrid(s, show) {
     var renderers = {
-      email: function () { return show.email !== false ? renderEmail() : ''; },
+      // A client account has no mailbox: /portal/mail answers 403, so the
+      // panel would sit on "No recent messages" for ever. Not drawn at all.
+      email: function () {
+        return show.email !== false && canReach('mail.use') ? renderEmail() : '';
+      },
       messages: function () { return show.messages !== false ? renderChats() : ''; },
       recentFiles: function () { return show.recentFiles ? renderRecentFiles(s) : ''; },
       shortcuts: function () { return show.shortcuts ? renderShortcuts() : ''; },
@@ -1506,7 +1517,7 @@
 
   var DASH_TILES = [
     { id: 'recentFiles', label: 'Recent Files', desc: 'Files you last accessed across all of your devices.', preview: 'files' },
-    { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
+    { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email', cap: 'mail.use' },
     { id: 'messages', label: 'Messages', desc: 'Your five most recent chats, with unread counts.', preview: 'messages' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
@@ -1977,6 +1988,7 @@
     // admin does not see them disappear and reappear.
     var staff = isStaffUser();
     return DASH_TILES.filter(function (t) {
+      if (t.cap && !canReach(t.cap)) return false;
       if (t.cipCard) return staff !== false || cipCardVisible(homeCip);
       return !t.staffOnly || staff !== false;
     });
@@ -2280,7 +2292,7 @@
       setCount('email', inboxUnreadCount);
     }
 
-    if (!inboxUnreadInflight) {
+    if (!inboxUnreadInflight && canReach('mail.use')) {
       inboxUnreadInflight = fetch('/portal/mail', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -2642,7 +2654,7 @@
       // The mailbox tile costs two round trips (index, then messages), so it
       // gets the same treatment. Both keep polling on their own timers while
       // the board is open, and both listen for their live signals.
-      if (force || !homeEmailLoaded || stale(homeEmailAt)) loadHomeEmail(el);
+      if (canReach('mail.use') && (force || !homeEmailLoaded || stale(homeEmailAt))) loadHomeEmail(el);
       if (force || !homeChatsLoaded || stale(homeChatsAt)) loadHomeChats(el);
       if (force || !homeCipLoaded || stale(homeCipAt, CIP_FRESH_MS)) loadHomeCip(el);
       if (window.TMAPortalHomeLibrary) {

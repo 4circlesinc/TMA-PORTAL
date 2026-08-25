@@ -2052,6 +2052,10 @@
   function primeMailbox() {
     if (warmBoot || !window.TMAEmailAPI) return;
     if (!document.querySelector('[data-email]')) return;
+    // The view markup is in every shell, the mailbox is not in every account.
+    // Without this a client fires two requests /portal/mail refuses before the
+    // shell has finished waking up, on every page they open.
+    if (window.TMAPortalAccess && !window.TMAPortalAccess.can('mail.use')) return;
 
     // Failures are captured rather than thrown: this runs with nobody waiting
     // on it, and an unhandled rejection here would surface as a console error
