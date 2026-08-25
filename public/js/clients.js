@@ -4533,7 +4533,10 @@
       ? '<div class="tma-dash__clients-assigned-list">' + members.map(function (m) {
           var meta = [companyRoleLabel(m.role)];
           if (m.primary) meta.unshift('Primary');
-          meta.push(m.hasAccount ? 'Has access' : (m.status === 'invited' ? 'Invited' : 'No account yet'));
+          if (m.hasAccount) meta.push('Has access');
+          else if (m.inviteError) meta.push('Invite failed');
+          else if (m.inviteSent) meta.push('Invite sent');
+          else meta.push('No invite sent');
           return '<div class="tma-dash__clients-assigned">' +
             '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(m) + '</span>' +
             '<span class="tma-dash__clients-assigned-main">' +
@@ -4543,7 +4546,7 @@
             '</span>' +
             (admin && !m.hasAccount && m.email
               ? '<button type="button" class="tma-dash__clients-message-btn" data-company-member-invite="' +
-                esc(m.id) + '">Invite</button>'
+                esc(m.id) + '">' + (m.inviteSent || m.inviteError ? 'Resend' : 'Invite') + '</button>'
               : '') +
             (admin
               ? '<button type="button" class="tma-dash__clients-row-remove" data-company-member-remove="' +
@@ -9666,12 +9669,19 @@
           email: email,
           // Everyone joins as a member; the row's controls change it after.
           role: 'member',
-        }).then(function () {
-          clientsToast('Member added', 'positive');
+          // Access is the invite surface. Add used to only park the row, and
+          // the list then said Invited even though no mail had gone out.
+          invite: true,
+        }).then(function (res) {
+          var sent = !!(res && res.invitation);
+          clientsToast(sent ? 'Invitation sent' : 'Member added', 'positive');
+          if (emailEl) emailEl.value = '';
+          memberAdd.disabled = false;
           refreshCompanyPanels();
         }).catch(function (err) {
           memberAdd.disabled = false;
           clientsToast((err && err.message) || 'Could not add that person', 'negative');
+          refreshCompanyPanels();
         });
       });
     }
@@ -9686,6 +9696,7 @@
           }).catch(function (err) {
             btn.disabled = false;
             clientsToast((err && err.message) || 'Could not send the invitation', 'negative');
+            refreshCompanyPanels();
           });
       });
     });

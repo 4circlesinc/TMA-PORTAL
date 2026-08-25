@@ -145,6 +145,41 @@ class CompanyAccountsTest extends TestCase
         $this->assertNotNull($uuid);
     }
 
+    public function test_inviting_a_deleted_account_is_refused(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $company = $this->company();
+        $gone = $this->staff('Client', ['email' => 'gone@acme.test']);
+
+        $this->actingAs($admin)->deleteJson('/admin/users/'.$gone->id)->assertOk();
+
+        $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => 'gone@acme.test', 'role' => 'member', 'invite' => true,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'This address belongs to a deleted account. Restore it from the Recycle Bin first.');
+
+        Mail::assertNothingSent();
+        $this->assertSame(0, CompanyMember::count());
+    }
+
+    public function test_a_failed_member_invite_is_reported_to_staff(): void
+    {
+        $admin = $this->admin();
+        $company = $this->company();
+        $uuid = $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => 'dana@acme.test', 'role' => 'member',
+        ])->json('member.id');
+
+        Mail::shouldReceive('to->sendNow')->andThrow(new \RuntimeException('SMTP refused the connection'));
+
+        $response = $this->actingAs($admin)
+            ->postJson("/portal/companies/{$company->uid}/members/{$uuid}/invite")
+            ->assertStatus(422);
+
+        $this->assertStringContainsString('SMTP refused', (string) $response->json('message'));
+    }
+
     public function test_accepting_a_company_invitation_activates_the_membership(): void
     {
         Mail::fake();

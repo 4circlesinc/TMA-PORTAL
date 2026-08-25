@@ -97,16 +97,33 @@ final class CompanyMembers
     }
 
     /**
-     * Invite a member who has no account yet. Returns null when there is
-     * nothing to send, they already have a login, or no address was given.
+     * Whether this address can receive a company invitation.
+     *
+     * A Recycle Bin account still occupies `users.email`, so a new signup
+     * cannot take it. Sending an invite that cannot be accepted looks like
+     * the mail never arrived.
      */
-    public static function invite(Company $company, CompanyMember $member, User $by): ?Invitation
+    public static function assertInvitable(?string $email): void
+    {
+        $email = $email ? Str::lower(trim($email)) : '';
+        abort_if($email === '', 422, 'Add an email address before inviting them.');
+
+        abort_if(
+            User::onlyTrashed()->where('email', $email)->exists(),
+            422,
+            'This address belongs to a deleted account. Restore it from the Recycle Bin first.',
+        );
+    }
+
+    /**
+     * Invite a member who has no account yet.
+     */
+    public static function invite(Company $company, CompanyMember $member, User $by): Invitation
     {
         $email = $member->displayEmail();
-
-        if (! $email || $member->user_id !== null) {
-            return null;
-        }
+        abort_if(! $email, 422, 'Add an email address before inviting them.');
+        abort_if($member->user_id !== null, 422, 'This person already has portal access.');
+        self::assertInvitable($email);
 
         [$invitation] = Invitations::issue([
             'type' => Invitation::TYPE_COMPANY_MEMBER,
@@ -123,6 +140,13 @@ final class CompanyMembers
         ]);
 
         Invitations::send($invitation);
+        $invitation = $invitation->fresh() ?? $invitation;
+
+        abort_if(
+            $invitation->status === Invitation::STATUS_FAILED,
+            422,
+            $invitation->last_error ?: 'The invitation email could not be sent.',
+        );
 
         ActivityLogger::log([
             'actor' => $by,
@@ -133,7 +157,7 @@ final class CompanyMembers
             'metadata' => ['companyUid' => $company->uid, 'invitationId' => $invitation->uuid],
         ]);
 
-        return $invitation->fresh();
+        return $invitation;
     }
 
     /**

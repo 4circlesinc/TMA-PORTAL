@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\Invitation;
 use App\Support\Access\Role;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Companies\CompanyRoles;
@@ -66,9 +67,14 @@ class CompanyMemberController extends Controller
             'Give an email address, or pick an existing contact.',
         );
 
+        $email = $data['email'] ?? $client?->email;
+        if ($request->boolean('invite')) {
+            CompanyMembers::assertInvitable($email);
+        }
+
         $member = CompanyMembers::add($company, array_merge([
             'name' => $data['name'] ?? $client?->name,
-            'email' => $data['email'] ?? $client?->email,
+            'email' => $email,
             'job_title' => $data['jobTitle'] ?? null,
             'role' => $data['role'],
             'is_primary' => $request->boolean('primary'),
@@ -76,7 +82,7 @@ class CompanyMemberController extends Controller
         ], $this->abilityOverrides($data['abilities'] ?? [])), $request->user());
 
         $invitation = null;
-        if ($request->boolean('invite')) {
+        if ($request->boolean('invite') && $member->user_id === null) {
             $invitation = CompanyMembers::invite($company, $member, $request->user());
         }
 
@@ -191,12 +197,31 @@ class CompanyMemberController extends Controller
     /** @return array<int, array<string, mixed>> */
     private function present(Company $company): array
     {
-        return CompanyMember::current()
+        $members = CompanyMember::current()
             ->where('company_id', $company->id)
             ->with(['user', 'client'])
             ->orderByDesc('is_primary')
-            ->get()
-            ->map(fn (CompanyMember $m) => $m->toRecord())
-            ->values()->all();
+            ->get();
+
+        $emails = $members->pluck('email')->filter()->map(fn ($email) => Str::lower((string) $email))->unique()->values()->all();
+        $invites = $emails === []
+            ? collect()
+            : Invitation::query()
+                ->where('type', Invitation::TYPE_COMPANY_MEMBER)
+                ->where('company_id', $company->id)
+                ->whereIn('email', $emails)
+                ->orderByDesc('id')
+                ->get()
+                ->unique(fn (Invitation $i) => Str::lower($i->email))
+                ->keyBy(fn (Invitation $i) => Str::lower($i->email));
+
+        return $members->map(function (CompanyMember $member) use ($invites) {
+            $row = $member->toRecord();
+            $invite = $invites[Str::lower((string) ($member->email ?? ''))] ?? null;
+            $row['inviteSent'] = (bool) $invite?->last_sent_at;
+            $row['inviteError'] = $invite?->last_error;
+
+            return $row;
+        })->values()->all();
     }
 }
