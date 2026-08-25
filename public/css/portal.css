@@ -2689,32 +2689,38 @@
  * a reader goes to *do* something from, and it earns being the one that looks
  * different.
  *
- * THE CARD IS AN ORDINARY CARD
+ * THE CARD IS THE GLASS
  *
- * No wash, no border: the panel is the same fill as Recent Files and Employees
- * beside it, so the board reads as one set of cards. Everything that makes
- * this widget its own thing happens inside, on the tiles.
+ * Not a colour, a *material*: the panel is a sheet of translucent white with
+ * the board blurred behind it and a white hairline round its edge, which is
+ * the whole of what makes something read as glass. No wash, no gradient —
+ * those were a picture of glass painted onto the card; this takes what is
+ * actually behind it.
  *
- * WHAT MAKES A TILE GLASS ON A FLAT CARD
+ * saturate() alongside the blur is what stops it looking like fog. Blurring
+ * alone averages the colours behind into grey; lifting the saturation back up
+ * keeps them recognisable through the sheet, which is the difference between
+ * frosted glass and tracing paper.
  *
- * Three things, and the *fill alone is not one of them*. Translucent white on
- * a near-white card is a difference of a few per cent that nobody can see, so
- * the tile is defined by its lit edge and the shadow under it — a bright
- * hairline along the top and a soft drop below, which is how a pane of glass
- * lying on a surface reads. The fill sits high (translucent, not transparent)
- * so the tile still lifts off the card rather than disappearing into it.
+ * Where backdrop-filter is unsupported the panel is a flat translucent white
+ * over the board — a slightly plainer card and nothing worse.
  *
- * The blur stays even though there is now a flat colour behind it. It costs
- * one composited layer and it is what keeps the treatment honest the moment
- * anything textured ends up under a tile — a wash, a photo, a themed board.
- * The design system already names the effect: --blur-16 is "Glass 1",
- * --shadow-glass-1 is its drop, so the tile is assembled from documented
- * parts. Where backdrop-filter is unsupported the tile is simply a flat
- * translucent white, which is a slightly plainer tile and nothing worse.
+ * THE TILES ARE GLASS ON GLASS
+ *
+ * A brighter sheet of the same material, so a tile lifts off the panel by
+ * being *more* opaque rather than by being a different colour. That is why
+ * both blur: two sheets, one behind the other.
  *
  * --color-white rather than a literal, throughout: it inverts with the theme,
- * so the glass darkens with the card instead of staying a white slab on it.
+ * so the glass darkens with the board instead of staying a white slab on it.
  */
+.tma-portal-panel--shortcuts {
+  background: color-mix(in srgb, var(--color-white) 55%, transparent);
+  -webkit-backdrop-filter: var(--blur-20) saturate(1.5);
+  backdrop-filter: var(--blur-20) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--color-white) 70%, transparent);
+}
+
 .tma-portal-shortcuts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2860,6 +2866,14 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
+  /*
+   * The placeholder's own grey, restated.
+   *
+   * .tma-skeleton is defined earlier in this file than the tile is, so the
+   * tile's translucent white outranks it and the loading tiles came out white
+   * — invisible on a white board, which is a skeleton that shimmers nothing.
+   */
+  background: color-mix(in srgb, var(--color-black) 6%, transparent);
 }
 
 .tma-portal-shortcut--skeleton .tma-skeleton--text { width: 70%; height: 11px; }
