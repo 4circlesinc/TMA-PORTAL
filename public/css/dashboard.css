@@ -23173,6 +23173,15 @@ a.tma-dash__clients-edit-btn--accent:visited {
   gap: var(--space-20);
 }
 
+/* An ordinary popup surface, not a sheet of glass. It opens over whatever the
+   page happens to be showing — a blue metric card, a photo, plain white — and
+   a translucent panel took its colour from all of them in turn, so the same
+   list of names read differently depending on what it landed on. Solid fill,
+   hairline, drop shadow: the same three parts as .tma-dash__menu, which is
+   what every other dropdown in the portal is made of.
+
+   --color-white rather than a literal, so the panel inverts with the theme
+   instead of staying a white slab on a dark board. */
 .tma-dash__header-popup {
   position: relative;
   flex: 0 0 auto;
@@ -23181,44 +23190,11 @@ a.tma-dash__clients-edit-btn--accent:visited {
   gap: var(--space-4);
   padding: var(--space-16);
   border-radius: var(--radius-24);
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.5),
-    0 4px 16px rgba(0, 0, 0, 0.04),
-    0 10px 36px rgba(0, 0, 0, 0.1);
-  -webkit-backdrop-filter: blur(20px) saturate(165%);
-  backdrop-filter: blur(20px) saturate(165%);
+  background: var(--color-white);
+  border: 0.5px solid var(--color-border-soft);
+  box-shadow: var(--shadow-popup);
   font-feature-settings: "ss01" 1, "cv01" 1;
   animation: tma-dash-header-popup-in 0.18s ease-out;
-}
-
-.tma-dash__header-popup::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.03) 40%,
-    rgba(255, 255, 255, 0.08) 100%
-  );
-  pointer-events: none;
-}
-
-.tma-dash__header-popup::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  pointer-events: none;
-}
-
-.tma-dash__header-popup > * {
-  position: relative;
-  z-index: 1;
 }
 
 @keyframes tma-dash-header-popup-in {
@@ -23278,7 +23254,7 @@ button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
 button.tma-dash__header-popup-item:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--color-hover);
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
@@ -23296,7 +23272,7 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash__header-popup-item--active,
 .tma-dash__header-popup-item:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--color-hover);
 }
 
 .tma-dash__header-popup-item--unread:hover,
@@ -23385,10 +23361,8 @@ button.tma-dash__header-popup-item:focus-visible {
   display: grid;
   place-items: center;
   border-radius: var(--radius-8);
-  background: rgba(255, 255, 255, 0.35);
-  border: 0.5px solid rgba(255, 255, 255, 0.25);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: var(--color-hover);
+  border: 0.5px solid var(--color-border-soft);
 }
 
 .tma-dash__header-popup-icon img {
@@ -23410,8 +23384,8 @@ button.tma-dash__header-popup-item:focus-visible {
   aspect-ratio: 1 / 1 !important;
   border-radius: 50% !important;
   overflow: hidden !important;
-  background: rgba(255, 255, 255, 0.25);
-  border: 0.5px solid rgba(255, 255, 255, 0.3);
+  background: var(--color-hover);
+  border: 0.5px solid var(--color-border-soft);
   display: block !important;
   line-height: 0;
 }
@@ -23457,29 +23431,9 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup {
-  background: rgba(24, 24, 26, 0.48);
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.08),
-    0 4px 16px rgba(0, 0, 0, 0.18),
-    0 10px 36px rgba(0, 0, 0, 0.28);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
-}
-
-.tma-dash[data-theme="dark"] .tma-dash__header-popup::before,
-.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup::before {
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.02) 38%,
-    rgba(255, 255, 255, 0.05) 100%
-  );
-}
-
-.tma-dash[data-theme="dark"] .tma-dash__header-popup::after,
-.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup::after {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: #1c1c1e;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-heading,
@@ -33256,7 +33210,7 @@ span.tma-dash__messages-profile-avatar {
   cursor: pointer;
   border-radius: var(--radius-8);
 }
-.tma-dash__header-popup-more:hover { color: var(--color-black); background: rgba(255, 255, 255, 0.28); }
+.tma-dash__header-popup-more:hover { color: var(--color-black); background: var(--color-hover); }
 
 /* The render layer emits div[role=button] items; give them the same
    affordances the original <button> items had. */
