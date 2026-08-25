@@ -2176,7 +2176,7 @@
   height: 32px;
 }
 
-.tma-portal-chat-row__avatar img {
+.tma-portal-chat-row__avatar img:not(.tma-portal-chat-row__avatar-part) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -2187,26 +2187,30 @@
 
 .tma-portal-chat-row__avatar--group {
   background: transparent;
+  overflow: visible;
 }
 
 .tma-portal-chat-row__avatar-part {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid var(--color-bg-page, #f5f5f7);
+  border: 2px solid var(--color-bg-page, #f5f5f7);
   background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
 }
 
 .tma-portal-chat-row__avatar-part--1 {
   top: 0;
   left: 0;
+  z-index: 2;
 }
 
 .tma-portal-chat-row__avatar-part--2 {
   right: 0;
   bottom: 0;
+  z-index: 1;
 }
 
 .tma-portal-chat-row__avatar.is-online::after {

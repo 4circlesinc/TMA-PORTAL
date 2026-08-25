@@ -544,37 +544,61 @@
     );
   }
 
+  /* Two people for a group stack: photos first so the photograph sits in front. */
+  function groupStackMembers(row) {
+    var pool = (row.members || []).slice();
+    if (pool.length < 2 && STORE.me && STORE.me.name) {
+      pool.push({ name: STORE.me.name, photo: STORE.me.photo || STORE.me.avatar });
+    }
+    pool.sort(function (a, b) {
+      return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
+    });
+    return pool.slice(0, 2);
+  }
+
+  function renderGroupStackPart(member, index) {
+    var cls = 'tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--' + (index + 1);
+    if (member.photo) {
+      return '<img class="' + cls + '" src="' + esc(member.photo) + '" alt="" loading="lazy">';
+    }
+    return (
+      '<span class="' + cls + ' tma-dash__messages-row-avatar-part--initial tma-dash__messages-row-avatar--' +
+      initialColourFor(member.name) + '">' +
+      esc(initialsFor(member.name).charAt(0)) +
+      '</span>'
+    );
+  }
+
   /*
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
+   * Groups always stack two member circles (photo in front, initials behind)
+   * rather than a single group photo with a corner badge.
    */
   function threadIcon(row) {
+    if (row.type === 'group') {
+      var members = groupStackMembers(row);
+      if (members.length) {
+        return (
+          '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group">' +
+          members.map(renderGroupStackPart).join('') +
+          '</span>'
+        );
+      }
+      if (row.photo) {
+        return (
+          '<span class="tma-dash__messages-row-avatar">' +
+          '<img src="' + esc(row.photo) + '" alt="" loading="lazy">' +
+          '</span>'
+        );
+      }
+      return renderInitialAvatar(row.name, 'tma-dash__messages-row-avatar--group');
+    }
+
     if (row.photo) {
       return (
         '<span class="tma-dash__messages-row-avatar">' +
         '<img src="' + esc(row.photo) + '" alt="" loading="lazy">' +
-        '</span>'
-      );
-    }
-
-    if (row.type === 'group') {
-      var members = (row.members || []).slice(0, 2);
-      if (members.length < 2 && STORE.me && STORE.me.name) {
-        members = members.concat([{ name: STORE.me.name, photo: STORE.me.photo || STORE.me.avatar }]);
-      }
-      if (!members.length) return renderInitialAvatar(row.name, 'tma-dash__messages-row-avatar--group');
-
-      return (
-        '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group">' +
-        members
-          .map(function (member, i) {
-            var cls = 'tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--' + (i + 1);
-            return member.photo
-              ? '<img class="' + cls + '" src="' + esc(member.photo) + '" alt="" loading="lazy">'
-              : '<span class="' + cls + ' tma-dash__messages-row-avatar-part--initial">' +
-                esc(initialsFor(member.name).charAt(0)) + '</span>';
-          })
-          .join('') +
         '</span>'
       );
     }

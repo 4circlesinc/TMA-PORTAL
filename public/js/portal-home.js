@@ -656,13 +656,21 @@
 
   function chatAvatarHtml(c) {
     var online = !!(c.presence && c.presence.online);
-    if (c.type === 'group' && !c.photo) {
-      var members = (c.members || []).slice(0, 2);
+    if (c.type === 'group') {
+      var members = (c.members || []).slice();
+      var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+      if (members.length < 2 && me && (me.name || me.avatar)) {
+        members = members.concat([{ name: me.name, photo: me.photo || me.avatar }]);
+      }
+      members.sort(function (a, b) {
+        return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
+      });
+      members = members.slice(0, 2);
       if (members.length) {
         return '<span class="tma-portal-chat-row__avatar tma-portal-chat-row__avatar--group">' +
           members.map(function (member, i) {
             return '<img class="tma-portal-chat-row__avatar-part tma-portal-chat-row__avatar-part--' +
-              (i + 1) + '" src="' + ui().esc(chatMemberSrc(member)) + '" alt="" width="20" height="20" loading="lazy">';
+              (i + 1) + '" src="' + ui().esc(chatMemberSrc(member)) + '" alt="" width="24" height="24" loading="lazy">';
           }).join('') +
           '</span>';
       }
