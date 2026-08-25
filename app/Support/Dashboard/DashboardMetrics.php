@@ -2,6 +2,7 @@
 
 namespace App\Support\Dashboard;
 
+use App\Models\CipDocumentComment;
 use App\Models\CipEvent;
 use App\Models\ConversationParticipant;
 use App\Models\MailMessage;
@@ -12,6 +13,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Status as CipStatus;
+use App\Support\Files\Workflow\Hub as WorkflowHub;
 use App\Support\Signatures\Status;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -20,8 +22,9 @@ use Illuminate\Support\Facades\DB;
  * The four KPI cards on the portal home, computed from real activity.
  *
  * Scope follows the reader: an administrator sees the whole firm, an employee
- * sees their own work. Clients never see these cards at all, they measure how
- * the firm is doing, so they are staff-facing by definition.
+ * sees their own work. Service-provider contacts get a different four cards
+ * for their CIP book and what is waiting on them. Other client accounts never
+ * see these cards at all.
  *
  * Every card reports a trailing window against the window before it (or a live
  * backlog with the longest wait). Where there is nothing to measure the card
@@ -57,20 +60,34 @@ class DashboardMetrics
         $this->priorStart = $this->now->subDays($this->windowDays * 2);
         $this->lookbackStart = $this->now->subDays($lookbackDays);
 
-        $this->allStaffIds = User::query()
-            ->whereIn('account_type', Role::STAFF)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        $allStaffIds = [];
+        $scopeStaffIds = [];
+        $clients = ClientDirectory::none();
 
-        $this->scopeStaffIds = $this->isAdministrator() ? $this->allStaffIds : [(int) $user->id];
+        if (Role::isStaff($this->user)) {
+            $allStaffIds = User::query()
+                ->whereIn('account_type', Role::STAFF)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
 
-        $this->clients = ClientDirectory::load();
+            $scopeStaffIds = $this->isAdministrator() ? $allStaffIds : [(int) $user->id];
+            $clients = ClientDirectory::load();
+        }
+
+        $this->allStaffIds = $allStaffIds;
+        $this->scopeStaffIds = $scopeStaffIds;
+        $this->clients = $clients;
     }
 
     public function isStaff(): bool
     {
         return Role::isStaff($this->user);
+    }
+
+    public function isProviderContact(): bool
+    {
+        return CipAccess::isProviderContact($this->user);
     }
 
     private function isAdministrator(): bool
@@ -91,6 +108,27 @@ class DashboardMetrics
                 'cipNew' => $this->cipNewCard(),
                 'cipUpdatesRequired' => $this->cipUpdatesRequiredCard(),
                 'awaitingSignature' => $this->awaitingSignatureCard(),
+            ],
+        ];
+    }
+
+    /**
+     * The four cards a service-provider contact opens their day on: the CIP
+     * filings still in flight, the ones sent back for updates, unread portal
+     * messages, and unresolved comments on their documents.
+     *
+     * @return array<string, mixed>
+     */
+    public function providerToArray(): array
+    {
+        return [
+            'scope' => 'provider',
+            'windowDays' => $this->windowDays,
+            'cards' => [
+                'cipActive' => $this->cipActiveCard(),
+                'cipUpdatesRequired' => $this->cipUpdatesRequiredCard(),
+                'unreadMessages' => $this->unreadMessagesCard(),
+                'openComments' => $this->openCommentsCard(),
             ],
         ];
     }
@@ -277,6 +315,134 @@ class DashboardMetrics
             'delta' => $waiting === null ? 'Awaiting' : Format::duration($waiting).' waiting',
             'deltaUp' => false,
             'hint' => Format::plural($count, 'document is', 'documents are').' out for signature and unsigned.',
+        ];
+    }
+
+    /* ── provider card: live CIP filings ───────────────────────────── */
+
+    /** @return array<string, mixed> */
+    private function cipActiveCard(): array
+    {
+        if (! CipAccess::enabled()) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => '-',
+                'deltaUp' => false,
+                'hint' => 'CIP is not enabled on this portal.',
+            ];
+        }
+
+        $count = ApplicationScope::query($this->user)
+            ->whereNotIn('status', CipStatus::TERMINAL)
+            ->count();
+
+        $filed = fn (CarbonImmutable $from, CarbonImmutable $to) => ApplicationScope::query($this->user)
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<', $to)
+            ->count();
+
+        $current = $filed($this->windowStart, $this->now);
+        $prior = $filed($this->priorStart, $this->windowStart);
+
+        if ($count === 0) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => 'None in progress',
+                'deltaUp' => true,
+                'hint' => 'No CIP applications are in progress.',
+            ];
+        }
+
+        return [
+            'value' => Format::count($count),
+            'count' => $count,
+            'delta' => Format::change($current, $prior === 0 ? null : $prior),
+            'deltaUp' => $current >= $prior,
+            'hint' => Format::plural($count, 'application is', 'applications are')
+                .' still in progress.',
+        ];
+    }
+
+    /* ── provider card: unread portal messages ─────────────────────── */
+
+    /** @return array<string, mixed> */
+    private function unreadMessagesCard(): array
+    {
+        $count = (int) DB::table('messages')
+            ->join('conversation_participants as cp', function ($join) {
+                $join->on('cp.conversation_id', '=', 'messages.conversation_id')
+                    ->where('cp.user_id', '=', $this->user->id)
+                    ->whereNull('cp.left_at');
+            })
+            ->whereNull('messages.deleted_at')
+            ->where('messages.type', '!=', Message::TYPE_SYSTEM)
+            ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
+            ->whereRaw('messages.id > coalesce(cp.cleared_before_message_id, 0)')
+            ->where(function ($q) {
+                $q->whereNull('messages.user_id')
+                    ->orWhere('messages.user_id', '!=', $this->user->id);
+            })
+            ->count();
+
+        if ($count === 0) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => 'All caught up',
+                'deltaUp' => true,
+                'hint' => 'No unread portal messages.',
+            ];
+        }
+
+        return [
+            'value' => Format::count($count),
+            'count' => $count,
+            'delta' => 'Waiting for you',
+            'deltaUp' => false,
+            'hint' => Format::plural($count, 'message is', 'messages are').' waiting to be read.',
+        ];
+    }
+
+    /* ── provider card: open CIP + file comments ───────────────────── */
+
+    /** @return array<string, mixed> */
+    private function openCommentsCard(): array
+    {
+        $cipOpen = 0;
+
+        if (CipAccess::enabled()) {
+            $cipOpen = CipDocumentComment::query()
+                ->whereNull('parent_id')
+                ->whereNull('resolved_at')
+                ->whereHas(
+                    'document',
+                    fn ($q) => $q->whereIn('application_id', ApplicationScope::query($this->user)->select('id'))
+                )
+                ->count();
+        }
+
+        $mentions = WorkflowHub::counts($this->user)['mentions'];
+        $count = $cipOpen + $mentions;
+
+        if ($count === 0) {
+            return [
+                'value' => '0',
+                'count' => 0,
+                'delta' => 'All clear',
+                'deltaUp' => true,
+                'hint' => 'No open comments on your documents.',
+            ];
+        }
+
+        return [
+            'value' => Format::count($count),
+            'count' => $count,
+            'delta' => 'Needs a look',
+            'deltaUp' => false,
+            'hint' => Format::plural($count, 'comment thread is', 'comment threads are')
+                .' still open on your documents.',
         ];
     }
 

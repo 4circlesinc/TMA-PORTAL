@@ -66,6 +66,12 @@ final class ClientDirectory
         return new self($keyByUserId, $keyByEmail, $names);
     }
 
+    /** Nobody in the directory. Used when the KPI row does not measure staff replies. */
+    public static function none(): self
+    {
+        return new self([], [], []);
+    }
+
     /** @return list<int> */
     public function userIds(): array
     {

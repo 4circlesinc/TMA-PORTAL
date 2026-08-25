@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipDocument;
 use App\Models\CipEvent;
+use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -13,6 +17,7 @@ use App\Models\Message;
 use App\Models\SignatureRequest;
 use App\Models\User;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentComments;
 use App\Support\Cip\Status as CipStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -361,6 +366,69 @@ class DashboardMetricsTest extends TestCase
 
         $response->assertJson(['staff' => false]);
         $this->assertArrayNotHasKey('cards', $response->json());
+    }
+
+    public function test_a_provider_contact_gets_cip_and_inbox_cards(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $staff = $this->staff();
+        $gil = User::factory()->create([
+            'email' => 'gil@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $company = Company::create(['uid' => 'galaxy-firm', 'name' => 'Galaxy Firm']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id,
+        ]);
+
+        Applications::create($provider, $staff);
+        $needsUpdate = Applications::create($provider, $staff);
+        $needsUpdate->forceFill(['status' => CipStatus::UPDATE_REQUIRED])->save();
+        $granted = Applications::create($provider, $staff);
+        $granted->forceFill(['status' => CipStatus::GRANTED])->save();
+
+        $person = CipPerson::create([
+            'application_id' => $needsUpdate->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        $slot = CipDocument::create([
+            'uuid' => (string) Str::uuid(),
+            'application_id' => $needsUpdate->id,
+            'person_id' => $person->id,
+            'type' => 'police_certificate',
+            'label' => 'Police certificate',
+            'required' => true,
+        ]);
+        DocumentComments::create($slot, $staff, 'This scan is cut off at the bottom.');
+
+        $thread = $this->conversation($staff, $gil);
+        $this->say($thread, $staff, '1 hour');
+
+        $payload = $this->metrics($gil);
+
+        $this->assertTrue($payload['provider']);
+        $this->assertFalse($payload['staff']);
+        $this->assertSame('provider', $payload['scope']);
+        $this->assertSame(2, $payload['cards']['cipActive']['count']);
+        $this->assertSame(1, $payload['cards']['cipUpdatesRequired']['count']);
+        $this->assertSame(1, $payload['cards']['unreadMessages']['count']);
+        $this->assertSame(1, $payload['cards']['openComments']['count']);
+        $this->assertArrayNotHasKey('clientResponse', $payload['cards']);
     }
 
     public function test_an_empty_account_reports_nothing_rather_than_inventing_a_number(): void

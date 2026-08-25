@@ -78,12 +78,22 @@
         kpiSkeletonCard('blue') + kpiSkeletonCard('purple') + kpiSkeletonCard('blue') + kpiSkeletonCard('purple') +
         '</div>';
     }
-    // The KPI row measures how the firm serves its clients, so it is staff
-    // only, a client account gets no row rather than four meaningless cards.
-    if (homeMetrics && homeMetrics.staff === false) return '';
+    // The KPI row is staff for the firm, or a CIP-and-inbox row for a
+    // service-provider contact. Other client accounts get no row rather
+    // than four meaningless cards.
+    if (homeMetrics && homeMetrics.staff === false && !homeMetrics.provider) return '';
 
     var c = (homeMetrics && homeMetrics.cards) || {};
     function card(key) { return c[key] || KPI_UNAVAILABLE; }
+
+    if (homeMetrics && homeMetrics.provider) {
+      return '<div class="tma-dash__cards">' +
+        kpiCard('blue', 'Active CIP Applications', 'FilePlus', card('cipActive')) +
+        kpiCard('purple', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired')) +
+        kpiCard('blue', 'Unread Messages', 'ChatsCircle', card('unreadMessages')) +
+        kpiCard('purple', 'Open Comments', 'ChatText', card('openComments')) +
+        '</div>';
+    }
 
     return '<div class="tma-dash__cards">' +
       kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse')) +

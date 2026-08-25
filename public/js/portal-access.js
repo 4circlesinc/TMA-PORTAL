@@ -56,9 +56,10 @@
 
   /* Pieces of the shell's first-paint skeleton that stand in for role-gated
      content. [data-boot-needs="<capability>"]. The Dashboard's KPI row is
-     staff-only, so its placeholder cards must not flash at a client. Every
-     capability used in the shell markup is listed here so the hold CSS can be
-     written before the DOM exists to prune. */
+     staff-only for most accounts, so portal-access.js drops it for anyone
+     without overview.view, except service-provider contacts who get their
+     own CIP-and-inbox cards. Every capability used in the shell markup is
+     listed here so the hold CSS can be written before the DOM exists to prune. */
   var BOOT_GATED_CAPABILITIES = ['overview.view'];
 
   /* Account settings rail (portal-admin.js): section id => capability.
@@ -176,7 +177,11 @@
   /* Boot-skeleton pieces standing in for content this account may not have. */
   function pruneBootGated(scope) {
     scope.querySelectorAll('[data-boot-needs]').forEach(function (el) {
-      if (!can(el.getAttribute('data-boot-needs'))) remove(el);
+      var need = el.getAttribute('data-boot-needs');
+      // Service-provider contacts get a KPI row of their own, so keep the
+      // placeholder even though they do not hold overview.view.
+      if (need === 'overview.view' && providerContact) return;
+      if (!can(need)) remove(el);
     });
   }
 

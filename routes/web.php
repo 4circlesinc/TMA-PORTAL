@@ -143,7 +143,8 @@ Route::get('/auth/email/confirm/{id}/{hash}', UnsignedVerifyEmailController::cla
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', 'onboarded', 'mfa.enforced'])->group(function () {
     Route::get('/', DashboardController::class);
 
-    // KPI cards on the portal home. Staff-facing: see DashboardMetricsController.
+    // KPI cards on the portal home. Staff and service-provider contacts:
+    // see DashboardMetricsController.
     Route::get('/portal/dashboard/metrics', DashboardMetricsController::class)
         ->name('dashboard.metrics');
 
