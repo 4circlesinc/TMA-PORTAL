@@ -2,6 +2,7 @@
 
 namespace App\Support\Onboarding;
 
+use App\Models\OnboardingProgress;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\SecurityPolicies;
@@ -233,6 +234,15 @@ final class AccountSetupFlow
 
     public static function accountsPhaseComplete(User $user): bool
     {
+        // The preference flag is what staff getting-started stamps. A client
+        // who touched that screen must still finish the 13-step wizard.
+        if (Role::isClient($user)) {
+            return OnboardingProgress::query()
+                ->where('user_id', $user->id)
+                ->whereNotNull('completed_at')
+                ->exists();
+        }
+
         return (bool) ($user->preferences['accountsSetupComplete'] ?? false);
     }
 

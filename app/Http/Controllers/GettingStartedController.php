@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Access\Role;
 use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\SecurityPolicies;
 use Illuminate\Http\RedirectResponse;
@@ -15,9 +16,13 @@ use Illuminate\View\View;
  */
 class GettingStartedController extends Controller
 {
-    public function show(Request $request): View
+    public function show(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+
+        if (Role::isClient($user)) {
+            return redirect()->route('onboarding.index');
+        }
         $policy = SecurityPolicies::get('sign-in');
 
         $google = $user->connectedAccount('google');
@@ -61,6 +66,11 @@ class GettingStartedController extends Controller
     public function finish(Request $request): RedirectResponse
     {
         $user = $request->user();
+
+        if (Role::isClient($user)) {
+            return redirect()->route('onboarding.index');
+        }
+
         $policy = SecurityPolicies::get('sign-in');
 
         $microsoftConfigured = (bool) config('services.microsoft.sync')

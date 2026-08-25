@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\OnboardingProgress;
 use App\Models\User;
 use App\Support\Onboarding\AccountSetupFlow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -188,6 +189,16 @@ class AccountSetupWalkthroughTest extends TestCase
                 'accountsSetupComplete' => true,
                 'accountSetupStep' => 'preferences',
             ],
+        ]);
+
+        OnboardingProgress::create([
+            'user_id' => $user->id,
+            'flow' => OnboardingProgress::FLOW_CLIENT,
+            'current_step' => 'done',
+            'completed_steps' => [],
+            'answers' => [],
+            'started_at' => now(),
+            'completed_at' => now(),
         ]);
 
         $this->assertSame(3, AccountSetupFlow::position('preferences', $user)['total']);

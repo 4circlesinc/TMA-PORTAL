@@ -175,6 +175,26 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($staff)->get('/')->assertRedirect(route('getting-started'));
     }
 
+    public function test_a_client_still_gets_the_wizard_if_getting_started_was_marked_done(): void
+    {
+        [$user] = $this->client([
+            'profile_completed_at' => now(),
+            'preferences' => [
+                'accountsSetupComplete' => true,
+                'accountSetupStep' => 'preferences',
+            ],
+        ]);
+
+        $this->actingAs($user)->get('/')->assertRedirect(route('onboarding.index'));
+        $this->actingAs($user)->get(route('getting-started'))->assertRedirect(route('onboarding.index'));
+        $this->actingAs($user)->get(route('account-setup.show', ['step' => 'preferences']))
+            ->assertRedirect(route('onboarding.index'));
+        $this->actingAs($user)->get(route('onboarding.show', ['step' => 'welcome']))
+            ->assertOk()
+            ->assertSee('Welcome')
+            ->assertSee('Get started');
+    }
+
     // ------------------------------------------------------------ every screen
 
     public function test_every_applicable_step_renders(): void
