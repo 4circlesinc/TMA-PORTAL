@@ -1526,9 +1526,21 @@ select.tma-auth__input {
 }
 
 .tma-auth__form .tma-auth__account-options,
-.tma-auth__form .tma-auth__nav-actions {
+.tma-auth__form .tma-auth__nav-actions,
+.tma-auth__form .tma-auth__checklist {
   width: 100%;
   align-items: stretch;
+}
+
+/* Labels and hints on a tall card must share the 384px column, not the
+   full card width. Otherwise "Calendar" sits on the left edge and the
+   rows float in the middle. */
+.tma-auth__card-scroll-inner > .tma-auth__section-label,
+.tma-auth__card-scroll-inner > .tma-auth__hint,
+.tma-auth__card-scroll-inner > .tma-auth__section-hint,
+.tma-auth__card-scroll-inner > .tma-auth__checklist,
+.tma-auth__card-scroll-inner > .tma-auth__alert {
+  width: min(384px, 100%);
 }
 
 .tma-auth__form .tma-auth__qr {
