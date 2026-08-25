@@ -17216,6 +17216,15 @@
   grid-template-columns: minmax(160px, 1.3fr) 96px minmax(140px, 1fr) minmax(160px, 1.1fr);
 }
 
+.tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--head,
+.tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--body {
+  grid-template-columns: minmax(160px, 1.3fr) minmax(160px, 1fr) minmax(180px, 1.1fr);
+}
+
+.tma-dash__ctable--clients .tma-dash__cc--empty {
+  grid-column: 1 / -1;
+}
+
 .tma-dash__ctable--clients .tma-dash__cc--user,
 .tma-dash__ctable--clients .tma-dash__cc--type,
 .tma-dash__ctable--clients .tma-dash__cc--referral,
@@ -21972,6 +21981,11 @@ a.tma-dash__clients-edit-btn--accent:visited {
   .tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--head,
   .tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--body {
     grid-template-columns: minmax(120px, 1fr) 80px minmax(100px, 0.9fr) minmax(100px, 1fr);
+  }
+
+  .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--head,
+  .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--body {
+    grid-template-columns: minmax(120px, 1fr) minmax(120px, 0.9fr) minmax(120px, 1fr);
   }
 
   .tma-dash__clients-form-row--dates {

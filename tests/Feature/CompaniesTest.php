@@ -65,6 +65,47 @@ class CompaniesTest extends TestCase
             ->assertJsonPath('company.people.0.id', 'bruce-wayne');
     }
 
+    public function test_the_directory_lists_people_from_every_service_provider(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy-partners', 'name' => 'Galaxy Partners']);
+        $wayne = Company::create(['uid' => 'wayne-enterprises', 'name' => 'Wayne Enterprises']);
+
+        Client::create([
+            'uid' => 'sarah-cheng', 'name' => 'Sarah Cheng',
+            'company_id' => $galaxy->id, 'email' => 'sarah.cheng@galaxypartners.example',
+            'data' => [],
+        ]);
+        Client::create([
+            'uid' => 'bruce-wayne', 'name' => 'Bruce Wayne',
+            'company_id' => $wayne->id, 'email' => 'bruce@wayne.example',
+            'data' => [],
+        ]);
+        Client::create([
+            'uid' => 'orphan-contact', 'name' => 'No Firm',
+            'data' => [],
+        ]);
+
+        $companies = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'));
+
+        $people = $companies->flatMap(fn ($company) => $company['people'] ?? []);
+        $this->assertEqualsCanonicalizing(
+            ['sarah-cheng', 'bruce-wayne'],
+            $people->pluck('id')->all(),
+            'The People tab is every contact that belongs to a service provider, not the unattached directory.',
+        );
+        $this->assertEquals(
+            'sarah.cheng@galaxypartners.example',
+            $people->firstWhere('id', 'sarah-cheng')['email'],
+        );
+        $this->assertEquals(
+            ['sarah-cheng'],
+            collect($companies->firstWhere('id', 'galaxy-partners')['people'])->pluck('id')->all(),
+        );
+    }
+
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
     {
         $staff = $this->staff();

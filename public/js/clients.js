@@ -39,34 +39,46 @@
   var LIST_TAB_KEY = 'tma.cipListTab.v1';
 
   /*
-   * The two things this page lists.
+   * The three things this page lists.
    *
    * They shared one table, told apart by a Type column and a filter, which
    * meant the answer to "how many applications are there" was a number you
    * had to filter for, and paging through applications walked you into
    * providers. They are different records with different columns; a tab each
-   * is what the page was doing informally.
+   * is what the page was doing informally. People is every contact that
+   * belongs to a service provider, the same rows the firm card used to
+   * hide one company at a time.
    */
   var LIST_TABS = [
     { id: 'applications', label: 'Applications' },
     { id: 'providers', label: 'Service providers' },
+    { id: 'people', label: 'People' },
   ];
+
+  function listTabOf(state) {
+    var tab = state && state.listTab;
+    if (tab === 'providers' || tab === 'people') return tab;
+    return 'applications';
+  }
 
   function loadListTab() {
     try {
-      var saved = localStorage.getItem(LIST_TAB_KEY);
-      return saved === 'providers' ? 'providers' : 'applications';
+      return listTabOf({ listTab: localStorage.getItem(LIST_TAB_KEY) });
     } catch (e) {
       return 'applications';
     }
   }
 
   function saveListTab(tab) {
-    try { localStorage.setItem(LIST_TAB_KEY, tab === 'providers' ? 'providers' : 'applications'); } catch (e) { /* private mode */ }
+    try { localStorage.setItem(LIST_TAB_KEY, listTabOf({ listTab: tab })); } catch (e) { /* private mode */ }
   }
 
   function onProvidersTab(state) {
-    return state && state.listTab === 'providers';
+    return listTabOf(state) === 'providers';
+  }
+
+  function onPeopleTab(state) {
+    return listTabOf(state) === 'people';
   }
 
   var ICONS = {
@@ -1247,7 +1259,7 @@
    * nothing to say and is not offered at all. Every field below starts here.
    */
   function onApplicationsTable(state) {
-    return !!state && state.screen === 'list' && !onProvidersTab(state);
+    return !!state && state.screen === 'list' && listTabOf(state) === 'applications';
   }
 
   /*
@@ -1853,6 +1865,13 @@
       .filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
   }
 
+  function personMatchesSearch(person, company, query) {
+    var q = String(query || '').trim().toLowerCase();
+    if (!q) return true;
+    return [person.name, person.email, company && company.name]
+      .filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+  }
+
   // Client rows keep the bare uid as their key: it is what `selected` holds and
   // what bulk-delete posts, so a company key has to be namespaced instead.
   function applicationRowEntries(state) {
@@ -1885,8 +1904,54 @@
     return rows;
   }
 
+  /*
+   * Every contact that belongs to a service provider, across every firm.
+   *
+   * These are the same rows the company profile's People card lists, flattened
+   * so the reader does not have to open each firm to find someone. Search
+   * matches the person, their email, or the firm they sit on.
+   */
+  function peopleRowEntries(state) {
+    var rows = [];
+    var search = state && state.search;
+    var removed = (state && state.removedIds) || {};
+
+    COMPANIES.forEach(function (company) {
+      if (!company || !company.id) return;
+      (company.people || []).forEach(function (person) {
+        if (!person || !person.id) return;
+        if (!personMatchesSearch(person, company, search)) return;
+        var key = 'person:' + person.id;
+        if (removed[key] || removed[person.id]) return;
+        rows.push({
+          kind: 'person',
+          key: key,
+          id: person.id,
+          name: person.name || '',
+          person: person,
+          company: company,
+        });
+      });
+    });
+
+    return rows;
+  }
+
+  function totalPeopleRecords() {
+    var n = 0;
+    COMPANIES.forEach(function (company) {
+      n += (company.people || []).length;
+    });
+    return n;
+  }
+
   function tableRowEntries(state) {
-    var rows = onProvidersTab(state) ? providerRowEntries(state) : applicationRowEntries(state);
+    var tab = listTabOf(state);
+    var rows = tab === 'providers'
+      ? providerRowEntries(state)
+      : tab === 'people'
+        ? peopleRowEntries(state)
+        : applicationRowEntries(state);
 
     return sortTableRows(rows, state && state.sort);
   }
@@ -1907,13 +1972,16 @@
     if (sort === 'name-desc') return rows.sort(function (a, b) { return byName(b, a); });
     if (sort === 'company') {
       return rows.sort(keyed(function (r) {
-        // Companies sort under their own name; people under their referrer.
-        return r.kind === 'company' ? r.name : clientReferralLabel(r.id);
+        if (r.kind === 'company') return r.name;
+        if (r.kind === 'person') return (r.company && r.company.name) || '';
+        return clientReferralLabel(r.id);
       }));
     }
     if (sort === 'type') {
       return rows.sort(keyed(function (r) {
-        return r.kind === 'company' ? 'Service provider' : clientTypeLabel(clientTypeOf(r.id));
+        if (r.kind === 'company') return 'Service provider';
+        if (r.kind === 'person') return 'Contact';
+        return clientTypeLabel(clientTypeOf(r.id));
       }));
     }
 
@@ -1980,8 +2048,30 @@
     );
   }
 
+  /*
+   * One contact from any service provider. Opening the row is the person;
+   * the firm name is its own control, the same as the Applications table.
+   */
+  function renderProviderPersonTableRow(entry, index) {
+    var person = entry.person;
+    var company = entry.company;
+    var contact = person.email || '-';
+    return (
+      '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-row="' + esc(person.id) +
+      '" data-row-index="' + index + '" role="row">' +
+      '<div class="tma-dash__cc tma-dash__cc--user">' + clientAvatarMarkup(person) +
+      '<span class="tma-dash__cc-truncate">' + esc(person.name || '') + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral">' +
+      '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
+      esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
+      esc(contact) + '</span></div></div>'
+    );
+  }
+
   function renderFullTableRow(entry, index, checked) {
     if (entry.kind === 'company') return renderCompanyTableRow(entry.company, index);
+    if (entry.kind === 'person') return renderProviderPersonTableRow(entry, index);
 
     var item = entry.item;
     var cols = clientTableColumns(item);
@@ -2030,16 +2120,18 @@
     return '<span class="tma-skeleton tma-skeleton--text" style="width:' + width + '%"></span>';
   }
 
-  function renderTableSkeletonRows(count) {
+  function renderTableSkeletonRows(state, count) {
+    var people = onPeopleTab(state);
+    var noselect = people || onProvidersTab(state);
     var rows = '';
     for (var i = 0; i < (count || SKELETON_ROW_COUNT); i++) {
       rows +=
         '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--skeleton" role="row" aria-hidden="true">' +
-        '<div class="tma-dash__cc tma-dash__cc--check"></div>' +
+        (noselect ? '' : '<div class="tma-dash__cc tma-dash__cc--check"></div>') +
         '<div class="tma-dash__cc tma-dash__cc--user">' +
         '<span class="tma-skeleton tma-skeleton--avatar tma-dash__clients-skeleton-avatar"></span>' +
         skeletonBar(skeletonWidth(i)) + '</div>' +
-        '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>' +
+        (people ? '' : '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>') +
         '<div class="tma-dash__cc tma-dash__cc--referral">' + skeletonBar(skeletonWidth(i + 7, 0.9)) + '</div>' +
         '<div class="tma-dash__cc tma-dash__cc--contact">' + skeletonBar(skeletonWidth(i + 2)) + '</div>' +
         '</div>';
@@ -2155,19 +2247,32 @@
     var searching = !!String(state.search || '').trim();
     var filtered = anyClientFilter(state.filters);
 
+    var people = onPeopleTab(state);
     var providers = onProvidersTab(state);
-    var noun = providers ? 'service provider' : 'client';
+    var noun = people ? 'person' : (providers ? 'service provider' : 'client');
 
     if (searching || filtered) {
       // Nothing to add here: the records exist, the query is what is wrong.
       var what = searching ? 'search' : 'filters';
-      if (!noData) return 'No ' + noun + 's match this ' + what;
+      if (!noData) return 'No ' + (people ? 'people' : noun + 's') + ' match this ' + what;
       return noData.render({
         title: 'No matches',
         subtitle: searching
-          ? 'No ' + noun + ' matches “' + state.search.trim() + '”.'
-          : 'No ' + noun + ' matches these filters.',
+          ? (people
+            ? 'No person matches “' + state.search.trim() + '”.'
+            : 'No ' + noun + ' matches “' + state.search.trim() + '”.')
+          : 'No ' + (people ? 'people' : noun) + ' matches these filters.',
         illustrationName: 'Illustration19',
+        showButton: false,
+      });
+    }
+
+    if (people) {
+      if (!noData) return 'No contacts yet';
+      return noData.render({
+        title: 'No contacts yet',
+        subtitle: 'Contacts appear here once they belong to a service provider.',
+        illustrationName: 'Illustration04',
         showButton: false,
       });
     }
@@ -2202,7 +2307,7 @@
   }
 
   function renderFullTableRows(state) {
-    if (state.loadState === 'loading') return renderTableSkeletonRows();
+    if (state.loadState === 'loading') return renderTableSkeletonRows(state);
     var page = getTablePageData(state);
     if (!page.items.length) {
       return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row">' +
@@ -2294,7 +2399,7 @@
   }
 
   /*
-   * The page's two lists, as the documented tab group.
+   * The page's lists, as the documented tab group.
    *
    * Same recipe as the profile's tabs and every other tablist in the portal:
    * the underline variant, a label, the count chip, and the indicator span
@@ -2312,7 +2417,9 @@
         var active = (state.listTab || 'applications') === tab.id;
         var count = loading ? null : (tab.id === 'providers'
           ? providerRowEntries(state).length
-          : applicationRowEntries(state).length);
+          : tab.id === 'people'
+            ? peopleRowEntries(state).length
+            : applicationRowEntries(state).length);
 
         return (
           '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
@@ -3191,9 +3298,9 @@
 
   function renderTableListPage(state) {
     var page = getTablePageData(state);
-    var providers = onProvidersTab(state);
+    var people = onPeopleTab(state);
 
-    if (!providers) {
+    if (onApplicationsTable(state)) {
       return (
         renderTableToolbar(state) +
         renderClientsFilterChips(state) +
@@ -3211,29 +3318,19 @@
       // the last columns are simply unreachable, and the page body scrolling
       // sideways drags the whole shell with it.
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
-      '<div class="tma-dash__ctable tma-dash__ctable--clients' +
-      // The column tracks are positional, so dropping the checkbox cell has
-      // to drop its track with it, see --noselect.
-      (providers ? ' tma-dash__ctable--noselect' : '') +
+      '<div class="tma-dash__ctable tma-dash__ctable--clients tma-dash__ctable--noselect' +
+      (people ? ' tma-dash__ctable--people' : '') +
       '" role="table" aria-label="' +
-      (providers ? 'Service providers' : 'Applications') + '">' +
+      (people ? 'People' : 'Service providers') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
-      // No checkbox column at all on the providers tab. A provider row carries
-      // no checkbox, the bulk actions post to the clients endpoint, so an
-      // empty cell was reserving 40px of gutter to hold nothing, and the list
-      // began an inch inside the table that framed it.
-      (providers ? ''
-        : '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
-          '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all">' +
-          '</div>') +
-      // The columns say what the rows are. A provider listed under "Client",
-      // with its own name repeated under "Service provider", was the table
-      // describing one record as if it were the other.
+      // No checkbox column on these tabs. Bulk actions post to the clients
+      // endpoint, and a company is deleted from its own profile.
       '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">' +
-      (providers ? 'Service provider' : 'Client') + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>' +
+      (people ? 'Person' : 'Service provider') + '</div>' +
+      (people ? ''
+        : '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>') +
       '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">' +
-      (providers ? 'People' : 'Service provider') + '</div>' +
+      (people ? 'Service provider' : 'People') + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
@@ -3265,13 +3362,16 @@
 
     // Counted within the tab: the number above a list has to be the number of
     // things in it, or it is answering a question nobody asked.
+    var people = onPeopleTab(state);
     var providers = onProvidersTab(state);
-    var total = providers ? COMPANIES.length : totalApplicationRecords();
-    var filtered = providers ? !!state.search : (anyClientFilter(state.filters) || !!state.search);
+    var total = people ? totalPeopleRecords() : (providers ? COMPANIES.length : totalApplicationRecords());
+    var filtered = (people || providers) ? !!state.search : (anyClientFilter(state.filters) || !!state.search);
     var shown = filtered ? tableRowEntries(state).length : total;
-    var noun = providers
-      ? (total === 1 && !filtered ? 'service provider' : 'service providers')
-      : (total === 1 && !filtered ? 'application' : 'applications');
+    var noun = people
+      ? (total === 1 && !filtered ? 'person' : 'people')
+      : providers
+        ? (total === 1 && !filtered ? 'service provider' : 'service providers')
+        : (total === 1 && !filtered ? 'application' : 'applications');
 
     return (
       '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
@@ -8509,7 +8609,10 @@
           return;
         }
         var current = state.sort || 'name';
-        clientsPop.sort.innerHTML = CLIENT_SORTS.map(function (s) {
+        var sorts = onPeopleTab(state)
+          ? CLIENT_SORTS.filter(function (s) { return s.value !== 'type'; })
+          : CLIENT_SORTS;
+        clientsPop.sort.innerHTML = sorts.map(function (s) {
           return clientsPopItem('data-clients-sort-value', s.value, s.label, { selected: current === s.value });
         }).join('');
         openClientsPopover(clientsPop.sort, sortTrigger);
@@ -9068,7 +9171,7 @@
     // Asked for at paint rather than on navigation: the table is drawn from
     // whatever the search box and the page buttons currently say, and those
     // change without a route change.
-    if (state.screen === 'list' && !onProvidersTab(state)) {
+    if (onApplicationsTable(state)) {
       /*
        * The bucket a link asked for, claimed at the first paint of the table
        * it filters, and claimed before the request below goes out, or the
