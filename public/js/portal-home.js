@@ -1364,19 +1364,74 @@
     var file = c.file || {};
     var body = c.deleted ? 'This comment was deleted.' : (c.body || '');
 
-    return '<button type="button" class="tma-portal-comment-row' + (c.mentionsMe ? ' is-mention' : '') + '"' +
+    /*
+     * Read state comes from the server per row, and the listing asking for it
+     * does not spend it — see Hub::comments. A resolved thread is settled
+     * rather than new, so it reads as read whatever the marker says.
+     */
+    var unread = c.unread !== false && !c.resolved;
+
+    return '<button type="button" class="tma-portal-comment-row' +
+      (unread ? ' is-unread' : '') + '"' +
       ' data-key="work-comment-' + ui().esc(c.id) + '"' +
+      ' data-home-work-comment="' + ui().esc(c.id) + '"' +
       workFileAttrs(file) + '>' +
       workAvatarHtml(c.author, 'tma-portal-comment-row__avatar') +
       '<span class="tma-portal-comment-row__meta">' +
       '<span class="tma-portal-comment-row__top">' +
       '<span class="tma-portal-comment-row__author">' +
       ui().esc((c.author && c.author.name) || 'Someone') + '</span>' +
+      // The dot is decoration; the word is what a screen reader gets, and it
+      // comes first so the row announces its state before its contents.
+      (unread ? '<span class="tma-portal-comment-row__unread">Unread</span>' : '') +
       '<span class="tma-portal-comment-row__time">' + ui().esc(workAgo(c.createdAt)) + '</span>' +
       '</span>' +
       '<span class="tma-portal-comment-row__body">' + ui().esc(body) + '</span>' +
       (file.name ? '<span class="tma-portal-comment-row__file">' + ui().esc(file.name) + '</span>' : '') +
       '</span></button>';
+  }
+
+  /*
+   * The reader opened this thread, so it is read.
+   *
+   * The listing deliberately marks nothing (see Hub::comments), which is what
+   * lets a row arrive unread. This is the other half, and it is the same
+   * endpoint the Workflows page posts to rather than a second definition of
+   * what reading means.
+   *
+   * `keepalive` because the click that gets here also opens the file, which
+   * navigates away in the same tick: an ordinary fetch would be cancelled on
+   * the way out and the row would still be unread on the way back.
+   */
+  function markWorkCommentRead(commentId) {
+    if (!commentId || !homeWork) return;
+
+    var row = (homeWork.comments || []).filter(function (c) { return c.id === commentId; })[0];
+    if (!row || row.unread === false) return;   // already read; nothing to spend
+    row.unread = false;
+
+    var root = window.__TMA_SITE_ROOT || '';
+
+    fetch(root + '/portal/files/workflows/comments/' + encodeURIComponent(commentId) + '/read', {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': prefXsrf(),
+      },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.counts) return;
+        homeWork.counts = j.counts;
+        keepWarm('work', homeWork);
+        publishWorkCounts(j.counts);
+        var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (el && el.isConnected) mount(el, { fromLoad: true });
+      })
+      .catch(function () { /* the badge settles on the next poll */ });
   }
 
   /* Is this tile's list part of the answer we are holding? */
@@ -1462,7 +1517,10 @@
         return [r.id, r.status || '', r.answered, ((r.headline || {}).text || '')].join(':');
       }).join('|'),
       (payload.comments || []).map(function (c) {
-        return [c.id, c.resolved ? 1 : 0, c.editedAt || '', c.deleted ? 1 : 0].join(':');
+        return [
+          c.id, c.unread === false ? 0 : 1, c.resolved ? 1 : 0,
+          c.editedAt || '', c.deleted ? 1 : 0,
+        ].join(':');
       }).join('|'),
     ].join('~');
   }
@@ -2993,6 +3051,7 @@
 
     pick('[data-home-work-file]').forEach(function (b) {
       b.addEventListener('click', function () {
+        markWorkCommentRead(b.getAttribute('data-home-work-comment'));
         openWorkFile(
           b.getAttribute('data-home-work-file'),
           b.getAttribute('data-home-work-folder')

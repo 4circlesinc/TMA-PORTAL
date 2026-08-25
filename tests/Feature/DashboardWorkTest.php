@@ -152,9 +152,12 @@ class DashboardWorkTest extends TestCase
             ->assertOk()
             ->assertJsonPath('items.0.unread', true);
 
+        // Per row, because that is what the tile draws: a badge saying "1
+        // unread" over five rows that all look alike answers nothing.
         $this->actingAs($ben)->getJson('/portal/dashboard/work')
             ->assertOk()
-            ->assertJsonPath('counts.unread', 1);
+            ->assertJsonPath('counts.unread', 1)
+            ->assertJsonPath('comments.0.unread', true);
 
         // Opening one is.
         $comment = FileComment::query()->whereNull('parent_id')->firstOrFail();
@@ -164,7 +167,10 @@ class DashboardWorkTest extends TestCase
 
         $this->actingAs($ben)->getJson('/portal/dashboard/work')
             ->assertOk()
-            ->assertJsonPath('counts.unread', 0);
+            ->assertJsonPath('counts.unread', 0)
+            // Still listed, and now visibly read — the row does not vanish
+            // because it was opened.
+            ->assertJsonPath('comments.0.unread', false);
     }
 
     /** A tile the reader turned off is not built. */

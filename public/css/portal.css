@@ -2160,7 +2160,7 @@
 
 .tma-portal-email-row.is-unread .tma-portal-email-row__subject,
 .tma-portal-chat-row.is-unread .tma-portal-chat-row__preview,
-.tma-portal-comment-row.is-mention .tma-portal-comment-row__body {
+.tma-portal-comment-row.is-unread .tma-portal-comment-row__body {
   font-weight: 700;
 }
 
@@ -2321,6 +2321,33 @@
 .tma-portal-comment-row__body { color: var(--color-black); }
 .tma-portal-comment-row__file { color: var(--color-text-secondary); }
 .tma-portal-request-row__file { color: var(--color-black); }
+
+/*
+ * Unread leads in bold, the reading the Recent Email tile above already gives
+ * a subject — and a dot, which is the part that actually does the work.
+ *
+ * The body stays black either way. Fading a read comment to secondary was the
+ * obvious move and the wrong one: the file line under it is already secondary,
+ * so a read row lost the difference between what somebody said and which
+ * document they said it about — two lines of identical grey.
+ *
+ * Which leaves weight to carry the state on its own, and weight cannot: these
+ * are 12px rows five deep, and half the comments people actually leave are one
+ * word. "test" in bold and "test" in regular are the same four letters. The dot
+ * is what you can scan a column for.
+ */
+.tma-portal-comment-row__unread {
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  /* The word is for screen readers; the circle is for everyone else. */
+  overflow: hidden;
+  text-indent: 100%;
+  white-space: nowrap;
+}
 
 /* Whose turn it is, in the same three tones the Workflows card headline uses,
    so a request reads the same on the board as it does on the page. */

@@ -1166,21 +1166,40 @@ node tests/Browser/notify-toasts.mjs
   the messaging seed at the end of this file provides them.
 - **`dashboard-work.mjs`** — the home board's Requests and Comments tiles. The
   lists themselves are `DashboardWorkTest`'s subject; what only a browser can
-  check is the reading and the one rule the tiles must not break. It reads back
-  every rendered row (type, file, whose turn it is, author, body, time), takes
-  the *computed* colour of the request headline and the *computed* weight of a
-  comment naming you, because both are the whole difference between "waiting on
-  you" and "somebody else's problem" and both live only in the cascade. Then it
-  calls the tile's own endpoint and re-reads the Workflows counts either side:
-  a tile that refreshes on a timer must never mark a thread read, or a board
-  left open all day empties the badge for conversations nobody opened. Finally
-  it clicks a comment, which has to land on `/folders/all?folder=…&file=…` —
-  the file the comment is about, not the Workflows page.
+  check is the reading. It takes back every rendered row (type, file, whose
+  turn it is, author, body, time) and the *computed* style of the parts that
+  carry state, because that is where this breaks: a rule the cascade overrides
+  later leaves the class on and the difference off, which no test that reads
+  markup can see.
 
-  Needs a staff account with something waiting on it and a thread or two naming
-  it — the fixture below. Rebuild the bundle first: the shell serves
-  `public/build`, so a stale bundle renders the new tiles with none of their
-  CSS, which looks exactly like a broken stylesheet rather than a stale build.
+  Most of it is about read and unread, which used to be undrawable and is the
+  reason the tile exists in a useful form at all:
+
+  - unread and read must differ in **weight**, and must **not** differ in
+    colour. Fading a read comment is the obvious move and the wrong one — the
+    filename under it is already secondary, so a faded row loses the difference
+    between what somebody said and which document they said it about. Both
+    halves are asserted, including that a read body is still a different colour
+    from the filename.
+  - the unread **dot** has to track the class. It is the part that survives a
+    one-word comment, and half of what people actually leave is one word:
+    "test" in bold and "test" in regular are the same four letters.
+  - marking a thread read through the Workflows endpoint has to change what the
+    tile draws on its next read, without a reload.
+  - a refresh must **never** mark anything read — it calls the tile's endpoint
+    and re-reads the Workflows counts either side. A board polling every minute
+    would otherwise empty the badge for conversations nobody opened.
+  - clicking a comment has to land on `/folders/all?folder=…&file=…` — the file
+    it is about, not the Workflows page — and the row has to be read when you
+    come back. The tile turns it grey optimistically, so a dropped mark looks
+    identical until the reload.
+
+  Needs a staff account with something waiting on it, and comment threads in
+  **both** states — the fixture below leaves one read and two unread, which is
+  what lets the comparisons above have two things to compare. Rebuild the bundle
+  first: the shell serves `public/build`, so a stale bundle renders the tiles
+  with none of their CSS, which looks exactly like a broken stylesheet rather
+  than a stale build.
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
@@ -1213,15 +1232,22 @@ node tests/Browser/notify-toasts.mjs
         'position' => 1, 'status' => 'pending']);
     }
 
+    \$made = [];
+    // The last one is deliberately a single word: it is the case bold alone
+    // cannot draw, and the reason the unread dot exists.
     foreach (['Can you confirm the fee cap in clause 4?', 'Source of funds letter is missing a page.',
-              'Numbers agree with the engagement letter now.'] as \$i => \$body) {
+              'test'] as \$i => \$body) {
       \$c = App\Models\FileComment::create(['uuid' => (string) Str::uuid(),
         'file_id' => \$files[\$i]->id, 'author_id' => \$ada->id, 'body' => \$body]);
       // root_id is what every unread and thread query keys on; a comment
       // inserted without one is invisible to both.
       \$c->forceFill(['root_id' => \$c->id])->save();
       App\Models\FileCommentMention::create(['comment_id' => \$c->id, 'user_id' => \$me->id]);
+      \$made[] = \$c;
     }
+    // One already read, so the board has both states to draw — with three
+    // unread rows there is nothing for the read/unread comparison to compare.
+    App\Support\Files\CommentReads::markThreadsRead(\$me, [\$made[1]->id]);
   "
 
   npm run build

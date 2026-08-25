@@ -54,17 +54,22 @@ const requests = await read('[data-tile-id="requests"] .tma-portal-request-row',
   }))
 );
 
-const comments = await read('[data-tile-id="comments"] .tma-portal-comment-row', (ns) =>
+const readComments = () => read('[data-tile-id="comments"] .tma-portal-comment-row', (ns) =>
   ns.map((n) => ({
     author: n.querySelector('.tma-portal-comment-row__author')?.textContent?.trim(),
     time: n.querySelector('.tma-portal-comment-row__time')?.textContent?.trim(),
     body: n.querySelector('.tma-portal-comment-row__body')?.textContent?.trim(),
     file: n.querySelector('.tma-portal-comment-row__file')?.textContent?.trim(),
-    mention: n.classList.contains('is-mention'),
+    unread: n.classList.contains('is-unread'),
+    dot: !!n.querySelector('.tma-portal-comment-row__unread'),
     weight: getComputedStyle(n.querySelector('.tma-portal-comment-row__body')).fontWeight,
+    colour: getComputedStyle(n.querySelector('.tma-portal-comment-row__body')).color,
     file_attr: n.getAttribute('data-home-work-file'),
+    id: n.getAttribute('data-home-work-comment'),
   }))
 );
+
+const comments = await readComments();
 
 const heads = await page.$$eval('[data-tile-id="requests"], [data-tile-id="comments"]', (ns) =>
   ns.map((n) => ({
@@ -107,6 +112,39 @@ for (const c of comments) {
   if (!c.body) fail.push('comment row with no body');
   if (!c.author) fail.push('comment row with no author');
   if (!c.file_attr) fail.push('comment row is not clickable');
+  // The dot is the state's one carrier for a row whose body is too short to
+  // show any weight at all, so it has to track the class, not decorate it.
+  if (c.unread !== c.dot) fail.push(`row "${c.body}" is unread=${c.unread} but dot=${c.dot}`);
+}
+
+/*
+ * Read and unread have to be *visibly* different, which is the whole ask.
+ * Compared as computed style rather than class names: a rule the cascade
+ * overrides later leaves the class on and the difference off, and that failure
+ * is invisible to any test that only reads markup.
+ *
+ * The body colour is deliberately NOT part of the difference — both states are
+ * black, so that a read row still tells the comment apart from the filename
+ * under it. Checked here so nobody restores the fade thinking it was missing.
+ */
+{
+  const unread = comments.filter((c) => c.unread);
+  const alreadyRead = comments.filter((c) => !c.unread);
+  if (!unread.length) fail.push('no unread rows to compare — re-seed');
+  if (!alreadyRead.length) fail.push('no read rows to compare — open one first');
+  if (unread.length && alreadyRead.length) {
+    if (unread[0].weight === alreadyRead[0].weight) {
+      fail.push(`read and unread are the same weight (${unread[0].weight})`);
+    }
+    if (unread[0].colour !== alreadyRead[0].colour) {
+      fail.push(`a read comment was faded (${alreadyRead[0].colour}) — it must stay as readable as an unread one`);
+    }
+    const fileColour = await page.$eval('[data-tile-id="comments"] .tma-portal-comment-row__file',
+      (n) => getComputedStyle(n).color);
+    if (alreadyRead[0].colour === fileColour) {
+      fail.push('a read comment is the same colour as the filename under it');
+    }
+  }
 }
 if (after.unread !== before.unread) fail.push(`tile refresh changed unread ${before.unread} -> ${after.unread}`);
 if (Number(groupBadge) !== before.waiting + before.unread) {
@@ -114,12 +152,65 @@ if (Number(groupBadge) !== before.waiting + before.unread) {
 }
 for (const h of heads) if (h.busy === 'true') fail.push(`${h.id} still shows a skeleton`);
 
-// Clicking a comment opens the file it is about.
-await page.click('[data-tile-id="comments"] .tma-portal-comment-row');
+/*
+ * Opening a thread reads it — and the row has to say so on the way back,
+ * not on the next poll. Marked through the same endpoint the Workflows page
+ * uses, then the board is re-asked the way its own timer would.
+ */
+{
+  const target = comments.find((c) => c.unread);
+  if (target) {
+    await page.evaluate(async (id) => {
+      const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+      await fetch(`/portal/files/workflows/comments/${id}/read`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
+        },
+      });
+    }, target.id);
+
+    // The board polls; force the same read rather than waiting a minute for it.
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('tma-workflow-counts', { detail: {} })));
+    await page.waitForTimeout(2000);
+
+    const after = (await readComments()).find((c) => c.id === target.id);
+    if (!after) fail.push('the row vanished once it was read');
+    else if (after.unread) fail.push(`"${after.body}" was read but still draws as unread`);
+  }
+}
+
+/*
+ * Clicking a comment opens the file it is about — and that click is also the
+ * reading, so the row has to come back read.
+ *
+ * Asserted on the outcome rather than the mechanism, because two things can
+ * produce it: the tile posts the mark itself (with `keepalive`, since the same
+ * click navigates away and an ordinary fetch would be cancelled on the way
+ * out), and the file's own comments panel marks its threads read once it
+ * loads. Either is a correct answer to "did opening it read it"; a row still
+ * bold after you have been and looked at it is not.
+ *
+ * The reload matters: the tile turns the row grey optimistically, so a dropped
+ * mark looks identical until you come back.
+ */
+const clicked = (await readComments()).find((c) => c.unread) || (await readComments())[0];
+await page.click(`[data-home-work-comment="${clicked.id}"]`);
 await page.waitForTimeout(2500);
 const url = page.url();
 console.log('after clicking a comment:', url);
 if (!url.includes('/folders/all?') || !url.includes('file=')) fail.push(`comment click went to ${url}`);
+
+await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+await page.waitForSelector('.tma-portal-comment-row');
+await page.waitForTimeout(2000);
+const back = (await readComments()).find((c) => c.id === clicked.id);
+console.log('the clicked row, on the way back:', back && { unread: back.unread, weight: back.weight });
+if (!back) fail.push('the clicked row was gone on the way back');
+else if (back.unread) fail.push('opening a comment did not mark it read — the keepalive mark was dropped');
 
 if (errors.length) fail.push(`console errors: ${errors.join(' | ')}`);
 console.log(fail.length ? 'FAIL\n' + fail.join('\n') : 'PASS');
