@@ -28,12 +28,13 @@
   function net() { return window.TMAFilesNet; }
   function esc(s) { return ui() ? ui().esc(s) : String(s || ''); }
 
+  // true = staff, false = client, null = /me not loaded yet. The server's
+  // answer, same as portal-home.js: account types are Role's business, and the
+  // pair this used to compare against never learned about the officer types.
   function isStaffUser() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
     if (!me) return null;
-    if (me.isAdmin) return true;
-    var type = String(me.accountType || '');
-    return type === 'Administrator' || type === 'Employee';
+    return !!(me.isAdmin || me.isStaff);
   }
 
   function navigate(nav) {

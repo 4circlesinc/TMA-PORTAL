@@ -8,6 +8,7 @@ use App\Models\CalendarMember;
 use App\Models\CalendarSubscription;
 use App\Models\Group;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Calendar\CalendarAccess;
 use App\Support\Calendar\CalendarAudit;
 use App\Support\Calendar\CalendarColours;
@@ -293,8 +294,11 @@ class CalendarController extends Controller
             ->values();
 
         // Staff search, so a colleague's calendar can be requested by name.
+        // Role::STAFF, not a hand-written pair: the officer account type was
+        // missing from the old list, so the people most likely to be searched
+        // for could not be found at all.
         $people = User::query()
-            ->whereIn('account_type', ['Administrator', 'Employee'])
+            ->whereIn('account_type', Role::STAFF)
             ->where('id', '!=', $user->id)
             ->when($query !== '', fn ($q) => $q->where(function ($w) use ($query, $like) {
                 $w->where('name', $like, '%'.$query.'%')

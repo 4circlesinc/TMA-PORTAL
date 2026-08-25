@@ -32,9 +32,6 @@ final class RecipientSuggester
 
     private const PRIOR_SCAN = 200;
 
-    /** @var list<string> */
-    private const STAFF = ['Administrator', 'Employee'];
-
     /**
      * @return list<array<string, mixed>>
      */

@@ -18,9 +18,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class MailPreviewController extends Controller
 {
-    /** Only the firm's own people may browse the gallery. */
-    private const STAFF = ['Administrator', 'Employee'];
-
     public function index(Request $request)
     {
         abort_unless(

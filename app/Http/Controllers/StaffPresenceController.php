@@ -27,8 +27,16 @@ class StaffPresenceController extends Controller
             return response()->json(['staff' => false, 'employees' => []]);
         }
 
+        /*
+         * Everyone who works here, which is Role::STAFF and not a hand-written
+         * list. This read was ['Administrator', 'Employee'], written before the
+         * officer account type existed, so the board showed exactly the wrong
+         * half of the firm: the parked Employee rows (who are held on the
+         * role-pending screen and cannot open the portal at all) were counted,
+         * and every CRO / Reviewing officer was left out.
+         */
         $users = User::query()
-            ->whereIn('account_type', ['Administrator', 'Employee'])
+            ->whereIn('account_type', Role::STAFF)
             ->where('status', User::STATUS_APPROVED)
             ->with('presence')
             ->orderBy('name')

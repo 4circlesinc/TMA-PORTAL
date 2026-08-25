@@ -2262,13 +2262,17 @@
     }
   }
 
-  // true = staff, false = client, null = /me not loaded yet
+  /* true = staff, false = client, null = /me not loaded yet.
+
+     The answer is the server's: /me already reports isStaff from
+     App\Support\Access\Role, which knows about the officer account types and
+     their legacy spellings. Reading accountType against a hand-written pair of
+     type names, as this did, filed every CRO / Reviewing officer under
+     "client" and hid the staff half of the home. */
   function isStaffUser() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
     if (!me) return null;
-    if (me.isAdmin) return true;
-    var type = String(me.accountType || '');
-    return type === 'Administrator' || type === 'Employee';
+    return !!(me.isAdmin || me.isStaff);
   }
 
   var layoutHydrated = false;

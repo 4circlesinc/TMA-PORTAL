@@ -29,8 +29,6 @@ use Illuminate\Support\Str;
  */
 class CompaniesController extends Controller
 {
-    private const STAFF = ['Administrator', 'Employee'];
-
     /**
      * The client columns a company record prints for a person, in both the
      * `people` list and the `referred` preview. Notably not `data`: the blob is

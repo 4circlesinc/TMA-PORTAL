@@ -26,9 +26,6 @@ use Illuminate\Http\Request;
  */
 class ClientsController extends Controller
 {
-    /** Staff who may manage clients. Client accounts never reach this data. */
-    private const STAFF = ['Administrator', 'Employee'];
-
     /** Shortest term worth asking the database about. */
     private const SEARCH_MIN = 2;
 

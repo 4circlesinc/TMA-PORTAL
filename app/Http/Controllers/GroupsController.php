@@ -61,7 +61,10 @@ class GroupsController extends Controller
             if ($g->auto_join) {
                 // Membership is the staff list, so the stored rows aren't the
                 // count. Measured once and reused across every auto-join group.
-                $autoJoinCount ??= User::whereIn('account_type', ['Administrator', 'Employee'])
+                // Role::STAFF is the same list GroupMembership::usersIn resolves
+                // auto-join against; a hand-written one here left the officers
+                // out of the count while they were still in the group.
+                $autoJoinCount ??= User::whereIn('account_type', Role::STAFF)
                     ->where('status', User::STATUS_APPROVED)
                     ->count();
                 $count = $autoJoinCount;
