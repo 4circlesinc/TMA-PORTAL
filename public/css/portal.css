@@ -2697,12 +2697,21 @@
  *
  * WHAT MAKES A TILE GLASS ON A FLAT CARD
  *
- * Three things, and the *fill alone is not one of them*. Translucent white on
- * a near-white card is a difference of a few per cent that nobody can see, so
- * the tile is defined by its lit edge and the shadow under it — a bright
- * hairline along the top and a soft drop below, which is how a pane of glass
- * lying on a surface reads. The fill sits high (translucent, not transparent)
- * so the tile still lifts off the card rather than disappearing into it.
+ * Three edges of one bead, and the *fill is not one of them*. Translucent
+ * white on a near-white card is a difference of a few per cent nobody can see,
+ * so what draws a tile is: a faint dark hairline all the way round, a white
+ * bead along the inside of its top edge, and a soft shadow spreading below it.
+ * That is the whole trick behind the floating pill of a browser's address bar
+ * — the tile does not look like glass because it is see-through, it looks like
+ * glass because it has a lit rim and something under it.
+ *
+ * The hairline is mixed from --color-black and the bead from --color-white, so
+ * both flip with the theme rather than being a dark line that stays dark on a
+ * dark card. The shadow is written out rather than taken from a token because
+ * none of the four fit: --shadow-drop-* are tight enough to be an edge but not
+ * a lift, and --shadow-popup is a dialog's, four times too heavy under a 44px
+ * tile. It is a pair — one tight, one wide and pulled in by its spread — which
+ * is what reads as a small object resting close to a surface.
  *
  * The blur stays even though there is now a flat colour behind it. It costs
  * one composited layer and it is what keeps the treatment honest the moment
@@ -2759,20 +2768,26 @@
   height: 44px;
   box-sizing: border-box;
   border-radius: var(--radius-12);
-  border: 1px solid color-mix(in srgb, var(--color-white) 92%, transparent);
-  background: color-mix(in srgb, var(--color-white) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-black) 7%, transparent);
+  background: color-mix(in srgb, var(--color-white) 92%, transparent);
   -webkit-backdrop-filter: var(--blur-16);
   backdrop-filter: var(--blur-16);
-  /* The drop is doing the work the fill cannot on a flat card: without it a
-     translucent white square on a near-white panel has no edge at all. */
-  box-shadow: var(--shadow-glass-1), var(--shadow-drop-1);
-  transition: background-color var(--transition-base);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-white) 95%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-black) 5%, transparent),
+    0 8px 18px -10px color-mix(in srgb, var(--color-black) 35%, transparent);
+  transition: background-color var(--transition-base), box-shadow var(--transition-base);
 }
 
-/* The glass clears rather than the cell washing: the hover happens where the
-   pointer is, on the thing that looks pressable. */
+/* The glass clears and lifts a little further off the card, rather than the
+   cell washing: the hover happens where the pointer is, on the thing that
+   looks pressable. */
 .tma-portal-shortcut:hover .tma-portal-shortcut__icon {
   background: var(--color-white);
+  box-shadow:
+    inset 0 1px 0 var(--color-white),
+    0 1px 2px color-mix(in srgb, var(--color-black) 6%, transparent),
+    0 11px 22px -10px color-mix(in srgb, var(--color-black) 40%, transparent);
 }
 
 /*
