@@ -7,6 +7,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\ContactScope;
+use App\Support\Access\Role;
 use App\Support\Files\FileType;
 use App\Support\Files\Vault;
 use App\Support\Messaging\MessagingPresenter;
@@ -209,6 +210,15 @@ class MessagingGroupController extends Controller
             ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
             ->where('status', User::STATUS_APPROVED)
             ->get();
+
+        if ($conversation->auto_join || $conversation->is_default) {
+            $candidates = $candidates->filter(fn (User $member) => Role::isStaff($member))->values();
+            if ($candidates->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'memberIds' => 'Only people who work at the firm can be in this group.',
+                ]);
+            }
+        }
 
         foreach ($candidates as $member) {
             $existing = $conversation->participants()->where('user_id', $member->id)->first();

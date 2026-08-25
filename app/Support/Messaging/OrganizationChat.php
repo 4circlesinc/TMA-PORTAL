@@ -12,9 +12,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * The firm-wide default conversation.
  *
- * One group everybody is in, owned by the firm rather than by whoever created
- * it: administrators manage it, nobody leaves it, and membership follows the
- * staff list instead of being curated.
+ * One group staff are in, owned by the firm rather than by whoever created
+ * it: administrators manage it, nobody on staff leaves it, and membership
+ * follows the staff list instead of being curated. Clients and other
+ * outside accounts stay out.
  *
  * Membership is reconciled lazily, when a user loads their conversations —
  * rather than by a hook on account approval. A hook would be one more thing to
@@ -71,7 +72,12 @@ class OrganizationChat
     }
 
     /**
-     * Make sure this user is in every auto-join conversation.
+     * Make sure this user is in every auto-join conversation, or out of it.
+     *
+     * The firm chat is internal: administrators, employees, and officers.
+     * A service-provider contact opening Messages used to be folded in
+     * because this ran for every account, and the comment about following
+     * the staff list was never actually checked.
      *
      * Cheap enough to call on each conversation-list load: one indexed lookup
      * when there is nothing to do, which is the normal case.
@@ -88,6 +94,12 @@ class OrganizationChat
             ->get();
 
         foreach ($conversations as $conversation) {
+            self::pruneOutsiders($conversation);
+
+            if (! Role::isStaff($user)) {
+                continue;
+            }
+
             $participant = $conversation->participants()
                 ->where('user_id', $user->id)
                 ->first();
@@ -101,8 +113,6 @@ class OrganizationChat
                 : ConversationParticipant::ROLE_MEMBER;
 
             if ($participant) {
-                // Somebody removed them, or they predate auto_join. Either way
-                // membership follows the staff list, so put them back.
                 $participant->forceFill([
                     'left_at' => null,
                     'joined_at' => now(),
@@ -119,5 +129,18 @@ class OrganizationChat
                 'pinned_at' => now(),
             ]);
         }
+    }
+
+    /** Drop anyone who does not work here from a firm-wide chat. */
+    private static function pruneOutsiders(Conversation $conversation): void
+    {
+        ConversationParticipant::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNull('left_at')
+            ->whereIn(
+                'user_id',
+                User::query()->select('id')->whereNotIn('account_type', Role::STAFF)
+            )
+            ->update(['left_at' => now()]);
     }
 }

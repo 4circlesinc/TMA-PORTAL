@@ -28,12 +28,12 @@ use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
-use App\Support\Presence\AvailabilityService;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
 use App\Support\Messaging\TabCounts;
+use App\Support\Presence\AvailabilityService;
 use App\Support\UserTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,8 +61,9 @@ class MessagingController extends Controller
     {
         $user = $request->user();
 
-        // Self-healing membership for firm-wide chats: anyone approved after
-        // one was created is added on their next visit.
+        // Self-healing membership for firm-wide chats: staff approved after
+        // one was created are added on their next visit. Outside accounts
+        // are kept out, and dropped if they were already in.
         OrganizationChat::syncMembership($user);
 
         $conversations = Conversation::query()
