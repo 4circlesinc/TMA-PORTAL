@@ -8,9 +8,6 @@ use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\OnboardingProgress;
 use App\Models\User;
-use App\Support\Companies\CompanyMembers;
-use App\Support\Companies\CompanyRoles;
-use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\Onboarding\ClientFlow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -176,126 +173,6 @@ class ClientOnboardingTest extends TestCase
         ]);
 
         $this->actingAs($staff)->get('/')->assertRedirect(route('getting-started'));
-    }
-
-    public function test_a_service_provider_contact_uses_the_original_setup_screens(): void
-    {
-        $admin = User::factory()->create([
-            'status' => 'approved',
-            'account_type' => 'Administrator',
-            'email_verified_at' => now(),
-            'profile_completed_at' => now(),
-            'onboarding_completed_at' => now(),
-        ]);
-        $company = Company::create([
-            'uid' => 'galaxy-partners',
-            'name' => 'Galaxy Partners',
-            'status' => 'active',
-        ]);
-        $user = User::factory()->create([
-            'status' => 'approved',
-            'account_type' => 'Client',
-            'email' => 'travis@galaxy.test',
-            'email_verified_at' => now(),
-            'profile_completed_at' => now(),
-            'onboarding_completed_at' => null,
-            'first_name' => 'Travis',
-            'last_name' => 'Hall',
-        ]);
-        CompanyMembers::add($company, [
-            'name' => 'Travis Hall',
-            'email' => $user->email,
-            'role' => CompanyRoles::MEMBER,
-        ], $admin);
-
-        $this->assertFalse(AccountSetupFlow::usesClientWizard($user));
-
-        $this->actingAs($user)->get('/')->assertRedirect(route('getting-started'));
-        $this->actingAs($user)->get('/onboarding')->assertRedirect(route('getting-started'));
-        $this->actingAs($user)->get('/onboarding/welcome')->assertRedirect(route('getting-started'));
-
-        $total = AccountSetupFlow::position(AccountSetupFlow::ACCOUNTS, $user)['total'];
-
-        $this->actingAs($user)
-            ->get(route('getting-started'))
-            ->assertOk()
-            ->assertSee('Set up your account')
-            ->assertSee("1 of {$total}", false)
-            ->assertSee('complete')
-            ->assertDontSee('Step 1')
-            ->assertDontSee('Welcome, Travis')
-            ->assertDontSee('Get started');
-    }
-
-    public function test_a_service_provider_contact_sets_up_their_profile_like_staff(): void
-    {
-        $admin = User::factory()->create([
-            'status' => 'approved',
-            'account_type' => 'Administrator',
-            'email_verified_at' => now(),
-            'profile_completed_at' => now(),
-            'onboarding_completed_at' => now(),
-        ]);
-        $company = Company::create([
-            'uid' => 'galaxy-partners',
-            'name' => 'Galaxy Partners',
-            'status' => 'active',
-        ]);
-        $user = User::factory()->create([
-            'status' => 'approved',
-            'account_type' => 'Client',
-            'email' => 'travis@galaxy.test',
-            'email_verified_at' => now(),
-            'profile_completed_at' => null,
-            'onboarding_completed_at' => null,
-            'first_name' => 'Travis',
-            'last_name' => 'Hall',
-        ]);
-        CompanyMembers::add($company, [
-            'name' => 'Travis Hall',
-            'email' => $user->email,
-            'role' => CompanyRoles::MEMBER,
-        ], $admin);
-
-        $this->actingAs($user)->get('/')->assertRedirect(route('profile-setup'));
-        $this->actingAs($user)->get('/onboarding')->assertRedirect(route('profile-setup'));
-        $this->actingAs($user)
-            ->get(route('profile-setup'))
-            ->assertOk()
-            ->assertSee('Set up your profile')
-            ->assertDontSee('Welcome, Travis')
-            ->assertDontSee('Step 1 of');
-    }
-
-    public function test_a_contact_linked_to_a_company_skips_the_client_wizard(): void
-    {
-        $company = Company::create([
-            'uid' => 'galaxy-partners',
-            'name' => 'Galaxy Partners',
-            'status' => 'active',
-        ]);
-        $user = User::factory()->create([
-            'status' => 'approved',
-            'account_type' => 'Client',
-            'email_verified_at' => now(),
-            'profile_completed_at' => now(),
-            'onboarding_completed_at' => null,
-            'first_name' => 'Travis',
-            'last_name' => 'Hall',
-        ]);
-        Client::create([
-            'uid' => 'travis-hall',
-            'name' => 'Travis Hall',
-            'email' => $user->email,
-            'user_id' => $user->id,
-            'company_id' => $company->id,
-            'initial' => 'T',
-            'initial_color' => 'blue',
-            'data' => [],
-        ]);
-
-        $this->actingAs($user)->get('/')->assertRedirect(route('getting-started'));
-        $this->actingAs($user)->get('/onboarding')->assertRedirect(route('getting-started'));
     }
 
     // ------------------------------------------------------------ every screen

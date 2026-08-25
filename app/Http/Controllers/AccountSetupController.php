@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\AuthenticatorApp;
 use App\Support\Notifications\NotificationPreferences;
 use App\Support\Notifications\NotificationType;
@@ -331,7 +332,7 @@ class AccountSetupController extends Controller
             return false;
         }
 
-        if (AccountSetupFlow::usesClientWizard($user)) {
+        if (Role::isClient($user)) {
             $progress = $user->onboardingProgress;
 
             return ! $progress || $progress->completed_at === null;
@@ -342,7 +343,7 @@ class AccountSetupController extends Controller
 
     private function accountsRedirect(User $user): RedirectResponse
     {
-        if (AccountSetupFlow::usesClientWizard($user)) {
+        if (Role::isClient($user)) {
             return redirect()->route('onboarding.index');
         }
 
