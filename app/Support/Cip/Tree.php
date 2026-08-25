@@ -8,6 +8,7 @@ use App\Models\Client;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\FolderTree;
 use Illuminate\Support\Str;
 
 /**
@@ -83,7 +84,39 @@ class Tree
             $application->forceFill(['folder_id' => $root->id])->save();
         }
 
+        self::stampClient($root, $client);
+
         return $root;
+    }
+
+    /**
+     * Give every folder in the tree the client it sits under.
+     *
+     * `folders.client_id` is a denormalisation the readers lean on:
+     * {@see \App\Support\Cip\Attention} and
+     * {@see \App\Support\Files\CommentReads::unreadByClient} find a
+     * client's documents by joining it, so a folder that does not carry it is
+     * a folder whose conversations no indicator can see.
+     *
+     * It was only ever written at creation, copied from whatever the parent
+     * held at that moment, and two paths leave it NULL: a tree built before
+     * the client row existed, and {@see self::childNamed} finding a folder by
+     * name instead of making one, which returns it as it is. Nothing went
+     * back for either. Chen Wei's Main Applicant folder held 21 comments and
+     * a NULL, so the dot that exists to find them could not see a single one.
+     *
+     * Only NULLs are filled. A folder naming a different client is making a
+     * claim this method has no better information than, and quietly
+     * reassigning documents between clients is not a repair.
+     */
+    private static function stampClient(Folder $root, Client $client): void
+    {
+        $ids = array_merge([$root->id], FolderTree::descendantIdsWithTrashed($root));
+
+        Folder::withTrashed()
+            ->whereIn('id', $ids)
+            ->whereNull('client_id')
+            ->update(['client_id' => $client->id]);
     }
 
     /**
