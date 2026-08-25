@@ -25,6 +25,7 @@ use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
+use App\Support\Messaging\ClientConversations;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
@@ -65,6 +66,7 @@ class MessagingController extends Controller
         // one was created are added on their next visit. Outside accounts
         // are kept out, and dropped if they were already in.
         OrganizationChat::syncMembership($user);
+        ClientConversations::attachLogin($user);
 
         $conversations = Conversation::query()
             ->forUser($user)
@@ -1654,7 +1656,7 @@ class MessagingController extends Controller
             abort(403, 'This conversation is unavailable.');
         }
 
-        $conversation = $this->findOrCreateDirect($user, $other);
+        $conversation = ClientConversations::resolveDirect($user, $other);
         $conversation->load(['activeParticipants.user', 'messages' => fn ($q) => $q->latest('id')->limit(1)]);
 
         return response()->json([
@@ -1786,40 +1788,5 @@ class MessagingController extends Controller
         if ($other && UserBlock::blockedBetween($user->id, $other->id)) {
             abort(403, 'This conversation is unavailable.');
         }
-    }
-
-    /**
-     * Exactly one direct thread may exist per pair, so reopening a chat lands
-     * back in the same history instead of starting an empty duplicate.
-     */
-    private function findOrCreateDirect(User $user, User $other): Conversation
-    {
-        $existing = Conversation::query()
-            ->where('type', Conversation::TYPE_DIRECT)
-            ->whereHas('participants', fn ($q) => $q->where('user_id', $user->id)->whereNull('left_at'))
-            ->whereHas('participants', fn ($q) => $q->where('user_id', $other->id)->whereNull('left_at'))
-            ->first();
-
-        if ($existing) {
-            return $existing;
-        }
-
-        return DB::transaction(function () use ($user, $other) {
-            $conversation = Conversation::create([
-                'type' => Conversation::TYPE_DIRECT,
-                'created_by' => $user->id,
-                'last_message_at' => now(),
-            ]);
-
-            foreach ([$user, $other] as $member) {
-                $conversation->participants()->create([
-                    'user_id' => $member->id,
-                    'role' => ConversationParticipant::ROLE_MEMBER,
-                    'joined_at' => now(),
-                ]);
-            }
-
-            return $conversation;
-        });
     }
 }

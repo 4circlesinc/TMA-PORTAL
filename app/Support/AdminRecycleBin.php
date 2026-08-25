@@ -18,6 +18,7 @@ use App\Support\Files\Presenter;
 use App\Support\Files\SystemFolders;
 use App\Support\Files\Thumbnail;
 use App\Support\Files\Vault;
+use App\Support\Messaging\ClientConversations;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -526,6 +527,7 @@ class AdminRecycleBin
             return;
         }
 
+        ClientConversations::preserveForLogin($user);
         SystemFolders::rehome([$user->id], $user->deleted_by ?: $user->id);
         CompanyMembers::parkForPurgedLogin($user);
         $user->forceDelete();

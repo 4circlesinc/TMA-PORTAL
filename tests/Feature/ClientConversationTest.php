@@ -8,6 +8,8 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\Conversation;
+use App\Models\ConversationParticipant;
+use App\Models\Message;
 use App\Models\User;
 use App\Support\Cip\Applications;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -264,5 +266,109 @@ class ClientConversationTest extends TestCase
         $this->actingAs($outsider)
             ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
             ->assertForbidden();
+    }
+
+    public function test_purging_a_login_and_inviting_again_keeps_the_person_thread_and_recordings(): void
+    {
+        $login = $this->portalUser();
+        $fx = $this->applicantWithProvider($login);
+
+        $id = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'person'])
+            ->json('conversation.id');
+
+        $conversation = Conversation::where('uuid', $id)->firstOrFail();
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $fx['staff']->id,
+            'type' => Message::TYPE_TEXT,
+            'body' => 'Please send the passport scan.',
+        ]);
+        CallRecording::create([
+            'uuid' => '22222222-2222-2222-2222-222222222222',
+            'conversation_id' => $conversation->id,
+            'client_id' => $fx['client']->id,
+            'client_user_id' => $login->id,
+            'recorded_by' => $fx['staff']->id,
+            'participants' => [],
+            'client_name' => $fx['client']->name,
+            'media' => 'audio',
+            'status' => CallRecording::STATUS_READY,
+            'started_at' => now(),
+        ]);
+
+        $this->actingAs($fx['staff'])->deleteJson('/admin/users/'.$login->id)->assertOk();
+        $this->actingAs($fx['staff'])->deleteJson('/portal/admin/recycle-bin/user/'.$login->id)->assertOk();
+
+        $this->assertSame($id, $conversation->fresh()->uuid);
+        $this->assertFalse(
+            ConversationParticipant::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('user_id', $login->id)
+                ->exists()
+        );
+
+        $again = $this->portalUser();
+        $fx['client']->refresh()->forceFill(['user_id' => $again->id])->save();
+
+        $reused = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'person'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        $this->assertSame($id, $reused);
+        $this->assertTrue(
+            ConversationParticipant::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('user_id', $again->id)
+                ->whereNull('left_at')
+                ->exists()
+        );
+
+        $this->actingAs($again)->getJson('/portal/messaging/conversations')->assertOk();
+        $ids = collect($this->actingAs($again)->getJson('/portal/messaging/conversations')->json('conversations'))
+            ->pluck('id');
+        $this->assertTrue($ids->contains($id));
+
+        $bodies = collect(
+            $this->actingAs($again)->getJson('/portal/messaging/conversations/'.$id.'/messages')->json('messages')
+        )->pluck('body');
+        $this->assertTrue($bodies->contains('Please send the passport scan.'));
+
+        $this->assertSame($again->id, CallRecording::first()->client_user_id);
+        $this->actingAs($fx['staff'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->assertJsonPath('recordings.0.clientName', 'Ahmed Hassan');
+    }
+
+    public function test_a_new_provider_contact_joins_the_existing_case_thread(): void
+    {
+        $fx = $this->applicantWithProvider();
+
+        $id = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->json('conversation.id');
+
+        $colleague = $this->portalUser();
+        CompanyMember::create([
+            'company_id' => $fx['company']->id,
+            'user_id' => $colleague->id,
+            'name' => $colleague->name,
+            'email' => $colleague->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($colleague)->getJson('/portal/messaging/conversations')->assertOk();
+
+        $conversation = Conversation::where('uuid', $id)->firstOrFail();
+        $this->assertTrue(
+            $conversation->activeParticipants()->where('user_id', $colleague->id)->exists()
+        );
+
+        $ids = collect($this->actingAs($colleague)->getJson('/portal/messaging/conversations')->json('conversations'))
+            ->pluck('id');
+        $this->assertTrue($ids->contains($id));
     }
 }

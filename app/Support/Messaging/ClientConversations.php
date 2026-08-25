@@ -2,6 +2,7 @@
 
 namespace App\Support\Messaging;
 
+use App\Models\CallRecording;
 use App\Models\CipApplication;
 use App\Models\Client;
 use App\Models\Company;
@@ -11,6 +12,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\FolderAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +29,11 @@ use Illuminate\Validation\ValidationException;
  * sign in. Opening it again, including from another officer, joins that same
  * history rather than starting a parallel chat. Private DMs stay the ordinary
  * one-to-one thread, tagged so they also appear on the applicant's profile.
+ *
+ * History follows the client (and the provider firm), not the current login.
+ * A contact who is purged and invited again, or a colleague at the same firm
+ * who creates an account, is put back in those threads so the messages and
+ * call recordings on the file stay reachable.
  */
 class ClientConversations
 {
@@ -234,39 +241,60 @@ class ClientConversations
             ]);
         }
 
-        return DB::transaction(function () use ($client, $actor, $other) {
+        return self::resolveDirect($actor, $other, $client);
+    }
+
+    /**
+     * Open (or reuse) a 1:1, tagging it onto the client when one of the people
+     * is that client's login. Staff messaging a replacement login land in the
+     * same thread they had with the previous account.
+     */
+    public static function resolveDirect(User $user, User $other, ?Client $client = null): Conversation
+    {
+        $client ??= self::clientBetween($user, $other);
+
+        return DB::transaction(function () use ($user, $other, $client) {
             $existing = Conversation::query()
                 ->where('type', Conversation::TYPE_DIRECT)
-                ->whereHas('participants', fn ($q) => $q->where('user_id', $actor->id)->whereNull('left_at'))
+                ->whereHas('participants', fn ($q) => $q->where('user_id', $user->id)->whereNull('left_at'))
                 ->whereHas('participants', fn ($q) => $q->where('user_id', $other->id)->whereNull('left_at'))
                 ->lockForUpdate()
                 ->first();
 
             if ($existing) {
-                if ($existing->client_id === null) {
-                    $existing->forceFill([
-                        'client_id' => $client->id,
-                        'subject' => Conversation::SUBJECT_PERSON,
-                    ])->save();
-                }
+                self::tagDirect($existing, $client);
 
-                return $existing->fresh([
-                    'activeParticipants.user.presence',
-                    'client:id,uid,name',
-                    'company:id,uid,name',
-                    'messages' => fn ($q) => $q->latest('id')->limit(1),
-                ]);
+                return self::freshDirect($existing);
+            }
+
+            $staff = Role::isStaff($user) ? $user : (Role::isStaff($other) ? $other : null);
+            if ($client && $staff) {
+                $orphaned = Conversation::query()
+                    ->where('type', Conversation::TYPE_DIRECT)
+                    ->where('client_id', $client->id)
+                    ->where(fn ($q) => $q->where('subject', Conversation::SUBJECT_PERSON)->orWhereNull('subject'))
+                    ->whereHas('participants', fn ($q) => $q->where('user_id', $staff->id)->whereNull('left_at'))
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($orphaned) {
+                    self::ensureMember($orphaned, $user, ConversationParticipant::ROLE_MEMBER);
+                    self::ensureMember($orphaned, $other, ConversationParticipant::ROLE_MEMBER);
+                    self::tagDirect($orphaned, $client);
+
+                    return self::freshDirect($orphaned);
+                }
             }
 
             $conversation = Conversation::create([
                 'type' => Conversation::TYPE_DIRECT,
-                'created_by' => $actor->id,
-                'client_id' => $client->id,
-                'subject' => Conversation::SUBJECT_PERSON,
+                'created_by' => $user->id,
+                'client_id' => $client?->id,
+                'subject' => $client ? Conversation::SUBJECT_PERSON : null,
                 'last_message_at' => now(),
             ]);
 
-            foreach ([$actor, $other] as $member) {
+            foreach ([$user, $other] as $member) {
                 $conversation->participants()->create([
                     'user_id' => $member->id,
                     'role' => ConversationParticipant::ROLE_MEMBER,
@@ -274,13 +302,101 @@ class ClientConversations
                 ]);
             }
 
-            return $conversation->fresh([
-                'activeParticipants.user.presence',
-                'client:id,uid,name',
-                'company:id,uid,name',
-                'messages' => fn ($q) => $q->latest('id')->limit(1),
-            ]);
+            return self::freshDirect($conversation);
         });
+    }
+
+    /**
+     * Put this login into the threads that belong on their client file.
+     *
+     * The applicant's current account joins every private DM tagged on that
+     * client. A provider-firm contact joins every case thread their firm
+     * already has about those applicants, including ones opened before they
+     * had an account.
+     */
+    public static function attachLogin(User $user): void
+    {
+        $clientIds = Client::query()->where('user_id', $user->id)->pluck('id');
+
+        if ($clientIds->isNotEmpty()) {
+            Conversation::query()
+                ->whereIn('client_id', $clientIds)
+                ->where(function ($q) {
+                    $q->where('subject', Conversation::SUBJECT_PERSON)
+                        ->orWhere(fn ($w) => $w->where('type', Conversation::TYPE_DIRECT)->whereNull('subject'));
+                })
+                ->get()
+                ->each(fn (Conversation $conversation) => self::ensureMember(
+                    $conversation, $user, ConversationParticipant::ROLE_MEMBER
+                ));
+
+            CallRecording::query()
+                ->whereIn('client_id', $clientIds)
+                ->update(['client_user_id' => $user->id]);
+        }
+
+        $companyIds = CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->pluck('company_id');
+
+        if ($companyIds->isEmpty()) {
+            return;
+        }
+
+        $firmClientIds = FolderAccess::clientIdsFor($user);
+
+        Conversation::query()
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->where(function ($q) use ($companyIds, $firmClientIds) {
+                $q->whereIn('company_id', $companyIds);
+                if ($firmClientIds !== []) {
+                    $q->orWhereIn('client_id', $firmClientIds);
+                }
+            })
+            ->get()
+            ->each(fn (Conversation $conversation) => self::ensureMember(
+                $conversation, $user, ConversationParticipant::ROLE_MEMBER
+            ));
+    }
+
+    /**
+     * Stamp client/company on threads this login is in, so a purge that drops
+     * their participant row still leaves a file to reattach the next account.
+     */
+    public static function preserveForLogin(User $user): void
+    {
+        $conversationIds = ConversationParticipant::query()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->pluck('conversation_id');
+
+        if ($conversationIds->isEmpty()) {
+            return;
+        }
+
+        $clientId = Client::query()->where('user_id', $user->id)->value('id');
+        $companyId = CompanyMember::query()->where('user_id', $user->id)->value('company_id');
+
+        Conversation::query()
+            ->whereIn('id', $conversationIds)
+            ->get()
+            ->each(function (Conversation $conversation) use ($clientId, $companyId) {
+                $patch = [];
+
+                if ($clientId && $conversation->type === Conversation::TYPE_DIRECT && $conversation->client_id === null) {
+                    $patch['client_id'] = $clientId;
+                    $patch['subject'] = Conversation::SUBJECT_PERSON;
+                }
+
+                if ($companyId && $conversation->company_id === null && $conversation->subject === Conversation::SUBJECT_PROVIDER) {
+                    $patch['company_id'] = $companyId;
+                }
+
+                if ($patch !== []) {
+                    $conversation->forceFill($patch)->save();
+                }
+            });
     }
 
     /**
@@ -321,6 +437,35 @@ class ClientConversations
             ->filter()
             ->unique('id')
             ->values();
+    }
+
+    private static function clientBetween(User $user, User $other): ?Client
+    {
+        return Client::query()
+            ->whereIn('user_id', [$user->id, $other->id])
+            ->first();
+    }
+
+    private static function tagDirect(Conversation $conversation, ?Client $client): void
+    {
+        if (! $client || $conversation->client_id !== null) {
+            return;
+        }
+
+        $conversation->forceFill([
+            'client_id' => $client->id,
+            'subject' => Conversation::SUBJECT_PERSON,
+        ])->save();
+    }
+
+    private static function freshDirect(Conversation $conversation): Conversation
+    {
+        return $conversation->fresh([
+            'activeParticipants.user.presence',
+            'client:id,uid,name',
+            'company:id,uid,name',
+            'messages' => fn ($q) => $q->latest('id')->limit(1),
+        ]) ?? $conversation;
     }
 
     private static function ensureMember(Conversation $conversation, User $user, string $role): void

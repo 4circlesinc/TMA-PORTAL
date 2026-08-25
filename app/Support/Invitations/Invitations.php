@@ -16,6 +16,7 @@ use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -334,6 +335,8 @@ final class Invitations
                 $client->forceFill(['company_id' => $invitation->company_id])->save();
             }
         }
+
+        ClientConversations::attachLogin($user);
 
         $invitation->forceFill([
             'status' => Invitation::STATUS_ACCEPTED,

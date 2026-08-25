@@ -9,6 +9,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Invitations\Invitations;
+use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Str;
 
@@ -94,6 +95,7 @@ final class CompanyMembers
                 'subject' => $company,
                 'action_url' => '/clients',
             ]);
+            ClientConversations::attachLogin($member->user);
         }
 
         return $member->fresh();
@@ -189,6 +191,8 @@ final class CompanyMembers
             'status' => CompanyMember::STATUS_ACTIVE,
             'name' => $user->name ?: $member->name,
         ])->save();
+
+        ClientConversations::attachLogin($user);
     }
 
     /** Change a member's role, reseeding their permissions from it. */
