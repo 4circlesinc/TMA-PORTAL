@@ -6,6 +6,8 @@
   <main class="tma-auth">
     <div class="tma-auth__body">
       <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="getting-started-title">
+        <div class="tma-auth__card-scroll">
+          <div class="tma-auth__card-scroll-inner">
         <div class="tma-auth__icon" aria-hidden="true">
           <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
         </div>
@@ -139,6 +141,8 @@
             <button type="submit" class="tma-auth__submit">Continue</button>
           @endif
         </form>
+          </div>
+        </div>
       </section>
     </div>
 

@@ -6,14 +6,18 @@
   <main class="tma-auth" data-account-setup data-step="{{ $step }}">
     <div class="tma-auth__body">
       <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="setup-title">
-        @if ($errors->any())
-          <div class="tma-auth__alert tma-auth__alert--error" role="alert">
-            <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
-            <span>{{ $errors->first() }}</span>
-          </div>
-        @endif
+        <div class="tma-auth__card-scroll">
+          <div class="tma-auth__card-scroll-inner">
+            @if ($errors->any())
+              <div class="tma-auth__alert tma-auth__alert--error" role="alert">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+                <span>{{ $errors->first() }}</span>
+              </div>
+            @endif
 
-        @yield('setup-content')
+            @yield('setup-content')
+          </div>
+        </div>
       </section>
     </div>
 

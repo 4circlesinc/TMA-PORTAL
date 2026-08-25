@@ -64,6 +64,55 @@
 .tma-auth__card--tall {
   min-height: min(784px, calc(100vh - var(--auth-chrome)));
   min-height: min(784px, calc(100dvh - var(--auth-chrome)));
+  max-height: calc(100vh - var(--auth-chrome));
+  max-height: calc(100dvh - var(--auth-chrome));
+  overflow: hidden;
+  gap: 0;
+}
+
+/*
+ * The page stays put. Anything that does not fit scrolls inside the card,
+ * so Continue is never stranded below the window on a short laptop.
+ */
+html:has(.tma-auth__card--tall),
+body:has(.tma-auth__card--tall) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.tma-auth:has(.tma-auth__card--tall) {
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.tma-auth:has(.tma-auth__card--tall) .tma-auth__body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tma-auth__card-scroll {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.tma-auth__card-scroll-inner {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-28);
+  margin-block: auto;
+  flex: 0 0 auto;
 }
 
 .tma-auth__icon {
@@ -1046,6 +1095,14 @@
     padding: var(--space-16) var(--space-24);
   }
 
+  .tma-auth__card--tall {
+    gap: 0;
+  }
+
+  .tma-auth__card-scroll-inner {
+    gap: var(--space-16);
+  }
+
   /*
    * The mark above the heading, which this tier used to leave at its full 80px
    * while trimming everything around it. Set up your account is the screen that
@@ -1109,8 +1166,12 @@
  */
 @media (max-height: 820px) {
   .tma-auth__card--tall {
-    gap: var(--space-12);
+    gap: 0;
     padding: var(--space-12) var(--space-24);
+  }
+
+  .tma-auth__card--tall .tma-auth__card-scroll-inner {
+    gap: var(--space-12);
   }
 
   .tma-auth__card--tall .tma-auth__icon,

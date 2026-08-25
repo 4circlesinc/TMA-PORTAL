@@ -105,6 +105,8 @@
   <main class="tma-auth">
     <div class="tma-auth__body">
       <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="profile-setup-title">
+        <div class="tma-auth__card-scroll">
+          <div class="tma-auth__card-scroll-inner">
         <div class="tma-auth__intro">
           <h1 class="tma-auth__title" id="profile-setup-title">Set up your profile</h1>
           <p class="tma-auth__subtitle">This is how colleagues and clients see you.</p>
@@ -251,6 +253,8 @@
 
           <button type="submit" class="tma-auth__submit">Continue</button>
         </form>
+          </div>
+        </div>
       </section>
     </div>
 

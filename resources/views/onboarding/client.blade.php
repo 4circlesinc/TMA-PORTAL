@@ -58,15 +58,18 @@
   <main class="tma-auth">
     <div class="tma-auth__body">
       <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="onboarding-title">
-        @if ($errors->any())
-          <div class="tma-auth__alert tma-auth__alert--error" role="alert">
-            <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
-            <span>{{ $errors->first() }}</span>
+        <div class="tma-auth__card-scroll">
+          <div class="tma-auth__card-scroll-inner">
+            @if ($errors->any())
+              <div class="tma-auth__alert tma-auth__alert--error" role="alert">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+                <span>{{ $errors->first() }}</span>
+              </div>
+            @endif
+
+            @include('onboarding.steps.'.$step)
           </div>
-        @endif
-
-        @include('onboarding.steps.'.$step)
-
+        </div>
       </section>
     </div>
 
