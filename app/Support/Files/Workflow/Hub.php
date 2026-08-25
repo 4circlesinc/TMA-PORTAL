@@ -128,10 +128,9 @@ final class Hub
 
     /**
      * @param  array{scope?:string,q?:string,cursor?:int,limit?:int}  $filters
-     * @param  bool  $markRead  whether returning these rows counts as having read them
      * @return array{items:array,nextCursor:?int,counts:array,canSeeAll:bool}
      */
-    public static function comments(User $viewer, array $filters = [], bool $markRead = true): array
+    public static function comments(User $viewer, array $filters = []): array
     {
         $scope = in_array($filters['scope'] ?? '', self::COMMENT_SCOPES, true)
             ? $filters['scope']
@@ -194,20 +193,27 @@ final class Hub
         $paths = self::folderPaths($page->map(fn (FileComment $c) => $c->file)->all());
         $mentions = self::mentionNames($page->pluck('id'));
 
-        $items = $page->map(fn (FileComment $c) => self::comment($c, $viewer, $paths, $mentions))->values()->all();
-
         /*
-         * Every thread here is drawn in full, body and all, so this page IS
-         * the reading. Marked after the rows are shaped and before the counts
-         * are taken, or the badge would still be claiming what is on screen.
+         * Read state per row — and asking for it does not spend it.
          *
-         * A caller that only shows a line of each thread — the home board's
-         * tile — passes false. Anything else and a dashboard left open all day
-         * would silently empty the Workflows badge nobody had looked at.
+         * This listing used to mark everything read as it served it, which made
+         * the state impossible to draw: by the time a card reached the screen it
+         * was already read, so every card looked alike and nothing told the
+         * reader what was new. Listing is not reading, the same way a page of
+         * notifications is not. A thread turns read when it is opened — from
+         * here, from the file, by replying to it, or by resolving it.
          */
-        if ($markRead) {
-            CommentReads::markThreadsRead($viewer, $page->map(fn (FileComment $c) => $c->root_id ?? $c->id));
-        }
+        $unread = CommentReads::unreadThreads(
+            $viewer,
+            $page->map(fn (FileComment $c) => $c->root_id ?? $c->id)
+        );
+
+        $items = $page->map(function (FileComment $c) use ($viewer, $paths, $mentions, $unread) {
+            $row = self::comment($c, $viewer, $paths, $mentions);
+            $row['unread'] = isset($unread[$c->root_id ?? $c->id]);
+
+            return $row;
+        })->values()->all();
 
         return [
             'items' => $items,

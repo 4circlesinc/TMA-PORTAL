@@ -154,6 +154,66 @@ class FileCommentTest extends TestCase
         $this->assertNull($row($admin));
     }
 
+    /**
+     * Listing the Workflows page is not reading it.
+     *
+     * The page used to mark every thread read as it served it, which made the
+     * state impossible to draw — a card was already read by the time it
+     * reached the screen, so every card looked alike. Opening one is what
+     * reads it, the way a notification works.
+     */
+    public function test_the_workflows_listing_reports_unread_without_spending_it(): void
+    {
+        $admin = $this->user();
+        $mate = $this->user('Administrator', 'b@example.com', 'Bo Colleague');
+        $file = $this->orgFile($admin);
+
+        $thread = $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Have a look @Bo Colleague',
+            'mentions' => [$mate->id],
+        ])->assertCreated()->json('id');
+
+        $cards = fn () => $this->actingAs($mate)
+            ->getJson('/portal/files/workflows/comments')->assertOk()->json('items');
+
+        $this->assertTrue($cards()[0]['unread'], 'a thread nobody has opened arrives unread');
+
+        // Asked twice, still unread: looking at a list is not reading.
+        $this->assertTrue($cards()[0]['unread']);
+        $this->assertSame(1, Hub::counts($mate)['unread']);
+
+        // Opening it from the page is what reads it.
+        $this->actingAs($mate)
+            ->postJson("/portal/files/workflows/comments/{$thread}/read")
+            ->assertOk()
+            ->assertJsonPath('counts.unread', 0);
+
+        $this->assertFalse($cards()[0]['unread']);
+    }
+
+    /** Answering a thread means you read what you were answering. */
+    public function test_replying_to_a_thread_marks_it_read_for_the_replier(): void
+    {
+        $admin = $this->user();
+        $mate = $this->user('Administrator', 'b@example.com', 'Bo Colleague');
+        $file = $this->orgFile($admin);
+
+        $thread = $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Is this the latest? @Bo Colleague',
+            'mentions' => [$mate->id],
+        ])->assertCreated()->json('id');
+
+        $this->assertSame(1, Hub::counts($mate)['unread']);
+
+        $this->actingAs($mate)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'It is',
+            'parent' => $thread,
+        ])->assertCreated();
+
+        $this->assertSame(0, Hub::counts($mate)['unread'], 'answering it is reading it');
+        $this->assertSame(1, Hub::counts($admin)['unread'], 'and the answer is unread to the person who asked');
+    }
+
     /** Being named buys you the whole conversation, not one comment of it. */
     public function test_a_reply_in_a_thread_that_named_you_is_unread_to_you(): void
     {

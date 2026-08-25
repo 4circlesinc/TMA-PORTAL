@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -141,8 +142,25 @@ class DashboardWorkTest extends TestCase
             ->assertOk()
             ->assertJsonPath('counts.unread', 1);
 
-        // Opening the list that draws the threads in full still does.
-        $this->actingAs($ben)->getJson('/portal/files/workflows/comments?scope=mine')->assertOk();
+        /*
+         * Nor does the Workflows list. It used to, and that made the state
+         * impossible to draw: a card was already read by the time it reached
+         * the screen, so unread and read cards looked alike. Listing is not
+         * reading anywhere now — opening a thread is what reads it.
+         */
+        $this->actingAs($ben)->getJson('/portal/files/workflows/comments?scope=mine')
+            ->assertOk()
+            ->assertJsonPath('items.0.unread', true);
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work')
+            ->assertOk()
+            ->assertJsonPath('counts.unread', 1);
+
+        // Opening one is.
+        $comment = FileComment::query()->whereNull('parent_id')->firstOrFail();
+        $this->actingAs($ben)
+            ->postJson("/portal/files/workflows/comments/{$comment->uuid}/read")
+            ->assertOk();
 
         $this->actingAs($ben)->getJson('/portal/dashboard/work')
             ->assertOk()

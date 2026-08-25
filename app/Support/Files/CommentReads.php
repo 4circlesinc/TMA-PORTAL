@@ -266,6 +266,33 @@ final class CommentReads
             ->all();
     }
 
+    /**
+     * Which of these threads are unread for this reader.
+     *
+     * Returned as a lookup rather than a count, because the caller is drawing
+     * one card per thread and needs to know about each. Asking does not change
+     * anything: listing is not reading.
+     *
+     * @param  iterable<int>  $rootIds
+     * @return array<int, true>
+     */
+    public static function unreadThreads(User $user, iterable $rootIds): array
+    {
+        $ids = collect($rootIds)->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return self::unreadQuery($user)
+            ->whereIn('file_comments.root_id', $ids->all())
+            ->distinct()
+            ->pluck('file_comments.root_id')
+            ->flip()
+            ->map(fn () => true)
+            ->all();
+    }
+
     /** @return Collection<int, int> */
     private static function unreadThreadIds(User $user): Collection
     {

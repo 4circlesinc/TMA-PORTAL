@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\FileComment;
+use App\Support\Files\CommentReads;
+use App\Support\Files\FileAccess;
 use App\Support\Files\Workflow\Hub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,5 +52,30 @@ class WorkflowHubController extends BaseFilesController
     public function counts(Request $request): JsonResponse
     {
         return response()->json(['counts' => Hub::counts($this->user($request))]);
+    }
+
+    /**
+     * Mark one thread read, because the reader opened it.
+     *
+     * The listing deliberately does not do this — see Hub::comments — so
+     * opening a comment from the Workflows page has to say so. Addressed by
+     * the comment's own uuid and authorized through its file, the same door
+     * every other comment action uses.
+     */
+    public function read(Request $request, string $comment): JsonResponse
+    {
+        $user = $this->user($request);
+
+        $row = FileComment::query()
+            ->with('file')
+            ->where('uuid', $comment)
+            ->firstOrFail();
+
+        abort_unless($row->file !== null, 404);
+        FileAccess::authorize($user, 'view', $row->file);
+
+        CommentReads::markThreadsRead($user, [$row->root_id ?? $row->id]);
+
+        return response()->json(['counts' => Hub::counts($user)]);
     }
 }

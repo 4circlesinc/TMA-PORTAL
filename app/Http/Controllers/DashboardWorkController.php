@@ -47,14 +47,8 @@ class DashboardWorkController extends Controller
         $requests = in_array('requests', $want, true)
             ? Hub::requests($user, ['scope' => Hub::SCOPE_INBOX, 'limit' => self::LIMIT])
             : null;
-
-        /*
-         * markRead: false. The tile shows one line of each thread, which is
-         * not the reading — and it refreshes on a timer, so a board left open
-         * would empty the Workflows badge for threads nobody ever opened.
-         */
         $comments = in_array('comments', $want, true)
-            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT], markRead: false)
+            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT])
             : null;
 
         return response()->json([

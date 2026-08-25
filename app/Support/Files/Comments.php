@@ -90,6 +90,16 @@ class Comments
         self::notify($comment->fresh(), $file, $author, $parent);
         self::broadcast($file, $comment, 'created');
 
+        /*
+         * Writing in a thread means you have read it.
+         *
+         * Your own comment was never unread to you, but anything already in the
+         * thread was — answering somebody's question and still being told the
+         * question is waiting is the sort of thing that teaches people to stop
+         * trusting the badge.
+         */
+        CommentReads::markThreadsRead($author, [$comment->root_id ?? $comment->id]);
+
         return $comment;
     }
 
@@ -133,6 +143,11 @@ class Comments
             'resolved_at' => $resolved ? now() : null,
             'resolved_by' => $resolved ? $actor->id : null,
         ]);
+
+        // Settling a thread is reading it. A resolved thread drops out of the
+        // unread count anyway; reopening one must not resurrect it as unread
+        // for the person who just reopened it.
+        CommentReads::markThreadsRead($actor, [$comment->root_id ?? $comment->id]);
 
         $file = $comment->file;
 

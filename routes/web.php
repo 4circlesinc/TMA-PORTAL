@@ -639,6 +639,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/workflows', [WorkflowHubController::class, 'index'])->name('workflows.hub');
         Route::get('/workflows/comments', [WorkflowHubController::class, 'comments'])->name('workflows.hub.comments');
         Route::get('/workflows/counts', [WorkflowHubController::class, 'counts'])->name('workflows.hub.counts');
+        // Opening a comment from the Workflows page is the reading; the listing
+        // itself is not, so it says so here.
+        Route::post('/workflows/comments/{comment}/read', [WorkflowHubController::class, 'read'])
+            ->name('workflows.hub.read');
 
         // Review / approval / acknowledgement requests. A request is pinned to
         // the version it was sent on and never silently follows the file.

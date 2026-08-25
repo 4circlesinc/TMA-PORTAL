@@ -4906,6 +4906,24 @@ label.tma-portal-check-row:hover {
   min-width: 0;
 }
 
+/* Read cards recede.
+ *
+ * White is "not dealt with yet" and the grey is "you have seen this" — the way
+ * a notification list reads, and the reason the default here is white rather
+ * than the grey being an added state: an inbox where everything looks the same
+ * is an inbox nobody scans.
+ *
+ * The tint sits on the card rather than the text so a read card is still
+ * perfectly readable — it has receded, not been dimmed. Nothing about it is
+ * lower contrast, which is what a faded opacity would have cost.
+ */
+.tma-portal-wf-card.is-read {
+  background: var(--color-surface-sunken, #f6f7f9);
+  border-color: transparent;
+}
+
+/* Unread and it names you: the accent edge stays, on white, so the one card
+   that is actually addressed to you is the loudest thing on the page. */
 /* A left edge rather than a fill: the row still has to be readable next to
    twenty others, and a tinted card competes with the status badge it sits
    beside for the same job. */

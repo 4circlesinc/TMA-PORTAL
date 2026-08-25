@@ -358,7 +358,20 @@
         (c.resolved ? '1' : '0') + '">' + (c.resolved ? 'Reopen' : 'Resolve') + '</button>');
     }
 
-    return '<article class="tma-portal-wf-card' + (c.mentionsMe && !c.resolved ? ' is-mine' : '') + '">' +
+    /*
+     * Read cards recede; unread ones stay white.
+     *
+     * `unread` comes from the server per row and is NOT spent by the listing
+     * asking for it — a thread turns read when it is opened, replied to or
+     * resolved. The accent edge is kept for unread mentions only: once you have
+     * read it, it is no longer shouting at you.
+     */
+    var unread = c.unread !== false && !c.resolved;
+
+    return '<article class="tma-portal-wf-card' +
+      (unread ? '' : ' is-read') +
+      (c.mentionsMe && unread ? ' is-mine' : '') +
+      '" data-wfh-card="' + esc(c.id) + '">' +
       '<div class="tma-portal-wf-card__head">' +
       '<span class="tma-portal-wf-author">' +
       wfAvatar(c.author) +
@@ -621,6 +634,53 @@
       .catch(function (err) { ui().toastError((err && err.message) || 'Could not update that thread.'); });
   }
 
+  /*
+   * The reader opened this thread, so it is read.
+   *
+   * The listing deliberately does not mark anything (see Hub::comments), which
+   * is what lets a card arrive white. This is the other half.
+   *
+   * `keepalive` because the common case is opening the file, which navigates
+   * away in the same tick — an ordinary fetch would be cancelled on the way
+   * out and the card would still be white when the reader came back.
+   */
+  function wfMarkThreadRead(commentId, keepalive) {
+    if (!commentId) return;
+
+    var record = wfRecord(commentId);
+    if (record) {
+      if (record.unread === false) return; // already read; nothing to spend
+      record.unread = false;
+    }
+
+    var card = wf.el && wf.el.querySelector('[data-wfh-card="' + CSS.escape(commentId) + '"]');
+    if (card) {
+      card.classList.add('is-read');
+      card.classList.remove('is-mine');
+    }
+
+    // The shared helper's own token, read the way every other write on this
+    // page reads it, rather than a second guess at where CSRF lives.
+    fetch(net().url('/workflows/comments/' + encodeURIComponent(commentId) + '/read'), {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: !!keepalive,
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': (net() && net().csrf) ? net().csrf() : '',
+      },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.counts) return;
+        wf.counts = j.counts;
+        publishWorkflowCounts(j.counts);
+        renderWorkflows();
+      })
+      .catch(function () { /* the badge settles on the next load */ });
+  }
+
   /**
    * Back to the file, with its viewer open.
    *
@@ -716,6 +776,9 @@
     if ((hit = t.closest('[data-wfh-more]'))) { loadWorkflows({ more: true }); return; }
 
     if ((hit = t.closest('[data-wfh-open]'))) {
+      // Opening the file from a comment card is reading that thread.
+      var openCard = hit.closest('[data-wfh-card]');
+      if (openCard) wfMarkThreadRead(openCard.getAttribute('data-wfh-card'), true);
       wfOpenFile(hit.getAttribute('data-wfh-open'), hit.getAttribute('data-wfh-folder'));
       return;
     }
