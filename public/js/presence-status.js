@@ -26,7 +26,7 @@
     do_not_disturb: { label: 'Do Not Disturb', icon: 'dnd' },
     in_office: { label: 'In Office', icon: 'office' },
     working_remote: { label: 'Working Remote', icon: 'home' },
-    away: { label: 'Away', icon: 'away' },
+    away: { label: 'Out of Office', icon: 'away' },
     available: { label: 'Available', icon: 'green' },
   };
 
@@ -741,7 +741,7 @@
       '<p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 12px">Schedule Away, meetings, or focus time with start and end dates.</p>' +
       scheduleRows +
       '<h3 style="font-size:14px;margin:16px 0 8px">Add schedule</h3>' +
-      '<label>Status</label><select data-schedule-status><option value="away">Away</option><option value="at_meeting">At a Meeting</option><option value="do_not_disturb">Do Not Disturb</option><option value="focus_time">Focus Time</option></select>' +
+      '<label>Status</label><select data-schedule-status><option value="away">Out of Office</option><option value="at_meeting">At a Meeting</option><option value="do_not_disturb">Do Not Disturb</option><option value="focus_time">Focus Time</option></select>' +
       '<div class="tma-presence-settings__row"><div><label>Starts</label><input type="datetime-local" data-schedule-starts></div>' +
       '<div><label>Ends</label><input type="datetime-local" data-schedule-ends></div></div>' +
       '<label>Message (optional)</label><input data-schedule-message maxlength="140">' +

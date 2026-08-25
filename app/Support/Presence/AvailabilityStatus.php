@@ -62,7 +62,7 @@ final class AvailabilityStatus
         self::DO_NOT_DISTURB => 'Do Not Disturb',
         self::IN_OFFICE => 'In Office',
         self::WORKING_REMOTE => 'Working Remote',
-        self::AWAY => 'Away',
+        self::AWAY => 'Out of Office',
         self::AVAILABLE => 'Available',
         self::BE_RIGHT_BACK => 'Be Right Back',
         self::ON_VACATION => 'On Vacation',
