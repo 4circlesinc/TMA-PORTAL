@@ -130,7 +130,7 @@ class ClientOnboardingTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Bruce', 'last_name' => 'Wayne', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ])->assertRedirect('/');
 
         $invited = User::where('email', 'bruce@wayne.test')->firstOrFail();

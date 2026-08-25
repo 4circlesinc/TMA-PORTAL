@@ -187,6 +187,7 @@ final class CompanyMembers
         $member->forceFill([
             'user_id' => $user->id,
             'status' => CompanyMember::STATUS_ACTIVE,
+            'name' => $user->name ?: $member->name,
         ])->save();
     }
 

@@ -89,13 +89,20 @@ class InvitationAcceptController extends Controller
         }
 
         $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
             'password' => ['required', 'confirmed', 'min:8'],
             'terms' => ['accepted'],
         ], [
             'terms.accepted' => 'Please accept the Terms and Privacy Policy to continue.',
         ]);
 
-        $user = Invitations::acceptAsNewUser($invitation, $data['password']);
+        $user = Invitations::acceptAsNewUser($invitation, $data['password'], [
+            'first_name' => $data['first_name'],
+            'middle_name' => $data['middle_name'] ?? null,
+            'last_name' => $data['last_name'],
+        ]);
 
         Auth::login($user);
         $request->session()->regenerate();
@@ -173,6 +180,7 @@ class InvitationAcceptController extends Controller
             'token' => $token,
             'state' => $state,
             'name' => $invitation?->name ?: $invitation?->client?->name,
+            'nameParts' => Invitations::splitName($invitation?->name ?: $invitation?->client?->name),
             'email' => $invitation?->email,
             'inviter' => $invitation?->inviter?->name,
             'organisation' => Postcards::site(),

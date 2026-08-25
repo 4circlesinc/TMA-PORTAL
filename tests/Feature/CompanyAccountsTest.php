@@ -206,7 +206,7 @@ class CompanyAccountsTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ])->assertRedirect('/');
 
         $member = CompanyMember::where('uuid', $uuid)->first();
@@ -252,13 +252,15 @@ class CompanyAccountsTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ])->assertRedirect('/');
 
         $member = CompanyMember::first();
         $this->assertSame('active', $member->status);
         $this->assertNotNull($member->user_id);
         $this->assertSame('dana@acme.test', $member->user->email);
+        $this->assertSame('Dana Reed', $member->user->name);
+        $this->assertSame('Dana Reed', $member->name);
     }
 
     public function test_adding_an_address_that_already_has_an_account_links_it(): void

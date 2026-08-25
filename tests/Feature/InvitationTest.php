@@ -129,7 +129,10 @@ class InvitationTest extends TestCase
             // The firm's name, not APP_NAME — which is "tma-portal" in production.
             ->assertSee(Postcards::site())
             ->assertSee('Client portal access')
-            ->assertSee('owner@acme.test');
+            ->assertSee('owner@acme.test')
+            ->assertSee('name="first_name"', false)
+            ->assertSee('name="last_name"', false)
+            ->assertDontSee('disabled', false);
     }
 
     // -------------------------------------------------------------- accepting
@@ -143,6 +146,8 @@ class InvitationTest extends TestCase
         $token = $this->inviteAndCaptureToken($client, $staff);
 
         $this->post("/invite/{$token}", [
+            'first_name' => 'Dana',
+            'last_name' => 'Reed',
             'password' => 'sup3rsecret!',
             'password_confirmation' => 'sup3rsecret!',
             'terms' => '1',
@@ -150,6 +155,9 @@ class InvitationTest extends TestCase
 
         $user = User::where('email', 'owner@acme.test')->first();
         $this->assertNotNull($user);
+        $this->assertSame('Dana Reed', $user->name);
+        $this->assertSame('Dana', $user->first_name);
+        $this->assertSame('Reed', $user->last_name);
         $this->assertSame('Client', $user->account_type);
         $this->assertSame('approved', $user->status);
         $this->assertSame($user->id, $client->fresh()->user_id);
@@ -161,6 +169,23 @@ class InvitationTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_accepting_requires_a_first_and_last_name(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        $client = $this->client();
+        $this->actingAs($staff)->postJson("/portal/clients/{$client->uid}/invite");
+        $token = $this->inviteAndCaptureToken($client, $staff);
+
+        $this->from("/invite/{$token}")->post("/invite/{$token}", [
+            'password' => 'sup3rsecret!',
+            'password_confirmation' => 'sup3rsecret!',
+            'terms' => '1',
+        ])->assertSessionHasErrors(['first_name', 'last_name']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);
+    }
+
     public function test_the_terms_box_is_required(): void
     {
         Mail::fake();
@@ -170,6 +195,8 @@ class InvitationTest extends TestCase
         $token = $this->inviteAndCaptureToken($client, $staff);
 
         $this->from("/invite/{$token}")->post("/invite/{$token}", [
+            'first_name' => 'Dana',
+            'last_name' => 'Reed',
             'password' => 'sup3rsecret!',
             'password_confirmation' => 'sup3rsecret!',
         ])->assertSessionHasErrors('terms');
@@ -186,7 +213,7 @@ class InvitationTest extends TestCase
         $token = $this->inviteAndCaptureToken($client, $staff);
 
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
 
         $this->app['auth']->forgetGuards();
@@ -198,7 +225,7 @@ class InvitationTest extends TestCase
         // A replay of the POST creates nothing.
         $before = User::count();
         $this->post("/invite/{$token}", [
-            'password' => 'another1!', 'password_confirmation' => 'another1!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'another1!', 'password_confirmation' => 'another1!', 'terms' => '1',
         ]);
         $this->assertSame($before, User::count());
     }
@@ -238,7 +265,7 @@ class InvitationTest extends TestCase
         $this->get("/invite/{$token}")->assertOk()->assertSee('withdrawn');
 
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
         $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);
     }
@@ -272,7 +299,7 @@ class InvitationTest extends TestCase
         // And registering is refused outright.
         $before = User::count();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
         $this->assertSame($before, User::count(), 'a duplicate account was created');
     }
@@ -373,7 +400,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ])->assertRedirect('/');
 
         $user = User::where('email', 'sam@firm.test')->first();
@@ -633,7 +660,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
 
         $accepted = ActivityLog::where('description', 'like', '%accepted their invitation%')->first();
@@ -655,7 +682,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
 
         $this->assertDatabaseHas('portal_notifications', [

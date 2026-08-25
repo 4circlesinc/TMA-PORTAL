@@ -210,31 +210,52 @@ final class Invitations
     }
 
     /**
+     * Split a stored full name into first / middle / last for the invite form.
+     *
+     * @return array{first: string, middle: string, last: string}
+     */
+    public static function splitName(?string $name): array
+    {
+        $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $first = (string) (array_shift($parts) ?: '');
+        $last = $parts ? (string) array_pop($parts) : '';
+        $middle = $parts ? implode(' ', $parts) : '';
+
+        return ['first' => $first, 'middle' => $middle, 'last' => $last];
+    }
+
+    /**
      * Accept an invitation for a brand-new account.
      *
      * Refuses when the address already has a login, that path has to go
      * through {@see self::acceptAs()} after signing in, so an invitation can
      * never mint a second account for someone who already has one.
+     *
+     * @param  array{first_name?: ?string, middle_name?: ?string, last_name?: ?string}  $name
      */
-    public static function acceptAsNewUser(Invitation $invitation, string $password): User
+    public static function acceptAsNewUser(Invitation $invitation, string $password, array $name = []): User
     {
         abort_unless($invitation->isAcceptable(), 410, 'This invitation is no longer valid.');
         abort_if($invitation->existingUser() !== null, 409, 'An account already exists for this email address.');
 
-        $name = $invitation->name ?: ($invitation->client?->name ?: $invitation->email);
-        $parts = preg_split('/\s+/', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $first = array_shift($parts) ?: $name;
-        $last = count($parts) ? array_pop($parts) : null;
+        $fallback = self::splitName($invitation->name ?: $invitation->client?->name);
+        $first = trim((string) ($name['first_name'] ?? '')) ?: $fallback['first'];
+        $middle = trim((string) ($name['middle_name'] ?? '')) ?: $fallback['middle'];
+        $last = trim((string) ($name['last_name'] ?? '')) ?: $fallback['last'];
 
-        return DB::transaction(function () use ($invitation, $password, $name, $first, $last, $parts) {
+        if ($first === '') {
+            $first = Str::before($invitation->email, '@');
+        }
+
+        return DB::transaction(function () use ($invitation, $password, $first, $middle, $last) {
             $user = new User([
-                'name' => $name,
                 'first_name' => $first,
-                'middle_name' => count($parts) ? implode(' ', $parts) : null,
-                'last_name' => $last,
+                'middle_name' => $middle !== '' ? $middle : null,
+                'last_name' => $last !== '' ? $last : null,
                 'email' => $invitation->email,
                 'password' => $password,
             ]);
+            $user->syncDisplayName();
 
             // Invited by someone who works here: the address is vouched for and
             // the account is pre-approved, so they land in onboarding rather

@@ -103,6 +103,42 @@
           <form class="tma-auth__form" method="POST" action="{{ url('/invite/'.$token) }}">
             @csrf
             <div class="tma-auth__group">
+              <label class="tma-auth__field @error('first_name') tma-auth__field--error @enderror">
+                <input class="tma-auth__input" type="text" name="first_name" placeholder="First name" autocomplete="given-name" aria-label="First name" value="{{ old('first_name', $nameParts['first'] ?? '') }}" required autofocus>
+              </label>
+              @error('first_name')
+                <p class="tma-auth__field-msg">
+                  <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                  <span>{{ $message }}</span>
+                </p>
+              @enderror
+            </div>
+
+            <div class="tma-auth__group">
+              <label class="tma-auth__field @error('middle_name') tma-auth__field--error @enderror">
+                <input class="tma-auth__input" type="text" name="middle_name" placeholder="Middle name (optional)" autocomplete="additional-name" aria-label="Middle name" value="{{ old('middle_name', $nameParts['middle'] ?? '') }}">
+              </label>
+              @error('middle_name')
+                <p class="tma-auth__field-msg">
+                  <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                  <span>{{ $message }}</span>
+                </p>
+              @enderror
+            </div>
+
+            <div class="tma-auth__group">
+              <label class="tma-auth__field @error('last_name') tma-auth__field--error @enderror">
+                <input class="tma-auth__input" type="text" name="last_name" placeholder="Last name" autocomplete="family-name" aria-label="Last name" value="{{ old('last_name', $nameParts['last'] ?? '') }}" required>
+              </label>
+              @error('last_name')
+                <p class="tma-auth__field-msg">
+                  <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                  <span>{{ $message }}</span>
+                </p>
+              @enderror
+            </div>
+
+            <div class="tma-auth__group">
               <label class="tma-auth__field tma-auth__field--locked">
                 <input class="tma-auth__input" type="email" value="{{ $email }}" readonly tabindex="-1" aria-label="Email">
               </label>
@@ -110,7 +146,7 @@
 
             <div class="tma-auth__group">
               <label class="tma-auth__field tma-auth__field--password @error('password') tma-auth__field--error @enderror">
-                <input class="tma-auth__input" type="password" name="password" placeholder="Password" autocomplete="new-password" aria-label="Password" data-password-meter required autofocus>
+                <input class="tma-auth__input" type="password" name="password" placeholder="Password" autocomplete="new-password" aria-label="Password" data-password-meter required>
                 <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
                   <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
                 </button>
