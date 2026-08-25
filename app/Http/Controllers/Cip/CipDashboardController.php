@@ -44,6 +44,8 @@ class CipDashboardController extends Controller
             return response()->json(['cip' => false, 'buckets' => []]);
         }
 
+        $summary = Buckets::summary($user);
+
         return response()->json([
             'cip' => true,
             /*
@@ -70,7 +72,18 @@ class CipDashboardController extends Controller
             // desk, and a heading that got that wrong would be the difference
             // between a report and a to-do list.
             'dashboard' => $dashboard,
-            'buckets' => Buckets::for($user),
+            'buckets' => $summary['buckets'],
+            /*
+             * How many applications the buckets cover between them — the
+             * figure the card leads on, above the queues that make it up.
+             *
+             * Counted by {@see Buckets::summary}, over the distinct statuses
+             * the set covers rather than by adding the buckets up: the
+             * Reviewing Officer's Assigned Reviews is the sum of the three
+             * queues below it, so a naive total would report that officer's
+             * desk twice and nothing on the page would show it.
+             */
+            'total' => $summary['total'],
         ]);
     }
 }

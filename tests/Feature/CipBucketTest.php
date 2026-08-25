@@ -241,6 +241,70 @@ class CipBucketTest extends TestCase
         );
     }
 
+    /**
+     * The figure the home card leads on: how many applications the buckets
+     * cover between them, counted over the statuses rather than by adding the
+     * rows up.
+     *
+     * The administrator's ten are ten separate statuses, so on that set the
+     * two answers agree and the test proves little on its own — it is here as
+     * the control for the one below, where they must not agree.
+     */
+    public function test_the_total_counts_the_applications_the_dashboard_covers(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        [$galaxy] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::NEW);
+        $this->application($galaxy, $admin, Status::NEW);
+        $this->application($galaxy, $admin, Status::READY_TO_SUBMIT);
+        $this->application($galaxy, $admin, Status::GRANTED);
+
+        $body = $this->actingAs($admin)->getJson('/portal/cip/dashboard')->assertOk()->json();
+
+        $this->assertSame(4, $body['total']);
+        $this->assertSame(4, array_sum(array_column($body['buckets'], 'count')));
+    }
+
+    /**
+     * The trap the total exists to avoid.
+     *
+     * Assigned Reviews is deliberately the sum of the three queues under it —
+     * a total beside its parts is what tells an officer whether the day is
+     * heavy before they read which kind of heavy it is — so adding the rows up
+     * reports every file on that desk twice, and nothing on the card would
+     * show that it had. Two files, four rows summing to four, one honest total.
+     */
+    public function test_an_officers_total_does_not_count_their_desk_twice(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [$galaxy] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::REVIEW_APPLICATION, $rita);
+        $this->application($galaxy, $admin, Status::UPDATE_REQUIRED, $rita);
+
+        $body = $this->actingAs($rita)->getJson('/portal/cip/dashboard')->assertOk()->json();
+
+        $this->assertSame(2, $body['total'], 'two files on the desk, counted once each');
+        $this->assertSame(
+            4,
+            array_sum(array_column($body['buckets'], 'count')),
+            'and the rows still add up to four, which is why the total is not their sum',
+        );
+    }
+
+    /** Nothing filed anywhere is a zero, not a missing key. */
+    public function test_an_empty_dashboard_totals_zero(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+
+        $this->assertSame(
+            0,
+            $this->actingAs($admin)->getJson('/portal/cip/dashboard')->assertOk()->json('total'),
+        );
+    }
+
     public function test_a_compliance_officer_queue_counts_the_files_they_hold(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');

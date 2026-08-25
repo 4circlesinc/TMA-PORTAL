@@ -35809,45 +35809,105 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * §9's buckets as one card on the portal home.
+ * §9's buckets as one card on the portal home: what has work in it, first.
  *
- * Ten queues, each a name and a number, and the number is the reason the card
- * exists: an administrator opening the portal should see where the work has
- * piled up before deciding what to open. So the counts are a column — one
- * under the other, right-aligned, tabular — rather than ten separate figures
- * scattered through a paragraph of labels.
+ * The card leads on one figure — how many applications this dashboard is about
+ * — and then names only the queues holding something, each as its own row with
+ * its count in a filled pill. The stages sitting at zero fold up behind a
+ * single line saying how many of them there are.
  *
- * The whole row is the control. A count is only useful if the reader can act
- * on it, and the act is always the same one: show me those. Making the row a
- * button rather than putting a link on the number means the pointer never has
- * to find a four-pixel target, and the hover wash tells a reader the row is
- * more than a readout before they try it.
+ * WHY THE ZEROS FOLD
  *
- * It grows; it does not scroll — the opposite of .tma-portal-employees--scroll
- * next door, and for a reason that is worth writing down. That list scrolls
- * because it is as long as the firm is: nobody knows how many colleagues will
- * be in it next month, so the card has to be able to refuse to grow. This list
- * is a *fixed* set the server names — ten buckets for an administrator, six for
- * a service provider, four for a reviewing officer — and it will be the same
- * ten tomorrow. A scroller would therefore hide rows that always had room, and
- * hide them below a fold with no affordance, which is exactly how a queue goes
- * unnoticed. The height is arithmetic instead: ten rows of 30px (a 12px line in
- * its 16px box plus 6px of padding either side comes to 28, and the min-height
- * is the floor that rounds it up) and nine 2px gaps is 318px, against the
- * 322px the Employees card asks for at six names. The two cards therefore end
- * level and the board is no taller than it already was. If the masonry ever
- * hands this tile less height than that, the packed panel body already scrolls
- * (see .is-packed in portal.css) — nothing here needs to.
+ * An administrator's ten rows are mostly zeros on a normal morning, and ten
+ * rows of nothing is what buries the two that need reading: every row costs
+ * the same height and the same glance whether or not there is anything behind
+ * it. They fold rather than disappear, because a total is only trustworthy if
+ * the reader can see what was counted, and a stage that vanished when it
+ * emptied would leave somebody wondering whether it emptied or broke.
+ *
+ * THE ROW IS THE CONTROL
+ *
+ * A count is only useful if the reader can act on it, and the act is always
+ * the same one: show me those. Making the whole row a button rather than
+ * putting a link on the number means the pointer never has to find a
+ * four-pixel target. That holds for a folded-away zero row too — an empty
+ * queue is a reasonable thing to open.
+ *
+ * IT GROWS; IT DOES NOT SCROLL
+ *
+ * The opposite of .tma-portal-employees--scroll next door, and for a reason
+ * worth writing down. That list scrolls because it is as long as the firm is:
+ * nobody knows how many colleagues will be in it next month, so the card has
+ * to be able to refuse to grow. This one is a fixed set the server names, and
+ * it is now as tall as the work is rather than as tall as the vocabulary:
+ * eight quiet stages cost one line instead of eight rows. Opening them
+ * re-packs the board — portal-home.js re-renders through mount(), which
+ * re-measures every tile — so the card grows to fit rather than hiding rows
+ * below a fold, which is exactly how a queue goes unnoticed. If the masonry
+ * ever hands this tile less height than it needs, the packed panel body
+ * already scrolls (see .is-packed in portal.css); nothing here needs to.
  */
+.tma-portal-cip-card {
+  /*
+   * The row surface, named once so the four row shapes cannot drift apart.
+   * White against the card's near-white grey is a small deliberate step — the
+   * rows are meant to sit *on* the card, not be boxed off from it — and
+   * --color-white inverts with the theme, so the step goes the other way in
+   * dark without a second rule.
+   */
+  --tma-cip-surface: var(--color-white);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/*
+ * The figure the card leads on.
+ *
+ * Big, because it is the one thing a reader takes away from a glance, and
+ * tabular so it does not jump about as it changes. What it is measured over
+ * is the panel head's job (All applications / Assigned to you / Your firm),
+ * so the word beside it is only ever "applications" — see cipTotal() in
+ * portal-home.js for why it is never "in pipeline".
+ */
+.tma-portal-cip__total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
+  min-width: 0;
+}
+
+.tma-portal-cip__total b {
+  font-size: var(--text-size-24);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-black);
+}
+
+.tma-portal-cip__total span {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+/* The loading total. Sized here rather than inline, like every other
+   measurement on this card. */
+.tma-portal-cip__total > .tma-skeleton {
+  width: 84px;
+  height: 22px;
+  border-radius: var(--radius-6);
+}
+
 .tma-portal-cip {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-8);
   list-style: none;
-  /* The hover wash reaches past the text toward the card's padding, the way
-     the employee and email rows do, without the focus ring being clipped. */
-  margin: 0 -4px;
-  padding: 0 4px;
+  margin: 0;
+  padding: 0;
   min-width: 0;
 }
 
@@ -35858,8 +35918,8 @@ span.tma-dash__messages-profile-avatar {
    * Load-bearing, not tidying — the same trap .tma-portal-employee documents.
    * The list is a flex column inside a body that can be given a definite
    * height by the masonry, so its children are eligible to shrink; without
-   * this the ten rows would be squeezed into whatever space the tile ended up
-   * with and the labels would overlap instead of the body scrolling.
+   * this the rows would be squeezed into whatever space the tile ended up with
+   * and the labels would overlap instead of the body scrolling.
    */
   flex-shrink: 0;
 }
@@ -35867,15 +35927,15 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__link {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-10);
   width: 100%;
   min-width: 0;
-  min-height: 30px;
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8);
+  padding: var(--space-10) var(--space-12);
   border: 0;
-  border-radius: var(--radius-8);
-  background: none;
+  border-radius: var(--radius-12);
+  background: var(--tma-cip-surface);
+  box-shadow: var(--shadow-drop-1);
   font: inherit;
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
@@ -35884,11 +35944,19 @@ span.tma-dash__messages-profile-avatar {
   cursor: pointer;
 }
 
-.tma-portal-cip__link:hover { background: var(--color-hover); }
+/* The wash goes over the surface rather than replacing it, so a row does not
+   change colour on hover — it only deepens. */
+.tma-portal-cip__link:hover {
+  background:
+    linear-gradient(var(--color-hover), var(--color-hover)),
+    var(--tma-cip-surface);
+}
 
 /* Keyboard readers get the same row, said out loud. Matches the ring the rest
    of the home board uses (.tma-portal-employee__action, portal.css). */
-.tma-portal-cip__link:focus-visible {
+.tma-portal-cip__link:focus-visible,
+.tma-portal-cip__zlink:focus-visible,
+.tma-portal-cip__toggle:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
@@ -35909,89 +35977,256 @@ span.tma-dash__messages-profile-avatar {
   background: var(--tma-cip-tone, var(--color-text-secondary));
 }
 
-.tma-portal-cip__dot--success { --tma-cip-tone: #16a34a; }
-.tma-portal-cip__dot--danger  { --tma-cip-tone: #dc2626; }
-.tma-portal-cip__dot--pending { --tma-cip-tone: #d97706; }
-.tma-portal-cip__dot--action  { --tma-cip-tone: #2563eb; }
-.tma-portal-cip__dot--neutral { --tma-cip-tone: #6b7280; }
-.tma-portal-cip__dot--sky    { --tma-cip-tone: var(--tma-status-sky, #2563eb); }
-.tma-portal-cip__dot--indigo { --tma-cip-tone: var(--tma-status-indigo, #6d28d9); }
-.tma-portal-cip__dot--violet { --tma-cip-tone: var(--tma-status-violet, #c026d3); }
-.tma-portal-cip__dot--amber  { --tma-cip-tone: var(--tma-status-amber, #ca8a04); }
-.tma-portal-cip__dot--teal   { --tma-cip-tone: var(--tma-status-teal, #0d9488); }
-.tma-portal-cip__dot--orange { --tma-cip-tone: var(--tma-status-orange, #ea580c); }
-.tma-portal-cip__dot--rose   { --tma-cip-tone: var(--tma-status-rose, #e11d48); }
-.tma-portal-cip__dot--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
-.tma-portal-cip__dot--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
+/*
+ * The tone, named on the row and on the dot alike.
+ *
+ * Two things read it on this card now — the dot and the pill behind the count
+ * — so portal-home.js sets it on the row and lets both inherit; a colour
+ * decided twice is a colour that can end up disagreeing with itself. The dot's
+ * own classes stay because the applications filter menu (clients.js) draws the
+ * same dots with no row to hang them on.
+ */
+.tma-portal-cip__dot--success, .tma-portal-cip__row--success { --tma-cip-tone: #16a34a; }
+.tma-portal-cip__dot--danger,  .tma-portal-cip__row--danger  { --tma-cip-tone: #dc2626; }
+.tma-portal-cip__dot--pending, .tma-portal-cip__row--pending { --tma-cip-tone: #d97706; }
+.tma-portal-cip__dot--action,  .tma-portal-cip__row--action  { --tma-cip-tone: #2563eb; }
+.tma-portal-cip__dot--neutral, .tma-portal-cip__row--neutral { --tma-cip-tone: #6b7280; }
+.tma-portal-cip__dot--sky,    .tma-portal-cip__row--sky    { --tma-cip-tone: var(--tma-status-sky, #2563eb); }
+.tma-portal-cip__dot--indigo, .tma-portal-cip__row--indigo { --tma-cip-tone: var(--tma-status-indigo, #6d28d9); }
+.tma-portal-cip__dot--violet, .tma-portal-cip__row--violet { --tma-cip-tone: var(--tma-status-violet, #c026d3); }
+.tma-portal-cip__dot--amber,  .tma-portal-cip__row--amber  { --tma-cip-tone: var(--tma-status-amber, #ca8a04); }
+.tma-portal-cip__dot--teal,   .tma-portal-cip__row--teal   { --tma-cip-tone: var(--tma-status-teal, #0d9488); }
+.tma-portal-cip__dot--orange, .tma-portal-cip__row--orange { --tma-cip-tone: var(--tma-status-orange, #ea580c); }
+.tma-portal-cip__dot--rose,   .tma-portal-cip__row--rose   { --tma-cip-tone: var(--tma-status-rose, #e11d48); }
+.tma-portal-cip__dot--cyan,   .tma-portal-cip__row--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
+.tma-portal-cip__dot--copper, .tma-portal-cip__row--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
 
 /* The label names the queue; it is the count beside it that is being read, so
-   the name sits back the way the old bucket chips had it. One line always —
-   "Assessment Feedback" wrapping would make one row twice the height of its
-   nine neighbours and cost the card the arithmetic above. */
+   the name sits a step back from the number. One line always — "Assessment
+   Feedback" wrapping would make one row twice the height of its neighbours. */
 .tma-portal-cip__label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-secondary);
+  font-weight: 500;
+  color: var(--color-black);
 }
 
-/* Tabular figures so a 7 and a 11 stack digit under digit down the column;
-   without them ten proportional numbers read as a ragged edge. */
-.tma-portal-cip__count {
+/*
+ * The count, as a filled pill in the queue's own colour.
+ *
+ * The pill is what makes a busy queue readable across the room, and it is the
+ * tone mixed toward black rather than the tone itself: several of the
+ * fourteen — amber, teal, orange — are chip colours picked to carry dark text,
+ * and white on them unmixed is a number you have to lean in to read. Mixing
+ * keeps one rule for all fourteen instead of a second hand-picked palette that
+ * would have to be re-picked every time a status changed colour.
+ */
+.tma-portal-cip__pill {
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-8);
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tma-cip-tone, #6b7280) 84%, #000);
+  font-size: var(--text-size-12);
+  line-height: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-white);
+}
+
+/*
+ * ── The queues sitting at zero ──────────────────────────────────────────
+ *
+ * One line stands in for all of them, and opens them. Zero is a true answer,
+ * not a fault, so nothing here is styled as a warning: the rows lose the
+ * surface, the colour and the ink, and keep the label, the number and the
+ * press. Legible, because a reader came here to learn that it is zero.
+ */
+.tma-portal-cip__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-top: var(--space-12);
+  padding: var(--space-12) var(--space-4) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border-soft);
+  background: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-cip__toggle b {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-black);
 }
 
+/* A masked span, not an <img>: the phosphor art is fill="currentColor", which
+   through an <img> resolves to flat black and could not follow the row's
+   grey. Same reason the sidebar nav icons are masked spans. */
+.tma-portal-cip__chev {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
+  transition: transform 0.2s ease;
+}
+
+.tma-portal-cip-card.is-open .tma-portal-cip__chev { transform: rotate(180deg); }
+
 /*
- * A queue with nothing in it.
+ * Closed is display:none, and that is the point.
  *
- * Zero is a true answer, not a fault, so this is the difference between a
- * number and a *quiet* number and nothing more: the count steps back to the
- * grey the label beside it is already written in, instead of standing in the
- * page's ink like the six that need reading. Legible, because a reader came
- * here to learn that it is zero.
- *
- * Everything that makes the row a control stays — the hover wash, the cursor,
- * the focus ring. An empty queue is a perfectly reasonable thing to open, and
- * a reader who cannot open it has to go and confirm the zero some other way.
- * The dot needs no rule here: cipTone() already drops an empty bucket to
- * neutral whatever tone the server sent, for the same reason.
+ * An animated height would be the prettier answer and the wrong one here: the
+ * masonry gives this tile a measured pixel height, so it re-measures the
+ * moment the rows appear — mid-transition it would read the height they are
+ * passing through and pack the board to that, leaving the rest of the list
+ * unfolding inside a scroller. Taken out of the flow instead, the card is its
+ * final height by the time the pack runs, and the reveal is animated on the
+ * rows themselves where nothing is measuring.
  */
-.tma-portal-cip__row--empty .tma-portal-cip__count { color: var(--color-text-secondary); }
+.tma-portal-cip__zeros { display: none; }
+
+.tma-portal-cip-card.is-open .tma-portal-cip__zeros {
+  display: block;
+  margin-top: var(--space-8);
+}
+
+.tma-portal-cip--zeros { gap: 0; }
+
+.tma-portal-cip__zrow {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  animation: tma-portal-cip-unfold 0.22s ease both;
+}
+
+.tma-portal-cip__zlink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-cip__zlink:hover { background: var(--color-hover); }
+
+.tma-portal-cip__zrow .tma-portal-cip__label {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+/* Tabular so the zeros stack digit under digit down the column. */
+.tma-portal-cip__count {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+@keyframes tma-portal-cip-unfold {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-portal-cip__zrow { animation: none; }
+  .tma-portal-cip__chev { transition: none; }
+}
+
+/*
+ * Every queue at zero: a finished day, said in one line rather than left as a
+ * gap under the total. It keeps the row surface so the card still reads as a
+ * card, and the toggle underneath still offers the stages that are clear.
+ */
+.tma-portal-cip__none {
+  margin: 0;
+  padding: var(--space-16) var(--space-12);
+  border-radius: var(--radius-12);
+  background: var(--tma-cip-surface);
+  box-shadow: var(--shadow-drop-1);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
 
 /*
  * Loading.
  *
- * Six placeholders standing in for a set nobody has counted yet, and the one
- * thing they have to get exactly right is the height: a loading row that is
- * not the same 30px as a real one makes the card jump the moment the counts
- * land, which is the single job a skeleton has.
+ * Placeholders standing in for a set nobody has counted yet, and what they
+ * have to get right is the row: same surface, same padding, same height as a
+ * real one, so the card does not lurch the moment the counts land — which is
+ * the single job a skeleton has. It cannot get the *number* of rows right any
+ * more, because only the queues holding work get one and that is precisely
+ * what has not arrived, so the board re-packs when it does.
  *
- * Which element carries that 30px depends on how portal-home.js shapes the
+ * Which element carries the box depends on how portal-home.js shapes the
  * loading row, so both shapes are covered. Keep a .tma-portal-cip__link around
- * the placeholders and the link's own box supplies the height, the padding and
- * the gap already — which is exactly why the rule below is scoped to a *direct*
- * child, because laying the same box on the row as well would make the loading
- * row taller than the real one and cause the jump it is here to prevent. Put
- * the placeholders straight in the <li> instead and there is no link to supply
- * any of it, so the row supplies it itself.
+ * the placeholders and the link's own box supplies all of it already — which
+ * is exactly why the rule below is scoped to a *direct* child, because laying
+ * the same box on the row as well would double the padding. Put the
+ * placeholders straight in the <li> instead, as it does today, and there is no
+ * link to supply any of it, so the row supplies it itself.
  *
- * The placeholder *widths* are deliberately not here. portal-home.js sets them
- * inline on each placeholder, as it does for every other tile on this board,
- * and an inline width outranks anything a selector in this file can say. Two
- * rules used to restate them and disagreed with the markup — 52% against 56%,
- * 16px against 14% — which is how a stylesheet ends up describing a page that
- * does not exist.
+ * The widths are the stylesheet's, here and above: portal-home.js sets no
+ * inline sizes on this card, and .tma-skeleton--text's own 60% is what a
+ * placeholder is worth.
  */
 .tma-portal-cip__row:has(> .tma-skeleton) {
   align-items: center;
-  gap: var(--space-8);
-  min-height: 30px;
-  padding: var(--space-6) var(--space-8);
+  gap: var(--space-10);
+  box-sizing: border-box;
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-12);
+  background: var(--tma-cip-surface);
+  box-shadow: var(--shadow-drop-1);
+}
+
+/* The label placeholder takes the room the label would; the one after it is
+   standing in for the pill, so it is the pill's 24px circle and it is what
+   makes the loading row exactly as tall as a real one. */
+.tma-portal-cip__row:has(> .tma-skeleton) > .tma-skeleton--text { flex: 1 1 auto; }
+
+.tma-portal-cip__row:has(> .tma-skeleton) > .tma-skeleton--text:last-child {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
 }
 
 /*

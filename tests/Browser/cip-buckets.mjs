@@ -13,6 +13,12 @@ import { chromium } from 'playwright';
  * What is really being tested is that the count and the list agree. A chip
  * saying six that opens onto nine rows is worse than no chip: it is the
  * portal telling somebody there is work they then cannot find.
+ *
+ * The card shows the queues holding work first and folds the ones sitting at
+ * zero away behind a line, so this seed — every bucket busy — is deliberately
+ * the case where nothing folds: ten rows, no toggle. The fold itself is a
+ * class on state, checked in step 1b by emptying the card's data rather than
+ * by seeding a second book.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
@@ -72,9 +78,10 @@ try {
     [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__row')].map(li => ({
       key: li.querySelector('[data-home-cip-bucket]')?.getAttribute('data-home-cip-bucket') || '',
       label: li.querySelector('.tma-portal-cip__label')?.innerText.trim() || '',
-      count: li.querySelector('.tma-portal-cip__count')?.innerText.trim() || '',
-      tone: [...(li.querySelector('.tma-portal-cip__dot')?.classList || [])]
-        .find(c => c.startsWith('tma-portal-cip__dot--')) || '',
+      count: li.querySelector('.tma-portal-cip__pill')?.innerText.trim() || '',
+      // The tone lives on the row now: the dot and the count pill both read
+      // it, and a colour named twice is a colour that can disagree with itself.
+      tone: [...li.classList].find(c => c.startsWith('tma-portal-cip__row--')) || '',
     })));
 
   check(rows.length === EXPECTED.length, `${EXPECTED.length} rows (${rows.length})`);
@@ -97,6 +104,97 @@ try {
         return !bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent';
       }).length);
   check(unpainted === 0, `every tone dot is actually painted (${unpainted} blank)`);
+
+  /*
+   * The pill behind each count is the tone mixed toward black, so it can only
+   * be transparent if the mix failed — which is what an unsupported
+   * color-mix() or a tone the row never received would look like, and white
+   * digits on nothing is a count nobody can read.
+   */
+  const flatPills = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__pill')]
+      .filter(p => {
+        const bg = getComputedStyle(p).backgroundColor;
+        return !bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent';
+      }).length);
+  check(flatPills === 0, `every count pill is filled (${flatPills} blank)`);
+
+  /*
+   * The figure the card leads on. 32 across the ten buckets, and the DRAFT is
+   * the evidence: it is the administrator's application too, so a total that
+   * counted the book rather than the buckets would read 33.
+   */
+  const total = await page.evaluate(() => {
+    const el = document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__total');
+    return {
+      figure: el?.querySelector('b')?.innerText.trim() || '',
+      noun: el?.querySelector('span')?.innerText.trim() || '',
+    };
+  });
+  check(total.figure === '32', `the total reads 32 (got "${total.figure}")`);
+  check(total.noun === 'applications', `and says what it counts (got "${total.noun}")`);
+
+  // Every bucket is busy in this seed, so there is nothing to fold and no
+  // line offering to.
+  const toggles = await page.$$('[data-tile-id="cipStatus"] [data-home-cip-zeros]');
+  check(toggles.length === 0, `no "stages clear" line when every queue has work (${toggles.length})`);
+
+  step('1b', 'The queues sitting at zero fold away behind one line');
+  /*
+   * Driven through the card's own data rather than a second seeded book: the
+   * fold is a property of the render, and re-seeding ten statuses to prove it
+   * would test the fixture. The dashboard endpoint is answered with the real
+   * payload minus most of its counts, then the card is asked to repaint.
+   */
+  await page.route('**/portal/cip/dashboard', async route => {
+    const res = await route.fetch();
+    const body = await res.json();
+    body.buckets = body.buckets.map((b, i) => (i === 0 ? b : { ...b, count: 0 }));
+    body.total = body.buckets[0].count;
+    await route.fulfill({ response: res, json: body });
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
+  await page.waitForTimeout(1500);
+
+  const folded = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    const toggle = card?.querySelector('[data-home-cip-zeros]');
+    return {
+      busy: card?.querySelectorAll('.tma-portal-cip__row').length || 0,
+      clear: card?.querySelectorAll('.tma-portal-cip__zrow').length || 0,
+      toggle: toggle?.innerText.replace(/\s+/g, ' ').trim() || '',
+      expanded: toggle?.getAttribute('aria-expanded') || '',
+      shown: card?.querySelector('.tma-portal-cip__zeros')?.offsetHeight || 0,
+    };
+  });
+  check(folded.busy === 1, `only the one busy queue keeps a row (${folded.busy})`);
+  check(folded.clear === 9, `the other nine are still on the card, folded (${folded.clear})`);
+  check(/9 stages clear/.test(folded.toggle), `one line says how many (got "${folded.toggle}")`);
+  check(folded.expanded === 'false' && folded.shown === 0, 'and they start hidden');
+
+  await page.click('[data-tile-id="cipStatus"] [data-home-cip-zeros]');
+  await page.waitForTimeout(600);
+  const opened = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    return {
+      expanded: card?.querySelector('[data-home-cip-zeros]')?.getAttribute('aria-expanded') || '',
+      shown: card?.querySelector('.tma-portal-cip__zeros')?.offsetHeight || 0,
+      // The tile must have grown to hold them, not hidden them in a scroller.
+      overflow: (() => {
+        const body = card?.querySelector('.tma-portal-panel__body');
+        return body ? body.scrollHeight - body.clientHeight : -1;
+      })(),
+    };
+  });
+  check(opened.expanded === 'true', 'pressing it says so');
+  check(opened.shown > 0, `the folded rows are showing (${opened.shown}px)`);
+  check(opened.overflow <= 1, `and the card grew to hold them (${opened.overflow}px hidden)`);
+
+  await page.unroute('**/portal/cip/dashboard');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
+  await page.waitForTimeout(1500);
 
   /* ── The card opens the table, filtered ────────── */
 

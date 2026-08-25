@@ -231,14 +231,45 @@ class Buckets
      */
     public static function for(?User $user): array
     {
+        return self::summary($user)['buckets'];
+    }
+
+    /**
+     * The same buckets, and how many applications they cover between them.
+     *
+     * THE TOTAL IS A UNION, NOT A SUM
+     *
+     * Adding the bucket counts up would be wrong on one of the three sets and
+     * the wrongness would be invisible: the Reviewing Officer's Assigned
+     * Reviews is *deliberately* the sum of the three queues under it, so a
+     * naive total reports every file on that officer's desk twice. It is
+     * counted over the distinct statuses the set covers instead — within each
+     * scope, because a personal queue and a firm-wide report count different
+     * rows — so a status named by two buckets still contributes once.
+     *
+     * What it therefore means is "applications this dashboard is about": the
+     * whole book for an administrator, the firm's book for a provider contact,
+     * this officer's desk for a reviewer. It is not a pipeline figure — the
+     * administrator's ten include Approved and Denied, which have left the
+     * pipeline — so nothing that draws it may call it one.
+     *
+     * Free: the tallies are already in hand, so no extra query is asked.
+     *
+     * @return array{buckets: list<array{key: string, label: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>}>, total: int}
+     */
+    public static function summary(?User $user): array
+    {
         $set = self::setFor($user);
 
         if ($set === null || $user === null) {
-            return [];
+            return ['buckets' => [], 'total' => 0];
         }
 
         $buckets = [];
         $tallies = [];
+        // Keyed by scope and status, so the same status reached through two
+        // buckets overwrites rather than adds.
+        $covered = [];
 
         foreach (self::SETS[$set] as $key) {
             $definition = self::DEFINITIONS[$key];
@@ -255,6 +286,10 @@ class Buckets
              */
             $tallies[$definition['scope']] ??= self::tally($user, $definition['scope']);
             $tally = $tallies[$definition['scope']];
+
+            foreach ($definition['statuses'] as $status) {
+                $covered[$definition['scope'].'|'.$status] = $tally[$status] ?? 0;
+            }
 
             $buckets[] = [
                 'key' => $key,
@@ -287,7 +322,7 @@ class Buckets
             ];
         }
 
-        return $buckets;
+        return ['buckets' => $buckets, 'total' => array_sum($covered)];
     }
 
     /**
