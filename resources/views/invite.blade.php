@@ -48,7 +48,7 @@
         @if ($state === 'expired')
           <div class="tma-auth__intro">
             <h1 class="tma-auth__title" id="invite-title">This invitation has expired</h1>
-            <p class="tma-auth__subtitle">This invitation has expired. Please request a new invitation.</p>
+            <p class="tma-auth__subtitle">Ask the person who invited you to send a new one.</p>
           </div>
           <a class="tma-auth__submit" href="mailto:support@tmantoine.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
           <p class="tma-auth__alt-link"><a href="{{ url('/auth/login') }}">Go to sign in</a></p>
@@ -203,20 +203,19 @@
         {{-- ------------------------------------- already has an account --}}
         @elseif ($state === 'signin')
           <div class="tma-auth__intro">
-            <h1 class="tma-auth__title" id="invite-title">Accept your invitation</h1>
-            <p class="tma-auth__subtitle">{{ $email }} already has an account here.</p>
+            <h1 class="tma-auth__title" id="invite-title">Sign in to accept</h1>
             @include('partials.invite-summary')
+            <p class="tma-auth__subtitle">Sign in as {{ $email }}.</p>
           </div>
           <form class="tma-auth__form" method="POST" action="{{ url('/invite/'.$token.'/signin') }}">
             @csrf
-            <button type="submit" class="tma-auth__submit">Sign in to accept</button>
+            <button type="submit" class="tma-auth__submit">Sign in</button>
           </form>
 
         @elseif ($state === 'wrong-account')
           <div class="tma-auth__intro">
-            <h1 class="tma-auth__title" id="invite-title">You're signed in as someone else</h1>
-            <p class="tma-auth__subtitle">This invitation is for {{ $email }}.</p>
-            <p class="tma-auth__subtitle">Sign out and sign back in as {{ $email }} to accept it.</p>
+            <h1 class="tma-auth__title" id="invite-title">Wrong account</h1>
+            <p class="tma-auth__subtitle">This invitation is for {{ $email }}. Sign out, then sign in as that address.</p>
           </div>
           <form class="tma-auth__form" method="POST" action="{{ url('/logout') }}">
             @csrf
@@ -242,9 +241,9 @@
         @unless ($dead)
           <p class="tma-auth__alt-link">
             @if ($expiresAt)
-              This invitation expires on {{ $expiresAt->format('j M Y') }}.
+              Expires {{ $expiresAt->format('j M Y') }}.
             @endif
-            Not expecting this? <a href="mailto:support@tmantoine.com">Contact support</a>.
+            <a href="mailto:support@tmantoine.com">Contact support</a>
           </p>
         @endunless
       </div>

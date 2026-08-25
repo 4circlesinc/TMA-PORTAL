@@ -452,4 +452,46 @@ final class Invitations
             ?? Client::find($invitation->client_id)?->name
             ?? 'the portal';
     }
+
+    /**
+     * One sentence for the invite screen. The logo already names the firm, so
+     * this only says who invited them and where, never both of those twice.
+     */
+    public static function screenLead(Invitation $invitation, ?string $inviter, string $organisation): string
+    {
+        $place = match ($invitation->type) {
+            Invitation::TYPE_COMPANY_MEMBER => $invitation->company?->name
+                ?? Company::find($invitation->company_id)?->name,
+            Invitation::TYPE_CLIENT => $invitation->client?->name
+                ?? Client::find($invitation->client_id)?->name,
+            default => null,
+        };
+        if ($place && ($place === 'the portal' || self::sameName($place, $organisation))) {
+            $place = null;
+        }
+        $person = ($inviter && ! self::sameName($inviter, $organisation))
+            ? $inviter
+            : null;
+
+        if ($person && $place) {
+            return $person.' invited you to '.$place.'.';
+        }
+        if ($person) {
+            return $person.' invited you.';
+        }
+        if ($place) {
+            return 'You have been invited to '.$place.'.';
+        }
+
+        return match ($invitation->type) {
+            Invitation::TYPE_STAFF => 'You have been invited to join the team.',
+            Invitation::TYPE_COMPANY_MEMBER => 'You have been invited to a company account.',
+            default => 'You have been invited to the client portal.',
+        };
+    }
+
+    private static function sameName(string $a, string $b): bool
+    {
+        return strcasecmp(trim($a), trim($b)) === 0;
+    }
 }

@@ -125,10 +125,10 @@ class InvitationTest extends TestCase
         $this->get("/invite/{$token}")
             ->assertOk()
             ->assertSee('tma-auth tma-auth--split', false)
-            ->assertSee('Dana Reed')
+            ->assertSee('Dana Reed invited you to Acme Co')
             // The firm's name, not APP_NAME — which is "tma-portal" in production.
             ->assertSee(Postcards::site())
-            ->assertSee('Client portal access')
+            ->assertDontSee('Client portal access')
             ->assertSee('owner@acme.test')
             ->assertSee('name="first_name"', false)
             ->assertSee('name="last_name"', false)
@@ -244,7 +244,7 @@ class InvitationTest extends TestCase
         $this->get("/invite/{$token}")
             ->assertOk()
             ->assertSee('This invitation has expired')
-            ->assertSee('Please request a new invitation');
+            ->assertSee('Request a new invitation');
 
         // Opening it flips the stored status, so the management screen agrees.
         $this->assertSame('expired', Invitation::first()->status);
@@ -293,7 +293,7 @@ class InvitationTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->get("/invite/{$token}")
             ->assertOk()
-            ->assertSee('already has an account')
+            ->assertSee('Sign in as owner@acme.test')
             ->assertSee('Sign in to accept');
 
         // And registering is refused outright.
@@ -348,7 +348,8 @@ class InvitationTest extends TestCase
 
         $this->actingAs($someoneElse)->get("/invite/{$token}")
             ->assertOk()
-            ->assertSee('signed in as someone else');
+            ->assertSee('Wrong account')
+            ->assertSee('owner@acme.test');
 
         $this->actingAs($someoneElse)->post("/invite/{$token}/accept");
 

@@ -184,8 +184,9 @@ class InvitationAcceptController extends Controller
             'email' => $invitation?->email,
             'inviter' => $invitation?->inviter?->name,
             'organisation' => Postcards::site(),
-            'target' => $invitation ? Invitations::targetLabel($invitation) : null,
-            'offer' => $invitation?->offerLabel(),
+            'lead' => $invitation
+                ? Invitations::screenLead($invitation, $invitation->inviter?->name, Postcards::site())
+                : null,
             'expiresAt' => $invitation?->expires_at,
         ]);
     }
