@@ -94,7 +94,7 @@ class CompaniesTest extends TestCase
         $this->assertEqualsCanonicalizing(
             ['sarah-cheng', 'bruce-wayne'],
             $people->pluck('id')->all(),
-            'The People tab is every contact that belongs to a service provider, not the unattached directory.',
+            'The Provider contacts tab is every contact that belongs to a service provider, not the unattached directory.',
         );
         $this->assertEquals(
             'sarah.cheng@galaxypartners.example',

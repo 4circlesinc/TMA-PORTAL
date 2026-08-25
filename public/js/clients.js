@@ -45,14 +45,14 @@
    * meant the answer to "how many applications are there" was a number you
    * had to filter for, and paging through applications walked you into
    * providers. They are different records with different columns; a tab each
-   * is what the page was doing informally. People is every contact that
-   * belongs to a service provider, the same rows the firm card used to
+   * is what the page was doing informally. Provider contacts is every contact
+   * that belongs to a service provider, the same rows the firm card used to
    * hide one company at a time.
    */
   var LIST_TABS = [
     { id: 'applications', label: 'Applications' },
     { id: 'providers', label: 'Service providers' },
-    { id: 'people', label: 'People' },
+    { id: 'people', label: 'Provider contacts' },
   ];
 
   function listTabOf(state) {
@@ -1907,7 +1907,7 @@
   /*
    * Every contact that belongs to a service provider, across every firm.
    *
-   * These are the same rows the company profile's People card lists, flattened
+   * These are the same rows the company profile's Provider contacts card lists, flattened
    * so the reader does not have to open each firm to find someone. Search
    * matches the person, their email, or the firm they sit on.
    */
@@ -2249,28 +2249,26 @@
 
     var people = onPeopleTab(state);
     var providers = onProvidersTab(state);
-    var noun = people ? 'person' : (providers ? 'service provider' : 'client');
+    var noun = people ? 'provider contact' : (providers ? 'service provider' : 'client');
 
     if (searching || filtered) {
       // Nothing to add here: the records exist, the query is what is wrong.
       var what = searching ? 'search' : 'filters';
-      if (!noData) return 'No ' + (people ? 'people' : noun + 's') + ' match this ' + what;
+      if (!noData) return 'No ' + noun + 's match this ' + what;
       return noData.render({
         title: 'No matches',
         subtitle: searching
-          ? (people
-            ? 'No person matches “' + state.search.trim() + '”.'
-            : 'No ' + noun + ' matches “' + state.search.trim() + '”.')
-          : 'No ' + (people ? 'people' : noun) + ' matches these filters.',
+          ? 'No ' + noun + ' matches “' + state.search.trim() + '”.'
+          : 'No ' + noun + ' matches these filters.',
         illustrationName: 'Illustration19',
         showButton: false,
       });
     }
 
     if (people) {
-      if (!noData) return 'No contacts yet';
+      if (!noData) return 'No provider contacts yet';
       return noData.render({
-        title: 'No contacts yet',
+        title: 'No provider contacts yet',
         subtitle: 'Contacts appear here once they belong to a service provider.',
         illustrationName: 'Illustration04',
         showButton: false,
@@ -3321,7 +3319,7 @@
       '<div class="tma-dash__ctable tma-dash__ctable--clients tma-dash__ctable--noselect' +
       (people ? ' tma-dash__ctable--people' : '') +
       '" role="table" aria-label="' +
-      (people ? 'People' : 'Service providers') + '">' +
+      (people ? 'Provider contacts' : 'Service providers') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
       // No checkbox column on these tabs. Bulk actions post to the clients
       // endpoint, and a company is deleted from its own profile.
@@ -3368,7 +3366,7 @@
     var filtered = (people || providers) ? !!state.search : (anyClientFilter(state.filters) || !!state.search);
     var shown = filtered ? tableRowEntries(state).length : total;
     var noun = people
-      ? (total === 1 && !filtered ? 'person' : 'people')
+      ? (total === 1 && !filtered ? 'provider contact' : 'provider contacts')
       : providers
         ? (total === 1 && !filtered ? 'service provider' : 'service providers')
         : (total === 1 && !filtered ? 'application' : 'applications');
@@ -3872,7 +3870,7 @@
       '<div class="tma-dash__clients-profile-ident">' +
       '<span class="tma-dash__clients-profile-name">' + esc(company.name) + '</span>' +
       '<span class="tma-dash__clients-profile-subtitle">' +
-      esc(peopleCount + (peopleCount === 1 ? ' person' : ' people')) +
+      esc(peopleCount + (peopleCount === 1 ? ' contact' : ' contacts')) +
       '</span></div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
@@ -4380,7 +4378,7 @@
         half: true, count: company.referredCount || 0,
       }) +
       companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
-      companyCard('People', renderCompanyPeople(company), {
+      companyCard('Provider contacts', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
       }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), { half: true }) +

@@ -5,7 +5,7 @@ window.TMAI18nDict = {
     "Dashboard": "Panel", "Home": "Inicio", "Overview": "Resumen", "Email": "Correo",
     "Calendar": "Calendario", "Calendars": "Calendarios", "Messages": "Mensajes",
     "Chat": "Chat", "Chats": "Chats", "Feed": "Novedades", "People": "Personas",
-    "Users": "Usuarios", "Client hub": "Centro de clientes", "CIP Applications": "Solicitudes CIP", "Create New Application": "Crear nueva solicitud", "New application": "Nueva solicitud", "New service provider": "Nuevo proveedor de servicios", "Clients": "Clientes",
+    "Users": "Usuarios", "Client hub": "Centro de clientes", "CIP Applications": "Solicitudes CIP", "Create New Application": "Crear nueva solicitud", "New application": "Nueva solicitud", "New service provider": "Nuevo proveedor de servicios", "Provider contacts": "Contactos del proveedor", "Clients": "Clientes",
     "Client": "Cliente", "Projects": "Proyectos", "My Projects": "Mis proyectos",
     "File Library": "Biblioteca de archivos", "Signatures": "Firmas", "Signature": "Firma",
     "Templates": "Plantillas", "Workflows": "Flujos de trabajo", "Settings": "Configuración",

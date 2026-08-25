@@ -5,7 +5,7 @@ window.TMAI18nDict = {
     "Dashboard": "仪表板", "Home": "主页", "Overview": "概览", "Email": "邮件",
     "Calendar": "日历", "Calendars": "日历", "Messages": "消息",
     "Chat": "聊天", "Chats": "聊天", "Feed": "动态", "People": "人员",
-    "Users": "用户", "Client hub": "客户中心", "CIP Applications": "CIP 申请", "Create New Application": "创建新申请", "New application": "新申请", "New service provider": "新服务提供商", "Clients": "客户",
+    "Users": "用户", "Client hub": "客户中心", "CIP Applications": "CIP 申请", "Create New Application": "创建新申请", "New application": "新申请", "New service provider": "新服务提供商", "Provider contacts": "服务商联系人", "Clients": "客户",
     "Client": "客户", "Projects": "项目", "My Projects": "我的项目",
     "File Library": "文件库", "Signatures": "签名", "Signature": "签名",
     "Templates": "模板", "Workflows": "工作流", "Settings": "设置",
