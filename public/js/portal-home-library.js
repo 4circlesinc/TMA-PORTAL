@@ -754,8 +754,9 @@
       if (isStaffUser() === false) {
         nextDefaults = [];
       } else {
-        var fromShortcuts = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
-        nextDefaults = mergeDefaults(normalizeOrgList(fromShortcuts.concat(adminOrg)));
+        var fromOrg = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
+        var fromLibraries = (shortcuts && shortcuts.groups && shortcuts.groups.libraries) || [];
+        nextDefaults = mergeDefaults(normalizeOrgList(fromLibraries.concat(fromOrg).concat(adminOrg)));
       }
       state.defaults = nextDefaults;
 

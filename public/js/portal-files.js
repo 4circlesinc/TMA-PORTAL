@@ -80,7 +80,7 @@
      *
      * This used to ask for everything (perPage=0) on the reasoning that a
      * library shows whole folders. That holds at a few hundred rows and
-     * breaks completely at eleven thousand: "Client Files" answered with a
+     * breaks completely at eleven thousand: "Clients" answered with a
      * 19MB payload the browser then reconciled into eleven thousand rows, and
      * the folder simply never opened. Sorting, searching and filtering all
      * already run in the database, so a page is a window on the same ordered

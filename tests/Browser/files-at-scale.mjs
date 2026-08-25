@@ -12,7 +12,7 @@ import { chromium } from 'playwright';
  *     check lazy-loaded a CIP slot five times per row on top. Fifty rows of
  *     Recent cost 364 queries — 104s against the remote database, past any
  *     request timeout, so the Dashboard's card sat empty for ever.
- *  2. Opening Client Files asked for all eleven thousand rows at once
+ *  2. Opening Clients asked for all eleven thousand rows at once
  *     (perPage=0). Server-side it never returned; even once it did, the
  *     answer was 19MB and the browser reconciled eleven thousand rows.
  *
@@ -127,17 +127,17 @@ try {
   await page.waitForSelector('[data-files-body] [data-id]', { timeout: BUDGET_MS });
   check(true, `File Library painted in ${Date.now() - libStart}ms`);
 
-  step(4, 'Client Files — the whole client list');
+  step(4, 'Clients — the whole client list');
   await parkPointer();
   const openStart = Date.now();
-  await page.locator('[data-files-body] [data-id]', { hasText: 'Client Files' }).first().dblclick();
+  await page.locator('[data-files-body] [data-files-open][title="Clients"]').first().dblclick();
   await page.waitForFunction(
     () => document.querySelectorAll('[data-files-body] [data-id]').length > 5,
     { timeout: BUDGET_MS },
   );
   const openMs = Date.now() - openStart;
   const shown = await rowCount();
-  check(openMs < BUDGET_MS, `Client Files opened in ${openMs}ms with ${shown} rows`);
+  check(openMs < BUDGET_MS, `Clients opened in ${openMs}ms with ${shown} rows`);
 
   // The page must stay usable once open: a listing that blocks the main
   // thread for seconds "loaded" by every assertion above and none that matter.

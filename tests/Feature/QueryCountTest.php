@@ -2,10 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\Conversation;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Models\UserPresence;
+use App\Support\Files\FileAccess;
+use App\Support\Presence\AvailabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -60,8 +66,8 @@ class QueryCountTest extends TestCase
      */
     private function countQueries(callable $fn): int
     {
-        \App\Support\Files\FileAccess::forgetFolders();
-        \App\Support\Presence\AvailabilityService::forgetPrimedStates();
+        FileAccess::forgetFolders();
+        AvailabilityService::forgetPrimedStates();
 
         DB::flushQueryLog();
         DB::enableQueryLog();
@@ -266,7 +272,7 @@ class QueryCountTest extends TestCase
 
         $root = Folder::create([
             'uuid' => (string) Str::uuid(),
-            'name' => 'Client Files',
+            'name' => 'Clients',
             'owner_id' => $me->id,
             'created_by' => $me->id,
             'folder_type' => Folder::TYPE_ROOT,
@@ -332,7 +338,7 @@ class QueryCountTest extends TestCase
                  * takes the cheap path here and the expensive one in real life,
                  * which is exactly how the N+1 shipped.
                  */
-                \App\Models\UserPresence::create([
+                UserPresence::create([
                     'user_id' => $u->id,
                     'last_seen_at' => now()->subMinutes(5),
                 ]);
@@ -371,7 +377,7 @@ class QueryCountTest extends TestCase
 
         $addClients = function (int $n, string $prefix) use ($me) {
             for ($i = 0; $i < $n; $i++) {
-                \App\Models\Client::create([
+                Client::create([
                     'uid' => (string) Str::uuid(),
                     'name' => "$prefix Client $i",
                     'email' => "$prefix-client-$i@example.com",
@@ -412,19 +418,19 @@ class QueryCountTest extends TestCase
         $me = $this->staff();
         $this->actingAs($me);
 
-        $folder = \App\Models\Folder::create([
+        $folder = Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'Library',
             'owner_id' => $me->id,
             'created_by' => $me->id,
-            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'folder_type' => Folder::TYPE_ORGANIZATION,
             'audience' => 'all_staff',
             'audience_role' => 'editor',
         ]);
 
         $addFiles = function (int $count, string $prefix) use ($me, $folder) {
             for ($i = 0; $i < $count; $i++) {
-                \App\Models\FileItem::create([
+                FileItem::create([
                     'uuid' => (string) Str::uuid(),
                     'name' => "$prefix-$i.pdf",
                     'extension' => 'pdf',
@@ -470,7 +476,7 @@ class QueryCountTest extends TestCase
 
         $addCompanies = function (int $count, string $prefix) use ($me) {
             for ($i = 0; $i < $count; $i++) {
-                $company = \App\Models\Company::create([
+                $company = Company::create([
                     'uid' => "$prefix-co-$i",
                     'name' => "$prefix Company $i",
                     'created_by' => $me->id,
@@ -478,19 +484,19 @@ class QueryCountTest extends TestCase
 
                 // Members and referrals are what the two per-company queries
                 // were counting, so both have to exist for the guard to bite.
-                \App\Models\CompanyMember::create([
+                CompanyMember::create([
                     'company_id' => $company->id,
                     'name' => "$prefix Member $i",
                     'email' => "$prefix-member-$i@example.com",
-                    'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+                    'status' => CompanyMember::STATUS_ACTIVE,
                     'invited_by' => $me->id,
                 ]);
 
                 foreach (range(1, 3) as $n) {
-                    \App\Models\Client::create([
+                    Client::create([
                         'uid' => "$prefix-ref-$i-$n",
                         'name' => "$prefix Referred $i $n",
-                        'referral_type' => \App\Models\Client::REFERRAL_COMPANY,
+                        'referral_type' => Client::REFERRAL_COMPANY,
                         'referred_by_company_id' => $company->id,
                         'data' => [],
                         'created_by' => $me->id,
@@ -528,7 +534,7 @@ class QueryCountTest extends TestCase
         $me = $this->staff();
         $this->actingAs($me);
 
-        $company = \App\Models\Company::create([
+        $company = Company::create([
             'uid' => 'ties-co',
             'name' => 'Ties Company',
             'created_by' => $me->id,
@@ -537,10 +543,10 @@ class QueryCountTest extends TestCase
         // Twenty clients sharing one name: more than the preview holds, so
         // which of them it keeps is decided entirely by the sort.
         foreach (range(1, 20) as $n) {
-            \App\Models\Client::create([
+            Client::create([
                 'uid' => "tie-$n",
                 'name' => 'Same Name',
-                'referral_type' => \App\Models\Client::REFERRAL_COMPANY,
+                'referral_type' => Client::REFERRAL_COMPANY,
                 'referred_by_company_id' => $company->id,
                 'data' => [],
                 'created_by' => $me->id,
@@ -556,7 +562,7 @@ class QueryCountTest extends TestCase
         $first = $idsFromListing();
         $second = $idsFromListing();
 
-        $this->assertCount(\App\Models\Company::REFERRED_PREVIEW, $first);
+        $this->assertCount(Company::REFERRED_PREVIEW, $first);
         $this->assertSame($first, $second, 'The referred preview changed between identical requests.');
 
         // And the single-company path has to agree with the listing, or a

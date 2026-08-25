@@ -7,7 +7,7 @@ use App\Models\Folder;
 use App\Models\User;
 
 /**
- * System-managed folders (the Client Files / Staff Files roots, every
+ * System-managed folders (the Clients / Staff Files roots, every
  * organization / client / staff folder, and everything nested inside them) are
  * owned and created by an administrator so storage has a stable owner. Folders
  * and files both cascade on those columns, so before an account is erased for

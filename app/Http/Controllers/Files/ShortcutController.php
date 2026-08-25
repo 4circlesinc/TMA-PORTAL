@@ -88,7 +88,7 @@ class ShortcutController extends BaseFilesController
             ->where('subject_user_id', $user->id)
             ->orderBy('name')->get();
 
-        // The "Client Files" / "Staff Files" containers, a fast path to browse
+        // The "Clients" / "Staff Files" containers, a fast path to browse
         // every client/staff folder. Only visible to whoever may see the root
         // (administrators), so staff never get a shortcut listing all clients.
         // Ensure both exist so an admin always has the entry points, even before

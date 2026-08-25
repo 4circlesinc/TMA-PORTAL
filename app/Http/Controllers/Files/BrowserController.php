@@ -235,7 +235,7 @@ class BrowserController extends BaseFilesController
                 // was just touched belongs here too. A trashed folder's whole
                 // subtree is soft-deleted with it (FolderTree::softDeleteTree),
                 // so the default non-trashed scope already excludes orphans.
-                // The bare "Client Files"/"Staff Files" root anchors are
+                // The bare "Clients"/"Staff Files" root anchors are
                 // structural scaffolding auto-provisioned for every user, not
                 // activity, excluded, or a brand new user's Recent would show
                 // nothing but two empty containers created moments earlier.
@@ -269,7 +269,7 @@ class BrowserController extends BaseFilesController
         return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
             // Non-admin access flows downward from visible roots (assigned
             // client folders, org folders, their own staff folder). Using only
-            // those root ids made "Client Files" open to an empty listing for
+            // those root ids made "Clients" open to an empty listing for
             // assigned staff because the contents live beneath the granted
             // folder, not at the root id itself.
             $ids = SyncScope::folderIds($user);

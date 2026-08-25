@@ -53,7 +53,7 @@ class ClientFolderProvisioningTest extends TestCase
         $this->assertSame($client->id, $folder->client_id);
         $this->assertSame('Vernon Francis', $folder->name);
 
-        // Lives under the "Client Files" root.
+        // Lives under the "Clients" root.
         $this->assertSame(FolderProvisioner::ROOT_CLIENTS, $folder->parent->name);
 
         // No scaffold of empty folders: the firm turned that off, so a new
@@ -94,7 +94,7 @@ class ClientFolderProvisioningTest extends TestCase
 
     public function test_configured_subfolders_are_still_created_when_an_admin_sets_them(): void
     {
-        \App\Models\FileLibrarySetting::put(['clientSubfolders' => ['Contracts', 'Invoices']]);
+        FileLibrarySetting::put(['clientSubfolders' => ['Contracts', 'Invoices']]);
 
         $admin = $this->user('Administrator');
         $this->actingAs($admin)->postJson('/portal/clients', $this->payload('acme-co', 'Acme Co'))->assertOk();

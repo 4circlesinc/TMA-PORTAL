@@ -8,6 +8,7 @@ use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 
 /**
  * Put the firm's own files under the firm's own account.
@@ -63,7 +64,7 @@ class FilesReassignSystemOwner extends Command
 
         $files = $this->idsFor($siteConnections, 'file_id');
         $folders = $this->idsFor($siteConnections, 'folder_id')
-            // The libraries' own root folders, and the Client Files / Staff
+            // The libraries' own root folders, and the Clients / Staff
             // Files roots, are not synced items — the connect flow made them —
             // so no mapping row names them. They are firm structure by their
             // type, never a person's, and were left under whoever ran it.
@@ -113,7 +114,7 @@ class FilesReassignSystemOwner extends Command
      * TYPE_USER is deliberately absent: that is somebody's own space, and
      * FileAccess treats a personal tree as private even from administrators.
      *
-     * @return \Illuminate\Support\Collection<int, int>
+     * @return Collection<int, int>
      */
     private function firmStructureFolderIds()
     {
@@ -128,8 +129,8 @@ class FilesReassignSystemOwner extends Command
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, int>  $connectionIds
-     * @return \Illuminate\Support\Collection<int, int>
+     * @param  Collection<int, int>  $connectionIds
+     * @return Collection<int, int>
      */
     private function idsFor($connectionIds, string $column)
     {

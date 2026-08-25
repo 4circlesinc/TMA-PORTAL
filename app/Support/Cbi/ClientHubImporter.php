@@ -161,7 +161,7 @@ class ClientHubImporter
         $now = now();
         $subfolders = FileLibrarySetting::clientSubfolders();
 
-        // Sibling names under Client Files, lowercased, so uniqueness is
+        // Sibling names under Clients, lowercased, so uniqueness is
         // settled in memory instead of one EXISTS round trip per person.
         $taken = Folder::query()
             ->where('parent_id', $root->id)

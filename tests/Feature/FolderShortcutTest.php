@@ -64,8 +64,30 @@ class FolderShortcutTest extends TestCase
                 ->assertOk()->json('groups.libraries')
         )->pluck('name');
 
-        $this->assertTrue($libraries->contains('Client Files'));
+        $this->assertTrue($libraries->contains('Clients'));
         $this->assertTrue($libraries->contains('Staff Files'));
+    }
+
+    public function test_a_legacy_client_files_root_is_renamed_to_clients(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Client Files',
+            'folder_type' => Folder::TYPE_ROOT,
+            'parent_id' => null,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+
+        $libraries = collect(
+            $this->actingAs($admin)->getJson('/portal/files/shortcuts')
+                ->assertOk()->json('groups.libraries')
+        )->pluck('name');
+
+        $this->assertTrue($libraries->contains('Clients'));
+        $this->assertFalse($libraries->contains('Client Files'));
+        $this->assertSame(1, Folder::where('folder_type', Folder::TYPE_ROOT)->where('name', 'Clients')->count());
     }
 
     public function test_staff_never_see_the_client_files_library_in_shortcuts(): void

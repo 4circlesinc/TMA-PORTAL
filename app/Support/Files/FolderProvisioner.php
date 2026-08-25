@@ -9,7 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Str;
 
 /**
- * Creates and maintains the system-managed folders: the "Client Files" and
+ * Creates and maintains the system-managed folders: the "Clients" and
  * "Staff Files" roots, one main folder per client (linked by client_id, never
  * by name), each client's configured default subfolders, and per-staff folders.
  *
@@ -19,7 +19,10 @@ use Illuminate\Support\Str;
  */
 class FolderProvisioner
 {
-    public const ROOT_CLIENTS = 'Client Files';
+    public const ROOT_CLIENTS = 'Clients';
+
+    /** Older label. Looked up so an existing install is renamed, not duplicated. */
+    public const ROOT_CLIENTS_LEGACY = 'Client Files';
 
     public const ROOT_STAFF = 'Staff Files';
 
@@ -61,7 +64,7 @@ class FolderProvisioner
 
     public static function clientsRoot(): Folder
     {
-        return self::ensureRoot(self::ROOT_CLIENTS);
+        return self::ensureRoot(self::ROOT_CLIENTS, [self::ROOT_CLIENTS_LEGACY]);
     }
 
     public static function staffRoot(): Folder
@@ -69,14 +72,23 @@ class FolderProvisioner
         return self::ensureRoot(self::ROOT_STAFF);
     }
 
-    private static function ensureRoot(string $name): Folder
+    /**
+     * @param  list<string>  $aliases
+     */
+    private static function ensureRoot(string $name, array $aliases = []): Folder
     {
+        $names = array_values(array_unique(array_merge([$name], $aliases)));
+
         $root = Folder::whereNull('parent_id')
             ->where('folder_type', Folder::TYPE_ROOT)
-            ->where('name', $name)
+            ->whereIn('name', $names)
             ->first();
 
         if ($root) {
+            if ($root->name !== $name) {
+                $root->forceFill(['name' => $name])->save();
+            }
+
             return $root;
         }
 
