@@ -174,16 +174,25 @@ try {
   check(bar.overflow === 0, `and the card does not scroll sideways (${bar.overflow}px)`);
 
   /*
-   * The figure the bar is a hundred per cent of. 32 across the ten buckets,
-   * and the DRAFT is the evidence: it is the administrator's application too,
-   * so a total that counted the book rather than the buckets would read 33.
+   * The figure the bar is a hundred per cent of, which lives in the heading
+   * beside the card's name. 32 across the ten buckets, and the DRAFT is the
+   * evidence: it is the administrator's application too, so a total that
+   * counted the book rather than the buckets would read 33.
+   *
+   * The heading is checked whole, because the point of moving the number up
+   * there was that one line carries both the name and the count — a card that
+   * printed the total twice, or lost the name to make room, would pass a
+   * check that only read the number.
    */
-  const total = await page.evaluate(() => {
-    const el = document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__total');
-    return { figure: el?.querySelector('b')?.innerText.trim() || '', noun: el?.querySelector('span')?.innerText.trim() || '' };
+  const heading = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    return {
+      text: card.querySelector('.tma-portal-panel__head')?.innerText.replace(/\s+/g, ' ').trim() || '',
+      elsewhere: card.querySelectorAll('.tma-portal-cip__total').length,
+    };
   });
-  check(total.figure === '32', `the total reads 32 (got "${total.figure}")`);
-  check(total.noun === 'applications', `and says what it counts (got "${total.noun}")`);
+  check(heading.text === 'CIP Applications 32', `the heading carries the total (got "${heading.text}")`);
+  check(heading.elsewhere === 0, 'and nothing under it prints the same number again');
 
   // Every bucket is busy in this seed, so nothing is a chip.
   const cardChips = await page.$$('[data-tile-id="cipStatus"] .tma-portal-cip__chip');
@@ -218,7 +227,7 @@ try {
       // One stage holding everything is one block across the whole strip.
       whole: segs.length === 1 &&
         Math.abs(segs[0].getBoundingClientRect().width - stack.getBoundingClientRect().width) < 1,
-      total: card.querySelector('.tma-portal-cip__total b')?.innerText.trim() || '',
+      total: card.querySelector('.tma-portal-panel__meta')?.innerText.trim() || '',
       share: card.querySelector('.tma-portal-cip__share')?.innerText.trim() || '',
     };
   });

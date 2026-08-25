@@ -916,24 +916,6 @@
   var homeCipAt = 0;
 
   /*
-   * What the counts are measured over, deliberately not a total.
-   *
-   * The two sets that can arrive count different things, so a single meta that
-   * fits one is a lie on the other. A Reviewing Officer's four are the files on
-   * their own desk; a heading that read like a firm-wide figure would turn
-   * their to-do list into a report about everybody, and they would act on it.
-   * The payload says which set it sent, so this says what that set covers.
-   *
-   * service_provider is on this card for the contact, not the private client.
-   * "Your firm" is true of the one reader `card` lets through.
-   */
-  var CIP_SCOPE_META = {
-    administrator: 'All applications',
-    reviewing_officer: 'Assigned to you',
-    service_provider: 'Your firm',
-  };
-
-  /*
    * The five-tone status vocabulary (App\Support\Cip\Status), whitelisted here
    * because the tone is interpolated into a class name and an unrecognised
    * value must fall back rather than travel into the markup.
@@ -977,8 +959,11 @@
 
   function cipSkeleton() {
     /*
-     * A bar and four legend rows. The bar is one grey block rather than
-     * segments, and the reason is the same one the rows have always had: a
+     * A bar and four legend rows, and no placeholder for the total: it lives
+     * in the heading now, which the loading card simply leaves without one
+     * rather than shimmering a number-shaped blank beside a real title.
+     *
+     * The bar is one grey block rather than segments, and the reason is the same one the rows have always had: a
      * shape that could be read as an answer must not stand in for one that has
      * not arrived. Ten grey slivers are what a *finished* card with nothing in
      * it would look like.
@@ -1009,7 +994,6 @@
     return tileShell(
       'cipStatus', 'panel-cip', 'CIP Applications', panelHead('CIP Applications'),
       '<div class="tma-portal-cip-card" aria-hidden="true">' +
-      '<p class="tma-portal-cip__total"><b class="tma-skeleton tma-skeleton--text"></b></p>' +
       '<p class="tma-portal-cip__stack-skeleton tma-skeleton"></p>' +
       '<ul class="tma-portal-cip">' + new Array(4).fill(row).join('') + '</ul>' +
       '</div>',
@@ -1256,12 +1240,23 @@
     var busy = parts.filter(function (b) { return b.count > 0; });
     var clear = parts.filter(function (b) { return !b.count; });
 
+    /*
+     * The total sits in the heading, beside the card's name.
+     *
+     * It used to be a figure of its own under a line saying what the counts
+     * were measured over ("All applications", "Assigned to you", "Your firm").
+     * One line now carries both jobs: the name says what this is and the
+     * number says how much of it there is, which is what a reader glancing at
+     * the board wants in the fewest words.
+     *
+     * The bar underneath still needs a stated total — it is what the blocks
+     * are a hundred per cent of — and this is it; there is no second copy
+     * lower down printing the same number twice.
+     */
     return tileShell(
       'cipStatus', 'panel-cip', 'CIP Applications',
-      panelHead('CIP Applications', CIP_SCOPE_META[homeCip.dashboard] || ''),
+      panelHead('CIP Applications', cipCount(total)),
       '<div class="tma-portal-cip-card">' +
-      '<p class="tma-portal-cip__total"><b>' + ui().esc(cipCount(total)) + '</b>' +
-      '<span>' + (total === 1 ? 'application' : 'applications') + '</span></p>' +
       (busy.length
         ? cipStack(busy, total) +
           '<ul class="tma-portal-cip">' +

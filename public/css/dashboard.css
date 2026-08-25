@@ -35884,45 +35884,19 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * The figure the bar is a hundred per cent of.
+ * The figure the bar is a hundred per cent of, in the heading beside the
+ * card's name.
  *
  * Stated rather than left to be inferred, because a stacked bar with no total
  * is a picture of proportions floating free of any quantity — the same shape
- * whether the firm is holding four applications or four hundred. Tabular so it
- * does not jump about as it changes. What it is measured over is the panel
- * head's job (All applications / Assigned to you / Your firm), so the word
- * beside it is only ever "applications": "in pipeline" would be wrong on the
- * administrator's set, whose ten include Approved and Denied.
+ * whether the firm is holding four applications or four hundred. It reads as a
+ * count rather than as a caption, so it takes the panel meta's slot and its
+ * own weight; tabular, so it does not jump about as it changes.
  */
-.tma-portal-cip__total {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-8);
-  margin: 0 0 var(--space-12);
-  min-width: 0;
-}
-
-.tma-portal-cip__total b {
-  font-size: var(--text-size-24);
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.tma-portal-panel--cip .tma-portal-panel__meta {
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-black);
-}
-
-.tma-portal-cip__total span {
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
-}
-
-/* The loading total. Sized here rather than inline, like every other
-   measurement on this card. */
-.tma-portal-cip__total > .tma-skeleton {
-  width: 84px;
-  height: 22px;
-  border-radius: var(--radius-6);
 }
 
 .tma-portal-cip__stack {
