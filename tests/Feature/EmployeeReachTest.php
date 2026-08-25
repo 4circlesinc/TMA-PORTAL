@@ -102,7 +102,7 @@ class EmployeeReachTest extends TestCase
             'folders/recent', 'folders/recycle', 'folders/shared',
             'folders/shared-with-me', 'overview',
             'settings/change-email', 'signatures', 'social/feed',
-            'social/messages', 'templates', 'workflows', 'workflows/feedback',
+            'social/messages', 'workflows', 'workflows/feedback',
         ], $reach[Role::REVIEWING_OFFICER], 'the pages employee-like staff reach have changed');
 
         // A client keeps their own File Library screens; the two
@@ -130,6 +130,19 @@ class EmployeeReachTest extends TestCase
         $this->assertStringNotContainsString('data-expand="projects"', $html);
         $this->assertStringNotContainsString('data-nav="projects-all"', $html);
         $this->assertStringNotContainsString('data-view="projects-hub"', $html);
+    }
+
+    public function test_the_templates_page_is_gone_for_everyone(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $this->actingAs($admin)->get('/templates')
+            ->assertNotFound('/templates should no longer be served');
+
+        $html = $this->actingAs($admin)->get('/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('data-nav="templates"', $html);
+        $this->assertStringNotContainsString('data-view="templates"', $html);
+        $this->assertStringNotContainsString('href="/templates"', $html);
     }
 
     public function test_an_approved_employee_is_held_on_the_role_pending_screen(): void

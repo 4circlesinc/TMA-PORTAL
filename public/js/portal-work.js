@@ -807,21 +807,6 @@
     }
   }
 
-  /* ── Templates (minimal) ─────────────────────────── */
-  var tpl = { el: null, search: '' };
-
-  function mountTemplates(el) {
-    tpl.el = el;
-    el.innerHTML =
-      '<div class="tma-portal-page">' +
-      ui().emptyState({
-        illustration: 'Illustration05',
-        title: 'No templates yet',
-        subtitle: 'Document and project templates will appear here.',
-      }) +
-      '</div>';
-  }
-
   /* ── Signatures ──────────────────────────────────── */
   var sig = {
     el: null, search: '', status: 'all', adminView: false,
@@ -2879,7 +2864,6 @@
 
   if (window.TMAPortalViews) {
     window.TMAPortalViews.register('workflows', mountWorkflows);
-    window.TMAPortalViews.register('templates', mountTemplates);
     window.TMAPortalViews.register('signatures', mountSignatures);
 
     /*

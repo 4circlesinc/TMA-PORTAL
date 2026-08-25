@@ -3,7 +3,7 @@
  *
  * The sidebar, the mobile menu and the bottom tab bar are static HTML shared
  * by every account type, so a client used to see Clients, Users, Email,
- * Templates, Workflows and People, click any of them and the page loaded,
+ * Workflows and People, click any of them and the page loaded,
  * then filled with permission errors. This removes what the server would
  * refuse, so the portal only ever offers what the account can actually use.
  *
@@ -29,7 +29,6 @@
     'so-feed': 'feed.view',
     'users': 'users.view',
     'reporting': 'settings.reporting',
-    'templates': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
