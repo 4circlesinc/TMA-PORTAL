@@ -203,6 +203,7 @@ app.whenReady().then(async () => {
       };
       return {
         bar: region('#tma-desktop-titlebar'),
+        title: region('#tma-desktop-titlebar .tma-tb-title'),
         sep: region('#tma-desktop-titlebar .tma-tb-sep'),
         nav: region('#tma-desktop-titlebar .tma-tb-nav'),
         back: region('[data-tb="back"]'),
