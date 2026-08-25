@@ -14,28 +14,36 @@ import { chromium } from 'playwright';
  * saying six that opens onto nine rows is worse than no chip: it is the
  * portal telling somebody there is work they then cannot find.
  *
- * The card is a strip of every stage over rows for only the occupied ones, so
- * this seed — every bucket busy — is deliberately the case where the two
- * halves are the same length: ten segments, ten rows. What happens when a
- * stage empties is checked in step 1b by emptying the card's data rather than
- * by seeding a second book.
+ * The card is one stacked bar over a legend, so this seed — every bucket busy
+ * — is deliberately the case where the bar has to divide into ten and still
+ * come out to exactly its own width. What happens when a stage empties is
+ * checked in step 1b by emptying the card's data rather than by seeding a
+ * second book.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
 const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
 
-/** What the harness seeded, in the order §9 names them. */
+/**
+ * What the harness seeded, in the order §9 names them: the full label, the
+ * short one the card's legend uses, and the count.
+ *
+ * Both names are here because both are the server's — App\Support\Cip\Buckets
+ * names each bucket twice, so that a legend column can hold "Requests" while
+ * the thing it opens is still Additional Information Requests. A browser
+ * shortening the label by rule is the failure this guards.
+ */
 const EXPECTED = [
-  ['New Applications', 3],
-  ['Review Applications', 1],
-  ['Assessment Feedback', 4],
-  ['Updates Required', 2],
-  ['Ready to Submit', 5],
-  ['Pending Review', 6],
-  ['Background Check', 1],
-  ['Delayed', 2],
-  ['Approved', 7],
-  ['Denied', 1],
+  ['New Applications', 'New', 3],
+  ['Review Applications', 'Review', 1],
+  ['Assessment Feedback', 'Feedback', 4],
+  ['Updates Required', 'Updates', 2],
+  ['Ready to Submit', 'Ready', 5],
+  ['Pending Review', 'Pending', 6],
+  ['Background Check', 'Background', 1],
+  ['Delayed', 'Delayed', 2],
+  ['Approved', 'Approved', 7],
+  ['Denied', 'Denied', 1],
 ];
 
 const failures = [];
@@ -78,17 +86,21 @@ try {
     [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__row')].map(li => ({
       key: li.querySelector('[data-home-cip-bucket]')?.getAttribute('data-home-cip-bucket') || '',
       label: li.querySelector('.tma-portal-cip__label')?.innerText.trim() || '',
-      count: li.querySelector('.tma-portal-cip__pill')?.innerText.trim() || '',
-      // The tone lives on the row now: the dot and the count pill both read
-      // it, and a colour named twice is a colour that can disagree with itself.
+      full: li.querySelector('[data-home-cip-bucket]')?.getAttribute('title') || '',
+      count: li.querySelector('.tma-portal-cip__count')?.innerText.trim() || '',
+      // The tone lives on the row: the dot and the bar's block both read it,
+      // and a colour named twice is a colour that can disagree with itself.
       tone: [...li.classList].find(c => c.startsWith('tma-portal-cip__tone--')) || '',
     })));
 
-  check(rows.length === EXPECTED.length, `${EXPECTED.length} rows (${rows.length})`);
-  EXPECTED.forEach(([label, count], i) => {
+  check(rows.length === EXPECTED.length, `${EXPECTED.length} legend rows (${rows.length})`);
+  EXPECTED.forEach(([label, short, count], i) => {
     const row = rows[i] || {};
-    check(row.label === label && row.count === String(count),
-      `${label} = ${count} (got "${row.label}" = "${row.count}")`);
+    check(row.label === short && row.count === String(count),
+      `${short} = ${count} (got "${row.label}" = "${row.count}")`);
+    // The short name is what fits the column; the full one is still reachable,
+    // because "Requests" on its own does not tell anybody what they are.
+    check(row.full === label, `and still says ${label} in full (got "${row.full}")`);
   });
   check(rows.every(r => r.tone), 'every row carries a status tone');
 
@@ -106,64 +118,67 @@ try {
   check(unpainted === 0, `every tone dot is actually painted (${unpainted} blank)`);
 
   /*
-   * The pill behind each count is the tone mixed toward black, so it can only
-   * be transparent if the mix failed — which is what an unsupported
-   * color-mix() or a tone the row never received would look like, and white
-   * digits on nothing is a count nobody can read.
+   * The bar. What is really being checked is that it is a *whole*: ten blocks
+   * whose widths and gaps come to exactly the width of the strip, in the same
+   * order as the legend. A bar that overflowed, left a gap at the end, or
+   * ordered itself differently from the names under it would be a picture of
+   * a pipeline nobody has.
    */
-  const flatPills = await page.evaluate(() =>
-    [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__pill')]
-      .filter(p => {
-        const bg = getComputedStyle(p).backgroundColor;
-        return !bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent';
-      }).length);
-  check(flatPills === 0, `every count pill is filled (${flatPills} blank)`);
-
-  /*
-   * The strip: one segment per bucket, in the same order, every one of them a
-   * control. It is the only way to reach a stage holding nothing, so a
-   * segment that stopped being pressable would quietly cost the reader six of
-   * the ten buckets on a normal morning.
-   */
-  const track = await page.evaluate(() => {
-    const segs = [...document.querySelectorAll('[data-tile-id="cipStatus"] .tma-portal-cip__seg')];
+  const bar = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    const stack = card.querySelector('.tma-portal-cip__stack');
+    const segs = [...stack.querySelectorAll('.tma-portal-cip__seg')];
+    const w = el => el.getBoundingClientRect().width;
     return {
       n: segs.length,
       keys: segs.map(s => s.getAttribute('data-home-cip-bucket')),
-      lit: segs.filter(s => s.classList.contains('is-on')).length,
       named: segs.filter(s => (s.getAttribute('aria-label') || '').trim()).length,
-      // The bar is a pseudo-element; what must be big enough to hit is the
-      // button around it.
-      hit: Math.min(...segs.map(s => s.getBoundingClientRect().height)),
-      painted: segs.filter(s => {
-        const bg = getComputedStyle(s, '::after').backgroundColor;
+      filled: segs.filter(s => {
+        const bg = getComputedStyle(s).backgroundColor;
         return bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
       }).length,
+      numbered: segs.filter(s => s.innerText.trim()).length,
+      smallest: Math.min(...segs.map(w)),
+      // Widths plus the 3px gaps between them, against the strip itself.
+      spans: Math.round(segs.reduce((t, s) => t + w(s), 0) + 3 * (segs.length - 1)),
+      strip: Math.round(w(stack)),
+      // The widest block must be the biggest count — 7 Approved here — or the
+      // shares have been computed against something other than the total.
+      widest: segs[segs.map(w).indexOf(Math.max(...segs.map(w)))].getAttribute('data-home-cip-bucket'),
+      overflow: card.scrollWidth - card.clientWidth,
     };
   });
-  check(track.n === EXPECTED.length, `${EXPECTED.length} segments (${track.n})`);
-  check(track.keys.join() === rows.map(r => r.key).join(), 'in the same order as the rows');
-  check(track.lit === EXPECTED.length, `every busy stage is lit (${track.lit})`);
-  check(track.named === track.n, `every segment says what it is (${track.named}/${track.n})`);
-  check(track.painted === track.n, `and every one is painted (${track.painted}/${track.n})`);
-  check(track.hit >= 16, `each is big enough to hit (${track.hit}px)`);
+  check(bar.n === EXPECTED.length, `${EXPECTED.length} blocks (${bar.n})`);
+  check(bar.keys.join() === rows.map(r => r.key).join(), 'in the same order as the legend');
+  check(bar.named === bar.n, `every block says what it is (${bar.named}/${bar.n})`);
+  check(bar.filled === bar.n, `and every one is painted (${bar.filled}/${bar.n})`);
+  check(bar.spans === bar.strip, `the blocks fill the strip exactly (${bar.spans} of ${bar.strip})`);
+  check(bar.smallest >= 20, `the smallest share is still hittable (${bar.smallest}px)`);
+  check(bar.widest === 'approved', `the widest block is the biggest count (${bar.widest})`);
+  check(bar.numbered > 0 && bar.numbered < bar.n,
+    `only the blocks wide enough carry their number (${bar.numbered} of ${bar.n})`);
+  check(bar.overflow === 0, `and the card does not scroll sideways (${bar.overflow}px)`);
 
   /*
-   * The three figures under the rule. 32 across the ten buckets, and the DRAFT
-   * is the evidence: it is the administrator's application too, so a total
-   * that counted the book rather than the buckets would read 33.
+   * The figure the bar is a hundred per cent of. 32 across the ten buckets,
+   * and the DRAFT is the evidence: it is the administrator's application too,
+   * so a total that counted the book rather than the buckets would read 33.
    */
-  const stats = await page.evaluate(() =>
-    document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__stats')
-      ?.innerText.replace(/\s+/g, ' ').trim() || '');
-  check(/Occupied 10/.test(stats), `Occupied 10 (got "${stats}")`);
-  check(/Clear 0/.test(stats), `Clear 0 (got "${stats}")`);
-  check(/Total 32/.test(stats), `Total 32 (got "${stats}")`);
+  const total = await page.evaluate(() => {
+    const el = document.querySelector('[data-tile-id="cipStatus"] .tma-portal-cip__total');
+    return { figure: el?.querySelector('b')?.innerText.trim() || '', noun: el?.querySelector('span')?.innerText.trim() || '' };
+  });
+  check(total.figure === '32', `the total reads 32 (got "${total.figure}")`);
+  check(total.noun === 'applications', `and says what it counts (got "${total.noun}")`);
 
-  step('1b', 'A stage sitting at zero keeps its segment and loses its row');
+  // Every bucket is busy in this seed, so nothing is a chip.
+  const cardChips = await page.$$('[data-tile-id="cipStatus"] .tma-portal-cip__chip');
+  check(cardChips.length === 0, `no chips when every stage has work (${cardChips.length})`);
+
+  step('1b', 'A stage sitting at zero becomes a chip and keeps its press');
   /*
    * Driven through the card's own data rather than a second seeded book: which
-   * stages get a row is a property of the render, and re-seeding ten statuses
+   * stages get a block is a property of the render, and re-seeding ten statuses
    * to prove it would test the fixture. The dashboard endpoint is answered
    * with the real payload minus most of its counts, then the card repaints.
    */
@@ -175,30 +190,32 @@ try {
     await route.fulfill({ response: res, json: body });
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
+  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__chip', { timeout: 60000 });
   await page.waitForTimeout(1500);
 
   const quiet = await page.evaluate(() => {
     const card = document.querySelector('[data-tile-id="cipStatus"]');
     const segs = [...card.querySelectorAll('.tma-portal-cip__seg')];
+    const stack = card.querySelector('.tma-portal-cip__stack');
     return {
-      rows: card.querySelectorAll('.tma-portal-cip__row').length,
-      idx: card.querySelector('.tma-portal-cip__idx')?.innerText.trim() || '',
       segs: segs.length,
-      lit: segs.filter(s => s.classList.contains('is-on')).length,
-      stats: card.querySelector('.tma-portal-cip__stats')?.innerText.replace(/\s+/g, ' ').trim() || '',
+      rows: card.querySelectorAll('.tma-portal-cip__row').length,
+      chips: card.querySelectorAll('.tma-portal-cip__chip').length,
+      // One stage holding everything is one block across the whole strip.
+      whole: segs.length === 1 &&
+        Math.abs(segs[0].getBoundingClientRect().width - stack.getBoundingClientRect().width) < 1,
+      total: card.querySelector('.tma-portal-cip__total b')?.innerText.trim() || '',
     };
   });
-  check(quiet.rows === 1, `only the stage holding work keeps a row (${quiet.rows})`);
-  check(quiet.idx === '05', `and its row is numbered for its place in the set (got "${quiet.idx}")`);
-  check(quiet.segs === EXPECTED.length, `all ten stages still have a segment (${quiet.segs})`);
-  check(quiet.lit === 1, `one of them lit (${quiet.lit})`);
-  check(/Occupied 1/.test(quiet.stats) && /Clear 9/.test(quiet.stats),
-    `the stats say 1 occupied, 9 clear (got "${quiet.stats}")`);
+  check(quiet.segs === 1, `only the stage holding work gets a block (${quiet.segs})`);
+  check(quiet.whole, 'and it is the whole bar');
+  check(quiet.rows === 1, `one legend row (${quiet.rows})`);
+  check(quiet.chips === EXPECTED.length - 1, `the other nine are chips (${quiet.chips})`);
+  check(quiet.total === '5', `the total is what the one stage holds (got "${quiet.total}")`);
 
-  // A stage with nothing in it is still openable — through its segment, which
-  // is the whole reason the segments are buttons.
-  await page.click('[data-tile-id="cipStatus"] [data-home-cip-bucket="denied"]');
+  // A stage with nothing in it is still openable — through its chip, which is
+  // the whole reason the chips are buttons.
+  await page.click('[data-tile-id="cipStatus"] .tma-portal-cip__chip[data-home-cip-bucket="denied"]');
   await page.waitForTimeout(3000);
   check(/bucket=denied/.test(page.url()), `an empty stage still opens its list (${page.url()})`);
 
@@ -207,49 +224,13 @@ try {
   await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
   await page.waitForTimeout(1500);
 
-  const folded = await page.evaluate(() => {
-    const card = document.querySelector('[data-tile-id="cipStatus"]');
-    const toggle = card?.querySelector('[data-home-cip-zeros]');
-    return {
-      busy: card?.querySelectorAll('.tma-portal-cip__row').length || 0,
-      clear: card?.querySelectorAll('.tma-portal-cip__zrow').length || 0,
-      toggle: toggle?.innerText.replace(/\s+/g, ' ').trim() || '',
-      expanded: toggle?.getAttribute('aria-expanded') || '',
-      shown: card?.querySelector('.tma-portal-cip__zeros')?.offsetHeight || 0,
-    };
-  });
-  check(folded.busy === 1, `only the one busy queue keeps a row (${folded.busy})`);
-  check(folded.clear === 9, `the other nine are still on the card, folded (${folded.clear})`);
-  check(/9 stages clear/.test(folded.toggle), `one line says how many (got "${folded.toggle}")`);
-  check(folded.expanded === 'false' && folded.shown === 0, 'and they start hidden');
-
-  await page.click('[data-tile-id="cipStatus"] [data-home-cip-zeros]');
-  await page.waitForTimeout(600);
-  const opened = await page.evaluate(() => {
-    const card = document.querySelector('[data-tile-id="cipStatus"]');
-    return {
-      expanded: card?.querySelector('[data-home-cip-zeros]')?.getAttribute('aria-expanded') || '',
-      shown: card?.querySelector('.tma-portal-cip__zeros')?.offsetHeight || 0,
-      // The tile must have grown to hold them, not hidden them in a scroller.
-      overflow: (() => {
-        const body = card?.querySelector('.tma-portal-panel__body');
-        return body ? body.scrollHeight - body.clientHeight : -1;
-      })(),
-    };
-  });
-  check(opened.expanded === 'true', 'pressing it says so');
-  check(opened.shown > 0, `the folded rows are showing (${opened.shown}px)`);
-  check(opened.overflow <= 1, `and the card grew to hold them (${opened.overflow}px hidden)`);
-
-  await page.unroute('**/portal/cip/dashboard');
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-tile-id="cipStatus"] .tma-portal-cip__row', { timeout: 60000 });
-  await page.waitForTimeout(1500);
-
   /* ── The card opens the table, filtered ────────── */
 
   step(2, 'A row opens the applications table filtered to that bucket');
-  await page.click('[data-home-cip-bucket="pending_review"]');
+  // Scoped to the legend row on purpose: three controls now carry this bucket
+  // — its block in the bar, its legend row, and (when it empties) its chip —
+  // and an unscoped selector matches more than one, which Playwright refuses.
+  await page.click('[data-tile-id="cipStatus"] .tma-portal-cip__link[data-home-cip-bucket="pending_review"]');
   await page.waitForTimeout(4000);
   await page.waitForSelector('.tma-cip-table tbody tr[data-cip-open]', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(1500);
@@ -308,7 +289,7 @@ try {
     [...document.querySelectorAll('[data-clients-filter-value]')].map(b =>
       b.innerText.replace(/\s+/g, ' ').trim()));
 
-  EXPECTED.forEach(([label, count]) => {
+  EXPECTED.forEach(([label, , count]) => {
     check(values.some(v => v.includes(label) && v.includes(String(count))),
       `${label} offered with its count of ${count}`);
   });

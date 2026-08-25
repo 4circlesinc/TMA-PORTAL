@@ -921,26 +921,23 @@
 
   function cipSkeleton() {
     /*
-     * A track and three rows, standing in for a card whose *length* is part of
-     * what has not arrived yet: only the stages holding work get a row, and
-     * how many of the four, six or ten that is cannot be guessed. Three is
-     * roughly what a working day looks like, and being wrong about it costs a
-     * re-pack of the board rather than a card that has to reflow. Warm boot
+     * A bar and four legend rows. The bar is one grey block rather than
+     * segments, and the reason is the same one the rows have always had: a
+     * shape that could be read as an answer must not stand in for one that has
+     * not arrived. Ten grey slivers are what a *finished* card with nothing in
+     * it would look like.
+     *
+     * Four legend rows because the sets are four, six and ten long and how
+     * many of them hold work is exactly what is unknown; four is roughly a
+     * working day and being wrong costs a re-pack of the board. Warm boot
      * means a returning reader paints their real set and never sees this.
      *
-     * The track is one bar rather than its real segments. Ten grey segments
-     * are what a *finished* card with nothing in it looks like, so drawing
-     * them here would tell a reader the pipeline is clear a second before it
-     * says otherwise — a placeholder must not be readable as an answer.
-     *
      * The placeholders sit straight in the row: there is nothing to press yet,
-     * so there is no button. That matters beyond tidiness, a
+     * so there is no button. That matters beyond tidiness — a
      * .tma-portal-cip__link wrapper would hand the loading rows the link's
      * pointer cursor, so rows nobody can click would invite the click.
      * dashboard.css gives the row itself the padding and gap the link would
-     * have supplied (.tma-portal-cip__row:has(> .tma-skeleton)), so both
-     * shapes measure the same and the card does not jump when the counts
-     * arrive.
+     * have supplied (.tma-portal-cip__row:has(> .tma-skeleton)).
      *
      * No inline sizes. The stylesheet owns every measurement here, an inline
      * width outranks it, and the two were quietly disagreeing about how wide a
@@ -951,117 +948,146 @@
     var row = '<li class="tma-portal-cip__row" aria-hidden="true">' +
       '<i class="tma-portal-cip__dot tma-skeleton tma-skeleton--avatar"></i>' +
       '<span class="tma-skeleton tma-skeleton--text"></span>' +
-      '<span class="tma-skeleton tma-skeleton--text"></span>' +
       '</li>';
 
     return tileShell(
       'cipStatus', 'panel-cip', 'CIP Applications', panelHead('CIP Applications'),
       '<div class="tma-portal-cip-card" aria-hidden="true">' +
-      '<p class="tma-portal-cip__track-skeleton tma-skeleton"></p>' +
-      '<ul class="tma-portal-cip">' + new Array(3).fill(row).join('') + '</ul>' +
+      '<p class="tma-portal-cip__total"><b class="tma-skeleton tma-skeleton--text"></b></p>' +
+      '<p class="tma-portal-cip__stack-skeleton tma-skeleton"></p>' +
+      '<ul class="tma-portal-cip">' + new Array(4).fill(row).join('') + '</ul>' +
       '</div>',
       'tma-portal-panel--cip',
       true
     );
   }
 
-  /* Two digits, so 03 and 10 hold the same column and the numbers down the
-     left edge read as positions rather than as counts. */
-  function cipIndex(n) {
-    return n < 10 ? '0' + n : String(n);
+  /*
+   * The buckets that are parts of the whole.
+   *
+   * A stacked bar can only be drawn from buckets that do not contain each
+   * other, and one of §9's does: the Reviewing Officer's Assigned Reviews is
+   * deliberately the sum of the three queues under it. Given a share of the
+   * bar alongside its own children it would draw every file on that officer's
+   * desk twice and the segments would add up to 200%.
+   *
+   * The server answers which one that is (App\Support\Cip\Buckets::rollsUp),
+   * because it is a fact about the shape of the set rather than something to
+   * infer from the counts: on a quiet day the roll-up and one of its children
+   * hold the same number, and a browser guessing from that would drop a
+   * different bucket each morning. A payload that has not been asked the
+   * question — a warm snapshot written by an older release — has no flag and
+   * every bucket is treated as a part, which is right for two of the three
+   * sets and settles for the third the moment the fetch behind it lands.
+   */
+  function cipParts(buckets) {
+    return buckets.filter(function (b) { return b.aggregate !== true; });
   }
 
   /*
-   * The track: every stage the set has, in the order work moves through them,
-   * lit where there is some.
+   * What the bar is a hundred per cent of.
    *
-   * This is the half of the card that answers "where is it sitting", which the
-   * rows underneath cannot: they only name the stages holding something, so
-   * without the track a card showing two rows looks the same whether those two
-   * are the start of the journey or the end of it. A lit segment also takes
-   * more width than a quiet one, so the shape of the strip alone says whether
-   * the work is bunched or spread.
-   *
-   * Equal segments, not proportional ones. The width is about position, and a
-   * stage holding one application is as much a place work is sitting as one
-   * holding forty; sizing by count would turn the map into a second, worse
-   * drawing of the numbers already in the rows.
-   *
-   * Every segment is a control, including the quiet ones. The rows dropped the
-   * empty stages, and an empty queue is a perfectly reasonable thing to open —
-   * a reader who cannot open it has to go and confirm the zero some other way.
-   * So this is where a stage with nothing in it stays reachable, by pointer
-   * and by keyboard, which is also why the segment carries a hit area taller
-   * than the bar it draws (see dashboard.css).
-   *
-   * One caveat worth naming: on the Reviewing Officer's set these four are
-   * work queues rather than a journey, and the first of them covers the other
-   * three. The strip still reads correctly there — each segment says whether
-   * that queue has anything in it — it is simply a map of a desk rather than
-   * of a pipeline. The order is the server's either way.
+   * The server's total when it sent one, and it and the parts agree by
+   * construction — the total is counted over the same statuses the parts
+   * divide between them. Falling back to adding the parts up is safe for the
+   * same reason, and is not the trap the old code had: it is the *whole*
+   * bucket list that cannot be summed, because of the roll-up now filtered out
+   * above.
    */
-  function cipTrack(buckets) {
-    return '<div class="tma-portal-cip__track" role="group" aria-label="Every stage, and where the work is">' +
-      buckets.map(function (b) {
+  function cipTotal(payload, parts) {
+    var total = payload.total;
+
+    if (typeof total === 'number' && isFinite(total) && total >= 0) return total;
+
+    return parts.reduce(function (sum, b) { return sum + (parseInt(b.count, 10) || 0); }, 0);
+  }
+
+  /* One decimal, so ten shares of an awkward total do not drift far enough
+     from 100 to leave a gap at the end of the bar. */
+  function cipShare(count, total) {
+    if (!total) return 0;
+    return Math.round((count / total) * 1000) / 10;
+  }
+
+  /*
+   * The bar: every stage holding work, as its share of the total, in the order
+   * §9 names them.
+   *
+   * Widths are shares and the numbers inside are counts, which is the division
+   * of labour the whole layout rests on — the bar answers "how is the work
+   * split" at a glance and the legend under it answers "how much" exactly.
+   * A number is only printed where its segment is wide enough to hold it;
+   * below that the segment is a plain block and its count is in the legend,
+   * because a digit clipped in half reads as a fault rather than as a small
+   * number. Every segment carries its name and count either way, for the
+   * pointer and for a screen reader.
+   *
+   * Each is a button, like the rows: a share is only useful if the reader can
+   * open what it is a share of.
+   */
+  function cipStack(busy, total) {
+    return '<div class="tma-portal-cip__stack" role="group" aria-label="Applications by stage">' +
+      busy.map(function (b) {
+        var share = cipShare(b.count, total);
         var name = b.label + ': ' + cipCount(b.count);
-        return '<button type="button" class="tma-portal-cip__seg' +
-          (b.count ? ' tma-portal-cip__tone--' + cipTone(b) + ' is-on' : '') +
-          '" data-home-cip-bucket="' + ui().esc(b.key) + '"' +
-          ' title="' + ui().esc(name) + '" aria-label="' + ui().esc(name) + '"></button>';
+
+        return '<button type="button" class="tma-portal-cip__seg tma-portal-cip__tone--' + cipTone(b) + '"' +
+          ' style="--tma-cip-share:' + share + '%"' +
+          ' data-home-cip-bucket="' + ui().esc(b.key) + '"' +
+          ' title="' + ui().esc(name) + '" aria-label="' + ui().esc(name) + '">' +
+          (share >= 12 ? '<span aria-hidden="true">' + ui().esc(cipCount(b.count)) + '</span>' : '') +
+          '</button>';
       }).join('') +
       '</div>';
   }
 
   /*
-   * One stage that has work in it: its position, its tone, its name, and the
-   * count as a tinted pill.
+   * The legend: the short name and the count, two to a line.
    *
-   * The tone is set on the row rather than on the dot, because two things read
-   * it — the dot and the pill — and a colour named twice is a colour that can
-   * disagree with itself. The dot keeps its own `--<tone>` classes in the
-   * stylesheet for the applications filter menu, which draws the same dots
-   * with no row to hang them on.
+   * The short name is the server's (App\Support\Cip\Buckets) rather than
+   * something cut down here — "Additional Information Requests" has to fit
+   * half a third-width card, and a browser shortening it by rule would be
+   * guessing where a name can be cut. `label` is the fallback for a snapshot
+   * taken before the field existed; it wraps rather than lying.
    *
-   * The number is the stage's own position in the set, not the row's position
-   * in the list, so it lines up with the segment above it: a card showing 04
-   * and 09 is saying the work is at both ends, and renumbering those 01 and 02
-   * would throw away the only thing this column is for.
+   * The tone is set on the row and the dot inherits it, because the segment
+   * above reads the same variable: a colour named twice is a colour that can
+   * end up disagreeing with itself, and here the two are how a reader knows
+   * which block of the bar is which.
    */
-  function cipRow(bucket, position) {
+  function cipLegendRow(bucket) {
     return '<li class="tma-portal-cip__row tma-portal-cip__tone--' + cipTone(bucket) +
       '" data-key="cip-' + ui().esc(bucket.key) + '">' +
-      '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(bucket.key) + '">' +
-      '<span class="tma-portal-cip__idx" aria-hidden="true">' + cipIndex(position) + '</span>' +
+      '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(bucket.key) + '"' +
+      ' title="' + ui().esc(bucket.label) + '">' +
       '<i class="tma-portal-cip__dot" aria-hidden="true"></i>' +
-      '<span class="tma-portal-cip__label">' + ui().esc(bucket.label) + '</span>' +
-      '<span class="tma-portal-cip__pill">' + ui().esc(cipCount(bucket.count)) + '</span>' +
+      '<span class="tma-portal-cip__label">' + ui().esc(bucket.short || bucket.label) + '</span>' +
+      '<span class="tma-portal-cip__count">' + ui().esc(cipCount(bucket.count)) + '</span>' +
       '</button></li>';
   }
 
   /*
-   * The three figures under the rule: how many stages hold work, how many are
-   * clear, and how many applications there are between them.
+   * The stages holding nothing, as chips.
    *
-   * Occupied and Clear are counted here because they are facts about the card
-   * itself. The total is the server's (App\Support\Cip\Buckets::summary) and
-   * this does not fall back to adding the rows up, which is why an older warm
-   * snapshot shows no Total rather than a wrong one: on the Reviewing
-   * Officer's set Assigned Reviews is the sum of the three queues below it, so
-   * the sum of the rows reports that officer's desk twice and nothing on the
-   * card would show that it had. A missing figure is a smaller lie than a
-   * doubled one.
+   * They keep their name and their press and lose everything else, which is
+   * the whole of what a zero earns: an empty queue is a true answer and a
+   * reasonable thing to open, and a reader who cannot open it has to go and
+   * confirm the zero some other way. Dropping them instead would leave a card
+   * that cannot say whether a stage is empty or missing.
    */
-  function cipStats(payload, busy, clear) {
-    var total = payload.total;
-    var stat = function (label, value) {
-      return '<span>' + label + ' <b>' + ui().esc(cipCount(value)) + '</b></span>';
-    };
+  function cipChips(clear) {
+    if (!clear.length) return '';
 
-    return '<p class="tma-portal-cip__stats">' +
-      stat('Occupied', busy) +
-      stat('Clear', clear) +
-      (typeof total === 'number' && isFinite(total) && total >= 0 ? stat('Total', total) : '') +
-      '</p>';
+    return '<div class="tma-portal-cip__chips">' +
+      clear.map(function (b) {
+        return '<button type="button" class="tma-portal-cip__chip"' +
+          ' data-home-cip-bucket="' + ui().esc(b.key) + '"' +
+          ' title="' + ui().esc(b.label + ': ' + cipCount(b.count)) + '"' +
+          ' aria-label="' + ui().esc(b.label + ': ' + cipCount(b.count)) + '">' +
+          ui().esc(b.short || b.label) +
+          '</button>';
+      }).join('') +
+      '</div>';
   }
 
   function renderCipStatus() {
@@ -1124,33 +1150,32 @@
      *
      * §9 lists the buckets in the order an application travels through them,
      * and that order is the brief's rather than a renderer's choice. It is
-     * also what makes the track above the rows mean anything: sorting the
-     * busiest stage to the front would leave the strip describing a journey
-     * and the rows describing a leaderboard, and the two would stop lining up.
+     * also what makes the bar readable: the blocks run in the order work moves
+     * through them, so a pipeline weighted toward the end looks different from
+     * one weighted toward the start. Sorting the biggest share to the front
+     * would throw that away and leave a chart that says only "some are bigger
+     * than others", which the numbers already said.
      *
      * Rows are keyed by bucket so morph leaves an unchanged one alone: the
      * counts are re-read on every CIP signal and most will not have moved.
      */
-    var rows = '';
-    var busy = 0;
-
-    buckets.forEach(function (b, i) {
-      if (!b.count) return;
-      busy += 1;
-      rows += cipRow(b, i + 1);
-    });
+    var parts = cipParts(buckets);
+    var total = cipTotal(homeCip, parts);
+    var busy = parts.filter(function (b) { return b.count > 0; });
+    var clear = parts.filter(function (b) { return !b.count; });
 
     return tileShell(
       'cipStatus', 'panel-cip', 'CIP Applications',
       panelHead('CIP Applications', CIP_SCOPE_META[homeCip.dashboard] || ''),
       '<div class="tma-portal-cip-card">' +
-      cipTrack(buckets) +
-      (busy
-        ? '<ul class="tma-portal-cip">' + rows + '</ul>'
+      '<p class="tma-portal-cip__total"><b>' + ui().esc(cipCount(total)) + '</b>' +
+      '<span>' + (total === 1 ? 'application' : 'applications') + '</span></p>' +
+      (busy.length
+        ? cipStack(busy, total) + '<ul class="tma-portal-cip">' + busy.map(cipLegendRow).join('') + '</ul>'
         // Every stage clear, which is a finished day rather than an empty
-        // card — so it says so, instead of leaving the track over a gap.
+        // card — so it says so, instead of leaving a bar with nothing in it.
         : '<p class="tma-portal-cip__none">Nothing waiting right now</p>') +
-      cipStats(homeCip, busy, buckets.length - busy) +
+      cipChips(clear) +
       '</div>',
       'tma-portal-panel--cip'
     );

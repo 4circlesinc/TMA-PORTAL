@@ -35809,33 +35809,39 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * §9's buckets as one card on the portal home: a map of the pipeline, and
- * detail only where there is work.
+ * §9's buckets as one card on the portal home: one bar, divided.
  *
- * The card is two halves that answer two different questions. The strip along
- * the top is every stage the set has, in the order work moves through them,
- * lit where there is some — that is *where* the work is sitting. Underneath,
- * only the occupied stages get a row: its position, its name and its count.
- * Three figures under a rule close it: occupied, clear, total.
+ * The card states how many applications the dashboard is about, splits that
+ * figure into a single stacked bar — one block per stage holding work, sized
+ * by its share and coloured by its tone — and names the blocks in a two-column
+ * legend underneath with their counts. The stages holding nothing become chips
+ * along the bottom.
  *
- * WHY THE EMPTY STAGES LOSE THEIR ROW BUT NOT THEIR PLACE
+ * WHY A BAR RATHER THAN TEN ROWS
  *
- * An administrator's ten rows are mostly zeros on a normal morning, and ten
- * rows of nothing is what buries the two that need reading: every row costs
- * the same height and the same glance whether or not there is anything behind
- * it. But a stage that vanished when it emptied would leave somebody
- * wondering whether it emptied or broke, and would make two rows unreadable —
- * you could not tell whether they were the start of the journey or the end.
- * The strip is where an empty stage keeps its place, its name and its press.
+ * The question this card is opened with is "where has the work piled up", and
+ * a column of ten numbers answers it only after the reader has compared them
+ * to each other. A bar has already done that comparison: one glance says
+ * whether the pipeline is evenly loaded or sitting almost entirely in one
+ * stage, and the legend is there for the moment the reader wants the actual
+ * number. It is also the most compact of the shapes this card has worn — ten
+ * stages in a bar, a five-line legend and a row of chips.
  *
- * THE ROW IS THE CONTROL, AND SO IS THE SEGMENT
+ * WIDTHS ARE SHARES, NUMBERS ARE COUNTS
  *
- * A count is only useful if the reader can act on it, and the act is always
- * the same one: show me those. Making the whole row a button rather than
- * putting a link on the number means the pointer never has to find a
- * four-pixel target; the segments are buttons for the same reason, and are the
- * only way to open a stage holding nothing — which is a perfectly reasonable
- * thing to want to open.
+ * The two must not be confused, and the layout is careful to keep them apart:
+ * the bar carries no axis and makes no claim to be readable in absolute terms,
+ * and every exact figure — the total above it, the counts in the legend — is
+ * written out. A number is printed inside a block only where the block is
+ * genuinely wide enough to hold it, because a digit clipped in half reads as a
+ * fault rather than as a small number.
+ *
+ * EVERY STAGE IS STILL A CONTROL
+ *
+ * A share is only useful if the reader can open what it is a share of, so the
+ * blocks are buttons, the legend rows are buttons, and so are the chips — an
+ * empty queue is a perfectly reasonable thing to open, and a reader who cannot
+ * open it has to go and confirm the zero some other way.
  *
  * IT GROWS; IT DOES NOT SCROLL
  *
@@ -35843,9 +35849,8 @@ span.tma-dash__messages-profile-avatar {
  * worth writing down. That list scrolls because it is as long as the firm is:
  * nobody knows how many colleagues will be in it next month, so the card has
  * to be able to refuse to grow. This one is a fixed set the server names, and
- * it is now as tall as the work is rather than as tall as the vocabulary —
- * eight quiet stages cost nine pixels of strip instead of eight rows. If the
- * masonry ever hands this tile less height than it needs, the packed panel
+ * it is now as tall as the work is rather than as tall as the vocabulary. If
+ * the masonry ever hands this tile less height than it needs, the packed panel
  * body already scrolls (see .is-packed in portal.css); nothing here needs to.
  */
 .tma-portal-cip-card {
@@ -35855,109 +35860,138 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * The strip: one segment per stage, equal, lit where there is work.
+ * The figure the bar is a hundred per cent of.
  *
- * Equal and not proportional, deliberately. The width is about position, and
- * a stage holding one application is as much a place work is sitting as one
- * holding forty; sizing by count would turn the map into a second, worse
- * drawing of the numbers already in the rows. What a lit segment does take is
- * a little more room than a quiet one, so the shape of the strip alone says
- * whether the work is bunched or spread.
+ * Stated rather than left to be inferred, because a stacked bar with no total
+ * is a picture of proportions floating free of any quantity — the same shape
+ * whether the firm is holding four applications or four hundred. Tabular so it
+ * does not jump about as it changes. What it is measured over is the panel
+ * head's job (All applications / Assigned to you / Your firm), so the word
+ * beside it is only ever "applications": "in pipeline" would be wrong on the
+ * administrator's set, whose ten include Approved and Denied.
  */
-.tma-portal-cip__track {
+.tma-portal-cip__total {
   display: flex;
-  gap: var(--space-4);
+  align-items: baseline;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
   min-width: 0;
-  margin: 0 0 var(--space-8);
+}
+
+.tma-portal-cip__total b {
+  font-size: var(--text-size-24);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-black);
+}
+
+.tma-portal-cip__total span {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+/* The loading total. Sized here rather than inline, like every other
+   measurement on this card. */
+.tma-portal-cip__total > .tma-skeleton {
+  width: 84px;
+  height: 22px;
+  border-radius: var(--radius-6);
+}
+
+.tma-portal-cip__stack {
+  display: flex;
+  gap: 3px;
+  height: 38px;
+  min-width: 0;
+  margin: 0 0 var(--space-12);
 }
 
 /*
- * A segment is a 9px bar in a 20px button.
+ * One block per stage holding work.
  *
- * The bar is drawn by the pseudo-element rather than being the button's own
- * background, because the button has to be big enough to hit: nine pixels of
- * height is a target a pointer misses and a finger cannot find at all, and
- * these are the only way to reach a stage that is holding nothing. The
- * difference is invisible and entirely the point — the strip looks like nine
- * pixels of bar and behaves like twenty.
+ * The width is the share; the min-width is what stops a stage holding one
+ * application out of forty from being an invisible two-pixel sliver nobody can
+ * hit. That floor does cost the bar a little accuracy at the bottom end, and
+ * it is the right trade: the blocks are allowed to shrink (flex-shrink stays
+ * on), so the row still ends flush and the distortion is spread across the
+ * large blocks where a percentage point is not visible anyway.
+ *
+ * The fill is the tone mixed toward black, and toward *black* in both themes
+ * rather than toward --color-black, because the number sitting on it is white
+ * in both. Several of the fourteen tones — amber, teal, orange — are chip
+ * colours picked to carry dark text, and a white digit on them unmixed is one
+ * you have to lean in to read. The legend dot beside it stays the pure tone;
+ * sixteen per cent is not a difference a reader can see across a card, and the
+ * alternative is a number nobody can read.
  */
 .tma-portal-cip__seg {
-  display: flex;
-  align-items: center;
-  flex: 1 1 0;
-  min-width: 0;
-  height: 20px;
+  display: grid;
+  place-items: center;
+  width: var(--tma-cip-share, 0%);
+  min-width: 20px;
   padding: 0;
   border: 0;
-  background: none;
+  border-radius: var(--radius-6);
+  background: color-mix(in srgb, var(--tma-cip-tone, #6b7280) 78%, #000);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-white);
   cursor: pointer;
-  transition: flex-grow 0.2s ease;
+  overflow: hidden;
+  transition: filter 0.16s ease;
 }
 
-.tma-portal-cip__seg::after {
-  content: "";
-  display: block;
-  width: 100%;
-  height: 9px;
-  border-radius: 3px;
-  background: var(--color-overlay-10);
-  transition: background-color 0.2s ease;
+.tma-portal-cip__seg:hover { filter: brightness(1.15); }
+
+/* The loading bar is one block, not its segments: a bar already divided is
+   what a *finished* card looks like, and a placeholder must not be readable
+   as an answer. Same 38px and same margin, so nothing moves when the real one
+   lands. */
+.tma-portal-cip__stack-skeleton {
+  height: 38px;
+  margin: 0 0 var(--space-12);
+  border-radius: var(--radius-6);
 }
 
-.tma-portal-cip__seg.is-on { flex-grow: 1.6; }
-
-.tma-portal-cip__seg.is-on::after { background: var(--tma-cip-tone, var(--color-text-secondary)); }
-
-/* The loading strip is one bar, not its segments. Ten grey segments are what
-   a *finished* card with nothing in it looks like, so drawing them here would
-   read as an answer a second before the real one lands. The margins put the
-   bar in the middle of the 20px band the real strip occupies, so the card
-   does not shift when it arrives: 5 + 9 + 14 is the 20 + 8 above. */
-.tma-portal-cip__track-skeleton {
-  height: 9px;
-  margin: 5px 0 14px;
-  border-radius: 3px;
-}
-
+/*
+ * The legend, two to a line.
+ *
+ * Two columns because the names are short (the server sends a short form for
+ * exactly this) and a single column of ten would be the row of numbers the bar
+ * replaced. auto-fit rather than a fixed two, so the one-column board at phone
+ * width gets a legend that is one column of full-width rows instead of two
+ * columns squeezed to nothing.
+ */
 .tma-portal-cip {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0 var(--space-12);
   list-style: none;
   margin: 0;
   padding: 0;
   min-width: 0;
 }
 
-/*
- * A hairline between rows rather than a gap: the rows are a list of stages
- * read one after another, and the rule is what keeps a name and its count on
- * the same line for the eye. The last one drops it so the list does not end
- * in a second rule right above the stats.
- */
 .tma-portal-cip__row {
   display: flex;
   min-width: 0;
-  border-bottom: 1px solid var(--color-border-soft);
-  /*
-   * Load-bearing, not tidying — the same trap .tma-portal-employee documents.
-   * The list is a flex column inside a body that can be given a definite
-   * height by the masonry, so its children are eligible to shrink; without
-   * this the rows would be squeezed into whatever space the tile ended up with
-   * and the labels would overlap instead of the body scrolling.
-   */
-  flex-shrink: 0;
 }
-
-.tma-portal-cip__row:last-child { border-bottom: 0; }
 
 .tma-portal-cip__link {
   display: flex;
   align-items: center;
-  gap: var(--space-10);
+  gap: var(--space-8);
   width: 100%;
   min-width: 0;
+  min-height: 30px;
   box-sizing: border-box;
-  padding: var(--space-8) var(--space-6);
+  padding: var(--space-6) var(--space-4);
   border: 0;
   border-radius: var(--radius-8);
   background: none;
@@ -35971,15 +36005,13 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-portal-cip__link:hover { background: var(--color-hover); }
 
-/* Keyboard readers get the same control, said out loud. Matches the ring the
-   rest of the home board uses (.tma-portal-employee__action, portal.css). The
-   segment's ring is drawn around its whole 20px box, so a strip being tabbed
-   through is legible even though the bar inside it is nine pixels. */
+/* Keyboard readers get the same controls, said out loud. Matches the ring the
+   rest of the home board uses (.tma-portal-employee__action, portal.css). */
 .tma-portal-cip__link:focus-visible,
-.tma-portal-cip__seg:focus-visible {
+.tma-portal-cip__seg:focus-visible,
+.tma-portal-cip__chip:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
-  border-radius: var(--radius-8);
 }
 
 /*
@@ -36023,22 +36055,10 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--cyan,   .tma-portal-cip__tone--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
 .tma-portal-cip__dot--copper, .tma-portal-cip__tone--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
 
-/* Where this stage falls in the set, so the rows line up with the strip
-   above them: a card showing 04 and 09 is saying the work is at both ends,
-   which renumbering them 01 and 02 would throw away. Two digits so 03 and 10
-   hold the same column. */
-.tma-portal-cip__idx {
-  flex: 0 0 auto;
-  width: 20px;
-  font-size: var(--text-size-11, 11px);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-}
-
-/* The label names the stage; it is the count beside it that is being read, so
-   the name sits a step back from the number. One line always — "Assessment
-   Feedback" wrapping would make one row twice the height of its neighbours. */
+/* The short name, and one line of it. A legend column is half a third-width
+   card, so a name that wrapped would push its neighbour's row out of line and
+   the two columns would stop being rows at all. The full name is on the
+   control's title. */
 .tma-portal-cip__label {
   flex: 1 1 auto;
   min-width: 0;
@@ -36049,73 +36069,68 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-black);
 }
 
-/*
- * The count, in a tint of the stage's own colour.
- *
- * A tint rather than a fill, because the strip above is already carrying the
- * colour at full strength and two saturated readings of the same fact compete
- * with each other. Both halves of the pill are mixed rather than picked: the
- * ground toward --color-white and the ink toward --color-black, so one rule
- * covers all fourteen tones and both invert with the theme. The ink is mixed
- * at all because several of the fourteen — amber, teal, orange — are chip
- * colours chosen to carry dark text, and set on their own tint unmixed they
- * are a number you have to lean in to read.
- */
-.tma-portal-cip__pill {
+/* The exact figure the bar only approximates. Tabular so the numbers down a
+   legend column stack digit under digit. */
+.tma-portal-cip__count {
   flex: 0 0 auto;
-  /*
-   * Height stated, not inherited. The pill is the tallest thing in the row, so
-   * it is what the row measures — and a row whose height came out of whatever
-   * line-height the cascade happened to hand a 13px span is a row the loading
-   * placeholder cannot be built to match. 24px here is 40px of row, and
-   * .tma-portal-cip__row:has(> .tma-skeleton) below is built on the same
-   * number.
-   */
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 var(--space-10);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--tma-cip-tone, #6b7280) 14%, var(--color-white));
-  font-size: var(--text-size-12);
-  line-height: 1;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--tma-cip-tone, #6b7280) 70%, var(--color-black));
-}
-
-/*
- * The three figures under the rule.
- *
- * Occupied and Clear are what the two halves above cost the reader to count
- * themselves — the whole point of dropping the empty rows is that nobody
- * should have to — and Total is the one number neither half states. It is the
- * server's, counted over the statuses a set covers rather than by adding the
- * rows up, so it can be missing (an older warm snapshot) and simply is not
- * drawn when it is. See cipStats() in portal-home.js.
- */
-.tma-portal-cip__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-6) var(--space-16);
-  margin: var(--space-12) 0 0;
-  padding-top: var(--space-12);
-  border-top: 1px solid var(--color-border-soft);
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
-}
-
-.tma-portal-cip__stats b {
+  margin-left: auto;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-black);
 }
 
 /*
+ * The stages holding nothing.
+ *
+ * A chip is the smallest thing that can still carry a name and a press, which
+ * is exactly what a zero is worth: it keeps the stage on the card — a total is
+ * only trustworthy if the reader can see what was counted, and a stage that
+ * vanished when it emptied would leave somebody wondering whether it emptied
+ * or broke — while costing a line rather than a row each.
+ *
+ * Nothing here is styled as a warning. Zero is a true answer and an empty
+ * queue is the answer an administrator opened the card hoping for.
+ */
+.tma-portal-cip__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-cip__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 24px;
+  padding: 0 var(--space-10);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-white);
+  box-shadow: var(--shadow-drop-1);
+  font: inherit;
+  font-size: var(--text-size-11, 11px);
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-portal-cip__chip::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-text-placeholder);
+}
+
+.tma-portal-cip__chip:hover { color: var(--color-black); }
+
+/*
  * Every stage clear: a finished day, said in one line rather than left as a
- * gap between the strip and the stats. Quiet, because zero everywhere is the
- * answer an administrator opened the card hoping for, not a fault.
+ * bar with nothing in it. Quiet, for the same reason the chips are.
  */
 .tma-portal-cip__none {
   margin: 0;
@@ -36127,19 +36142,18 @@ span.tma-dash__messages-profile-avatar {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tma-portal-cip__seg,
-  .tma-portal-cip__seg::after { transition: none; }
+  .tma-portal-cip__seg { transition: none; }
 }
 
 /*
  * Loading.
  *
  * Placeholders standing in for a set nobody has counted yet, and what they
- * have to get right is the row: same surface, same padding, same height as a
- * real one, so the card does not lurch the moment the counts land — which is
- * the single job a skeleton has. It cannot get the *number* of rows right any
- * more, because only the queues holding work get one and that is precisely
- * what has not arrived, so the board re-packs when it does.
+ * have to get right is the row: same padding, same height as a real one, so
+ * the card does not lurch the moment the counts land — which is the single job
+ * a skeleton has. It cannot get the *number* of rows right any more, because
+ * only the stages holding work get one and that is precisely what has not
+ * arrived, so the board re-packs when it does.
  *
  * Which element carries the box depends on how portal-home.js shapes the
  * loading row, so both shapes are covered. Keep a .tma-portal-cip__link around
@@ -36155,22 +36169,16 @@ span.tma-dash__messages-profile-avatar {
  */
 .tma-portal-cip__row:has(> .tma-skeleton) {
   align-items: center;
-  gap: var(--space-10);
+  gap: var(--space-8);
   box-sizing: border-box;
-  padding: var(--space-8) var(--space-6);
+  min-height: 30px;
+  padding: var(--space-6) var(--space-4);
 }
 
-/* The label placeholder takes the room the label would; the one after it is
-   standing in for the pill, so it is the pill's box — and that is what makes
-   the loading row exactly as tall as a real one (8 + 24 + 8). */
+/* The one placeholder takes the room the short name would. A legend row is a
+   dot and a name, so there is nothing else to stand in for — the count is
+   four pixels of digit and a placeholder for it would be noise. */
 .tma-portal-cip__row:has(> .tma-skeleton) > .tma-skeleton--text { flex: 1 1 auto; }
-
-.tma-portal-cip__row:has(> .tma-skeleton) > .tma-skeleton--text:last-child {
-  flex: 0 0 auto;
-  width: 34px;
-  height: 24px;
-  border-radius: var(--radius-pill);
-}
 
 /*
  * Nothing in a loading row is pressable, and it must not look as though it is.

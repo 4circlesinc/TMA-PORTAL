@@ -250,6 +250,94 @@ class CipBucketTest extends TestCase
      * two answers agree and the test proves little on its own — it is here as
      * the control for the one below, where they must not agree.
      */
+    /**
+     * Which buckets are parts of a whole, and which one is the whole.
+     *
+     * Anything drawing the set as a chart needs this and cannot safely work it
+     * out from the counts: on a quiet day Assigned Reviews and Reviews Pending
+     * hold the same number, and a renderer guessing from that would pick a
+     * different bucket to drop each morning.
+     */
+    public function test_only_the_officers_roll_up_bucket_is_marked_as_one(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [, $contact] = $this->providerWithContact('GAL');
+
+        $rolled = function (User $reader): array {
+            $buckets = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json('buckets');
+
+            return array_keys(array_filter(array_column($buckets, 'aggregate', 'key')));
+        };
+
+        // Assigned Reviews contains the three queues under it; nothing else in
+        // any set contains anything else.
+        $this->assertSame(['assigned_reviews'], $rolled($rita));
+        $this->assertSame([], $rolled($admin));
+        $this->assertSame([], $rolled($contact));
+    }
+
+    /**
+     * The parts add up to the whole, which is what lets a chart drawn from the
+     * parts state the total underneath it without measuring anything twice.
+     */
+    public function test_the_buckets_that_are_not_roll_ups_add_up_to_the_total(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [$galaxy] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::REVIEW_APPLICATION, $rita);
+        $this->application($galaxy, $admin, Status::UPDATE_REQUIRED, $rita);
+        $this->application($galaxy, $admin, Status::NEW);
+
+        foreach ([$admin, $rita] as $reader) {
+            $body = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json();
+            $parts = array_filter($body['buckets'], fn (array $b) => ! $b['aggregate']);
+
+            $this->assertSame(
+                $body['total'],
+                array_sum(array_column($parts, 'count')),
+                $reader->email.'’s parts add up to their total',
+            );
+        }
+    }
+
+    /** Every bucket carries a short name, and it is short. */
+    public function test_every_bucket_carries_a_short_name(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [, $contact] = $this->providerWithContact('GAL');
+
+        foreach ([$admin, $rita, $contact] as $reader) {
+            $buckets = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json('buckets');
+
+            foreach ($buckets as $bucket) {
+                $this->assertNotSame('', trim($bucket['short'] ?? ''), $bucket['key'].' is named short');
+                /*
+                 * The legend it has to fit is two columns of a third-width
+                 * card. "Additional Information Requests" is 31 characters and
+                 * the reason this field exists; twelve is the width the column
+                 * holds without the name being cut by the browser instead.
+                 */
+                $this->assertLessThanOrEqual(
+                    12,
+                    mb_strlen($bucket['short']),
+                    $bucket['key'].' fits a legend column',
+                );
+            }
+        }
+
+        // And within one set they still tell the queues apart — a legend of
+        // four rows saying "Pending" twice names nothing.
+        $shorts = array_column(
+            $this->actingAs($rita)->getJson('/portal/cip/dashboard')->json('buckets'),
+            'short',
+        );
+        $this->assertSame($shorts, array_unique($shorts));
+    }
+
     public function test_the_total_counts_the_applications_the_dashboard_covers(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');

@@ -85,46 +85,60 @@ class Buckets
      * statuses over different slices, and defining them twice is how the two
      * dashboards would drift apart the first time one status was renamed.
      *
-     * @var array<string, array{label: string, statuses: list<string>, scope: string}>
+     * Each carries a short name as well as the one §9 gives it. That is not a
+     * renderer's abbreviation to invent: "Additional Information Requests" and
+     * "Assessment Feedback Tasks" have to fit a legend beside a chart, and a
+     * browser shortening them by rule would be guessing where a name can be
+     * cut. Named here, beside the label, so the two cannot drift apart.
+     *
+     * @var array<string, array{label: string, short: string, statuses: list<string>, scope: string}>
      */
     private const DEFINITIONS = [
         'new' => [
             'label' => 'New Applications',
+            'short' => 'New',
             'statuses' => [Status::NEW],
             'scope' => self::SCOPE_ALL,
         ],
         'review_application' => [
             'label' => 'Review Applications',
+            'short' => 'Review',
             'statuses' => [Status::REVIEW_APPLICATION],
             'scope' => self::SCOPE_ALL,
         ],
         'assessment_feedback' => [
             'label' => 'Assessment Feedback',
+            'short' => 'Feedback',
             'statuses' => [Status::ASSESSMENT_FEEDBACK],
             'scope' => self::SCOPE_ALL,
         ],
         'update_required' => [
             'label' => 'Updates Required',
+            'short' => 'Updates',
             'statuses' => [Status::UPDATE_REQUIRED],
             'scope' => self::SCOPE_ALL,
         ],
         'ready_to_submit' => [
             'label' => 'Ready to Submit',
+            'short' => 'Ready',
             'statuses' => [Status::READY_TO_SUBMIT],
             'scope' => self::SCOPE_ALL,
         ],
         'pending_review' => [
             'label' => 'Pending Review',
+            'short' => 'Pending',
             'statuses' => [Status::PENDING_REVIEW],
             'scope' => self::SCOPE_ALL,
         ],
         'background_check' => [
             'label' => 'Background Check',
+            'short' => 'Background',
             'statuses' => [Status::BACKGROUND_CHECK],
             'scope' => self::SCOPE_ALL,
         ],
         'delayed' => [
             'label' => 'Delayed',
+            'short' => 'Delayed',
             'statuses' => [Status::DELAYED],
             'scope' => self::SCOPE_ALL,
         ],
@@ -135,11 +149,13 @@ class Buckets
          */
         'approved' => [
             'label' => 'Approved',
+            'short' => 'Approved',
             'statuses' => [Status::GRANTED],
             'scope' => self::SCOPE_ALL,
         ],
         'denied' => [
             'label' => 'Denied',
+            'short' => 'Denied',
             'statuses' => [Status::DENIED],
             'scope' => self::SCOPE_ALL,
         ],
@@ -151,18 +167,21 @@ class Buckets
         // is heavy before they read which kind of heavy it is.
         'assigned_reviews' => [
             'label' => 'Assigned Reviews',
+            'short' => 'Assigned',
             'statuses' => self::UNDER_REVIEW,
             'scope' => self::SCOPE_MINE,
         ],
         // Handed over and not yet read.
         'reviews_pending' => [
             'label' => 'Reviews Pending',
+            'short' => 'Pending',
             'statuses' => [Status::REVIEW_APPLICATION],
             'scope' => self::SCOPE_MINE,
         ],
         // Read, and waiting on the officer's verdict to move.
         'assessment_feedback_tasks' => [
             'label' => 'Assessment Feedback Tasks',
+            'short' => 'Feedback',
             'statuses' => [Status::ASSESSMENT_FEEDBACK],
             'scope' => self::SCOPE_MINE,
         ],
@@ -170,6 +189,7 @@ class Buckets
         // watch: an update nobody chases is the round trip §14 measures.
         'information_requests' => [
             'label' => 'Additional Information Requests',
+            'short' => 'Requests',
             'statuses' => [Status::UPDATE_REQUIRED],
             'scope' => self::SCOPE_MINE,
         ],
@@ -227,7 +247,7 @@ class Buckets
      * This reader's dashboard: every bucket with its count and the filter that
      * reproduces it.
      *
-     * @return list<array{key: string, label: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>}>
+     * @return list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool}>
      */
     public static function for(?User $user): array
     {
@@ -255,7 +275,7 @@ class Buckets
      *
      * Free: the tallies are already in hand, so no extra query is asked.
      *
-     * @return array{buckets: list<array{key: string, label: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>}>, total: int}
+     * @return array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool}>, total: int}
      */
     public static function summary(?User $user): array
     {
@@ -294,6 +314,9 @@ class Buckets
             $buckets[] = [
                 'key' => $key,
                 'label' => $definition['label'],
+                // The same name, short enough to sit in a legend. See
+                // DEFINITIONS: it is named there, not abbreviated here.
+                'short' => $definition['short'],
                 'count' => array_sum(array_map(
                     fn (string $status) => $tally[$status] ?? 0,
                     $definition['statuses'],
@@ -319,6 +342,20 @@ class Buckets
                  * definition the count above was measured through.
                  */
                 'filter' => ['bucket' => $key],
+                /*
+                 * Whether this bucket is a roll-up of others in the same set
+                 * rather than a slice of its own.
+                 *
+                 * True of exactly one bucket today: the Reviewing Officer's
+                 * Assigned Reviews, which is deliberately the sum of the three
+                 * queues under it. It is a fact about the *shape* of the set,
+                 * so it is answered here rather than left to whoever draws it
+                 * to work out from the statuses — and anything that shows the
+                 * buckets as parts of a whole has to know. A chart that gave
+                 * the roll-up a share alongside its own children would draw
+                 * every file on that officer's desk twice and add up to 200%.
+                 */
+                'aggregate' => self::rollsUp($key, $set),
             ];
         }
 
@@ -360,6 +397,39 @@ class Buckets
     {
         return self::scoped($query, $bucket['scope'], $user)
             ->whereIn('status', $bucket['statuses']);
+    }
+
+    /**
+     * Is this bucket a roll-up of others in its set?
+     *
+     * True when some *other* bucket in the set counts a proper subset of what
+     * this one counts, within the same scope. The direction is the whole of
+     * the rule: Assigned Reviews contains Reviews Pending, so Assigned Reviews
+     * rolls up and Reviews Pending does not, and a test for mere overlap would
+     * mark both and leave nothing to draw.
+     */
+    private static function rollsUp(string $key, string $set): bool
+    {
+        $mine = self::DEFINITIONS[$key];
+
+        foreach (self::SETS[$set] as $other) {
+            if ($other === $key) {
+                continue;
+            }
+
+            $theirs = self::DEFINITIONS[$other];
+
+            if ($theirs['scope'] !== $mine['scope']) {
+                continue;
+            }
+
+            if (count($theirs['statuses']) < count($mine['statuses'])
+                && array_diff($theirs['statuses'], $mine['statuses']) === []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

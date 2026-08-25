@@ -428,19 +428,32 @@
   function paintHeader() {
     ensureSlots();
     var p = primary();
-    var label = p.label || meta(p.status).label;
     var slug = p.status || 'online';
+    var label = p.label || meta(slug).label;
+    var icon = p.icon || meta(slug).icon;
+    var title = p.message ? label + ': ' + p.message : label;
 
-    var pillHtml =
-      iconHtml(p.icon || meta(slug).icon, 8) +
-      '<span class="tma-presence-pill__label">' + esc(label) + '</span>';
+    /*
+     * Rewriting the pill costs a fresh <img> for the status icon, and the
+     * icon flashes while it is fetched. Plenty of things repaint the header
+     * that have nothing to say about presence, a view render, a /me answer,
+     * so paint only what changed and leave an unchanged pill alone.
+     */
+    var key = slug + '\u0000' + icon + '\u0000' + label + '\u0000' + title;
+    var pillHtml = null;
 
     document.querySelectorAll('[data-presence-indicator]').forEach(function (el) {
+      if (el.getAttribute('data-presence-painted') === key && el.firstChild) return;
+      if (pillHtml === null) {
+        pillHtml = iconHtml(icon, 8) +
+          '<span class="tma-presence-pill__label">' + esc(label) + '</span>';
+      }
       el.className = 'tma-presence-pill tma-presence-pill--' + slug;
       el.innerHTML = pillHtml;
       el.setAttribute('data-presence-status', slug);
-      el.title = p.message ? label + ': ' + p.message : label;
+      el.title = title;
       el.setAttribute('aria-label', 'Status: ' + label + '. Click to change.');
+      el.setAttribute('data-presence-painted', key);
     });
 
     document.querySelectorAll('[data-presence-titlebar]').forEach(function (wrap) {
@@ -1009,6 +1022,7 @@
   }
 
   var locationVisibilityBound = false;
+  var locationChecksArmed = false;
 
   function reportCurrentPosition() {
     if (!navigator.geolocation) return;
@@ -1025,22 +1039,47 @@
     );
   }
 
-  function startLocationChecks() {
-    if (locationTimer) clearInterval(locationTimer);
-    var locs = (state && state.locations) || [];
-    if (!locs.some(function (l) { return l.enabled && l.latitude != null; }) || !navigator.geolocation) return;
+  function locationTick() {
+    if (document.visibilityState === 'hidden') return;
+    reportCurrentPosition();
+  }
 
-    function tick() {
-      if (document.visibilityState === 'hidden') return;
-      reportCurrentPosition();
+  /*
+   * Arm the geofence poll, once.
+   *
+   * Reporting a position answers with the whole availability payload, and
+   * every payload lands in applyPayload, which arms the poll. So an
+   * immediate check on each call is a loop that feeds itself: report,
+   * payload, arm, report. It spun as fast as the round trip, repainting the
+   * header pill on every turn (the blink) and posting a position to the
+   * server without pause for anyone with a geofence saved.
+   *
+   * A payload is not a reason to go and look where the device is. Being
+   * switched on is. So the first call starts the poll and the rest are
+   * no-ops until the locations themselves change.
+   */
+  function startLocationChecks() {
+    var locs = (state && state.locations) || [];
+    var wanted = !!navigator.geolocation && locs.some(function (l) {
+      return l.enabled && l.latitude != null;
+    });
+
+    if (!wanted) {
+      if (locationTimer) clearInterval(locationTimer);
+      locationTimer = null;
+      locationChecksArmed = false;
+      return;
     }
-    tick();
-    locationTimer = setInterval(tick, 300000);
+    if (locationChecksArmed) return;
+    locationChecksArmed = true;
+
+    locationTick();
+    locationTimer = setInterval(locationTick, 300000);
 
     if (!locationVisibilityBound) {
       locationVisibilityBound = true;
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') tick();
+        if (document.visibilityState === 'visible' && locationChecksArmed) locationTick();
       });
     }
   }
@@ -1098,10 +1137,16 @@
       document.documentElement.dataset.tmaPresenceHeaderWatch = '1';
       new MutationObserver(function () {
         var right = document.querySelector('.tma-dash__header-right');
-        if (right && right.querySelector('.tma-dash__header-icons') && !right.querySelector('[data-presence-header] [data-presence-indicator]')) {
-          ensureSlots();
-          paintHeader();
-        }
+        if (!right || !right.querySelector('.tma-dash__header-icons')) return;
+        var pill = right.querySelector('[data-presence-header] [data-presence-indicator]');
+        /*
+         * Missing, or rebuilt empty: a morph that reconciles the header
+         * against the shell's markup leaves the button there and its
+         * contents gone, which looks the same to a reader as no pill at all.
+         */
+        if (pill && pill.firstChild) return;
+        ensureSlots();
+        paintHeader();
       }).observe(document.documentElement, { childList: true, subtree: true });
     }
     document.addEventListener('click', function (e) {
