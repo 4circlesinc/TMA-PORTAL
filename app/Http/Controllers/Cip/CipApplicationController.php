@@ -13,6 +13,7 @@ use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
+use App\Support\Cip\Attention;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Countries;
@@ -401,8 +402,16 @@ class CipApplicationController extends Controller
 
         $page = $query->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
+        // Measured for the whole page at once, then handed to each row: the
+        // dot on an applicant's face costs one query per table draw, not one
+        // per applicant.
+        $attention = Attention::forClients(
+            $user,
+            collect($page->items())->map(fn ($a) => $a->client_id)->filter()->all()
+        );
+
         return response()->json([
-            'applications' => collect($page->items())->map(fn ($a) => $this->row($a, $user))->all(),
+            'applications' => collect($page->items())->map(fn ($a) => $this->row($a, $user, $attention))->all(),
             'page' => $page->currentPage(),
             'lastPage' => $page->lastPage(),
             'perPage' => $page->perPage(),
@@ -602,7 +611,10 @@ class CipApplicationController extends Controller
      * every person and their checklists, which is the right answer for a
      * profile and a hundred times too much for a table of fifty lines.
      */
-    private function row($application, User $viewer): array
+    /**
+     * @param  array<int, array{comments: int, mentionsMe: bool, messages: int}>  $attention
+     */
+    private function row($application, User $viewer, array $attention = []): array
     {
         $main = $application->people->first();
         $client = $application->client;
@@ -611,6 +623,9 @@ class CipApplicationController extends Controller
         return [
             'id' => $application->uuid,
             'clientUid' => $client?->uid,
+            // Null unless something on this client's file is waiting for this
+            // reader — see Cip\Attention. Absent means "draw nothing".
+            'attention' => $client ? ($attention[$client->id] ?? null) : null,
             // §7: the CIP number once it exists, the internal one until then.
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,

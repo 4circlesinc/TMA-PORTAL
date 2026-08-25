@@ -141,6 +141,39 @@ class FileManagerTest extends TestCase
         $this->assertTrue($names->contains('filed.pdf'), 'Foldered file must appear in Recent Files');
     }
 
+    /**
+     * Recent is ordered by recency — across both tables, not folders first.
+     *
+     * The listing windows folders before files, which is right for browsing a
+     * folder and wrong for this section: a library with more folders than fit
+     * on a page filled every slot with folders and returned zero files, for
+     * ever. The Overview widget passed `only=files` to dodge it, so the same
+     * account saw recent files in the widget and none in the table.
+     */
+    public function test_recent_puts_the_newest_item_first_even_with_a_page_full_of_folders(): void
+    {
+        $user = $this->approvedUser();
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->actingAs($user)->postJson('/portal/files/folders', ['name' => 'Folder '.$i])->assertCreated();
+        }
+
+        // Uploaded a clear minute later, so it is unambiguously the most
+        // recently touched thing here rather than tied within the same second.
+        $this->travel(1)->minutes();
+        $this->actingAs($user)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('newest.pdf', '%PDF-1.4 z'),
+        ])->assertCreated();
+
+        $res = $this->actingAs($user)->getJson('/portal/files/?section=recent&perPage=10')->assertOk();
+
+        $names = collect($res->json('files'))->pluck('name');
+        $this->assertTrue(
+            $names->contains('newest.pdf'),
+            'The most recently touched file must be on page one of Recent, not starved by folders'
+        );
+    }
+
     public function test_duplicate_upload_keep_both_appends_counter(): void
     {
         $user = $this->approvedUser();

@@ -3,6 +3,8 @@
 namespace App\Support\Files;
 
 use App\Models\CipDocument;
+use App\Models\FileComment;
+use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\FileWorkflow;
@@ -47,6 +49,9 @@ class Presenter
      * @var array<int, CipDocument>
      */
     private array $cipFile = [];
+
+    /** file id => ['open' => int, 'mentionsMe' => bool] */
+    private array $commentFile = [];
 
     /**
      * Whether {@see self::prime()} has run for this page of items.
@@ -135,6 +140,7 @@ class Presenter
         $this->sharedFile = $this->sharedWithMap('file', $fileIds);
         $this->statusFile = $this->statusMap($fileIds);
         $this->cipFile = $this->cipMap($fileIds);
+        $this->commentFile = $this->commentMap($fileIds);
         $this->primed = true;
         $this->attachCipSlots($files);
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
@@ -175,6 +181,9 @@ class Presenter
             // Denormalised on the row, so a listing of 200 files costs no
             // extra queries to show which have been revised.
             'versionNumber' => (int) ($file->version_number ?: 1),
+            // What the row's comment indicator draws. Absent (null) when the
+            // file has no open thread, so the client has nothing to decide.
+            'comments' => $this->commentFile[$file->id] ?? null,
             'folder' => $file->folder ? ['id' => $file->folder->uuid, 'name' => $file->folder->name] : null,
             'path' => $this->folderPath($file->folder),
             'createdAt' => optional($file->created_at)->toIso8601String(),
@@ -929,6 +938,65 @@ class Presenter
      * @param  int[]  $fileIds
      * @return array<int, array{status:string,label:string,tone:string}>
      */
+    /**
+     * Open comment threads per file, and whether any of them names the viewer.
+     *
+     * Two grouped queries for the whole page rather than one per row: a folder
+     * of two hundred files draws this indicator on every one of them.
+     *
+     * "Open" is an unresolved root thread. Replies are not counted separately —
+     * a thread is one conversation, and a badge that climbed as people replied
+     * would say a file needs more attention the more it had already had. The
+     * mention flag follows Hub::counts: a mention inside a reply is judged by
+     * whether its thread is still open, so resolving the thread clears it.
+     *
+     * @param  list<int>  $fileIds
+     * @return array<int, array{open: int, mentionsMe: bool}>
+     */
+    private function commentMap(array $fileIds): array
+    {
+        if (! $fileIds) {
+            return [];
+        }
+
+        $open = FileComment::query()
+            ->whereIn('file_id', $fileIds)
+            ->whereNull('parent_id')
+            ->whereNull('resolved_at')
+            ->groupBy('file_id')
+            ->selectRaw('file_id, COUNT(*) as n')
+            ->pluck('n', 'file_id');
+
+        $mine = FileCommentMention::query()
+            ->where('file_comment_mentions.user_id', $this->viewer->id)
+            ->whereHas('comment', fn ($q) => $q
+                ->whereIn('file_id', $fileIds)
+                ->whereIn('root_id', fn ($sub) => $sub->select('id')
+                    ->from('file_comments')
+                    ->whereNull('resolved_at')
+                    ->whereNull('deleted_at')))
+            ->with('comment:id,file_id')
+            ->get()
+            ->pluck('comment.file_id')
+            ->filter()
+            ->flip();
+
+        $out = [];
+
+        foreach ($fileIds as $id) {
+            $count = (int) ($open[$id] ?? 0);
+            $mentioned = $mine->has($id);
+
+            if ($count === 0 && ! $mentioned) {
+                continue;
+            }
+
+            $out[$id] = ['open' => $count, 'mentionsMe' => $mentioned];
+        }
+
+        return $out;
+    }
+
     private function statusMap(array $fileIds): array
     {
         if (! $fileIds) {

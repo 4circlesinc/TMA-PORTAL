@@ -1302,8 +1302,17 @@
     return onApplicationsTable(state) && APP_TABLE.assignees.length > 0;
   }
 
+  /*
+   * Filtering by firm only means something when there is more than one firm to
+   * choose between. A provider contact sees their own firm's applications and
+   * nobody else's, so the menu offered them a single value that was already
+   * true of every row on screen.
+   */
   function providerFilterApplies(state) {
-    return onApplicationsTable(state) && APP_TABLE.providers.length > 0;
+    if (!onApplicationsTable(state)) return false;
+    if (isExternalCipUser()) return false;
+
+    return APP_TABLE.providers.length > 0;
   }
 
   /*
@@ -1517,19 +1526,46 @@
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-letters">Manage decision letters</button>' +
           '</div></div>'
         : '') +
-      '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
-      '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
-      'Create New Application' +
-      '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
-      '</button>' +
-      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create New Application">' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">New application</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>' +
-      '</div>' +
-      '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">' +
-      '</div>'
+      /*
+       * One choice is a button, not a menu.
+       *
+       * Registering a service provider and importing a spreadsheet are the
+       * firm's work; a provider contact files applications for the one firm
+       * they belong to and may do neither. Leaving the caret there gave them a
+       * menu whose only live entry was the thing the button already said, and
+       * two entries that answer 403.
+       */
+      (canCreateBeyondApplications()
+        ? '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
+          'Create New Application' +
+          '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
+          '</button>' +
+          '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create New Application">' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">New application</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>' +
+          '</div>' +
+          '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">' +
+          '</div>'
+        : '<div class="tma-dash__head-dropdown-wrap">' +
+          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-clients-create-application>' +
+          'Create New Application' +
+          '</button></div>')
     );
+  }
+
+  /*
+   * May this reader make anything here other than an application?
+   *
+   * The two extra entries write to the client hub — a company record, a bulk
+   * import — which is `clients.manage`, a matrix capability no external
+   * account holds.
+   */
+  function canCreateBeyondApplications() {
+    if (isExternalCipUser()) return false;
+
+    return canManageClients();
   }
 
   function syncClientsPageActions(state, navigate) {
@@ -3101,8 +3137,62 @@
       ? '<img class="tma-cip-table__applicant-face" src="' + esc(a.photo) + '" alt="" width="26" height="26">'
       : applicantInitials(a);
 
-    return '<span class="tma-cip-table__applicant">' + face +
-      '<span class="tma-cip-table__applicant-name">' + esc(name) + '</span></span>';
+    var flag = attentionFlags(a.attention);
+
+    return '<span class="tma-cip-table__applicant">' +
+      '<span class="tma-cip-table__applicant-avatar">' + face + flag.dot + '</span>' +
+      '<span class="tma-cip-table__applicant-name">' + esc(name) + '</span>' +
+      flag.icons + '</span>';
+  }
+
+  /*
+   * The dot and the kind icons for one row.
+   *
+   * Two parts doing two jobs. The dot on the face is the thing you notice
+   * scanning a table of fifty — it says only "this one". The icons after the
+   * name are what you read once you have noticed: a speech bubble for a
+   * conversation open on their documents, an envelope for unread messages
+   * from them. Together they answer "which row, and what kind" without
+   * opening anything.
+   *
+   * `attention` is absent unless there is something to draw, so a table where
+   * nothing is waiting renders exactly as it did before.
+   */
+  function attentionFlags(at) {
+    if (!at) return { dot: '', icons: '' };
+
+    var comments = at.comments || 0;
+    var messages = at.messages || 0;
+    if (!comments && !messages) return { dot: '', icons: '' };
+
+    var reasons = [];
+    if (comments) {
+      reasons.push(at.mentionsMe
+        ? 'a comment naming you'
+        : (comments === 1 ? '1 open comment thread' : comments + ' open comment threads'));
+    }
+    if (messages) {
+      reasons.push(messages === 1 ? '1 unread message' : messages + ' unread messages');
+    }
+    var label = 'Waiting on you: ' + reasons.join(' and ');
+
+    var icons = '';
+    if (comments) {
+      icons += '<span class="tma-cip-table__flag' + (at.mentionsMe ? ' tma-cip-table__flag--mine' : '') +
+        '" title="' + esc(label) + '">' +
+        '<span class="tma-cip-table__flag-icon tma-cip-table__flag-icon--comment" aria-hidden="true"></span>' +
+        '</span>';
+    }
+    if (messages) {
+      icons += '<span class="tma-cip-table__flag" title="' + esc(label) + '">' +
+        '<span class="tma-cip-table__flag-icon tma-cip-table__flag-icon--message" aria-hidden="true"></span>' +
+        '</span>';
+    }
+
+    return {
+      dot: '<span class="tma-cip-table__attention-dot" aria-hidden="true"></span>',
+      icons: '<span class="tma-cip-table__flags" role="img" aria-label="' + esc(label) + '">' + icons + '</span>',
+    };
   }
 
   function applicantInitials(a) {
@@ -3371,15 +3461,55 @@
    * something. When a filter is on it reports both figures, because "8,210 of
    * 11,101" is the honest answer and a bare 8,210 is not.
    */
+  function clientsCountShell(inner) {
+    return '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' + inner + '</span>';
+  }
+
+  function clientsCountSkeleton() {
+    return clientsCountShell(
+      '<span class="tma-skeleton tma-skeleton--text" style="width:64px;display:inline-block"></span>'
+    );
+  }
+
+  function clientsCountValue(text, noun) {
+    return clientsCountShell(
+      '<span class="tma-dash__toolbar-count-value">' + esc(text) + '</span> ' + noun
+    );
+  }
+
   function renderClientsCount(state) {
+    /*
+     * The applications tab counts its own request, not the client directory.
+     *
+     * Both used to hang off `state.loadState`, which belongs to /portal/clients
+     * — a directory a service-provider contact is not allowed to read. Their
+     * applications table loaded and listed perfectly while the number beside it
+     * sat on a loading skeleton that could never resolve, because the request it
+     * was waiting for had been refused several seconds earlier. And the figure
+     * it was waiting to show was the wrong one anyway: it counted applicants in
+     * the directory, where this tab lists applications.
+     *
+     * The listing is filtered and paged on the server, so its `total` is
+     * already the answer for whatever filters are on, and there is no second
+     * figure to say "of" against.
+     */
+    if (onApplicationsTable(state)) {
+      // The table says its own piece when the request fails; a number beside
+      // that message would be a second, quieter claim about the same failure.
+      if (APP_TABLE.error) return '';
+      if (APP_TABLE.loadedKey === null || APP_TABLE.loading) return clientsCountSkeleton();
+
+      var apps = APP_TABLE.total || 0;
+
+      return clientsCountValue(apps.toLocaleString(), apps === 1 ? 'application' : 'applications');
+    }
+
     // Nothing has been counted yet, and "0 clients" beside a skeleton table is
     // a claim about the firm rather than a report on the request.
     if (state.loadState !== 'ready') {
-      return (
-        '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
-        '<span class="tma-skeleton tma-skeleton--text" style="width:64px;display:inline-block"></span>' +
-        '</span>'
-      );
+      // A directory that answered with an error is not still counting. Saying
+      // nothing is honest; a skeleton promises a number that is not coming.
+      return state.loadState === 'error' ? '' : clientsCountSkeleton();
     }
 
     // Counted within the tab: the number above a list has to be the number of
@@ -3395,12 +3525,9 @@
         ? (total === 1 && !filtered ? 'service provider' : 'service providers')
         : (total === 1 && !filtered ? 'application' : 'applications');
 
-    return (
-      '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
-      '<span class="tma-dash__toolbar-count-value">' +
-      esc(filtered ? shown.toLocaleString() + ' of ' + total.toLocaleString() : total.toLocaleString()) +
-      '</span> ' + noun +
-      '</span>'
+    return clientsCountValue(
+      filtered ? shown.toLocaleString() + ' of ' + total.toLocaleString() : total.toLocaleString(),
+      noun
     );
   }
 
@@ -5881,6 +6008,24 @@
       ' tma-portal-status--inline">' + esc(s.label) + '</span>';
   }
 
+  /* Same indicator the File Library draws, from the same listing field: a
+     document with a conversation open on it says so wherever it is listed. */
+  function clientCommentChip(f) {
+    var c = f && f.comments;
+    if (!c || (!c.open && !c.mentionsMe)) return '';
+
+    var mine = !!c.mentionsMe;
+    var label = mine
+      ? 'You are mentioned in a comment on this file'
+      : (c.open === 1 ? '1 open comment thread' : c.open + ' open comment threads');
+
+    return '<span class="tma-portal-comment-flag' + (mine ? ' tma-portal-comment-flag--mine' : '') +
+      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+      '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +
+      (c.open > 0 ? esc(String(c.open)) : '') +
+      '</span>';
+  }
+
   /* The rows currently on show, so a click can hand the viewer the whole file
      rather than re-fetching one it already has. Folders too, because the row
      menu acts on either. */
@@ -5958,7 +6103,8 @@
       html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main">' +
-          '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) + clientStatusChip(f) + '</span>' +
+          '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
+            clientCommentChip(f) + clientStatusChip(f) + '</span>' +
           (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
         '</span></button>';
     });
@@ -9152,6 +9298,14 @@
         var importInput = slot && slot.querySelector('[data-clients-import-input]');
         if (importInput) importInput.click();
       }
+    });
+
+    // The menuless button raises no head-dropdown:select, so it is heard here.
+    document.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-clients-create-application]');
+      if (!btn || !btn.closest('[data-clients-page-actions]')) return;
+      event.preventDefault();
+      if (clientsHeadActionsNavigate) clientsHeadActionsNavigate('new-application');
     });
 
     document.addEventListener('change', function (event) {

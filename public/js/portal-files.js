@@ -127,6 +127,31 @@
       ' tma-portal-status--inline">' + esc(s.label) + '</span>';
   }
 
+  /*
+   * Does this row have a conversation open on it?
+   *
+   * `comments` is absent unless there is something to say, so a listing of
+   * files nobody has commented on renders exactly what it did before. The
+   * count is threads, not messages: a thread is one conversation, and a number
+   * that climbed with every reply would report a busy discussion as a bigger
+   * problem than an unanswered question.
+   */
+  function commentChip(it) {
+    var c = it && it.comments;
+    if (!c || (!c.open && !c.mentionsMe)) return '';
+
+    var mine = !!c.mentionsMe;
+    var label = mine
+      ? 'You are mentioned in a comment on this file'
+      : (c.open === 1 ? '1 open comment thread' : c.open + ' open comment threads');
+
+    return '<span class="tma-portal-comment-flag' + (mine ? ' tma-portal-comment-flag--mine' : '') +
+      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+      '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +
+      (c.open > 0 ? esc(String(c.open)) : '') +
+      '</span>';
+  }
+
   function fileIconSrc(item) {
     if (item.type === 'folder') {
       var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
@@ -990,7 +1015,7 @@
         '<td class="tma-portal-cell--name"><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
         // title: the full name is still reachable when the cell clips it.
         '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
-        statusChip(it) + busySpin + '</span></td>' +
+        commentChip(it) + statusChip(it) + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '-') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
@@ -1028,7 +1053,7 @@
         '<button type="button" class="tma-portal-file-card__thumb" data-files-open="' + esc(it.id) + '">' + thumb + '</button>' +
         '<button type="button" class="tma-portal-file-card__name" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         '<span class="tma-portal-file-card__meta">' + esc(sub) + '</span>' +
-        statusChip(it) +
+        commentChip(it) + statusChip(it) +
         '</div>';
     }).join('');
     return '<div class="tma-portal-grid">' + cards + '</div>';
@@ -6640,6 +6665,18 @@
     state.el = el;
     state.navId = opts.navId && NAV_SECTION[opts.navId] ? opts.navId : (opts.navId || 'folders-all');
     state.section = NAV_SECTION[state.navId] || 'all';
+
+    /*
+     * Recent is a list in time order, so that is the order it opens in.
+     * The shared default is name-ascending and it was sent with every request,
+     * which quietly turned Recent into a flat alphabetical copy of All Files —
+     * and since the listing takes folders before files, a library with more
+     * folders than fit on a page never reached a single file.
+     */
+    if (state.section === 'recent') {
+      state.sort = 'modified';
+      state.dir = 'desc';
+    }
     /*
      * A sidebar folder shortcut lands straight inside its folder; otherwise
      * the URL decides. The shortcut wins because it is a fresh instruction,

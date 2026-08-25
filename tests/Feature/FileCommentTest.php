@@ -52,6 +52,51 @@ class FileCommentTest extends TestCase
         return $this->file($admin, $folder);
     }
 
+    /**
+     * The listing carries enough to draw the row indicator without a second
+     * request per file — one open-thread count, and whether it names you.
+     */
+    public function test_a_file_row_reports_its_open_threads_and_whether_they_name_you(): void
+    {
+        $admin = $this->user();
+        $mate = $this->user('Administrator', 'b@example.com', 'Bo Colleague');
+        $file = $this->orgFile($admin);
+
+        $row = fn (User $viewer) => collect(
+            $this->actingAs($viewer)->getJson('/portal/files/?section=recent')->assertOk()->json('files')
+        )->firstWhere('id', $file->uuid);
+
+        // Nothing to say yet: the key is absent rather than a zero, so the
+        // client has no state to reason about.
+        $this->assertNull($row($admin)['comments']);
+
+        $thread = $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Needs a second look @Bo Colleague',
+            'mentions' => [$mate->id],
+        ])->assertCreated()->json('id');
+
+        $this->assertSame(1, $row($admin)['comments']['open']);
+        $this->assertFalse($row($admin)['comments']['mentionsMe']);
+        $this->assertTrue($row($mate)['comments']['mentionsMe'], 'the mentioned reader is told it is about them');
+
+        // A reply is part of the same conversation, not a second one.
+        $this->actingAs($mate)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Looking now',
+            'parent' => $thread,
+        ])->assertCreated();
+        $this->assertSame(1, $row($admin)['comments']['open']);
+
+        // Resolving the thread clears both the count and the mention.
+        $comment = FileComment::where('uuid', $thread)->firstOrFail();
+        $this->actingAs($admin)->postJson(
+            "/portal/files/files/{$file->uuid}/comments/{$comment->uuid}/resolve",
+            ['resolved' => true]
+        )->assertOk();
+
+        $this->assertNull($row($admin)['comments']);
+        $this->assertNull($row($mate)['comments']);
+    }
+
     public function test_a_comment_can_be_posted_and_read_back(): void
     {
         $user = $this->user();

@@ -1079,6 +1079,54 @@
   text-transform: uppercase; white-space: nowrap;
   color: #fff;
 }
+/* ── comment indicator ───────────────────────────────────────────────
+ *
+ * A file with an open thread on it, said on the row rather than only inside
+ * the viewer — the whole point is that you can see which documents are waiting
+ * on a conversation without opening each one.
+ *
+ * Two states and no more: there is a conversation open, and it names you. The
+ * second is the one that earns colour, because it is the only one that is
+ * about the reader rather than about the file.
+ */
+.tma-portal-comment-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 0 var(--space-4, 4px);
+  height: 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-text-secondary, #6b7280);
+  background: var(--color-surface-sunken, rgba(107, 114, 128, 0.12));
+  vertical-align: middle;
+}
+
+.tma-portal-comment-flag__icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatCircle.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatCircle.svg */
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* Named in the thread: the row is asking this reader for something. */
+.tma-portal-comment-flag--mine {
+  color: #fff;
+  background: #2563eb;
+}
+
 .tma-portal-status--success { background: #16a34a; }
 .tma-portal-status--danger  { background: #dc2626; }
 .tma-portal-status--pending { background: #d97706; }

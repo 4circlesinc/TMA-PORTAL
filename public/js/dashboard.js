@@ -1407,6 +1407,9 @@
       var key = btn.getAttribute('data-expand');
       var sub = root.querySelector('[data-subnav="' + key + '"]');
       if (sub) sub.hidden = !open;
+      // Workflows moves its count between the parent and the children as it
+      // opens and closes; every path that opens a group comes through here.
+      if (key === 'workflows' && root._syncWorkflowBadges) root._syncWorkflowBadges();
     }
 
     /* The rail is showing icons only, no labels, and CSS hides every submenu
@@ -2075,7 +2078,75 @@
       badge.textContent = text;
     }
 
+    /*
+     * Workflows: one number when the group is shut, each screen's own when it
+     * is open.
+     *
+     * Requests waiting on you and comment threads that name you are both work
+     * addressed to this reader; a request they sent is not, so it is not
+     * counted. Collapsed, the parent carries the sum, because that is the only
+     * row on screen and a group that hides a number is a group nobody opens.
+     * Expanded, the children say which screen the work is on and the parent
+     * drops its badge rather than repeating a total the reader can now see
+     * broken down.
+     *
+     * Deliberately only this group. File Library and People count nothing, so
+     * giving their toggles the same treatment would be inventing numbers.
+     */
+    var workflowCounts = { waiting: 0, mentions: 0 };
+
+    function workflowsExpanded() {
+      var toggle = root.querySelector('.tma-dash__nav-item[data-expand="workflows"]');
+      return !!toggle && toggle.getAttribute('aria-expanded') === 'true';
+    }
+
+    function syncWorkflowBadges() {
+      var open = workflowsExpanded();
+      var total = workflowCounts.waiting + workflowCounts.mentions;
+
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-expand="workflows"]'), open ? 0 : total);
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-automated"]'), open ? workflowCounts.waiting : 0);
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-feedback"]'), open ? workflowCounts.mentions : 0);
+
+      // The mobile menu has no disclosure, every row is always on screen, so
+      // each carries its own number and the parent row is not repeated there.
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), workflowCounts.waiting);
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-feedback"]'), workflowCounts.mentions);
+    }
+
+    function syncWorkflowCounts() {
+      // Only for accounts that have the section at all — portal-access.js
+      // removes it otherwise, and asking would be a guaranteed 403 an hour.
+      if (!root.querySelector('.tma-dash__nav-item[data-expand="workflows"], .tma-dash__mrow[data-nav="workflows-automated"]')) {
+        return;
+      }
+
+      fetch('/portal/files/workflows/counts', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var c = (j && j.counts) || {};
+          workflowCounts = { waiting: c.waiting || 0, mentions: c.mentions || 0 };
+          syncWorkflowBadges();
+        })
+        .catch(function () {});
+    }
+
+    root._syncWorkflowCounts = syncWorkflowCounts;
+    root._syncWorkflowBadges = syncWorkflowBadges;
+
+    // The Workflows page re-reads these on every load and after every answer,
+    // so its figures are fresher than the one taken at boot.
+    document.addEventListener('tma-workflow-counts', function (e) {
+      var c = (e && e.detail) || {};
+      workflowCounts = { waiting: c.waiting || 0, mentions: c.mentions || 0 };
+      syncWorkflowBadges();
+    });
+
     function syncNavBadges() {
+      syncWorkflowBadges();
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="email"]'), getEmailBadgeCount());
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="so-messages"]'), getMessagesBadgeCount());
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="calendar"]'), getCalendarBadgeCount());
@@ -2104,6 +2175,7 @@
     }
     root._syncPendingUsersBadge = syncPendingUsersBadge;
     syncPendingUsersBadge();
+    syncWorkflowCounts();
 
     // Exact inbox unread for the Email nav badge, same source as home shortcuts.
     // Without this the badge stays at 0 until the mailbox view opens.

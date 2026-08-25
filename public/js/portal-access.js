@@ -49,6 +49,21 @@
     'people-resend': 'users.manage',
   };
 
+  /*
+   * File Library rows a service-provider contact has no use for.
+   *
+   * Their whole reason to be in the library is the client folders their firm
+   * filed: everything they upload belongs in one of those, and the server
+   * refuses anywhere else. File Box and Personal Folders are both "somewhere
+   * outside a client folder", so offering them is offering a destination that
+   * answers 403 — and, worse, a place to leave a client's passport where the
+   * client's file will never show it.
+   *
+   * Capability-based pruning cannot express this: external accounts hold no
+   * matrix capability at all, so there is no row in Role::MATRIX to hang it on.
+   */
+  var PROVIDER_CONTACT_HIDDEN_NAV = ['folders-filebox', 'folders-personal'];
+
   /* Bottom tab bar (mobile). data-tab => capability. */
   var TAB_CAPABILITIES = {
     email: 'mail.use',
@@ -125,6 +140,12 @@
   function pruneNavItems(scope) {
     scope.querySelectorAll('[data-nav]').forEach(function (el) {
       var nav = el.getAttribute('data-nav');
+
+      if (providerContact && PROVIDER_CONTACT_HIDDEN_NAV.indexOf(nav) !== -1) {
+        remove(el);
+        return;
+      }
+
       var need = NAV_CAPABILITIES[nav];
       if (!need) return;
       // All Files is also for CIP-reach accounts. Shared Folders stays

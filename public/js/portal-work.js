@@ -99,6 +99,14 @@
     loadWorkflows();
   }
 
+  /* Hand the counts to the shell so the Workflows badge agrees with the tabs. */
+  function publishWorkflowCounts(counts) {
+    if (!counts) return;
+    try {
+      document.dispatchEvent(new CustomEvent('tma-workflow-counts', { detail: counts }));
+    } catch (e) { /* an old engine simply keeps the hourly figure */ }
+  }
+
   function wfTabs() {
     var all = wf.page === 'comments' ? WF_COMMENT_TABS : WF_TABS;
 
@@ -499,6 +507,10 @@
 
         wf.cursor = res.nextCursor || null;
         wf.counts = res.counts || wf.counts;
+        // The sidebar shows the same figures. This page re-reads them after
+        // every answer given here, so pushing them across keeps the badge from
+        // still claiming work the reader just finished.
+        publishWorkflowCounts(wf.counts);
         wf.canSeeAll = !!res.canSeeAll;
         wf.loading = false;
         wf.loadingMore = false;

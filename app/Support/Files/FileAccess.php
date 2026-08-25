@@ -583,10 +583,46 @@ class FileAccess
         abort_unless(self::can($user, $ability, $item), 403, 'Permission denied.');
     }
 
-    /** Uploading to the File Box (null folder) is always allowed for the user's own area. */
+    /**
+     * Where may this account put something?
+     *
+     * Uploading to the File Box (null folder) is the user's own area, so it is
+     * open — except to a service-provider contact, whose entire reason to be in
+     * the library is the client folders their firm filed. Anywhere else is a
+     * document about somebody's citizenship application sitting outside that
+     * application's file, where nobody working it will ever see it, so it is
+     * refused rather than merely discouraged.
+     *
+     * This is the one gate every write goes through — upload, chunked upload,
+     * new folder, move, copy, and a public file request — so the rule is stated
+     * once here rather than at ten call sites.
+     */
     public static function canUploadTo(User $user, ?Folder $folder): bool
     {
+        if (self::isProviderContact($user)) {
+            return $folder !== null
+                && self::inClientTree($folder)
+                && self::can($user, 'upload', $folder);
+        }
+
         return $folder === null ? true : self::can($user, 'upload', $folder);
+    }
+
+    /*
+     * Deliberately not memoised on a static keyed by id. Ids repeat across
+     * requests in a long-lived worker and across tests under RefreshDatabase,
+     * so a cached "yes" for user 7 becomes a wrong answer about a different
+     * user 7 later — which reads as an unexplained 403 on an ordinary upload.
+     * Staff short-circuit before the query, and every caller asks once per
+     * request, so there is nothing here worth caching.
+     */
+    private static function isProviderContact(User $user): bool
+    {
+        if (Role::isStaff($user) || ! CipAccess::enabled()) {
+            return false;
+        }
+
+        return CipAccess::isProviderContact($user);
     }
 
     /** File ids shared/assigned directly to the user (for "Shared with me"). */

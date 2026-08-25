@@ -79,30 +79,36 @@ class BrowserController extends BaseFilesController
 
         $this->applyOwnerFilter($folderQuery, $fileQuery, $request);
 
-        [$sort, $dir] = $this->sort($request);
+        [$sort, $dir] = $this->sort($request, $section);
 
         $folderTotal = $folderQuery ? (clone $folderQuery)->count() : 0;
         $fileTotal = $fileQuery ? (clone $fileQuery)->count() : 0;
         $total = $folderTotal + $fileTotal;
 
-        // Folder-first windowing across the two tables without loading either.
         $offset = ($page - 1) * $perPage;
         $folders = collect();
         $files = collect();
 
-        if ($folderQuery) {
-            $this->orderFolders($folderQuery, $sort, $dir);
-            $folders = $folderQuery->with(['owner', 'creator', 'parent'])
-                ->offset($offset)->limit($perPage)->get();
+        if ($section === 'recent' && $folderQuery && $fileQuery) {
+            [$folders, $files] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
+        } else {
+            // Folder-first windowing across the two tables without loading either.
+            if ($folderQuery) {
+                $this->orderFolders($folderQuery, $sort, $dir);
+                $folders = $folderQuery->with(['owner', 'creator', 'parent'])
+                    ->offset($offset)->limit($perPage)->get();
+            }
+
+            $taken = $folders->count();
+            if ($fileQuery && $taken < $perPage) {
+                $fileOffset = max(0, $offset - $folderTotal);
+                $this->orderFiles($fileQuery, $sort, $dir);
+                $files = $fileQuery->with(['owner', 'uploader', 'folder'])
+                    ->offset($fileOffset)->limit($perPage - $taken)->get();
+            }
         }
 
         $used = $folders->count();
-        if ($fileQuery && $used < $perPage) {
-            $fileOffset = max(0, $offset - $folderTotal);
-            $this->orderFiles($fileQuery, $sort, $dir);
-            $files = $fileQuery->with(['owner', 'uploader', 'folder'])
-                ->offset($fileOffset)->limit($perPage - $used)->get();
-        }
 
         $presenter = $this->presenter($request);
         $presenter->prime($files->all(), $folders->all());
@@ -450,13 +456,71 @@ class BrowserController extends BaseFilesController
         }
     }
 
-    private function sort(Request $request): array
+    /**
+     * @param  string  $section  Recent is ordered by when things changed, so
+     *                           that is its default rather than by name — the
+     *                           alphabetical default made the section a second
+     *                           copy of All Files that happened to be flatter.
+     */
+    private function sort(Request $request, string $section = 'all'): array
     {
-        $sort = $request->query('sort', 'name');
-        $dir = strtolower($request->query('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $default = $section === 'recent' ? 'modified' : 'name';
+        $sort = $request->query('sort', $default);
+        $defaultDir = $section === 'recent' && $sort === 'modified' ? 'desc' : 'asc';
+        $dir = strtolower($request->query('dir', $defaultDir)) === 'desc' ? 'desc' : 'asc';
         $allowed = ['name', 'created', 'modified', 'size', 'type', 'owner'];
 
-        return [in_array($sort, $allowed, true) ? $sort : 'name', $dir];
+        return [in_array($sort, $allowed, true) ? $sort : $default, $dir];
+    }
+
+    /**
+     * One window over both tables, ordered together.
+     *
+     * Everywhere else the listing takes folders first and gives files what is
+     * left, which is how a file manager should read a folder. Recent is not a
+     * folder: it is a single list in time order, and folders-first turned it
+     * into "every folder you can see, alphabetically, and files only once you
+     * run out of folders" — which for any real library meant never. The
+     * Overview widget worked around it by asking for `only=files`, so the same
+     * account saw recent files there and an empty table here.
+     *
+     * Both sides are read to the end of the requested window and merged in
+     * PHP. That costs `offset + perPage` rows per table, which is bounded by
+     * the same clamp as any other page.
+     *
+     * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection}
+     */
+    private function recencyWindow(Builder $folderQuery, Builder $fileQuery, string $sort, string $dir, int $offset, int $perPage): array
+    {
+        $reach = $offset + $perPage;
+
+        $this->orderFolders($folderQuery, $sort, $dir);
+        $this->orderFiles($fileQuery, $sort, $dir);
+
+        $folders = $folderQuery->with(['owner', 'creator', 'parent'])->limit($reach)->get();
+        $files = $fileQuery->with(['owner', 'uploader', 'folder'])->limit($reach)->get();
+
+        // Microseconds, not seconds: a bulk import writes hundreds of rows
+        // inside one second, and a whole-second key would order them by which
+        // table they came out of rather than by when they landed.
+        $key = match ($sort) {
+            'created' => fn ($row) => $row->created_at?->getPreciseTimestamp(6) ?? 0,
+            'modified' => fn ($row) => $row->updated_at?->getPreciseTimestamp(6) ?? 0,
+            // Folders have no size or extension to compare against a file's,
+            // so those orderings fall back to the one column both tables share.
+            default => fn ($row) => mb_strtolower((string) $row->name),
+        };
+
+        $merged = $folders->map(fn ($row) => ['kind' => 'folder', 'row' => $row, 'key' => $key($row)])
+            ->concat($files->map(fn ($row) => ['kind' => 'file', 'row' => $row, 'key' => $key($row)]))
+            ->sortBy('key', SORT_REGULAR, $dir === 'desc')
+            ->values()
+            ->slice($offset, $perPage);
+
+        return [
+            $merged->where('kind', 'folder')->pluck('row')->values(),
+            $merged->where('kind', 'file')->pluck('row')->values(),
+        ];
     }
 
     private function orderFolders(Builder $q, string $sort, string $dir): void

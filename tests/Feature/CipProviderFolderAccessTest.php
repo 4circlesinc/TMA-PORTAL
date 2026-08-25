@@ -93,6 +93,57 @@ class CipProviderFolderAccessTest extends TestCase
         ];
     }
 
+    /**
+     * A provider contact files into the client's tree, and nowhere else.
+     *
+     * The File Box is "your own area", which is right for staff and wrong for
+     * a firm filing somebody's citizenship papers: a passport dropped there is
+     * outside the application it belongs to, where nobody working the file will
+     * ever find it. The sidebar no longer offers the destination and this is
+     * what makes the offer's absence a rule rather than a suggestion.
+     */
+    public function test_a_provider_contact_may_only_upload_inside_a_client_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        ['root' => $root, 'main' => $main] = $this->filing($galaxy, $staff);
+
+        // Inside the filing: yes, that is the whole point of the grant.
+        $this->assertTrue(FileAccess::canUploadTo($gil, $root));
+        $this->assertTrue(FileAccess::canUploadTo($gil, $main));
+
+        // The File Box, and a folder of their own outside any client tree: no.
+        $this->assertFalse(FileAccess::canUploadTo($gil, null));
+
+        $ownFolder = Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Scratch',
+            'owner_id' => $gil->id,
+            'created_by' => $gil->id,
+        ]);
+        $this->assertFalse(FileAccess::canUploadTo($gil, $ownFolder));
+
+        // Staff are unaffected: the File Box is still theirs.
+        $this->assertTrue(FileAccess::canUploadTo($staff, null));
+    }
+
+    /** The upload endpoint refuses it too, not just the helper. */
+    public function test_a_provider_contact_cannot_post_a_file_to_the_file_box(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        ['main' => $main] = $this->filing($galaxy, $staff);
+
+        $this->actingAs($gil)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('passport.pdf', '%PDF-1.4 x'),
+        ])->assertForbidden();
+
+        $this->actingAs($gil)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('passport.pdf', '%PDF-1.4 x'),
+            'folder' => $main->uuid,
+        ])->assertCreated();
+    }
+
     public function test_every_contact_at_the_filing_firm_can_open_the_client_tree(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
