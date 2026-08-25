@@ -1,8 +1,10 @@
 @php $photo = $user->photoUrl(); @endphp
+@include('onboarding.steps._icon', ['icon' => 'Camera'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Add a photo or logo</h1>
   <p class="tma-auth__subtitle">A picture helps us recognise you. You can skip this and add one later.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}" enctype="multipart/form-data">
   @csrf
   {{-- Same control as the staff profile-setup screen: a round preview beside an

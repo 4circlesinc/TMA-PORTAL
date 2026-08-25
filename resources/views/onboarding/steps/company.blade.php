@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'Buildings'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Your company</h1>
   <p class="tma-auth__subtitle">If colleagues already use this portal, we'll put you on the same company record.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <div class="tma-auth__group">

@@ -1,8 +1,10 @@
 @php $rows = old('contacts', $values['contacts'] ?? []); @endphp
+@include('onboarding.steps._icon', ['icon' => 'Users'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Anyone else we should include?</h1>
   <p class="tma-auth__subtitle">Colleagues or family who should receive documents and updates. Optional.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   @for ($i = 0; $i < 3; $i++)

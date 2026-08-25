@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'CalendarBlank'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Connect your calendar</h1>
   <p class="tma-auth__subtitle">Optional. It keeps meetings we book with you in your own calendar.</p>
 </div>
+@include('auth.setup._progress')
 
 <div class="tma-auth__checklist">
   @if ($google)

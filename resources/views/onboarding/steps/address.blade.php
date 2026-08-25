@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'MapPin'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Your address</h1>
   <p class="tma-auth__subtitle">Used on documents and invoices. You can skip this and add it later.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   {{-- Not $label: _nav reads `$label ?? 'Continue'` off the shared view scope,

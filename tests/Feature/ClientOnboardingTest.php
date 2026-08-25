@@ -194,7 +194,8 @@ class ClientOnboardingTest extends TestCase
 
             $this->actingAs($user)->get("/onboarding/{$step}")
                 ->assertOk()
-                ->assertSee('Step ', false);
+                ->assertSee(' complete', false)
+                ->assertDontSee('Step ', false);
         }
     }
 

@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'ChatCentered'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">How should we reach you?</h1>
   <p class="tma-auth__subtitle">We'll use this first when something needs your attention.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   @php $chosen = old('preferred_contact', $values['preferred_contact'] ?? 'Email'); @endphp

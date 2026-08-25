@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'ShieldCheck'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">What you'll be able to do</h1>
   <p class="tma-auth__subtitle">This is the access your account has.</p>
 </div>
+@include('auth.setup._progress')
 
 <div class="tma-auth__checklist">
   @foreach ([

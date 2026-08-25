@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'IdentificationCard'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Confirm your name</h1>
   <p class="tma-auth__subtitle">This is how your name appears to everyone at {{ \App\Support\Mail\Postcards::site() }}.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <div class="tma-auth__group">

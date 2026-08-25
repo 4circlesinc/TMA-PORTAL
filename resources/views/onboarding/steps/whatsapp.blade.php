@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'ChatCircle'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Your WhatsApp number</h1>
   <p class="tma-auth__subtitle">Leave it blank if it's the same as the number you just gave us.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <div class="tma-auth__group">

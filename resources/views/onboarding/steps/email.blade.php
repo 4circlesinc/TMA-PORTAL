@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'EnvelopeSimple'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Confirm your email</h1>
   <p class="tma-auth__subtitle">This is where we'll send documents, updates and notifications.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <div class="tma-auth__group">

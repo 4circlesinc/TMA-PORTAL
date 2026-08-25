@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'FileText'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Terms and privacy</h1>
   <p class="tma-auth__subtitle">One last thing before we finish.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <label class="tma-auth__check">

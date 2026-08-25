@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'UserCircle'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Is this account for you or a company?</h1>
   <p class="tma-auth__subtitle">It decides what we ask for next and how your records are grouped.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   @php $chosen = old('account_type', $values['account_type'] ?? 'individual'); @endphp

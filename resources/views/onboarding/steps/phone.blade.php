@@ -1,7 +1,9 @@
+@include('onboarding.steps._icon', ['icon' => 'DeviceMobile'])
 <div class="tma-auth__intro">
   <h1 class="tma-auth__title" id="onboarding-title">Add a phone number</h1>
   <p class="tma-auth__subtitle">So we can reach you quickly when something needs your attention.</p>
 </div>
+@include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
   <div class="tma-auth__group">
