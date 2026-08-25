@@ -124,6 +124,7 @@ class InvitationTest extends TestCase
 
         $this->get("/invite/{$token}")
             ->assertOk()
+            ->assertSee('tma-auth tma-auth--split', false)
             ->assertSee('Dana Reed')
             // The firm's name, not APP_NAME — which is "tma-portal" in production.
             ->assertSee(Postcards::site())

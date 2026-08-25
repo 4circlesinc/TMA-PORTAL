@@ -69,6 +69,16 @@ a.tma-auth__chip-btn {
   border-color: var(--color-red);
 }
 
+/* An address that came with the invitation, not something they can edit. */
+.tma-auth__field--locked {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-auth__field--locked .tma-auth__input {
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
 /* a field whose inline message is visible renders in its error style */
 .tma-auth__group:has(> .tma-auth__field-msg:not([hidden])) .tma-auth__field,
 .tma-auth__group:has(> .tma-auth__field-msg:not([hidden])) .tma-auth__otp-digit {

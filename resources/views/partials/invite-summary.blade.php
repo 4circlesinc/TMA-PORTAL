@@ -2,28 +2,17 @@
   What the invitation is offering, shown on every live state of the invite
   screen: who sent it, which organization it is for, and what access it grants.
   Phase 2 requires all three before anyone is asked to create an account.
+
+  Rendered as the same subtitle lines the sign-in and sign-up pages use.
 --}}
-<div class="summary">
-  <dl>
-    <dt>Organization</dt>
-    <dd>{{ $organisation }}</dd>
+@if ($inviter)
+  <p class="tma-auth__subtitle">{{ $inviter }} invited you to {{ $organisation }}.</p>
+@elseif ($organisation)
+  <p class="tma-auth__subtitle">You have been invited to {{ $organisation }}.</p>
+@endif
 
-    @if ($inviter)
-      <dt>Invited by</dt>
-      <dd>{{ $inviter }}</dd>
-    @endif
-
-    @if ($offer)
-      <dt>Access</dt>
-      <dd>{{ $offer }}</dd>
-    @endif
-
-    @if ($target && $target !== $organisation && $target !== 'the portal')
-      <dt>Account</dt>
-      <dd>{{ $target }}</dd>
-    @endif
-
-    <dt>Email</dt>
-    <dd>{{ $email }}</dd>
-  </dl>
-</div>
+@if ($offer)
+  <p class="tma-auth__subtitle">
+    {{ $offer }}@if ($target && $target !== $organisation && $target !== 'the portal') · {{ $target }}@endif
+  </p>
+@endif
