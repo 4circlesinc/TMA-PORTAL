@@ -163,6 +163,57 @@ class CompanyAccountsTest extends TestCase
         $this->assertSame(0, CompanyMember::count());
     }
 
+    public function test_purging_an_account_frees_the_address_for_a_new_invite(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $company = $this->company();
+        $login = $this->staff('Client', ['email' => 'igraphix@acme.test']);
+
+        $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'name' => 'I Graphix',
+            'email' => 'igraphix@acme.test',
+            'role' => 'member',
+        ])->assertCreated()->assertJsonPath('member.hasAccount', true);
+
+        $this->actingAs($admin)->deleteJson('/admin/users/'.$login->id)->assertOk();
+
+        $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => 'igraphix@acme.test', 'role' => 'member', 'invite' => true,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'This address belongs to a deleted account. Restore it from the Recycle Bin first.');
+
+        $this->actingAs($admin)->deleteJson("/portal/admin/recycle-bin/user/{$login->id}")->assertOk();
+        $this->assertFalse(User::withTrashed()->where('email', 'igraphix@acme.test')->exists());
+
+        $uuid = $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+            ->assertOk()
+            ->assertJsonPath('members.0.hasAccount', false)
+            ->assertJsonPath('members.0.email', 'igraphix@acme.test')
+            ->json('members.0.id');
+
+        $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members/{$uuid}/invite")
+            ->assertOk();
+
+        $token = null;
+        Mail::assertSent(Postcard::class, function (Postcard $m) use (&$token) {
+            if (preg_match('#/invite/([A-Za-z0-9]+)#', $m->payload['button']['url'] ?? '', $x)) {
+                $token = $x[1];
+            }
+
+            return true;
+        });
+
+        $this->app['auth']->forgetGuards();
+        $this->post("/invite/{$token}", [
+            'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+        ])->assertRedirect('/');
+
+        $member = CompanyMember::where('uuid', $uuid)->first();
+        $this->assertSame('active', $member->status);
+        $this->assertSame('igraphix@acme.test', $member->user->email);
+    }
+
     public function test_a_failed_member_invite_is_reported_to_staff(): void
     {
         $admin = $this->admin();

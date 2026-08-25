@@ -48,9 +48,11 @@ final class CompanyMembers
             ->latest('id')
             ->first() ?? new CompanyMember;
 
+        $userId = self::liveUserId($existingUser, $member);
+
         $member->forceFill(array_merge([
             'company_id' => $company->id,
-            'user_id' => $existingUser?->id ?? $member->user_id,
+            'user_id' => $userId,
             'client_id' => $attrs['client_id'] ?? $member->client_id,
             'name' => $attrs['name'] ?? $member->name,
             'email' => $email ?? $member->email,
@@ -58,10 +60,11 @@ final class CompanyMembers
             'role' => $role,
             'is_primary' => (bool) ($attrs['is_primary'] ?? $member->is_primary ?? false),
             // An account that already exists is active straight away; anyone
-            // else stays `invited` until they accept.
-            'status' => $existingUser
+            // else stays `invited` until they accept. A Recycle Bin or purged
+            // login is not an account.
+            'status' => $userId
                 ? CompanyMember::STATUS_ACTIVE
-                : ($member->user_id ? CompanyMember::STATUS_ACTIVE : CompanyMember::STATUS_INVITED),
+                : CompanyMember::STATUS_INVITED,
             'added_by' => $member->added_by ?? $by->id,
             'removed_at' => null,
             'removed_by' => null,
@@ -122,7 +125,7 @@ final class CompanyMembers
     {
         $email = $member->displayEmail();
         abort_if(! $email, 422, 'Add an email address before inviting them.');
-        abort_if($member->user_id !== null, 422, 'This person already has portal access.');
+        abort_if($member->hasLiveAccount(), 422, 'This person already has portal access.');
         self::assertInvitable($email);
 
         [$invitation] = Invitations::issue([
@@ -278,5 +281,41 @@ final class CompanyMembers
             'email' => $client->email,
             'role' => $role,
         ], $by);
+    }
+
+    /**
+     * Keep the Access row when a login is purged. The membership used to
+     * cascade away with the user, so staff had to retype the address to invite
+     * them as a new account.
+     */
+    public static function parkForPurgedLogin(User $user): void
+    {
+        CompanyMember::where('user_id', $user->id)->get()->each(function (CompanyMember $member) use ($user) {
+            $member->forceFill([
+                'user_id' => null,
+                'status' => CompanyMember::STATUS_INVITED,
+                'removed_at' => null,
+                'removed_by' => null,
+                'email' => $member->email ?: $user->email,
+                'name' => $member->name ?: $user->name,
+            ])->save();
+        });
+    }
+
+    /**
+     * A live login to attach, never a Recycle Bin row or a pointer at a user
+     * who has already been purged.
+     */
+    private static function liveUserId(?User $existingUser, CompanyMember $member): ?int
+    {
+        if ($existingUser) {
+            return $existingUser->id;
+        }
+
+        if (! $member->exists || ! $member->user_id) {
+            return null;
+        }
+
+        return User::whereKey($member->user_id)->exists() ? $member->user_id : null;
     }
 }

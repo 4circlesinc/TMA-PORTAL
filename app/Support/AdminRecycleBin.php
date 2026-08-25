@@ -11,6 +11,7 @@ use App\Models\MessageAttachment;
 use App\Models\SignatureRequest;
 use App\Models\User;
 use App\Support\Clients\ClientDirectory;
+use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Presenter;
@@ -526,7 +527,11 @@ class AdminRecycleBin
         }
 
         SystemFolders::rehome([$user->id], $user->deleted_by ?: $user->id);
+        CompanyMembers::parkForPurgedLogin($user);
         $user->forceDelete();
+
+        ClientDirectory::flush();
+        Cache::forget('companies.directory');
     }
 
     private static function restoreClient(string $uid): void

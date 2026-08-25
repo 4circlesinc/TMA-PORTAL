@@ -82,7 +82,7 @@ class CompanyMemberController extends Controller
         ], $this->abilityOverrides($data['abilities'] ?? [])), $request->user());
 
         $invitation = null;
-        if ($request->boolean('invite') && $member->user_id === null) {
+        if ($request->boolean('invite') && ! $member->hasLiveAccount()) {
             $invitation = CompanyMembers::invite($company, $member, $request->user());
         }
 
@@ -100,7 +100,7 @@ class CompanyMemberController extends Controller
         $company = Company::where('uid', $uid)->firstOrFail();
         $member = $this->member($company, $memberUuid);
 
-        abort_if($member->user_id !== null, 422, 'This person already has portal access.');
+        abort_if($member->hasLiveAccount(), 422, 'This person already has portal access.');
         abort_if(! $member->displayEmail(), 422, 'Add an email address before inviting them.');
 
         $invitation = CompanyMembers::invite($company, $member, $request->user());
@@ -203,7 +203,12 @@ class CompanyMemberController extends Controller
             ->orderByDesc('is_primary')
             ->get();
 
-        $emails = $members->pluck('email')->filter()->map(fn ($email) => Str::lower((string) $email))->unique()->values()->all();
+        $emails = $members->map(fn (CompanyMember $m) => $m->displayEmail())
+            ->filter()
+            ->map(fn ($email) => Str::lower((string) $email))
+            ->unique()
+            ->values()
+            ->all();
         $invites = $emails === []
             ? collect()
             : Invitation::query()
@@ -217,7 +222,7 @@ class CompanyMemberController extends Controller
 
         return $members->map(function (CompanyMember $member) use ($invites) {
             $row = $member->toRecord();
-            $invite = $invites[Str::lower((string) ($member->email ?? ''))] ?? null;
+            $invite = $invites[Str::lower((string) ($member->displayEmail() ?? ''))] ?? null;
             $row['inviteSent'] = (bool) $invite?->last_sent_at;
             $row['inviteError'] = $invite?->last_error;
 

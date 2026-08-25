@@ -106,6 +106,20 @@ class CompanyMember extends Model
         return CompanyRoles::label($this->role);
     }
 
+    /** A live portal login, not one sitting in the Recycle Bin. */
+    public function hasLiveAccount(): bool
+    {
+        if ($this->user_id === null) {
+            return false;
+        }
+
+        if ($this->relationLoaded('user')) {
+            return $this->user !== null;
+        }
+
+        return $this->user()->exists();
+    }
+
     /** The display name, whether or not they have an account yet. */
     public function displayName(): string
     {
@@ -114,10 +128,6 @@ class CompanyMember extends Model
 
     public function displayEmail(): ?string
     {
-        if ($this->user_id && $this->user === null) {
-            return null;
-        }
-
         return $this->user?->email ?: $this->email;
     }
 
@@ -138,7 +148,7 @@ class CompanyMember extends Model
             'roleLabel' => $this->roleLabel(),
             'primary' => $this->is_primary,
             'status' => $this->status,
-            'hasAccount' => $this->user_id !== null,
+            'hasAccount' => $this->hasLiveAccount(),
             'avatar' => $this->user?->photoUrl(),
             'clientUid' => $this->client?->uid,
             'abilities' => $abilities,
