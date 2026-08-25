@@ -135,7 +135,7 @@
 
     var n = tab.key === 'inbox' ? c.waiting
       : tab.key === 'sent' ? c.sent
-        : (wf.page === 'comments' && tab.key === 'mine') ? c.mentions
+        : (wf.page === 'comments' && tab.key === 'mine') ? c.unread
           : 0;
 
     return n > 0 ? tab.label + ' (' + n + ')' : tab.label;

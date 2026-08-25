@@ -9,6 +9,7 @@ use App\Models\Folder;
 use App\Models\Notification;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Files\Workflow\Hub;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -95,6 +96,87 @@ class FileCommentTest extends TestCase
 
         $this->assertNull($row($admin)['comments']);
         $this->assertNull($row($mate)['comments']);
+    }
+
+    /**
+     * Reading is a thing the reader does, and the badge answers to it.
+     *
+     * Before this there was no read state at all: the Workflows count fired
+     * only on an explicit @-mention and could not be cleared by reading, and
+     * the row indicator lit for whoever had just written the comment.
+     */
+    public function test_unread_counts_fall_when_the_comments_are_actually_read(): void
+    {
+        $admin = $this->user();
+        $mate = $this->user('Administrator', 'b@example.com', 'Bo Colleague');
+        $file = $this->orgFile($admin);
+
+        $counts = fn (User $u) => Hub::counts($u);
+        $row = fn (User $viewer) => collect(
+            $this->actingAs($viewer)->getJson('/portal/files/?section=recent')->assertOk()->json('files')
+        )->firstWhere('id', $file->uuid)['comments'] ?? null;
+
+        $thread = $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Second pair of eyes please @Bo Colleague',
+            'mentions' => [$mate->id],
+        ])->assertCreated()->json('id');
+
+        // The author has read their own writing; the person named has not.
+        $this->assertSame(0, $counts($admin)['unread']);
+        $this->assertSame(1, $counts($mate)['unread']);
+        $this->assertSame(1, $row($mate)['unread']);
+        $this->assertSame(0, $row($admin)['unread']);
+
+        // Opening the file's comments is the reading.
+        $this->actingAs($mate)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+        $this->assertSame(0, $counts($mate)['unread']);
+        // Still an open conversation, just not an unread one.
+        $this->assertSame(1, $row($mate)['open']);
+        $this->assertSame(0, $row($mate)['unread']);
+
+        // A reply lands: unread again for the person who did not write it, and
+        // now for the author too, because somebody answered them.
+        $this->actingAs($mate)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Looks right to me',
+            'parent' => $thread,
+        ])->assertCreated();
+
+        $this->assertSame(0, $counts($mate)['unread'], 'your own reply is not unread to you');
+        $this->assertSame(1, $counts($admin)['unread'], 'an answer to your thread is unread to you');
+
+        // Resolving settles it for everybody, read or not.
+        $comment = FileComment::where('uuid', $thread)->firstOrFail();
+        $this->actingAs($admin)->postJson(
+            "/portal/files/files/{$file->uuid}/comments/{$comment->uuid}/resolve",
+            ['resolved' => true]
+        )->assertOk();
+        $this->assertSame(0, $counts($admin)['unread']);
+        $this->assertNull($row($admin));
+    }
+
+    /** Being named buys you the whole conversation, not one comment of it. */
+    public function test_a_reply_in_a_thread_that_named_you_is_unread_to_you(): void
+    {
+        $admin = $this->user();
+        $mate = $this->user('Administrator', 'b@example.com', 'Bo Colleague');
+        $third = $this->user('Administrator', 'c@example.com', 'Cy Third');
+        $file = $this->orgFile($admin);
+
+        $thread = $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Thoughts @Bo Colleague',
+            'mentions' => [$mate->id],
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($mate)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+        $this->assertSame(0, Hub::counts($mate)['unread']);
+
+        // Somebody else answers, without naming anybody.
+        $this->actingAs($third)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Adding a note',
+            'parent' => $thread,
+        ])->assertCreated();
+
+        $this->assertSame(1, Hub::counts($mate)['unread']);
     }
 
     public function test_a_comment_can_be_posted_and_read_back(): void

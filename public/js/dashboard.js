@@ -2082,9 +2082,10 @@
      * Workflows: one number when the group is shut, each screen's own when it
      * is open.
      *
-     * Requests waiting on you and comment threads that name you are both work
-     * addressed to this reader; a request they sent is not, so it is not
-     * counted. Collapsed, the parent carries the sum, because that is the only
+     * Requests waiting on you and comment threads with something in them you
+     * have not read are both work addressed to this reader; a request they
+     * sent is not, so it is not counted. The comment half is unread rather
+     * than unresolved, so reading it clears it — see Files\CommentReads. Collapsed, the parent carries the sum, because that is the only
      * row on screen and a group that hides a number is a group nobody opens.
      * Expanded, the children say which screen the work is on and the parent
      * drops its badge rather than repeating a total the reader can now see
@@ -2093,7 +2094,7 @@
      * Deliberately only this group. File Library and People count nothing, so
      * giving their toggles the same treatment would be inventing numbers.
      */
-    var workflowCounts = { waiting: 0, mentions: 0 };
+    var workflowCounts = { waiting: 0, unread: 0 };
 
     function workflowsExpanded() {
       var toggle = root.querySelector('.tma-dash__nav-item[data-expand="workflows"]');
@@ -2102,16 +2103,16 @@
 
     function syncWorkflowBadges() {
       var open = workflowsExpanded();
-      var total = workflowCounts.waiting + workflowCounts.mentions;
+      var total = workflowCounts.waiting + workflowCounts.unread;
 
       setNavCount(root.querySelector('.tma-dash__nav-item[data-expand="workflows"]'), open ? 0 : total);
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-automated"]'), open ? workflowCounts.waiting : 0);
-      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-feedback"]'), open ? workflowCounts.mentions : 0);
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-feedback"]'), open ? workflowCounts.unread : 0);
 
       // The mobile menu has no disclosure, every row is always on screen, so
       // each carries its own number and the parent row is not repeated there.
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), workflowCounts.waiting);
-      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-feedback"]'), workflowCounts.mentions);
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-feedback"]'), workflowCounts.unread);
     }
 
     function syncWorkflowCounts() {
@@ -2128,7 +2129,7 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           var c = (j && j.counts) || {};
-          workflowCounts = { waiting: c.waiting || 0, mentions: c.mentions || 0 };
+          workflowCounts = { waiting: c.waiting || 0, unread: c.unread || 0 };
           syncWorkflowBadges();
         })
         .catch(function () {});
@@ -2137,11 +2138,15 @@
     root._syncWorkflowCounts = syncWorkflowCounts;
     root._syncWorkflowBadges = syncWorkflowBadges;
 
+    // Reading a file's comments marks them read on the server, so the badge
+    // has to be re-asked rather than left claiming what was just read.
+    document.addEventListener('tma-comments-read', function () { syncWorkflowCounts(); });
+
     // The Workflows page re-reads these on every load and after every answer,
     // so its figures are fresher than the one taken at boot.
     document.addEventListener('tma-workflow-counts', function (e) {
       var c = (e && e.detail) || {};
-      workflowCounts = { waiting: c.waiting || 0, mentions: c.mentions || 0 };
+      workflowCounts = { waiting: c.waiting || 0, unread: c.unread || 0 };
       syncWorkflowBadges();
     });
 

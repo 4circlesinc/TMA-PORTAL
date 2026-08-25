@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Files;
 use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Support\Files\CommentPresenter;
+use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
 use Illuminate\Http\JsonResponse;
@@ -27,9 +28,16 @@ class FileCommentController extends BaseFilesController
 
         $data = $request->validate(['before' => ['nullable', 'integer', 'min:1']]);
 
-        return response()->json(
-            CommentPresenter::page($file, $user, isset($data['before']) ? (int) $data['before'] : null)
-        );
+        $page = CommentPresenter::page($file, $user, isset($data['before']) ? (int) $data['before'] : null);
+
+        /*
+         * The bodies are now on the reader's screen, so this is the moment
+         * they were read. Recorded here rather than on any listing that merely
+         * names the file: a row in a folder is not a conversation you have had.
+         */
+        CommentReads::markFileRead($user, $file);
+
+        return response()->json($page);
     }
 
     /** People the author may @-mention on this file. */

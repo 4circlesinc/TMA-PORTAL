@@ -3168,8 +3168,8 @@
     var reasons = [];
     if (comments) {
       reasons.push(at.mentionsMe
-        ? 'a comment naming you'
-        : (comments === 1 ? '1 open comment thread' : comments + ' open comment threads'));
+        ? 'an unread comment naming you'
+        : (comments === 1 ? '1 unread comment thread' : comments + ' unread comment threads'));
     }
     if (messages) {
       reasons.push(messages === 1 ? '1 unread message' : messages + ' unread messages');
@@ -6012,17 +6012,27 @@
      document with a conversation open on it says so wherever it is listed. */
   function clientCommentChip(f) {
     var c = f && f.comments;
-    if (!c || (!c.open && !c.mentionsMe)) return '';
+    if (!c) return '';
 
-    var mine = !!c.mentionsMe;
-    var label = mine
-      ? 'You are mentioned in a comment on this file'
-      : (c.open === 1 ? '1 open comment thread' : c.open + ' open comment threads');
+    var unread = c.unread || 0;
+    var open = c.open || 0;
+    if (!unread && !open) return '';
 
-    return '<span class="tma-portal-comment-flag' + (mine ? ' tma-portal-comment-flag--mine' : '') +
-      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+    var count = unread || open;
+    var mine = unread > 0 && !!c.mentionsMe;
+    var label = unread
+      ? (c.mentionsMe
+        ? 'Unread comment naming you'
+        : (unread === 1 ? '1 unread comment thread' : unread + ' unread comment threads'))
+      : (open === 1 ? '1 open comment thread' : open + ' open comment threads');
+
+    var cls = 'tma-portal-comment-flag' +
+      (unread ? ' tma-portal-comment-flag--unread' : '') +
+      (mine ? ' tma-portal-comment-flag--mine' : '');
+
+    return '<span class="' + cls + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
       '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +
-      (c.open > 0 ? esc(String(c.open)) : '') +
+      esc(String(count)) +
       '</span>';
   }
 

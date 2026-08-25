@@ -1121,7 +1121,15 @@
   mask-size: contain;
 }
 
-/* Named in the thread: the row is asking this reader for something. */
+/* Something here you have not read. Quiet chips are conversations you have
+   already seen that happen to still be open. */
+.tma-portal-comment-flag--unread {
+  color: var(--color-text-primary, #111827);
+  background: var(--color-hover, rgba(17, 24, 39, 0.08));
+  font-weight: 700;
+}
+
+/* Unread and it names you: the one case that is about this reader. */
 .tma-portal-comment-flag--mine {
   color: #fff;
   background: #2563eb;

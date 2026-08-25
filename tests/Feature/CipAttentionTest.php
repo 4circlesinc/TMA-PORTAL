@@ -58,7 +58,7 @@ class CipAttentionTest extends TestCase
         return [$client, $file];
     }
 
-    public function test_an_open_thread_on_a_clients_document_marks_that_client(): void
+    public function test_an_unread_thread_on_a_clients_document_marks_that_client(): void
     {
         $staff = $this->user('Ada Admin', 'a@example.com');
         $mate = $this->user('Bo Colleague', 'b@example.com');
@@ -75,12 +75,20 @@ class CipAttentionTest extends TestCase
         $this->assertTrue($forMate[$chen->id]['mentionsMe']);
         $this->assertArrayNotHasKey($quiet->id, $forMate);
 
-        // The author is told the thread is open, but not that it names them.
-        $forStaff = Attention::forClients($staff, [$chen->id]);
-        $this->assertSame(1, $forStaff[$chen->id]['comments']);
-        $this->assertFalse($forStaff[$chen->id]['mentionsMe']);
+        // The author has read what they themselves wrote, so their own row is
+        // clean. This is the difference between unread and unresolved: the old
+        // dot lit for the person who had just typed the comment.
+        $this->assertSame([], Attention::forClients($staff, [$chen->id]));
 
-        // Resolving it clears the client entirely.
+        // Opening the file's comments is the reading, and it clears the dot.
+        $this->actingAs($mate)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+        $this->assertSame([], Attention::forClients($mate, [$chen->id]));
+
+        // A reply from somebody else makes it unread again.
+        Comments::create($file, $staff, 'Any update?', FileComment::findOrFail($comment->id));
+        $this->assertSame(1, Attention::forClients($mate, [$chen->id])[$chen->id]['comments']);
+
+        // Resolving it settles the thread whether or not anyone read it.
         Comments::resolve(FileComment::findOrFail($comment->id), $staff, true);
         $this->assertSame([], Attention::forClients($mate, [$chen->id]));
     }

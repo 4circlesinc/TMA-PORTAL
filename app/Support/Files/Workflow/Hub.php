@@ -10,6 +10,7 @@ use App\Models\FileWorkflowStep;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\Comments;
+use App\Support\Files\CommentReads;
 use App\Support\Files\FileAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -190,8 +191,17 @@ final class Hub
         $paths = self::folderPaths($page->map(fn (FileComment $c) => $c->file)->all());
         $mentions = self::mentionNames($page->pluck('id'));
 
+        $items = $page->map(fn (FileComment $c) => self::comment($c, $viewer, $paths, $mentions))->values()->all();
+
+        /*
+         * Every thread here is drawn in full, body and all, so this page IS
+         * the reading. Marked after the rows are shaped and before the counts
+         * are taken, or the badge would still be claiming what is on screen.
+         */
+        CommentReads::markThreadsRead($viewer, $page->map(fn (FileComment $c) => $c->root_id ?? $c->id));
+
         return [
-            'items' => $page->map(fn (FileComment $c) => self::comment($c, $viewer, $paths, $mentions))->values()->all(),
+            'items' => $items,
             'nextCursor' => $more ? (int) $page->last()->id : null,
             'counts' => self::counts($viewer),
             'canSeeAll' => $canSeeAll,
@@ -207,7 +217,7 @@ final class Hub
      * Running the per-file check over every one of them to render three
      * numbers would cost more than the page it labels.
      *
-     * @return array{waiting:int,sent:int,mentions:int}
+     * @return array{waiting:int,sent:int,mentions:int,unread:int}
      */
     public static function counts(User $viewer): array
     {
@@ -242,7 +252,22 @@ final class Hub
             }))
             ->count();
 
-        return ['waiting' => $waiting, 'sent' => $sent, 'mentions' => $mentions];
+        /*
+         * What the badge actually counts.
+         *
+         * `mentions` is kept because the Involving-you tab still wants to say
+         * how many name you outright, but it was never a badge: it fires only
+         * on an explicit @, so a thread you started and somebody answered
+         * counted as nothing, and no amount of reading could clear one that
+         * did. `unread` is the honest number — threads that concern you with
+         * something in them you have not seen — and it goes down as you read.
+         */
+        return [
+            'waiting' => $waiting,
+            'sent' => $sent,
+            'mentions' => $mentions,
+            'unread' => CommentReads::unreadCount($viewer),
+        ];
     }
 
     /* ── queries ──────────────────────────────────────────────── */
@@ -301,10 +326,25 @@ final class Hub
     }
 
     /** Comments that name me, answer me, or sit on a file I own. */
-    private static function concernsMe(Builder $query, User $viewer): void
+    /**
+     * Threads that concern this reader: they wrote in it, were named in it, or
+     * the file is theirs.
+     *
+     * Public because it is the definition of "yours" for comments, and the
+     * unread count has to use the same one — a badge that counted a wider set
+     * than the page it opens would send people looking for work that is not
+     * listed anywhere. {@see \App\Support\Files\CommentReads}
+     */
+    public static function concernsMe(Builder $query, User $viewer): void
     {
+        /*
+         * Every column is table-qualified. The unread count joins this against
+         * file_comment_reads, which carries a root_id of its own, and a bare
+         * name there is ambiguous — the kind of break that only appears once
+         * somebody joins the query, which is exactly what happened.
+         */
         $query
-            ->where('author_id', $viewer->id)
+            ->where('file_comments.author_id', $viewer->id)
             ->orWhereHas('mentions', fn ($m) => $m->where('file_comment_mentions.user_id', $viewer->id))
             ->orWhereHas('file', fn ($f) => $f->where('owner_id', $viewer->id))
             /*
@@ -313,17 +353,17 @@ final class Hub
              * should keep the follow-up in front of me, and so should somebody
              * answering mine.
              */
-            ->orWhereIn('root_id', function ($sub) use ($viewer) {
+            ->orWhereIn('file_comments.root_id', function ($sub) use ($viewer) {
                 $sub->select('root_id')
-                    ->from('file_comments')
-                    ->where('author_id', $viewer->id)
-                    ->whereNotNull('root_id');
+                    ->from('file_comments as mine')
+                    ->where('mine.author_id', $viewer->id)
+                    ->whereNotNull('mine.root_id');
             })
-            ->orWhereIn('id', function ($sub) use ($viewer) {
+            ->orWhereIn('file_comments.id', function ($sub) use ($viewer) {
                 $sub->select('root_id')
-                    ->from('file_comments')
-                    ->where('author_id', $viewer->id)
-                    ->whereNotNull('root_id');
+                    ->from('file_comments as mine')
+                    ->where('mine.author_id', $viewer->id)
+                    ->whereNotNull('mine.root_id');
             });
     }
 

@@ -16,6 +16,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Files\CommentReads;
 use App\Support\Files\Workflow\Status;
 
 /**
@@ -50,7 +51,7 @@ class Presenter
      */
     private array $cipFile = [];
 
-    /** file id => ['open' => int, 'mentionsMe' => bool] */
+    /** file id => ['open' => int, 'unread' => int, 'mentionsMe' => bool] */
     private array $commentFile = [];
 
     /**
@@ -951,7 +952,7 @@ class Presenter
      * whether its thread is still open, so resolving the thread clears it.
      *
      * @param  list<int>  $fileIds
-     * @return array<int, array{open: int, mentionsMe: bool}>
+     * @return array<int, array{open: int, unread: int, mentionsMe: bool}>
      */
     private function commentMap(array $fileIds): array
     {
@@ -966,6 +967,8 @@ class Presenter
             ->groupBy('file_id')
             ->selectRaw('file_id, COUNT(*) as n')
             ->pluck('n', 'file_id');
+
+        $unread = CommentReads::unreadByFile($this->viewer, $fileIds);
 
         $mine = FileCommentMention::query()
             ->where('file_comment_mentions.user_id', $this->viewer->id)
@@ -985,13 +988,14 @@ class Presenter
 
         foreach ($fileIds as $id) {
             $count = (int) ($open[$id] ?? 0);
+            $new = (int) ($unread[$id] ?? 0);
             $mentioned = $mine->has($id);
 
-            if ($count === 0 && ! $mentioned) {
+            if ($count === 0 && $new === 0 && ! $mentioned) {
                 continue;
             }
 
-            $out[$id] = ['open' => $count, 'mentionsMe' => $mentioned];
+            $out[$id] = ['open' => $count, 'unread' => $new, 'mentionsMe' => $mentioned];
         }
 
         return $out;

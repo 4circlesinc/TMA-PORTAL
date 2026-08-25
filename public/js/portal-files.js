@@ -138,17 +138,36 @@
    */
   function commentChip(it) {
     var c = it && it.comments;
-    if (!c || (!c.open && !c.mentionsMe)) return '';
+    if (!c) return '';
 
-    var mine = !!c.mentionsMe;
-    var label = mine
-      ? 'You are mentioned in a comment on this file'
-      : (c.open === 1 ? '1 open comment thread' : c.open + ' open comment threads');
+    var unread = c.unread || 0;
+    var open = c.open || 0;
+    if (!unread && !open) return '';
 
-    return '<span class="tma-portal-comment-flag' + (mine ? ' tma-portal-comment-flag--mine' : '') +
-      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+    /*
+     * Two tiers, and the difference is whether it is about you.
+     *
+     * Unread is loud: there is something here you have not seen, and it goes
+     * quiet the moment you open the file. Open-but-read is a quiet note that a
+     * conversation is still going — worth knowing, not worth chasing. Before
+     * there was a read marker every open thread was loud for ever, including
+     * to the person who wrote it.
+     */
+    var count = unread || open;
+    var mine = unread > 0 && !!c.mentionsMe;
+    var label = unread
+      ? (c.mentionsMe
+        ? 'Unread comment naming you'
+        : (unread === 1 ? '1 unread comment thread' : unread + ' unread comment threads'))
+      : (open === 1 ? '1 open comment thread' : open + ' open comment threads');
+
+    var cls = 'tma-portal-comment-flag' +
+      (unread ? ' tma-portal-comment-flag--unread' : '') +
+      (mine ? ' tma-portal-comment-flag--mine' : '');
+
+    return '<span class="' + cls + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
       '<span class="tma-portal-comment-flag__icon" aria-hidden="true"></span>' +
-      (c.open > 0 ? esc(String(c.open)) : '') +
+      esc(String(count)) +
       '</span>';
   }
 
@@ -2840,6 +2859,15 @@
             data.threads = e.comments.threads.concat(data.threads);
           }
           e.comments = data;
+          /*
+           * The server marked these read as it served them, so whatever the
+           * sidebar is claiming about unread comments is now one request out
+           * of date. Say so rather than leaving the badge to correct itself on
+           * the reader's next navigation.
+           */
+          try {
+            document.dispatchEvent(new CustomEvent('tma-comments-read', { detail: { file: f.id } }));
+          } catch (err) { /* the badge simply settles on the next page */ }
           if (current().id !== f.id || !viewerPrefs.comments) return;
           var slot = lb.querySelector('[data-lb-comments]');
           if (slot) slot.innerHTML = commentsHtml(data, e);

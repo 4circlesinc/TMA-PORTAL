@@ -4,9 +4,9 @@ namespace App\Support\Cip;
 
 use App\Models\Client;
 use App\Models\Conversation;
-use App\Models\FileComment;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\Files\CommentReads;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,9 +20,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Two kinds, deliberately:
  *
- *   comments — an unresolved thread on a document in that client's tree. The
- *              same definition the File Library row indicator uses, so a
- *              client marked here has a file marked when you open it.
+ *   comments — a thread on a document in that client's tree with something in
+ *              it this reader has not seen. Unread, not merely unresolved: a
+ *              dot you cannot clear by reading is a dot people stop looking at.
+ *              {@see \App\Support\Files\CommentReads} owns the definition, so
+ *              a client marked here has a file marked when you open it.
  *   messages — unread direct correspondence with the person the firm deals
  *              with on that client. Not "the client is talking to anybody",
  *              which would light the dot for conversations this reader is not
@@ -45,7 +47,7 @@ final class Attention
             return [];
         }
 
-        $comments = self::openThreads($clientIds);
+        $comments = CommentReads::unreadByClient($viewer, $clientIds);
         $mentions = self::threadsNaming($viewer, $clientIds);
         $messages = self::unreadMessages($viewer, $clientIds);
 
@@ -64,32 +66,6 @@ final class Attention
         }
 
         return $out;
-    }
-
-    /**
-     * Unresolved root threads on documents in each client's tree.
-     *
-     * Joined through `folders.client_id`, which every folder under a client
-     * carries as its subtree is provisioned, so a comment on a passport four
-     * folders deep still counts against the client it belongs to.
-     *
-     * @param  list<int>  $clientIds
-     * @return \Illuminate\Support\Collection<int, int>
-     */
-    private static function openThreads(array $clientIds)
-    {
-        return FileComment::query()
-            ->join('files', 'files.id', '=', 'file_comments.file_id')
-            ->join('folders', 'folders.id', '=', 'files.folder_id')
-            ->whereIn('folders.client_id', $clientIds)
-            ->whereNull('file_comments.parent_id')
-            ->whereNull('file_comments.resolved_at')
-            ->whereNull('file_comments.deleted_at')
-            ->whereNull('files.deleted_at')
-            ->whereNull('folders.deleted_at')
-            ->groupBy('folders.client_id')
-            ->selectRaw('folders.client_id as cid, COUNT(*) as n')
-            ->pluck('n', 'cid');
     }
 
     /**
