@@ -2704,11 +2704,13 @@
  * THE TILES ARE STILL GLASS
  *
  * They have something behind them — the card — so a translucent white tile
- * over it does read as a pane, helped by the white rim and the soft drop that
- * lifts it off. The blur is what keeps that honest: --blur-16 is the design
- * system's own "Glass 1", --shadow-glass-1 its drop, so the tile is assembled
- * from documented parts. Where backdrop-filter is unsupported it is a flat
- * translucent white, which is a slightly plainer tile and nothing worse.
+ * over it does read as a pane, and its white rim is the only edge it needs.
+ * Nothing is cast underneath: a shadow would make each tile a raised object
+ * sitting *on* the card, and twelve of those in a grid is a page of buttons
+ * rather than a sheet of glass with icons in it. The blur is what keeps the
+ * material honest — --blur-16 is the design system's own "Glass 1" — and where
+ * backdrop-filter is unsupported the tile is a flat translucent white, which
+ * is a slightly plainer tile and nothing worse.
  *
  * --color-white rather than a literal, throughout: it inverts with the theme,
  * so the glass darkens with the card instead of staying a white slab on it.
@@ -2761,9 +2763,6 @@
   background: color-mix(in srgb, var(--color-white) 78%, transparent);
   -webkit-backdrop-filter: var(--blur-16);
   backdrop-filter: var(--blur-16);
-  /* The drop is doing the work the fill cannot on a flat card: without it a
-     translucent white square on a near-white panel has no edge at all. */
-  box-shadow: var(--shadow-glass-1), var(--shadow-drop-1);
   transition: background-color var(--transition-base);
 }
 
@@ -2857,7 +2856,6 @@
   border: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: none;
   /*
    * The placeholder's own grey, restated.
    *
