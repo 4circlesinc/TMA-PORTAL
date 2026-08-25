@@ -2689,19 +2689,23 @@
  * a reader goes to *do* something from, and it earns being the one that looks
  * different.
  *
- * THE WASH IS THE APPLICATION'S OWN PALETTE
+ * THE WASH IS THE TWO BRAND BLUES
  *
- * Four soft radials, one to a corner, over the card's normal fill: the brand
- * blue and its deep partner on one diagonal, mint and orange from the accent
- * palette on the other. Every colour is a token from tokens.css rather than a
- * hex picked for this card, so the wash follows a rebrand instead of outliving
- * it. Mixed with `transparent` rather than baked as rgba for the same reason —
- * the token can be any format and this still resolves.
+ * Two soft radials over the card's normal fill and nothing else: the light
+ * primary along the top edge, the dark one along the bottom. Both are tokens
+ * from tokens.css rather than hexes picked for this card, so the wash follows
+ * a rebrand instead of outliving it, and mixed with `transparent` rather than
+ * baked as rgba for the same reason — the token can be any format and this
+ * still resolves.
  *
- * The two accent tokens are mixed harder than the two brand ones because they
- * are already pastels (#6be6d3, #ffb55b) where the brand blues are saturated;
- * matched percentages leave a card that is blue in two corners and barely
- * tinted in the other two.
+ * The dark blue is mixed lighter than the light one. At matched strengths
+ * #136da0 reads as a grey band across the foot of the card rather than as the
+ * same colour family arriving from below.
+ *
+ * No border. The wash already separates this card from the board, and a
+ * hairline around a gradient draws the edge of the *panel* rather than the
+ * shape of the glass — the one thing on the card that is meant to have edges
+ * is the tiles.
  *
  * WHY THE TILES BLUR
  *
@@ -2718,12 +2722,9 @@
  * so the glass darkens with the card instead of staying a white slab on it.
  */
 .tma-portal-panel--shortcuts {
-  border: 1px solid var(--color-border-soft);
   background:
-    radial-gradient(60% 55% at 12% 14%, color-mix(in srgb, var(--color-primary) 30%, transparent), transparent 70%),
-    radial-gradient(55% 50% at 88% 10%, color-mix(in srgb, var(--color-mint) 42%, transparent), transparent 70%),
-    radial-gradient(55% 55% at 15% 90%, color-mix(in srgb, var(--color-orange) 40%, transparent), transparent 70%),
-    radial-gradient(60% 55% at 88% 86%, color-mix(in srgb, var(--color-primary-dark) 26%, transparent), transparent 70%),
+    radial-gradient(85% 60% at 50% 0%, color-mix(in srgb, var(--color-primary) 34%, transparent), transparent 72%),
+    radial-gradient(85% 62% at 50% 100%, color-mix(in srgb, var(--color-primary-dark) 40%, transparent), transparent 74%),
     var(--color-bg-card);
   box-shadow: var(--shadow-glass-1);
 }
@@ -2732,8 +2733,8 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   /* Generous down, tight across: the labels are what need the room, and four
-     columns of a third-width card leave a tile about 20px of side margin. */
-  gap: var(--space-20) var(--space-6);
+     columns of a third-width card leave a tile about 15px of side margin. */
+  gap: var(--space-16) var(--space-6);
   width: 100%;
   min-width: 0;
 }
@@ -2768,10 +2769,10 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   box-sizing: border-box;
-  border-radius: var(--radius-16);
+  border-radius: var(--radius-12);
   border: 1px solid color-mix(in srgb, var(--color-white) 90%, transparent);
   background: color-mix(in srgb, var(--color-white) 62%, transparent);
   -webkit-backdrop-filter: var(--blur-16);
@@ -2802,8 +2803,8 @@
  */
 .tma-portal-shortcut__art {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background-color: var(--tma-sc-ink, var(--color-primary-dark));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
@@ -2823,10 +2824,8 @@
 }
 
 .tma-portal-shortcut__label {
-  max-width: 88px;
-  font-size: var(--text-size-11, 11px);
-  line-height: 1.3;
-  font-weight: 600;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
   color: var(--color-black);
 }
 
@@ -2834,8 +2833,8 @@
    Grows with the number — exact totals like 27,000, never capped at 99+. */
 .tma-portal-shortcut__count {
   position: absolute;
-  top: -7px;
-  right: -9px;
+  top: -6px;
+  right: -6px;
   min-width: 18px;
   height: 18px;
   padding: 0 6px;

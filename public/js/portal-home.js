@@ -355,7 +355,7 @@
 
     /*
      * The loading tile is the real tile with the glass taken out: the same
-     * 56px box at the same radius, above the same label line, so the grid does
+     * 44px box at the same radius, above the same label line, so the grid does
      * not resettle when the counts land. The board's *shape* is already known
      * here — visibleShortcuts() is answered from the boot capability list, not
      * from a request — so the placeholder is the right length as well.
