@@ -36078,9 +36078,10 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-black);
 }
 
-/* The exact figure the bar only approximates. Tabular so the numbers down a
-   legend column stack digit under digit. */
-.tma-portal-cip__count {
+/* How much of the bar this stage is, in figures — what two blocks of colour
+   can show but cannot say. Tabular so the numbers down a legend column stack
+   digit under digit rather than reading as a ragged edge. */
+.tma-portal-cip__share {
   flex: 0 0 auto;
   margin-left: auto;
   font-weight: 600;

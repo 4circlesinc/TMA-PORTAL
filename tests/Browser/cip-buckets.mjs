@@ -32,18 +32,23 @@ const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
  * names each bucket twice, so that a legend column can hold "Requests" while
  * the thing it opens is still Additional Information Requests. A browser
  * shortening the label by rule is the failure this guards.
+ *
+ * The percentages are what the legend prints, and they are stated here rather
+ * than computed from the counts on purpose: a test that divides by 32 the same
+ * way the page does agrees with the page whichever of them is wrong. These are
+ * the ten shares of 32, and they add up to 100.
  */
 const EXPECTED = [
-  ['New Applications', 'New', 3],
-  ['Review Applications', 'Review', 1],
-  ['Assessment Feedback', 'Feedback', 4],
-  ['Updates Required', 'Updates', 2],
-  ['Ready to Submit', 'Ready', 5],
-  ['Pending Review', 'Pending', 6],
-  ['Background Check', 'Background', 1],
-  ['Delayed', 'Delayed', 2],
-  ['Approved', 'Approved', 7],
-  ['Denied', 'Denied', 1],
+  ['New Applications', 'New', 3, '9%'],
+  ['Review Applications', 'Review', 1, '3%'],
+  ['Assessment Feedback', 'Feedback', 4, '13%'],
+  ['Updates Required', 'Updates', 2, '6%'],
+  ['Ready to Submit', 'Ready', 5, '16%'],
+  ['Pending Review', 'Pending', 6, '19%'],
+  ['Background Check', 'Background', 1, '3%'],
+  ['Delayed', 'Delayed', 2, '6%'],
+  ['Approved', 'Approved', 7, '22%'],
+  ['Denied', 'Denied', 1, '3%'],
 ];
 
 const failures = [];
@@ -87,21 +92,30 @@ try {
       key: li.querySelector('[data-home-cip-bucket]')?.getAttribute('data-home-cip-bucket') || '',
       label: li.querySelector('.tma-portal-cip__label')?.innerText.trim() || '',
       full: li.querySelector('[data-home-cip-bucket]')?.getAttribute('title') || '',
-      count: li.querySelector('.tma-portal-cip__count')?.innerText.trim() || '',
+      share: li.querySelector('.tma-portal-cip__share')?.innerText.trim() || '',
       // The tone lives on the row: the dot and the bar's block both read it,
       // and a colour named twice is a colour that can disagree with itself.
       tone: [...li.classList].find(c => c.startsWith('tma-portal-cip__tone--')) || '',
     })));
 
   check(rows.length === EXPECTED.length, `${EXPECTED.length} legend rows (${rows.length})`);
-  EXPECTED.forEach(([label, short, count], i) => {
+  EXPECTED.forEach(([label, short, count, share], i) => {
     const row = rows[i] || {};
-    check(row.label === short && row.count === String(count),
-      `${short} = ${count} (got "${row.label}" = "${row.count}")`);
-    // The short name is what fits the column; the full one is still reachable,
-    // because "Requests" on its own does not tell anybody what they are.
-    check(row.full === label, `and still says ${label} in full (got "${row.full}")`);
+    check(row.label === short && row.share === share,
+      `${short} = ${share} (got "${row.label}" = "${row.share}")`);
+    /*
+     * The legend prints the share; the count and the full name are on the
+     * control itself. Both halves matter: "Requests" alone does not tell
+     * anybody what they are, and a card that had dropped the exact number
+     * everywhere would have replaced a figure with an estimate of it.
+     */
+    check(row.full === `${label}: ${count} (${share})`,
+      `and carries ${label}: ${count} (${share}) in full (got "${row.full}")`);
   });
+  check(
+    EXPECTED.reduce((t, [, , , share]) => t + parseInt(share, 10), 0) === 100,
+    'the shares this seed prints add up to 100',
+  );
   check(rows.every(r => r.tone), 'every row carries a status tone');
 
   /*
@@ -205,6 +219,7 @@ try {
       whole: segs.length === 1 &&
         Math.abs(segs[0].getBoundingClientRect().width - stack.getBoundingClientRect().width) < 1,
       total: card.querySelector('.tma-portal-cip__total b')?.innerText.trim() || '',
+      share: card.querySelector('.tma-portal-cip__share')?.innerText.trim() || '',
     };
   });
   check(quiet.segs === 1, `only the stage holding work gets a block (${quiet.segs})`);
@@ -212,6 +227,8 @@ try {
   check(quiet.rows === 1, `one legend row (${quiet.rows})`);
   check(quiet.chips === EXPECTED.length - 1, `the other nine are chips (${quiet.chips})`);
   check(quiet.total === '5', `the total is what the one stage holds (got "${quiet.total}")`);
+  // The one stage holding everything is all of it, and the legend says so.
+  check(quiet.share === '100%', `and its share is 100% (got "${quiet.share}")`);
 
   // A stage with nothing in it is still openable — through its chip, which is
   // the whole reason the chips are buttons.

@@ -1017,6 +1017,28 @@
   }
 
   /*
+   * The same share, written out for the legend: whole per cent, and never a
+   * rounded-down zero.
+   *
+   * "0%" beside a stage that is in the legend at all would be a plain
+   * contradiction — only stages holding work get a row — so a share too small
+   * to round up says "<1%" instead. It happens at one application in more than
+   * two hundred, which a firm's whole book reaches.
+   *
+   * Whole numbers cost the column its last decimal and the ten of them can
+   * therefore come to 99 or 101. That is the ordinary arithmetic of a
+   * percentage legend and is preferable to "9.4%" ten times over; the exact
+   * figures are the total above and the counts on each row's title.
+   */
+  function cipPercent(count, total) {
+    var share = cipShare(count, total);
+
+    if (count > 0 && share < 0.5) return '<1%';
+
+    return Math.round(share) + '%';
+  }
+
+  /*
    * The bar: every stage holding work, as its share of the total, in the order
    * §9 names them.
    *
@@ -1049,7 +1071,14 @@
   }
 
   /*
-   * The legend: the short name and the count, two to a line.
+   * The legend: the short name and the share, two to a line.
+   *
+   * A share rather than a count, because the count is the one thing the row is
+   * sitting next to a picture of. The bar says which stage is biggest; what it
+   * cannot say is *how much* biggest, and "19%" against "3%" answers that in a
+   * way two blocks of colour cannot. The exact numbers are not lost — the
+   * total is stated above, the wider blocks carry theirs, and every row's
+   * title and label say it in full.
    *
    * The short name is the server's (App\Support\Cip\Buckets) rather than
    * something cut down here — "Additional Information Requests" has to fit
@@ -1057,19 +1086,26 @@
    * guessing where a name can be cut. `label` is the fallback for a snapshot
    * taken before the field existed; it wraps rather than lying.
    *
-   * The tone is set on the row and the dot inherits it, because the segment
+   * The accessible name carries the visible per cent as well as the count, so
+   * a screen reader is told what the sighted reader is looking at rather than
+   * a different fact about the same row.
+   *
+   * The tone is set on the row and the dot inherits it, because the block
    * above reads the same variable: a colour named twice is a colour that can
    * end up disagreeing with itself, and here the two are how a reader knows
    * which block of the bar is which.
    */
-  function cipLegendRow(bucket) {
+  function cipLegendRow(bucket, total) {
+    var percent = cipPercent(bucket.count, total);
+    var name = bucket.label + ': ' + cipCount(bucket.count) + ' (' + percent + ')';
+
     return '<li class="tma-portal-cip__row tma-portal-cip__tone--' + cipTone(bucket) +
       '" data-key="cip-' + ui().esc(bucket.key) + '">' +
       '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(bucket.key) + '"' +
-      ' title="' + ui().esc(bucket.label) + '">' +
+      ' title="' + ui().esc(name) + '" aria-label="' + ui().esc(name) + '">' +
       '<i class="tma-portal-cip__dot" aria-hidden="true"></i>' +
       '<span class="tma-portal-cip__label">' + ui().esc(bucket.short || bucket.label) + '</span>' +
-      '<span class="tma-portal-cip__count">' + ui().esc(cipCount(bucket.count)) + '</span>' +
+      '<span class="tma-portal-cip__share">' + ui().esc(percent) + '</span>' +
       '</button></li>';
   }
 
@@ -1178,7 +1214,10 @@
       '<p class="tma-portal-cip__total"><b>' + ui().esc(cipCount(total)) + '</b>' +
       '<span>' + (total === 1 ? 'application' : 'applications') + '</span></p>' +
       (busy.length
-        ? cipStack(busy, total) + '<ul class="tma-portal-cip">' + busy.map(cipLegendRow).join('') + '</ul>'
+        ? cipStack(busy, total) +
+          '<ul class="tma-portal-cip">' +
+          busy.map(function (b) { return cipLegendRow(b, total); }).join('') +
+          '</ul>'
         // Every stage clear, which is a finished day rather than an empty
         // card — so it says so, instead of leaving a bar with nothing in it.
         : '<p class="tma-portal-cip__none">Nothing waiting right now</p>') +
