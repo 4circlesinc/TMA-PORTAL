@@ -61,10 +61,6 @@
             <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
             <span>Dashboard</span>
           </a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--fav" href="/projects" data-nav="fav-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects" hidden>
-            <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
-            <span>Projects</span>
-          </a>
         </div>
         <div class="tma-dash__list" data-list="recently" hidden>
         </div>
@@ -81,11 +77,6 @@
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt="">
           <span>Admin Overview</span>
-        </a>
-        <a class="tma-dash__nav-item" href="/projects" data-nav="dash-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/FolderNotch.svg" alt="">
-          <span>Projects</span>
         </a>
         <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
@@ -254,10 +245,6 @@
         <div class="tma-dash__account-mount" data-account></div>
       </div>
 
-      <div class="tma-dash__view" data-view="projects" data-table-view hidden>
-        <div class="tma-dash__projects" data-projects></div>
-      </div>
-
       <div class="tma-dash__view" data-view="users" data-table-view data-table-grid="avatar" hidden>
         <div class="tma-dash__users" data-users></div>
       </div>
@@ -414,9 +401,6 @@
       <div class="tma-dash__mmenu-favorites" hidden>
       <div class="tma-dash__mmenu-label">Favorites</div>
       <div class="tma-dash__mmenu-card">
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="fav-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects" hidden>
-          <img class="tma-dash__mrow-emoji" src="images/emoji/RobotEmoji.svg" alt=""><span>My Projects</span>
-        </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users" hidden>
           <img class="tma-dash__mrow-emoji" src="images/emoji/GrinningCat.svg" alt=""><span>Users</span>
         </button>
@@ -430,9 +414,6 @@
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="dash-project-overview" data-title="Admin Overview" data-crumb="Admin Overview" data-view="overview">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt=""><span>Admin Overview</span>
-        </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="dash-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>Projects</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>Users</span>
@@ -490,7 +471,6 @@
   <script src="js/card-icons.js"></script>
   <script src="js/card.js"></script>
   <script src="js/strip.js"></script>
-  <script src="js/projects.js"></script>
   <script src="js/dashboard-metrics.js"></script>
   <script src="js/file-icons.js"></script>
   <script src="js/folder-colours.js"></script>

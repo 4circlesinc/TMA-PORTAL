@@ -21,7 +21,7 @@
 
   /* data-nav id => the capability needed to see it. Anything absent is open
      to every account: their own dashboard, calendar, files, signatures,
-     messages, projects and settings. Names match Role::MATRIX exactly. */
+     messages and settings. Names match Role::MATRIX exactly. */
   var NAV_CAPABILITIES = {
     'dash-project-overview': 'overview.view',
     'clients': 'clients.view',

@@ -28,7 +28,7 @@ const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
 const SCREENS = [
   '/', '/overview', '/clients', '/cbi', '/email', '/social/messages',
   '/social/feed', '/calendar', '/signatures', '/folders', '/workflows',
-  '/people', '/users', '/account-settings', '/projects',
+  '/people', '/users', '/account-settings',
   '/clients/companies/new', '/clients/new', '/users/new',
   '/people/contacts', '/people/teams', '/people/directory',
   '/storage-usage', '/notifications', '/activity', '/getting-started',

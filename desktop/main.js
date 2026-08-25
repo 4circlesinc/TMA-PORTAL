@@ -1001,7 +1001,6 @@ const PLACES = [
   { label: 'Clients', path: '/clients' },
   { label: 'People', path: '/people' },
   { label: 'Signatures', path: '/signatures' },
-  { label: 'Projects', path: '/projects/all' },
 ];
 
 function go(to) {

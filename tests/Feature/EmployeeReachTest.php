@@ -100,8 +100,7 @@ class EmployeeReachTest extends TestCase
             'classic', 'clients', 'email', 'email/templates', 'folders/all',
             'folders/clients', 'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',
-            'folders/shared-with-me', 'overview', 'projects', 'projects/all',
-            'projects/closed', 'projects/recently_deleted',
+            'folders/shared-with-me', 'overview',
             'settings/change-email', 'signatures', 'social/feed',
             'social/messages', 'templates', 'workflows', 'workflows/feedback',
         ], $reach[Role::REVIEWING_OFFICER], 'the pages employee-like staff reach have changed');
@@ -113,10 +112,24 @@ class EmployeeReachTest extends TestCase
             'billing-details/card', 'calendar', 'choose-account-type',
             'classic', 'folders/clients', 'folders/favorites', 'folders/filebox',
             'folders/personal', 'folders/recent', 'folders/recycle',
-            'folders/shared-with-me', 'projects', 'projects/all',
-            'projects/closed', 'projects/recently_deleted',
+            'folders/shared-with-me',
             'settings/change-email', 'signatures', 'social/messages',
         ], $reach[Role::CLIENT], 'the pages a client reaches have changed');
+    }
+
+    public function test_the_projects_pages_are_gone_for_everyone(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        foreach (['projects', 'projects/all', 'projects/closed', 'projects/recently_deleted'] as $page) {
+            $this->actingAs($admin)->get('/'.$page)
+                ->assertNotFound('/'.$page.' should no longer be served');
+        }
+
+        $html = $this->actingAs($admin)->get('/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('data-expand="projects"', $html);
+        $this->assertStringNotContainsString('data-nav="projects-all"', $html);
+        $this->assertStringNotContainsString('data-view="projects-hub"', $html);
     }
 
     public function test_an_approved_employee_is_held_on_the_role_pending_screen(): void

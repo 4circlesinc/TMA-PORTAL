@@ -47,7 +47,6 @@ const targets = [
   { key: 'signatures', sel: '[data-nav="signatures"] .tma-dash__nav-icon, [data-nav="signatures"] .tma-dash__nav-icon-wrap' },
   { key: 'folders', sel: '[data-expand="folders"] .tma-dash__nav-icon, [data-expand="folders"] .tma-dash__nav-icon-wrap' },
   { key: 'users', sel: '[data-nav="users"] .tma-dash__nav-icon, [data-nav="users"] .tma-dash__nav-icon-wrap' },
-  { key: 'projects', sel: '[data-expand="projects"] .tma-dash__nav-icon, [data-expand="projects"] .tma-dash__nav-icon-wrap' },
   { key: 'workflows', sel: '[data-expand="workflows"] .tma-dash__nav-icon, [data-expand="workflows"] .tma-dash__nav-icon-wrap' },
   { key: 'logo', sel: '.tma-dash__sidebar-logo' },
   { key: 'tabs-row', sel: '.tma-dash__nav-section--tabs' },

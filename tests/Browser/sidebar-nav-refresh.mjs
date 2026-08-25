@@ -163,15 +163,15 @@ await page.evaluate(() => {
 await page.hover('.tma-dash__sidebar');
 await page.waitForTimeout(450);
 const beforeHoverClick = new URL(page.url()).pathname;
-await page.click('[data-expand="projects"]');
+await page.click('[data-expand="workflows"]');
 await page.waitForTimeout(600);
 check(
   'hover rail expands the group instead of navigating',
   new URL(page.url()).pathname === beforeHoverClick &&
-    (await page.evaluate(() => document.querySelector('[data-expand="projects"]').getAttribute('aria-expanded') === 'true')),
+    (await page.evaluate(() => document.querySelector('[data-expand="workflows"]').getAttribute('aria-expanded') === 'true')),
   page.url()
 );
-await page.click('[data-expand="projects"]');
+await page.click('[data-expand="workflows"]');
 await page.mouse.move(1400, 500);
 await page.waitForTimeout(400);
 await page.evaluate(() => {

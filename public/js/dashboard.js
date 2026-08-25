@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-18-no-cbi-nav';
+  var NAV_SHELL_VERSION = '2026-08-25-no-projects-nav';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -34,7 +34,6 @@
     'users',
     'reporting',
     'templates',
-    'projects',
     'workflows',
     'call-recordings',
     'people',
@@ -47,7 +46,6 @@
     'users',
     'reporting',
     'templates',
-    'projects-all',
     'workflows-automated',
     'call-recordings',
     'people-home',
@@ -95,7 +93,7 @@
     // the second main-list section (or any remaining section after primary).
     var pagesSection = sections[1] || sections[0];
     for (var s = 0; s < sections.length; s++) {
-      if (sections[s] !== primarySection && sections[s].querySelector('[data-nav="users"], [data-expand="projects"]')) {
+      if (sections[s] !== primarySection && sections[s].querySelector('[data-nav="users"], [data-expand="workflows"]')) {
         pagesSection = sections[s];
         break;
       }
@@ -129,7 +127,7 @@
     var pagesCard = null;
     cards.forEach(function (card) {
       if (card.querySelector('[data-nav="dash-dashboard"]')) dashCard = card;
-      else if (card.querySelector('[data-nav="account-settings"]') && card.querySelector('[data-nav="users"], [data-nav="templates"], [data-nav="projects-all"]')) pagesCard = card;
+      else if (card.querySelector('[data-nav="account-settings"]') && card.querySelector('[data-nav="users"], [data-nav="templates"], [data-nav="workflows-automated"]')) pagesCard = card;
     });
     if (!pagesCard) {
       cards.forEach(function (card) {
@@ -304,14 +302,6 @@
           view: 'reporting',
           title: 'Reporting',
           crumb: 'Reporting',
-        };
-      }
-      if (p === '/projects') {
-        return {
-          navId: 'dash-projects',
-          view: 'projects',
-          title: 'My Projects',
-          crumb: 'Dashboards / Projects',
         };
       }
       if (p === '/overview') {
@@ -544,7 +534,6 @@
         return '/settings';
       }
       if (view === 'account' || navId === 'ac-overview' || navId === 'ac-security' || navId === 'ac-billing' || navId === 'ac-statements' || navId === 'ac-referrals' || navId === 'ac-api-keys' || navId === 'ac-logs') return '/account';
-      if (view === 'projects' || navId === 'dash-projects' || navId === 'fav-projects') return '/projects';
       if (view === 'email' || navId === 'email') {
         if (normalizePath(window.location.pathname) === '/email/templates') return '/email/templates';
         return '/email';
@@ -855,13 +844,13 @@
         viewEls.forEach(function (v) { v.hidden = v.getAttribute('data-view') !== name; });
       }
       syncBackButton(name);
-      if (todayWrap) todayWrap.style.display = (name === 'dashboard' || name === 'projects') ? '' : 'none';
+      if (todayWrap) todayWrap.style.display = name === 'dashboard' ? '' : 'none';
       // Dashboard parks Today inside the hello row; put it back when leaving.
       if (name !== 'dashboard' && window.TMAPortalHome && window.TMAPortalHome.restoreTodayToShell) {
         window.TMAPortalHome.restoreTodayToShell();
         todayWrap = root.querySelector('[data-today-dropdown]');
       }
-      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
+      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';
@@ -1805,7 +1794,7 @@
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(queueNavFit);
     }
 
-    /* Hover rail: when the overlay closes, collapse Folders/Projects/People
+    /* Hover rail: when the overlay closes, collapse Folders/People
        so an open submenu can't reappear as a floating white panel the next
        time the rail animates open (or peek out of the 72px icon column). */
     function onHoverRailClosed() {
@@ -3023,11 +3012,6 @@
     var pricingRoot = root.querySelector('[data-pricing]');
     if (pricingRoot && window.TMAPricing) {
       window.TMAPricing.mount(pricingRoot);
-    }
-
-    var projectsRoot = root.querySelector('[data-projects]');
-    if (projectsRoot && window.TMAProjects) {
-      window.TMAProjects.mount(projectsRoot);
     }
 
     if (viewToggleWrap && window.TMATableViewToggle) {

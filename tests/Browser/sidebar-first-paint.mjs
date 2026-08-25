@@ -26,7 +26,7 @@ const PASSWORD = process.env.TMA_PASSWORD || 'password12345';
 const STALL_MS = 4000;
 
 const ACCOUNTS = [
-  { email: 'e2e@example.com', label: 'Administrator', expect: ['Dashboard', 'Overview', 'Client hub', 'Email', 'Messages', 'Feed', 'Calendar', 'Signatures', 'File Library', 'Users', 'Templates', 'Projects', 'Workflows', 'People', 'Settings'] },
+  { email: 'e2e@example.com', label: 'Administrator', expect: ['Dashboard', 'Overview', 'CIP Applications', 'Email', 'Messages', 'Feed', 'Calendar', 'Signatures', 'File Library', 'Users', 'Reporting', 'Templates', 'Workflows', 'Call Recordings', 'People', 'Settings'] },
   { email: 'emp@example.com', label: 'Employee' },
   { email: 'client@example.com', label: 'Client' },
 ];
