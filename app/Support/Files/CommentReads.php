@@ -8,6 +8,7 @@ use App\Models\FileCommentRead;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Files\Workflow\Hub;
+use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -49,8 +50,11 @@ final class CommentReads
      * Called when the file's comments are actually put on screen. Reading is
      * something the reader did, so it is recorded where the bodies are shown
      * and nowhere else — a listing that merely names a file must not clear it.
+     *
+     * Returns whether any marker actually moved, so the caller can tell the
+     * indicators to redraw and say nothing when there was nothing to clear.
      */
-    public static function markFileRead(User $user, FileItem $file): void
+    public static function markFileRead(User $user, FileItem $file): bool
     {
         $rows = FileComment::query()
             ->where('file_id', $file->id)
@@ -59,7 +63,7 @@ final class CommentReads
             ->selectRaw('root_id, MAX(id) as newest')
             ->pluck('newest', 'root_id');
 
-        self::mark($user, $rows);
+        return self::mark($user, $rows);
     }
 
     /**
@@ -70,12 +74,12 @@ final class CommentReads
      *
      * @param  iterable<int>  $rootIds
      */
-    public static function markThreadsRead(User $user, iterable $rootIds): void
+    public static function markThreadsRead(User $user, iterable $rootIds): bool
     {
         $ids = collect($rootIds)->filter()->unique()->values();
 
         if ($ids->isEmpty()) {
-            return;
+            return false;
         }
 
         $rows = FileComment::query()
@@ -84,7 +88,7 @@ final class CommentReads
             ->selectRaw('root_id, MAX(id) as newest')
             ->pluck('newest', 'root_id');
 
-        self::mark($user, $rows);
+        return self::mark($user, $rows);
     }
 
     /**
@@ -358,10 +362,10 @@ final class CommentReads
      *
      * @param  Collection<int, int>  $newestByRoot
      */
-    private static function mark(User $user, Collection $newestByRoot): void
+    private static function mark(User $user, Collection $newestByRoot): bool
     {
         if ($newestByRoot->isEmpty()) {
-            return;
+            return false;
         }
 
         $existing = FileCommentRead::query()
@@ -389,7 +393,7 @@ final class CommentReads
         }
 
         if ($rows === []) {
-            return;
+            return false;
         }
 
         DB::table('file_comment_reads')->upsert(
@@ -397,5 +401,25 @@ final class CommentReads
             ['user_id', 'root_id'],
             ['last_read_comment_id', 'updated_at'],
         );
+
+        /*
+         * Tell this reader's other tabs, and nobody else's.
+         *
+         * Unread is the one count in the portal that is per-reader, so having
+         * read something changes exactly one person's screens: the dot on the
+         * CIP table, the chip on a checklist line and a folder row, the
+         * Workflows badge. Signalling the staff room instead would have the
+         * whole firm refetch to be told their own numbers are unchanged.
+         *
+         * The tab that did the reading is excluded by toOthers(), which is
+         * correct rather than a gap: it is holding the response and redraws
+         * from that, and a refetch racing its own write would be the one
+         * request most likely to read back the old number.
+         */
+        Live::user(Live::FILES, $user->id);
+        Live::user(Live::CIP, $user->id);
+        Live::user(Live::WORKFLOWS, $user->id);
+
+        return true;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -9,6 +10,22 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        /*
+         * Start with an empty realtime buffer.
+         *
+         * Live collects signals in a static and sends them on terminate, which
+         * a test kernel never reaches. Without this, whatever the last test
+         * queued is still pending when the next one starts watching, so a
+         * signal assertion passes alone and fails in a full run depending on
+         * what ran before it.
+         */
+        Live::discard();
+    }
+
     /**
      * The body of a file response, however it happens to be sent.
      *

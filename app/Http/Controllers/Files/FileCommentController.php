@@ -26,7 +26,10 @@ class FileCommentController extends BaseFilesController
         $file = $this->findFile($uuid, withTrashed: true);
         FileAccess::authorize($user, 'view', $file);
 
-        $data = $request->validate(['before' => ['nullable', 'integer', 'min:1']]);
+        $data = $request->validate([
+            'before' => ['nullable', 'integer', 'min:1'],
+            'peek' => ['nullable', 'boolean'],
+        ]);
 
         $page = CommentPresenter::page($file, $user, isset($data['before']) ? (int) $data['before'] : null);
 
@@ -34,10 +37,22 @@ class FileCommentController extends BaseFilesController
          * The bodies are now on the reader's screen, so this is the moment
          * they were read. Recorded here rather than on any listing that merely
          * names the file: a row in a folder is not a conversation you have had.
+         *
+         * Unless the caller says it is only counting. The viewer refreshes
+         * this endpoint to keep its tab badge honest when a comment lands
+         * while the conversation column is CLOSED, and that fetch was clearing
+         * every thread on the file: a colleague writing to you marked their
+         * own message read, on your behalf, because you happened to have the
+         * document open on another tab. Peeking asks the same question and
+         * claims nothing.
          */
-        CommentReads::markFileRead($user, $file);
+        $marked = ($data['peek'] ?? false)
+            ? false
+            : CommentReads::markFileRead($user, $file);
 
-        return response()->json($page);
+        // So the tab holding this response can redraw its own indicators, and
+        // stay quiet when there was nothing to clear.
+        return response()->json($page + ['readCleared' => $marked]);
     }
 
     /** People the author may @-mention on this file. */

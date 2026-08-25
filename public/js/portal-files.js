@@ -2810,9 +2810,16 @@
       });
     }
 
-    // Keeps the tab's badge honest while the reader is on another tab.
+    /*
+     * Keeps the tab's badge honest while the reader is on another tab.
+     *
+     * `peek` because this is counting, not reading. Without it a colleague
+     * commenting while your conversation column was closed marked their own
+     * message read on your behalf, and the unread you never saw was gone
+     * before you looked.
+     */
     function refreshOpenCountOnly(f) {
-      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'))
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments?peek=1'))
         .then(function (data) { entry(f).comments = data; refreshCommentCount(data); })
         .catch(function () {});
     }
@@ -2843,6 +2850,14 @@
       restoreDraft(e);
     }
 
+    /* Re-run whatever TMALive surfaces are registered for a resource. Silent
+       when the module is absent, the indicators then settle on next load. */
+    function liveRefresh(key) {
+      var live = window.TMALive;
+      if (!live || !live.flush || !live.RESOURCES) return;
+      if (live.RESOURCES[key]) live.flush(live.RESOURCES[key]);
+    }
+
     function loadComments(f, append) {
       var e = entry(f);
       var q = append && e.comments && e.comments.nextCursor ? '?before=' + e.comments.nextCursor : '';
@@ -2863,10 +2878,29 @@
            * sidebar is claiming about unread comments is now one request out
            * of date. Say so rather than leaving the badge to correct itself on
            * the reader's next navigation.
+           *
+           * Only when a marker actually moved. Opening a conversation you have
+           * already had changes nothing, and every surface refetching to be
+           * told so is a burst of requests per panel open.
            */
-          try {
-            document.dispatchEvent(new CustomEvent('tma-comments-read', { detail: { file: f.id } }));
-          } catch (err) { /* the badge simply settles on the next page */ }
+          if (data.readCleared) {
+            try {
+              document.dispatchEvent(new CustomEvent('tma-comments-read', { detail: { file: f.id } }));
+            } catch (err) { /* the badge simply settles on the next page */ }
+            /*
+             * And the indicators that are not the sidebar badge: the chip on
+             * this file's row and on the folder holding it, the dot on the CIP
+             * applications table, the dot on the Documents tab. Each is drawn
+             * from a different endpoint and the reader has just made all of
+             * them wrong at once.
+             *
+             * Asked for here rather than left to the broadcast, because the
+             * broadcast deliberately excludes the tab that caused it: this one
+             * is holding the answer, the others are told.
+             */
+            liveRefresh('FILES');
+            liveRefresh('CIP');
+          }
           if (current().id !== f.id || !viewerPrefs.comments) return;
           var slot = lb.querySelector('[data-lb-comments]');
           if (slot) slot.innerHTML = commentsHtml(data, e);
