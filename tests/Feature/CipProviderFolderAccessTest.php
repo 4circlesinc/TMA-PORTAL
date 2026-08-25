@@ -246,4 +246,28 @@ class CipProviderFolderAccessTest extends TestCase
                 ->contains(fn (array $row) => $row['id'] === $root->uuid)
         );
     }
+
+    public function test_a_provider_contact_can_open_the_applicant_profile_through_cip(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        [, $outsider] = $this->providerWithContact('BLU');
+        ['application' => $application] = $this->filing($galaxy, $staff);
+        $uid = $application->fresh()->client->uid;
+
+        $this->actingAs($gil)
+            ->getJson('/portal/cip/clients/'.$uid.'/application')
+            ->assertOk()
+            ->assertJsonPath('client.id', $uid)
+            ->assertJsonPath('client.name', 'Chen Wei')
+            ->assertJsonPath('application.clientUid', $uid);
+
+        $this->actingAs($outsider)
+            ->getJson('/portal/cip/clients/'.$uid.'/application')
+            ->assertOk()
+            ->assertJsonPath('application', null)
+            ->assertJsonPath('client', null);
+
+        $this->actingAs($gil)->getJson('/portal/clients/'.$uid)->assertForbidden();
+    }
 }

@@ -751,13 +751,29 @@
     };
   }
 
+  var CLIENT_STUBS = {};
+
   function directoryItemFor(id) {
+    if (CLIENT_STUBS[id]) return CLIENT_STUBS[id];
     for (var i = 0; i < DIRECTORY.length; i++) {
       for (var j = 0; j < DIRECTORY[i].items.length; j++) {
         if (DIRECTORY[i].items[j].id === id) return DIRECTORY[i].items[j];
       }
     }
     return null;
+  }
+
+  function rememberClientRecord(rec) {
+    if (!rec || !rec.id) return;
+    rememberProfile(rec.id, rec.profile || {});
+    rememberMeta(rec);
+    CLIENT_STUBS[rec.id] = {
+      id: rec.id,
+      name: rec.name || 'Client',
+      initial: rec.initial,
+      initialColor: rec.initialColor,
+      photo: rec.photo,
+    };
   }
 
   function displayName(contact) {
@@ -1548,6 +1564,14 @@
       return true;
     }
     if (window.TMABootProviderContact === true || window.TMABootProviderContact === 'true') {
+      return true;
+    }
+    // CIP reach without the staff directory: a private client, or a provider
+    // contact whose boot flag has not been read yet. Officers hold clients.view
+    // and keep using the hub show endpoint.
+    var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true'
+      || (access && typeof access.cipReach === 'function' && access.cipReach());
+    if (cipReach && access && typeof access.can === 'function' && !access.can('clients.view')) {
       return true;
     }
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
@@ -10120,16 +10144,31 @@
       else render({ detailOnly: true });
     };
 
-    ClientsAPI.show(id).then(function (res) {
+    /*
+     * Provider contacts and private clients never hold clients.view, so the
+     * hub show endpoint 403s and the profile paints as a failed load. The
+     * CIP application they can already open carries the same record.
+     */
+    var request = isExternalCipUser()
+      ? clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
+      : ClientsAPI.show(id);
+
+    request.then(function (res) {
       if (stale()) return;
+      if (res && res.application) {
+        rememberApplication(id, res.application);
+        state.applicationFreshFor = id;
+      }
       var rec = res && res.client;
-      // An empty profile is a real answer, most imported clients have one —
-      // so this records the fetch even when there is nothing in it.
-      rememberProfile(id, rec ? rec.profile : {});
-      if (rec) rememberMeta(rec);
+      if (!rec) {
+        state.profileLoadingFor = null;
+        state.profileError = 'You’re not assigned to this client.';
+        state.profileErrorFinal = true;
+        redraw();
+        return;
+      }
+      rememberClientRecord(rec);
       state.profileLoadingFor = null;
-      // An edit screen was waiting on this to build its draft (see
-      // applyScreen); it holds null until the record is actually in hand.
       if (state.screen === 'edit' && state.selectedId === id && !state.draft) {
         state.draft = contactToDraft(contactFor(id));
       }
@@ -10516,9 +10555,11 @@
         state.applicationFreshFor = null;
         ensureProfileLoaded(state, render);
         ensureApplicationLoaded(state, render);
-        ensureAccessLoaded(state, render);
-        ensureAssignmentsLoaded(state, render, { quiet: true });
-        ensureConversationsLoaded(state, render, { quiet: true });
+        if (!isExternalCipUser()) {
+          ensureAccessLoaded(state, render);
+          ensureAssignmentsLoaded(state, render, { quiet: true });
+          ensureConversationsLoaded(state, render, { quiet: true });
+        }
       }
 
       if (state.screen === 'company' && state.companyId) {

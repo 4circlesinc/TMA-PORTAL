@@ -974,7 +974,7 @@ class CipIntakeTest extends TestCase
         $this->actingAs($staff)
             ->getJson('/portal/cip/clients/'.$other->uid.'/application')
             ->assertOk()
-            ->assertJson(['application' => null]);
+            ->assertJson(['application' => null, 'client' => null]);
     }
 
     public function test_the_applicants_passport_photo_becomes_the_clients_picture(): void

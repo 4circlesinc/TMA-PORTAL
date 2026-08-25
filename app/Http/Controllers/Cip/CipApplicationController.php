@@ -805,12 +805,32 @@ class CipApplicationController extends Controller
         // same reason show() settles it, and kept off the fifty-row pages for
         // the same reason too.
         if ($application) {
+            if ($application->folder_id === null) {
+                Tree::provision($application, $user);
+                $application->refresh();
+            }
             Requirements::materialiseApplication($application);
             $application->unsetRelation('people');
         }
 
+        /*
+         * The hub record rides with the application.
+         *
+         * Opening a row from CIP Applications still asks the profile endpoint
+         * (`/portal/clients/{uid}`), which is staff-only, ClientScope, so a
+         * provider contact who can already see the filing got "Couldn't load
+         * this client" on every click. The application they may see is enough
+         * to name the person, and this is the one read that already answers
+         * that question for them.
+         */
+        $client = $application?->client;
+        if ($client) {
+            $client->loadMissing(['folder', 'companyRecord', 'referredByCompany']);
+        }
+
         return response()->json([
             'application' => $application ? $this->record($application, $user) : null,
+            'client' => $client?->toRecord(),
         ]);
     }
 
