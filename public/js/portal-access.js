@@ -91,6 +91,7 @@
     'clienthub-access': 'settings.clientHub',
     'service-teams': 'settings.clientHub',
     'custom-fields': 'settings.clientHub',
+    'cip-documents': 'settings.clientHub',
     'cip-letters': 'settings.clientHub',
     'security-insights': 'settings.security',
     'signin-policy': 'settings.security',

@@ -795,26 +795,36 @@
   background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
   font-size: var(--text-size-13);
 }
-.tma-portal-viewer__thread.is-resolved { opacity: 0.72; }
+.tma-portal-viewer__thread.is-resolved {
+  /* Solid, not opacity: a translucent card let the document (and the Files
+     table behind the viewer) print through the bubble. */
+  background: #f4f6f5;
+}
 /*
  * A bubble reads top to bottom: the face and the name head it, the message
  * runs the full width underneath, flush with the face's own left edge. The
  * verbs live in the top corner and only show themselves under the pointer.
  */
 .tma-portal-viewer__comment { display: block; position: relative; padding: var(--space-4) 0; }
-.tma-portal-viewer__comment-top { display: flex; align-items: center; gap: var(--space-8); }
-.tma-portal-viewer__comment-head { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; }
-.tma-portal-viewer__comment-name { display: inline-flex; align-items: center; gap: var(--space-6); }
-.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.1; }
-.tma-portal-viewer__comment-head time {
-  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.1;
-  margin-top: -1px;
+.tma-portal-viewer__comment-top {
+  display: flex; align-items: flex-start; gap: var(--space-8);
+  /* Room for the hover verbs so they never sit on the name. */
+  padding-right: 48px;
 }
-.tma-portal-viewer__comment-body {
-  font-size: var(--text-size-13);
-  /* The separation the head cannot give: the message gets its own air. */
-  padding: var(--space-10) 0;
-  margin: 0;
+.tma-portal-viewer__comment-head {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  flex: 1; min-width: 0;
+}
+.tma-portal-viewer__comment-name {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--space-6);
+  max-width: 100%;
+}
+.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.3; color: var(--color-text-primary); }
+.tma-portal-viewer__comment-head time {
+  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3;
+}
+.tma-portal-viewer__comment-resolved {
+  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3;
 }
 
 /* The corner verbs: a tick to resolve, a ⋯ for the rest. Invisible until the
@@ -850,19 +860,16 @@
 .tma-portal-viewer__comment-menu button:hover { background: var(--color-hover); }
 .tma-portal-viewer__comment.is-deleted { padding-left: 38px; color: var(--color-text-secondary); font-size: var(--text-size-13); }
 .tma-portal-viewer__comment-main { flex: 1; min-width: 0; }
-.tma-portal-viewer__comment-head {
-  display: flex; align-items: baseline; gap: var(--space-8); flex-wrap: wrap;
-  font-size: var(--text-size-12); color: var(--color-text-secondary);
-}
-.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); color: var(--color-text-primary); }
 .tma-portal-viewer__comment-flag {
   padding: 1px var(--space-6); border-radius: 999px;
   background: var(--color-hover); font-size: 11px;
+  line-height: 1.4; white-space: nowrap; flex: 0 0 auto;
 }
 .tma-portal-viewer__comment-flag--ok { background: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary-dark); }
 .tma-portal-viewer__comment-body {
-  margin: var(--space-2) 0 0; font-size: var(--text-size-13); line-height: 1.5;
+  font-size: var(--text-size-13); line-height: 1.5;
   color: var(--color-text-primary); word-break: break-word; white-space: pre-wrap;
+  padding: var(--space-10) 0; margin: 0;
 }
 .tma-portal-viewer__mention { color: var(--color-primary-dark); font-weight: 600; }
 .tma-portal-viewer__comment-actions { display: flex; gap: var(--space-10); margin-top: var(--space-4); }
@@ -1036,6 +1043,9 @@
   color: var(--color-primary-dark);
 }
 .tma-portal-viewer__version-main { flex: 1; min-width: 0; }
+.tma-portal-viewer__version-main .tma-portal-viewer__comment-head {
+  flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: var(--space-8);
+}
 .tma-portal-viewer__version-note {
   margin: var(--space-2) 0 0; font-size: var(--text-size-13); line-height: 1.45;
   color: var(--color-text-primary); word-break: break-word;

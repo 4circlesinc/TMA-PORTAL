@@ -157,19 +157,22 @@ class PortalAccessTest extends TestCase
         // branding, storage and Advanced Preferences, offered to employees and
         // clients alike because it is one static list.
         $employee = $this->user(Role::EMPLOYEE);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
         $client = $this->user(Role::CLIENT);
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $administration = [
             'background-ops', 'notification-history',
             'branding', 'clienthub-access',
-            'service-teams', 'custom-fields', 'security-policy', 'signin-policy',
+            'service-teams', 'custom-fields', 'cip-documents', 'cip-letters',
+            'security-policy', 'signin-policy',
             'alert-settings', 'storage-usage',
             'permissions', 'default-folders', 'folder-templates',
         ];
 
         foreach ($administration as $section) {
             $this->assertFalse(Role::canViewSettingsPage($employee, $section), $section.' should be closed to employees');
+            $this->assertFalse(Role::canViewSettingsPage($officer, $section), $section.' should be closed to officers');
             $this->assertFalse(Role::canViewSettingsPage($client, $section), $section.' should be closed to clients');
             $this->assertTrue(Role::canViewSettingsPage($admin, $section), $section.' should be open to administrators');
         }
@@ -224,6 +227,35 @@ class PortalAccessTest extends TestCase
         }
 
         $this->assertSame(Role::settingsPageCapabilities(), $mirror);
+    }
+
+    public function test_every_cip_console_settings_page_is_gated(): void
+    {
+        // An unlisted rail id is treated as personal, which is how Document
+        // requirements used to put CIP Console on every account's Settings.
+        $js = file_get_contents(public_path('js/portal-admin.js'));
+        $this->assertIsString($js);
+
+        preg_match("/group: 'clienthub-group'.*?items: \[(.*?)\]/s", $js, $block);
+        $this->assertNotEmpty($block, 'CIP Console items not found in portal-admin.js');
+
+        preg_match_all("/id: '([^']+)'/", $block[1], $ids);
+        $this->assertNotEmpty($ids[1], 'CIP Console has no pages');
+
+        $gated = Role::settingsPageCapabilities();
+
+        foreach ($ids[1] as $id) {
+            $this->assertArrayHasKey(
+                $id,
+                $gated,
+                $id.' is on CIP Console but not on SETTINGS_PAGE_CAPABILITIES'
+            );
+            $this->assertSame(
+                'settings.clientHub',
+                $gated[$id],
+                $id.' must stay with the rest of CIP Console'
+            );
+        }
     }
 
     public function test_the_shell_does_not_boot_a_view_the_account_cannot_reach(): void

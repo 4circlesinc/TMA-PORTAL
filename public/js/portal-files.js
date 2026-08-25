@@ -3006,10 +3006,14 @@
           '<div class="tma-portal-viewer__comment-head">' +
             '<span class="tma-portal-viewer__comment-name"><strong>' + esc(who) + '</strong>' +
             (c.editedAt ? '<span class="tma-portal-viewer__comment-flag">edited</span>' : '') +
-            (c.resolved ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Resolved' +
-              (c.resolvedBy ? ' by ' + esc(c.resolvedBy) : '') + '</span>' : '') +
+            (c.resolved ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok"' +
+              (c.resolvedBy ? ' title="Resolved by ' + esc(c.resolvedBy) + '"' : '') +
+              '>Resolved</span>' : '') +
             '</span>' +
             '<time datetime="' + esc(c.createdAt) + '">' + esc(fmtDateTime(c.createdAt)) + '</time>' +
+            (c.resolved && c.resolvedBy
+              ? '<span class="tma-portal-viewer__comment-resolved">by ' + esc(c.resolvedBy) + '</span>'
+              : '') +
           '</div>' +
           (hover ? '<div class="tma-portal-viewer__hover-acts">' + hover + '</div>' : '') +
         '</div>' +

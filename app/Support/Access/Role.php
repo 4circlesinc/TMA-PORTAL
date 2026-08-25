@@ -384,6 +384,11 @@ class Role
         'clienthub-access' => 'settings.clientHub',
         'service-teams' => 'settings.clientHub',
         'custom-fields' => 'settings.clientHub',
+        // Document requirements used to be absent from this map, which made
+        // the whole CIP Console group look personal: anything unlisted is
+        // treated as open, so officers, clients and provider contacts all
+        // saw the rail. It is administration, same as the letters.
+        'cip-documents' => 'settings.clientHub',
         'cip-letters' => 'settings.clientHub',
         // "Account security" is the reader's own password and 2FA and stays
         // open; everything else under Security is firm-wide policy.
