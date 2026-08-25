@@ -2072,10 +2072,29 @@
       if (!text) {
         badge.hidden = true;
         badge.textContent = '';
+        setLabelTitle(el, false);
         return;
       }
       badge.hidden = false;
       badge.textContent = text;
+      setLabelTitle(el, true);
+    }
+
+    /*
+     * A submenu label gives way to its count.
+     *
+     * The badge is what the row is for once there is one, so the label takes
+     * the ellipsis — "Feedback and Com… 21" rather than a number cut in half by
+     * the sidebar's edge. Its own text becomes a tooltip so nothing is lost.
+     * Set on the span, not the row: applyRailTitles owns the row's title and
+     * clears it whenever labels are visible.
+     */
+    function setLabelTitle(el, on) {
+      if (!el.classList.contains('tma-dash__nav-item--nested')) return;
+      var label = el.querySelector(':scope > span:not(.tma-dash__nav-count)');
+      if (!label) return;
+      if (on) label.setAttribute('title', (label.textContent || '').trim());
+      else label.removeAttribute('title');
     }
 
     /*
@@ -2109,10 +2128,9 @@
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-automated"]'), open ? workflowCounts.waiting : 0);
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-feedback"]'), open ? workflowCounts.unread : 0);
 
-      // The mobile menu has no disclosure, every row is always on screen, so
-      // each carries its own number and the parent row is not repeated there.
-      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), workflowCounts.waiting);
-      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-feedback"]'), workflowCounts.unread);
+      // The mobile menu has one Workflows row and no submenu under it, so it
+      // is the collapsed case: one door onto both screens, carrying the sum.
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), total);
     }
 
     function syncWorkflowCounts() {

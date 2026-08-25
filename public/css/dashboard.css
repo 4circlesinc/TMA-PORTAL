@@ -666,14 +666,23 @@
 }
 
 /* A submenu row has no icon to pin a corner badge to, so its count sits at the
-   end of the row instead — the shape a mail folder list uses everywhere. */
+   end of the row instead — the shape a mail folder list uses everywhere.
+ *
+ * The row's label is a <span> for exactly this reason: as a bare text node it
+ * was an anonymous flex item, which cannot be given `min-width: 0` or an
+ * ellipsis, so "Feedback and Comments" held its full width, pushed the badge
+ * past the sidebar's `overflow: hidden` edge, and the count was drawn cut in
+ * half. With a span the label shrinks and the badge always has its place. */
 .tma-dash__nav-item--nested > .tma-dash__nav-count {
   position: static;
   top: auto;
   right: auto;
-  margin-left: auto;
+  margin-left: var(--space-8);
   flex: none;
 }
+
+/* Room at the end of the row so the badge is not flush against the panel. */
+.tma-dash__sidebar-nav .tma-dash__nav-item--nested { padding-right: var(--space-8); }
 
 .tma-dash__nav-count[hidden] { display: none; }
 
