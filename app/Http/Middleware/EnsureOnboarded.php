@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Support\Access\Role;
 use App\Support\Onboarding\AccountSetupFlow;
 use Closure;
 use Illuminate\Http\Request;
@@ -27,7 +26,7 @@ class EnsureOnboarded
         }
 
         if (! AccountSetupFlow::accountsPhaseComplete($user)) {
-            return Role::isClient($user)
+            return AccountSetupFlow::usesClientWizard($user)
                 ? redirect()->route('onboarding.index')
                 : redirect()->route('getting-started');
         }

@@ -2,13 +2,15 @@
 
 namespace App\Support\Onboarding;
 
+use App\Models\Client;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\SecurityPolicies;
 
 /**
  * Steps every account walks through after "Set up your account"
- * (getting-started for staff, client wizard for clients).
+ * (getting-started for staff, client wizard for private clients).
  */
 final class AccountSetupFlow
 {
@@ -108,11 +110,33 @@ final class AccountSetupFlow
     {
         $steps = self::applicableSteps($user);
 
-        if (! Role::isClient($user)) {
+        if (! self::usesClientWizard($user)) {
             array_unshift($steps, self::ACCOUNTS);
         }
 
         return $steps;
+    }
+
+    /**
+     * Private clients fill in a profile through the guided wizard.
+     *
+     * Service-provider contacts already belong to a firm, so they use the
+     * original screens: profile-setup, getting-started, then preferences,
+     * two-factor and notifications.
+     */
+    public static function usesClientWizard(?User $user): bool
+    {
+        if ($user === null || ! Role::isClient($user)) {
+            return false;
+        }
+
+        if (CompanyMember::isLiveMember($user)) {
+            return false;
+        }
+
+        $companyId = Client::query()->where('user_id', $user->id)->value('company_id');
+
+        return $companyId === null;
     }
 
     /** @return array{index: int, total: int} */

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\ClientAssignment;
 use App\Models\OnboardingProgress;
 use App\Models\User;
-use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\Notifications\Notifier;
@@ -29,6 +28,10 @@ class ClientOnboardingController extends Controller
     /** Land on whichever step they have got to. */
     public function index(Request $request): RedirectResponse
     {
+        if ($redirect = $this->leaveIfNotClientWizard($request->user())) {
+            return $redirect;
+        }
+
         $progress = $this->progress($request->user());
 
         return redirect()->route('onboarding.show', ['step' => ClientFlow::nextUnfinished($progress)]);
@@ -37,6 +40,11 @@ class ClientOnboardingController extends Controller
     public function show(Request $request, string $step): View|RedirectResponse
     {
         $user = $request->user();
+
+        if ($redirect = $this->leaveIfNotClientWizard($user)) {
+            return $redirect;
+        }
+
         $progress = $this->progress($user);
 
         if (! ClientFlow::exists($step)) {
@@ -55,6 +63,11 @@ class ClientOnboardingController extends Controller
     public function store(Request $request, string $step): RedirectResponse
     {
         $user = $request->user();
+
+        if ($redirect = $this->leaveIfNotClientWizard($user)) {
+            return $redirect;
+        }
+
         $progress = $this->progress($user);
 
         if (! ClientFlow::exists($step) || ! ClientFlow::applies($step, $progress)) {
@@ -104,6 +117,10 @@ class ClientOnboardingController extends Controller
     /** Finish: mark it done, tell the assigned staff, and go to the portal. */
     public function complete(Request $request): RedirectResponse
     {
+        if ($redirect = $this->leaveIfNotClientWizard($request->user())) {
+            return $redirect;
+        }
+
         return $this->finish($request, $request->user());
     }
 
@@ -181,6 +198,10 @@ class ClientOnboardingController extends Controller
     /** Go back a step without losing anything. */
     public function back(Request $request, string $step): RedirectResponse
     {
+        if ($redirect = $this->leaveIfNotClientWizard($request->user())) {
+            return $redirect;
+        }
+
         $progress = $this->progress($request->user());
         $previous = ClientFlow::before($step, $progress);
 
@@ -218,6 +239,29 @@ class ClientOnboardingController extends Controller
     }
 
     /**
+     * Service-provider contacts belong on the original setup screens, not this
+     * wizard. Send them to whichever of those they have not finished.
+     */
+    private function leaveIfNotClientWizard(User $user): ?RedirectResponse
+    {
+        if (AccountSetupFlow::usesClientWizard($user)) {
+            return null;
+        }
+
+        if ($user->profile_completed_at === null) {
+            return redirect()->route('profile-setup');
+        }
+
+        if (! AccountSetupFlow::accountsPhaseComplete($user)) {
+            return redirect()->route('getting-started');
+        }
+
+        $setupUrl = AccountSetupFlow::redirectFor($user);
+
+        return $setupUrl ? redirect($setupUrl) : redirect('/');
+    }
+
+    /**
      * This person's progress row, created on first sight. Redirects out
      * entirely if they have no business being here.
      */
@@ -226,7 +270,7 @@ class ClientOnboardingController extends Controller
         return OnboardingProgress::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'flow' => Role::isClient($user)
+                'flow' => AccountSetupFlow::usesClientWizard($user)
                     ? OnboardingProgress::FLOW_CLIENT
                     : OnboardingProgress::FLOW_STAFF,
                 'current_step' => ClientFlow::stepKeys()[0],

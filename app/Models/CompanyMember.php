@@ -80,6 +80,16 @@ class CompanyMember extends Model
         return $query->where('status', self::STATUS_ACTIVE)->whereNotNull('user_id');
     }
 
+    /** Is this account an active contact on a company right now? */
+    public static function isLiveMember(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return self::query()->active()->where('user_id', $user->id)->exists();
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE && $this->user_id !== null;
