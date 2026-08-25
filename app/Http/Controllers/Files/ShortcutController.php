@@ -6,6 +6,7 @@ use App\Models\ClientAssignment;
 use App\Models\Folder;
 use App\Models\FolderShortcut;
 use App\Models\User;
+use App\Support\Cip\FolderAccess;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderColours;
 use App\Support\Files\FolderIcons;
@@ -38,20 +39,37 @@ class ShortcutController extends BaseFilesController
     /**
      * Folders that appear in the sidebar automatically, without pinning:
      * the staff member's assigned client folders, the organization folders
-     * they may see, and their own staff folder. Grouped so the sidebar can
-     * label each section instead of mixing them with manual pins.
+     * they may see, and their own staff folder. Provider contacts get the
+     * client folders their firm filed, the same set FileAccess already
+     * grants. Grouped so the sidebar can label each section instead of
+     * mixing them with pins.
      *
      * @return array<string, array<int, array{id: string, name: string}>>
      */
     private function autoGroups(User $user): array
     {
-        // Default / organization / assigned-client / staff folders are staff
-        // tooling only. Clients never receive those auto groups, they reach
-        // files through shares and their own pins.
+        $map = fn ($folders) => $folders->map(fn (Folder $f) => [
+            'id' => $f->uuid,
+            'name' => $f->name,
+            'colour' => FolderColours::effective($f, null),
+            'iconName' => FolderIcons::effective($f, null),
+        ])->values()->all();
+
+        // Default / organization / staff folders are staff tooling. External
+        // accounts still get the client folders they may open, so a provider
+        // contact does not have to hunt through Shared for every filing
+        // their firm has on.
         if (! FileAccess::isStaff($user)) {
+            $clientIds = FolderAccess::clientIdsFor($user);
+            $assignedClients = $clientIds === []
+                ? collect()
+                : Folder::where('folder_type', Folder::TYPE_CLIENT)
+                    ->whereIn('client_id', $clientIds)
+                    ->orderBy('name')->get();
+
             return [
                 'libraries' => [],
-                'assignedClients' => [],
+                'assignedClients' => $map($assignedClients),
                 'organization' => [],
                 'staff' => [],
             ];
@@ -87,13 +105,6 @@ class ShortcutController extends BaseFilesController
 
         // All default/system-type folders here, colour/icon are the one
         // admin-set values, no per-viewer preference lookup needed.
-        $map = fn ($folders) => $folders->map(fn (Folder $f) => [
-            'id' => $f->uuid,
-            'name' => $f->name,
-            'colour' => FolderColours::effective($f, null),
-            'iconName' => FolderIcons::effective($f, null),
-        ])->values()->all();
-
         return [
             'libraries' => $map($libraries),
             'assignedClients' => $map($assignedClients),

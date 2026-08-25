@@ -14,6 +14,7 @@ use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
+use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Package;
 use App\Support\Companies\CompanyAccess;
 use Illuminate\Support\Collection;
@@ -21,8 +22,9 @@ use Illuminate\Support\Collection;
 /**
  * The single server-side authorization surface for file/folder actions.
  * Every controller action runs through here, hidden buttons on the client are
- * never trusted. Access comes from ownership, the admin role, or an active
- * share/assignment (directly on the item or on an ancestor folder).
+ * never trusted. Access comes from ownership, the admin role, an active
+ * share/assignment (directly on the item or on an ancestor folder), or, for
+ * an external account, the client folders {@see FolderAccess} names.
  */
 class FileAccess
 {
@@ -339,8 +341,8 @@ class FileAccess
      * Access a folder's kind grants directly - independent of shares.
      * Organization folders open to all staff, a staff member's own personal
      * folder, and a client folder for the staff assigned to that client.
-     * Clients (non-staff) match none of these: they reach content only through
-     * explicit shares, which is what keeps internal folders invisible to them.
+     * External accounts match none of the staff rules: a provider contact
+     * reaches a client folder when their firm filed it, see {@see FolderAccess}.
      */
     private static function systemFolderRole(User $user, Folder $folder): ?string
     {
@@ -359,23 +361,25 @@ class FileAccess
             return 'full';
         }
 
-        if ($folder->folder_type === Folder::TYPE_CLIENT
-            && $folder->client_id !== null
-            && self::isStaff($user)) {
-            // Ended assignments are kept as history, so this must ask for the
-            // live one, without the scope an expired row could be picked up
-            // and hand back access that was taken away.
-            $assignment = ClientAssignment::live()
-                ->where('client_id', $folder->client_id)
-                ->where('user_id', $user->id)
-                ->first();
+        if ($folder->folder_type === Folder::TYPE_CLIENT && $folder->client_id !== null) {
+            if (self::isStaff($user)) {
+                // Ended assignments are kept as history, so this must ask for the
+                // live one, without the scope an expired row could be picked up
+                // and hand back access that was taken away.
+                $assignment = ClientAssignment::live()
+                    ->where('client_id', $folder->client_id)
+                    ->where('user_id', $user->id)
+                    ->first();
 
-            // Staff assigned to the whole company reach the folders of the
-            // contacts beneath it, when their assignment says it should.
-            return self::highest(array_filter([
-                $assignment?->fileRole(),
-                self::companyStaffRole($user, $folder->client_id),
-            ]));
+                // Staff assigned to the whole company reach the folders of the
+                // contacts beneath it, when their assignment says it should.
+                return self::highest(array_filter([
+                    $assignment?->fileRole(),
+                    self::companyStaffRole($user, $folder->client_id),
+                ]));
+            }
+
+            return FolderAccess::folderRole($user, $folder);
         }
 
         return null;
@@ -384,12 +388,21 @@ class FileAccess
     /**
      * Folder ids a user can see at the top level through system rules (not
      * shares or ownership): organization folders open to all staff, their own
-     * staff folder, and their assigned client folders. Empty for clients.
+     * staff folder, and their assigned client folders. External accounts see
+     * the client folders {@see FolderAccess} names, nothing else.
      */
     public static function systemVisibleFolderIds(User $user): array
     {
         if (! self::isStaff($user)) {
-            return [];
+            $reachable = FolderAccess::clientIdsFor($user);
+
+            if ($reachable === []) {
+                return [];
+            }
+
+            return Folder::where('folder_type', Folder::TYPE_CLIENT)
+                ->whereIn('client_id', $reachable)
+                ->pluck('id')->all();
         }
 
         $orgIds = Folder::where('folder_type', Folder::TYPE_ORGANIZATION)

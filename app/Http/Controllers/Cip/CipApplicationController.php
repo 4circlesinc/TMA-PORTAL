@@ -29,6 +29,7 @@ use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
+use App\Support\Cip\Tree;
 use App\Support\Files\Presenter;
 use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
@@ -733,6 +734,11 @@ class CipApplicationController extends Controller
     public function show(Request $request, string $uuid): JsonResponse
     {
         $application = ApplicationScope::findOrFail($request->user(), $uuid);
+
+        if ($application->folder_id === null) {
+            Tree::provision($application, $request->user());
+            $application->refresh();
+        }
 
         /*
          * The checklist is settled on the read that opens ONE file, so the

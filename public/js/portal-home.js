@@ -23,19 +23,26 @@
   }
 
   var SHORTCUTS = [
-    { id: 'email', label: 'Email', icon: 'EnvelopeSimple', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'email', label: 'Email', icon: 'EnvelopeSimple', count: 'email', cap: 'mail.use', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
     { id: 'messages', label: 'Messages', icon: 'ChatsCircle', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
-    { id: 'feed', label: 'Feed', icon: 'Newspaper', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
+    { id: 'feed', label: 'Feed', icon: 'Newspaper', count: 'feed', cap: 'feed.view', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
     { id: 'calendar', label: 'Calendar', icon: 'CalendarBlank', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
-    { id: 'users', label: 'Users', icon: 'Users', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
-    { id: 'share-files', label: 'Share Files', icon: 'Share' },
-    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple' },
-    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus' },
-    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
+    { id: 'users', label: 'Users', icon: 'Users', count: 'users', cap: 'users.view', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
+    { id: 'share-files', label: 'Share Files', icon: 'Share', cap: 'files.viewOrg' },
+    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple', cap: 'files.viewOrg' },
+    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus', cap: 'users.manage' },
+    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', cap: 'files.viewOrg', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
     { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Comments', icon: 'Checks', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
-    { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
+    { id: 'feedback-approval', label: 'Feedback and Comments', icon: 'Checks', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
+    { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
+
+  function visibleShortcuts() {
+    var access = window.TMAPortalAccess;
+    return SHORTCUTS.filter(function (sc) {
+      return !sc.cap || (access && access.can(sc.cap));
+    });
+  }
 
   function navigate(nav) {
     if (window.TMADashboard && window.TMADashboard.navigate) {
@@ -298,20 +305,22 @@
   }
 
   function renderShortcuts() {
+    var shown = visibleShortcuts();
+    if (!shown.length) return '';
     if (!homeFilesLoaded) {
       var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
         '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
         '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
       return tileShell(
         'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
-        '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div>',
+        '<div class="tma-portal-shortcuts">' + new Array(shown.length).fill(tile).join('') + '</div>',
         '', true
       );
     }
     return tileShell(
       'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
       '<div class="tma-portal-shortcuts">' +
-      SHORTCUTS.map(function (sc) {
+      shown.map(function (sc) {
         return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
           '<span class="tma-portal-shortcut__icon"><img src="images/icons/phosphor/' + sc.icon + '.svg" alt="">' +
           (sc.count ? '<span class="tma-portal-shortcut__count" data-home-shortcut-count="' + sc.count + '" hidden></span>' : '') +
