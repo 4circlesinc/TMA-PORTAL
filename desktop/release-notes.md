@@ -1,1 +1,1 @@
-- Faster cold start: the app serves the portal's icons and stylesheets from inside the package again, instead of fetching two thousand files over the network every time it opens
+- The window's close, minimise and zoom buttons no longer sit on top of a file you are viewing — they step aside while the viewer is open and come back when you close it
