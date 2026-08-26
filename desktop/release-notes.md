@@ -1,3 +1,1 @@
-- Files now show a picture of themselves wherever they are listed — photographs, scans and PDFs, instead of the same page icon for everything
-- Clicking a file on the Dashboard opens it in the file viewer, with its comments, versions and details, rather than dropping you into the folder it lives in
-- An application's document checklist shows each document beside the line it answers
+- Faster cold start: the app serves the portal's icons and stylesheets from inside the package again, instead of fetching two thousand files over the network every time it opens
