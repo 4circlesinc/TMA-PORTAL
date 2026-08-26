@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.8.35",
+  "version": "0.8.36",
   "private": true,
   "description": "TM ANTOINE Advisory portal, macOS desktop shell",
   "main": "main.js",
@@ -12,7 +12,7 @@
     "dist": "electron-builder --mac",
     "release": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never && node verify-asar.js",
     "release:win": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never && node verify-asar.js",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-file-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-shell-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-offline-boot.js && env -u ELECTRON_RUN_AS_NODE electron test-offline-screen.js && env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js && env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-provider.js && env -u ELECTRON_RUN_AS_NODE electron test-update-surface.js && env -u ELECTRON_RUN_AS_NODE electron test-update-prompt.js && env -u ELECTRON_RUN_AS_NODE electron test-splash-colour.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-file-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-shell-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-offline-boot.js && env -u ELECTRON_RUN_AS_NODE electron test-offline-screen.js && env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js && env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-deploy-refresh.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-provider.js && env -u ELECTRON_RUN_AS_NODE electron test-update-surface.js && env -u ELECTRON_RUN_AS_NODE electron test-update-prompt.js && env -u ELECTRON_RUN_AS_NODE electron test-splash-colour.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",

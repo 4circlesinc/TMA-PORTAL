@@ -1,1 +1,1 @@
-- Click and hold the blue title bar to move the window, on Mac and Windows — empty space around Search and the page title now drags, while buttons stay clickable
+- Fixed the portal losing its styling when the website updated while the app was open — the app now picks up the new version instead of holding on to the page it was sent earlier
