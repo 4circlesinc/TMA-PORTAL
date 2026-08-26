@@ -102,18 +102,6 @@
     return '<img class="tma-portal-file-thumb is-fallback" src="' + esc(icon) + '" alt="" width="' + size + '" height="' + size + '">';
   }
 
-  function ownerCell(person) {
-    if (!person) return '-';
-    var name = person.name || person.email || '-';
-    var src = (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
-      ? window.TMACurrentUser.avatarSrc(person.avatar, name)
-      : (person.avatar || '');
-    return '<span class="tma-portal-owner-cell">' +
-      (src ? '<img class="tma-portal-owner-avatar" src="' + esc(src) + '" alt="" width="20" height="20">' : '') +
-      '<span class="tma-portal-owner-name">' + esc(name) + '</span>' +
-      '</span>';
-  }
-
   function starBtn(it) {
     var on = !!it.favorite;
     var path = 'M10 1.6l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.2l-4.94 2.6.94-5.5-4-3.9 5.53-.8z';
@@ -419,7 +407,17 @@
         attrs: ' class="tma-portal-cell--tight"',
       },
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
-      'Name', 'Type', 'Size', 'Owner', 'Modified',
+      /*
+       * No Owner column.
+       *
+       * Everything on this board belongs to the firm, so the column printed
+       * the same logo and the same name against every single row — a stripe of
+       * "TM ANTOINE Advisory" carrying nothing, in the width the file's name
+       * and date could have used. Who owns a file is still a question worth
+       * asking; it is answered where the answers differ, in the File Library's
+       * own table and in the viewer's details panel.
+       */
+      'Name', 'Type', 'Size', 'Modified',
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
     ];
 
@@ -438,7 +436,6 @@
         '</span></td>' +
         '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(size) + '</td>' +
-        '<td class="tma-portal-table__muted">' + ownerCell(it.owner || it.uploadedBy) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
         '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-home-lib-menu="' + esc(it.id) + '" aria-label="More actions">' +
         '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
