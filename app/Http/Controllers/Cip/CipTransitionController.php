@@ -95,7 +95,15 @@ class CipTransitionController extends Controller
      *    records the CIP number and the submission date. Driven bare, §7's
      *    dual-numbering rule fails silently, every surface goes on showing the
      *    internal number for an application the Unit already holds, and since
-     *    there is no edge back, the proper door is then shut for good.
+     *    there is no edge back, the proper door is then shut for good. Judged
+     *    on whether the file has ever been submitted, not on where it stands:
+     *    the picker offers every status from every status, so gating on
+     *    Ready to submit left the same hole open one step to the side, and the
+     *    date was skipped by anybody who reached Pending review from anywhere
+     *    else. Non-compliant → Pending review is the exception the test names
+     *    rather than excludes: a file going back to the Unit with its query
+     *    answered was submitted long ago and keeps the number and the day it
+     *    went.
      *  - GRANTED and DENIED are phase 8's decision, which writes `decision` and
      *    `decided_at`. Both are terminal, so a bare transition leaves those
      *    columns null with no way back to fill them, and any report measured
@@ -113,7 +121,7 @@ class CipTransitionController extends Controller
             abort(422, 'Use the submit verb to file a leftover draft, it checks the applicant\'s documents first.');
         }
 
-        if ($status === Status::PENDING_REVIEW && $application->status === Status::READY_TO_SUBMIT) {
+        if ($status === Status::PENDING_REVIEW && $application->submitted_at === null) {
             abort(422, 'Record the submission instead, so the CIP number and the date go with it.');
         }
 
@@ -388,6 +396,7 @@ class CipTransitionController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             ...Confirmation::payload($application, $actor),
+            'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),
             'decision' => $application->decision,

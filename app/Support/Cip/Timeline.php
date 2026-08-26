@@ -134,6 +134,7 @@ class Timeline
             CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
             CipEvent::ACTION_QUERY_RECEIVED => self::querySentence($meta, $who),
             CipEvent::ACTION_ACCEPTED_FOR_PROCESSING => self::acceptedSentence($meta, $who),
+            CipEvent::ACTION_MILESTONE_CORRECTED => self::milestoneSentence($meta, $who),
             CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
@@ -215,6 +216,31 @@ class Timeline
         return $date
             ? "{$who} recorded the decision on {$date}"
             : "{$who} recorded the decision";
+    }
+
+    /**
+     * A milestone date corrected: which step, to what, and from what.
+     *
+     * What it said before is the point of the line. A date silently different
+     * from the one on last month's report is the thing an audit is trying to
+     * catch, so the sentence carries both days rather than only the new one.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function milestoneSentence(array $meta, string $who): string
+    {
+        $label = $meta['label'] ?? null;
+        $step = $label !== null ? lcfirst((string) $label).' date' : 'a milestone date';
+        $date = $meta['date'] ?? null;
+        $previous = $meta['previous'] ?? null;
+
+        if ($date === null) {
+            return "{$who} corrected the {$step}";
+        }
+
+        return $previous !== null
+            ? "{$who} corrected the {$step} from {$previous} to {$date}"
+            : "{$who} corrected the {$step} to {$date}";
     }
 
     /**

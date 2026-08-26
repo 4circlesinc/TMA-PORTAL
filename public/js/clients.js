@@ -5247,15 +5247,41 @@
   function renderMilestones(app) {
     var steps = (app && app.milestones) || [];
     if (!steps.length) return '';
+    var id = app.id;
+    var uid = app.clientUid;
 
     return overviewList(steps.map(function (m) {
       return overviewRow(
         m.label,
-        m.date ? fmtShortDate(m.date) : '-',
-        false,
+        milestoneValue(m, id, uid),
+        true,
         m.reached ? '' : 'tma-dash__cip-tl-ahead'
       );
     }).join(''));
+  }
+
+  /*
+   * A day the file reached a step on, and — for a reader who may — the way
+   * to fix it.
+   *
+   * The date itself is the control rather than a pencil beside it: the thing
+   * being corrected is the only thing on the row, and a second target next to
+   * it would be an extra thing to explain. `canEdit` is the server's answer,
+   * not a capability read here, so the rows the timeline offers and the ones
+   * the endpoint accepts cannot drift, a step with no date yet is never one
+   * of them, because entering a date is the job of the verb that moves the
+   * file there.
+   */
+  function milestoneValue(m, applicationId, clientUid) {
+    var shown = m.date ? fmtShortDate(m.date) : '-';
+    if (!m.canEdit) return esc(shown);
+
+    return '<button type="button" class="tma-dash__cip-tl-edit" data-cip-milestone="' + esc(m.key) + '"' +
+      ' data-cip-milestone-app="' + esc(applicationId || '') + '"' +
+      ' data-cip-milestone-client="' + esc(clientUid || '') + '"' +
+      ' data-cip-milestone-label="' + esc(m.label) + '"' +
+      ' data-cip-milestone-date="' + esc(m.date) + '"' +
+      ' title="Correct this date">' + esc(shown) + '</button>';
   }
 
   function overviewRow(label, value, rawHtml, extraClass) {
@@ -5438,13 +5464,13 @@
     return null;
   }
 
+  /* The facts strip and the Timeline card say the same day the same way —
+     they used to carry two copies of the formatting, and only one of them
+     named the midnight. */
   function cipMilestoneDate(app, key) {
     var step = cipMilestone(app, key);
-    var iso = step && step.date;
-    if (!iso) return '';
-    var d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
-    if (isNaN(d)) return '';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+    return step && step.date ? fmtShortDate(step.date) : '';
   }
 
   function cipAssignedFaces(app) {
@@ -6012,8 +6038,22 @@
     return parts.join(' · ');
   }
 
+  /*
+   * A day, or an instant, said the way the reader's browser says it.
+   *
+   * The midnight matters. `new Date('2026-01-31')` is parsed as midnight UTC,
+   * and a reader west of it is then shown the thirty-first as the thirtieth —
+   * so every plain day in this file, and the whole CIP timeline is plain days,
+   * read a day early for anybody in the Americas. Naming the midnight makes
+   * the string local, which is what a day-without-a-time means: the day the
+   * Unit received something is that day wherever it is read.
+   *
+   * Only for the ten-character form. A full timestamp IS an instant, and
+   * shifting one into the reader's own zone is exactly right.
+   */
   function fmtShortDate(iso) {
-    var d = new Date(iso);
+    if (iso == null || iso === '') return '';
+    var d = new Date(String(iso).length === 10 ? iso + 'T00:00:00' : iso);
     if (isNaN(d)) return '';
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
@@ -8420,15 +8460,35 @@
     }, 0);
   }
 
+  /*
+   * Everything that remembers this application, dropped, then read back.
+   *
+   * Three caches, and forgetting one is forgetting none. TMAStore survives a
+   * reload, APPLICATIONS survives a tab change, and `applicationFreshFor` is
+   * what makes ensureApplicationLoaded return without asking — so clearing
+   * only the store left the profile drawing the record the reader had just
+   * changed, right up until they reloaded the page.
+   *
+   * Then the read, because a repaint alone does not make one: the loader is
+   * called on navigation, and this is not a navigation.
+   */
   function refreshAfterCipMove(clientUid) {
     forgetApplicationTable();
     forgetBuckets();
+
+    var ctx = clientsMenuCtx;
+    var state = (ctx && ctx.state) || clientsMountState;
+    var render = (ctx && ctx.render) || repaintClients;
+
     if (clientUid) {
       forgetApplication(clientUid);
+      delete APPLICATIONS[clientUid];
       delete TIMELINE[clientUid];
+      if (state && state.applicationFreshFor === clientUid) state.applicationFreshFor = null;
     }
-    if (clientsMenuCtx && clientsMenuCtx.render) clientsMenuCtx.render({ forceFull: true });
-    else repaintClients();
+
+    render({ forceFull: true });
+    if (state) ensureApplicationLoaded(state, render);
   }
 
   function changeCipStatus(to, extra, clientUid, label) {
@@ -8446,9 +8506,30 @@
 
     if (source && source.status === to) return;
 
-    if (to === 'pending_review' && source && source.status === 'ready_to_submit') {
+    /*
+     * The statuses that carry a date ask for it, wherever the file is coming
+     * from.
+     *
+     * These used to be routed on the status the file was leaving as well as
+     * the one it was going to, and the picker offers every status from every
+     * status — so a reader who reached one of them from anywhere but the
+     * expected step went out through the bare status endpoint and the date
+     * was never recorded. Where the file is going is the whole question: the
+     * date belongs to the destination.
+     *
+     * Submission is the one with a second condition, and it is not where the
+     * file stands either: a file going back to the Unit with its query
+     * answered was submitted long ago and keeps the number and the day it
+     * went, so the dialog opens only for a file that has never been submitted.
+     */
+    if (to === 'pending_review' && !(source && source.submittedAt)) {
       if (!state) return;
-      openSubmissionDialog(state, render, false, source || { id: applicationId, clientUid: clientUid });
+      openSubmissionDialog(
+        state,
+        render,
+        false,
+        source || { id: applicationId, clientUid: clientUid }
+      );
 
       return;
     }
@@ -8609,6 +8690,76 @@
         });
       },
     });
+  }
+
+  /*
+   * §4d: a day on the Timeline card recorded wrong, corrected in place.
+   *
+   * A correction, not a step. The status does not move and no notice goes
+   * out, because nothing happened to the file that its readers have not
+   * already been told about — what changed is the record of when. The server
+   * still writes an audit row carrying what the date said before, which is
+   * the question an auditor asks of a day that disagrees with a letter.
+   */
+  function openMilestoneDialog(applicationId, clientUid, key, label, current) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !applicationId || !key) return;
+
+    ui.openModal({
+      title: 'Edit ' + lcFirst(label) + ' date',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-milestone-date">' + esc(label) + '</label>' +
+        '<input type="date" id="cip-milestone-date" class="tma-dash__clients-field-input"' +
+        ' data-cip-milestone-input value="' + esc(current || '') + '">' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">The status does not change.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-milestone>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-milestone>Save date</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-milestone]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-milestone]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-milestone-input]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the corrected date.', 'negative');
+            return;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Saving\u2026';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) +
+            '/milestones/' + encodeURIComponent(key), {
+            method: 'PATCH',
+            json: { date: date },
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast(label + ' date updated', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = 'Save date';
+              clientsToast((err && err.message) || 'Could not save that date.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  function lcFirst(text) {
+    var s = String(text || '');
+
+    return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
   }
 
   function openDecisionDialog(applicationId, clientUid, decision) {
@@ -10184,6 +10335,18 @@
     if (fixNumberBtn) {
       MORPH.on(fixNumberBtn, 'click', function () { openSubmissionDialog(state, render, true); });
     }
+
+    MORPH.unwired(root, '[data-cip-milestone]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        openMilestoneDialog(
+          btn.getAttribute('data-cip-milestone-app'),
+          btn.getAttribute('data-cip-milestone-client'),
+          btn.getAttribute('data-cip-milestone'),
+          btn.getAttribute('data-cip-milestone-label'),
+          btn.getAttribute('data-cip-milestone-date')
+        );
+      });
+    });
 
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {

@@ -171,6 +171,49 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-application-full.mjs
   ```
+- **`cip-milestone-dates.mjs`** — §4d's Timeline card, and correcting a day on
+  it. `CipMilestoneTest` pins the endpoint and its refusals; what only a browser
+  can check is that the card is the way in and that the corrected day lands on
+  the screen, not just in the database.
+
+  Two bugs it was written to catch, both of which a server test passes straight
+  over. A plain day is not an instant: `new Date('2026-01-31')` is midnight UTC,
+  so every CIP date read a day early for anybody west of it — which is why the
+  run asserts the printed string in whatever zone the machine is in. And the
+  profile remembers an application in three places (TMAStore, the in-page
+  `APPLICATIONS` object, and `state.applicationFreshFor`, which makes the loader
+  return without asking); dropping one of the three left the card showing the
+  day the reader had just replaced until they reloaded.
+
+  Every selector is scoped to the Timeline card by its heading:
+  `.tma-dash__cip-tl` is the shared label/date list Family, Documents and
+  Assigned draw with too, and the portal's pages all live in one SPA shell, so
+  a bare selector collects the other cards' rows and hidden views' copies.
+
+  Wants an administrator, `FEATURE_CIP`, and one application that has travelled
+  the whole way, so every step has a date to correct. Re-seed between runs — it
+  leaves the submission date on 2026-08-16:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true php artisan tinker --execute="
+    \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+    \$c = App\Models\Company::create(['uid' => 'bluemina', 'name' => 'Bluemina', 'created_by' => \$u->id]);
+    \$p = App\Models\CipProvider::create(['name' => 'Bluemina', 'code' => 'BLU', 'company_id' => \$c->id]);
+    \$client = App\Models\Client::create(['uid' => 'chen-wei', 'name' => 'Chen Wei', 'created_by' => \$u->id, 'data' => []]);
+    \$a = App\Support\Cip\Applications::create(\$p, \$u);
+    \$a->forceFill(['client_id' => \$client->id, 'status' => 'granted', 'decision' => 'granted',
+      'locked_at' => '2026-08-17', 'submitted_at' => '2026-01-31', 'query_received_at' => '2026-02-09',
+      'accepted_at' => '2026-02-17', 'decided_at' => '2026-08-17', 'cip_number' => '10T1G12661P'])->save();
+    App\Models\CipPerson::create(['application_id' => \$a->id, 'role' => 'main_applicant',
+      'first_name' => 'Chen', 'last_name' => 'Wei']);
+  "
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-milestone-dates.mjs
+  ```
+
+  The sign-in block here is the current one: `/auth/stay-signed-in` is two
+  forms posting the same route, told apart by a hidden `stay` value, and its
+  buttons read "Yes" and "Not this time" — the older `text=Yes, stay signed in`
+  selector in the neighbouring scripts matches nothing.
 - **`cip-offline.mjs`** — an application edited with the network switched off.
   `CipApplicationSyncTest` pins the server's catch-up read; this pins the half
   that only exists in a browser: a save that cannot be delivered is kept rather

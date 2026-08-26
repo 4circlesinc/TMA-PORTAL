@@ -78,6 +78,17 @@ class CipEvent extends Model
     public const ACTION_ACCEPTED_FOR_PROCESSING = 'accepted_for_processing';
 
     /**
+     * A milestone date was corrected — the day only, not the step.
+     *
+     * Its own action rather than a status change, because no status changed:
+     * the file has already been where the date says it was, and what moved is
+     * the record of when. Read on its own it answers the question an auditor
+     * actually asks of a date that disagrees with a government letter — who
+     * changed it, when, and what it said before, which rides in the meta.
+     */
+    public const ACTION_MILESTONE_CORRECTED = 'milestone_corrected';
+
+    /**
      * The delay clock ran out (§20).
      *
      * Its own action rather than a detail of the status change: the accepted

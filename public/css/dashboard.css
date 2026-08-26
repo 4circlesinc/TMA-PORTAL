@@ -35577,6 +35577,28 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-muted, #6b7280);
 }
 
+/* A date a reader may correct. The date IS the control — the row holds one
+   thing, and a pencil beside it would be a second target for the same job —
+   so it inherits everything from the value it replaces and says it is
+   pressable only on hover. Rows nobody may edit render as plain text, so the
+   underline never appears on a date that cannot move. */
+.tma-dash__cip-tl-edit {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-dash__cip-tl-edit:hover,
+.tma-dash__cip-tl-edit:focus-visible {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-border, #d1d5db);
+}
+
 .tma-dash__cip-ov-lead {
   margin: 0 0 var(--space-8);
   font-size: var(--text-size-13, 13px);

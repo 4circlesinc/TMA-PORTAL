@@ -522,6 +522,17 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // A mistyped government number, corrected without unwinding the status.
         Route::patch('/applications/{uuid}/cip-number', [CipApplicationController::class, 'correctNumber'])
             ->name('applications.cip-number');
+        /*
+         * §4d: a day on the Timeline card recorded wrong, corrected in place.
+         *
+         * A correction, not a transition, so it does not belong on the status
+         * routes above: the file has already been where the date says, and
+         * only the record of when moves. App\Support\Cip\Milestones refuses a
+         * step with no date yet, which is what keeps this from being a second
+         * door into the lifecycle.
+         */
+        Route::patch('/applications/{uuid}/milestones/{key}', [CipApplicationController::class, 'correctMilestone'])
+            ->name('applications.milestone');
         // Which application a client's profile is showing, or none yet.
         Route::get('/clients/{uid}/application', [CipApplicationController::class, 'forClient'])->name('clients.application');
         // The archival passport photo, streamed through the app: it is a

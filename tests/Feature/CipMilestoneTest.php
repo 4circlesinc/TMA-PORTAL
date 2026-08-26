@@ -135,6 +135,89 @@ class CipMilestoneTest extends TestCase
         $this->assertSame('Denied', $decision($application->refresh())['label']);
     }
 
+    /*
+     * Correcting a day already recorded.
+     *
+     * The card is the only place all six dates are visible at once, so it is
+     * where a wrong one gets noticed. What these guard is the line between a
+     * correction and a transition: the day moves, the status does not, and a
+     * step the file has never reached cannot be filled in from here — that
+     * date belongs to the verb that drives the file there, so that the status,
+     * the audit row and the date all arrive together.
+     */
+    public function test_a_recorded_date_can_be_corrected_without_moving_the_status(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+        $application->forceFill([
+            'status' => Status::BACKGROUND_CHECK,
+            'accepted_at' => '2026-02-17',
+        ])->save();
+
+        $body = $this->actingAs($admin)
+            ->patchJson('/portal/cip/applications/'.$application->uuid.'/milestones/accepted', [
+                'date' => '2026-02-19',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame('2026-02-19', $body['acceptedAt']);
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->refresh()->status);
+        $this->assertSame('2026-02-19', $application->accepted_at->toDateString());
+
+        // What it said before is the point of the audit row: a date silently
+        // different from last month's report is what an audit exists to catch.
+        $event = DB::table('cip_events')
+            ->where('application_id', $application->id)
+            ->where('action', 'milestone_corrected')
+            ->first();
+        $this->assertNotNull($event);
+        $meta = json_decode($event->meta, true);
+        $this->assertSame('accepted', $meta['milestone']);
+        $this->assertSame('2026-02-17', $meta['previous']);
+        $this->assertSame('2026-02-19', $meta['date']);
+    }
+
+    public function test_a_step_the_file_has_not_reached_cannot_be_dated_from_the_card(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        // locked_at freezes the original package (§15). Writing it by hand
+        // here would lock a package nobody confirmed, which is exactly the
+        // state no transition produces.
+        $this->actingAs($admin)
+            ->patchJson('/portal/cip/applications/'.$application->uuid.'/milestones/locked', [
+                'date' => '2026-02-19',
+            ])
+            ->assertStatus(422);
+
+        $this->assertNull($application->refresh()->locked_at);
+    }
+
+    public function test_only_a_reader_who_may_record_the_step_may_correct_its_date(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+        $application->forceFill([
+            'status' => Status::BACKGROUND_CHECK,
+            'accepted_at' => '2026-02-17',
+        ])->save();
+
+        // The card answers it too, so a reader is never offered a date the
+        // endpoint would then refuse them.
+        $milestones = collect(Milestones::for($application->refresh(), $admin))->keyBy('key');
+        $this->assertTrue($milestones['accepted']['canEdit']);
+        $this->assertFalse(
+            $milestones['submitted']['canEdit'],
+            'a step with no date has nothing to correct',
+        );
+        $this->assertFalse(
+            collect(Milestones::for($application))->firstWhere('key', 'accepted')['canEdit'],
+            'a card nobody is reading offers nothing',
+        );
+    }
+
     public function test_the_record_carries_the_card_and_the_officer(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

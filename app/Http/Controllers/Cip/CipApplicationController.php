@@ -632,6 +632,11 @@ class CipApplicationController extends Controller
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
+            // Not a column §8 draws: it is how the status picker tells a first
+            // submission from a file going back to the Unit with its query
+            // answered, and asks for the CIP number and the day only for the
+            // first. Read off the row, so it costs nothing.
+            'submittedAt' => $application->submitted_at?->toDateString(),
             // Their passport photo, which intake files as the client's picture.
             'photo' => $client?->photo_url,
             'applicantName' => $main
@@ -940,6 +945,42 @@ class CipApplicationController extends Controller
     }
 
     /**
+     * Fix a milestone date recorded wrong. The status does not move.
+     *
+     * §4d's Timeline card is the only place these six days are all visible at
+     * once, so it is the place a wrong one gets noticed — and, until this,
+     * the place nothing could be done about it. The rules are
+     * {@see Milestones::correct()}'s, including the one that matters most:
+     * only a day already recorded can be corrected, so this cannot be used to
+     * reach a step the lifecycle has not driven.
+     *
+     * The capability is not checked here: Milestones reads it off the same
+     * table that names the column, so the verb that writes a date and the
+     * correction that fixes it can never be open to different people.
+     */
+    public function correctMilestone(Request $request, string $uuid, string $key): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+        ], [
+            'date.required' => 'Enter the corrected date.',
+        ]);
+
+        try {
+            $application = Milestones::correct($application, $user, $key, Carbon::parse($data['date']));
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
      * The filed passport photo at the resolution it was filed in.
      *
      * Scoped through the application, not the person: whoever may read the
@@ -1035,7 +1076,7 @@ class CipApplicationController extends Controller
             // §4d's Timeline card on Overview: how far the file has travelled,
             // and, because the steps it has not reached are answered too —
             // how far it has left to go.
-            'milestones' => Milestones::for($application),
+            'milestones' => Milestones::for($application, $viewer),
             /*
              * Whether anything on this file is waiting for the reader — the
              * same block the applications table draws a dot from. On the

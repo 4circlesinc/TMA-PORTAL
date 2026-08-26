@@ -373,6 +373,32 @@ class CipTransitionTest extends TestCase
     }
 
     /**
+     * A file going back to the Unit with its query answered keeps its number
+     * and the day it first went.
+     *
+     * The companion to the refusal below: Non-compliant → Pending review is
+     * the one edge into Pending review that is not a first submission, and
+     * asking for a CIP number the application already carries would either
+     * duplicate it or overwrite it with a retype.
+     */
+    public function test_a_file_already_submitted_may_go_back_to_the_unit_bare(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($staff), Status::NON_COMPLIANT);
+        $application->forceFill([
+            'cip_number' => '10T1G12661P',
+            'submitted_at' => '2026-01-31',
+        ])->save();
+
+        $this->actingAs($staff)
+            ->postJson($this->statusUrl($application), ['status' => 'pending_review'])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::PENDING_REVIEW);
+
+        $this->assertSame('2026-01-31', $application->refresh()->submitted_at->toDateString());
+    }
+
+    /**
      * The generic endpoint must not be a way round the verbs that guard.
      *
      * Every status below has a door of its own that does more than move the
@@ -399,6 +425,24 @@ class CipTransitionTest extends TestCase
             ->assertStatus(422);
 
         $this->assertSame(Status::READY_TO_SUBMIT, $ready->refresh()->status);
+
+        /*
+         * And from anywhere else it has never been submitted from.
+         *
+         * The guard used to name Ready to submit, but the status picker offers
+         * every status from every status — so the same hole stood open one
+         * step to the side, and a reader who reached Pending review from
+         * anywhere but the expected step wrote no CIP number and no date. What
+         * decides is whether the file has ever gone to the Unit, not where it
+         * stands.
+         */
+        $unsent = $this->at($this->application($staff), Status::REVIEW_APPLICATION);
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$unsent->uuid.'/status', ['status' => 'pending_review'])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $unsent->refresh()->status);
+        $this->assertNull($unsent->refresh()->submitted_at);
 
         $pending = $this->at($this->application($staff), Status::PENDING_REVIEW);
         $this->actingAs($staff)
