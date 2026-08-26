@@ -1415,6 +1415,87 @@
 /* Active view-toggle button: reuse the documented hover background, no border. */
 .tma-portal-files__toolbar .tma-dash__tool-btn.is-active { background: var(--color-hover); }
 
+/*
+ * The type pills inside the toolbar.
+ *
+ * They take the width the tools and the search leave behind and scroll
+ * sideways when there is not enough of it — so the row never pushes the tools
+ * together, never runs under the search box, and every type stays reachable on
+ * a narrow window instead of wrapping the bar into two lines.
+ */
+.tma-portal-files__toolbar .tma-dash__toolbar-actions {
+  flex: 0 0 auto;
+}
+
+.tma-portal-files__toolbar .tma-portal-files__types {
+  flex: 1 1 0;
+  /* Never a sliver: below this there is not enough of a pill on screen to tell
+     what it is, and the row stops looking scrollable at all. */
+  min-width: 120px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Clear of the search: the toolbar's own gap plus a little, so the last pill
+     never looks stuck to the box. */
+  margin-right: var(--space-8);
+  /* The focus ring of a pill must not be clipped by the scroller. */
+  padding: 2px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+}
+
+.tma-portal-files__toolbar .tma-portal-files__types::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tma-portal-files__toolbar .tma-portal-files__types::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--color-overlay-12, rgba(0, 0, 0, 0.12));
+}
+
+.tma-portal-files__toolbar .tma-portal-files__types::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tma-portal-files__toolbar .tma-portal-type-pill {
+  flex: 0 0 auto;
+}
+
+/* The search keeps its width; it is the one thing here that must not shrink
+   into a slot too small to read what you have typed. */
+.tma-portal-files__toolbar .tma-dash__toolbar-search {
+  flex: 0 0 auto;
+}
+
+/*
+ * Narrow: the bar gives up and stacks rather than grinding three things into
+ * one line. Tools and search keep the top line — they are what people reach
+ * for first — and the pills take the whole width below them, still scrolling
+ * sideways if even that is not enough.
+ */
+@media (max-width: 900px) {
+  .tma-portal-files__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .tma-portal-files__toolbar .tma-dash__toolbar-actions {
+    order: 1;
+  }
+
+  .tma-portal-files__toolbar .tma-dash__toolbar-search {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .tma-portal-files__toolbar .tma-portal-files__types {
+    order: 3;
+    flex-basis: 100%;
+    margin-right: 0;
+  }
+}
+
 /* ── drag items onto a folder to move them ─────────── */
 [data-files-row][draggable="true"] { cursor: grab; }
 .tma-portal-table tbody tr.is-dragging td,

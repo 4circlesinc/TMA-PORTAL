@@ -5014,11 +5014,6 @@ label.tma-portal-check-row:hover {
   min-width: 0;
 }
 
-/* Under the tools, above the list. */
-.tma-portal-files__types {
-  margin: 0 0 var(--space-16);
-}
-
 .tma-portal-type-pill {
   display: inline-flex;
   align-items: center;

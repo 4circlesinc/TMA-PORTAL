@@ -104,7 +104,15 @@
   };
 
   var globalsBound = false;
-  var nameClickTimer = null;
+
+  /*
+   * Where a Shift range measures from.
+   *
+   * Kept out of `state` on purpose: state.selected is replaced wholesale on
+   * every render and every reload, and an anchor that went with it would make
+   * the second half of "click, Shift-click" a range of one row.
+   */
+  var selectAnchor = { id: null };
 
   /* ── helpers ───────────────────────────────────────── */
 
@@ -663,7 +671,7 @@
     if (isBusy(id)) return;
     var it = findItem(id);
     if (!it || !perm(it, 'rename') || !state.el) return;
-    var nameEl = state.el.querySelector('[data-files-row][data-id="' + id + '"] [data-files-open="' + id + '"]');
+    var nameEl = state.el.querySelector('[data-files-row][data-id="' + id + '"] [data-files-name="' + id + '"]');
     if (!nameEl) return;
 
     var input = document.createElement('input');
@@ -726,7 +734,6 @@
     html += renderBreadcrumb();
     html += '<div data-sync-host>' + syncStatusHtml() + '</div>';
     html += renderToolbar();
-    html += renderTypePills();
 
     html += '<div class="tma-portal-files__body" data-files-body>';
     if (state.loading) html += renderLoading();
@@ -804,7 +811,7 @@
   }
 
   /*
-   * The type pills, under the tools.
+   * The type pills, in the toolbar.
    *
    * The same six the Dashboard's file tables offer, wearing the same marks, so
    * a reader who narrows to Word on the board narrows to Word here. They drive
@@ -891,8 +898,16 @@
 
     var search = ui().searchInput('Search files', 'data-files-search', state.search);
 
+    /*
+     * The type pills ride in the toolbar, between the tools and the search.
+     *
+     * Their own strip below it was a second bar for one control. In here they
+     * take whatever width is left over and scroll sideways when that runs out,
+     * so the tools never squash and the row never crowds the search box.
+     */
     return '<div class="tma-dash__toolbar' + (n > 0 ? ' tma-dash__toolbar--selected' : '') + ' tma-portal-files__toolbar">' +
       '<div class="tma-dash__toolbar-actions">' + actions + bulk + '</div>' +
+      renderTypePills() +
       search +
       '</div>';
   }
@@ -1049,12 +1064,15 @@
   function renderTable() {
     var showStar = !isRecycle();
     var all = items();
-    var selectable = all;
-    var allSel = selectable.length && selectedIds().length === selectable.length;
 
-    var headers = [
-      { html: '<input type="checkbox" class="tma-dash__check" data-files-selectall ' + (allSel ? 'checked' : '') + ' aria-label="Select all">', attrs: ' class="tma-portal-cell--tight"' },
-    ];
+    /*
+     * No checkbox column.
+     *
+     * Rows are picked the way a file manager picks them — click, Shift-click,
+     * Ctrl-click — so the box per row and the box in the header have nothing
+     * left to do. See selectRow() and TMAFileSelect.
+     */
+    var headers = [];
     if (showStar) headers.push({ html: '', attrs: ' class="tma-portal-cell--tight"' });
     /*
      * Every column is named, because the table lays out fixed: a filename is
@@ -1088,12 +1106,12 @@
       var when = isRecycle() ? fmtDate(it.deletedAt) : fmtDate(it.modifiedAt || it.createdAt);
       var busySpin = busy ? '<img class="tma-portal-row-spinner" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
 
-      return '<tr' + cls + ' data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '">' +
-        '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
+      return '<tr' + cls + ' data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '"' +
+        ' aria-selected="' + (state.selected[it.id] ? 'true' : 'false') + '">' +
         star +
         '<td class="tma-portal-cell--name"><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
         // title: the full name is still reachable when the cell clips it.
-        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
+        '<button type="button" class="tma-portal-file-link" data-files-name="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         commentChip(it) + statusChip(it) + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '-') + '</td>' +
@@ -1135,12 +1153,15 @@
         ? ((it.fileCount != null ? it.fileCount : 0) + ' items')
         : (it.sizeLabel || '');
       var busySpin = busy ? '<img class="tma-portal-row-spinner tma-portal-row-spinner--card" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
-      return '<div class="tma-portal-file-card' + cls + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0">' +
-        '<label class="tma-portal-file-card__check"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></label>' +
+      return '<div class="tma-portal-file-card' + cls + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0"' +
+        ' aria-selected="' + (state.selected[it.id] ? 'true' : 'false') + '">' +
         (isRecycle() ? '' : '<span class="tma-portal-file-card__star">' + starBtn(it) + '</span>') +
         busySpin +
-        '<button type="button" class="tma-portal-file-card__thumb" data-files-open="' + esc(it.id) + '">' + thumb + '</button>' +
-        '<button type="button" class="tma-portal-file-card__name" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
+        // The picture is not a control: the card is picked by clicking it and
+        // opened by double-clicking it, so a button here would only be a
+        // second tab stop onto the same file the name already reaches.
+        '<span class="tma-portal-file-card__thumb">' + thumb + '</span>' +
+        '<button type="button" class="tma-portal-file-card__name" data-files-name="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         '<span class="tma-portal-file-card__meta">' + esc(sub) + '</span>' +
         commentChip(it) + statusChip(it) +
         '</div>';
@@ -1219,8 +1240,12 @@
     // toolbar + selection-bar + generic actions (delegated)
     el.addEventListener('click', onClick);
     el.addEventListener('dblclick', onDblClick);
-    el.addEventListener('change', onChange);
     el.addEventListener('contextmenu', onContextMenu);
+    // Shift-clicking rows paints a streak of selected text otherwise; the
+    // list's own selection is what Shift is for here.
+    el.addEventListener('mousedown', function (e) {
+      if (e.shiftKey && e.target.closest('[data-files-row]')) e.preventDefault();
+    });
 
     // drag-to-move: rows and grid cards are draggable (except the recycle bin)
     if (!isRecycle()) {
@@ -1301,52 +1326,101 @@
     var crumb = e.target.closest('[data-files-crumb]');
     if (crumb) { e.preventDefault(); openFolder(crumb.getAttribute('data-files-crumb') || null); return; }
 
-    var open = e.target.closest('[data-files-open]');
-    if (open) {
-      e.preventDefault();
-      // Delay the open just enough that a double-click on the name renames
-      // instead of opening.
-      var oid = open.getAttribute('data-files-open');
-      if (nameClickTimer) clearTimeout(nameClickTimer);
-      nameClickTimer = setTimeout(function () { nameClickTimer = null; openItem(oid); }, 220);
-      return;
-    }
-
     var star = e.target.closest('[data-files-star]');
     if (star) { e.preventDefault(); toggleStar(star.getAttribute('data-files-star')); return; }
 
     var menu = e.target.closest('[data-files-menu]');
-    if (menu) { e.preventDefault(); e.stopPropagation(); var it = findItem(menu.getAttribute('data-files-menu')); if (it) { var r = menu.getBoundingClientRect(); openContextMenu(r.left, r.bottom + 4, it); } return; }
+    if (menu) { e.preventDefault(); e.stopPropagation(); var it = findItem(menu.getAttribute('data-files-menu')); if (it) { rowMenuFor(it, menu); } return; }
 
-    // Click anywhere on the row (name, cells, card) opens the item, but not
-    // the checkbox/label (selection), the star, or the row menu.
-    var row = e.target.closest('[data-files-row]');
-    if (row && !e.target.closest('input, label, .tma-portal-star, [data-files-menu]')) {
-      openItem(row.getAttribute('data-id'));
+    /*
+     * A click picks the row. It does not open it.
+     *
+     * The name is still a button, so a reader on the keyboard can tab to it
+     * and press Enter — that has no pointer behind it and still opens, which
+     * is the one thing a double-click cannot be asked of somebody who is not
+     * holding a mouse.
+     */
+    var name = e.target.closest('[data-files-name]');
+    if (name && window.TMAFileSelect && window.TMAFileSelect.fromKeyboard(e)) {
+      e.preventDefault();
+      openItem(name.getAttribute('data-files-name'));
+      return;
     }
+
+    var row = e.target.closest('[data-files-row]');
+    if (row) {
+      if (e.target.closest('.tma-portal-star, [data-files-menu], input, .tma-portal-rename-input')) return;
+      e.preventDefault();
+      selectRow(row.getAttribute('data-id'), e);
+      return;
+    }
+
+    // Clicking the empty space around the rows drops the selection, the same
+    // way clicking the background of a folder window does.
+    if (e.target.closest('[data-files-body]') && selectedIds().length) clearSelection();
   }
 
-  function onChange(e) {
-    var check = e.target.closest('[data-files-check]');
-    if (check) { toggleSelect(check.getAttribute('data-files-check'), check.checked); return; }
-    if (e.target.closest('[data-files-selectall]')) { toggleSelectAll(e.target.checked); return; }
-  }
-
-  // Double-click a name → inline rename (cancels the pending single-click open).
+  /*
+   * Double-click: the name renames, anywhere else on the row opens.
+   *
+   * Renaming in place has always been the second click on the name itself,
+   * and opening is now the second click on the row — so the two have to be
+   * told apart by where the pointer was, not by a timer.
+   */
   function onDblClick(e) {
-    var open = e.target.closest('[data-files-open]');
-    if (!open) return;
+    var name = e.target.closest('[data-files-name]');
+    if (name) {
+      e.preventDefault();
+      startRename(name.getAttribute('data-files-name'));
+      return;
+    }
+
+    var row = e.target.closest('[data-files-row]');
+    if (!row || e.target.closest('.tma-portal-star, [data-files-menu], .tma-portal-rename-input')) return;
     e.preventDefault();
-    if (nameClickTimer) { clearTimeout(nameClickTimer); nameClickTimer = null; }
-    startRename(open.getAttribute('data-files-open'));
+    openItem(row.getAttribute('data-id'));
   }
 
+  /**
+   * Right-click: the menu for whatever is selected.
+   *
+   * Inside a selection of several, it is the selection's menu; anywhere else
+   * the row is taken first, so the menu is never about rows the reader cannot
+   * see they had picked.
+   */
   function onContextMenu(e) {
     var row = e.target.closest('[data-files-row]');
-    if (!row) return;
+    if (!row) {
+      if (e.target.closest('[data-files-body]') && selectedIds().length) clearSelection();
+      return;
+    }
     e.preventDefault();
-    var it = findItem(row.getAttribute('data-id'));
-    if (it) openContextMenu(e.clientX, e.clientY, it);
+
+    var id = row.getAttribute('data-id');
+    if (window.TMAFileSelect) {
+      state.selected = window.TMAFileSelect.context({
+        selected: state.selected, id: id, anchor: selectAnchor, value: selectValue,
+      });
+      render();
+    }
+
+    var it = findItem(id);
+    if (!it) return;
+
+    var picked = selectedItems();
+    if (picked.length > 1) openContextMenu(e.clientX, e.clientY, it, contextItemsMulti(picked, clearSelection));
+    else openContextMenu(e.clientX, e.clientY, it);
+  }
+
+  /* The three-dot button opens the same menu the right button does. */
+  function rowMenuFor(it, btn) {
+    var r = btn.getBoundingClientRect();
+    var picked = selectedItems();
+    if (picked.length > 1 && state.selected[it.id]) {
+      openContextMenu(r.left, r.bottom + 4, it, contextItemsMulti(picked, clearSelection));
+      return;
+    }
+    openContextMenu(r.left, r.bottom + 4, it);
   }
 
   function bindGlobals() {
@@ -1358,6 +1432,7 @@
       if (d.file) insertItem(d.file);
       else if ((d.folderId || null) === (state.folder || null)) load(true);
     });
+    document.addEventListener('keydown', onSelectKey);
     bindDrop();
     bindInternalMove();
   }
@@ -1562,23 +1637,61 @@
     });
   }
 
-  /* ── selection ──────────────────────────────────────── */
+  /* ── selection ────────────────────────────────────────
+   *
+   * File-manager rules, from TMAFileSelect: a click takes the row, Shift takes
+   * everything between it and the last one, Ctrl (Cmd on a Mac) adds or drops
+   * one. Ctrl+A takes the page, Escape lets go.
+   */
 
-  function toggleSelect(id, on) {
+  /* What a picked row is worth remembering by: enough for the toolbar's count
+     and the bulk endpoints, without holding the whole row. */
+  function selectValue(id) {
     var it = findItem(id);
-    if (!it) return;
-    if (on) state.selected[id] = { type: it.type, name: it.name };
-    else delete state.selected[id];
+
+    return it ? { type: it.type, name: it.name } : true;
+  }
+
+  function selectRow(id, e) {
+    if (!window.TMAFileSelect) return;
+    var ids = items().map(function (i) { return i.id; });
+    state.selected = window.TMAFileSelect.click({
+      ids: ids, selected: state.selected, id: id, event: e, anchor: selectAnchor, value: selectValue,
+    });
     render();
   }
 
-  function toggleSelectAll(on) {
-    state.selected = {};
-    if (on) items().forEach(function (i) { state.selected[i.id] = { type: i.type, name: i.name }; });
+  function selectAllVisible() {
+    var ids = items().map(function (i) { return i.id; });
+    state.selected = window.TMAFileSelect
+      ? window.TMAFileSelect.all(ids, selectValue)
+      : state.selected;
     render();
   }
 
-  function clearSelection() { state.selected = {}; render(); }
+  function clearSelection() { state.selected = {}; selectAnchor.id = null; render(); }
+
+  /**
+   * Ctrl+A and Escape, for the list on screen.
+   *
+   * Bound to the document rather than the list: table rows are not focusable,
+   * so there is nothing for a keydown on the list itself to fire from. Guarded
+   * on the view actually being mounted and on the reader not typing — Ctrl+A
+   * in the search box still selects the text in it.
+   */
+  function onSelectKey(e) {
+    if (!state.el || !document.contains(state.el)) return;
+    var t = e.target;
+    if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return;
+    if (document.querySelector('.tma-portal-modal, .tma-portal-context-menu')) return;
+
+    if (e.key === 'Escape' && selectedIds().length) { clearSelection(); return; }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'a' || e.key === 'A')) {
+      if (!items().length) return;
+      e.preventDefault();
+      selectAllVisible();
+    }
+  }
 
   /* ── library sync status ─────────────────────────────
    *
@@ -6488,6 +6601,98 @@
     return list;
   }
 
+  /**
+   * The menu for a selection of more than one item.
+   *
+   * Only what means something over several things at once — no Preview, no
+   * Rename, no Copy link — and every entry is offered only where every item in
+   * the selection allows it. An entry that half-works across a mixed selection
+   * is worse than one that is not there: half the files move and the reader
+   * finds out from a toast.
+   *
+   * `onDone` fires once the server has confirmed, so the list that raised the
+   * menu can let go of a selection whose rows may no longer exist. `recycle`
+   * is passed by callers outside this view, whose list is never the bin
+   * whatever section the File Library happens to be sitting on.
+   */
+  function contextItemsMulti(list, onDone, recycle) {
+    list = (list || []).filter(Boolean);
+    var n = list.length;
+    var count = n + ' item' + (n === 1 ? '' : 's');
+    var payload = list.map(function (i) { return { type: i.type, id: i.id }; });
+    var done = onDone || function () {};
+    var all = function (ability) { return list.every(function (i) { return perm(i, ability); }); };
+    var out = [];
+
+    if (recycle === undefined ? isRecycle() : recycle) {
+      out.push({
+        label: 'Restore ' + count, icon: 'ArrowCounterClockwise',
+        fn: function () { bulkRun('restore', payload, null, done); },
+      });
+      out.push({
+        label: 'Delete permanently', icon: 'Trash', danger: true,
+        fn: function () {
+          confirmModal({
+            title: 'Delete permanently',
+            message: 'Permanently delete ' + count + '? This cannot be undone.',
+            confirmLabel: 'Delete forever', danger: true,
+            onConfirm: function () { bulkRun('forceDelete', payload, null, done); },
+          });
+        },
+      });
+
+      return out;
+    }
+
+    if (all('download')) {
+      out.push({
+        label: 'Download ' + count, icon: 'ArrowLineDown',
+        fn: function () { list.forEach(function (it) { downloadItem(it); }); },
+      });
+    }
+    out.push({ sep: true });
+    if (all('move')) out.push({ label: 'Cut', icon: 'Scissors', fn: function () { setClipboard('cut', list); } });
+    if (all('copy')) out.push({ label: 'Copy', icon: 'Copy', fn: function () { setClipboard('copy', list); } });
+    if (all('move')) {
+      out.push({
+        label: 'Move to\u2026', icon: 'ArrowsOutCardinal',
+        fn: function () { bulkRun('move', payload, null, done, true); },
+      });
+    }
+    if (all('copy')) {
+      out.push({
+        label: 'Copy to\u2026', icon: 'Copy',
+        fn: function () { bulkRun('copy', payload, null, done, true); },
+      });
+    }
+    out.push({ sep: true });
+    out.push({
+      label: 'Add to favourites', icon: 'Star',
+      fn: function () { bulkRun('favorite', payload, null, done); },
+    });
+    if (all('delete')) {
+      out.push({
+        label: 'Delete ' + count, icon: 'Trash', danger: true,
+        fn: function () {
+          confirmModal({
+            title: 'Move to recycle bin',
+            message: 'Move ' + count + ' to the recycle bin?',
+            confirmLabel: 'Move to bin', danger: true,
+            onConfirm: function () { bulkRun('delete', payload, null, done); },
+          });
+        },
+      });
+    }
+
+    // A separator that ended up first or last (everything on one side of it
+    // was withheld) is a rule floating against the menu's edge.
+    return out.filter(function (entry, i) {
+      if (!entry.sep) return true;
+
+      return i > 0 && i < out.length - 1 && !out[i - 1].sep;
+    });
+  }
+
   /* Placed where asked, then pulled back inside the window.
      Grows left from the point when the right edge would run off, the CIP
      Assigned To column is the last one, and a menu that only clamped after
@@ -7052,6 +7257,25 @@
       externalItems = item ? [item] : [];
       externalOnChange = onChange || null;
       openContextMenu(x, y, item || { id: '', type: 'application' }, list);
+    },
+
+    /**
+     * The same menu, for a selection of several rows in somebody else's list.
+     *
+     * Every list that shows files now selects the way a file manager does, so
+     * every one of them can end up with four things picked and a right-click
+     * over them. The actions behind that are these ones — one destination
+     * picker, one set of permission rules, one confirmation — handed the rows
+     * the caller already holds.
+     */
+    menuMulti: function (x, y, items, onChange) {
+      var list = (items || []).filter(Boolean);
+      if (!list.length) return;
+      if (list.length === 1) return this.menu(x, y, list[0], onChange);
+
+      externalItems = list.slice();
+      externalOnChange = onChange || null;
+      openContextMenu(x, y, list[0], contextItemsMulti(list, onChange || function () {}, false));
     },
 
     /**

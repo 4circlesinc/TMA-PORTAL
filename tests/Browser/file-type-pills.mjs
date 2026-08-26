@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 /**
- * The File Library's type pills, under the tools.
+ * The File Library's type pills, in the toolbar.
  *
  * The same six the Dashboard's file tables offer, wearing the same marks, so a
  * reader who narrows to Word on the board narrows to Word here. They write the
@@ -78,29 +78,75 @@ try {
   await page.waitForTimeout(2500);
   await park();
 
-  step(2, 'The pills sit under the tools, and carry their marks');
+  step(2, 'The pills ride in the toolbar, and carry their marks');
   const shape = await page.evaluate(() => {
-    const page_ = document.querySelector('.tma-portal-page--files');
-    if (!page_) return null;
-    const row = page_.querySelector('.tma-portal-files__types');
-    const toolbar = page_.querySelector('.tma-portal-files__toolbar');
+    const toolbar = document.querySelector('.tma-portal-files__toolbar');
+    if (!toolbar) return null;
+    const row = toolbar.querySelector('.tma-portal-files__types');
+    const search = toolbar.querySelector('.tma-dash__toolbar-search');
+    const pills = Array.from(toolbar.querySelectorAll('[data-files-type-pill]'));
     return {
       there: !!row,
-      // Node.DOCUMENT_POSITION_FOLLOWING: the row comes after the toolbar.
-      belowTools: !!(row && toolbar && (toolbar.compareDocumentPosition(row) & 4)),
-      keys: Array.from(page_.querySelectorAll('[data-files-type-pill]')).map((b) => b.getAttribute('data-files-type-pill')),
-      marks: Array.from(page_.querySelectorAll('[data-files-type-pill]'))
-        .every((b) => !!b.querySelector('.tma-portal-type-pill__icon')),
+      keys: pills.map((b) => b.getAttribute('data-files-type-pill')),
+      marks: pills.every((b) => !!b.querySelector('.tma-portal-type-pill__icon')),
+      // One line: the row must not wrap the bar into two on a normal window.
+      lines: row && search
+        ? Math.abs(row.getBoundingClientRect().top - search.getBoundingClientRect().top) < 8
+        : false,
+      gapToSearch: row && search
+        ? Math.round(search.getBoundingClientRect().left - row.getBoundingClientRect().right)
+        : 0,
+      scrolls: !!row && row.scrollWidth > row.clientWidth + 1,
     };
   });
-  check(!!shape && shape.there, 'the row is drawn');
-  check(!!shape && shape.belowTools, 'below the tools, not in them');
+  check(!!shape && shape.there, 'the row is inside the toolbar');
+  check(!!shape && shape.lines, 'on the same line as the tools and the search');
+  check(!!shape && shape.gapToSearch >= 8,
+    `and kept clear of the search box (${shape ? shape.gapToSearch : 0}px)`);
   check(!!shape && shape.marks, 'every pill carries its file mark');
   ['pdf', 'word', 'excel', 'powerpoint', 'image', 'archive'].forEach((k) => {
     check(!!shape && shape.keys.includes(k), `${k} is offered`);
   });
 
-  step(3, 'Pressing one narrows the listing');
+  step(3, 'Out of room, it scrolls sideways rather than squashing anything');
+  /*
+   * The whole point of putting the row in the bar: the tools keep their size,
+   * the search keeps its width, and the types that do not fit are still
+   * reachable. Measured by scrolling to the end and back.
+   */
+  const scroll = await page.evaluate(async () => {
+    const row = document.querySelector('.tma-portal-files__types');
+    const before = row.scrollLeft;
+    row.scrollLeft = 9999;
+    await new Promise((r) => setTimeout(r, 400));
+    const end = row.scrollLeft;
+    row.scrollLeft = 0;
+    return { before, end, overflow: row.scrollWidth - row.clientWidth };
+  });
+  check(scroll.overflow > 0 && scroll.end > 0,
+    `the row scrolls to reach the rest (${scroll.overflow}px beyond the edge)`);
+
+  const narrow = await (async () => {
+    await page.setViewportSize({ width: 860, height: 950 });
+    await page.waitForTimeout(1200);
+    return page.evaluate(() => {
+      const toolbar = document.querySelector('.tma-portal-files__toolbar');
+      const row = toolbar.querySelector('.tma-portal-files__types');
+      const search = toolbar.querySelector('.tma-dash__toolbar-search');
+      return {
+        stacked: row.getBoundingClientRect().top - search.getBoundingClientRect().top > 8,
+        fullWidth: row.clientWidth > search.clientWidth,
+        bodyScrolls: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      };
+    });
+  })();
+  check(narrow.stacked && narrow.fullWidth,
+    'on a narrow window it drops to its own line under the tools');
+  check(!narrow.bodyScrolls, 'and never pushes the page sideways');
+  await page.setViewportSize({ width: 1500, height: 950 });
+  await page.waitForTimeout(1000);
+
+  step(4, 'Pressing one narrows the listing');
   const before = await rows().count();
   await park();
   await page.click('[data-files-type-pill="pdf"]');
@@ -109,14 +155,14 @@ try {
   check(narrowed > 0 && narrowed < before, `PDF narrows the folder (${before} → ${narrowed})`);
   check(await page.locator('[data-files-type-pill="pdf"].is-active').count() === 1, 'and the pill reads as pressed');
 
-  step(4, 'The toolbar menu and the pills are one filter, not two');
+  step(5, 'The toolbar menu and the pills are one filter, not two');
   // The button's own label, not the menu behind it — the menu lists every type
   // whatever is chosen, so reading the whole thing would pass on any filter.
   const menuSays = ((await page.textContent(
     '[data-files-filter-menu] [data-head-dropdown-toggle]')) || '').trim();
   check(menuSays === 'PDF', `the "All types" menu agrees (says "${menuSays}")`);
 
-  step(5, 'Pressing it again clears it — once, not twice');
+  step(6, 'Pressing it again clears it — once, not twice');
   /*
    * The bug this catches: bound per render instead of per element, the click
    * ran the toggle twice and the listing never came back.
@@ -127,14 +173,14 @@ try {
   check(await rows().count() === before, `the whole folder is back (${await rows().count()} of ${before})`);
   check(await page.locator('.tma-portal-type-pill.is-active').count() === 0, 'and no pill is left pressed');
 
-  step(6, 'The recycle bin has no type row');
+  step(7, 'The recycle bin has no type row');
   await park();
   await page.goto(`${BASE}/folders/recycle`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
   check(await page.locator('.tma-portal-files__types').count() === 0,
     'a list of things on their way out is not browsed by type');
 
-  step(7, 'No console errors');
+  step(8, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   errors.slice(0, 4).forEach((e) => log('      ' + e));
 } catch (e) {
