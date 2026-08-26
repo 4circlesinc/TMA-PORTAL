@@ -5444,13 +5444,21 @@
   /*
    * The case at a glance, under every tab. CBI's facts strip.
    *
-   * The journey in four dates — Received, Submitted, Accepted, and the
-   * decision — then what the file is and who holds it.
+   * Three dates, then what the file is and who holds it.
+   *
+   * Submitted, Accepted, and the decision: the ones about the Unit rather than
+   * about us. Received went back to the Timeline card below — it is our own
+   * filing date, and four dates in a row stopped being a glance. The three
+   * that are left are the ones a file is chased on, and the two gaps between
+   * them are what §20's delay is measured across.
    *
    * Application number is `displayNumber()`: the internal number until the
    * CIP number is recorded, the CIP number after. Submitted and Accepted stay
-   * on the strip even before the Unit has them, as empty dates. Empty decision
-   * dates still drop out; Assigned always answers, Unassigned if nobody.
+   * on the strip even before the Unit has them, as empty dates — the wait is
+   * the thing being watched, and a slot that appeared only once the waiting
+   * stopped would be missing from every file anybody was waiting on. Empty
+   * decision dates still drop out; Assigned always answers, Unassigned if
+   * nobody.
    */
   function cipFact(label, value, rawHtml) {
     if (value == null || value === '') return '';
@@ -5499,14 +5507,7 @@
     var decision = cipMilestone(app, 'decision');
     var html =
       cipFact('Application number', app.number) +
-      cipFact('Received', cipMilestoneDate(app, 'filed')) +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
-      // The Unit accepting the file is the step the two dates either side of
-      // it are measured against: how long the Unit took to accept it, and the
-      // 180 days §20 counts from it. Held on the strip as an empty date the
-      // way Submitted is — the wait is the thing being watched, and a slot
-      // that appeared only once the waiting stopped would be missing from
-      // every file anybody was actually waiting on.
       cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
       cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
       cipFact('Investment', app.investmentType) +
