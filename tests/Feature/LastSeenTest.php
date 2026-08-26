@@ -146,6 +146,68 @@ class LastSeenTest extends TestCase
         $this->assertNotEmpty($row['lastSeenAt']);
     }
 
+    /**
+     * The order a team board is read in.
+     *
+     * Whoever is here comes first, then whoever was here most recently. It was
+     * sorted by name under that, which is the one thing nobody scans a team
+     * list for — and it put the person who has never signed in above the
+     * colleague who stepped away five minutes ago, purely on the alphabet.
+     *
+     * The names below are deliberately alphabetical in the wrong direction, so
+     * a sort that fell back to them would be obvious rather than plausible.
+     */
+    public function test_the_staff_board_puts_who_is_here_first_then_who_was_here_last(): void
+    {
+        $viewer = $this->approvedStaff(['name' => 'Zoe Viewer', 'account_type' => 'Administrator']);
+        $online = $this->approvedStaff(['name' => 'Carl Online']);
+        $recent = $this->approvedStaff(['name' => 'Dina Recent']);
+        $older = $this->approvedStaff(['name' => 'Evan Yesterday']);
+        // No presence row at all: never signed in.
+        $never = $this->approvedStaff(['name' => 'Aaron Never']);
+
+        // The viewer is by definition here — they are the one looking at it.
+        UserPresence::create([
+            'user_id' => $viewer->id,
+            'last_seen_at' => now(),
+            'online_until' => now()->addMinutes(5),
+        ]);
+        UserPresence::create([
+            'user_id' => $online->id,
+            'last_seen_at' => now()->subSeconds(30),
+            'online_until' => now()->addMinutes(5),
+        ]);
+        UserPresence::create([
+            'user_id' => $recent->id,
+            'last_seen_at' => now()->subMinutes(4),
+            'online_until' => now()->subMinutes(3),
+        ]);
+        UserPresence::create([
+            'user_id' => $older->id,
+            'last_seen_at' => now()->subDay(),
+            'online_until' => now()->subDay(),
+        ]);
+
+        $names = collect(
+            $this->actingAs($viewer)->getJson('/portal/dashboard/staff')->assertOk()->json('employees')
+        )->pluck('name')->all();
+
+        $online = array_slice($names, 0, 2);
+        sort($online);
+
+        // The two online, in either order — they were both seen "now", so the
+        // board falls back to the alphabet between them and that is all this
+        // asserts about the pair.
+        $this->assertSame(['Carl Online', 'Zoe Viewer'], $online);
+
+        // Then most recent first, and never-seen last rather than first, which
+        // is where a plain descending sort on a nullable column would put it.
+        $this->assertSame(
+            ['Dina Recent', 'Evan Yesterday', 'Aaron Never'],
+            array_slice($names, 2)
+        );
+    }
+
     private function approvedStaff(array $overrides = []): User
     {
         return User::factory()->create(array_merge([

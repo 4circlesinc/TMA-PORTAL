@@ -95,7 +95,11 @@
         return;
       }
 
-      var people = state.employees || [];
+      // Same order as the home board's tile, through the same comparator —
+      // presence moves under the list, so this cannot be left to the payload.
+      var people = (state.employees || []).slice();
+      if (window.TMAPresence && window.TMAPresence.compare) people.sort(window.TMAPresence.compare);
+
       var online = people.filter(function (p) { return p.online; }).length;
 
       if (!people.length) {

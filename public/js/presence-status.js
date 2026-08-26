@@ -1125,6 +1125,39 @@
     return person;
   }
 
+  /*
+   * The order a team list is read in: who is here, then who was here most
+   * recently.
+   *
+   * Mirrors the sort in StaffPresenceController, and exists separately from it
+   * on purpose — presence moves under a list that is already on screen, so
+   * somebody coming online has to rise to the top on the event rather than on
+   * the next poll thirty seconds later. Both surfaces that draw the team
+   * (the home board's Employees tile and Overview's) sort through here, so
+   * they cannot disagree about it.
+   */
+  function lastSeenMs(person) {
+    var at = person && person.lastSeenAt ? Date.parse(person.lastSeenAt) : 0;
+
+    return isFinite(at) ? at : 0;
+  }
+
+  function compare(a, b) {
+    // Ascending on 0/1 rather than a separate descending pass, so the whole
+    // order is one comparison.
+    var here = (a.online ? 0 : 1) - (b.online ? 0 : 1);
+    if (here) return here;
+
+    // Most recently seen first. Never seen is 0, which lands after every real
+    // timestamp rather than in front of it — the trap a plain descending sort
+    // on a nullable field falls into.
+    var seen = lastSeenMs(b) - lastSeenMs(a);
+    if (seen) return seen;
+
+    // Everyone online was seen "now", so that group needs a real tiebreak.
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  }
+
   function wire() {
     if (wired) return;
     wired = true;
@@ -1181,6 +1214,7 @@
     bindRealtime: bindRealtime,
     bindCallIntegration: bindCallIntegration,
     applyRemoteToPerson: applyRemoteToPerson,
+    compare: compare,
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);

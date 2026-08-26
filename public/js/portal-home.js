@@ -523,7 +523,16 @@
 
     if (!homeStaff || homeStaff.staff === false) return '';
 
-    var people = homeStaff.employees || [];
+    /*
+     * Sorted here, not just trusted from the server. The payload arrives in
+     * this order, but presence then moves under a list that is already on
+     * screen: somebody coming online has to rise to the top on the event, not
+     * on the next poll. A copy, so the kept snapshot is left as the server
+     * sent it.
+     */
+    var people = (homeStaff.employees || []).slice();
+    if (window.TMAPresence && window.TMAPresence.compare) people.sort(window.TMAPresence.compare);
+
     var onlineCount = people.filter(function (p) { return p.online; }).length;
     var rows = people.map(function (p) {
       var badge = presenceBadge(p);

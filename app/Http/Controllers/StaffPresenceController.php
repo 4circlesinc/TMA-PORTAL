@@ -67,9 +67,23 @@ class StaffPresenceController extends Controller
                 'statusIcon' => $presence['statusIcon'] ?? null,
                 'workStatus' => $workStatuses[(int) $user->id] ?? null,
             ];
-        })->sortBy([
-            ['online', 'desc'],
-            ['name', 'asc'],
+        })->sortBy(fn (array $p) => [
+            // Ascending on 0/1 rather than a separate descending pass, so the
+            // whole order is one comparison.
+            $p['online'] ? 0 : 1,
+            /*
+             * Then most recently seen.
+             *
+             * Negated rather than sorted descending, because this column is
+             * nullable: `desc` on a null would put everyone who has never
+             * signed in at the head of the offline group, ahead of the
+             * colleague who was here five minutes ago. Negated, never-seen is
+             * 0 and lands after every real timestamp.
+             */
+            -($p['lastSeenAt'] ? strtotime($p['lastSeenAt']) : 0),
+            // Everyone online was seen "now", so that group needs a real
+            // tiebreak or its order is whatever the query happened to return.
+            mb_strtolower((string) $p['name']),
         ])->values();
 
         return response()->json([
