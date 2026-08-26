@@ -35,6 +35,7 @@ const nav = (u) => new Request(u, { headers: { accept: 'text/html,application/xh
 
 const asset = (u) => new Request(u, { headers: { accept: 'text/css,*/*;q=0.1' } });
 
+
 const htmlResponse = (body) => new Response(body, {
   status: 200,
   headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -138,6 +139,29 @@ app.whenReady().then(async () => {
   await settle();
   check('a dead session reloads the served shell away', staleReason, 'signed-out');
   check('and the copy is gone', shellCache.readMeta(), null);
+
+  /* ── a shell the network served is not ours to reload away ─────── */
+
+  scratch();
+  await session.defaultSession.cookies.set({
+    url: ORIGIN, name: 'tma_portal_session', value: 'x', expirationDate: Date.now() / 1000 + 3600,
+  });
+  shellCache.noteBuild('build-3');
+  shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
+  await settle();
+  check('a copy is kept under this deploy',
+    !!(await shellCache.maybeServe(url('/clients'), nav(`${ORIGIN}/clients`))), true);
+
+  // …and then the network serves one itself — a reload, a deep link. That is
+  // the document on screen now, whatever happens to the copy on disk.
+  shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
+  await settle();
+
+  staleReason = null;
+  shellCache.on({ stale: (reason) => { staleReason = reason; } });
+  shellCache.noteBuild('build-4');
+  check('a deploy still drops the copy', shellCache.readMeta(), null);
+  check('but reloads nothing — the network served what is on screen', staleReason, null);
 
   /* ── somebody else signs in ────────────────────────────────────── */
 

@@ -55,20 +55,57 @@ class DesktopAssetsController extends Controller
 
     public function show(): JsonResponse
     {
-        return response()->json(Cache::remember(
+        return response()->json($this->cached());
+    }
+
+    /**
+     * Just this deploy's identity, for an app that is only asking whether the
+     * portal has moved under it.
+     *
+     * The app asks that question far more often than it needs the answer in
+     * detail: it re-checks on every navigation and on a timer, because a shell
+     * it kept from this morning names bundles this afternoon's deploy has
+     * already deleted, and that is a page with no stylesheet on it. Two
+     * thousand hashes is the wrong price for a yes/no. This is the same value
+     * as show()'s `build`, out of the same cached computation, so the two can
+     * never disagree about what is deployed.
+     */
+    public function build(): JsonResponse
+    {
+        return response()->json(['build' => $this->cached()['build']]);
+    }
+
+    /** @return array{build: string, count: int, bytes: int, files: array<string, string>} */
+    private function cached(): array
+    {
+        return Cache::remember(
             'desktop.assets.'.self::deployKey(),
             self::TTL,
             fn () => $this->manifest()
-        ));
+        );
     }
 
     /**
      * Changes whenever the app is redeployed, so a new release never serves a
      * hash computed from the previous one's files.
+     *
+     * The built bundles' filenames are content hashes of every stylesheet and
+     * script the portal ships, so any deploy that touches one moves this. The
+     * directory mtimes cover what the build does not see — images, audio — and
+     * they are deliberately not the whole key: a directory's mtime does not
+     * change when a file inside it is edited in place, so on its own it would
+     * hold a day-old manifest across exactly the deploys this must catch.
      */
     private static function deployKey(): string
     {
-        return (string) (filemtime(public_path('js')) ?: 0);
+        $manifest = public_path('build/manifest.json');
+
+        return substr(md5(implode('|', [
+            is_file($manifest) ? (string) file_get_contents($manifest) : '',
+            (string) (@filemtime(public_path('js')) ?: 0),
+            (string) (@filemtime(public_path('css')) ?: 0),
+            (string) (@filemtime(public_path('images')) ?: 0),
+        ])), 0, 16);
     }
 
     /**

@@ -129,6 +129,29 @@ background. Asset requests hold for that answer (a stylesheet 300ms late costs
 nothing; unverified against a moved deploy costs a broken page) — navigations
 and the cached shell do not.
 
+**And it is not a launch-time question.** The app is open for days and the
+portal deploys under it. Every build writes `build/app-<hash>.{css,js}` and
+deletes the one before it, so a shell kept from this morning names two files
+this afternoon's deploy no longer has: the reader gets the portal with no
+stylesheet and no script on it, and reloading does not help — the reload is
+answered from the same kept copy. So `revalidate()` asks again, on every
+navigation and on a ten-minute timer and whenever the window comes to the
+front, against `/desktop/build`, which is the same identity as
+`/desktop/assets` without the two thousand hashes. A navigation holds up to
+700ms for that answer; a cold start and an offline one hold for nothing.
+
+A reload cannot be recognised here, and that is measured rather than assumed:
+Chromium adds `Cache-Control: max-age=0` downstream of `protocol.handle`, so a
+reload and a first load reach the handler byte for byte identical. Holding the
+navigation for the check is what stands in for it.
+`npm run test:deploy-refresh` drives the whole sequence — open, keep, deploy,
+navigate — through `handle()`, which is where the two caches meet.
+
+The portal carries its own half of this, for any client that is one deploy
+behind for any reason: `AssetBundle` gives the two bundle tags an `onerror`
+that reloads the document once (never offline, at most once per ten minutes
+per tab). The shell is `no-store`, so what comes back is always this deploy's.
+
 **And one deliberate loosening:** when the portal is *unreachable* — offline,
 not answering-badly — the bundle is served unverified. Offline there is no API
 to be stale against, and the strict alternative was the app refusing to open

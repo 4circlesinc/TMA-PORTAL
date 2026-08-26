@@ -132,6 +132,42 @@ app.whenReady().then(async () => {
     fs.readFileSync(served).equals(fs.readFileSync(origin_file)), true);
 
   matching.close();
+
+  /* ── the portal deploys while the app is open ──────────────────── */
+
+  /*
+   * The failure this covers: the app verified at launch, the portal deployed
+   * an hour later, and nothing ever asked again — so the shell kept from
+   * launch went on being served, naming `/build/app-<hash>.css` that the new
+   * deploy had already deleted. An unstyled portal, until somebody quit.
+   */
+  let build = local.build;
+  let files = local.files;
+  const live = http.createServer((req, res) => {
+    if (req.url === '/desktop/build' || req.url === '/desktop/assets') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(req.url === '/desktop/build' ? { build } : { build, files }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise((r) => live.listen(0, '127.0.0.1', r));
+  const running = `http://127.0.0.1:${live.address().port}`;
+
+  result = await assetCache.install(running);
+  check('the portal it launched against is verified', result.active, true);
+  check('and re-asking costs nothing while it has not moved',
+    await assetCache.revalidate({ force: true }), null);
+
+  // The deploy lands. Every asset it ships is a different file now.
+  build = 'a-later-deploy';
+  files = Object.fromEntries(Object.keys(local.files).map((u) => [u, 'moved']));
+
+  const after = await assetCache.revalidate({ force: true });
+  check('a deploy that lands while the app is open is noticed', !!after, true);
+  check('and the bundle stops being served against it', after && after.active, false);
+
+  live.close();
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });

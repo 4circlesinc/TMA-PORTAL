@@ -53,6 +53,16 @@ const TYPES = {
   '.wav': 'audio/wav',
 };
 
+/* Electron's own answer, and never a reason to throw. Offline, holding a
+   navigation for a check that cannot happen is pure delay. */
+function online() {
+  try {
+    return net.isOnline();
+  } catch {
+    return true;
+  }
+}
+
 function bundled() {
   try {
     return JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
@@ -205,6 +215,38 @@ async function serverManifest(origin) {
 }
 
 /**
+ * This deploy's identity, and nothing else.
+ *
+ * `/desktop/assets` is two thousand hashes; asking it every minute to learn a
+ * single yes/no would be absurd, so the portal answers the yes/no separately.
+ * An older portal that has never heard of the route says 404, which is not an
+ * answer about the deploy at all — the caller falls back to the full manifest.
+ */
+async function remoteBuild(origin) {
+  let response;
+  try {
+    response = await net.fetch(new URL('/desktop/build', origin).toString(), {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    return 'unreachable';
+  }
+
+  if (response.status === 404) return 'unsupported';
+
+  try {
+    if (!response.ok) return 'invalid';
+    const body = await response.json();
+
+    return body && typeof body.build === 'string' && body.build ? body.build : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
+/**
  * Resolves a portal URL to a bundled file, or null.
  *
  * The query string is dropped deliberately — the portal cache-busts with
@@ -245,7 +287,37 @@ const state = {
   agreed: null,
   verify: null,
   installed: false,
+  /* The build the last full verification ran against, and when we last asked
+     whether it still is the one. `checking` holds an in-flight ask so a burst
+     of navigations costs one request. */
+  build: null,
+  checkedAt: 0,
+  checking: null,
+  settled: null,
+  /* Whether this portal can answer the cheap question at all. An older one
+     cannot, and asking it per navigation would mean the full manifest per
+     navigation — so on that portal the throttle holds even for a navigation. */
+  cheap: true,
 };
+
+/*
+ * How long a verdict about the deploy stands before the timer and the focus
+ * handler bother asking again. Navigations do not use it — see below.
+ */
+const RECHECK_MS = 60_000;
+
+/*
+ * How long a navigation will wait for that answer.
+ *
+ * Nothing at a cold start: the window opens on the kept shell, which is the
+ * entire point of keeping it. Afterwards a navigation is a reload or a deep
+ * link, and both are worth a beat — the alternative is painting a page whose
+ * stylesheet this deploy deleted an hour ago, which is what the reader was
+ * reloading to escape. If the answer is slower than this the shell is served
+ * anyway and the answer reloads the window when it lands, so a bad connection
+ * costs the beat and nothing else.
+ */
+const NAV_HOLD_MS = 700;
 
 function fileResponse(file) {
   return new Response(fs.createReadStream(file), {
@@ -267,6 +339,26 @@ async function handle(request) {
   }
 
   if (url.origin !== state.origin) return networkFetch(request);
+
+  /*
+   * Every navigation is the moment to ask whether the portal is still the
+   * deploy we verified against — unthrottled, because a reload is a
+   * navigation and somebody reloading twice must not be answered from a
+   * throttle. One request, one hash; the cost is the round trip, not the
+   * two thousand hashes of the full manifest.
+   *
+   * A cold start does not wait for the answer (`checkedAt` is still zero) and
+   * neither does an offline one. Everything else holds for it, briefly: this
+   * is the request that decides whether the reader gets their portal or a
+   * document naming files that no longer exist.
+   */
+  if (shellCache.isNavigation(request)) {
+    revalidate({ force: true });
+
+    if (state.checkedAt && state.settled && online()) {
+      await Promise.race([state.settled, new Promise((r) => { setTimeout(r, NAV_HOLD_MS); })]);
+    }
+  }
 
   /*
    * A navigation is answered from the shell cache before anything else — and
@@ -362,6 +454,9 @@ function install(origin) {
 
   state.origin = origin;
   state.agreed = null;
+  state.build = null;
+  state.checkedAt = 0;
+  state.cheap = true;
 
   if (!state.installed) {
     state.installed = true;
@@ -376,7 +471,25 @@ function install(origin) {
     });
   }
 
-  state.verify = serverManifest(origin).then((remote) => {
+  state.verify = verify(origin);
+
+  return state.verify;
+}
+
+/**
+ * Fetch the deploy's manifest and settle what may be served from the bundle.
+ *
+ * Runs at launch, and again whenever the cheap check says the portal has
+ * moved. `state.agreed` is left null until it answers, which is what makes
+ * asset requests hold rather than be served against a deploy we are no longer
+ * sure of.
+ */
+function verify(origin) {
+  const local = bundled();
+
+  return serverManifest(origin).then((remote) => {
+    state.checkedAt = Date.now();
+
     if (remote === 'unreachable') {
       /*
        * Offline. The bundle is served without a deploy to check against —
@@ -413,6 +526,7 @@ function install(origin) {
       if (remote.files[url] === hash) agreed.add(url);
     }
     state.agreed = agreed;
+    state.build = remote.build || null;
 
     // The shell cache invalidates on this — a deploy means a shell captured
     // under the old one references bundles that may no longer exist.
@@ -431,13 +545,93 @@ function install(origin) {
       stale: local.count - agreed.size,
     };
   });
+}
 
-  return state.verify;
+/**
+ * Ask again whether the portal is still the deploy we verified against.
+ *
+ * install() answered that once, at launch, and for the length of a launch it
+ * was the whole story. It is not the whole story: the app stays open for days
+ * and the portal deploys under it. The shell kept from this morning then names
+ * bundles this afternoon's deploy has already deleted — `/build/app-<hash>.css`
+ * is rebuilt under a new name every time and the old one is removed — and the
+ * reader gets a page with no stylesheet and no script on it, which is what
+ * being one deploy behind actually looks like. Nothing re-asked, so nothing
+ * healed it short of quitting the app.
+ *
+ * Cheap on purpose, because it is asked on every navigation and on a timer:
+ * `/desktop/build` is one hash. The full manifest is fetched only when that
+ * hash has moved, which is the rare case by definition — and when it has,
+ * `agreed` goes back to null first, so no asset is served from the old
+ * intersection while the new one is on its way.
+ *
+ * Silence is not an answer. Unreachable and invalid both leave everything
+ * exactly as it was: a reader on a train has not been handed a new deploy.
+ *
+ * @param {{force?: boolean}} [opts]
+ * @returns {Promise<null|object>} the new verification, when one was needed.
+ */
+function revalidate(opts) {
+  if (!state.installed || !state.origin) return Promise.resolve(null);
+  if (state.checking) return state.checking;
+
+  const force = !!(opts && opts.force) && state.cheap;
+
+  if (!force && state.checkedAt && Date.now() - state.checkedAt < RECHECK_MS) {
+    return Promise.resolve(null);
+  }
+
+  /*
+   * Two promises, because they are worth waiting for by different amounts.
+   *
+   * `settled` is the cheap question — has the portal moved — and it is the one
+   * a navigation holds for, because by the time it resolves the shell cache
+   * has already been told and will refuse to hand back a copy that is one
+   * deploy behind. The full manifest behind it takes as long as it takes, and
+   * nothing waits on it but the assets, which hold on `agreed` being null.
+   */
+  state.settled = remoteBuild(state.origin).then((build) => {
+    if (build === 'unreachable' || build === 'invalid') {
+      // Ask again next time rather than settling into the throttle: nothing
+      // was learned, so nothing should be assumed.
+      return false;
+    }
+
+    state.checkedAt = Date.now();
+    state.cheap = build !== 'unsupported';
+
+    // A portal older than this route cannot answer cheaply; the full manifest
+    // is the only way to ask it, and the throttle above is what keeps that rare.
+    if (state.cheap && state.build && build === state.build) return false;
+
+    /*
+     * Told the moment we know, rather than when the manifest comes back a
+     * second later. In that second the network may well serve the new shell —
+     * a reload is the usual reason we are here — and a capture stamped with
+     * the deploy we are in the middle of leaving would be dropped for nothing.
+     */
+    if (state.cheap) shellCache.noteBuild(build);
+
+    state.agreed = null;
+    state.verify = verify(state.origin);
+
+    return true;
+  }).catch(() => false);
+
+  state.checking = state.settled
+    .then((moved) => (moved ? state.verify : null))
+    .finally(() => { state.checking = null; });
+
+  return state.checking;
 }
 
 module.exports = {
   OFFLINE_HEADER,
   install,
+  revalidate,
+  // Test seam. The handler is the module — everything above is only reachable
+  // through it, and a deploy landing mid-session is only testable through it.
+  handle,
   bundled,
   localFile,
   SERVED,

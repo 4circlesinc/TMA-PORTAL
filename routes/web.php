@@ -1352,6 +1352,12 @@ Route::get('/desktop/download/{platform}', [DesktopReleasesController::class, 'd
 Route::get('/desktop/assets', [DesktopAssetsController::class, 'show'])
     ->name('desktop.assets');
 
+// The same identity, without the two thousand hashes. The app polls this to
+// notice a deploy that happened while it was open, and only fetches the full
+// manifest above when the answer has changed.
+Route::get('/desktop/build', [DesktopAssetsController::class, 'build'])
+    ->name('desktop.build');
+
 // Update feed the installed macOS app polls. Public by design: it serves only
 // the signed builds we publish, and the app has no session when it checks.
 Route::get('/desktop/{file}', DesktopUpdateController::class)

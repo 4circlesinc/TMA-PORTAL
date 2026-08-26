@@ -1359,6 +1359,16 @@ if (!app.requestSingleInstanceLock()) {
     // Document bytes, kept per machine under a budget, see file-cache.js.
     fileCache.configure({ dir: path.join(app.getPath('userData'), 'file-cache') });
 
+    /*
+     * The portal deploys while the app is open, and the app is open for days.
+     * install()'s verification cannot see that, so ask again: on a timer, and
+     * whenever the window comes back to the front — which is the beat before
+     * somebody starts using it again, and so the cheapest place to find out.
+     * (Every navigation asks too; see asset-cache's revalidate.)
+     */
+    setInterval(() => { assetCache.revalidate(); }, 10 * 60 * 1000).unref();
+    app.on('browser-window-focus', () => { assetCache.revalidate(); });
+
     shellCache.on({
       stale: (reason) => {
         console.log(`  • shell cache: reloading (${reason})`);

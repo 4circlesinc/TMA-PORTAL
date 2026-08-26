@@ -35,7 +35,15 @@
  *      the copy is dropped and — if it was already on screen — the window is
  *      reloaded from the network. A shell one deploy old references asset
  *      bundles the new deploy may no longer serve, which is a broken page,
- *      not a slow one.
+ *      not a slow one. Verification is not a launch-time question: the app
+ *      stays open for days and the portal deploys under it, so asset-cache.js
+ *      asks again on every navigation and on a timer.
+ *
+ * A reload cannot be a fourth gate, though it is the gesture somebody makes
+ * when a page looks wrong. Chromium adds `Cache-Control: max-age=0` downstream
+ * of `protocol.handle`, so a reload and a first load arrive here byte for byte
+ * identical — measured, not assumed. What stands in for it is asset-cache
+ * holding a navigation for a fresh build check before asking us anything.
  *
  * And two watchdogs on `/me`, because the shell embeds who the reader is:
  * a 401/419 means the session died since the cookie check (served shell,
@@ -67,9 +75,10 @@ let accountId = null;
 /* The deploy the portal reported, once verification has run. */
 let remoteBuild = null;
 
-/* Whether a cached shell was actually put on screen this session — the
-   watchdogs only bite when the thing they guard was used. */
-let servedThisSession = false;
+/* Whether the document on screen came from here. The watchdogs only bite
+   when the thing they guard is what the reader is looking at, and a shell the
+   network served a moment ago needs no reload to become correct. */
+let servingFromCache = false;
 
 /*
  * First segments that are never the SPA shell, and must not be answered with
@@ -124,7 +133,7 @@ function on(handlers) {
 function goStale(reason) {
   suspended = true;
   invalidate();
-  if (servedThisSession && callbacks.stale) callbacks.stale(reason);
+  if (servingFromCache && callbacks.stale) callbacks.stale(reason);
 }
 
 /** Is this request the window navigating to a page? (Subresources ask for
@@ -190,7 +199,7 @@ async function maybeServe(url, request, opts) {
     return null;
   }
 
-  servedThisSession = true;
+  servingFromCache = true;
 
   return new Response(html, {
     headers: {
@@ -252,6 +261,11 @@ async function captureIfShell(url, copy) {
   const meta = readMeta() || { segments: [] };
   const segment = firstSegment(url.pathname);
 
+  // The network just served a shell, so that is what the window is about to
+  // paint — whatever happens to the copy on disk from here, the reader is not
+  // looking at it, and a mismatch found in a moment costs them no reload.
+  servingFromCache = false;
+
   fs.mkdirSync(cacheDir(), { recursive: true });
   fs.writeFileSync(htmlFile(), html);
   fs.writeFileSync(metaFile(), JSON.stringify({
@@ -269,7 +283,7 @@ async function watchMe(copy) {
   if (copy.status === 401 || copy.status === 419) {
     // The cookie existed but the session behind it did not. The shell on
     // screen belongs to nobody; the network knows the way to sign-in.
-    if (servedThisSession) goStale('signed-out');
+    if (servingFromCache) goStale('signed-out');
 
     return;
   }
@@ -285,7 +299,7 @@ async function watchMe(copy) {
 
     // The shell was captured for somebody else: its inlined capabilities are
     // theirs, and the sidebar pruned itself from them before first paint.
-    if (meta && meta.account && meta.account !== id && servedThisSession) {
+    if (meta && meta.account && meta.account !== id && servingFromCache) {
       accountId = id;
       goStale('account-changed');
 
@@ -317,7 +331,7 @@ function _reset(overrideDir) {
   dir = overrideDir || null;
   accountId = null;
   remoteBuild = null;
-  servedThisSession = false;
+  servingFromCache = false;
   suspended = false;
   callbacks = { stale: null };
 }

@@ -28,6 +28,7 @@
     "test:shell-cache": "env -u ELECTRON_RUN_AS_NODE electron test-shell-cache.js",
     "test:navigation": "env -u ELECTRON_RUN_AS_NODE electron test-navigation.js",
     "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
+    "test:deploy-refresh": "env -u ELECTRON_RUN_AS_NODE electron test-deploy-refresh.js",
     "test:badge": "env -u ELECTRON_RUN_AS_NODE electron test-badge.js",
     "test:taskbar-pin": "env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js",
     "test:signin-handoff": "env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js",

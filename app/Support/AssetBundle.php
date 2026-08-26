@@ -29,6 +29,29 @@ final class AssetBundle
 
     private const JS_TAG = '~^[ \t]*<script src="js/([^"?]+)(?:\?[^"]*)?" defer></script>[ \t]*$~m';
 
+    /**
+     * What to do when the bundle this document names is not there any more.
+     *
+     * Every build writes `build/app-<hash>.{css,js}` and deletes the previous
+     * one, so a document that outlives its deploy names two files that 404 —
+     * and a portal with neither its stylesheet nor its script is not a
+     * degraded page, it is unreadable. The shell is served no-store, so the
+     * copy a reload brings back is always this deploy's: the fix is simply to
+     * ask again, once.
+     *
+     * Guarded, because a reload that does not fix it must not become a loop.
+     * Offline is skipped outright (nothing is wrong with the deploy, the
+     * network is down), and one attempt per ten minutes per tab means a
+     * genuinely broken deploy costs a reload every ten minutes rather than
+     * continuously — and heals itself the moment the deploy is fixed.
+     */
+    private const RECOVERY = '<script>window.__tmaBundleMissing=function(){'
+        .'try{if(navigator.onLine===false)return;'
+        ."var k='tma.stale-document',n=Date.now();"
+        .'if(n-(+sessionStorage.getItem(k)||0)<600000)return;'
+        .'sessionStorage.setItem(k,String(n));}catch(e){return;}'
+        .'location.reload();};</script>';
+
     /** Rewritten shells, keyed by content hash. The regex work happens once. */
     private static array $rendered = [];
 
@@ -61,13 +84,16 @@ final class AssetBundle
             return $html;
         }
 
+        // The script run sits below the stylesheet run in the document, so it
+        // is replaced first: the CSS offsets are then still the ones measured.
         $html = self::replace($html, $js, sprintf(
-            '  <script src="build/%s" defer></script>',
+            '  <script src="build/%s" defer onerror="__tmaBundleMissing()"></script>',
             $manifest['js'],
         ));
 
         return self::replace($html, $css, sprintf(
-            '  <link rel="stylesheet" href="build/%s">',
+            '  %s'."\n".'  <link rel="stylesheet" href="build/%s" onerror="__tmaBundleMissing()">',
+            self::RECOVERY,
             $manifest['css'],
         ));
     }
