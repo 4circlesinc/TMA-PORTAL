@@ -736,26 +736,53 @@ field placement and drawing, and computed CSS only exist in a browser.
   other check here and fails that one. Only the quiet line is dismissible; a
   sync in progress, a sync error and an unresolved conflict all still show.
   Needs a connected library whose last sync succeeded.
-- **`home-library-actions.mjs`** — bulk actions and the row menu on the
-  dashboard's Recent Files / Shared-with-me tables. Those tables rendered
+- **`file-selection.mjs`** — picking files the way a file manager picks them,
+  across every list that shows them. The checkbox column is gone: a click takes
+  a row, Shift takes the run in between, Ctrl (Cmd on a Mac) adds or drops one,
+  Ctrl+A takes the page, Escape lets go, a double-click opens, and the right
+  button carries the actions — over the whole selection when the row is part of
+  one, over that row alone when it is not. The rules live in one module
+  (`TMAFileSelect`) so the File Library, the dashboard's Recent Files table and
+  Overview's Files tab cannot drift apart, which is why the test drives all
+  three rather than the library alone.
+
+  Two gestures it exists to protect. **A double-click on the name is rename**,
+  and always was — so "open" has to be a double-click on a cell beside it, and
+  a test that double-clicks the name and waits for a viewer is testing rename.
+  And **Ctrl-click is a right-click on macOS**: the additive modifier there is
+  Cmd, so the harness picks it from the platform (the portal accepts either).
+
+  Needs a staff account with at least five rows and one folder in the library.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/file-selection.mjs
+  ```
+- **`home-library-actions.mjs`** — picking rows, bulk actions and the row menu
+  on the dashboard's Recent Files / Shared-with-me tables. Those tables rendered
   checkboxes, a select-all header and a three-dot button with **nothing wired to
-  any of it**. The test drives the real controls and insists on consequences,
-  not appearances: the toolbar reveals on selection, the selection survives the
-  re-render each click triggers, a partial selection leaves the header box
-  *indeterminate* (a DOM property no markup can express), delete asks before
-  acting, and — the two that matter — a row-menu action and a bulk delete are
-  each followed back to the server. Opening the menu proved nothing on its own:
-  the actions come from the File Library and several re-look the row up by id,
-  which found nothing when driven from the dashboard, so every item was
-  clickable and did absolutely nothing. Needs a few files in Recent Files
-  (it deletes one, so re-seed between runs).
-- **`home-library-viewer.mjs`** — clicking a file on those same tables opens
-  it, **in the File Library's own viewer**. A filename click used to navigate
-  to the folder the file lives in and leave the reader to find it again; it
-  now goes through `TMAFileActions.open`, the seam a client's Documents tab
-  already opens through, so it is the same window from every list — the file's
+  any of it**; the checkboxes have since gone entirely, and the rows are picked
+  the way a folder window picks them. The test drives the real gestures and
+  insists on consequences, not appearances: a click reveals the toolbar and
+  survives the re-render it triggers, a **Shift-click takes the run in
+  between**, a **Ctrl-click drops one back out**, a type filter's range reaches
+  only what is on screen, delete asks before acting, and — the two that matter
+  — a row-menu action and a bulk delete are each followed back to the server.
+  Opening the menu proved nothing on its own: the actions come from the File
+  Library and several re-look the row up by id, which found nothing when driven
+  from the dashboard, so every item was clickable and did absolutely nothing.
+  Needs a few files in Recent Files (it deletes one, so re-seed between runs).
+- **`home-library-viewer.mjs`** — opening a file from those same tables opens
+  it **in the File Library's own viewer**. A filename click used to navigate to
+  the folder the file lives in and leave the reader to find it again; it now
+  goes through `TMAFileActions.open`, the seam a client's Documents tab already
+  opens through, so it is the same window from every list — the file's
   comments, versions, approvals, activity and access, not a second lighter
   viewer that only knew how to show the bytes.
+
+  Opening is a **double-click on the row**, everywhere files are listed. A
+  single click only picks it, and in the File Library a double-click on the
+  *name* is the rename gesture — so a test that means "open" must land on a
+  cell beside the name.
 
   What only a browser shows is that the *stage* is right for each kind, so the
   fixture seeds four: pdf.js has to paint real canvases, the photo has to

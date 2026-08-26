@@ -49,13 +49,15 @@ await page.goto(`${BASE}/folders/all`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(2000)
 
 /*
- * A single click on the name opens it. Not a double-click: that is bound to
- * rename, and the single-click handler waits 220ms to tell the two apart, so
- * the wait below has to clear that.
+ * A double-click on the row opens it, the way a folder window opens a file. A
+ * single click only picks the row, and a double-click on the *name* is the
+ * rename gesture — so this takes a cell beside it.
  */
-const row = page.locator('[data-files-open]', { hasText: 'Live Detail.pdf' }).first()
+const row = page.locator('[data-files-row]')
+  .filter({ has: page.locator('[data-files-name]', { hasText: 'Live Detail.pdf' }) })
+  .first()
 await row.waitFor({ timeout: 8000 })
-await row.click()
+await row.locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3500)
 
 // The viewer is detected by the subscription it opens rather than by a class

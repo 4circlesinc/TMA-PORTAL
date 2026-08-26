@@ -6214,6 +6214,50 @@
 
   var clientFolderFolders = [];
 
+  /*
+   * What is picked in this tab, and where a Shift range measures from.
+   *
+   * The Documents tab is a folder window like any other in the portal, so it
+   * is picked like one: a click takes the row, Shift takes a run of them, Ctrl
+   * (Cmd on a Mac) adds or drops one, a second click opens, and the right
+   * button carries the actions — over the whole selection when the row is part
+   * of one. TMAFileSelect holds the rules so this and the File Library cannot
+   * drift apart.
+   */
+  var clientFolderSelected = {};
+
+  var clientFolderAnchor = { id: null };
+
+  function clientFolderIds() {
+    return (clientFolderFolders || []).concat(clientFolderFiles || [])
+      .map(function (r) { return r.id; });
+  }
+
+  function clientFolderSelectedRows() {
+    return clientFolderIds().map(clientFolderRow)
+      .filter(function (r) { return r && clientFolderSelected[r.id]; });
+  }
+
+  function clearClientFolderSelection() {
+    clientFolderSelected = {};
+    clientFolderAnchor.id = null;
+  }
+
+  /* Repainted in place: a re-render would reload the folder, and reloading a
+     folder to show a row went blue is a request per click. */
+  function paintClientFolderSelection(root) {
+    var canvas = clientFolderCanvas(root);
+    if (!canvas) return;
+    // Addressed by the two attributes only this list uses: `data-clients-row`
+    // is also on the directory's own client rows, which are not files.
+    canvas.querySelectorAll('[data-clients-subfolder], [data-clients-file]').forEach(function (el) {
+      var id = el.getAttribute('data-clients-subfolder') || el.getAttribute('data-clients-file');
+      var on = !!clientFolderSelected[id];
+      el.classList.toggle('is-selected', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
   function clientFolderCanvas(root) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap) return null;
@@ -6228,6 +6272,13 @@
     var files = (res && res.files) || [];
     clientFolderFiles = files;
     clientFolderFolders = folders;
+    // Anything that moved, was renamed away or deleted stops being picked —
+    // acting on an id that is no longer in the folder is acting blind.
+    var present = {};
+    folders.concat(files).forEach(function (r) { present[r.id] = true; });
+    Object.keys(clientFolderSelected).forEach(function (id) {
+      if (!present[id]) delete clientFolderSelected[id];
+    });
     if (!folders.length && !files.length) {
       // Same illustrated empty state as File Library folders, plain grey copy
       // read as a broken list rather than an intentional empty folder.
@@ -6251,7 +6302,9 @@
       var folderIcon = window.TMAFolderIcons
         ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
         : '<img src="' + (window.TMAFolderColours ? window.TMAFolderColours.iconSrc(folderBase, f.colour) : ICONS[folderBase]) + '" alt="">';
-      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder' + (clientFolderSelected[f.id] ? ' is-selected' : '') +
+        '" draggable="true" data-clients-row data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '"' +
+        ' aria-pressed="' + (clientFolderSelected[f.id] ? 'true' : 'false') + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
           clientCommentChip(f) + '</span>' +
@@ -6301,7 +6354,9 @@
         who,
       ].filter(Boolean).join(' · ');
 
-      html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder' + (clientFolderSelected[f.id] ? ' is-selected' : '') +
+        '" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '"' +
+        ' aria-pressed="' + (clientFolderSelected[f.id] ? 'true' : 'false') + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + thumb + '</span>' +
         '<span class="tma-dash__clients-folder-main">' +
           '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
@@ -6386,6 +6441,8 @@
     if (!wrap || !clientFolderNav) return;
     var current = clientFolderNav.path[clientFolderNav.path.length - 1];
     wrap.setAttribute('data-folder-uuid', current.uuid);
+    // A new folder is a new list; nothing picked in the last one belongs to it.
+    clearClientFolderSelection();
     renderFolderCrumbs(root);
     if (clientsMountState) syncClientsDetailUrl(clientsMountState);
     loadClientFolder(root);
@@ -6412,58 +6469,103 @@
    */
   function openClientFolderMenu(root, e, id) {
     var row = clientFolderRow(id);
-    if (!row || !window.TMAFileActions || !window.TMAFileActions.menu) return;
+    var acts = window.TMAFileActions;
+    if (!row || !acts || !acts.menu) return;
 
     e.preventDefault();
-    window.TMAFileActions.menu(e.clientX, e.clientY, row, function () {
-      loadClientFolder(root, { changed: true });
-    });
+
+    // Right-clicking inside a selection is about the selection; anywhere else
+    // takes the row first, so a menu is never about rows out of view.
+    if (window.TMAFileSelect) {
+      clientFolderSelected = window.TMAFileSelect.context({
+        selected: clientFolderSelected, id: id, anchor: clientFolderAnchor,
+      });
+      paintClientFolderSelection(root);
+    }
+
+    var done = function () { loadClientFolder(root, { changed: true }); };
+    var picked = clientFolderSelectedRows();
+
+    if (picked.length > 1 && acts.menuMulti) {
+      acts.menuMulti(e.clientX, e.clientY, picked, function () {
+        clearClientFolderSelection();
+        done();
+      });
+
+      return;
+    }
+    acts.menu(e.clientX, e.clientY, row, done);
+  }
+
+  /* Drill into a folder, or open a file in the File Library's viewer. */
+  function openClientFolderItem(root, id) {
+    var row = clientFolderRow(id);
+    if (!row) return;
+
+    if (row.type === 'folder') {
+      if (!clientFolderNav) return;
+      clientFolderNav.path.push({ uuid: row.id, name: row.name || 'Folder' });
+      showClientFolderCurrent(root);
+
+      return;
+    }
+
+    /*
+     * The File Library's viewer, not a new browser tab.
+     *
+     * These are the same files the library lists, so opening one here used to
+     * give a bare PDF in another tab, no comments, no versions, no review
+     * controls, while opening it from the library gave the full viewer.
+     * TMAFileActions.open hands the row we already hold straight to it, and
+     * the callback refreshes this list for anything the viewer changed (a
+     * review moved on, a version added).
+     */
+    if (window.TMAFileActions && window.TMAFileActions.open) {
+      window.TMAFileActions.open(row, function () { loadClientFolder(root, { changed: true }); });
+
+      return;
+    }
+
+    // No viewer on this shell, the old behaviour beats doing nothing.
+    if (filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(id) + '/preview'), '_blank', 'noopener');
   }
 
   function bindClientFolderRows(root) {
-    root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
-        if (!clientFolderNav) return;
-        clientFolderNav.path.push({
-          uuid: btn.getAttribute('data-clients-subfolder'),
-          name: btn.getAttribute('data-clients-subfolder-name') || 'Folder',
-        });
-        showClientFolderCurrent(root);
-      });
-      btn.addEventListener('contextmenu', function (e) {
-        openClientFolderMenu(root, e, btn.getAttribute('data-clients-subfolder'));
-      });
-    });
-    root.querySelectorAll('[data-clients-file]').forEach(function (btn) {
-      btn.addEventListener('contextmenu', function (e) {
-        openClientFolderMenu(root, e, btn.getAttribute('data-clients-file'));
-      });
-      btn.addEventListener('click', function (e) {
-        if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
-        var fu = btn.getAttribute('data-clients-file');
-        if (!fu) return;
+    // Not `[data-clients-row]`: the client directory's own rows carry that too,
+    // and they are clients, not documents.
+    root.querySelectorAll('[data-clients-subfolder], [data-clients-file]').forEach(function (btn) {
+      var id = btn.getAttribute('data-clients-subfolder') || btn.getAttribute('data-clients-file');
 
-        /*
-         * The File Library's viewer, not a new browser tab.
-         *
-         * These are the same files the library lists, so opening one here used
-         * to give a bare PDF in another tab, no comments, no versions, no
-         * review controls, while opening it from the library gave the full
-         * viewer. TMAFileActions.open hands the row we already hold straight
-         * to it, and the callback refreshes this list for anything the viewer
-         * changed (a review moved on, a version added).
-         */
-        var row = clientFolderRow(fu);
+      btn.addEventListener('contextmenu', function (e) { openClientFolderMenu(root, e, id); });
 
-        if (row && window.TMAFileActions && window.TMAFileActions.open) {
-          window.TMAFileActions.open(row, function () { loadClientFolder(root, { changed: true }); });
+      // Shift-click selects a run of rows; without this it also drags a blue
+      // streak of text across them.
+      btn.addEventListener('mousedown', function (e) { if (e.shiftKey) e.preventDefault(); });
+
+      btn.addEventListener('click', function (e) {
+        // A drag that ended on this row raises a click nobody asked for.
+        if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
+        e.preventDefault();
+
+        // Enter or Space on a focused row: no pointer behind it, and nobody
+        // on the keyboard can be asked for a double-click.
+        if (window.TMAFileSelect && window.TMAFileSelect.fromKeyboard(e)) {
+          openClientFolderItem(root, id);
 
           return;
         }
+        if (!window.TMAFileSelect) { openClientFolderItem(root, id); return; }
 
-        // No viewer on this shell, the old behaviour beats doing nothing.
-        if (filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(fu) + '/preview'), '_blank', 'noopener');
+        clientFolderSelected = window.TMAFileSelect.click({
+          ids: clientFolderIds(), selected: clientFolderSelected, id: id,
+          event: e, anchor: clientFolderAnchor,
+        });
+        paintClientFolderSelection(root);
+      });
+
+      btn.addEventListener('dblclick', function (e) {
+        e.preventDefault();
+        openClientFolderItem(root, id);
       });
     });
   }
@@ -6829,7 +6931,13 @@
       var id = row.getAttribute('data-clients-subfolder') || row.getAttribute('data-clients-file');
       var it = clientFolderRow(id);
       if (!it) return;
-      draggingItems = [{ id: it.id, type: it.type || (row.hasAttribute('data-clients-subfolder') ? 'folder' : 'file') }];
+      var fallbackType = it.type || (row.hasAttribute('data-clients-subfolder') ? 'folder' : 'file');
+      // Dragging one of several picked rows moves all of them; dragging a row
+      // outside the selection moves just it.
+      var grabbed = clientFolderSelected[id] ? clientFolderSelectedRows() : [];
+      draggingItems = grabbed.length > 1
+        ? grabbed.map(function (r) { return { id: r.id, type: r.type || 'file' }; })
+        : [{ id: it.id, type: fallbackType }];
       try { e.dataTransfer.setData('text/plain', it.name || 'item'); } catch (err) {}
       try { e.dataTransfer.setData('application/x-tma-move', '1'); } catch (err) {}
       e.dataTransfer.effectAllowed = 'move';

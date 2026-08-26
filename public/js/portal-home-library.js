@@ -384,6 +384,30 @@
   function acts() { return window.TMAFileActions; }
 
   /**
+   * The File Library's own menu, over one row or over the whole selection.
+   *
+   * Same actions, same permission rules, same destination picker and same
+   * confirmations — this table never grows a second copy of any of it. What it
+   * decides is only which rows the menu is about: everything picked when the
+   * row is part of a selection, otherwise the row alone.
+   *
+   * Anything the menu changes reloads the list; a rename or a delete leaves
+   * these rows stale otherwise.
+   */
+  function openRowMenu(x, y, item) {
+    if (!item || !acts()) return;
+    var done = function () { clearSelection(); refresh(); };
+    var picked = selectedItems();
+
+    if (picked.length > 1 && sel()[item.id] && acts().menuMulti) {
+      acts().menuMulti(x, y, picked, done);
+
+      return;
+    }
+    acts().menu(x, y, item, function () { refresh(); }, null);
+  }
+
+  /**
    * Run a bulk action on the current selection.
    *
    * Delegates to the File Library rather than reimplementing any of it, so the
@@ -425,6 +449,28 @@
 
   function sel() { return state.selected[state.tab] || (state.selected[state.tab] = {}); }
 
+  /*
+   * Where a Shift range measures from, per tab.
+   *
+   * Recent Files and Shared with me hold their own selections, so they hold
+   * their own anchors too — switching tabs and Shift-clicking must not measure
+   * from a row on the list you just left.
+   */
+  var anchors = {};
+
+  function anchor() { return anchors[state.tab] || (anchors[state.tab] = { id: null }); }
+
+  function rowIds() { return tableItems().map(function (i) { return i.id; }); }
+
+  /** Explorer rules: click takes one, Shift takes a run, Ctrl adds or drops. */
+  function selectRow(id, e) {
+    if (!window.TMAFileSelect) return;
+    state.selected[state.tab] = window.TMAFileSelect.click({
+      ids: rowIds(), selected: sel(), id: id, event: e, anchor: anchor(),
+    });
+    rerenderHome();
+  }
+
   function selectedItems() {
     var picked = sel();
 
@@ -433,20 +479,9 @@
     return tableItems().filter(function (i) { return picked[i.id]; });
   }
 
-  function setSelected(id, on) {
-    if (on) sel()[id] = true;
-    else delete sel()[id];
-    rerenderHome();
-  }
-
-  function selectAll(on) {
-    state.selected[state.tab] = {};
-    if (on) tableItems().forEach(function (i) { state.selected[state.tab][i.id] = true; });
-    rerenderHome();
-  }
-
   function clearSelection() {
     state.selected[state.tab] = {};
+    anchor().id = null;
   }
 
   /**
@@ -486,16 +521,17 @@
   function renderFilesTable() {
     var all = tableItems();
     var picked = sel();
-    var allOn = all.length > 0 && all.every(function (i) { return picked[i.id]; });
-    var someOn = !allOn && all.some(function (i) { return picked[i.id]; });
 
     var headers = [
-      {
-        html: '<input type="checkbox" class="tma-dash__check" data-home-lib-all' +
-          (allOn ? ' checked' : '') + (someOn ? ' data-indeterminate="1"' : '') +
-          ' aria-label="Select all">',
-        attrs: ' class="tma-portal-cell--tight"',
-      },
+      /*
+       * No checkbox column.
+       *
+       * Rows here are picked the way they are picked in the File Library and
+       * in every file manager the reader already uses — a click, a Shift-click
+       * for a run of them, Ctrl for one more — and the actions are on the
+       * right button. A column of boxes was a second way to do the same thing,
+       * and the only one that had to be taught.
+       */
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
       /*
        * No Owner column.
@@ -517,12 +553,11 @@
       var when = fmtDate(it.modifiedAt || it.createdAt || it.uploadedAt);
 
       return '<tr data-home-lib-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '"' +
-        (picked[it.id] ? ' class="is-selected"' : '') + '>' +
-        '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-home-lib-check="' + esc(it.id) + '"' +
-        (picked[it.id] ? ' checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
+        (picked[it.id] ? ' class="is-selected"' : '') +
+        ' aria-selected="' + (picked[it.id] ? 'true' : 'false') + '">' +
         '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' +
         '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
-        '<button type="button" class="tma-portal-file-link" data-home-lib-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
+        '<button type="button" class="tma-portal-file-link" data-home-lib-name="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
         '</span></td>' +
         '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(size) + '</td>' +
@@ -672,23 +707,9 @@
     if (dash && typeof dash._homeLibRerender === 'function') dash._homeLibRerender();
   }
 
-  /*
-   * "Some but not all selected" is a property, not an attribute.
-   *
-   * There is no HTML for it. `indeterminate` can only be set on the element —
-   * so the header box has to be corrected after every render or a partial
-   * selection renders as plain unchecked.
-   */
-  function syncIndeterminate(host) {
-    var box = host.querySelector('[data-home-lib-all]');
-    if (box) box.indeterminate = box.hasAttribute('data-indeterminate');
-  }
-
   function wire(root) {
     var host = root.querySelector('[data-key="home-below"]') || root;
     if (!host) return;
-
-    syncIndeterminate(host);
 
     // Bind once per element, via a property rather than an attribute: the strip
     // now survives re-renders, and morph strips any data-* attribute the fresh
@@ -750,12 +771,9 @@
         e.preventDefault();
         e.stopPropagation();
         var menuItem = findItem(rowMenu.getAttribute('data-home-lib-menu'));
-        // The File Library owns the menu, same actions, same permissions.
-        if (menuItem && acts()) {
+        if (menuItem) {
           var r = rowMenu.getBoundingClientRect();
-          // Reload when an action changes something, a rename or a delete
-          // leaves this row stale otherwise.
-          acts().menu(r.left, r.bottom + 4, menuItem, function () { refresh(); });
+          openRowMenu(r.left, r.bottom + 4, menuItem);
         }
         return;
       }
@@ -767,24 +785,77 @@
         return;
       }
 
-      var openBtn = e.target.closest('[data-home-lib-open], [data-home-lib-open-file]');
+      // Inside the folder cards above the table: still a plain link, they are
+      // shortcuts into the library rather than a list of things to pick.
+      var openBtn = e.target.closest('[data-home-lib-open-file]');
       if (openBtn && host.contains(openBtn)) {
-        var id = openBtn.getAttribute('data-home-lib-open') || openBtn.getAttribute('data-home-lib-open-file');
-        openItem(findItem(id));
+        openItem(findItem(openBtn.getAttribute('data-home-lib-open-file')));
+        return;
+      }
+
+      /*
+       * In the table a click picks the row; it does not open it.
+       *
+       * The name stays a button so a reader on the keyboard can tab to it and
+       * press Enter — that click carries no pointer (detail 0) and still
+       * opens, which is the one thing a double-click cannot ask of somebody
+       * who is not holding a mouse.
+       */
+      var nameBtn = e.target.closest('[data-home-lib-name]');
+      if (nameBtn && host.contains(nameBtn) && window.TMAFileSelect
+        && window.TMAFileSelect.fromKeyboard(e)) {
+        openItem(findItem(nameBtn.getAttribute('data-home-lib-name')));
+        return;
+      }
+
+      var row = e.target.closest('[data-home-lib-row]');
+      if (row && host.contains(row)) {
+        if (e.target.closest('.tma-portal-star, [data-home-lib-menu]')) return;
+        selectRow(row.getAttribute('data-id'), e);
+        return;
+      }
+
+      // The empty space around the rows lets the selection go, the same way
+      // the background of a folder window does.
+      if (e.target.closest('[data-home-lib-table]') && Object.keys(sel()).length) {
+        clearSelection();
+        rerenderHome();
       }
     }, 'homeLib');
 
-    // Checkboxes fire `change`, not `click`, binding click here would miss a
-    // keyboard toggle entirely.
-    bindOnce(host, 'change', function (e) {
-      var all = e.target.closest('[data-home-lib-all]');
-      if (all && host.contains(all)) { selectAll(all.checked); return; }
+    // A second click on the row opens it; on the name it is the library's
+    // rename gesture, which this table does not offer, so it opens too.
+    bindOnce(host, 'dblclick', function (e) {
+      var row = e.target.closest('[data-home-lib-row]');
+      if (!row || !host.contains(row)) return;
+      if (e.target.closest('.tma-portal-star, [data-home-lib-menu]')) return;
+      e.preventDefault();
+      openItem(findItem(row.getAttribute('data-id')));
+    }, 'homeLibOpen');
 
-      var box = e.target.closest('[data-home-lib-check]');
-      if (box && host.contains(box)) {
-        setSelected(box.getAttribute('data-home-lib-check'), box.checked);
+    // Right-click acts on the selection when the row is part of one, and takes
+    // the row first when it is not.
+    bindOnce(host, 'contextmenu', function (e) {
+      var row = e.target.closest('[data-home-lib-row]');
+      if (!row || !host.contains(row)) return;
+      e.preventDefault();
+
+      var id = row.getAttribute('data-id');
+      if (window.TMAFileSelect) {
+        state.selected[state.tab] = window.TMAFileSelect.context({
+          selected: sel(), id: id, anchor: anchor(),
+        });
+        rerenderHome();
       }
-    }, 'homeLibSelect');
+      var item = findItem(id);
+      if (item) openRowMenu(e.clientX, e.clientY, item);
+    }, 'homeLibMenu');
+
+    // Shift-clicking rows would otherwise paint a streak of selected text
+    // across them.
+    bindOnce(host, 'mousedown', function (e) {
+      if (e.shiftKey && e.target.closest('[data-home-lib-row]')) e.preventDefault();
+    }, 'homeLibShift');
 
     // Keep underline chrome in sync for a11y; switching itself is delegated above.
     if (ui() && ui().wireTabs) {

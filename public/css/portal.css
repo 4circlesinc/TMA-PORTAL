@@ -5193,6 +5193,20 @@ label.tma-portal-check-row:hover {
   background: var(--color-accent-bg);
 }
 
+/*
+ * Picked, not read.
+ *
+ * Rows are selected with Shift and Ctrl the way a folder window selects them,
+ * and Shift-clicking two rows of live text drags a blue streak across
+ * everything between them. Nothing on the row is a link any more either — one
+ * click takes it, two open it — so the pointer stops promising a jump.
+ */
+.tma-portal-home-library tbody tr {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* ── Workflows: requests and comments across every file ──────────
  *
  * One card shape for both lists. A request and a comment are different

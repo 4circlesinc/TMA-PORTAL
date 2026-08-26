@@ -336,12 +336,11 @@
         ? '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + esc(visual.tone) + '">' + visual.html + '</span>'
         : '<span class="tma-dash__overview-recycle-visual">' + visual.html + '</span>';
 
+      /* Picked the way a folder window picks things — click, Shift-click,
+         Ctrl-click — with the actions on the right button. See TMAFileSelect. */
       return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' +
-        (checked ? ' tma-dash__ctr--selected' : '') + '" role="row" data-recycle-row="' + esc(key) + '">' +
-        '<div class="tma-dash__cc tma-dash__cc--check">' +
-          '<input type="checkbox" class="tma-dash__check" data-recycle-check="' + esc(key) + '"' +
-            (checked ? ' checked' : '') + ' aria-label="Select ' + esc(item.name) + '">' +
-        '</div>' +
+        (checked ? ' tma-dash__ctr--selected' : '') + '" role="row" data-recycle-row="' + esc(key) + '"' +
+        ' aria-selected="' + (checked ? 'true' : 'false') + '">' +
         '<div class="tma-dash__cc tma-dash__cc--filename">' +
           iconWrap +
           '<span class="tma-dash__cc-truncate" title="' + esc(item.name) + '">' + esc(item.name) + '</span>' +
@@ -371,7 +370,7 @@
       if (open) open.remove();
     }
 
-    function openRowMenu(btn, item) {
+    function openRowMenu(x, y, item) {
       closeRowMenu();
       var key = rowKey(item);
       var menu = document.createElement('div');
@@ -382,10 +381,9 @@
         '<button type="button" class="tma-dash__menu-item" role="menuitem" data-recycle-restore="' + esc(key) + '">Restore</button>' +
         '<button type="button" class="tma-dash__menu-item" role="menuitem" data-recycle-purge="' + esc(key) + '">Delete forever</button>';
       document.body.appendChild(menu);
-      var rect = btn.getBoundingClientRect();
       menu.style.position = 'fixed';
-      menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 4) + 'px';
-      menu.style.left = Math.max(8, rect.right - menu.offsetWidth) + 'px';
+      menu.style.top = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, y)) + 'px';
+      menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, x)) + 'px';
       menu.style.zIndex = '80';
 
       menu.querySelector('[data-recycle-restore]').addEventListener('click', function (e) {
@@ -456,11 +454,8 @@
         ? kindLabel + ' · ' + sizeLabel
         : kindLabel;
       return '<div class="tma-portal-file-card' + (checked ? ' is-selected' : '') +
-        '" data-recycle-row="' + esc(key) + '" tabindex="0">' +
-        '<label class="tma-portal-file-card__check">' +
-          '<input type="checkbox" class="tma-dash__check" data-recycle-check="' + esc(key) + '"' +
-            (checked ? ' checked' : '') + ' aria-label="Select ' + esc(item.name) + '">' +
-        '</label>' +
+        '" data-recycle-row="' + esc(key) + '" tabindex="0"' +
+        ' aria-selected="' + (checked ? 'true' : 'false') + '">' +
         '<button type="button" class="tma-portal-row-menu tma-dash__overview-recycle-card-more" data-recycle-row-more="' + esc(key) + '" aria-label="More actions for ' + esc(item.name) + '">' +
           '<img src="' + TMA + 'ThreeDots-16.svg" alt="" width="16" height="16">' +
         '</button>' +
@@ -477,16 +472,8 @@
     }
 
     function renderTable() {
-      var allChecked = state.items.length && state.items.every(function (item) {
-        return !!state.selected[rowKey(item)];
-      });
-
       return '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Recycle bin">' +
         '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview" role="row">' +
-          '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
-            '<input type="checkbox" class="tma-dash__check" data-recycle-selectall aria-label="Select all"' +
-              (allChecked ? ' checked' : '') + '>' +
-          '</div>' +
           '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">Name</div>' +
           '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head">Type</div>' +
           '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">Size</div>' +
@@ -549,22 +536,34 @@
       if (e.target.closest('[data-recycle-search]')) state.searchFocused = false;
     });
 
-    container.addEventListener('change', function (e) {
-      var selectAll = e.target.closest('[data-recycle-selectall]');
-      if (selectAll) {
-        var on = !!selectAll.checked;
-        state.selected = {};
-        if (on) {
-          state.items.forEach(function (item) { state.selected[rowKey(item)] = true; });
-        }
+    /*
+     * Picking rows: click, Shift-click for a run, Ctrl-click for one more.
+     *
+     * The bin lists more than files — accounts, clients, calendar entries —
+     * but they are all things you take back or throw away in handfuls, so it
+     * is picked the same way the file lists are, through the same rules.
+     */
+    var selectAnchor = { id: null };
+
+    function visibleKeys() { return state.items.map(rowKey); }
+
+    container.addEventListener('mousedown', function (e) {
+      if (e.shiftKey && e.target.closest('[data-recycle-row]')) e.preventDefault();
+    });
+
+    container.addEventListener('contextmenu', function (e) {
+      var rowEl = e.target.closest('[data-recycle-row]');
+      if (!rowEl) return;
+      e.preventDefault();
+      var key = rowEl.getAttribute('data-recycle-row');
+      if (window.TMAFileSelect) {
+        state.selected = window.TMAFileSelect.context({
+          selected: state.selected, id: key, anchor: selectAnchor,
+        });
         render();
-        return;
       }
-      var check = e.target.closest('[data-recycle-check]');
-      if (check) {
-        state.selected[check.getAttribute('data-recycle-check')] = !!check.checked;
-        render();
-      }
+      var item = findItem(key);
+      if (item) openRowMenu(e.clientX, e.clientY, item);
     });
 
     if (!container._recycleDocClick) {
@@ -603,7 +602,20 @@
         e.preventDefault();
         e.stopPropagation();
         var moreItem = findItem(moreBtn.getAttribute('data-recycle-row-more'));
-        if (moreItem) openRowMenu(moreBtn, moreItem);
+        if (moreItem) {
+          var r = moreBtn.getBoundingClientRect();
+          openRowMenu(r.left, r.bottom + 4, moreItem);
+        }
+        return;
+      }
+
+      var rowEl = e.target.closest('[data-recycle-row]');
+      if (rowEl && !e.target.closest('[data-recycle-row-more]') && window.TMAFileSelect) {
+        state.selected = window.TMAFileSelect.click({
+          ids: visibleKeys(), selected: state.selected,
+          id: rowEl.getAttribute('data-recycle-row'), event: e, anchor: selectAnchor,
+        });
+        render();
         return;
       }
 

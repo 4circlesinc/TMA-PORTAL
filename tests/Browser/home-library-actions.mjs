@@ -75,32 +75,32 @@ try {
   step(2, 'The bulk toolbar is hidden until something is selected');
   check(!(await toolbarVisible()), 'no toolbar with an empty selection');
 
-  step(3, 'Selecting a row reveals the toolbar');
-  await page.locator('[data-home-lib-check]').first().check();
+  step(3, 'A click on a row picks it and reveals the toolbar');
+  // No checkboxes any more: these rows are picked the way a folder window
+  // picks them — a click takes one, Shift takes a run, Ctrl adds one more.
+  await rows().nth(0).click();
   await page.waitForTimeout(400);
   check(await toolbarVisible(), 'the toolbar appears');
   check((await selectionText()).includes('1 Selected'), `reads "1 Selected" (got "${(await selectionText()).trim()}")`);
 
   // The click re-renders the table; a selection that does not survive that is
   // the classic failure here.
-  check(await page.locator('[data-home-lib-check]').first().isChecked(),
-    'the checkbox stays checked through the re-render');
+  check(await rows().nth(0).evaluate((el) => el.classList.contains('is-selected')),
+    'the row stays picked through the re-render');
 
-  step(4, 'Select-all picks up every row');
-  await page.locator('[data-home-lib-all]').check();
+  step(4, 'Shift-click takes everything in between');
+  await rows().nth(n - 1).click({ modifiers: ['Shift'] });
   await page.waitForTimeout(400);
   check((await selectionText()).includes(`${n} Selected`),
     `reads "${n} Selected" (got "${(await selectionText()).trim()}")`);
 
-  step(5, 'A partial selection shows the header box as indeterminate');
-  await page.locator('[data-home-lib-check]').first().uncheck();
+  step(5, 'Ctrl-click drops one back out of the selection');
+  await rows().nth(0).click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
   await page.waitForTimeout(400);
-  const headerState = await page.evaluate(() => {
-    const el = document.querySelector('[data-home-lib-all]');
-    return el ? { checked: el.checked, indeterminate: el.indeterminate } : null;
-  });
-  check(!!headerState && headerState.indeterminate,
-    'the header checkbox is indeterminate, not plain unchecked');
+  check((await selectionText()).includes(`${n - 1} Selected`),
+    `reads "${n - 1} Selected" (got "${(await selectionText()).trim()}")`);
+  check(!(await rows().nth(0).evaluate((el) => el.classList.contains('is-selected'))),
+    'and the row it dropped is no longer picked');
 
   step(6, 'Delete asks for confirmation instead of acting silently');
   await page.click('[data-home-lib-bulk="delete"]');
@@ -249,10 +249,14 @@ try {
     check(narrowed > 0 && narrowed < before10,
       `filtering to ${firstType.key} narrows the table (${before10} → ${narrowed})`);
 
-    await page.locator('[data-home-lib-all]').check();
+    // Click the first row, Shift-click the last: a range can only reach what
+    // the filter left on screen.
+    await rows().nth(0).click();
+    await page.waitForTimeout(300);
+    await rows().nth(narrowed - 1).click({ modifiers: ['Shift'] });
     await page.waitForTimeout(600);
     check((await selectionText()).includes(`${narrowed} Selected`),
-      `Select all picks up only what is on screen (got "${(await selectionText()).trim()}")`);
+      `a Shift range picks up only what is on screen (got "${(await selectionText()).trim()}")`);
 
     // The same pill again clears the filter, and the selection with it.
     await page.click(`[data-home-lib-filter="${firstType.key}"]`);
@@ -262,9 +266,9 @@ try {
   }
 
   step(11, 'A bulk delete really deletes — dialog to server');
-  // The sidebar can be set to Hover Overlay and expands over the checkbox
-  // column; the previous step's last click left the pointer on the left of the
-  // board, which is enough to hold it open over this one's first click.
+  // The sidebar can be set to Hover Overlay and expands over the left of the
+  // table; the previous step's last click left the pointer over there, which
+  // is enough to hold it open over this one's first click.
   await page.mouse.move(1400, 500);
   // Reload for a clean selection. Earlier steps deliberately left rows picked
   // (the selection is per-tab and survives switching), so carrying that in
@@ -285,7 +289,7 @@ try {
    * inside it with it — this step then counted four files leaving where it
    * expected one and reported a delete that had worked perfectly as a failure.
    */
-  await page.locator('[data-home-lib-row][data-type="file"] [data-home-lib-check]').first().check();
+  await page.locator('[data-home-lib-row][data-type="file"]').first().click();
   await page.waitForTimeout(400);
   await page.click('[data-home-lib-bulk="delete"]');
   await page.waitForTimeout(500);

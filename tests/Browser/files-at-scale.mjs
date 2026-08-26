@@ -130,7 +130,10 @@ try {
   step(4, 'Clients — the whole client list');
   await parkPointer();
   const openStart = Date.now();
-  await page.locator('[data-files-body] [data-files-open][title="Clients"]').first().dblclick();
+  // Double-click the row, not the name — a double-click on the name renames.
+  await page.locator('[data-files-body] [data-files-row]')
+    .filter({ has: page.locator('[data-files-name][title="Clients"]') })
+    .first().locator('.tma-portal-cell--type').dblclick();
   await page.waitForFunction(
     () => document.querySelectorAll('[data-files-body] [data-id]').length > 5,
     { timeout: BUDGET_MS },

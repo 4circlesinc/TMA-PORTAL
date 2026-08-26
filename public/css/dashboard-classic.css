@@ -1736,6 +1736,14 @@
 .tma-dash__ctr--body { border-radius: var(--radius-8); cursor: pointer; }
 .tma-dash__ctr--body:hover { background: var(--color-hover); }
 .tma-dash__ctr--selected { background: var(--color-hover); }
+
+/* Overview's file rows are picked with click / Shift / Ctrl, so a Shift-click
+   must select rows rather than paint text across them. */
+.tma-dash__ctr--overview.tma-dash__ctr--body {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .tma-dash__cc {
   display: flex;
   align-items: center;
@@ -5736,6 +5744,10 @@
     justify-content: center;
   }
 
+  /* The name cell holds the middle column by name: the checkbox that used to
+     push it there is gone, and an auto-placed cell would fall into the 32px
+     gutter it left behind. */
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--filename,
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--activity {
     grid-area: main;
     flex: 1 1 auto;
@@ -6046,6 +6058,10 @@
     justify-content: center;
   }
 
+  /* The name cell holds the middle column by name: the checkbox that used to
+     push it there is gone, and an auto-placed cell would fall into the 32px
+     gutter it left behind. */
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--filename,
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--activity {
     grid-area: main;
     flex: 1 1 auto;

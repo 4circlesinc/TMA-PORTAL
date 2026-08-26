@@ -96,12 +96,17 @@
 }
 .tma-portal-file-card__thumb-img { border-radius: 6px; }
 .tma-portal-check { width: 16px; height: 16px; accent-color: var(--color-accent); cursor: pointer; }
-/* File name: regular 12/16 black table text (documented recipe) — not a link. */
+/*
+ * File name: regular 12/16 black table text (documented recipe) — not a link.
+ *
+ * And no longer dressed as one: a single click picks the row rather than
+ * opening it, so an underline on hover would promise a jump that the click
+ * does not make. Double-clicking the name still renames in place.
+ */
 .tma-portal-file-link {
-  background: none; border: 0; padding: 0; font: inherit; font-weight: 400; cursor: pointer;
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 400; cursor: default;
   color: var(--color-text-primary); text-align: left;
 }
-.tma-portal-file-link:hover { text-decoration: underline; }
 /* Inline rename field (double-click a name, or new folder). */
 .tma-portal-rename-input {
   font: inherit; font-size: var(--text-size-14); line-height: var(--text-lh-14);
@@ -137,6 +142,24 @@
 .tma-portal-files__selection-clear { margin-left: auto; }
 .tma-portal-tool--ghost { border-color: transparent; background: none; }
 
+/*
+ * Picked, not read.
+ *
+ * Rows and cards are selected with Shift and Ctrl the way a folder window
+ * selects them, and Shift-clicking two rows of live text drags a blue streak
+ * across everything between them. The filename is still on the element's
+ * title, and the details panel still gives it as copyable text.
+ */
+.tma-portal-files-table tbody tr,
+.tma-portal-file-card {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Nothing on a row is a link any more — one click takes it, two open it — so
+   the pointer says "this is a thing", not "this is a destination". */
+.tma-portal-files-table tbody tr { cursor: default; }
+
 /* ── grid view ─────────────────────────────────────── */
 .tma-portal-grid {
   display: grid; gap: var(--space-12);
@@ -151,19 +174,17 @@
 }
 .tma-portal-file-card:hover { background: var(--color-hover); border-color: var(--color-border-medium); }
 .tma-portal-file-card.is-selected { border-color: var(--color-accent); background: var(--color-accent-bg); }
-.tma-portal-file-card__check { position: absolute; top: var(--space-8); left: var(--space-8); }
 .tma-portal-file-card__star { position: absolute; top: var(--space-4); right: var(--space-4); }
 .tma-portal-file-card__thumb {
   display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 72px; border: 0; background: none; cursor: pointer;
+  width: 100%; height: 72px; border: 0; background: none;
 }
 .tma-portal-file-card__thumb-img { max-width: 100%; max-height: 72px; border-radius: var(--radius-6); object-fit: cover; }
 .tma-portal-file-card__name {
-  background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-weight: 400;
+  background: none; border: 0; padding: 0; cursor: default; font: inherit; font-weight: 400;
   color: var(--color-text-primary); font-size: var(--text-size-14); line-height: var(--text-lh-14);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tma-portal-file-card__name:hover { text-decoration: underline; }
 .tma-portal-file-card__meta { font-size: var(--text-size-12); color: var(--color-text-secondary); }
 
 /* ── context menu extras (base in portal.css) ──────── */

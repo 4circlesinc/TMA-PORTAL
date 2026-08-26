@@ -43,10 +43,6 @@
     return String(value || '').toLowerCase().trim();
   }
 
-  function rowKey(index) {
-    return String(index);
-  }
-
   function cap(s) {
     s = String(s || '');
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
@@ -172,9 +168,16 @@
   function renderRow(row, index, checked) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
     var sharedLabel = row.shared ? 'Shared' : 'Private';
-    return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row" data-files-row>' +
-      '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-files-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.name) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--filename" data-files-open>' +
+    /*
+     * No checkbox column.
+     *
+     * The rows are picked the way a file manager picks them — click,
+     * Shift-click for a run, Ctrl-click for one more — and the actions are on
+     * the right button. See TMAFileSelect.
+     */
+    return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row" data-files-row' +
+      ' data-id="' + escapeHtml(row.id || '') + '" aria-selected="' + (checked ? 'true' : 'false') + '">' +
+      '<div class="tma-dash__cc tma-dash__cc--filename">' +
         '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + escapeHtml(row.tone) + '">' +
           rowThumbHtml(row) +
         '</span>' +
@@ -271,6 +274,10 @@
     var typeLabel = ext === 'pdf' ? 'PDF' : (category ? cap(category) : (ext ? ext.toUpperCase() : 'File'));
     return {
       id: f.id,
+      // Folders come through here too (Shared with me holds both) and every
+      // file action is addressed by {type, id} — without it a folder would be
+      // asked for down the file routes.
+      type: f.type || 'file',
       name: name,
       extension: ext,
       category: category,
@@ -305,7 +312,8 @@
     if (open) open.remove();
   }
 
-  function openRowMenu(btn, row) {
+  /* The bare menu used only where the File Library's own is not on the page. */
+  function openRowMenu(x, y, row) {
     closeRowMenu();
     var menu = document.createElement('div');
     menu.className = 'tma-dash__menu tma-dash__overview-files-menu';
@@ -321,10 +329,9 @@
         escapeHtml(it.action) + '"' + (it.disabled ? ' disabled' : '') + '>' + escapeHtml(it.label) + '</button>';
     }).join('');
     document.body.appendChild(menu);
-    var rect = btn.getBoundingClientRect();
     menu.style.position = 'fixed';
-    menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 4) + 'px';
-    menu.style.left = Math.max(8, rect.right - menu.offsetWidth) + 'px';
+    menu.style.top = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, y)) + 'px';
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, x)) + 'px';
     menu.style.zIndex = '1200';
 
     menu.addEventListener('click', function (e) {
@@ -339,7 +346,7 @@
 
     setTimeout(function () {
       function onDoc(ev) {
-        if (menu.contains(ev.target) || btn.contains(ev.target)) return;
+        if (menu.contains(ev.target)) return;
         closeRowMenu();
         document.removeEventListener('mousedown', onDoc);
       }
@@ -427,6 +434,11 @@
       sort: 'uploaded',
     };
 
+    /* Where a Shift range measures from. Outside `state` because the table is
+       rebuilt on every render and an anchor that went with it would make the
+       second half of "click, Shift-click" a range of one row. */
+    var selectAnchor = { id: null };
+
     container.setAttribute('data-files-mounted', '');
 
     // Delegate section tabs so clicks still work after full re-renders.
@@ -440,6 +452,7 @@
         state.section = next;
         state.page = 1;
         state.selected = {};
+        selectAnchor.id = null;
         state.search = '';
         state.filterType = '';
         if (state.cache[next]) {
@@ -499,7 +512,6 @@
         ? (
           '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Files">' +
             '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
-              '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head"><input type="checkbox" class="tma-dash__check" data-files-selectall aria-label="Select all"></div>' +
               '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">File name</div>' +
               '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head">Type</div>' +
               '<div class="tma-dash__cc tma-dash__cc--folder tma-dash__cc--head">Folder</div>' +
@@ -513,7 +525,7 @@
             '<div data-files-body>' +
               pageRows.map(function (row, i) {
                 var globalIndex = start + i;
-                return renderRow(row, globalIndex, !!state.selected[rowKey(globalIndex)]);
+                return renderRow(row, globalIndex, !!state.selected[row.id]);
               }).join('') +
             '</div>' +
           '</div>' +
@@ -538,6 +550,25 @@
     }
 
     function wireEvents(filtered, pageRows, start) {
+      /**
+       * The File Library's menu, over this row or over the whole selection.
+       *
+       * These are the library's files, so they get the library's actions —
+       * share, move, rename, request, delete, the lot — rather than the three
+       * this table used to carry on its own. The bare Preview / Download /
+       * Open folder menu is kept only for a shell where the library's script
+       * is not loaded at all.
+       */
+      function openRowMenuAt(x, y, row, list) {
+        var acts = window.TMAFileActions;
+        var picked = (list || [row]).filter(Boolean);
+        var done = function () { reloadFiles(); };
+
+        if (acts && acts.menuMulti && picked.length > 1) { acts.menuMulti(x, y, picked, done); return; }
+        if (acts && acts.menu) { acts.menu(x, y, row, done); return; }
+        openRowMenu(x, y, row);
+      }
+
       var searchInput = container.querySelector('[data-files-search]');
       var searchTimer = null;
 
@@ -611,43 +642,77 @@
         if (state.page < totalPages) { state.page++; render(); }
       });
 
-      var selectAll = container.querySelector('[data-files-selectall]');
-      var rowChecks = Array.prototype.slice.call(container.querySelectorAll('[data-files-check]'));
+      /*
+       * Picking rows, the way a folder window picks them.
+       *
+       * A click takes the row, Shift takes everything between it and the last
+       * one, Ctrl (Cmd on a Mac) adds or drops one, a second click opens, and
+       * the right button carries the actions. The rules themselves are in
+       * TMAFileSelect so this list and the File Library cannot drift apart.
+       */
+      var body = container.querySelector('[data-files-body]');
 
-      function syncRow(cb, rowIndex) {
-        var key = rowKey(rowIndex);
-        if (cb.checked) state.selected[key] = true;
-        else delete state.selected[key];
-        var rowEl = cb.closest('[data-row-index]');
-        if (rowEl) rowEl.classList.toggle('tma-dash__ctr--selected', cb.checked);
+      function pageIds() { return pageRows.map(function (r) { return r.id; }); }
+
+      function rowById(id) {
+        return filtered.filter(function (r) { return r.id === id; })[0];
+      }
+
+      function selectedRows() {
+        return filtered.filter(function (r) { return state.selected[r.id]; });
+      }
+
+      function repaintSelection() {
+        container.querySelectorAll('[data-files-row]').forEach(function (el) {
+          var on = !!state.selected[el.getAttribute('data-id')];
+          el.classList.toggle('tma-dash__ctr--selected', on);
+          el.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
         updateToolbarSelection();
       }
 
-      rowChecks.forEach(function (cb) {
-        var rowEl = cb.closest('[data-row-index]');
-        var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
-        cb.addEventListener('change', function () {
-          syncRow(cb, rowIndex);
-          syncSelectAll();
+      if (body) {
+        // Shift-click would otherwise paint a streak of selected text across
+        // the rows it is meant to be selecting.
+        body.addEventListener('mousedown', function (e) {
+          if (e.shiftKey && e.target.closest('[data-files-row]')) e.preventDefault();
         });
-      });
 
-      function syncSelectAll() {
-        if (!selectAll) return;
-        var checked = rowChecks.filter(function (c) { return c.checked; }).length;
-        selectAll.checked = checked === rowChecks.length && rowChecks.length > 0;
-        selectAll.indeterminate = checked > 0 && checked < rowChecks.length;
-      }
-
-      if (selectAll) {
-        selectAll.addEventListener('change', function () {
-          rowChecks.forEach(function (cb, i) {
-            cb.checked = selectAll.checked;
-            syncRow(cb, start + i);
+        body.addEventListener('click', function (e) {
+          var rowEl = e.target.closest('[data-files-row]');
+          if (!rowEl) return;
+          if (e.target.closest('[data-files-row-more], [data-files-uploader-photo], [data-files-open-folder]')) return;
+          if (!window.TMAFileSelect) return;
+          state.selected = window.TMAFileSelect.click({
+            ids: pageIds(), selected: state.selected, id: rowEl.getAttribute('data-id'),
+            event: e, anchor: selectAnchor,
           });
-          selectAll.indeterminate = false;
+          repaintSelection();
         });
-        syncSelectAll();
+
+        body.addEventListener('dblclick', function (e) {
+          var rowEl = e.target.closest('[data-files-row]');
+          if (!rowEl) return;
+          if (e.target.closest('[data-files-row-more], [data-files-uploader-photo], [data-files-open-folder]')) return;
+          e.preventDefault();
+          var row = rowById(rowEl.getAttribute('data-id'));
+          if (row) openFilePreview(row);
+        });
+
+        body.addEventListener('contextmenu', function (e) {
+          var rowEl = e.target.closest('[data-files-row]');
+          if (!rowEl) return;
+          e.preventDefault();
+          var id = rowEl.getAttribute('data-id');
+          if (window.TMAFileSelect) {
+            state.selected = window.TMAFileSelect.context({
+              selected: state.selected, id: id, anchor: selectAnchor,
+            });
+            repaintSelection();
+          }
+          var row = rowById(id);
+          if (row) openRowMenuAt(e.clientX, e.clientY, row, selectedRows());
+        });
       }
 
       var addBtn = container.querySelector('[data-files-add]');
@@ -661,16 +726,6 @@
           addInput.value = '';
         });
       }
-
-      container.querySelectorAll('[data-files-open]').forEach(function (cell) {
-        cell.addEventListener('click', function () {
-          var rowEl = cell.closest('[data-row-index]');
-          var idx = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : -1;
-          var row = filtered[idx];
-          if (!row) return;
-          openFilePreview(row);
-        });
-      });
 
       container.querySelectorAll('[data-files-open-folder]').forEach(function (cell) {
         cell.addEventListener('click', function (e) {
@@ -689,7 +744,9 @@
           var rowEl = btn.closest('[data-row-index]');
           var idx = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : -1;
           var row = filtered[idx];
-          if (row) openRowMenu(btn, row);
+          if (!row) return;
+          var r = btn.getBoundingClientRect();
+          openRowMenuAt(r.left, r.bottom + 4, row, state.selected[row.id] ? selectedRows() : [row]);
         });
       });
 

@@ -53,7 +53,11 @@ const before = await count()
 
 await page.goto(`${BASE}/folders/all`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1500)
-await page.locator('[data-files-open]', { hasText: 'Live Detail.pdf' }).first().click()
+// A file is opened by double-clicking its row, the way a folder window opens
+// one. Not the name: a double-click there is the rename gesture.
+await page.locator('[data-files-row]')
+  .filter({ has: page.locator('[data-files-name]', { hasText: 'Live Detail.pdf' }) })
+  .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3000)
 await page.click('.tma-portal-viewer__tabs [data-lb-tab="versions"]')
 await page.waitForTimeout(1500)

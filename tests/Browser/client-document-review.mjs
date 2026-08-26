@@ -72,7 +72,7 @@ await page.goto(`${BASE}/folders/all?folder=${subUuid}`, { waitUntil: 'networkid
 await page.waitForTimeout(2500)
 
 const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[data-files-row]')).map((r) => ({
-  name: (r.querySelector('[data-files-open]') || {}).textContent,
+  name: (r.querySelector('[data-files-name]') || {}).textContent,
   badge: (r.querySelector('.tma-portal-status') || {}).textContent || null,
 })))
 
@@ -82,7 +82,9 @@ check(rows.every((r) => r.badge === 'Pending review'),
 
 /* ── a reviewer can move it on ── */
 
-await page.locator('[data-files-open]', { hasText: 'Passport.pdf' }).first().click()
+await page.locator('[data-files-row]')
+  .filter({ has: page.locator('[data-files-name]', { hasText: 'Passport.pdf' }) })
+  .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3000)
 
 // The picker, then the state — all four are listed whatever the current one.

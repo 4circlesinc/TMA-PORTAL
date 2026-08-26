@@ -1242,10 +1242,10 @@
     el.addEventListener('dblclick', onDblClick);
     el.addEventListener('contextmenu', onContextMenu);
     // Shift-clicking rows paints a streak of selected text otherwise; the
-    // list's own selection is what Shift is for here.
-    el.addEventListener('mousedown', function (e) {
-      if (e.shiftKey && e.target.closest('[data-files-row]')) e.preventDefault();
-    });
+    // list's own selection is what Shift is for here. Named, like its
+    // neighbours: wire() runs on every render, and an inline function would be
+    // a new listener each time, stacked on the one before it.
+    el.addEventListener('mousedown', onShiftGuard);
 
     // drag-to-move: rows and grid cards are draggable (except the recycle bin)
     if (!isRecycle()) {
@@ -1375,10 +1375,22 @@
       return;
     }
 
+    if (e.target.closest('.tma-portal-star, [data-files-menu], .tma-portal-rename-input')) return;
+
+    /*
+     * The row, or failing that the one the first click took.
+     *
+     * The first click of the pair repaints the list, and a browser dispatches
+     * dblclick to the common ancestor of the two clicks — so if anything under
+     * the pointer were rebuilt in between, `closest` would answer with the
+     * table rather than a row. The anchor is that row by definition: a plain
+     * click sets it to whatever it just picked.
+     */
     var row = e.target.closest('[data-files-row]');
-    if (!row || e.target.closest('.tma-portal-star, [data-files-menu], .tma-portal-rename-input')) return;
+    var id = row ? row.getAttribute('data-id') : (e.target.closest('[data-files-body]') ? selectAnchor.id : null);
+    if (!id) return;
     e.preventDefault();
-    openItem(row.getAttribute('data-id'));
+    openItem(id);
   }
 
   /**
@@ -1670,6 +1682,12 @@
   }
 
   function clearSelection() { state.selected = {}; selectAnchor.id = null; render(); }
+
+  /* Shift-click selects a run of rows; without this it also drags a blue
+     streak of selected text across them. */
+  function onShiftGuard(e) {
+    if (e.shiftKey && e.target.closest('[data-files-row]')) e.preventDefault();
+  }
 
   /**
    * Ctrl+A and Escape, for the list on screen.

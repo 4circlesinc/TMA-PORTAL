@@ -70,7 +70,11 @@ await page.waitForTimeout(2000)
 
 /* ── into a folder ── */
 
-await page.locator('[data-files-open]', { hasText: FOLDER }).first().click()
+// Folders and files alike open on a double-click of the row; the name itself
+// is the rename gesture, so these take the cell beside it.
+await page.locator('[data-files-row]')
+  .filter({ has: page.locator('[data-files-name]', { hasText: FOLDER }) })
+  .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(2500)
 
 check(/[?&]folder=/.test(page.url()), `URL carries the folder (${page.url().split('?')[1] || 'no query'})`)
@@ -84,7 +88,9 @@ check(await page.evaluate((n) => document.body.innerText.includes(n), FILE),
 
 /* ── with a file open ── */
 
-await page.locator('[data-files-open]', { hasText: FILE }).first().click()
+await page.locator('[data-files-row]')
+  .filter({ has: page.locator('[data-files-name]', { hasText: FILE }) })
+  .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3500)
 
 const viewerOpen = () => page.evaluate(() => !!document.querySelector('.tma-portal-viewer'))

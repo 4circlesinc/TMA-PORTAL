@@ -169,7 +169,9 @@ check('tabs with nothing to count stay bare', tabs.info === null && tabs.access 
 // Drilling into a subfolder must not rewrite the client's total.
 await page.click('[data-clients-tab="folders"]');
 await page.waitForTimeout(2500);
-await page.click('.tma-dash__clients-folder[data-clients-subfolder]');
+// A double-click drills in; a single click only picks the tile, the way a
+// folder window works.
+await page.dblclick('.tma-dash__clients-folder[data-clients-subfolder]');
 await page.waitForTimeout(2500);
 check(
   'drilling into a subfolder leaves the total alone',

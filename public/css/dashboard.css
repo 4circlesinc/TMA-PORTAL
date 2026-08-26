@@ -2356,6 +2356,14 @@
 .tma-dash__ctr--body { border-radius: var(--radius-8); cursor: pointer; }
 .tma-dash__ctr--body:hover { background: var(--color-hover); }
 .tma-dash__ctr--selected { background: var(--color-hover); }
+
+/* Overview's file and recycle-bin rows are picked with click / Shift / Ctrl,
+   so a Shift-click must select rows rather than paint text across them. */
+.tma-dash__ctr--overview.tma-dash__ctr--body {
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .tma-dash__cc {
   display: flex;
   align-items: center;
@@ -6984,6 +6992,15 @@
     justify-content: center;
   }
 
+  /*
+   * The name cell holds the middle column by name, not by luck.
+   *
+   * It used to be auto-placed: the checkbox took the first column, so the name
+   * fell into the second one on its own. With the checkbox gone there is
+   * nothing in front of it, and an auto-placed cell would drop into the 32px
+   * gutter the checkbox used to sit in.
+   */
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--filename,
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--activity {
     grid-area: main;
     flex: 1 1 auto;
@@ -7294,6 +7311,15 @@
     justify-content: center;
   }
 
+  /*
+   * The name cell holds the middle column by name, not by luck.
+   *
+   * It used to be auto-placed: the checkbox took the first column, so the name
+   * fell into the second one on its own. With the checkbox gone there is
+   * nothing in front of it, and an auto-placed cell would drop into the 32px
+   * gutter the checkbox used to sit in.
+   */
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--filename,
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__cc--activity {
     grid-area: main;
     flex: 1 1 auto;
@@ -18265,6 +18291,24 @@ button.tma-cip-status-chip:focus-visible {
 
 .tma-dash__clients-folder.is-dragging {
   opacity: 0.45;
+}
+
+/*
+ * Picked, the way a folder window picks things.
+ *
+ * A click takes the tile, Shift takes a run of them, and the right button
+ * carries the actions — so a picked tile has to look picked, and Shift-click
+ * must not paint a streak of selected text across the names.
+ */
+.tma-dash__clients-folder {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tma-dash__clients-folder.is-selected,
+.tma-dash__clients-folder.is-selected:hover {
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
 }
 
 .tma-dash__clients-folder .tma-portal-rename-input {

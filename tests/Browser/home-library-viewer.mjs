@@ -68,9 +68,13 @@ const title = async () => (await page.textContent('.tma-portal-viewer__name').ca
    the table, so the pointer is parked on the right before every click. */
 async function park() { await page.mouse.move(1400, 500); }
 
+/* A file opens on a double-click of its row, the way a folder window opens
+   one; a single click only picks it. */
 async function openFile(name) {
   await park();
-  await page.locator(`[data-home-lib-open]:text-is("${name}")`).first().click();
+  await page.locator('[data-home-lib-row]')
+    .filter({ has: page.locator(`[data-home-lib-name]:text-is("${name}")`) })
+    .first().dblclick();
   await page.waitForSelector('.tma-portal-viewer', { timeout: 10000 });
   await page.waitForTimeout(900);
 }
@@ -222,7 +226,7 @@ try {
 
   step(11, 'A folder row still navigates, it is not a viewer');
   await park();
-  await page.locator('[data-home-lib-row][data-type="folder"] [data-home-lib-open]').first().click();
+  await page.locator('[data-home-lib-row][data-type="folder"]').first().dblclick();
   await page.waitForTimeout(1500);
   check(await viewer().count() === 0, 'no viewer for a folder');
   const inLibrary = await page.evaluate(() =>
