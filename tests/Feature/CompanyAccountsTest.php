@@ -159,7 +159,10 @@ class CompanyAccountsTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonPath('message', 'This address belongs to a deleted account. Restore it from the Recycle Bin first.');
 
-        Mail::assertNothingSent();
+        // The one email is the closure notice the delete sent; no invitation
+        // went out to an address nobody can sign in with.
+        Mail::assertSentCount(1);
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->subjectLine === 'Your account has been closed');
         $this->assertSame(0, CompanyMember::count());
     }
 
@@ -186,11 +189,20 @@ class CompanyAccountsTest extends TestCase
         $this->actingAs($admin)->deleteJson("/portal/admin/recycle-bin/user/{$login->id}")->assertOk();
         $this->assertFalse(User::withTrashed()->where('email', 'igraphix@acme.test')->exists());
 
-        $uuid = $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+        // The membership survived the purge instead of cascading away, so
+        // adding the address back reuses its row rather than starting a
+        // second one — and it comes back as somebody staff deliberately let
+        // in, not as a leftover.
+        $uuid = $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => 'igraphix@acme.test', 'role' => 'member',
+        ])->assertCreated()->json('member.id');
+
+        $this->assertSame(1, CompanyMember::where('company_id', $company->id)->count());
+
+        $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
             ->assertOk()
             ->assertJsonPath('members.0.hasAccount', false)
-            ->assertJsonPath('members.0.email', 'igraphix@acme.test')
-            ->json('members.0.id');
+            ->assertJsonPath('members.0.email', 'igraphix@acme.test');
 
         $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members/{$uuid}/invite")
             ->assertOk();
@@ -212,6 +224,73 @@ class CompanyAccountsTest extends TestCase
         $member = CompanyMember::where('uuid', $uuid)->first();
         $this->assertSame('active', $member->status);
         $this->assertSame('igraphix@acme.test', $member->user->email);
+    }
+
+    /**
+     * Deleting somebody's account takes their company access away. Emptying
+     * the Recycle Bin afterwards used to hand it back: parking the membership
+     * so it would not cascade away with the login also reset it to `invited`
+     * and cleared the removal, so the person reappeared in Access as though
+     * an invitation were outstanding, with a Resend button on it.
+     */
+    public function test_emptying_the_recycle_bin_does_not_hand_back_company_access(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $company = $this->company();
+        $login = $this->staff('Client', ['email' => 'travis@acme.test', 'name' => 'Travis Francis']);
+
+        $uuid = $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'name' => 'Travis Francis', 'email' => 'travis@acme.test', 'role' => 'member',
+        ])->assertCreated()->json('member.id');
+
+        $this->actingAs($admin)->deleteJson('/admin/users/'.$login->id)->assertOk();
+        $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+            ->assertOk()
+            ->assertJsonCount(0, 'members')
+            ->assertJsonPath('removed.0.email', 'travis@acme.test');
+
+        $this->actingAs($admin)->postJson('/portal/admin/recycle-bin/empty')->assertOk();
+
+        $member = CompanyMember::where('uuid', $uuid)->first();
+        $this->assertNotNull($member, 'the membership record has to survive the purge');
+        $this->assertNull($member->user_id);
+        $this->assertSame('removed', $member->status);
+
+        $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+            ->assertOk()
+            ->assertJsonCount(0, 'members');
+    }
+
+    /**
+     * An accepted invitation has been used up — a resend starts a new one — so
+     * it must not go on reporting itself as outstanding. A member whose login
+     * has since been purged read as "Invite sent", offering to re-send a link
+     * nobody was waiting on.
+     */
+    public function test_an_accepted_invitation_is_not_still_reported_as_sent(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $company = $this->company();
+
+        $uuid = $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => 'dana@acme.test', 'role' => 'member', 'invite' => true,
+        ])->assertCreated()->json('member.id');
+
+        $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+            ->assertOk()
+            ->assertJsonPath('members.0.inviteSent', true);
+
+        Invitation::where('email', 'dana@acme.test')->update([
+            'status' => Invitation::STATUS_ACCEPTED,
+            'accepted_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->getJson("/portal/companies/{$company->uid}/members")
+            ->assertOk()
+            ->assertJsonPath('members.0.id', $uuid)
+            ->assertJsonPath('members.0.inviteSent', false);
     }
 
     public function test_a_failed_member_invite_is_reported_to_staff(): void

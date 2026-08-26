@@ -141,13 +141,18 @@ class AccountApprovalFlowTest extends TestCase
         Mail::fake();
         $admin = $this->admin();
 
+        // The real form's fields. Posting a single `name` failed validation
+        // silently, so no account was ever created and everything below was
+        // asserted against a registration that never happened.
         $this->post('/auth/register', [
-            'name' => 'Newbie Jones',
+            'first_name' => 'Newbie',
+            'last_name' => 'Jones',
+            'gender' => 'Prefer not to say',
             'email' => 'newbie@example.com',
             'password' => 'password-that-is-long-enough',
             'password_confirmation' => 'password-that-is-long-enough',
             'terms' => 'on',
-        ]);
+        ])->assertSessionHasNoErrors();
 
         $newbie = User::where('email', 'newbie@example.com')->firstOrFail();
         $this->assertSame(User::STATUS_PENDING, $newbie->status);

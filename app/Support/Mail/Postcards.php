@@ -174,6 +174,27 @@ class Postcards
         ]));
     }
 
+    /**
+     * An administrator closed somebody's account.
+     *
+     * A closed account cannot sign in, so the bell notification raised at the
+     * same time is one they will never see; this is the only way the decision
+     * reaches the person it is about. Nothing here mentions the Recycle Bin —
+     * that the row is recoverable is the firm's business, not a promise to
+     * make to somebody who has just lost their access.
+     */
+    public static function accountDeleted(string $email, ?string $name = null): Postcard
+    {
+        return new Postcard('Your account has been closed', [
+            'preheader' => 'Your access to the portal has been closed.',
+            'eyebrow' => 'Account',
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => 'Your account has been closed',
+            'bodyHtml' => '<p>An administrator has closed the '.self::SITE.' account for <strong>'.e($email).'</strong>. You will no longer be able to sign in, and the files, messages and calendars shared with you are no longer available.</p>'
+                .'<p>If this is unexpected, or you need anything you had stored there, reply to this email or contact us at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
+        ]);
+    }
+
     public static function newLogin(array $details, string $reviewUrl): Postcard
     {
         return new Postcard('New sign-in to your account', [

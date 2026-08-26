@@ -292,15 +292,20 @@ final class CompanyMembers
      * Keep the Access row when a login is purged. The membership used to
      * cascade away with the user, so staff had to retype the address to invite
      * them as a new account.
+     *
+     * What it must not do is hand the company back. Access that had already
+     * been taken away — including the removal `AccessSync` performs when the
+     * account is moved to the Recycle Bin — stays taken away, so emptying the
+     * bin cannot resurrect somebody in the Access list as freshly invited.
      */
     public static function parkForPurgedLogin(User $user): void
     {
         CompanyMember::where('user_id', $user->id)->get()->each(function (CompanyMember $member) use ($user) {
             $member->forceFill([
                 'user_id' => null,
-                'status' => CompanyMember::STATUS_INVITED,
-                'removed_at' => null,
-                'removed_by' => null,
+                'status' => $member->isRemoved()
+                    ? CompanyMember::STATUS_REMOVED
+                    : CompanyMember::STATUS_INVITED,
                 'email' => $member->email ?: $user->email,
                 'name' => $member->name ?: $user->name,
             ])->save();

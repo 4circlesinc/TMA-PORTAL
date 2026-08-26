@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -119,6 +121,46 @@ class UserRecycleBinTest extends TestCase
         // deliberate act, the same as after a suspension.
         $this->actingAs($admin)->postJson("/portal/admin/recycle-bin/user/{$staff->id}/restore")->assertOk();
         $this->assertSame(ClientAssignment::STATUS_ENDED, $assignment->fresh()->status);
+    }
+
+    /**
+     * Losing an account is otherwise something the person finds out about the
+     * next time they try to sign in — and by then the portal has no way left
+     * to tell them anything. Sent inline, like approval and denial: a queued
+     * message waits behind a worker that may not be running.
+     */
+    public function test_deleting_an_account_emails_the_person_it_belonged_to(): void
+    {
+        Mail::fake();
+        $admin = $this->user('Administrator');
+        $victim = $this->user('Employee', ['name' => 'Selina Kyle', 'email' => 'selina@firm.test']);
+
+        $this->actingAs($admin)->deleteJson("/admin/users/{$victim->id}")->assertOk();
+
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo('selina@firm.test')
+            && $m->subjectLine === 'Your account has been closed'
+            && str_contains($m->render(), 'selina@firm.test'));
+
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'selina@firm.test', 'template' => 'accountDeleted',
+        ]);
+    }
+
+    public function test_a_bulk_delete_emails_everybody_in_the_batch(): void
+    {
+        Mail::fake();
+        $admin = $this->user('Administrator');
+        $one = $this->user('Employee', ['email' => 'one@firm.test']);
+        $two = $this->user('Employee', ['email' => 'two@firm.test']);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/users/bulk-delete', ['ids' => [$one->id, $two->id]])
+            ->assertOk();
+
+        foreach (['one@firm.test', 'two@firm.test'] as $email) {
+            Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($email)
+                && $m->subjectLine === 'Your account has been closed');
+        }
     }
 
     public function test_a_bulk_delete_lands_every_account_in_the_bin(): void

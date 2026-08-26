@@ -209,12 +209,21 @@ class CompanyMemberController extends Controller
             ->unique()
             ->values()
             ->all();
+        /*
+         * Only invitations still standing. An accepted or cancelled one has
+         * been used up — `Invitations::issue` starts a fresh row rather than
+         * reviving it — so counting it as sent made a member whose login had
+         * since been purged read as "Invite sent", with a Resend button for a
+         * link nobody was waiting on.
+         */
         $invites = $emails === []
             ? collect()
             : Invitation::query()
                 ->where('type', Invitation::TYPE_COMPANY_MEMBER)
                 ->where('company_id', $company->id)
                 ->whereIn('email', $emails)
+                ->whereNull('accepted_at')
+                ->whereNull('cancelled_at')
                 ->orderByDesc('id')
                 ->get()
                 ->unique(fn (Invitation $i) => Str::lower($i->email))

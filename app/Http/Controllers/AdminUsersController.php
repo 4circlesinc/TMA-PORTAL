@@ -607,6 +607,10 @@ class AdminUsersController extends Controller
      * is a deliberate re-assignment rather than a silent return of everything
      * the person could once reach.
      *
+     * The person is emailed. Losing an account is something they find out
+     * about the next time they try to sign in otherwise, and by then there is
+     * no way for the portal to tell them anything.
+     *
      * System folders stay put, see SystemFolders::rehome, which runs on purge
      * instead, when the row really is about to go.
      */
@@ -616,6 +620,26 @@ class AdminUsersController extends Controller
 
         DB::table('sessions')->where('user_id', $user->id)->delete();
         AccessSync::userSuspended($user, $actor);
+
+        /*
+         * Tell the person. A closed account can never sign in again, so the
+         * portal has no way left to reach them — email is it. Inline and
+         * tracked, like approval and denial: a queued message waits behind a
+         * worker that may not be running, and one that never arrives is
+         * indistinguishable from never having been sent.
+         *
+         * Sent before the row goes, so the delivery is recorded against a user
+         * that is still there to be recorded against.
+         */
+        if ($user->email) {
+            Deliveries::send(
+                Postcards::accountDeleted($user->email, $user->first_name ?: null),
+                $user->email,
+                $user,
+                'accountDeleted',
+                immediate: true,
+            );
+        }
 
         $user->forceFill(['deleted_by' => $actor->id])->save();
         $user->delete();
