@@ -136,33 +136,9 @@
   }
 
   /*
-   * Files open in the shared lightbox — the same viewer the Overview → Files
-   * table, Messages and the Feed use — instead of dropping the reader into the
-   * folder the file happens to live in. Documents that have no in-browser
-   * preview still open: the lightbox draws its honest no-preview card with the
-   * download beside it.
-   */
-  function lightboxItem(it) {
-    var url = it.previewUrl || it.downloadUrl;
-    return {
-      name: it.name,
-      mime: it.mime || '',
-      size: it.size || 0,
-      url: url,
-      downloadUrl: it.downloadUrl || url,
-      thumbUrl: it.thumbUrl || '',
-      canDownload: !(it.permissions && it.permissions.download === false),
-    };
-  }
-
-  function previewable(it) {
-    return !!it && it.type !== 'folder' && !(it.permissions && it.permissions.preview === false);
-  }
-
-  /*
-   * The list the clicked file belongs to, so the arrows and the filmstrip step
-   * through its neighbours: the rows of the visible tab, or the preview inside
-   * the folder card it was clicked in.
+   * The list the clicked file belongs to, so the viewer's arrows and its rail
+   * step through the file's neighbours: the rows of the visible tab, or the
+   * preview inside the folder card it was clicked in.
    */
   function siblingsOf(id) {
     var i;
@@ -179,20 +155,24 @@
     return [];
   }
 
-  function openInLightbox(it) {
-    var lb = window.TMAPortalLightbox;
-    if (!lb || typeof lb.open !== 'function' || !previewable(it)) return false;
+  /*
+   * Files open in the File Library's own viewer, not a second one of our own.
+   *
+   * It is the same file, so it gets the same window: the same comments,
+   * versions, review controls and details panel, and the same behaviour for
+   * every type. TMAFileActions is the seam the Client hub's Documents tab
+   * already opens through — see its comment in portal-files.js — and the rest
+   * of the table travels with the file so the arrows walk the rows the reader
+   * was actually looking at. Anything an action in there changes (a rename, a
+   * delete, a review) lands back here as a refresh.
+   */
+  function openInViewer(it) {
+    var actions = acts();
+    if (!actions || typeof actions.open !== 'function') return false;
 
-    // Rows this reader may not preview are left out of the set rather than
-    // shown as a broken stage.
-    var set = siblingsOf(it.id).filter(previewable);
-    var idx = -1;
-    for (var i = 0; i < set.length; i++) {
-      if (set[i].id === it.id) { idx = i; break; }
-    }
-    if (idx < 0) { set = [it]; idx = 0; }
+    var set = siblingsOf(it.id).filter(function (s) { return s.type !== 'folder'; });
+    actions.open(it, function () { refresh(); }, set);
 
-    lb.open(set.map(lightboxItem), idx);
     return true;
   }
 
@@ -202,9 +182,9 @@
       openFolder(it.id);
       return;
     }
-    if (openInLightbox(it)) return;
-    // No viewer on the page, or nothing this reader may preview: the folder it
-    // lives in is the next best place to land.
+    if (openInViewer(it)) return;
+    // No viewer on the page: the folder it lives in is the next best place to
+    // land.
     if (it.folder && it.folder.id) {
       openFolder(it.folder.id);
       return;

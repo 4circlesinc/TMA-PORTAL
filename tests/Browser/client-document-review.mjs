@@ -58,7 +58,10 @@ await page.fill('input[name="password"]', 'password12345')
 await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}), page.click('button[type="submit"]:visible')])
 await page.waitForTimeout(400)
 if (page.url().includes('/auth/stay-signed-in')) {
-  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}), page.click('button:has-text("Yes, stay signed in")')])
+  // Two forms post the same route, told apart by a hidden `stay` value, and
+  // the buttons read "Yes" / "Not this time" — the old "Yes, stay signed in"
+  // text stopped matching and the run stalled here on an empty shell.
+  await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}), page.click('button[type="submit"]:visible')])
 }
 
 console.log('\nClient document review\n')

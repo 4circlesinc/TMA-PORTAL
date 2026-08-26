@@ -1860,8 +1860,21 @@
     // make Back land on the folder instead of the previous file.
     closeLightbox(true);
 
+    /*
+     * What the arrows and the left rail step through.
+     *
+     * This view's own rows normally, but a file handed in from a list
+     * elsewhere — the Dashboard's Recent Files, a client's Documents tab — is
+     * not among them, and the reader still expects to walk the table they were
+     * looking at. Those callers pass their rows to TMAFileActions.open, which
+     * leaves them in externalItems.
+     */
     var gallery = items().filter(function (it) { return it.type === 'file'; });
     var idx = gallery.findIndex(function (f) { return f.id === file.id; });
+    if (idx < 0) {
+      gallery = externalItems.filter(function (it) { return it.type !== 'folder'; });
+      idx = gallery.findIndex(function (f) { return f.id === file.id; });
+    }
     if (idx < 0) { gallery = [file]; idx = 0; }
 
     state.openFile = file.id;
@@ -6980,9 +6993,15 @@
      * file it was handed through findItem, which otherwise only knows about
      * rows the library itself loaded.
      */
-    open: function (item, onChange) {
+    open: function (item, onChange, list) {
       if (!item || item.type === 'folder') return;
-      externalItems = [item];
+      // `list` is the caller's own rows, in the caller's own order, so the
+      // viewer steps through them the way the table reads. The file itself is
+      // always in there, whatever was passed.
+      externalItems = (list || []).filter(Boolean);
+      if (!externalItems.some(function (i) { return i.id === item.id; })) {
+        externalItems = [item].concat(externalItems);
+      }
       externalOnChange = onChange || null;
       openLightbox(item);
     },

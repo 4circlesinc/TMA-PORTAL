@@ -737,23 +737,39 @@ field placement and drawing, and computed CSS only exist in a browser.
   which found nothing when driven from the dashboard, so every item was
   clickable and did absolutely nothing. Needs a few files in Recent Files
   (it deletes one, so re-seed between runs).
-- **`home-library-lightbox.mjs`** — clicking a file on those same tables opens
-  it. A filename click used to navigate to the folder the file lives in and
-  leave the reader to find it again; it now opens the shared lightbox
-  (`window.TMAPortalLightbox`), the viewer the Overview → Files table, the Feed
-  and Messages already use. What only a browser shows is that the *stage* is
-  right for each kind, so the fixture seeds four: pdf.js has to paint a real
-  canvas, the photo has to decode, the text file has to show its text, and the
-  `.docx` has to get the honest no-preview card with a download rather than a
-  blank screen. It also pins the two rules around it — the set the arrows step
-  through is the table the row was clicked in (folders excluded), and a folder
-  row still navigates instead of opening a viewer.
+- **`home-library-viewer.mjs`** — clicking a file on those same tables opens
+  it, **in the File Library's own viewer**. A filename click used to navigate
+  to the folder the file lives in and leave the reader to find it again; it
+  now goes through `TMAFileActions.open`, the seam a client's Documents tab
+  already opens through, so it is the same window from every list — the file's
+  comments, versions, approvals, activity and access, not a second lighter
+  viewer that only knew how to show the bytes.
+
+  What only a browser shows is that the *stage* is right for each kind, so the
+  fixture seeds four: pdf.js has to paint real canvases, the photo has to
+  decode, the text file has to show its text, and the `.docx` has to get the
+  honest no-preview card with a download rather than a blank screen.
+
+  Three things it was written around. The details panel starts **closed**
+  (`viewerPrefs.panel` is false) exactly as it does inside the library, so the
+  test opens it from the toolbar rather than asserting on collapsed markup — an
+  assertion that merely finds the tabs in the DOM proves nothing, they are
+  always there. A PDF's left rail is its **page** thumbnails, so the
+  file-stepping rail is checked on the photograph instead. And the rail is the
+  proof that the caller's rows travel with the file: `TMAFileActions.open`
+  takes the list as its third argument, so the arrows walk the table the row
+  was clicked in rather than whatever the File Library last loaded.
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
     php artisan tinker tests/Browser/fixtures/lightbox-seed.php
-  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/home-library-lightbox.mjs
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/home-library-viewer.mjs
   ```
+
+  Run it against a **fresh** database. `client-document-review.mjs` seeds files
+  whose bytes are a PDF under a `.png` name; their thumbnails 404 (correctly —
+  the row falls back to its type icon), and the console-error check counts
+  those.
 - **`file-thumbnails.mjs`** — the picture of the file, in every list that
   draws one. Lists showed a type glyph and nothing else, so a folder of
   passports, scans and photographs read as one repeated green picture mark.
