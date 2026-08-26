@@ -10,6 +10,27 @@
   var DEFAULT_VISIBLE = 3;
   var PREVIEW_FILES = 5;
 
+  /*
+   * The type pills, in the order they are offered.
+   *
+   * Same categories and same names as the File Library's own "All types"
+   * filter — a reader who filters to Word there must get Word here — each with
+   * the mark the file itself wears in the list, so the row of pills reads as
+   * the row of documents it narrows to. Only the ones actually present are
+   * drawn; a pill for a type nobody has filed is a dead control.
+   */
+  var TYPES = [
+    { key: 'pdf', label: 'PDF', icon: 'images/icons/phosphor/FilePdf.svg' },
+    { key: 'word', label: 'Word', icon: 'images/icons/tma/DocxIcon.svg' },
+    { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
+    { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
+    { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
+    { key: 'video', label: 'Video', icon: 'images/icons/phosphor/FileVideo.svg' },
+    { key: 'audio', label: 'Audio', icon: 'images/icons/phosphor/FileAudio.svg' },
+    { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg' },
+    { key: 'text', label: 'Text', icon: 'images/icons/tma/TxtIcon.svg' },
+  ];
+
   var state = {
     loaded: false,
     loadedAt: 0,
@@ -17,6 +38,10 @@
     showAllDefaults: false,
     defaults: [], // { id, name, colour, iconName, files: [], fileCount }
     tab: 'recent', // recent | shared
+    // '' is everything; otherwise one of the File Library's own categories
+    // (pdf, word, excel, powerpoint, image, video, audio, archive, text), so
+    // the two lists mean the same thing by "Word".
+    filterType: '',
     recent: { folders: [], files: [] },
     shared: { folders: [], files: [] },
     // Selected row ids, per tab. Kept apart so switching tabs cannot carry a
@@ -286,9 +311,61 @@
 
   /* ── files table (same columns/markup as Folders → All Files) ── */
 
-  function tableItems() {
+  /* Everything in the open tab, before the type pills narrow it. */
+  function tabItems() {
     var pack = state.tab === 'shared' ? state.shared : state.recent;
     return (pack.folders || []).concat(pack.files || []);
+  }
+
+  /* One row's category, from the server's own answer, falling back to the
+     extension for a payload that predates it. */
+  function categoryOf(it) {
+    if (it.category) return String(it.category).toLowerCase();
+    var m = String(it.name || '').match(/\.([a-z0-9]+)$/i);
+    if (!m) return '';
+    var ext = m[1].toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (/^(doc|docx)$/.test(ext)) return 'word';
+    if (/^(xls|xlsx|csv)$/.test(ext)) return 'excel';
+    if (/^(ppt|pptx)$/.test(ext)) return 'powerpoint';
+    if (/^(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif|tiff?)$/.test(ext)) return 'image';
+    if (/^(txt|md|rtf|log)$/.test(ext)) return 'text';
+    return '';
+  }
+
+  /*
+   * The rows on screen.
+   *
+   * Everything reads the list through here — the table, select-all, the bulk
+   * toolbar — so narrowing it by type narrows all of them together, and a
+   * filtered "Select all" can never pick up a row the reader cannot see.
+   *
+   * A type filter hides folders: a folder is not a spreadsheet, and leaving
+   * them in would mean "Excel" listing things that are not Excel files.
+   */
+  function tableItems() {
+    var all = tabItems();
+    if (!state.filterType) return all;
+
+    return all.filter(function (it) {
+      return it.type !== 'folder' && categoryOf(it) === state.filterType;
+    });
+  }
+
+  /* The pills worth offering: the types actually in this tab, in TYPES order,
+     with "All" in front. Nothing to choose between means nothing to draw. */
+  function typeFilters() {
+    var present = {};
+    tabItems().forEach(function (it) {
+      if (it.type === 'folder') return;
+      var c = categoryOf(it);
+      if (c) present[c] = (present[c] || 0) + 1;
+    });
+
+    var offered = TYPES.filter(function (t) { return present[t.key]; });
+    if (offered.length < 2) return [];
+
+    return [{ key: '', label: 'All' }].concat(offered);
   }
 
   function acts() { return window.TMAFileActions; }
@@ -467,15 +544,38 @@
       ? ui().table(headers, rows || '')
       : '';
 
+    /*
+     * Two pill rows, not one.
+     *
+     * Which list you are looking at and which kind of file you want out of it
+     * are different questions, and a single row of pills answering both would
+     * read as one set of alternatives. The tabs keep their own track; the type
+     * pills sit beside them and narrow whatever the tabs chose.
+     */
+    var tabRow = ui() && ui().tabs
+      ? ui().tabs([
+          { key: 'recent', label: 'Recent Files', icon: 'images/icons/phosphor/ClockCounterClockwise.svg' },
+          { key: 'shared', label: 'Shared with me', icon: 'images/icons/phosphor/ShareNetwork.svg' },
+        ], state.tab, { variant: 'pill', small: true, label: 'Which files' })
+      : '';
+
+    var offered = typeFilters();
+    var filterRow = offered.length
+      ? '<div class="tma-tab-group tma-tab-group--pill tma-tab-group--small tma-portal-home-library__types"' +
+        ' role="group" aria-label="Filter by type">' +
+        offered.map(function (t) {
+          var on = t.key === state.filterType;
+          return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '"' +
+            ' data-home-lib-filter="' + esc(t.key) + '" aria-pressed="' + on + '">' +
+            (t.icon ? '<img class="tma-tab__icon" src="' + esc(t.icon) + '" alt="">' : '') +
+            '<span class="tma-tab__label">' + esc(t.label) + '</span>' +
+            '</button>';
+        }).join('') +
+        '</div>'
+      : '';
+
     return '<section class="tma-portal-home-library" data-key="home-library">' +
-      '<div class="tma-portal-home-library__head">' +
-      (ui() && ui().tabs
-        ? ui().tabs([
-            { key: 'recent', label: 'Recent Files' },
-            { key: 'shared', label: 'Shared with me' },
-          ], state.tab)
-        : '') +
-      '</div>' +
+      '<div class="tma-portal-home-library__head">' + tabRow + filterRow + '</div>' +
       bulkToolbar() +
       '<div class="tma-portal-home-library__body" data-home-lib-table>' +
       (empty && !rows ? empty : tableHtml) +
@@ -560,8 +660,24 @@
         var key = tabBtn.getAttribute('data-tab-key');
         if ((key === 'recent' || key === 'shared') && state.tab !== key) {
           state.tab = key;
+          // The other tab holds other files, and a type it has none of would
+          // land the reader on an empty table they did not ask for.
+          state.filterType = '';
           rerenderHome();
         }
+        return;
+      }
+
+      var typeBtn = e.target.closest('[data-home-lib-filter]');
+      if (typeBtn && host.contains(typeBtn)) {
+        var type = typeBtn.getAttribute('data-home-lib-filter');
+        // Clicking the pill that is already on turns it off, so the filter can
+        // always be undone where it was set.
+        state.filterType = state.filterType === type ? '' : type;
+        // A row that is no longer on screen must not stay selected: the bulk
+        // toolbar would then act on files the reader cannot see.
+        clearSelection();
+        rerenderHome();
         return;
       }
 

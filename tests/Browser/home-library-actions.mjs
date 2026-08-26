@@ -165,7 +165,61 @@ try {
   // Switching tabs must not carry the recent selection across.
   check(!(await toolbarVisible()), 'the selection does not follow you to the other tab');
 
-  step(10, 'A bulk delete really deletes — dialog to server');
+  step(10, 'The type pills narrow the table, and the controls follow');
+  /*
+   * The tabs and the type filters are both pill groups in the strip's head:
+   * which list you are looking at, and which kind of file you want out of it.
+   * The pill only appears for a type that is actually in the list, so a filter
+   * can never empty the table — and Select all must pick up the rows on screen
+   * rather than the ones the filter hid, or a bulk delete would take files the
+   * reader cannot see.
+   */
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-home-lib-row]', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  await page.mouse.move(1400, 500);
+
+  const pills = await page.evaluate(() => {
+    const head = document.querySelector('.tma-portal-home-library__head');
+    if (!head) return null;
+    return {
+      pillGroups: head.querySelectorAll('.tma-tab-group--pill').length,
+      tabIcons: head.querySelectorAll('[data-tab-key] .tma-tab__icon').length,
+      types: Array.from(head.querySelectorAll('[data-home-lib-filter]')).map((b) => ({
+        key: b.getAttribute('data-home-lib-filter'),
+        icon: !!b.querySelector('.tma-tab__icon'),
+      })),
+    };
+  });
+  check(!!pills && pills.pillGroups === 2, 'the tabs and the type filters are both pill groups');
+  check(!!pills && pills.tabIcons === 2, 'each tab carries its own icon');
+
+  const typed = (pills && pills.types) || [];
+  check(typed.length > 1, `type pills are offered (${typed.map((t) => t.key || 'all').join(', ')})`);
+  check(typed.filter((t) => t.key).every((t) => t.icon), 'every type pill carries its file mark');
+
+  const before10 = await rows().count();
+  const firstType = typed.filter((t) => t.key)[0];
+  if (firstType) {
+    await page.click(`[data-home-lib-filter="${firstType.key}"]`);
+    await page.waitForTimeout(800);
+    const narrowed = await rows().count();
+    check(narrowed > 0 && narrowed < before10,
+      `filtering to ${firstType.key} narrows the table (${before10} → ${narrowed})`);
+
+    await page.locator('[data-home-lib-all]').check();
+    await page.waitForTimeout(600);
+    check((await selectionText()).includes(`${narrowed} Selected`),
+      `Select all picks up only what is on screen (got "${(await selectionText()).trim()}")`);
+
+    // The same pill again clears the filter, and the selection with it.
+    await page.click(`[data-home-lib-filter="${firstType.key}"]`);
+    await page.waitForTimeout(800);
+    check(await rows().count() === before10, 'clicking the pill again shows everything');
+    check(!(await toolbarVisible()), 'and drops a selection the reader can no longer see');
+  }
+
+  step(11, 'A bulk delete really deletes — dialog to server');
   // Reload for a clean selection. Earlier steps deliberately left rows picked
   // (the selection is per-tab and survives switching), so carrying that in
   // would delete more than the one row this step is about.
@@ -195,7 +249,7 @@ try {
     `one file left the library (${before.length} → ${after.length})`);
   check(!(await toolbarVisible()), 'the selection clears once the action lands');
 
-  step(11, 'No console errors');
+  step(12, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   errors.slice(0, 4).forEach((e) => log('      ' + e));
 

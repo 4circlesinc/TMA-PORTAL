@@ -301,6 +301,19 @@
   display: none;
 }
 
+/*
+ * An icon beside the label, not instead of it.
+ *
+ * The row variants lay a tab's contents out in a line, so the mark and the
+ * name need a gap of their own — without one they touch, and a pill reads as
+ * one smudged word.
+ */
+.tma-tab-group--pill .tma-tab,
+.tma-tab-group--segmented .tma-tab,
+.tma-tab-group--icon .tma-tab {
+  gap: var(--tab-icon-gap, 8px);
+}
+
 /* Shared icon styles */
 .tma-tab__icon {
   display: block;

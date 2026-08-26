@@ -4980,10 +4980,47 @@ label.tma-portal-check-row:hover {
 .tma-portal-home-library__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-12);
   margin-bottom: var(--space-16);
   min-width: 0;
+}
+
+/*
+ * The type pills sit to the right of the tabs and give way first: on a narrow
+ * board they wrap onto their own line rather than squeezing "Recent Files"
+ * and "Shared with me" into two columns of broken text.
+ */
+.tma-portal-home-library__types {
+  margin-left: auto;
+}
+
+/*
+ * Filters, not tabs.
+ *
+ * The pill component fades what is not selected to 0.4, which is right for a
+ * tab you are not on. Here the mark IS the label — a washed-out Word or PDF
+ * logo is exactly the thing a reader is scanning the row for — so the unchosen
+ * pills stay legible and the chosen one is told apart by its white pill and
+ * shadow instead.
+ */
+.tma-portal-home-library__types .tma-tab {
+  opacity: 0.75;
+}
+
+.tma-portal-home-library__types .tma-tab:hover {
+  opacity: 1;
+}
+
+.tma-portal-home-library__types .tma-tab.is-active {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .tma-portal-home-library__types {
+    margin-left: 0;
+  }
 }
 
 .tma-portal-home-defaults__title {
