@@ -167,12 +167,18 @@ try {
 
   step(10, 'The type pills narrow the table, and the controls follow');
   /*
-   * The tabs and the type filters are both pill groups in the strip's head:
-   * which list you are looking at, and which kind of file you want out of it.
-   * The pill only appears for a type that is actually in the list, so a filter
-   * can never empty the table — and Select all must pick up the rows on screen
-   * rather than the ones the filter hid, or a bulk delete would take files the
-   * reader cannot see.
+   * Two different things in the strip's head: the tabs, which are alternatives
+   * (you are on one of them, so they share a track), and the type pills, which
+   * are switches — each one its own pill, pressed and pressed again. Nothing
+   * pressed means everything, which is why there is no "All".
+   *
+   * The row is fixed rather than drawn from what the list happens to hold: it
+   * is how a reader learns what they can narrow by, and a set that changes
+   * shape as files come and go means Word is there on Monday and gone on
+   * Tuesday. A type with nothing behind it is allowed; pressing it says so.
+   *
+   * And Select all must pick up the rows on screen rather than the ones the
+   * filter hid, or a bulk delete would take files the reader cannot see.
    */
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-home-lib-row]', { timeout: 20000 });
@@ -183,53 +189,54 @@ try {
     const head = document.querySelector('.tma-portal-home-library__head');
     if (!head) return null;
     return {
-      pillGroups: head.querySelectorAll('.tma-tab-group--pill').length,
+      tabTracks: head.querySelectorAll('.tma-tab-group--pill').length,
       tabIcons: head.querySelectorAll('[data-tab-key] .tma-tab__icon').length,
       types: Array.from(head.querySelectorAll('[data-home-lib-filter]')).map((b) => ({
         key: b.getAttribute('data-home-lib-filter'),
-        icon: !!b.querySelector('.tma-tab__icon'),
+        icon: !!b.querySelector('.tma-portal-type-pill__icon'),
+        standalone: b.classList.contains('tma-portal-type-pill') && !b.closest('.tma-tab-group'),
       })),
     };
   });
-  check(!!pills && pills.pillGroups === 2, 'the tabs and the type filters are both pill groups');
+  check(!!pills && pills.tabTracks === 1, 'the tabs share one pill track');
   check(!!pills && pills.tabIcons === 2, 'each tab carries its own icon');
 
   const typed = (pills && pills.types) || [];
-  const keys = typed.map((t) => t.key || 'all');
-  check(typed.filter((t) => t.key).every((t) => t.icon), 'every type pill carries its file mark');
+  const keys = typed.map((t) => t.key);
+  check(typed.length > 0 && typed.every((t) => t.standalone),
+    'each type is a pill of its own, not a segment of the tabs');
+  check(typed.every((t) => t.icon), 'every type pill carries its file mark');
+  check(!keys.includes(''), 'there is no All pill — nothing pressed already means everything');
 
-  /*
-   * The whole row, whatever is in the list.
-   *
-   * This first shipped offering only the types already present, and on a board
-   * of PDFs and photographs that meant no Word pill and no Excel pill at all —
-   * the row cannot teach you what you can narrow by if it only shows you what
-   * you already have. A type with nothing behind it is allowed; picking it
-   * says so.
-   */
-  ['all', 'pdf', 'word', 'excel', 'powerpoint', 'image', 'text'].forEach((k) => {
+  ['pdf', 'word', 'excel', 'powerpoint', 'image', 'archive'].forEach((k) => {
     check(keys.includes(k), `${k} is offered whether or not the list has one`);
+  });
+  ['video', 'audio', 'text'].forEach((k) => {
+    check(!keys.includes(k), `${k} is not offered`);
   });
 
   const emptyType = await page.evaluate(async () => {
     const r = await fetch('/portal/files/?section=recent&perPage=40',
       { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     const cats = ((await r.json()).files || []).map((f) => f.category);
-    return ['excel', 'powerpoint', 'audio', 'archive'].find((c) => !cats.includes(c)) || null;
+    return ['excel', 'powerpoint', 'archive'].find((c) => !cats.includes(c)) || null;
   });
   if (emptyType) {
     await page.click(`[data-home-lib-filter="${emptyType}"]`);
     await page.waitForTimeout(900);
     const said = ((await page.textContent('[data-home-lib-table]')) || '').replace(/\s+/g, ' ');
-    check(/No .* files here/.test(said) && /Pick All/.test(said),
-      `a type with nothing behind it says so, and offers the way back (got "${said.trim().slice(0, 60)}")`);
+    check(/No .* files here/.test(said) && /again to see everything/.test(said),
+      `a type with nothing behind it says so, and names the way back (got "${said.trim().slice(0, 60)}")`);
     check(!/No recent files/.test(said), 'and does not claim the whole tab is empty');
-    await page.click('[data-home-lib-filter="all"], [data-home-lib-filter=""]');
+    // Pressing it again is the way back, there being no All to fall back on.
+    await page.click(`[data-home-lib-filter="${emptyType}"]`);
     await page.waitForTimeout(900);
+    check(await rows().count() > 0, 'pressing it again brings the list back');
   }
 
   const before10 = await rows().count();
-  const firstType = typed.filter((t) => t.key)[0];
+  // A type this list actually has, so "narrows" can be measured.
+  const firstType = typed.filter((t) => t.key === 'pdf')[0] || typed[0];
   if (firstType) {
     await page.click(`[data-home-lib-filter="${firstType.key}"]`);
     await page.waitForTimeout(800);

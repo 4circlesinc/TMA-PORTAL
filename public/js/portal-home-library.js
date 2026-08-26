@@ -25,10 +25,7 @@
     { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
     { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
     { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
-    { key: 'video', label: 'Video', icon: 'images/icons/phosphor/FileVideo.svg' },
-    { key: 'audio', label: 'Audio', icon: 'images/icons/phosphor/FileAudio.svg' },
     { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg' },
-    { key: 'text', label: 'Text', icon: 'images/icons/tma/TxtIcon.svg' },
   ];
 
   var state = {
@@ -359,11 +356,15 @@
    * that a pill for a type nobody has filed is a dead control. That was the
    * wrong call: the row is how a reader learns what they can narrow by, and a
    * set that changes shape as files come and go means Word is there on Monday
-   * and gone on Tuesday. It is a fixed row of the same types the File Library
-   * filters by, and a type with nothing behind it says so when it is picked.
+   * and gone on Tuesday. It is a fixed row now, and a type with nothing behind
+   * it says so when it is picked.
+   *
+   * No "All" pill either: the one that is on turns itself off when it is
+   * pressed again, so nothing selected already means everything, and a pill
+   * for that would be a second way to say the same thing.
    */
   function typeFilters() {
-    return [{ key: '', label: 'All' }].concat(TYPES);
+    return TYPES;
   }
 
   /* How many rows a type would show, for the "nothing here" line. */
@@ -541,7 +542,7 @@
     var emptySubtitle;
     if (state.filterType) {
       emptyTitle = 'No ' + typeLabel(state.filterType) + ' files here';
-      emptySubtitle = 'Pick All to see everything again.';
+      emptySubtitle = 'Press ' + typeLabel(state.filterType) + ' again to see everything.';
     } else {
       emptyTitle = state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files';
       emptySubtitle = state.tab === 'shared'
@@ -586,15 +587,22 @@
       : '';
 
     var offered = typeFilters();
+    /*
+     * Each type is its own pill, not one shared track.
+     *
+     * The tabs are a track because they are alternatives — you are on one of
+     * them. These are not: each one is a switch you press, and drawing them
+     * inside a single rounded rail read as a second set of tabs, as if picking
+     * Word meant leaving Recent Files.
+     */
     var filterRow = offered.length
-      ? '<div class="tma-tab-group tma-tab-group--pill tma-tab-group--small tma-portal-home-library__types"' +
-        ' role="group" aria-label="Filter by type">' +
+      ? '<div class="tma-portal-home-library__types" role="group" aria-label="Filter by type">' +
         offered.map(function (t) {
           var on = t.key === state.filterType;
-          return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '"' +
+          return '<button type="button" class="tma-portal-type-pill' + (on ? ' is-active' : '') + '"' +
             ' data-home-lib-filter="' + esc(t.key) + '" aria-pressed="' + on + '">' +
-            (t.icon ? '<img class="tma-tab__icon" src="' + esc(t.icon) + '" alt="">' : '') +
-            '<span class="tma-tab__label">' + esc(t.label) + '</span>' +
+            (t.icon ? '<img class="tma-portal-type-pill__icon" src="' + esc(t.icon) + '" alt="">' : '') +
+            '<span class="tma-portal-type-pill__label">' + esc(t.label) + '</span>' +
             '</button>';
         }).join('') +
         '</div>'

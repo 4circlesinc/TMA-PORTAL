@@ -4997,22 +4997,61 @@ label.tma-portal-check-row:hover {
 /*
  * Filters, not tabs.
  *
- * The pill component fades what is not selected to 0.4, which is right for a
- * tab you are not on. Here the mark IS the label — a washed-out Word or PDF
- * logo is exactly the thing a reader is scanning the row for — so the unchosen
- * pills stay legible and the chosen one is told apart by its white pill and
- * shadow instead.
+ * Each type is a pill of its own with its own edge, rather than segments of a
+ * shared rail: the tabs are alternatives — you are on one of them — and these
+ * are switches you press, so they must not read as a second set of tabs.
+ *
+ * Nothing pressed means everything, and the pressed one turns itself off when
+ * pressed again, which is why there is no "All".
  */
-.tma-portal-home-library__types .tma-tab {
-  opacity: 0.75;
+.tma-portal-home-library__types {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
 }
 
-.tma-portal-home-library__types .tma-tab:hover {
-  opacity: 1;
+.tma-portal-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 36px;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-bg-page, #ffffff);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.tma-portal-home-library__types .tma-tab.is-active {
-  opacity: 1;
+.tma-portal-type-pill:hover {
+  background: var(--color-overlay-4, rgba(0, 0, 0, 0.04));
+}
+
+/* Pressed: the same black the portal uses for a chosen control, with the mark
+   flipped to white so the logo still reads against it. */
+.tma-portal-type-pill.is-active {
+  background: var(--component-black, #000);
+  border-color: var(--component-black, #000);
+  color: #ffffff;
+}
+
+.tma-portal-type-pill:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 2px;
+}
+
+.tma-portal-type-pill__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .tma-portal-home-defaults__title {
