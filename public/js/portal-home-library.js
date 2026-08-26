@@ -25,7 +25,9 @@
     { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
     { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
     { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
-    { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg' },
+    // Line art rather than a brand mark, so it has to be flipped to white when
+    // the pill is pressed - see `mono` in pill().
+    { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg', mono: true },
   ];
 
   var state = {
@@ -579,31 +581,46 @@
      * read as one set of alternatives. The tabs keep their own track; the type
      * pills sit beside them and narrow whatever the tabs chose.
      */
-    var tabRow = ui() && ui().tabs
-      ? ui().tabs([
-          { key: 'recent', label: 'Recent Files', icon: 'images/icons/phosphor/ClockCounterClockwise.svg' },
-          { key: 'shared', label: 'Shared with me', icon: 'images/icons/phosphor/ShareNetwork.svg' },
-        ], state.tab, { variant: 'pill', small: true, label: 'Which files' })
-      : '';
+    /*
+     * Every control in this head is a pill of its own.
+     *
+     * Not a rounded rail with segments in it: a shared track reads as one
+     * control with parts, and there are two separate questions here — which
+     * list, and which kind of file out of it. Drawn the same way, spaced the
+     * same way, they read as what they are, a row of things you can press.
+     */
+    var TABS = [
+      { key: 'recent', label: 'Recent Files', icon: 'images/icons/phosphor/ClockCounterClockwise.svg', mono: true },
+      { key: 'shared', label: 'Shared with me', icon: 'images/icons/phosphor/ShareNetwork.svg', mono: true },
+    ];
+
+    /*
+     * `mono` is the difference between a black line drawing and a brand mark.
+     *
+     * A pressed pill is filled black, and a black clock on it is no clock at
+     * all — line art is flipped to white by the stylesheet. Word's blue W and
+     * Excel's green X must survive untouched, so they are not marked.
+     */
+    function pill(o) {
+      var cls = 'tma-portal-type-pill__icon' + (o.mono ? ' tma-portal-type-pill__icon--mono' : '');
+      return '<button type="button" class="tma-portal-type-pill' + (o.on ? ' is-active' : '') + '"' +
+        ' ' + o.attr + '="' + esc(o.key) + '" aria-pressed="' + o.on + '">' +
+        (o.icon ? '<img class="' + cls + '" src="' + esc(o.icon) + '" alt="">' : '') +
+        '<span class="tma-portal-type-pill__label">' + esc(o.label) + '</span>' +
+        '</button>';
+    }
+
+    var tabRow = '<div class="tma-portal-home-library__tabs" role="group" aria-label="Which files">' +
+      TABS.map(function (t) {
+        return pill({ attr: 'data-tab-key', key: t.key, label: t.label, icon: t.icon, mono: t.mono, on: t.key === state.tab });
+      }).join('') +
+      '</div>';
 
     var offered = typeFilters();
-    /*
-     * Each type is its own pill, not one shared track.
-     *
-     * The tabs are a track because they are alternatives — you are on one of
-     * them. These are not: each one is a switch you press, and drawing them
-     * inside a single rounded rail read as a second set of tabs, as if picking
-     * Word meant leaving Recent Files.
-     */
     var filterRow = offered.length
       ? '<div class="tma-portal-home-library__types" role="group" aria-label="Filter by type">' +
         offered.map(function (t) {
-          var on = t.key === state.filterType;
-          return '<button type="button" class="tma-portal-type-pill' + (on ? ' is-active' : '') + '"' +
-            ' data-home-lib-filter="' + esc(t.key) + '" aria-pressed="' + on + '">' +
-            (t.icon ? '<img class="tma-portal-type-pill__icon" src="' + esc(t.icon) + '" alt="">' : '') +
-            '<span class="tma-portal-type-pill__label">' + esc(t.label) + '</span>' +
-            '</button>';
+          return pill({ attr: 'data-home-lib-filter', key: t.key, label: t.label, icon: t.icon, mono: t.mono, on: t.key === state.filterType });
         }).join('') +
         '</div>'
       : '';

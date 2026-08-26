@@ -5004,6 +5004,7 @@ label.tma-portal-check-row:hover {
  * Nothing pressed means everything, and the pressed one turns itself off when
  * pressed again, which is why there is no "All".
  */
+.tma-portal-home-library__tabs,
 .tma-portal-home-library__types {
   display: flex;
   flex-wrap: wrap;
@@ -5052,6 +5053,12 @@ label.tma-portal-check-row:hover {
   height: 16px;
   flex: 0 0 auto;
   object-fit: contain;
+}
+
+/* A black line drawing on a black pill is no drawing at all. Only the line art
+   is flipped — a brand mark keeps its own colours. */
+.tma-portal-type-pill.is-active .tma-portal-type-pill__icon--mono {
+  filter: brightness(0) invert(1);
 }
 
 .tma-portal-home-defaults__title {

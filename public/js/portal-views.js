@@ -264,26 +264,13 @@
     return modalHost;
   }
 
-  /**
-   * A tab group - reuses the documented .tma-tab-group markup + PortalTabGroup.
-   *
-   * Underline by default, which is what every existing caller draws. Pass
-   * `{ variant: 'pill', small: true }` for the rounded track, and give an item
-   * an `icon` (a src) to put a mark beside its name; both are the component
-   * set's own variants rather than anything invented here.
-   */
-  function tabs(items, activeKey, opts) {
-    opts = opts || {};
-    var variant = opts.variant === 'pill' ? 'pill' : 'underline';
-    var classes = 'tma-tab-group tma-tab-group--' + variant + (opts.small ? ' tma-tab-group--small' : '');
-
-    return '<div class="' + classes + '" role="tablist"' +
-      (opts.label ? ' aria-label="' + esc(opts.label) + '"' : '') + '>' +
+  /* Underline tab group - reuses .tma-tab-group markup + PortalTabGroup */
+  function tabs(items, activeKey) {
+    return '<div class="tma-tab-group tma-tab-group--underline" role="tablist">' +
       items.map(function (it, i) {
         var on = it.key === activeKey;
         return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '" role="tab"' +
           ' data-tab-index="' + i + '" data-tab-key="' + esc(it.key) + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' +
-          (it.icon ? '<img class="tma-tab__icon" src="' + esc(it.icon) + '" alt="">' : '') +
           '<span class="tma-tab__label">' + esc(it.label) + '</span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
           '</button>';

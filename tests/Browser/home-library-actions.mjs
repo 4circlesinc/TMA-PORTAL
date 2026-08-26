@@ -188,23 +188,28 @@ try {
   const pills = await page.evaluate(() => {
     const head = document.querySelector('.tma-portal-home-library__head');
     if (!head) return null;
+    const shape = (b) => ({
+      key: b.getAttribute('data-home-lib-filter') ?? b.getAttribute('data-tab-key'),
+      icon: !!b.querySelector('.tma-portal-type-pill__icon'),
+      standalone: b.classList.contains('tma-portal-type-pill') && !b.closest('.tma-tab-group'),
+    });
     return {
-      tabTracks: head.querySelectorAll('.tma-tab-group--pill').length,
-      tabIcons: head.querySelectorAll('[data-tab-key] .tma-tab__icon').length,
-      types: Array.from(head.querySelectorAll('[data-home-lib-filter]')).map((b) => ({
-        key: b.getAttribute('data-home-lib-filter'),
-        icon: !!b.querySelector('.tma-portal-type-pill__icon'),
-        standalone: b.classList.contains('tma-portal-type-pill') && !b.closest('.tma-tab-group'),
-      })),
+      tracks: head.querySelectorAll('.tma-tab-group').length,
+      tabs: Array.from(head.querySelectorAll('[data-tab-key]')).map(shape),
+      types: Array.from(head.querySelectorAll('[data-home-lib-filter]')).map(shape),
     };
   });
-  check(!!pills && pills.tabTracks === 1, 'the tabs share one pill track');
-  check(!!pills && pills.tabIcons === 2, 'each tab carries its own icon');
+  // Nothing in this head is a tab strip any more: which list you are looking
+  // at and which type you want are both rows of pills you press.
+  check(!!pills && pills.tracks === 0, 'no shared tab track is left in the head');
+  const tabbed = (pills && pills.tabs) || [];
+  check(tabbed.length === 2 && tabbed.every((t) => t.standalone && t.icon),
+    'Recent Files and Shared with me are pills of their own, each with an icon');
 
   const typed = (pills && pills.types) || [];
   const keys = typed.map((t) => t.key);
   check(typed.length > 0 && typed.every((t) => t.standalone),
-    'each type is a pill of its own, not a segment of the tabs');
+    'each type is a pill of its own too');
   check(typed.every((t) => t.icon), 'every type pill carries its file mark');
   check(!keys.includes(''), 'there is no All pill — nothing pressed already means everything');
 
