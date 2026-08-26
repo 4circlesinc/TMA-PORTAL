@@ -5005,12 +5005,18 @@ label.tma-portal-check-row:hover {
  * pressed again, which is why there is no "All".
  */
 .tma-portal-home-library__tabs,
-.tma-portal-home-library__types {
+.tma-portal-home-library__types,
+.tma-portal-files__types {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-8);
   min-width: 0;
+}
+
+/* Under the tools, above the list. */
+.tma-portal-files__types {
+  margin: 0 0 var(--space-16);
 }
 
 .tma-portal-type-pill {

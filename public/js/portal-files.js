@@ -726,6 +726,7 @@
     html += renderBreadcrumb();
     html += '<div data-sync-host>' + syncStatusHtml() + '</div>';
     html += renderToolbar();
+    html += renderTypePills();
 
     html += '<div class="tma-portal-files__body" data-files-body>';
     if (state.loading) html += renderLoading();
@@ -800,6 +801,58 @@
       ' aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
       (opts.pressed != null ? ' aria-pressed="' + opts.pressed + '"' : '') + '>' +
       '<img src="images/icons/phosphor/' + icon + '.svg" alt=""></button>';
+  }
+
+  /*
+   * The type pills, under the tools.
+   *
+   * The same six the Dashboard's file tables offer, wearing the same marks, so
+   * a reader who narrows to Word on the board narrows to Word here. They drive
+   * `state.filterType` — the toolbar's "All types" menu writes exactly the same
+   * value — so the two can never disagree; the menu is still the way to the
+   * types that have no pill (Video, Audio, Text), and picking one of those
+   * draws it here as a pill of its own, because a filter that is on must be
+   * visible where the filters are.
+   */
+  var TYPE_PILLS = [
+    { key: 'pdf', label: 'PDF', icon: 'images/icons/phosphor/FilePdf.svg' },
+    { key: 'word', label: 'Word', icon: 'images/icons/tma/DocxIcon.svg' },
+    { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
+    { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
+    { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
+    // Line art rather than a brand mark, so it is flipped to white when the
+    // pill is pressed.
+    { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg', mono: true },
+  ];
+
+  var TYPE_EXTRA = {
+    video: { key: 'video', label: 'Video', icon: 'images/icons/phosphor/FileVideo.svg', mono: true },
+    audio: { key: 'audio', label: 'Audio', icon: 'images/icons/phosphor/FileAudio.svg', mono: true },
+    text: { key: 'text', label: 'Text', icon: 'images/icons/tma/TxtIcon.svg' },
+  };
+
+  function renderTypePills() {
+    // The recycle bin is a list of things on their way out, not a library to
+    // browse by type.
+    if (isRecycle()) return '';
+
+    var offered = TYPE_PILLS.slice();
+    var current = state.filterType;
+    if (current && !offered.some(function (t) { return t.key === current; })) {
+      offered.push(TYPE_EXTRA[current] || { key: current, label: cap(current) });
+    }
+
+    return '<div class="tma-portal-files__types" role="group" aria-label="Filter by type">' +
+      offered.map(function (t) {
+        var on = t.key === current;
+        var iconCls = 'tma-portal-type-pill__icon' + (t.mono ? ' tma-portal-type-pill__icon--mono' : '');
+        return '<button type="button" class="tma-portal-type-pill' + (on ? ' is-active' : '') + '"' +
+          ' data-files-type-pill="' + esc(t.key) + '" aria-pressed="' + on + '">' +
+          (t.icon ? '<img class="' + iconCls + '" src="' + esc(t.icon) + '" alt="">' : '') +
+          '<span class="tma-portal-type-pill__label">' + esc(t.label) + '</span>' +
+          '</button>';
+      }).join('') +
+      '</div>';
   }
 
   function renderToolbar() {
@@ -1139,6 +1192,26 @@
     });
     ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; reload(); });
     ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; reload(); });
+    /*
+     * Pressing the pill that is already on clears it, so the filter can always
+     * be undone where it was set.
+     *
+     * Bound through `unwired` like the view buttons above: morph keeps these
+     * nodes across renders, and a plain querySelectorAll here stacked a second
+     * handler on every repaint — two toggles per click, which read as the
+     * filter refusing to turn off.
+     */
+    var typePills = window.TMAMorph
+      ? window.TMAMorph.unwired(el, '[data-files-type-pill]')
+      : Array.prototype.slice.call(el.querySelectorAll('[data-files-type-pill]'));
+    typePills.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var key = b.getAttribute('data-files-type-pill');
+        state.filterType = state.filterType === key ? '' : key;
+        state.selected = {};
+        reload();
+      });
+    });
     ui().wireHeadDropdownAll(el, '[data-files-owner-menu]', function (sel) { state.filterOwner = sel.action; reload(); });
 
     wirePagination(el);

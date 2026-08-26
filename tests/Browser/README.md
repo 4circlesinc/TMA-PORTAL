@@ -790,6 +790,30 @@ field placement and drawing, and computed CSS only exist in a browser.
   whose bytes are a PDF under a `.png` name; their thumbnails 404 (correctly —
   the row falls back to its type icon), and the console-error check counts
   those.
+- **`file-type-pills.mjs`** — the File Library's type pills, under the tools.
+  The same six the Dashboard's file tables offer (PDF, Word, Excel,
+  PowerPoint, Images, Archives), wearing the same marks, writing the same
+  `filterType` the toolbar's "All types" menu writes — so this checks the two
+  never disagree, which is where a filter starts lying about what it is
+  showing.
+
+  Two things it was written to catch, neither of which a server test can see.
+  The library repaints through TMAMorph, which **keeps** these nodes: binding
+  per render rather than per element stacked a second handler on every repaint,
+  so a click ran the toggle twice and the pill appeared to refuse to switch off
+  — pressing one twice is the assertion. And the row must not appear in the
+  recycle bin, which is a list of things on their way out rather than a library
+  to browse by type.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
+    php artisan tinker tests/Browser/fixtures/thumbnails-seed.php
+  TMA_BASE_URL=http://127.0.0.1:8899 TMA_FOLDER=<the folder= it printed> \
+    node tests/Browser/file-type-pills.mjs
+  ```
+
+  The folder wants files of more than one type in it, or "narrows" cannot be
+  measured; the thumbnails fixture already seeds a mixed one.
 - **`file-thumbnails.mjs`** — the picture of the file, in every list that
   draws one. Lists showed a type glyph and nothing else, so a folder of
   passports, scans and photographs read as one repeated green picture mark.
