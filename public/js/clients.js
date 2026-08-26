@@ -5444,9 +5444,12 @@
   /*
    * The case at a glance, under every tab. CBI's facts strip.
    *
+   * The journey in four dates — Received, Submitted, Accepted, and the
+   * decision — then what the file is and who holds it.
+   *
    * Application number is `displayNumber()`: the internal number until the
-   * CIP number is recorded, the CIP number after. Submitted stays on the
-   * strip even before the Unit has it, as an empty date. Empty decision
+   * CIP number is recorded, the CIP number after. Submitted and Accepted stay
+   * on the strip even before the Unit has them, as empty dates. Empty decision
    * dates still drop out; Assigned always answers, Unassigned if nobody.
    */
   function cipFact(label, value, rawHtml) {
@@ -5498,6 +5501,13 @@
       cipFact('Application number', app.number) +
       cipFact('Received', cipMilestoneDate(app, 'filed')) +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
+      // The Unit accepting the file is the step the two dates either side of
+      // it are measured against: how long the Unit took to accept it, and the
+      // 180 days §20 counts from it. Held on the strip as an empty date the
+      // way Submitted is — the wait is the thing being watched, and a slot
+      // that appeared only once the waiting stopped would be missing from
+      // every file anybody was actually waiting on.
+      cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
       cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
       cipFact('Investment', app.investmentType) +
       cipFact('Referred by', app.provider) +
