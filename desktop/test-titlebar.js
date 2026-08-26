@@ -178,6 +178,50 @@ app.whenReady().then(async () => {
   check('expanded: the rail logo is hidden, not clipped', expanded.logoHidden, true);
   check('expanded: page does not scroll', expanded.overflow, 0);
 
+  /*
+   * The traffic lights, and the viewer that has to own the corner they sit in.
+   *
+   * They are AppKit's: drawn over the window, above every layer the page has,
+   * so a file viewer opening full-screen wears them on top of its own title.
+   * The page cannot fix that, so it reports the state and the shell hides
+   * them — this checks the reporting half against real viewer markup, both
+   * directions, and that hiding them is safe to call.
+   */
+  const overlayFlag = () => win.webContents.executeJavaScript(
+    "document.documentElement.getAttribute('data-tma-overlay')", true,
+  );
+
+  check('nothing open: no overlay flag', await overlayFlag(), null);
+
+  const settle = 'new Promise((r) => setTimeout(r, 50))';
+  await win.webContents.executeJavaScript(`
+    (() => {
+      const el = document.createElement('div');
+      el.className = 'tma-portal-viewer';
+      el.id = 'tb-test-overlay';
+      document.body.appendChild(el);
+      return ${settle};
+    })()
+  `, true);
+  check('a viewer opens: the shell is told', await overlayFlag(), '1');
+
+  await win.webContents.executeJavaScript(`
+    (() => {
+      document.getElementById('tb-test-overlay').remove();
+      return ${settle};
+    })()
+  `, true);
+  check('it closes: the flag is cleared', await overlayFlag(), null);
+
+  let buttonsThrew = false;
+  try {
+    titlebar.setWindowButtonsVisible(win, false);
+    titlebar.setWindowButtonsVisible(win, true);
+  } catch {
+    buttonsThrew = true;
+  }
+  check('hiding and restoring the window buttons is safe', buttonsThrew, false);
+
   await win.webContents.executeJavaScript(
     "document.querySelector('.tma-dash').classList.add('is-sidebar-collapsed')", true,
   );

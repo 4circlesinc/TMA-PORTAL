@@ -1317,6 +1317,13 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('tma:badge', (event, count) => fromMainWindow(event) && applyBadge(count));
     ipcMain.on('tma:call', (event, phase) => fromMainWindow(event) && applyCallPhase(phase));
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
+    // A file viewer covers the whole window, including the corner AppKit draws
+    // the traffic lights in. They cannot be layered under it, so they come off
+    // screen until it closes.
+    ipcMain.on('tma:overlay', (event, open) => {
+      if (!fromMainWindow(event)) return;
+      titlebar.setWindowButtonsVisible(mainWindow, !open);
+    });
     ipcMain.on('tma:signin-reopen', (event) => {
       if (!fromMainWindow(event) || !pendingBrowserSignInUrl) return;
       shell.openExternal(pendingBrowserSignInUrl);

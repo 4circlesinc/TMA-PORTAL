@@ -13,9 +13,10 @@ contextBridge.exposeInMainWorld('TMADesktop', {
  * Relay for everything the page publishes onto <html>. See host-bridge.js for
  * the badge and focus writers, and messaging-calls.js for data-tma-call.
  *
- *   data-tma-badge  "7"                  unread notifications + new activity
- *   data-tma-call   "ringing" | "active" call phase, drives dock + sleep
- *   data-tma-focus  "<timestamp>"        page asked for the app to come forward
+ *   data-tma-badge   "7"                  unread notifications + new activity
+ *   data-tma-call    "ringing" | "active" call phase, drives dock + sleep
+ *   data-tma-focus   "<timestamp>"        page asked for the app to come forward
+ *   data-tma-overlay "1"                  a full-screen viewer is covering the page
  */
 const RELAYS = [
   {
@@ -27,6 +28,9 @@ const RELAYS = [
     },
   },
   { attribute: 'data-tma-call', channel: 'tma:call', read: (raw) => raw || '' },
+  // A full-screen file viewer is open. macOS draws its traffic lights above
+  // the page, so the shell takes them off screen while one is up.
+  { attribute: 'data-tma-overlay', channel: 'tma:overlay', read: (raw) => raw === '1' },
   { attribute: 'data-tma-focus', channel: 'tma:focus', read: () => true, skipInitial: true },
   // Sign-in waiting screen (file://) — reopen the system-browser tab, or cancel.
   { attribute: 'data-tma-signin-reopen', channel: 'tma:signin-reopen', read: () => true, skipInitial: true },

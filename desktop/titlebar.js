@@ -663,6 +663,34 @@ function script({ canGoBack, canGoForward }) {
     }
 
     /*
+     * Tell the shell when a full-screen viewer is open.
+     *
+     * The traffic lights are AppKit's, not ours: they float above the web
+     * content and no z-index reaches them, so when the portal opens a file
+     * viewer over everything they land on top of the file's name and its
+     * close button. The page cannot put them behind anything — but the main
+     * process can take them off screen while the viewer is up, so the state
+     * goes onto <html> and preload.js relays it (the same route the unread
+     * badge takes).
+     *
+     * Every one of these viewers is appended straight to <body>, which is why
+     * watching its direct children is enough.
+     */
+    const OVERLAYS = '.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox';
+    const markOverlay = () => {
+      const el = document.documentElement;
+      const open = !!document.querySelector(OVERLAYS);
+      if (open === (el.getAttribute('data-tma-overlay') === '1')) return;
+      if (open) el.setAttribute('data-tma-overlay', '1');
+      else el.removeAttribute('data-tma-overlay');
+    };
+    if (!document.documentElement.dataset.tmaTbOverlayWatch) {
+      document.documentElement.dataset.tmaTbOverlayWatch = '1';
+      new MutationObserver(markOverlay).observe(document.body, { childList: true });
+    }
+    markOverlay();
+
+    /*
      * The page's own heading, not document.title, that one is prefixed with
      * the unread count ("(388) Dashboard"), which belongs on the badge rather
      * than in the middle of the chrome.
@@ -753,6 +781,32 @@ function setOverlayColor(win, color) {
   }
 }
 
+/**
+ * Take the traffic lights off screen while a full-screen viewer is up, and put
+ * them back when it closes.
+ *
+ * macOS only, and not a style choice: `titleBarStyle: 'hidden'` leaves the
+ * buttons themselves native, drawn by AppKit over the window, so the portal
+ * cannot layer anything above them. Hiding them is the only way for a viewer
+ * to own its own top-left corner. Windows' caption buttons have no equivalent
+ * API; they stay where they are.
+ *
+ * @param {Electron.BrowserWindow} win
+ * @param {boolean} visible
+ */
+function setWindowButtonsVisible(win, visible) {
+  if (process.platform !== 'darwin') return;
+  if (!win || win.isDestroyed()) return;
+
+  try {
+    win.setWindowButtonVisibility(visible);
+  } catch {
+    // Older Electron, or a window without a frame to hide. Leaving the buttons
+    // where they are is the safe failure: the alternative is a window with no
+    // way to close it.
+  }
+}
+
 function windowOptions() {
   if (process.platform === 'darwin') {
     return {
@@ -817,5 +871,6 @@ async function apply(webContents) {
 // has to be measurable from a Mac, or its two reserved-space bugs are only ever
 // found by shipping.
 module.exports = {
-  apply, refresh, windowOptions, setOverlayColor, script, buildCss, metrics, CSS, HEIGHT, BLUE,
+  apply, refresh, windowOptions, setOverlayColor, setWindowButtonsVisible,
+  script, buildCss, metrics, CSS, HEIGHT, BLUE,
 };
