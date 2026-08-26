@@ -352,20 +352,30 @@
     });
   }
 
-  /* The pills worth offering: the types actually in this tab, in TYPES order,
-     with "All" in front. Nothing to choose between means nothing to draw. */
+  /*
+   * The whole row, always.
+   *
+   * This used to offer only the types already in the list, on the reasoning
+   * that a pill for a type nobody has filed is a dead control. That was the
+   * wrong call: the row is how a reader learns what they can narrow by, and a
+   * set that changes shape as files come and go means Word is there on Monday
+   * and gone on Tuesday. It is a fixed row of the same types the File Library
+   * filters by, and a type with nothing behind it says so when it is picked.
+   */
   function typeFilters() {
-    var present = {};
-    tabItems().forEach(function (it) {
-      if (it.type === 'folder') return;
-      var c = categoryOf(it);
-      if (c) present[c] = (present[c] || 0) + 1;
-    });
+    return [{ key: '', label: 'All' }].concat(TYPES);
+  }
 
-    var offered = TYPES.filter(function (t) { return present[t.key]; });
-    if (offered.length < 2) return [];
+  /* How many rows a type would show, for the "nothing here" line. */
+  function countOfType(key) {
+    return tabItems().filter(function (it) {
+      return it.type !== 'folder' && categoryOf(it) === key;
+    }).length;
+  }
 
-    return [{ key: '', label: 'All' }].concat(offered);
+  function typeLabel(key) {
+    var t = TYPES.filter(function (x) { return x.key === key; })[0];
+    return t ? t.label : key;
   }
 
   function acts() { return window.TMAFileActions; }
@@ -519,25 +529,41 @@
         '</tr>';
     }).join('');
 
+    /*
+     * Two different kinds of empty.
+     *
+     * A filter that matches nothing is not an empty list — the files are
+     * there, this type is not among them — so it says which type it looked
+     * for and leaves the way back in the same sentence. Saying "No recent
+     * files" over a full Recent Files tab would be a lie.
+     */
+    var emptyTitle;
+    var emptySubtitle;
+    if (state.filterType) {
+      emptyTitle = 'No ' + typeLabel(state.filterType) + ' files here';
+      emptySubtitle = 'Pick All to see everything again.';
+    } else {
+      emptyTitle = state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files';
+      emptySubtitle = state.tab === 'shared'
+        ? 'Items other people share with you will show up here.'
+        : 'Files you open or upload will show up here.';
+    }
+
     var empty = !all.length
       ? (ui() && ui().emptyState
         ? ui().emptyState({
             illustration: 'Illustration07',
-            title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
-            subtitle: state.tab === 'shared'
-              ? 'Items other people share with you will show up here.'
-              : 'Files you open or upload will show up here.',
+            title: emptyTitle,
+            subtitle: emptySubtitle,
           })
         : (window.TMANoData
           ? window.TMANoData.render({
               illustrationName: 'Illustration07',
-              title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
-              subtitle: state.tab === 'shared'
-                ? 'Items other people share with you will show up here.'
-                : 'Files you open or upload will show up here.',
+              title: emptyTitle,
+              subtitle: emptySubtitle,
               showButton: false,
             })
-          : '<p class="tma-portal-panel__note">No items yet.</p>'))
+          : '<p class="tma-portal-panel__note">' + esc(emptyTitle) + '</p>'))
       : '';
 
     var tableHtml = ui() && ui().table

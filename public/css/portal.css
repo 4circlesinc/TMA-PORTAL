@@ -4988,13 +4988,11 @@ label.tma-portal-check-row:hover {
 }
 
 /*
- * The type pills sit to the right of the tabs and give way first: on a narrow
- * board they wrap onto their own line rather than squeezing "Recent Files"
- * and "Shared with me" into two columns of broken text.
+ * The type pills follow the tabs and wrap onto their own line when the row
+ * runs out of width — which, at ten types, is most boards. Left-aligned
+ * either way: pushed to the right they left a gap under the tabs on the first
+ * line and ran into the panel's edge on the second.
  */
-.tma-portal-home-library__types {
-  margin-left: auto;
-}
 
 /*
  * Filters, not tabs.
@@ -5015,12 +5013,6 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-home-library__types .tma-tab.is-active {
   opacity: 1;
-}
-
-@media (max-width: 900px) {
-  .tma-portal-home-library__types {
-    margin-left: 0;
-  }
 }
 
 .tma-portal-home-defaults__title {

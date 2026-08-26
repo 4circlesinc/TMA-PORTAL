@@ -195,8 +195,38 @@ try {
   check(!!pills && pills.tabIcons === 2, 'each tab carries its own icon');
 
   const typed = (pills && pills.types) || [];
-  check(typed.length > 1, `type pills are offered (${typed.map((t) => t.key || 'all').join(', ')})`);
+  const keys = typed.map((t) => t.key || 'all');
   check(typed.filter((t) => t.key).every((t) => t.icon), 'every type pill carries its file mark');
+
+  /*
+   * The whole row, whatever is in the list.
+   *
+   * This first shipped offering only the types already present, and on a board
+   * of PDFs and photographs that meant no Word pill and no Excel pill at all —
+   * the row cannot teach you what you can narrow by if it only shows you what
+   * you already have. A type with nothing behind it is allowed; picking it
+   * says so.
+   */
+  ['all', 'pdf', 'word', 'excel', 'powerpoint', 'image', 'text'].forEach((k) => {
+    check(keys.includes(k), `${k} is offered whether or not the list has one`);
+  });
+
+  const emptyType = await page.evaluate(async () => {
+    const r = await fetch('/portal/files/?section=recent&perPage=40',
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const cats = ((await r.json()).files || []).map((f) => f.category);
+    return ['excel', 'powerpoint', 'audio', 'archive'].find((c) => !cats.includes(c)) || null;
+  });
+  if (emptyType) {
+    await page.click(`[data-home-lib-filter="${emptyType}"]`);
+    await page.waitForTimeout(900);
+    const said = ((await page.textContent('[data-home-lib-table]')) || '').replace(/\s+/g, ' ');
+    check(/No .* files here/.test(said) && /Pick All/.test(said),
+      `a type with nothing behind it says so, and offers the way back (got "${said.trim().slice(0, 60)}")`);
+    check(!/No recent files/.test(said), 'and does not claim the whole tab is empty');
+    await page.click('[data-home-lib-filter="all"], [data-home-lib-filter=""]');
+    await page.waitForTimeout(900);
+  }
 
   const before10 = await rows().count();
   const firstType = typed.filter((t) => t.key)[0];
@@ -220,6 +250,10 @@ try {
   }
 
   step(11, 'A bulk delete really deletes — dialog to server');
+  // The sidebar can be set to Hover Overlay and expands over the checkbox
+  // column; the previous step's last click left the pointer on the left of the
+  // board, which is enough to hold it open over this one's first click.
+  await page.mouse.move(1400, 500);
   // Reload for a clean selection. Earlier steps deliberately left rows picked
   // (the selection is per-tab and survives switching), so carrying that in
   // would delete more than the one row this step is about.
@@ -232,7 +266,14 @@ try {
     return ((await r.json()).files || []).map((f) => f.name);
   });
 
-  await page.locator('[data-home-lib-check]').first().check();
+  /*
+   * A FILE row, not simply the first row.
+   *
+   * Recent lists folders before files, and binning a folder takes everything
+   * inside it with it — this step then counted four files leaving where it
+   * expected one and reported a delete that had worked perfectly as a failure.
+   */
+  await page.locator('[data-home-lib-row][data-type="file"] [data-home-lib-check]').first().check();
   await page.waitForTimeout(400);
   await page.click('[data-home-lib-bulk="delete"]');
   await page.waitForTimeout(500);
