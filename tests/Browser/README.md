@@ -750,6 +750,14 @@ field placement and drawing, and computed CSS only exist in a browser.
   decode, the text file has to show its text, and the `.docx` has to get the
   honest no-preview card with a download rather than a blank screen.
 
+  It covers **four** lists on that one board, because they do not share a row
+  shape: the Recent Files / Shared-with-me table and the Default Folders cards
+  (portal-home-library.js) hold the listing payload itself, while the Recent
+  Files and Favorites *panels* (portal-home.js) keep a reduced shape of their
+  own — `kind`, `path`, `sortAt` — and have to look the real row up before
+  handing it over. A panel row opening a viewer whose meta line reads
+  "Pdf · 876 B · Modified … · in Lightbox Test" is what proves it found it.
+
   Three things it was written around. The details panel starts **closed**
   (`viewerPrefs.panel` is false) exactly as it does inside the library, so the
   test opens it from the toolbar rather than asserting on collapsed markup — an

@@ -167,7 +167,60 @@ try {
     'the download is still offered');
   await closeViewer();
 
-  step(9, 'A folder row still navigates, it is not a viewer');
+  step(9, 'The Recent Files widget opens the same viewer');
+  /*
+   * A second list on the same board, and the one the reader meets first: the
+   * Recent Files panel down the left, whose rows are the reduced shape those
+   * widgets keep rather than the listing payload the viewer needs. Clicking
+   * one used to navigate to the folder the file lives in.
+   */
+  await park();
+  await page.locator('[data-home-file][data-home-file-kind="file"]').first().click();
+  await page.waitForSelector('.tma-portal-viewer', { timeout: 10000 });
+  await page.waitForTimeout(1200);
+  check(await viewer().count() === 1, 'the widget row opens the File Library viewer');
+  const widgetName = (await title()).trim();
+  check(widgetName.length > 0 && widgetName !== 'undefined',
+    `the panel names the file (got "${widgetName}")`);
+  check(await page.locator('.tma-portal-viewer__sub').count() === 1,
+    'with the meta line the viewer draws from the listing payload');
+  const widgetMeta = (await page.textContent('.tma-portal-viewer__sub').catch(() => '')) || '';
+  check(/\d/.test(widgetMeta), `and that payload is the real row (got "${widgetMeta.trim()}")`);
+  await closeViewer();
+
+  step(10, 'So does the Favorites widget, which reads a different list');
+  const favourited = await page.evaluate(async () => {
+    const list = await fetch('/portal/files/?section=recent&perPage=40',
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } }).then((r) => r.json());
+    const file = (list.files || [])[0];
+    if (!file) return null;
+    const token = document.querySelector('meta[name="csrf-token"]');
+    await fetch('/portal/files/favorites/toggle', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': token ? token.getAttribute('content') : '',
+      },
+      body: JSON.stringify({ type: 'file', id: file.id }),
+    });
+    return file.name;
+  });
+  check(!!favourited, `favourited a file through the API (${favourited || 'none'})`);
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-home-favorite]', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  await park();
+  await page.locator('[data-home-favorite][data-home-favorite-kind="file"]').first().click();
+  await page.waitForSelector('.tma-portal-viewer', { timeout: 10000 });
+  await page.waitForTimeout(1200);
+  check((await title()).trim() === favourited,
+    `the Favorites row opens it in the viewer too (got "${(await title()).trim()}")`);
+  await closeViewer();
+
+  step(11, 'A folder row still navigates, it is not a viewer');
   await park();
   await page.locator('[data-home-lib-row][data-type="folder"] [data-home-lib-open]').first().click();
   await page.waitForTimeout(1500);
@@ -176,7 +229,7 @@ try {
     !!document.querySelector('[data-view="folders"]:not([hidden])'));
   check(inLibrary, 'it opened the File Library instead');
 
-  step(10, 'No console errors');
+  step(12, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   errors.slice(0, 4).forEach((e) => log('      ' + e));
 } catch (e) {

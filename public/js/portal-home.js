@@ -2643,6 +2643,27 @@
     }).join('|');
   }
 
+  /*
+   * The listing rows, exactly as the server sent them, kept beside the state
+   * rather than in it.
+   *
+   * The File Library's viewer expects to be handed the payload it hands
+   * itself; these two panels keep a reduced shape of their own (`kind`,
+   * `path`, `sortAt`) that it would not understand. Parking the full rows in
+   * `data().state()` would have worked and would also have written every one
+   * of them into localStorage on the next save() — a stale copy of the
+   * library, persisted, which is the one thing this feature must never grow.
+   */
+  var homeFilePayloads = {};
+
+  function rememberFilePayload(f) {
+    if (!f || !f.id) return;
+    // Bounded: a long session rotating through hundreds of files must not turn
+    // this into a leak. Everything on screen is re-registered on every load.
+    if (Object.keys(homeFilePayloads).length > 200) homeFilePayloads = {};
+    homeFilePayloads[f.id] = f;
+  }
+
   function loadHomeFiles(el) {
     var net = window.TMAFilesNet;
     if (!net) { homeFilesLoaded = true; return; }
@@ -2705,6 +2726,7 @@
           };
         });
         var recentFiles = (res[0].files || []).map(function (f) {
+          rememberFilePayload(f);
           return {
             kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
             // Carried for the thumbnail: a PDF has no server thumbnail, so
@@ -2723,6 +2745,7 @@
           return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
         });
         var favFiles = (res[1].files || []).map(function (f) {
+          rememberFilePayload(f);
           return {
             kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
             // Carried for the thumbnail: a PDF has no server thumbnail, so
@@ -3050,13 +3073,42 @@
       });
     });
 
+    /*
+     * A file opens where every other list in the portal opens one: the File
+     * Library's viewer, through TMAFileActions — the same window, with the
+     * file's comments, versions, approvals and details. Naming a row and then
+     * dropping the reader into the folder it lives in, which is what these two
+     * panels used to do, left them to find it again among everything else in
+     * there.
+     *
+     * The panel's other files go with it, so the viewer's rail steps through
+     * the list that was clicked, and anything an action changes in there (a
+     * rename, a delete) is reloaded back into the panel.
+     */
+    function openHomeFile(list, id) {
+      var actions = window.TMAFileActions;
+      if (!actions || typeof actions.open !== 'function') return false;
+
+      var files = (list || [])
+        .filter(function (f) { return f.kind !== 'folder' && homeFilePayloads[f.id]; })
+        .map(function (f) { return homeFilePayloads[f.id]; });
+      var row = files.filter(function (f) { return String(f.id) === String(id); })[0];
+      if (!row) return false;
+
+      actions.open(row, function () { loadHomeFiles(el); }, files);
+
+      return true;
+    }
+
     pick('[data-home-file]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (b.getAttribute('data-home-file-kind') === 'folder') {
           navigate({ navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: b.getAttribute('data-home-file') });
           return;
         }
-        // Open the file's own folder; fall back to the File Box when it has none.
+        if (openHomeFile(data().state().recentFiles, b.getAttribute('data-home-file'))) return;
+        // No viewer on the page: open the file's own folder, falling back to
+        // the File Box when it has none.
         var folderId = b.getAttribute('data-home-file-folder');
         navigate(folderId
           ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
@@ -3070,13 +3122,15 @@
         if (kind === 'folder') {
           // Open the favorited folder itself.
           navigate({ navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: b.getAttribute('data-home-favorite') });
-        } else {
-          // Open the file's folder, or fall back to the Favorites section.
-          var folderId = b.getAttribute('data-home-favorite-folder');
-          navigate(folderId
-            ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
-            : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' });
+          return;
         }
+        var favs = (data().state().folders || {}).favorites;
+        if (openHomeFile(favs, b.getAttribute('data-home-favorite'))) return;
+        // Open the file's folder, or fall back to the Favorites section.
+        var folderId = b.getAttribute('data-home-favorite-folder');
+        navigate(folderId
+          ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
+          : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' });
       });
     });
 
