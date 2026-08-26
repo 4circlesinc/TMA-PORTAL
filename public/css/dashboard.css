@@ -35628,6 +35628,13 @@ span.tma-dash__messages-profile-avatar {
   border-bottom-color: var(--color-border, #d1d5db);
 }
 
+/* A step still to come is a dash, and a dash is too small to aim at. Widened
+   into a target without becoming a button-shaped thing on a card of dates. */
+.tma-dash__cip-tl-edit--empty {
+  min-width: 44px;
+  text-align: right;
+}
+
 .tma-dash__cip-ov-lead {
   margin: 0 0 var(--space-8);
   font-size: var(--text-size-13, 13px);

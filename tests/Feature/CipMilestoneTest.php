@@ -218,6 +218,47 @@ class CipMilestoneTest extends TestCase
         );
     }
 
+    /**
+     * An empty step is a way in, when the file could actually take it.
+     *
+     * The card turns `canRecord` into the verb that drives the step, so the
+     * two answers together make the timeline the one place these days are read
+     * and written. What it must not do is offer a step the engine would refuse
+     * — that would be the card hiding a rule it could simply not have shown.
+     */
+    public function test_an_empty_step_is_offered_only_where_the_file_could_take_it(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        $steps = fn (CipApplication $a) => collect(Milestones::for($a->refresh(), $admin))->keyBy('key');
+
+        // A new file has been nowhere. Filed happened, and nothing else is
+        // one move away.
+        $new = $steps($application);
+        $this->assertFalse($new['filed']['canRecord'], 'Filed always has a date, so it is never recorded');
+        $this->assertTrue($new['filed']['canEdit']);
+        foreach (['submitted', 'query_received', 'accepted', 'decision'] as $ahead) {
+            $this->assertFalse($new[$ahead]['canRecord'], $ahead.' is not one move from New');
+        }
+
+        // With the Unit holding it, the two steps the Unit can take next are.
+        $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
+        $pending = $steps($application);
+        $this->assertTrue($pending['query_received']['canRecord']);
+        $this->assertTrue($pending['accepted']['canRecord']);
+        $this->assertFalse($pending['decision']['canRecord'], 'nothing is decided straight out of Pending review');
+
+        $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
+        $this->assertTrue($steps($application)['decision']['canRecord']);
+
+        // Never both: a day already recorded is corrected, not recorded again.
+        $application->forceFill(['accepted_at' => '2026-02-17'])->save();
+        $accepted = $steps($application)['accepted'];
+        $this->assertTrue($accepted['canEdit']);
+        $this->assertFalse($accepted['canRecord']);
+    }
+
     public function test_the_record_carries_the_card_and_the_officer(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

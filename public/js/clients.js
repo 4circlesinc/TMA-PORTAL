@@ -5261,27 +5261,69 @@
   }
 
   /*
-   * A day the file reached a step on, and — for a reader who may — the way
-   * to fix it.
+   * A day the file reached a step on, and — for a reader who may — the way to
+   * enter it.
+   *
+   * Every row on the card is a way in, which is what makes the timeline the
+   * one place these six days are both read and written. A day already there is
+   * corrected in place. An empty step opens the verb that records it, so the
+   * status, the audit event and the date arrive together rather than a date
+   * turning up on a step the file never took.
    *
    * The date itself is the control rather than a pencil beside it: the thing
-   * being corrected is the only thing on the row, and a second target next to
-   * it would be an extra thing to explain. `canEdit` is the server's answer,
-   * not a capability read here, so the rows the timeline offers and the ones
-   * the endpoint accepts cannot drift, a step with no date yet is never one
-   * of them, because entering a date is the job of the verb that moves the
-   * file there.
+   * being entered is the only thing on the row, and a second target next to it
+   * would be an extra thing to explain. Both answers are the server's, not
+   * capabilities read here — `canRecord` is the engine's own "is this edge
+   * open to this reader", so the card cannot offer a step that would then be
+   * refused.
    */
   function milestoneValue(m, applicationId, clientUid) {
     var shown = m.date ? fmtShortDate(m.date) : '-';
-    if (!m.canEdit) return esc(shown);
+    if (!m.canEdit && !m.canRecord) return esc(shown);
 
-    return '<button type="button" class="tma-dash__cip-tl-edit" data-cip-milestone="' + esc(m.key) + '"' +
+    return '<button type="button" class="tma-dash__cip-tl-edit' +
+      (m.date ? '' : ' tma-dash__cip-tl-edit--empty') + '" data-cip-milestone="' + esc(m.key) + '"' +
       ' data-cip-milestone-app="' + esc(applicationId || '') + '"' +
       ' data-cip-milestone-client="' + esc(clientUid || '') + '"' +
       ' data-cip-milestone-label="' + esc(m.label) + '"' +
-      ' data-cip-milestone-date="' + esc(m.date) + '"' +
-      ' title="Correct this date">' + esc(shown) + '</button>';
+      ' data-cip-milestone-date="' + esc(m.date || '') + '"' +
+      ' title="' + (m.date ? 'Correct this date' : 'Record this step') + '">' +
+      esc(shown) + '</button>';
+  }
+
+  /*
+   * A row on the Timeline card, pressed.
+   *
+   * Correction and recording are the same gesture in the same place, told
+   * apart by whether the day is already there. Recording hands over to the
+   * verb that owns the step — the same dialogs the action bar opens — so
+   * every precondition those carry is still asked, and the file still moves
+   * with its date.
+   */
+  function openMilestoneRow(state, render, btn) {
+    var key = btn.getAttribute('data-cip-milestone');
+    var id = btn.getAttribute('data-cip-milestone-app');
+    var uid = btn.getAttribute('data-cip-milestone-client');
+    var date = btn.getAttribute('data-cip-milestone-date');
+
+    if (date) {
+      openMilestoneDialog(id, uid, key, btn.getAttribute('data-cip-milestone-label'), date);
+
+      return;
+    }
+
+    if (key === 'query_received') { openQueryDialog(id, uid); return; }
+    if (key === 'accepted') { openAcceptanceDialog(id, uid); return; }
+    if (key === 'decision') { openDecisionDialog(id, uid); return; }
+    if (!state) return;
+    // Both of these are written against the open profile rather than a row,
+    // so they need the screen's own state, and the application with it.
+    if (key === 'locked') { openConfirmSubmissionDialog(state, render); return; }
+    if (key === 'submitted') {
+      openSubmissionDialog(state, render, false, applicationFor(state.selectedId) || {
+        id: id, clientUid: uid,
+      });
+    }
   }
 
   function overviewRow(label, value, rawHtml, extraClass) {
@@ -8060,9 +8102,16 @@
     var app = applicationFor(state.selectedId);
     if (!app || !ui || !ui.openModal) return;
 
+    var today = new Date().toISOString().slice(0, 10);
+
     ui.openModal({
       title: 'Confirm submission',
       body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-locked">Package confirmed date</label>' +
+        '<input type="date" id="cip-locked" class="tma-dash__clients-field-input"' +
+        ' data-cip-locked value="' + esc(today) + '">' +
+        '</div>' +
         '<p class="tma-portal-modal__text">' +
         'Confirming locks the original submission package. Documents cannot be changed after this.</p>' +
         '<div class="tma-portal-modal__foot">' +
@@ -8077,12 +8126,20 @@
         if (!save) return;
 
         save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-locked]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the package confirmed date.', 'negative');
+
+            return;
+          }
+
           save.disabled = true;
           save.textContent = 'Confirming…';
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/confirm', {
             method: 'POST',
-            json: {},
+            json: { lockedAt: date },
           })
             .then(function (json) {
               ui.closeModal();
@@ -10407,15 +10464,7 @@
     }
 
     MORPH.unwired(root, '[data-cip-milestone]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        openMilestoneDialog(
-          btn.getAttribute('data-cip-milestone-app'),
-          btn.getAttribute('data-cip-milestone-client'),
-          btn.getAttribute('data-cip-milestone'),
-          btn.getAttribute('data-cip-milestone-label'),
-          btn.getAttribute('data-cip-milestone-date')
-        );
-      });
+      MORPH.on(btn, 'click', function () { openMilestoneRow(state, render, btn); });
     });
 
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {

@@ -10,13 +10,18 @@ import { chromium } from 'playwright';
  * the profile repaints through the morph layer, so a value that lands on the
  * server and not on the screen is the failure this exists to catch.
  *
- * Needs an administrator, FEATURE_CIP on, and one application that has
- * travelled the whole way, so every step carries a date to correct.
+ * Needs an administrator, FEATURE_CIP on, and two applications: one that has
+ * travelled the whole way, so every step carries a date to correct, and one
+ * still with the Unit, so the steps it has not taken are on the card as empty
+ * rows that open the verb that records them.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
 const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
 const CLIENT = process.env.TMA_CLIENT_UID || 'chen-wei';
+// A file still with the Unit, so the steps it has not taken are on the card
+// as empty rows.
+const INFLIGHT = process.env.TMA_INFLIGHT_UID || 'wei-jun';
 
 const failures = [];
 const check = (ok, msg) => { console.log(`    ${ok ? '✓' : '✗'} ${msg}`); if (!ok) failures.push(msg); };
@@ -97,7 +102,37 @@ try {
   check(await dayOf('Submitted').innerText() === 'Aug 16, 2026',
     `the corrected day survives a reload (${await dayOf('Submitted').innerText()})`);
 
-  step(5, 'The Activity tab says who changed it, and what it said before');
+  step(5, 'An empty step is the way to record it, where the file could take it');
+  await page.goto(`${BASE}/clients/${INFLIGHT}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.tma-dash__cip-tl', { timeout: 30000 });
+  await page.waitForTimeout(1200);
+
+  // Recorded days on this file are corrections; the two steps it has not
+  // taken open the verbs that drive them, so the status, the audit row and
+  // the date still arrive together.
+  const opens = async (label, field) => {
+    await dayOf(label).click();
+    await page.waitForTimeout(1200);
+    const ok = await page.locator(`${field}:visible`).count() > 0;
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    return ok;
+  };
+
+  check(await opens('Query received', '[data-cip-query-received]'), 'an empty Query received opens Record query');
+  check(await opens('Decision', '[data-cip-decided]'), 'an empty Decision opens Record decision');
+  check(await opens('Accepted', '[data-cip-milestone-input]'), 'a recorded Accepted still opens the correction');
+
+  // And a step the file is nowhere near is not offered at all — the card must
+  // not draw a way in that the engine would then refuse.
+  await page.goto(`${BASE}/clients/${CLIENT}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.tma-dash__cip-tl', { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  check(await card().locator('.tma-dash__cip-tl-edit').count() === 6,
+    'every step of a file that travelled the whole way is a correction');
+
+  step(6, 'The Activity tab says who changed it, and what it said before');
   const events = await page.evaluate(async (id) => {
     const r = await fetch(`/portal/cip/applications/${id}/events`, { headers: { Accept: 'application/json' } });
     return (await r.json()).events;

@@ -190,9 +190,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   Assigned draw with too, and the portal's pages all live in one SPA shell, so
   a bare selector collects the other cards' rows and hidden views' copies.
 
-  Wants an administrator, `FEATURE_CIP`, and one application that has travelled
-  the whole way, so every step has a date to correct. Re-seed between runs — it
-  leaves the submission date on 2026-08-16:
+  It also walks the other half: an empty step is the way to *record* it, so the
+  card opens the verb that drives the step rather than writing a date onto one
+  the file never took — and a step the file is nowhere near is not drawn as a
+  way in at all.
+
+  Wants an administrator, `FEATURE_CIP`, and two applications: one that has
+  travelled the whole way, so every step has a date to correct, and one still
+  with the Unit, so the steps it has not taken are on the card as empty rows.
+  Re-seed between runs — it leaves the submission date on 2026-08-16:
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true php artisan tinker --execute="
@@ -206,6 +212,12 @@ field placement and drawing, and computed CSS only exist in a browser.
       'accepted_at' => '2026-02-17', 'decided_at' => '2026-08-17', 'cip_number' => '10T1G12661P'])->save();
     App\Models\CipPerson::create(['application_id' => \$a->id, 'role' => 'main_applicant',
       'first_name' => 'Chen', 'last_name' => 'Wei']);
+    \$w = App\Models\Client::create(['uid' => 'wei-jun', 'name' => 'Wei Jun', 'created_by' => \$u->id, 'data' => []]);
+    \$b = App\Support\Cip\Applications::create(\$p, \$u);
+    \$b->forceFill(['client_id' => \$w->id, 'status' => 'background_check', 'locked_at' => '2026-08-17',
+      'submitted_at' => '2026-02-01', 'accepted_at' => '2026-02-18', 'cip_number' => '10T1G1BBBBP'])->save();
+    App\Models\CipPerson::create(['application_id' => \$b->id, 'role' => 'main_applicant',
+      'first_name' => 'Wei', 'last_name' => 'Jun']);
   "
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-milestone-dates.mjs
   ```

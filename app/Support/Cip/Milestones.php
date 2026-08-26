@@ -73,15 +73,19 @@ class Milestones
     /**
      * The whole timeline: every step in its order, reached or still to come.
      *
-     * `canEdit` answers whether this reader may correct the day, which is
-     * only ever true of a step that has one: {@see correct()} fixes a date
-     * that was recorded wrong, it does not record one. A milestone still
-     * ahead of the file gets its date from the verb that moves the file
-     * there, so that the status, the audit event and the date arrive
-     * together. A null actor is a screen nobody is reading, and may edit
-     * nothing.
+     * Two answers per step, and they are never both true. `canEdit` is a day
+     * already recorded that this reader may correct — {@see correct()} fixes a
+     * date entered wrong and moves nothing else. `canRecord` is an empty step
+     * this reader may record right now, which the card turns into the verb
+     * that drives it, so the status, the audit event and the date still arrive
+     * together rather than a date appearing on a step the file never took.
      *
-     * @return list<array{key:string,label:string,date:string|null,reached:bool,canEdit:bool}>
+     * A null actor is a screen nobody is reading, and may do neither.
+     *
+     * @return list<array{
+     *     key:string, label:string, date:string|null, reached:bool,
+     *     canEdit:bool, canRecord:bool
+     * }>
      */
     public static function for(CipApplication $application, ?User $actor = null): array
     {
@@ -98,10 +102,56 @@ class Milestones
                 'canEdit' => $date !== null
                     && $actor !== null
                     && CipAccess::can($actor, $capability),
+                'canRecord' => $date === null && self::canRecord($application, $actor, $key),
             ];
         }
 
         return $milestones;
+    }
+
+    /**
+     * The status each step's verb drives the file to.
+     *
+     * Filed has no verb — a row exists, so it happened — and the lock is not a
+     * status change at all, which is why it is answered separately below.
+     */
+    private const RECORDS = [
+        self::SUBMITTED => Status::PENDING_REVIEW,
+        self::QUERY_RECEIVED => Status::NON_COMPLIANT,
+        self::ACCEPTED => Status::BACKGROUND_CHECK,
+        self::DECISION => Status::GRANTED,
+    ];
+
+    /**
+     * May this reader record this step right now — the answer that decides
+     * whether an empty row on the card is a way in or just a dash.
+     *
+     * The engine's own two questions, not a third reading of them: is the edge
+     * in the lifecycle from where the file stands, and may this actor drive
+     * it. Offering a step that would then be refused would be the card hiding
+     * a rule it could simply not have shown, which is the same argument the
+     * action bar's buttons are drawn from.
+     *
+     * The lock is not a status change, so it is asked of
+     * {@see Confirmation::allows()} instead — the authority the Confirm
+     * submission button itself uses. Staff never hold it: the press is the
+     * submitting party's.
+     */
+    private static function canRecord(CipApplication $application, ?User $actor, string $key): bool
+    {
+        if ($actor === null) {
+            return false;
+        }
+
+        if ($key === self::LOCKED) {
+            return Confirmation::allows($actor, $application);
+        }
+
+        $to = self::RECORDS[$key] ?? null;
+
+        return $to !== null
+            && Engine::canTransition($application, $to)
+            && Engine::allows($actor, $application, $to);
     }
 
     /**

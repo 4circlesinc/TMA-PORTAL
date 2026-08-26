@@ -197,8 +197,20 @@ class CipTransitionController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
+        $data = $request->validate([
+            // Optional, unlike the other dates on this controller: the firm
+            // pressing this button is nearly always pressing it on the day,
+            // and the ones that are required are the ones read off a
+            // government letter that has a date printed on it.
+            'lockedAt' => ['nullable', 'date'],
+        ]);
+
         try {
-            $application = Confirmation::confirm($application, $user);
+            $application = Confirmation::confirm(
+                $application,
+                $user,
+                isset($data['lockedAt']) ? Carbon::parse($data['lockedAt']) : null,
+            );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }

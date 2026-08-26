@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -53,17 +54,30 @@ class Confirmation
     }
 
     /**
-     * Freeze the original package.
+     * Freeze the original package, on the day it was confirmed.
+     *
+     * The day is asked for rather than assumed, the way §16's submission and
+     * §21's decision are: "when did this stop being changeable" is the first
+     * question asked of a package the Unit later queries, and a firm entering
+     * a file it confirmed last week would have had today stamped on it with
+     * nothing to say otherwise. Defaults to today when the caller does not
+     * name one, which is the common case and the honest one.
      *
      * Idempotent when already locked: a double-click is the state it already
      * is, not a second confirmation. A stranger still cannot learn the file
-     * exists by being refused a lock that is already on.
+     * exists by being refused a lock that is already on. A second press does
+     * not move the day either — correcting it is
+     * {@see Milestones::correct()}, so a confirmation cannot be quietly
+     * re-dated by pressing the button again.
      *
      * @throws AuthorizationException
      * @throws \InvalidArgumentException
      */
-    public static function confirm(CipApplication $application, User $actor): CipApplication
-    {
+    public static function confirm(
+        CipApplication $application,
+        User $actor,
+        ?Carbon $lockedAt = null,
+    ): CipApplication {
         if ($application->isLocked()) {
             if (! self::isSubmittingParty($actor, $application)) {
                 throw new AuthorizationException('Only the service provider can confirm this submission.');
@@ -88,21 +102,24 @@ class Confirmation
             );
         }
 
-        return DB::transaction(function () use ($application, $actor) {
-            $application->forceFill(['locked_at' => now()])->save();
+        $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
+
+        return DB::transaction(function () use ($application, $actor, $lockedAt) {
+            $application->forceFill(['locked_at' => $lockedAt])->save();
 
             Package::forget();
             Package::revokeOutstandingLinks($application);
 
             Engine::record($application, CipEvent::ACTION_PACKAGE_CONFIRMED, $actor, [
                 'reason' => 'confirm_submission',
+                'lockedAt' => $lockedAt->toDateString(),
             ]);
 
             ActivityLogger::log([
                 'actor' => $actor,
                 'type' => 'cip.package_confirmed',
                 'module' => 'cip',
-                'description' => $application->displayNumber().' package confirmed',
+                'description' => $application->displayNumber().' package confirmed on '.$lockedAt->toDateString(),
                 'subject' => $application,
             ]);
 

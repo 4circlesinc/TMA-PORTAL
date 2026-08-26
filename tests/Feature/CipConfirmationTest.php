@@ -148,6 +148,58 @@ class CipConfirmationTest extends TestCase
         ]);
     }
 
+    /**
+     * The day the package froze is recorded, not assumed.
+     *
+     * "When did this stop being changeable" is the first question asked of a
+     * package the Unit later queries, and a firm entering a file it confirmed
+     * last week had today stamped on it with nothing to say otherwise. Left
+     * optional rather than required: the press is nearly always on the day,
+     * and the dates that are required are the ones read off a government
+     * letter with a date printed on it.
+     */
+    public function test_the_day_the_package_was_confirmed_is_the_day_given(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = null;
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $contact = $this->contact($company, $staff);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm', [
+                'lockedAt' => '2026-08-17',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.locked', true);
+
+        $this->assertSame('2026-08-17', $application->fresh()->locked_at->toDateString());
+
+        $meta = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_PACKAGE_CONFIRMED)
+            ->value('meta');
+        $this->assertSame('2026-08-17', $meta['lockedAt']);
+    }
+
+    public function test_confirming_without_a_day_is_still_today(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = null;
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $contact = $this->contact($company, $staff);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertOk();
+
+        $this->assertSame(
+            now()->toDateString(),
+            $application->fresh()->locked_at->toDateString(),
+        );
+    }
+
     public function test_staff_cannot_confirm_submission(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
