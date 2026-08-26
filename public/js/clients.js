@@ -5834,6 +5834,45 @@
    * would hide the first. It is the documented TMA checkbox (`.tma-dash__check`),
    * not a Phosphor circle, same glyph the rest of the portal uses.
    */
+  /*
+   * The picture of the document, beside the line it answers.
+   *
+   * A checklist of a dozen identical ticks says which slots are filled and
+   * nothing about what is in them; a scan of the wrong passport page looks
+   * exactly like the right one until it is opened. The slot payload carries
+   * the same two URLs every other list draws from, so this is the shared
+   * helper doing the same thing here (TMAFileThumbs): the server's image
+   * thumbnail, page one for a PDF, the type icon when neither is possible.
+   *
+   * An empty slot keeps the space, so the labels stay in one column whether
+   * or not a document has arrived.
+   */
+  function checklistThumbHtml(d) {
+    if (!d.uploaded || !d.fileId) {
+      return '<span class="tma-dash__clients-checklist-thumb" aria-hidden="true"></span>';
+    }
+
+    var file = {
+      name: d.fileName || d.label,
+      extension: d.fileExt || '',
+      category: d.fileCategory || '',
+      mime: d.fileMime || '',
+      thumbUrl: d.thumbUrl || null,
+      previewUrl: d.previewUrl || null,
+    };
+
+    var img = window.TMAFileThumbs
+      ? window.TMAFileThumbs.imgHtml(file, {
+          size: 28,
+          iconSize: 20,
+          cls: 'tma-dash__clients-checklist-thumb-img',
+          iconCls: 'tma-dash__clients-checklist-thumb-img is-icon',
+        })
+      : '';
+
+    return '<span class="tma-dash__clients-checklist-thumb" aria-hidden="true">' + img + '</span>';
+  }
+
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
     var status = filed
@@ -5841,6 +5880,7 @@
       : 'Pending upload';
     var tone = filed ? (d.statusTone || 'success') : 'neutral';
     var opens = filed && d.fileId;
+    var thumb = checklistThumbHtml(d);
     var name =
       '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
       (opens
@@ -5860,8 +5900,8 @@
       ' tma-portal-status--inline">' + esc(status) + '</span>';
     var body = opens
       ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
-        esc(d.fileId) + '" title="Open the filed document">' + name + chip + '</button>'
-      : name + chip;
+        esc(d.fileId) + '" title="Open the filed document">' + thumb + name + chip + '</button>'
+      : thumb + name + chip;
 
     return (
       '<li class="tma-dash__clients-checklist-row">' +

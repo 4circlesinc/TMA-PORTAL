@@ -32,7 +32,9 @@ use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
 use App\Support\Files\CommentReads;
+use App\Support\Files\FileType;
 use App\Support\Files\Presenter;
+use App\Support\Files\Thumbnail;
 use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -1279,9 +1281,47 @@ class CipApplicationController extends Controller
                         'fileExt' => $slot->isFilled() && $slot->file
                             ? strtolower(pathinfo($slot->file->name, PATHINFO_EXTENSION))
                             : null,
+                        /*
+                         * What the checklist draws beside the line: the picture
+                         * of the document, the same one every other list in the
+                         * portal shows.
+                         *
+                         * Only what a thumbnail needs, not a whole presented
+                         * file row — a main applicant owes a dozen of these and
+                         * presenting each one would cost a permission walk per
+                         * line for a 28px image. The routes behind both URLs
+                         * enforce access themselves, and `previewUrl` is what
+                         * TMAFileThumbs paints page one of a PDF from, this
+                         * stack having nothing that can rasterise one
+                         * server-side.
+                         */
+                        ...$this->slotThumb($slot->isFilled() ? $slot->file : null),
                     ];
                 })->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
+        ];
+    }
+
+    /**
+     * Thumbnail fields for a filled slot: the server's image thumbnail where
+     * GD can make one, and the preview route otherwise so a PDF can have its
+     * first page painted in the browser.
+     *
+     * @return array<string, string|null>
+     */
+    private function slotThumb(?FileItem $file): array
+    {
+        if (! $file) {
+            return ['thumbUrl' => null, 'previewUrl' => null, 'fileMime' => null, 'fileCategory' => null];
+        }
+
+        $ext = (string) $file->extension;
+
+        return [
+            'thumbUrl' => Thumbnail::supportsExt($ext) ? route('files.thumb', $file->uuid) : null,
+            'previewUrl' => FileType::isPreviewable($ext) ? route('files.preview', $file->uuid) : null,
+            'fileMime' => $file->mime_type,
+            'fileCategory' => FileType::category($ext),
         ];
     }
 

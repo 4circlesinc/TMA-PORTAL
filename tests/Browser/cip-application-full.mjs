@@ -63,7 +63,7 @@ try {
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('button[type="submit"]:visible')]);
   await page.waitForTimeout(700);
   if (page.url().includes('/auth/stay-signed-in')) {
-    await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('text=Yes, stay signed in')]);
+    await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('button[type="submit"]:visible')]);
     await page.waitForTimeout(700);
   }
 
@@ -199,6 +199,50 @@ try {
   const photoRes = await page.request.get(`${BASE}${app.applicant.passportPhotoUrl}`);
   check(photoRes.status() === 200 && (photoRes.headers()['content-type'] || '').startsWith('image/'),
     `the filed passport photo serves (HTTP ${photoRes.status()})`);
+
+  step(10, 'The checklist shows the documents, not just ticks');
+  /*
+   * A dozen identical ticks say which slots are filled and nothing about what
+   * is in them — a scan of the wrong passport page looks exactly like the
+   * right one until it is opened. Each filed line now carries the document's
+   * own picture (TMAFileThumbs): the server's thumbnail for the photo, and for
+   * a PDF page one, or its type icon when page one is blank — which every
+   * scan this test files is, so the icon is the right answer here and a white
+   * rectangle would be the bug.
+   */
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3500);
+  await page.mouse.move(1450, 600);
+  await page.locator('[data-cip-open], [data-clients-row], tbody tr').first().click();
+  await page.waitForTimeout(3000);
+  await page.locator('[data-clients-tab]:visible', { hasText: 'Main applicant' }).first().click();
+  await page.waitForTimeout(3000);
+
+  const lines = await page.evaluate(() => Array.from(
+    document.querySelectorAll('.tma-dash__clients-checklist-row'))
+    .filter((r) => r.offsetParent !== null)
+    .map((r) => {
+      const img = r.querySelector('.tma-dash__clients-checklist-thumb img');
+      return {
+        label: (r.textContent || '').trim().split('\n')[0].trim(),
+        filed: !!r.querySelector('input:checked'),
+        slot: !!r.querySelector('.tma-dash__clients-checklist-thumb'),
+        src: img ? img.getAttribute('src') : null,
+      };
+    }));
+
+  const filed = lines.filter((l) => l.filed);
+  const owed = lines.filter((l) => !l.filed);
+  check(filed.length > 0 && filed.every((l) => !!l.src),
+    `every filed line carries a picture of its document (${filed.length} of ${filed.length})`);
+  const photoLine = filed.find((l) => /Passport photo/i.test(l.label));
+  check(!!photoLine && /thumb/.test(photoLine.src || ''),
+    `the passport photo draws the server's thumbnail (${photoLine ? photoLine.src.split('/').pop() : 'no line'})`);
+  const scanLine = filed.find((l) => /bio page|Birth/i.test(l.label));
+  check(!!scanLine && /FilePdf/.test(scanLine.src || ''),
+    `a scan whose first page is blank keeps its type icon (${scanLine ? scanLine.src.split('/').pop() : 'no line'})`);
+  check(owed.length > 0 && owed.every((l) => l.slot && !l.src),
+    'an unfiled line keeps the space, so the labels stay in one column');
 
   await page.screenshot({ path: 'tests/Browser/cip-application-full.png', fullPage: false });
 } catch (e) {

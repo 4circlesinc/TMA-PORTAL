@@ -35251,6 +35251,35 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-link, var(--dash-accent));
 }
 
+/* The document's own picture, beside the line it answers — see
+   checklistThumbHtml. The empty slot on an unfiled line is deliberate: it
+   keeps every label in one column. */
+.tma-dash__clients-checklist-thumb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tma-dash__clients-checklist-thumb-img {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-4, 4px);
+  object-fit: cover;
+  background: var(--color-bg-card, #f4f5f7);
+}
+
+/* A type glyph is a mark, not artwork: smaller, unpadded, uncropped. */
+.tma-dash__clients-checklist-thumb-img.is-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  background: none;
+  object-fit: contain;
+}
+
 .tma-dash__clients-checklist-open-icon {
   flex: 0 0 auto;
   width: 14px;
@@ -36295,9 +36324,16 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /* A document is read from the top: cropping a page to a square must keep the
-   letterhead, not the middle of the body text. */
+   letterhead, not the middle of the body text.
+
+   And a page is mostly paper, so it needs an edge: without one, a white page
+   on a white row reads as a picture that failed to load rather than as a
+   document. (A page with nothing on it at all keeps its type icon instead —
+   see hasInk in file-thumbs.js.) */
 .tma-file-thumb--doc {
   object-position: top center;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
 }
 
 /* Client hub / CBI document rows: the 40px tile holds a 24px glyph, but a real

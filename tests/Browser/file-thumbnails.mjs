@@ -135,6 +135,16 @@ try {
   check(!!docx && !docx.painted && /\.svg$/.test(docx.src),
     `a .docx keeps its type icon — nothing can preview it (${docx ? docx.src.split('/').pop() : 'no row'})`);
 
+  /*
+   * A blank first page is the case that made this look broken: pdf.js renders
+   * it perfectly and the result is a white rectangle, which in a 28px row
+   * reads as a picture that failed to load rather than as a document. The ink
+   * is counted before the thumbnail is accepted, so this one keeps its icon.
+   */
+  const blank = shown.find((p) => p.name.includes('Cover sheet.pdf'));
+  check(!!blank && !blank.painted && /FilePdf/.test(blank.src),
+    `a PDF with nothing on page one keeps its icon (${blank ? blank.src.split('/').pop() : 'no row'})`);
+
   step(3, 'File Library → list');
   await page.goto(`${BASE}/folders/all?folder=${process.env.TMA_FOLDER}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-files-row]', { timeout: 20000 });

@@ -159,6 +159,41 @@
     img.src = dataUrl;
   }
 
+  /*
+   * Is there anything on this page?
+   *
+   * A first page that is blank — a cover sheet, a scan that starts on paper —
+   * paints a white rectangle, and a white rectangle in a 28px row does not
+   * read as "a document", it reads as a picture that failed to load. The type
+   * icon is the better answer there, so the ink is counted before the
+   * thumbnail is accepted.
+   *
+   * Counted over the whole rendered page (~28k pixels at this size, which is
+   * nothing) rather than sampled: a single line of text is a few hundred
+   * pixels and a grid would step straight over it.
+   */
+  function hasInk(canvas, ctx) {
+    try {
+      var w = canvas.width;
+      var h = canvas.height;
+      var data = ctx.getImageData(0, 0, w, h).data;
+      var marked = 0;
+      var total = w * h;
+
+      for (var i = 0; i < data.length; i += 4) {
+        // Anything meaningfully darker than paper. Antialiased text lands here
+        // long before it reaches black.
+        if (data[i] < 242 || data[i + 1] < 242 || data[i + 2] < 242) marked += 1;
+      }
+
+      return total > 0 && (marked / total) > 0.002;
+    } catch (e) {
+      // A tainted or oversized canvas cannot be read. Keep the picture rather
+      // than throwing away a thumbnail that may well be fine.
+      return true;
+    }
+  }
+
   /* Page one, painted onto a canvas and handed back as a data: URL. The page's
      own shape is kept (a portrait page stays portrait); the slot it lands in
      decides how it is cropped. */
@@ -181,6 +216,8 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+          if (!hasInk(canvas, ctx)) throw new Error('blank first page');
+
           return canvas.toDataURL('image/jpeg', 0.75);
         });
       }).then(function (dataUrl) {
