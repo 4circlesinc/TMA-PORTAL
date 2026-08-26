@@ -346,7 +346,8 @@ class PortalAccessTest extends TestCase
         }
     }
 
-    public function test_a_service_provider_contact_can_open_the_cip_shell_page(): void
+    /** An active member of a firm the portal has registered as a CIP provider. */
+    private function providerContact(): User
     {
         config(['services.cip.enabled' => true]);
         $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
@@ -362,8 +363,45 @@ class PortalAccessTest extends TestCase
             'status' => CompanyMember::STATUS_ACTIVE,
         ]);
 
+        return $contact;
+    }
+
+    public function test_a_service_provider_contact_can_open_the_cip_shell_page(): void
+    {
+        $contact = $this->providerContact();
+
         $this->actingAs($contact)->get('/clients')->assertOk();
         $this->actingAs($contact)->get('/clients/applications')->assertOk();
+    }
+
+    /**
+     * The account had a Dashboard and nothing behind it. Overview is staff
+     * tooling in the matrix, but what a provider contact sees there is their
+     * own profile, week, files, notifications and activity — the same reads
+     * the rest of their portal already gives them.
+     *
+     * Opening the page opens only the page: they hold no capability, so the
+     * administration it also carries stays shut, and a client with no provider
+     * firm behind them still gets a 404.
+     */
+    public function test_a_service_provider_contact_reaches_the_overview_page(): void
+    {
+        $contact = $this->providerContact();
+
+        $this->actingAs($contact)->get('/overview')->assertOk();
+
+        $this->assertFalse(Role::can($contact, 'overview.view'));
+        $this->assertFalse(Role::can($contact, 'users.view'));
+        $this->assertFalse(Role::can($contact, 'recyclebin.admin'));
+        $this->assertFalse(Role::can($contact, 'activity.viewAll'));
+
+        // Sign-ins are the firm's business; the card is dropped client-side
+        // and the endpoint refuses them either way.
+        $this->actingAs($contact)->getJson('/portal/sign-ins')->assertForbidden();
+
+        // A client with no provider firm behind them is unchanged.
+        config(['services.cip.enabled' => true]);
+        $this->actingAs($this->user(Role::CLIENT))->get('/overview')->assertNotFound();
     }
 
     public function test_staff_still_reach_the_staff_pages(): void

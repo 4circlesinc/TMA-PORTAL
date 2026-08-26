@@ -32,6 +32,22 @@
     return !!(me && me.isAdmin);
   }
 
+  /* A contact at a firm the portal has registered as a CIP service provider.
+     They reach this page (LegacyPageController::canViewOverviewPage) but hold
+     no matrix capability, so every staff-only piece on it has to be asked for
+     by name rather than assumed from the page being open. */
+  function isProviderContact() {
+    var access = window.TMAPortalAccess;
+    return !!(access && access.isProviderContact && access.isProviderContact());
+  }
+
+  /* Sign-ins are the firm's, not yours: SignInActivityController refuses
+     anyone who is not staff. The card is dropped rather than shown erroring,
+     which is what a swallowed 403 looks like. */
+  function seesSignIns() {
+    return !isProviderContact();
+  }
+
   function visibleTabs() {
     return (isAdminUser() ? ADMIN_TABS : BASE_TABS).slice();
   }
@@ -291,6 +307,12 @@
      error state rather than an empty list, an empty list means nobody has
      signed in, which is a different thing to say. */
   function loadSignIns() {
+    if (!seesSignIns()) {
+      SIGNINS = [];
+      SIGNINS_STATE = 'ready';
+      return Promise.resolve();
+    }
+
     return apiGet('/portal/sign-ins?limit=8').then(function (j) {
       SIGNINS = (j && j.items) || [];
       SIGNINS_STATE = j ? 'ready' : 'error';
@@ -335,16 +357,30 @@
       '</div></div>';
   }
 
+  /* The staff row measures how the firm serves its clients; a service-provider
+     contact gets the CIP-and-inbox row instead, the same four the Dashboard
+     gives them (see portal-home.js). Reading only the staff shape left them
+     with "No data yet" on a page the server had answered in full. */
+  var STAFF_METRICS = [
+    ['clientResponse', 'Client response'],
+    ['cipNew', 'New CIP applications'],
+    ['cipUpdatesRequired', 'CIP updates required'],
+    ['awaitingSignature', 'Awaiting signature'],
+  ];
+
+  var PROVIDER_METRICS = [
+    ['cipActive', 'Active CIP applications'],
+    ['cipUpdatesRequired', 'CIP updates required'],
+    ['unreadMessages', 'Unread messages'],
+    ['openComments', 'Open comments'],
+  ];
+
   function metricCardsFromApi(j) {
-    if (!j || j.staff === false || !j.cards) return null;
+    if (!j || !j.cards) return null;
+    if (j.staff === false && !j.provider) return null;
     var cards = j.cards;
-    var order = [
-      ['clientResponse', 'Client response'],
-      ['cipNew', 'New CIP applications'],
-      ['cipUpdatesRequired', 'CIP updates required'],
-      ['awaitingSignature', 'Awaiting signature'],
-    ];
-    return order.map(function (pair) {
+
+    return (j.provider ? PROVIDER_METRICS : STAFF_METRICS).map(function (pair) {
       var c = cards[pair[0]] || {};
       return {
         label: pair[1],
@@ -482,6 +518,8 @@
   }
 
   function renderSignIns() {
+    if (!seesSignIns()) return '';
+
     return '<section class="tma-dash__overview-block tma-dash__overview-block--signins" data-overview-signins>' +
       '<div class="tma-dash__overview-block-head">' +
       '<h3 class="tma-dash__overview-block-title">Recent sign-ins</h3>' +

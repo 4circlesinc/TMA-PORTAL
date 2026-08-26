@@ -63,6 +63,23 @@
    */
   var PROVIDER_CONTACT_HIDDEN_NAV = ['folders-filebox', 'folders-personal'];
 
+  /*
+   * Nav rows that say the wrong thing to a service-provider contact.
+   *
+   * Overview is "Admin Overview" in the shell because for years only staff
+   * reached it. A provider contact reaches the same page now, and none of what
+   * they see there is administration — telling them otherwise reads either as
+   * a mistake or as a door they are not allowed through. The label is the only
+   * thing that changes; the row, the icon and the href are the same one.
+   *
+   * data-title and data-crumb travel with it: they are what the page header
+   * and the breadcrumb print, so relabelling only the visible span would leave
+   * "Admin Overview" at the top of the page it opened.
+   */
+  var PROVIDER_CONTACT_NAV_LABELS = {
+    'dash-project-overview': 'Overview',
+  };
+
   /* Bottom tab bar (mobile). data-tab => capability. */
   var TAB_CAPABILITIES = {
     email: 'mail.use',
@@ -128,6 +145,11 @@
     // Service-provider contacts keep Workflows without workflows.view.
     // Generic clients still do not see it.
     if (capability === 'workflows.view' && providerContact) return true;
+    // And Overview. Its administrator tabs are chosen off isAdmin inside
+    // overview.js, so what a provider contact reaches is their own profile,
+    // week, files, notifications and activity — and the KPI row they already
+    // have on the Dashboard. Mirrors LegacyPageController::canViewOverviewPage.
+    if (capability === 'overview.view' && providerContact) return true;
     return caps.indexOf(capability) !== -1;
   }
 
@@ -188,6 +210,26 @@
     );
   }
 
+  /* The label, the header title and the breadcrumb, for rows whose staff
+     wording does not fit the account reading it. */
+  function relabelNavItems(scope) {
+    if (!providerContact) return;
+
+    scope.querySelectorAll('[data-nav]').forEach(function (el) {
+      var label = PROVIDER_CONTACT_NAV_LABELS[el.getAttribute('data-nav')];
+      if (!label) return;
+
+      el.setAttribute('data-title', label);
+      el.setAttribute('data-crumb', label);
+
+      // The text sits in the row's last span, after the caret and the icon in
+      // the sidebar and after the image on a mobile row.
+      var spans = el.querySelectorAll('span');
+      var text = spans[spans.length - 1];
+      if (text && !text.className) text.textContent = label;
+    });
+  }
+
   function pruneTabs(scope) {
     scope.querySelectorAll('[data-tab]').forEach(function (el) {
       var need = TAB_CAPABILITIES[el.getAttribute('data-tab')];
@@ -198,11 +240,9 @@
   /* Boot-skeleton pieces standing in for content this account may not have. */
   function pruneBootGated(scope) {
     scope.querySelectorAll('[data-boot-needs]').forEach(function (el) {
-      var need = el.getAttribute('data-boot-needs');
-      // Service-provider contacts get a KPI row of their own, so keep the
-      // placeholder even though they do not hold overview.view.
-      if (need === 'overview.view' && providerContact) return;
-      if (!can(need)) remove(el);
+      // Service-provider contacts keep the KPI placeholder: can() holds that
+      // rule now, alongside the one that keeps their Overview nav row.
+      if (!can(el.getAttribute('data-boot-needs'))) remove(el);
     });
   }
 
@@ -210,6 +250,7 @@
     var scope = document;
     var sections = navSections(scope);
     pruneNavItems(scope);
+    relabelNavItems(scope);
     pruneEmptyGroups(scope);
     pruneEmptySections(sections);
     pruneTabs(scope);

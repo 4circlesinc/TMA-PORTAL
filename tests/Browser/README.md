@@ -2360,3 +2360,25 @@ TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/calls-recording.mjs
 ```sh
 node tests/Browser/overview-recycle-columns.mjs
 ```
+
+- **`provider-overview-nav.mjs`** — the Overview row in the sidebar, for a
+  service-provider contact. External accounts hold no capability in
+  `Role::MATRIX` at all, so `portal-access.js` deleted the row on sight and
+  those accounts had a Dashboard with nothing behind it. It is kept by name
+  now, the same way Clients and Workflows already were, and relabelled: the
+  shell calls it "Admin Overview" because for years only staff reached it, and
+  none of what a provider contact sees there is administration.
+
+  It runs the real `portal-access.js` over the real sidebar markup — the row's
+  shape (caret, icon, label span) is what the relabel walks — for three
+  readers, and checks what each is left with: an administrator keeps "Admin
+  Overview", a provider contact keeps the same row reading "Overview" with the
+  header title and breadcrumb agreeing, and a client with no provider firm
+  behind them keeps neither the row nor the KPI placeholder.
+
+  Like the recycle-bin harness it needs no portal and no database: a static
+  server over `public/` is enough.
+
+```sh
+node tests/Browser/provider-overview-nav.mjs
+```

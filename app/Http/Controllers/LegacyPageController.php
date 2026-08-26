@@ -128,6 +128,8 @@ class LegacyPageController extends Controller
                 abort_unless($this->canViewAllFilesPage($request), 404);
             } elseif ($page === 'workflows' || $page === 'workflows/feedback') {
                 abort_unless($this->canViewWorkflowsPage($request), 404);
+            } elseif ($page === 'overview') {
+                abort_unless($this->canViewOverviewPage($request), 404);
             } else {
                 abort_unless(Role::canViewPage($request->user(), $page), 404);
             }
@@ -169,6 +171,25 @@ class LegacyPageController extends Controller
         $user = $request->user();
 
         return Role::canViewPage($user, 'clients') || CipAccess::canReach($user);
+    }
+
+    /**
+     * Overview is staff tooling in the matrix, but the half of it that is not
+     * administrator-only — your profile, your week, your recent files, your
+     * notifications, your activity — is exactly as true of a service-provider
+     * contact as of an employee. They already get a KPI row of their own on
+     * the home page; without this the same account had a Dashboard and no
+     * Overview behind it.
+     *
+     * The administrator tabs (Employees, Users, Recycle Bin) are chosen in
+     * overview.js off `isAdmin`, and every one of them is separately enforced
+     * server-side, so opening the page opens nothing else.
+     */
+    private function canViewOverviewPage(Request $request): bool
+    {
+        $user = $request->user();
+
+        return Role::canViewPage($user, 'overview') || CipAccess::isProviderContact($user);
     }
 
     /**
