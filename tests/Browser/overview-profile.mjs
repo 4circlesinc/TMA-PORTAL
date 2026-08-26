@@ -34,7 +34,7 @@ if (page.url().includes('/auth/login')) throw new Error('login failed');
 if (page.url().includes('stay-signed-in')) {
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-    page.click('text=Yes, stay signed in'),
+    page.click('button[type="submit"]:visible'),
   ]);
 }
 

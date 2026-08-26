@@ -45,7 +45,7 @@ async function signIn(page) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
       // The choice is a hidden input plus a plain submit, not a named button.
-      page.click('text=Yes, stay signed in'),
+      page.click('button[type="submit"]:visible'),
     ]);
     await page.waitForTimeout(400);
   }

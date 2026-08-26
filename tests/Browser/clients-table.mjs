@@ -63,7 +63,7 @@ try {
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('text=Yes, stay signed in'),
+      page.click('button[type="submit"]:visible'),
     ]);
   }
   await page.goto(`${BASE}/clients`, { waitUntil: 'networkidle' });

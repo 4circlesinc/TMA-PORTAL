@@ -50,7 +50,7 @@ async function signIn(page, email) {
     // The answer rides on which form is submitted now, not a named button.
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('text=Yes, stay signed in'),
+      page.click('button[type="submit"]:visible'),
     ]);
     await wait(400);
   }

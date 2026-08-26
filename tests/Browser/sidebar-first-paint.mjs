@@ -52,7 +52,7 @@ async function login(page, email) {
   // The stay-signed-in interstitial holds the session until answered, so
   // every later goto lands back on it and the shell never renders.
   if (page.url().includes('/auth/stay-signed-in')) {
-    await page.click('text=Yes, stay signed in');
+    await page.click('button[type="submit"]:visible');
     await page.waitForTimeout(800);
   }
 }

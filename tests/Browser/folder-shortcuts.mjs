@@ -31,7 +31,7 @@ async function signIn(page, email) {
   // every later goto lands back on it, so the portal shell never renders and
   // every selector below finds nothing.
   if (page.url().includes('/auth/stay-signed-in')) {
-    await page.click('text=Yes, stay signed in');
+    await page.click('button[type="submit"]:visible');
     await page.waitForTimeout(800);
   }
 }

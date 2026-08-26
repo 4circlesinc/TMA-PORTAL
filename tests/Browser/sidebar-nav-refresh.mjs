@@ -49,7 +49,7 @@ async function signIn(target) {
   if (target.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
       target.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
-      target.click('text=Yes, stay signed in'),
+      target.click('button[type="submit"]:visible'),
     ]);
   }
   if (target.url().includes('/auth/login')) throw new Error('login failed');

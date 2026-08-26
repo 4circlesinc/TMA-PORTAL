@@ -48,7 +48,7 @@ async function login(page, email) {
   await page.waitForTimeout(500);
   if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
   if (page.url().includes('/auth/stay-signed-in')) {
-    await page.click('text=Yes, stay signed in');
+    await page.click('button[type="submit"]:visible');
     await page.waitForTimeout(800);
   }
 }

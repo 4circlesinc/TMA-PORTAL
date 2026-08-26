@@ -69,7 +69,7 @@ try {
   await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('button[type="submit"]:visible')]);
   await page.waitForTimeout(700);
   if (page.url().includes('/auth/stay-signed-in')) {
-    await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('text=Yes, stay signed in')]);
+    await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('button[type="submit"]:visible')]);
     await page.waitForTimeout(700);
   }
 
