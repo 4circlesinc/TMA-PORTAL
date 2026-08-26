@@ -2341,3 +2341,22 @@ must click `[data-messages-call="…"]` and then `[data-callask-start="…"]`
 ```sh
 TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/calls-recording.mjs
 ```
+
+- **`overview-recycle-columns.mjs`** — Overview → Recycle Bin's columns, and
+  the other three overview tables that share the chrome. When the portal moved
+  to explorer-style picking the rows lost their checkboxes, but the grid kept a
+  leading 40px checkbox track: every cell then sat one column left of its own
+  heading, so the name was squeezed into 40px and vanished behind its icon
+  while a spare track hung empty off the right edge. Nothing throws — only
+  measuring finds it. This renders the real `overview-recycle.js` against a
+  stubbed API and checks that the head, the body and the grid agree on how many
+  columns there are and where each one starts, that no cell has to truncate
+  what it was handed, and that each of the four overview tables has exactly one
+  track per heading it renders.
+
+  It needs no portal and no database: a static server over `public/` is enough,
+  so it runs anywhere.
+
+```sh
+node tests/Browser/overview-recycle-columns.mjs
+```

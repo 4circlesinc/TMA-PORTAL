@@ -6643,9 +6643,9 @@
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--head,
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--body {
     display: grid;
-    /* check | name | type | folder | size | uploader | uploaded | modified | shared | actions */
+    /* name | type | folder | size | uploader | uploaded | modified | shared | actions
+       No checkbox column: rows are picked the way a file manager picks them. */
     grid-template-columns:
-      40px
       minmax(140px, 1.4fr)
       88px
       minmax(96px, 0.9fr)
@@ -6662,15 +6662,15 @@
   .tma-dash__recycle--overview .tma-dash__ctable--overview .tma-dash__ctr--head,
   .tma-dash__recycle--overview .tma-dash__ctable--overview .tma-dash__ctr--body {
     display: grid;
-    /* check | name | type | size | deleted by | deleted | actions */
+    /* name | type | size | deleted by | deleted | actions
+       No checkbox column: rows are picked the way a file manager picks them. */
     grid-template-columns:
-      40px
       minmax(160px, 1.6fr)
       110px
       80px
-      minmax(120px, 1fr)
-      150px
-      72px;
+      minmax(140px, 1fr)
+      180px
+      48px;
     align-items: center;
     width: 100%;
   }
