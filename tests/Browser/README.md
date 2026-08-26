@@ -737,6 +737,29 @@ field placement and drawing, and computed CSS only exist in a browser.
   which found nothing when driven from the dashboard, so every item was
   clickable and did absolutely nothing. Needs a few files in Recent Files
   (it deletes one, so re-seed between runs).
+- **`home-library-lightbox.mjs`** — clicking a file on those same tables opens
+  it. A filename click used to navigate to the folder the file lives in and
+  leave the reader to find it again; it now opens the shared lightbox
+  (`window.TMAPortalLightbox`), the viewer the Overview → Files table, the Feed
+  and Messages already use. What only a browser shows is that the *stage* is
+  right for each kind, so the fixture seeds four: pdf.js has to paint a real
+  canvas, the photo has to decode, the text file has to show its text, and the
+  `.docx` has to get the honest no-preview card with a download rather than a
+  blank screen. It also pins the two rules around it — the set the arrows step
+  through is the table the row was clicked in (folders excluded), and a folder
+  row still navigates instead of opening a viewer.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
+    php artisan tinker tests/Browser/fixtures/lightbox-seed.php
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/home-library-lightbox.mjs
+  ```
+
+  The seed stamps `profile_completed_at` and the account-setup preferences on
+  the account it makes: without them every portal route bounces to
+  profile-setup, then to getting-started, and the dashboard is never reached.
+  Serve with `FILES_DISK=local` too, or the preview asks R2 for bytes that were
+  written to `storage/app/private/vault`.
 - **`dashboard-stability.mjs`** — the Dashboard staying put. Leaving the board
   and coming back re-fetched six endpoints, re-rendered on each answer, and
   force-refreshed the Default Folders strip — which replaced every card's

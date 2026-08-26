@@ -125,12 +125,76 @@
     });
   }
 
+  /*
+   * Files open in the shared lightbox — the same viewer the Overview → Files
+   * table, Messages and the Feed use — instead of dropping the reader into the
+   * folder the file happens to live in. Documents that have no in-browser
+   * preview still open: the lightbox draws its honest no-preview card with the
+   * download beside it.
+   */
+  function lightboxItem(it) {
+    var url = it.previewUrl || it.downloadUrl;
+    return {
+      name: it.name,
+      mime: it.mime || '',
+      size: it.size || 0,
+      url: url,
+      downloadUrl: it.downloadUrl || url,
+      thumbUrl: it.thumbUrl || '',
+      canDownload: !(it.permissions && it.permissions.download === false),
+    };
+  }
+
+  function previewable(it) {
+    return !!it && it.type !== 'folder' && !(it.permissions && it.permissions.preview === false);
+  }
+
+  /*
+   * The list the clicked file belongs to, so the arrows and the filmstrip step
+   * through its neighbours: the rows of the visible tab, or the preview inside
+   * the folder card it was clicked in.
+   */
+  function siblingsOf(id) {
+    var i;
+    var table = tableItems();
+    for (i = 0; i < table.length; i++) {
+      if (table[i].id === id) return table;
+    }
+    for (i = 0; i < state.defaults.length; i++) {
+      var files = state.defaults[i].files || [];
+      for (var j = 0; j < files.length; j++) {
+        if (files[j].id === id) return files;
+      }
+    }
+    return [];
+  }
+
+  function openInLightbox(it) {
+    var lb = window.TMAPortalLightbox;
+    if (!lb || typeof lb.open !== 'function' || !previewable(it)) return false;
+
+    // Rows this reader may not preview are left out of the set rather than
+    // shown as a broken stage.
+    var set = siblingsOf(it.id).filter(previewable);
+    var idx = -1;
+    for (var i = 0; i < set.length; i++) {
+      if (set[i].id === it.id) { idx = i; break; }
+    }
+    if (idx < 0) { set = [it]; idx = 0; }
+
+    lb.open(set.map(lightboxItem), idx);
+    return true;
+  }
+
   function openItem(it) {
     if (!it) return;
     if (it.type === 'folder') {
       openFolder(it.id);
       return;
     }
+    if (openInLightbox(it)) return;
+    // No viewer on the page, or nothing this reader may preview: the folder it
+    // lives in is the next best place to land.
     if (it.folder && it.folder.id) {
       openFolder(it.folder.id);
       return;
