@@ -189,11 +189,19 @@
       : '<img src="' + esc(fileIconSrc(item)) + '" alt="" width="' + size + '" height="' + size + '">';
   }
 
-  // A real image thumbnail (server-generated) when available, else the type
-  // icon. Falls back to the icon if the thumbnail can't be produced.
+  // A real preview when there is one - the server's image thumbnail, or page
+  // one of a PDF painted by TMAFileThumbs - else the type icon.
   function thumbOrIcon(item, size) {
     if (item.type === 'folder') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
+    if (window.TMAFileThumbs) {
+      return window.TMAFileThumbs.imgHtml(item, {
+        size: size,
+        cls: 'tma-portal-file-thumb',
+        iconCls: 'tma-portal-file-thumb is-fallback',
+        icon: icon,
+      });
+    }
     if (item.type === 'file' && item.thumbUrl) {
       return '<img class="tma-portal-file-thumb" src="' + esc(item.thumbUrl) + '" alt="" loading="lazy" width="' + size + '" height="' + size + '"' +
         ' onerror="this.onerror=null;this.classList.add(\'is-fallback\');this.src=\'' + esc(icon) + '\'">';
@@ -1056,10 +1064,20 @@
       var cls = cardClasses.length ? ' ' + cardClasses.join(' ') : '';
       var thumb = it.type === 'folder'
         ? folderIconHtml(it, 40)
-        : (it.thumbUrl
-          ? '<img class="tma-portal-file-card__thumb-img" src="' + esc(it.thumbUrl) + '" alt="" loading="lazy"' +
-            ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
-          : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">');
+        : (window.TMAFileThumbs
+          ? window.TMAFileThumbs.imgHtml(it, {
+              // The card sizes its own picture (max 72px tall), so a real
+              // preview keeps the shape of the page or photograph.
+              size: null,
+              iconSize: 40,
+              cls: 'tma-portal-file-card__thumb-img',
+              iconCls: 'tma-portal-file-card__icon',
+              icon: fileIconSrc(it),
+            })
+          : (it.thumbUrl
+            ? '<img class="tma-portal-file-card__thumb-img" src="' + esc(it.thumbUrl) + '" alt="" loading="lazy"' +
+              ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
+            : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">'));
       var sub = it.type === 'folder'
         ? ((it.fileCount != null ? it.fileCount : 0) + ' items')
         : (it.sizeLabel || '');
@@ -2183,9 +2201,16 @@
 
     function railHtml() {
       return gallery.map(function (g, i) {
-        var thumb = g.thumbUrl
-          ? '<img src="' + esc(g.thumbUrl) + '" alt="" loading="lazy">'
-          : '<img class="tma-portal-viewer__rail-icon" src="' + esc(fileIconSrc(g)) + '" alt="">';
+        var thumb = window.TMAFileThumbs
+          ? window.TMAFileThumbs.imgHtml(g, {
+              size: null,
+              cls: '',
+              iconCls: 'tma-portal-viewer__rail-icon',
+              icon: fileIconSrc(g),
+            })
+          : (g.thumbUrl
+            ? '<img src="' + esc(g.thumbUrl) + '" alt="" loading="lazy">'
+            : '<img class="tma-portal-viewer__rail-icon" src="' + esc(fileIconSrc(g)) + '" alt="">');
         return '<button type="button" class="tma-portal-viewer__rail-item' + (i === idx ? ' is-current' : '') + '"' +
           ' data-lb-go="' + i + '" title="' + esc(g.name) + '" aria-current="' + (i === idx) + '">' +
           thumb + '<span class="tma-portal-viewer__rail-name">' + esc(g.name) + '</span></button>';

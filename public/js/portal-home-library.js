@@ -85,6 +85,16 @@
   function thumbOrIcon(item, size) {
     if (item.type === 'folder') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
+    // The one place that decides preview-or-icon, shared with the File
+    // Library: images use the server's thumbnail, PDFs get page one painted.
+    if (window.TMAFileThumbs) {
+      return window.TMAFileThumbs.imgHtml(item, {
+        size: size,
+        cls: 'tma-portal-file-thumb',
+        iconCls: 'tma-portal-file-thumb is-fallback',
+        icon: icon,
+      });
+    }
     if (item.type === 'file' && item.thumbUrl) {
       return '<img class="tma-portal-file-thumb" src="' + esc(item.thumbUrl) + '" alt="" loading="lazy" width="' + size + '" height="' + size + '"' +
         ' onerror="this.onerror=null;this.classList.add(\'is-fallback\');this.src=\'' + esc(icon) + '\'">';

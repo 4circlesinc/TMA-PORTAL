@@ -6180,6 +6180,25 @@
         ? window.TMAFileIcons.fileIconSrc(f.icon, f.name)
         : 'images/icons/phosphor/File.svg';
 
+      /*
+       * A picture of the document, not a glyph for its type.
+       *
+       * These rows are mostly passports, photographs and scans, and a column
+       * of identical green image marks tells the reader nothing about which
+       * one they are looking at. The listing comes from the File Library API,
+       * so it already carries the server's `thumbUrl`; TMAFileThumbs paints
+       * page one for PDFs, which have no server thumbnail on this stack.
+       */
+      var thumb = window.TMAFileThumbs
+        ? window.TMAFileThumbs.imgHtml(f, {
+            size: 40,
+            iconSize: 24,
+            cls: 'tma-dash__clients-folder-preview',
+            iconCls: '',
+            icon: icon,
+          })
+        : '<img src="' + esc(icon) + '" alt="">';
+
       // Who and when, not just how big, the brief asks for both against every
       // client document, and "uploaded by" is the first question about one.
       var who = f.uploadedBy && f.uploadedBy.name ? f.uploadedBy.name : null;
@@ -6190,7 +6209,7 @@
       ].filter(Boolean).join(' · ');
 
       html += '<button type="button" class="tma-dash__clients-folder" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '">' +
-        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + thumb + '</span>' +
         '<span class="tma-dash__clients-folder-main">' +
           '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
             clientCommentChip(f) + clientStatusChip(f) + '</span>' +

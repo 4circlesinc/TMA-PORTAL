@@ -304,6 +304,14 @@
       var src = window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, f.colour) : 'images/icons/phosphor/' + base + '.svg';
       return '<img src="' + ui().esc(src) + '" alt="">';
     }
+    if (window.TMAFileThumbs) {
+      return window.TMAFileThumbs.imgHtml(f, {
+        size: 24,
+        cls: 'tma-portal-file-row__thumb',
+        iconCls: '',
+        icon: fileIconSrc(f),
+      });
+    }
     if (f.thumbUrl) {
       return '<img class="tma-portal-file-row__thumb" src="' + ui().esc(f.thumbUrl) + '" alt="" loading="lazy"' +
         ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-row__thumb\');this.src=\'' + ui().esc(fileIconSrc(f)) + '\'">';
@@ -2690,6 +2698,9 @@
         var recentFiles = (res[0].files || []).map(function (f) {
           return {
             kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+            // Carried for the thumbnail: a PDF has no server thumbnail, so
+            // TMAFileThumbs paints page one from the preview route.
+            category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
             folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
           };
         });
@@ -2705,6 +2716,9 @@
         var favFiles = (res[1].files || []).map(function (f) {
           return {
             kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+            // Carried for the thumbnail: a PDF has no server thumbnail, so
+            // TMAFileThumbs paints page one from the preview route.
+            category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
             folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
           };
         });

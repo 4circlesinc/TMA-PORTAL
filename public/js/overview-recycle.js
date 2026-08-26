@@ -145,6 +145,23 @@
         : 'File');
       var fallback = fileIconSrc(icon, item.name);
       var tone = toneFor(meta.extension, meta.category);
+      // Same preview rule as every other list (TMAFileThumbs): the server's
+      // image thumbnail, page one for a PDF, the type icon otherwise. `name`
+      // lives on the item, the rest of the file is on `meta`.
+      if (window.TMAFileThumbs) {
+        var file = { name: item.name };
+        Object.keys(meta).forEach(function (k) { file[k] = meta[k]; });
+        return {
+          html: window.TMAFileThumbs.imgHtml(file, {
+            size: px,
+            iconSize: iconPx,
+            cls: px >= 40 ? 'tma-portal-file-card__thumb-img' : 'tma-dash__overview-recycle-thumb',
+            iconCls: px >= 40 ? 'tma-portal-file-card__icon' : '',
+            icon: fallback,
+          }),
+          tone: tone,
+        };
+      }
       if (meta.thumbUrl) {
         return {
           html: '<img class="' + (px >= 40 ? 'tma-portal-file-card__thumb-img' : 'tma-dash__overview-recycle-thumb') +

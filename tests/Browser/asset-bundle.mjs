@@ -58,7 +58,11 @@ async function signIn(page) {
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('button:has-text("Yes, stay signed in")'),
+      // Two forms post the same route, told apart by a hidden `stay` value,
+      // and the buttons now read "Yes" / "Not this time" — the old
+      // "Yes, stay signed in" text stopped matching and every run stalled
+      // here on an empty shell.
+      page.click('button[type="submit"]:visible'),
     ])
     await page.waitForTimeout(300)
   }

@@ -153,6 +153,22 @@
     return AVATAR + 'Avatar3d01.png';
   }
 
+  /* The file itself where there is a picture of it, the tinted type mark
+     where there is not. */
+  function rowThumbHtml(row) {
+    var icon = fileIconSrc(row.icon, row.name);
+    if (!window.TMAFileThumbs) {
+      return '<img src="' + icon + '" alt="" width="16" height="16">';
+    }
+    return window.TMAFileThumbs.imgHtml(row, {
+      size: 24,
+      iconSize: 16,
+      cls: 'tma-dash__overview-file-preview',
+      iconCls: '',
+      icon: icon,
+    });
+  }
+
   function renderRow(row, index, checked) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
     var sharedLabel = row.shared ? 'Shared' : 'Private';
@@ -160,7 +176,7 @@
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-files-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.name) + '"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--filename" data-files-open>' +
         '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + escapeHtml(row.tone) + '">' +
-          '<img src="' + fileIconSrc(row.icon, row.name) + '" alt="" width="16" height="16">' +
+          rowThumbHtml(row) +
         '</span>' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.name) + '</span>' +
       '</div>' +
@@ -271,6 +287,10 @@
       tone: tone,
       icon: f.icon || ((window.TMAFileIcons && TMAFileIcons.iconKeyFor) ? TMAFileIcons.iconKeyFor(name) : 'File'),
       mime: f.mime || '',
+      // What the row's picture is drawn from: the server's image thumbnail,
+      // or (for a PDF, which has none) page one via TMAFileThumbs.
+      thumbUrl: f.thumbUrl || null,
+      permissions: f.permissions || null,
       previewUrl: f.previewUrl || null,
       downloadUrl: f.downloadUrl || null,
       folder: (f.folder && f.folder.name) || '',

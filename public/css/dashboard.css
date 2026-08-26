@@ -36282,3 +36282,38 @@ span.tma-dash__messages-profile-avatar {
   outline-offset: -2px;
 }
 
+
+/* ── Real file previews (TMAFileThumbs) ────────────────────────────────────
+ *
+ * One class for "this image IS the file", wherever a list draws one: the
+ * server's image thumbnail, or page one of a PDF painted by pdf.js. The type
+ * icon keeps whatever the list already gave it — these rules only describe
+ * artwork, which fills its slot rather than sitting in the middle of it.
+ */
+.tma-file-thumb {
+  object-fit: cover;
+}
+
+/* A document is read from the top: cropping a page to a square must keep the
+   letterhead, not the middle of the body text. */
+.tma-file-thumb--doc {
+  object-position: top center;
+}
+
+/* Client hub / CBI document rows: the 40px tile holds a 24px glyph, but a real
+   preview fills the tile. */
+.tma-dash__clients-folder-icon img.tma-file-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card, #f4f5f7);
+}
+
+/* Overview → Files: the tinted type mark is 20px, the picture of the file is
+   a little larger and squared off. */
+.tma-dash__overview-file-icon img.tma-file-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-4);
+  background: var(--color-bg-card, #f4f5f7);
+}

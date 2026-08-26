@@ -754,6 +754,38 @@ field placement and drawing, and computed CSS only exist in a browser.
     php artisan tinker tests/Browser/fixtures/lightbox-seed.php
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/home-library-lightbox.mjs
   ```
+- **`file-thumbnails.mjs`** — the picture of the file, in every list that
+  draws one. Lists showed a type glyph and nothing else, so a folder of
+  passports, scans and photographs read as one repeated green picture mark.
+  Two things changed and both are checked here: every list now goes through
+  one shared helper (`TMAFileThumbs`) for the server's image thumbnail, and
+  PDFs — which this stack cannot rasterise server-side, no ghostscript, so
+  `thumbUrl` is null for every one of them — have page one painted in the
+  browser by pdf.js and swapped in over the icon.
+
+  The PDF path is why this is a browser test at all: the markup ships the
+  icon, and the thumbnail only exists once pdf.js has rendered. Every check
+  therefore *waits for a `data:` src*, which is the only proof a page was
+  really painted rather than a URL merely being emitted. It walks the four
+  shapes the helper feeds — the Dashboard's Recent Files table, the File
+  Library's list and its grid cards, and a client's Documents tab — and pins
+  the two rules that keep the feature honest: a `.docx` keeps its type icon,
+  because nothing can preview it, and a page is painted **once**. That last
+  one is counted at the network: these lists re-render on every background
+  poll, and without the in-page cache the same PDF would be re-fetched and
+  re-rendered every few seconds.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
+    php artisan tinker tests/Browser/fixtures/thumbnails-seed.php
+  TMA_BASE_URL=http://127.0.0.1:8899 TMA_FOLDER=<the folder= it printed> \
+    node tests/Browser/file-thumbnails.mjs
+  ```
+
+  The fixture prints the two folder uuids it made; `TMA_FOLDER` is the plain
+  one. It also builds the client the Documents-tab step opens, which is
+  reached from the right-hand Clients list — `/clients` is the CIP
+  Applications view, not the client directory.
 
   The seed stamps `profile_completed_at` and the account-setup preferences on
   the account it makes: without them every portal route bounces to
