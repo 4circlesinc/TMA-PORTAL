@@ -16170,8 +16170,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  /* Flat on the page shell — optional --bg-* variants override below. */
-  background: transparent;
+  /* A whisper of brand blue behind the thread — the bubbles stay the loud
+   * part. Mixed from tokens so the accent and dark mode carry through.
+   * Optional --bg-* variants override below. */
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-white));
 }
 
 .tma-dash__messages-divider {
@@ -33816,8 +33818,8 @@ span.tma-dash__messages-profile-avatar {
 
 /*
  * The default thread surface is plain and lives on the base chat-body rule
- * (see .tma-dash__messages-chat-body): a quiet near-white with a whisper of
- * brand at the top, built on tokens so dark mode follows for free. The old
+ * (see .tma-dash__messages-chat-body): a very light brand-blue wash, built
+ * on tokens so the accent and dark mode follow for free. The old
  * TMA pattern wallpaper was retired — an image behind the thread fought the
  * bubbles for attention. The variants below remain as optional choices.
  */
