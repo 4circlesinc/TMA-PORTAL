@@ -13180,16 +13180,26 @@
   z-index: 2;
 }
 
-/* When Reply opens, the composer (plus quoted mail) can be taller than the
-   reading pane. Without a cap, overflow:hidden on .email-detail clips it and
-   Reply looks like it did nothing. Shrink and scroll the footer instead. */
+/* Reply stays pinned under the reading pane. The composer fills a capped
+   height; To / toolbar / Send stay put while the body + quote scroll inside. */
 .tma-dash__email-detail-footer:has([data-email-inline-compose-panel]) {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: min(70%, 32rem);
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  max-height: min(52vh, 26rem);
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+  overflow: hidden;
+}
+
+.tma-dash__email-detail-footer:has([data-email-inline-compose-panel]) > .tma-dash__email-thread-actions {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  width: 100%;
 }
 
 .tma-dash__email-thread-actions {
@@ -13234,21 +13244,27 @@
 }
 
 .tma-dash__email-inline-compose {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   box-sizing: border-box;
   border: 1px solid var(--color-overlay-4);
   border-radius: var(--radius-16);
   background: var(--color-white);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  overflow-x: hidden;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
 .tma-dash__email-inline-compose-head {
   display: flex;
   align-items: flex-start;
+  flex-shrink: 0;
   gap: var(--space-12);
   padding: var(--space-12) var(--space-16);
   border-bottom: 1px solid var(--color-overlay-4);
@@ -13307,10 +13323,14 @@
 .tma-dash__email-inline-compose-editor-wrap {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   min-height: 0;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .tma-dash__email-inline-compose-editor {
@@ -13436,6 +13456,7 @@
 }
 
 .tma-dash__email-inline-compose-bar {
+  flex-shrink: 0;
   border-top: 1px solid var(--color-overlay-4);
 }
 
@@ -13450,6 +13471,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
   gap: var(--space-8);
   padding: var(--space-8) var(--space-12);
   border-top: 1px solid var(--color-overlay-4);
@@ -14588,12 +14610,21 @@
   }
 
   .tma-dash__email-detail-mobile-footer:has([data-email-inline-compose-panel]) {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
-    max-height: min(75%, 28rem);
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    max-height: min(58vh, 24rem);
+    overflow: hidden;
+  }
+
+  .tma-dash__email-detail-mobile-footer:has([data-email-inline-compose-panel]) > .tma-dash__email-thread-actions {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    width: 100%;
   }
 
   .tma-dash__email-thread-actions--mobile {
