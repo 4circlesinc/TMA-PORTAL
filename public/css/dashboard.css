@@ -15761,87 +15761,79 @@
   background: var(--color-green);
 }
 
-.tma-dash__messages-row-avatar--group {
+/* ── Messages: group avatar cluster ──────────────────────────────── */
+
+/*
+ * A group is drawn the way iOS Messages draws one: a soft grey disc with the
+ * members' faces arranged inside it — one centred, two on a diagonal, three
+ * in a triangle, four in a grid. One markup, sized by --cluster-size, so the
+ * inbox row and chat head (40px) and the info panel (80px) share it.
+ */
+.tma-dash__messages-cluster {
+  --cluster-size: 40px;
   position: relative;
-  overflow: visible;
-  background: transparent;
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--cluster-size);
+  height: var(--cluster-size);
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-overlay-8, rgba(0, 0, 0, 0.08));
 }
 
-.tma-dash__messages-row-avatar-part {
+.tma-dash__messages-cluster-face {
   position: absolute;
-  box-sizing: border-box;
-  width: 28px;
-  height: 28px;
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  /* A hairline ring keeps faces apart where they touch. */
+  box-shadow: 0 0 0 1.5px var(--color-bg-page);
+}
+
+.tma-dash__messages-cluster-img,
+.tma-dash__messages-cluster-initial {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--color-white);
 }
 
-.tma-dash__messages-row-avatar-part--1 {
-  top: 0;
-  left: 0;
-  z-index: 2;
-}
-
-.tma-dash__messages-row-avatar-part--2 {
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-}
-
-/* Inbox: the five members most recently online as an overlapping facepile,
- * never fewer than two circles (the reader fills in behind a lone member). */
-.tma-dash__messages-row-avatar--facepile {
-  display: flex;
-  flex-direction: row;
+.tma-dash__messages-cluster-initial {
+  display: inline-flex;
   align-items: center;
-  width: auto;
-  height: 28px;
-  overflow: visible;
+  justify-content: center;
+  font-size: calc(var(--cluster-size) * 0.2);
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  text-transform: uppercase;
 }
 
-.tma-dash__messages-row-avatar-part-wrap {
-  position: relative;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  margin-left: -8px;
+.tma-dash__messages-cluster-face .tma-dash__messages-row-online-dot {
+  right: -4%;
+  bottom: -4%;
+  width: 40%;
+  height: 40%;
+  border-width: calc(var(--cluster-size) * 0.035);
 }
 
-.tma-dash__messages-row-avatar-part-wrap:first-child {
-  margin-left: 0;
-}
+/* Layouts by head count. */
+.tma-dash__messages-cluster--1 .tma-dash__messages-cluster-face { width: 60%; height: 60%; left: 20%; top: 20%; }
 
-.tma-dash__messages-row-avatar-part-wrap:nth-child(1) { z-index: 1; }
-.tma-dash__messages-row-avatar-part-wrap:nth-child(2) { z-index: 2; }
-.tma-dash__messages-row-avatar-part-wrap:nth-child(3) { z-index: 3; }
-.tma-dash__messages-row-avatar-part-wrap:nth-child(4) { z-index: 4; }
-.tma-dash__messages-row-avatar-part-wrap:nth-child(5) { z-index: 5; }
+.tma-dash__messages-cluster--2 .tma-dash__messages-cluster-face { width: 52%; height: 52%; }
+.tma-dash__messages-cluster--2 .tma-dash__messages-cluster-face:nth-child(1) { left: 6%; top: 8%; }
+.tma-dash__messages-cluster--2 .tma-dash__messages-cluster-face:nth-child(2) { left: 42%; top: 40%; }
 
-.tma-dash__messages-row-avatar--facepile .tma-dash__messages-row-avatar-part {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: auto;
-  bottom: auto;
-  width: 24px;
-  height: 24px;
-  z-index: 1;
-}
+.tma-dash__messages-cluster--3 .tma-dash__messages-cluster-face:nth-child(1) { left: 29%; top: 7%; }
+.tma-dash__messages-cluster--3 .tma-dash__messages-cluster-face:nth-child(2) { left: 52%; top: 38%; }
+.tma-dash__messages-cluster--3 .tma-dash__messages-cluster-face:nth-child(3) { left: 9%; top: 49%; }
 
-.tma-dash__messages-row-avatar-part-wrap .tma-dash__messages-row-online-dot {
-  right: -1px;
-  bottom: -1px;
-  width: 9px;
-  height: 9px;
-  z-index: 2;
-}
-
-.tma-dash__messages-row-avatar--facepile-1 { width: 24px; }
-.tma-dash__messages-row-avatar--facepile-2 { width: 40px; }
-.tma-dash__messages-row-avatar--facepile-3 { width: 56px; }
-.tma-dash__messages-row-avatar--facepile-4 { width: 72px; }
-.tma-dash__messages-row-avatar--facepile-5 { width: 88px; }
+.tma-dash__messages-cluster--4 .tma-dash__messages-cluster-face:nth-child(1) { left: 8%; top: 8%; }
+.tma-dash__messages-cluster--4 .tma-dash__messages-cluster-face:nth-child(2) { left: 50%; top: 8%; }
+.tma-dash__messages-cluster--4 .tma-dash__messages-cluster-face:nth-child(3) { left: 8%; top: 50%; }
+.tma-dash__messages-cluster--4 .tma-dash__messages-cluster-face:nth-child(4) { left: 50%; top: 50%; }
 
 .tma-dash__messages-row-avatar-wrap {
   position: relative;
@@ -16072,16 +16064,6 @@
   width: 20px;
   height: 20px;
   margin: 10px;
-}
-
-.tma-dash__messages-chat-contact .tma-dash__messages-row-avatar--group {
-  width: 40px;
-  height: 40px;
-}
-
-.tma-dash__messages-chat-contact .tma-dash__messages-row-avatar-part {
-  width: 28px;
-  height: 28px;
 }
 
 .tma-dash__messages-chat-avatar-link {
@@ -30846,18 +30828,6 @@ button.tma-dash__header-popup-item:focus-visible {
   color: #fff;
 }
 
-.tma-dash__messages-row-avatar-part--initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #2f6fed;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  color: #fff;
-  text-transform: uppercase;
-}
-
 .tma-dash__messages-row-avatar--blue { background: #2f6fed; }
 .tma-dash__messages-row-avatar--green { background: #17976a; }
 .tma-dash__messages-row-avatar--purple { background: #7a4fe0; }
@@ -32755,43 +32725,16 @@ button.tma-dash__header-popup-item:focus-visible {
   cursor: pointer;
 }
 
-/* A group at profile size: the same circle cluster as the inbox row, larger.
- * The box loses its ring and clip so the overlapping circles can breathe. */
+/* A group at profile size: the same disc as the inbox row, filling the
+ * 80px ring (74px inside its 3px border). */
 .tma-dash__messages-profile-avatar--group {
-  width: auto;
-  min-width: 80px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
+  cursor: default;
 }
 
-.tma-dash__messages-profile-part {
-  box-sizing: border-box;
-  flex-shrink: 0;
-  width: 56px;
-  height: 56px;
-  margin-left: -16px;
-  border: 3px solid var(--color-bg-card);
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.tma-dash__messages-profile-part:first-child {
-  margin-left: 0;
-}
-
-.tma-dash__messages-profile-part--initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-size-18, 18px);
-  font-weight: 600;
-  line-height: 1;
-  color: #fff;
-  text-transform: uppercase;
+.tma-dash__messages-profile-avatar--group .tma-dash__messages-cluster {
+  --cluster-size: 74px;
+  width: 100%;
+  height: 100%;
 }
 
 /* No photo means nothing to enlarge, so the tile is not a button. */

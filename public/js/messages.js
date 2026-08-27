@@ -545,14 +545,16 @@
   }
 
   /*
-   * A group is always drawn as a cluster of member circles, never a single
-   * tile: a lone initial reads as one person, and a group photo with a corner
-   * badge was retired for the same reason. These helpers decide who fills the
-   * circles. The reader's own face fills in when fewer than two others are
-   * available, so a two-person group still shows two faces. An uploaded group
-   * photo, where one exists, takes the front circle rather than replacing the
-   * cluster.
+   * A group is drawn the way iOS Messages draws one: a soft disc with the
+   * members' faces arranged inside it — one centred, two on a diagonal, three
+   * in a triangle, four in a grid. Never a single tile: a lone initial reads
+   * as one person. These helpers decide who fills the disc. Faces are ordered
+   * online first, then most recently seen, then photographs before initials;
+   * the reader's own face fills in when fewer than two others are available;
+   * an uploaded group photo, where one exists, takes the first spot.
    */
+  var GROUP_CLUSTER_MAX = 4;
+
   function selfClusterMember() {
     var me = STORE.me;
     if (!me || !me.name) return null;
@@ -573,26 +575,8 @@
     return pool;
   }
 
-  /* Two circles for the compact stack: photos first so a photograph sits in front. */
-  function groupStackMembers(row) {
-    var pool = (row.members || []).slice().filter(Boolean);
-    var photo = groupPhotoClusterMember(row);
-    if (photo) pool.unshift(photo);
-    pool = padClusterWithSelf(pool, 2);
-    pool.sort(function (a, b) {
-      return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
-    });
-    return pool.slice(0, 2);
-  }
-
-  /*
-   * Inbox facepile: the five members most recently online — anyone online
-   * right now first, then by last seen. Members who are online carry the
-   * green dot; the rest sit plain. Never fewer than two circles: the reader's
-   * own face fills in behind a lone member.
-   */
-  function groupOnlineFacepileMembers(row) {
-    var pool = (row.members || []).slice().filter(Boolean);
+  function groupClusterMembers(row, members) {
+    var pool = (members || row.members || []).slice().filter(function (m) { return m && m.name; });
     pool.sort(function (a, b) {
       var ao = a.online ? 0 : 1;
       var bo = b.online ? 0 : 1;
@@ -600,67 +584,34 @@
       var at = a.lastSeenAt ? Date.parse(a.lastSeenAt) : 0;
       var bt = b.lastSeenAt ? Date.parse(b.lastSeenAt) : 0;
       if (bt !== at) return bt - at;
+      var ap = a.photo ? 0 : 1;
+      var bp = b.photo ? 0 : 1;
+      if (ap !== bp) return ap - bp;
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
-    pool = pool.slice(0, 5);
     var photo = groupPhotoClusterMember(row);
     if (photo) pool.unshift(photo);
-    return padClusterWithSelf(pool, 2).slice(0, 5);
+    return padClusterWithSelf(pool, 2).slice(0, GROUP_CLUSTER_MAX);
   }
 
-  /* Conversation info: every member, photographs first, at profile size. */
-  function groupProfileClusterMembers(row, members) {
-    var pool = (members || []).slice().filter(function (m) { return m && m.name; });
-    var photo = groupPhotoClusterMember(row);
-    if (photo) pool.unshift(photo);
-    pool = padClusterWithSelf(pool, 2);
-    pool.sort(function (a, b) {
-      return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
-    });
-    return pool.slice(0, 5);
-  }
-
-  function renderGroupProfilePart(member) {
-    if (member.photo) {
-      return '<img class="tma-dash__messages-profile-part" src="' + esc(member.photo) + '" alt="" title="' + esc(member.name || '') + '">';
-    }
+  function renderGroupClusterFace(member) {
+    var face = member.photo
+      ? '<img class="tma-dash__messages-cluster-img" src="' + esc(member.photo) + '" alt="" loading="lazy">'
+      : '<span class="tma-dash__messages-cluster-initial tma-dash__messages-row-avatar--' +
+        initialColourFor(member.name) + '">' + esc(initialsFor(member.name).charAt(0)) + '</span>';
     return (
-      '<span class="tma-dash__messages-profile-part tma-dash__messages-profile-part--initial tma-dash__messages-row-avatar--' +
-      initialColourFor(member.name) + '" title="' + esc(member.name || '') + '">' +
-      esc(initialsFor(member.name).charAt(0)) +
-      '</span>'
-    );
-  }
-
-  function renderGroupStackPart(member, index) {
-    var cls = 'tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--' + (index + 1);
-    if (member.photo) {
-      return '<img class="' + cls + '" src="' + esc(member.photo) + '" alt="" loading="lazy">';
-    }
-    return (
-      '<span class="' + cls + ' tma-dash__messages-row-avatar-part--initial tma-dash__messages-row-avatar--' +
-      initialColourFor(member.name) + '">' +
-      esc(initialsFor(member.name).charAt(0)) +
-      '</span>'
-    );
-  }
-
-  function renderGroupFacepilePart(member) {
-    var face;
-    if (member.photo) {
-      face = '<img class="tma-dash__messages-row-avatar-part" src="' + esc(member.photo) + '" alt="" loading="lazy">';
-    } else {
-      face = (
-        '<span class="tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--initial tma-dash__messages-row-avatar--' +
-        initialColourFor(member.name) + '">' +
-        esc(initialsFor(member.name).charAt(0)) +
-        '</span>'
-      );
-    }
-    return (
-      '<span class="tma-dash__messages-row-avatar-part-wrap" title="' + esc(member.name || '') + '">' +
+      '<span class="tma-dash__messages-cluster-face" title="' + esc(member.name || '') + '">' +
       face +
       (member.online ? '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' : '') +
+      '</span>'
+    );
+  }
+
+  function renderGroupCluster(members, extraClass) {
+    return (
+      '<span class="tma-dash__messages-cluster tma-dash__messages-cluster--' + members.length +
+      (extraClass ? ' ' + extraClass : '') + '">' +
+      members.map(renderGroupClusterFace).join('') +
       '</span>'
     );
   }
@@ -668,31 +619,18 @@
   /*
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
-   * Groups are always a cluster of member circles (photo in front, initials
-   * behind), never one tile. The inbox expands that into a facepile of the
-   * five members most recently online.
+   * Groups are always the member-face cluster (see renderGroupCluster), in
+   * the inbox, the chat head and search alike.
    */
-  function threadIcon(row, opts) {
-    opts = opts || {};
+  function threadIcon(row) {
     if (row.type === 'group') {
-      var facepile = !!opts.facepile;
-      var members = facepile
-        ? groupOnlineFacepileMembers(row)
-        : groupStackMembers(row);
+      var members = groupClusterMembers(row);
       if (!members.length) {
         /* No members and no reader yet (a warm start before /me): the group's
-         * own name still sits in a circle of the cluster, not a tile. */
+         * own name still sits as one face in the disc, not a tile. */
         members = [{ name: row.name || 'Group', photo: row.photo || null }];
-        facepile = false;
       }
-      return (
-        '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group' +
-        (facepile ? ' tma-dash__messages-row-avatar--facepile' : '') +
-        (facepile ? ' tma-dash__messages-row-avatar--facepile-' + members.length : '') +
-        '">' +
-        members.map(facepile ? renderGroupFacepilePart : renderGroupStackPart).join('') +
-        '</span>'
-      );
+      return renderGroupCluster(members, 'tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group');
     }
 
     if (row.photo) {
@@ -713,7 +651,7 @@
   function renderInboxThreadIcon(row) {
     var item = resolveThread(row);
     if (!isDirectThread(row)) {
-      return threadIcon(item, { facepile: true });
+      return threadIcon(item);
     }
     var icon = threadIcon(item);
     var online = isThreadOnline(row);
@@ -4185,7 +4123,7 @@
         // A group is its people: the same circle cluster as the list, at
         // profile size, rather than one photo or one initials tile.
         ? '<span class="tma-dash__messages-profile-avatar tma-dash__messages-profile-avatar--group">' +
-          groupProfileClusterMembers({ name: p.name, photo: p.photo }, p.members).map(renderGroupProfilePart).join('') +
+          renderGroupCluster(groupClusterMembers({ name: p.name, photo: p.photo }, p.members)) +
           '</span>'
         : p.photo
           ? '<button type="button" class="tma-dash__messages-profile-avatar" ' +
