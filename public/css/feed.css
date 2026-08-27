@@ -1359,13 +1359,31 @@ img.tma-dash__feed-badge {
   font-weight: 600;
 }
 
-.tma-dash__feed-media--1 .tma-dash__feed-media-item { aspect-ratio: auto; max-height: 460px; }
-
 .tma-dash__feed-media-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/*
+ * A lone photo is never cropped. It keeps its own shape up to the 4:5 frame
+ * Facebook and Instagram allow in a feed (1080 × 1350): wider pictures show
+ * at full width, and anything taller than 4:5 is letterboxed inside that
+ * frame rather than cut off — the viewer opens the whole thing. `cqw` is the
+ * width of the media strip, so the cap follows the post, not the viewport.
+ */
+.tma-dash__feed-media--1 { container-type: inline-size; }
+
+.tma-dash__feed-media--1 .tma-dash__feed-media-item {
+  aspect-ratio: auto;
+  display: block;
+}
+
+.tma-dash__feed-media--1 .tma-dash__feed-media-item img {
+  height: auto;
+  max-height: 125cqw;
+  object-fit: contain;
 }
 
 .tma-dash__feed-files {
