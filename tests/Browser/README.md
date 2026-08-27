@@ -1297,6 +1297,23 @@ node tests/Browser/mail-pins.mjs
 node tests/Browser/mail-suggest.mjs
 ```
 
+- **`mail-recipient-pills.mjs`** — recipient pills on To / Cc / Bcc. Every
+  address in a compose window, a reply-all or a forward is a pill and the
+  input after them only holds the address being typed: Enter, Tab, a comma,
+  a pasted list and leaving the field all turn text into pills, Backspace on
+  an empty input takes the last one back, the × removes one, and a typeahead
+  pick lands as a `Name <email>` pill. A plain reply shows its one recipient
+  as a fixed pill. It also pins that the draft still holds the
+  `"Name <a@b>, c@d"` string the send path reads, that pills and half-typed
+  text survive a re-render (opening Cc), and — by intercepting
+  `/portal/mail/send` — that what is still typed at Send goes out with the
+  pills. Needs the seeded three-message thread (with its Cc), a colleague
+  `dana@example.com`, and a connected mailbox; hides the sync toast itself.
+
+```sh
+node tests/Browser/mail-recipient-pills.mjs
+```
+
 - **`mail-snooze.mjs`** — snooze as a working reminder. The hover clock opens
   a "Snooze until…" picker (In 15 minutes / In 1 hour / Later today /
   Tomorrow / Next week + custom datetime); picking a preset hides the row

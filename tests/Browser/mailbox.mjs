@@ -244,7 +244,7 @@ try {
     const val = await toField.inputValue();
     check(val === 'client@example.com', 'typing into To is retained');
     await toField.press('Enter');
-    const pill = await page.$('[data-email-compose-field="to"] ~ *, [data-email-recipient="client@example.com"]');
+    const pill = await page.$('[data-email-recipient="client@example.com"]');
     check(!!pill, 'Enter turns the address into a pill');
     check((await toField.inputValue()) === '', 'the input is clear once the pill lands');
   }

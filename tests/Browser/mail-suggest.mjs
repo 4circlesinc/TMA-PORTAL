@@ -31,8 +31,26 @@ async function signIn() {
     page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
+  await page.waitForTimeout(500);
+  // Every portal login lands here first; left un-dismissed, every later
+  // route bounces back and the run stalls on an empty shell.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+      page.click('button[type="submit"]:visible'),
+    ]);
+    await page.waitForTimeout(500);
+  }
   if (page.url().includes('/auth/login')) throw new Error('login failed');
 }
+
+const toPills = () => page.evaluate(() => {
+  const input = document.querySelector('[data-email-compose-field="to"]');
+  const field = input && input.closest('[data-email-recipients]');
+  return field
+    ? Array.from(field.querySelectorAll('[data-email-recipient]')).map((p) => p.getAttribute('title')).join(', ')
+    : '';
+});
 
 try {
   step(1, 'Open email and start a new compose');
@@ -60,11 +78,12 @@ try {
   // Photos come from Microsoft/Google directory lookups — absent in this
   // fixture, so initials are expected. Real orgs get faces after reconnect.
 
-  step(3, 'Picking a suggestion fills To with Name <email>');
+  step(3, 'Picking a suggestion lands as a Name <email> pill');
   await page.click('[data-email-suggest-item], [data-email-suggest-index="0"]');
   await page.waitForSelector('[data-email-suggest-menu]', { state: 'detached', timeout: 5000 }).catch(() => {});
-  const toValue = await to.inputValue();
-  check(/Dana Reed\s*<dana@example\.com>/i.test(toValue) || /dana@example\.com/i.test(toValue), `To filled (got: "${toValue}")`);
+  const toValue = await toPills();
+  check(/Dana Reed\s*<dana@example\.com>/i.test(toValue) || /dana@example\.com/i.test(toValue), `To pill added (got: "${toValue}")`);
+  check((await to.inputValue()) === '', 'the input is clear once the pill lands');
 
   step(4, 'Client and prior-mail sources appear for their queries');
   await to.fill('');
@@ -83,8 +102,8 @@ try {
   step(5, 'Keyboard Enter selects the active suggestion');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
-  const afterEnter = await to.inputValue();
-  check(/pat\.partner@example\.com/i.test(afterEnter), `Enter inserted prior address (got: "${afterEnter}")`);
+  const afterEnter = await toPills();
+  check(/pat\.partner@example\.com/i.test(afterEnter), `Enter added the prior address as a pill (got: "${afterEnter}")`);
 
   await page.screenshot({ path: 'tests/Browser/mail-suggest-final.png' });
 } catch (e) {
