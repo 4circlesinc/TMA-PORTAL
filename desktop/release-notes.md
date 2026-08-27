@@ -1,1 +1,1 @@
-- On Windows, the minimise/maximise/close buttons no longer sit in a blue box on top of a file you are viewing — the strip takes the viewer's own colour
+- On Windows, the window's minimise/maximise/close no longer cover the file viewer's own buttons — the viewer's bar keeps clear of them
