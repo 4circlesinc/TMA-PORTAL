@@ -170,12 +170,18 @@
    *, leaves a hole where every author's face should be.
    */
   function myAvatar() {
-    var u = me();
+    // The shell's record first; the Feed's own /me answer when the shell
+    // has not filled in yet. Without the fallback the composer drew a "?"
+    // tile — initials for nobody — and nothing redrew it once the shell
+    // caught up.
+    var u = me() || state.viewer;
     var store = window.TMACurrentUser;
 
-    if (store && store.avatarSrc) return store.avatarSrc(u && u.avatar, u && u.name);
+    if (store && store.avatarSrc) {
+      return store.avatarSrc(u && (u.avatar || u.photo), u && u.name);
+    }
 
-    return (u && u.avatar) || TRANSPARENT;
+    return (u && (u.avatar || u.photo)) || TRANSPARENT;
   }
 
   function avatarFor(person) {
@@ -4739,6 +4745,9 @@
       .then(function (data) {
         if (!data) return;
         if (data.id) viewerId = data.id;
+        // Kept whole: the composer and comment boxes draw this face when the
+        // shell's own copy has not arrived.
+        state.viewer = data;
         if (data.realtime && data.realtime.enabled) realtimeConfig = data.realtime;
       })
       .catch(function () {
@@ -4833,6 +4842,12 @@
     }
 
     bindGlobals();
+
+    // The shell fills the signed-in user in asynchronously; faces drawn
+    // before that resolve to nobody's initials, so the page repaints once.
+    if (window.TMACurrentUser && window.TMACurrentUser.onChange) {
+      window.TMACurrentUser.onChange(function () { if (state.el) render(); });
+    }
 
     var deepLink = readDeepLink();
 
