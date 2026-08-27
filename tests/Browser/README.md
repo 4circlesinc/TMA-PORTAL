@@ -1378,6 +1378,17 @@ node tests/Browser/notify-toasts.mjs
   actually measured, and none may be left at the em-dash the client falls back
   to when the metrics request fails. Needs the KPI fixture below — with an empty
   database the cards are *correctly* empty and the run proves nothing.
+- **`dashboard-period.mjs`** — the head's Today / This week / This month /
+  This year picker, which used to change its own label and nothing else. It
+  picks each period in turn and checks three things: the metrics request
+  carries that period, the row shows what the API answers *for that period*
+  (read back in the same session, so the check holds on any date), and the
+  four rows disagree with each other, since identical rows would mean the
+  selection never reached the server. Then it reloads: the label must survive
+  and the first measured request must already carry it. Needs the KPI fixture
+  *and* `kpi-period-seed.php`, which spreads CIP applications across the four
+  windows; serve with `FEATURE_CIP=true`. The seed's PDFs have no bytes, so
+  their thumbnail requests 422 — the driver ignores those and nothing else.
 - **`dashboard-messages.mjs`** — the home dashboard's Messages tile: the five
   rows it shows have to be the *first five* the conversations API returns
   (checked against the API in the same session, not against a fixture), each
@@ -1671,6 +1682,9 @@ seed above:
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
   php artisan tinker tests/Browser/fixtures/kpi-seed.php
+# dashboard-period.mjs also wants the CIP applications, on top of the above:
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true \
+  php artisan tinker tests/Browser/fixtures/kpi-period-seed.php
 ```
 
 Only `/` serves the portal shell; deep paths like `/folders/all` exist purely

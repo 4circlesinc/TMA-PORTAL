@@ -26,21 +26,15 @@ use Illuminate\Support\Facades\DB;
  * for their CIP book and what is waiting on them. Other client accounts never
  * see these cards at all.
  *
- * Every card reports a trailing window against the window before it (or a live
- * backlog with the longest wait). Where there is nothing to measure the card
- * says so; it never falls back to a plausible-looking number.
+ * Every card reports the chosen Period against the stretch before it (or a
+ * live backlog with the longest wait). Where there is nothing to measure the
+ * card says so; it never falls back to a plausible-looking number.
  */
 class DashboardMetrics
 {
+    private readonly Period $period;
+
     private readonly CarbonImmutable $now;
-
-    private readonly CarbonImmutable $windowStart;
-
-    private readonly CarbonImmutable $priorStart;
-
-    private readonly CarbonImmutable $lookbackStart;
-
-    private readonly int $windowDays;
 
     /** Staff whose activity is in scope (the reader, or the whole firm). */
     private readonly array $scopeStaffIds;
@@ -50,15 +44,10 @@ class DashboardMetrics
 
     private readonly ClientDirectory $clients;
 
-    public function __construct(private readonly User $user)
+    public function __construct(private readonly User $user, ?Period $period = null)
     {
-        $this->windowDays = max(1, (int) config('portal.metrics.window_days', 30));
-        $lookbackDays = max($this->windowDays * 2, (int) config('portal.metrics.lookback_days', 90));
-
-        $this->now = CarbonImmutable::now();
-        $this->windowStart = $this->now->subDays($this->windowDays);
-        $this->priorStart = $this->now->subDays($this->windowDays * 2);
-        $this->lookbackStart = $this->now->subDays($lookbackDays);
+        $this->period = $period ?? Period::for(null, $user);
+        $this->now = $this->period->now;
 
         $allStaffIds = [];
         $scopeStaffIds = [];
@@ -102,7 +91,8 @@ class DashboardMetrics
 
         return [
             'scope' => $this->isAdministrator() ? 'organization' : 'personal',
-            'windowDays' => $this->windowDays,
+            'period' => $this->period->key,
+            'windowDays' => $this->period->days,
             'cards' => [
                 'clientResponse' => $this->clientResponseCard($timelines),
                 'cipNew' => $this->cipNewCard(),
@@ -123,7 +113,8 @@ class DashboardMetrics
     {
         return [
             'scope' => 'provider',
-            'windowDays' => $this->windowDays,
+            'period' => $this->period->key,
+            'windowDays' => $this->period->days,
             'cards' => [
                 'cipActive' => $this->cipActiveCard(),
                 'cipUpdatesRequired' => $this->cipUpdatesRequiredCard(),
@@ -142,9 +133,9 @@ class DashboardMetrics
         $prior = [];
 
         foreach ($timelines->responsePairs() as $pair) {
-            if ($pair['askedAt'] >= $this->windowStart) {
+            if ($pair['askedAt'] >= $this->period->windowStart) {
                 $current[] = $pair['seconds'];
-            } elseif ($pair['askedAt'] >= $this->priorStart) {
+            } elseif ($pair['askedAt'] >= $this->period->priorStart && $pair['askedAt'] < $this->period->priorEnd) {
                 $prior[] = $pair['seconds'];
             }
         }
@@ -171,7 +162,7 @@ class DashboardMetrics
             'deltaUp' => $priorAverage !== null && $average > $priorAverage,
             'sample' => count($current),
             'hint' => Format::plural(count($current), 'client reply', 'client replies')
-                .' in the last '.$this->windowDays.' days, across portal messages and email.',
+                .' '.$this->period->phrase().', across portal messages and email.',
         ];
     }
 
@@ -195,15 +186,15 @@ class DashboardMetrics
             ->where('created_at', '<', $to)
             ->count();
 
-        $current = $filed($this->windowStart, $this->now);
-        $prior = $filed($this->priorStart, $this->windowStart);
+        $current = $filed($this->period->windowStart, $this->now);
+        $prior = $filed($this->period->priorStart, $this->period->priorEnd);
 
         return [
             'value' => Format::count($current),
             'count' => $current,
             'delta' => Format::change($current, $prior === 0 ? null : $prior),
             'deltaUp' => $current >= $prior,
-            'hint' => 'New CIP applications filed in the last '.$this->windowDays.' days.',
+            'hint' => 'New CIP applications filed '.$this->period->phrase().'.',
         ];
     }
 
@@ -342,8 +333,8 @@ class DashboardMetrics
             ->where('created_at', '<', $to)
             ->count();
 
-        $current = $filed($this->windowStart, $this->now);
-        $prior = $filed($this->priorStart, $this->windowStart);
+        $current = $filed($this->period->windowStart, $this->now);
+        $prior = $filed($this->period->priorStart, $this->period->priorEnd);
 
         if ($count === 0) {
             return [
@@ -497,7 +488,7 @@ class DashboardMetrics
 
         $messages = Message::query()
             ->whereIn('conversation_id', $conversationIds)
-            ->where('created_at', '>=', $this->lookbackStart)
+            ->where('created_at', '>=', $this->period->lookbackStart)
             ->whereNotNull('user_id')
             ->where('type', '!=', 'system')
             ->orderBy('conversation_id')
@@ -541,7 +532,7 @@ class DashboardMetrics
             ->where('folder', 'inbox')
             ->whereNotNull('thread_id')
             ->whereNotNull('sent_at')
-            ->where('sent_at', '>=', $this->lookbackStart)
+            ->where('sent_at', '>=', $this->period->lookbackStart)
             ->whereIn(DB::raw('lower(from_email)'), $emails)
             ->orderBy('sent_at')
             ->get(['user_id', 'thread_id', 'from_email', 'sent_at']);
@@ -570,7 +561,7 @@ class DashboardMetrics
             ->where('folder', 'sent')
             ->whereIn('thread_id', $inbound->pluck('thread_id')->unique()->all())
             ->whereNotNull('sent_at')
-            ->where('sent_at', '>=', $this->lookbackStart)
+            ->where('sent_at', '>=', $this->period->lookbackStart)
             ->orderBy('sent_at')
             ->get(['user_id', 'thread_id', 'sent_at']);
 

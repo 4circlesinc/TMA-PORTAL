@@ -2707,6 +2707,11 @@
         });
         item.classList.add('tma-dash__menu-item--active');
         store.set('tma.today', val);
+        // The KPI row measures whatever this says; portal-home reads the
+        // stored label, so the store must be written before it is told.
+        if (window.TMAPortalHome && window.TMAPortalHome.setMetricsPeriod) {
+          window.TMAPortalHome.setMetricsPeriod();
+        }
       });
     }
 

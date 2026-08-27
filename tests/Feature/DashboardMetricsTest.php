@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\Status as CipStatus;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -134,9 +135,11 @@ class DashboardMetricsTest extends TestCase
         ], $overrides));
     }
 
-    private function metrics(User $as): array
+    private function metrics(User $as, ?string $period = null): array
     {
-        return $this->actingAs($as)->getJson('/portal/dashboard/metrics')->assertOk()->json();
+        $url = '/portal/dashboard/metrics'.($period === null ? '' : '?period='.$period);
+
+        return $this->actingAs($as)->getJson($url)->assertOk()->json();
     }
 
     /* ── response time ─────────────────────────────────────────────── */
@@ -274,6 +277,86 @@ class DashboardMetricsTest extends TestCase
         $card = $this->metrics($staff)['cards']['cipNew'];
 
         $this->assertSame(2, $card['count']);
+    }
+
+    /* ── the date-range picker ─────────────────────────────────────── */
+
+    /** A CIP application backdated to an instant, given in UTC. */
+    private function filedAt(CipProvider $provider, User $by, string $at): void
+    {
+        Applications::create($provider, $by)
+            ->forceFill(['created_at' => CarbonImmutable::parse($at, 'UTC')])
+            ->saveQuietly();
+    }
+
+    public function test_the_period_picker_measures_calendar_windows(): void
+    {
+        config(['services.cip.enabled' => true]);
+        // A Wednesday, so "today", "this week" (from Sunday) and "this month"
+        // all draw different lines.
+        $this->travelTo(CarbonImmutable::parse('2026-08-26 12:00:00', 'UTC'));
+        $staff = $this->staff();
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $this->filedAt($provider, $staff, '2026-08-26 08:00:00'); // today
+        $this->filedAt($provider, $staff, '2026-08-24 09:00:00'); // Monday: this week
+        $this->filedAt($provider, $staff, '2026-08-20 09:00:00'); // last week: this month
+        $this->filedAt($provider, $staff, '2026-07-30 09:00:00'); // last month: this year
+        $this->filedAt($provider, $staff, '2025-12-31 09:00:00'); // last year
+
+        $this->assertSame(1, $this->metrics($staff, 'today')['cards']['cipNew']['count']);
+        $this->assertSame(2, $this->metrics($staff, 'week')['cards']['cipNew']['count']);
+        $this->assertSame(3, $this->metrics($staff, 'month')['cards']['cipNew']['count']);
+        $this->assertSame(4, $this->metrics($staff, 'year')['cards']['cipNew']['count']);
+
+        $week = $this->metrics($staff, 'week');
+        $this->assertSame('week', $week['period']);
+        $this->assertSame('New CIP applications filed this week.', $week['cards']['cipNew']['hint']);
+    }
+
+    public function test_the_comparison_is_the_same_stretch_of_the_previous_period(): void
+    {
+        config(['services.cip.enabled' => true]);
+        // Wednesday noon: this week so far is Sunday to Wednesday noon, so it
+        // is read against last Sunday to last Wednesday noon, not all seven
+        // days of last week.
+        $this->travelTo(CarbonImmutable::parse('2026-08-26 12:00:00', 'UTC'));
+        $staff = $this->staff();
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $this->filedAt($provider, $staff, '2026-08-25 09:00:00'); // this week
+        $this->filedAt($provider, $staff, '2026-08-18 09:00:00'); // last Tuesday: in the comparison
+        $this->filedAt($provider, $staff, '2026-08-21 09:00:00'); // last Friday: after it
+
+        $card = $this->metrics($staff, 'week')['cards']['cipNew'];
+
+        $this->assertSame(1, $card['count']);
+        $this->assertSame('No change', $card['delta']);
+    }
+
+    public function test_today_ends_at_the_reader_midnight_not_the_server_one(): void
+    {
+        config(['services.cip.enabled' => true]);
+        // 15:00 UTC is 03:00 the next morning in Auckland.
+        $this->travelTo(CarbonImmutable::parse('2026-08-26 15:00:00', 'UTC'));
+        $auckland = $this->staff('nz@example.com');
+        $auckland->forceFill(['preferences' => ['timezone' => 'Pacific/Auckland']])->save();
+        $utc = $this->staff('utc@example.com');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $this->filedAt($provider, $utc, '2026-08-26 10:00:00'); // 22:00 yesterday in Auckland
+        $this->filedAt($provider, $utc, '2026-08-26 14:00:00'); // 02:00 today in both
+
+        $this->assertSame(1, $this->metrics($auckland, 'today')['cards']['cipNew']['count']);
+        $this->assertSame(2, $this->metrics($utc, 'today')['cards']['cipNew']['count']);
+    }
+
+    public function test_an_unknown_period_falls_back_to_the_rolling_window(): void
+    {
+        $json = $this->metrics($this->staff(), 'fortnight');
+
+        $this->assertSame('rolling', $json['period']);
+        $this->assertSame(30, $json['windowDays']);
     }
 
     /* ── documents awaiting signature ──────────────────────────────── */

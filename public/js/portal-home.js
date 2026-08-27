@@ -197,6 +197,9 @@
 
     window.TMAStore.get('home:metrics').then(function (snap) {
       if (!snap || homeReal.metrics) return;
+      // A snapshot measured for another selection would put last week's
+      // numbers under this week's label; the fetch already on its way answers.
+      if (snap.period !== metricsPeriod()) return;
       homeMetrics = snap;
       homeMetricsLoaded = true;
       remount();
@@ -252,7 +255,21 @@
   var homeMetricsLoaded = false;
   var homeMetrics = null;
   var homeMetricsInflight = null;
+  var homeMetricsInflightPeriod = '';
   var homeMetricsAt = 0;
+
+  /*
+   * The head's Today / This week / This month / This year picker. dashboard.js
+   * owns the control and stores the label it shows; the server wants the key.
+   * The label is the default the shell ships with, so "nothing stored" is Today.
+   */
+  var METRICS_PERIODS = { 'Today': 'today', 'This week': 'week', 'This month': 'month', 'This year': 'year' };
+
+  function metricsPeriod() {
+    var label = '';
+    try { label = localStorage.getItem('tma.today') || ''; } catch (e) {}
+    return METRICS_PERIODS[label] || 'today';
+  }
 
   /*
    * Revalidation windows.
@@ -2782,20 +2799,28 @@
    * library, signatures from the request log. A failure leaves the row in
    * place with em-dashes rather than showing a stale or invented number. */
   function loadHomeMetrics(el) {
-    if (homeMetricsInflight) return;
+    var period = metricsPeriod();
+    if (homeMetricsInflight && homeMetricsInflightPeriod === period) return;
+    homeMetricsInflightPeriod = period;
 
     var before = JSON.stringify(homeMetrics || null);
 
-    homeMetricsInflight = fetch('/portal/dashboard/metrics', {
+    homeMetricsInflight = fetch('/portal/dashboard/metrics?period=' + encodeURIComponent(period), {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     })
       .then(function (r) { return r.ok ? r.json() : null; })
       // A failed refresh keeps the numbers already on the cards; only the very
       // first attempt has nothing to fall back to.
-      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); homeReal.metrics = true; keepWarm('metrics', j); } })
+      .then(function (j) {
+        // The picker moved on while this was in flight; the newer request
+        // answers, and these numbers belong to a selection nobody is looking at.
+        if (homeMetricsInflightPeriod !== period) return;
+        if (j) { homeMetrics = j; homeMetricsAt = Date.now(); homeReal.metrics = true; keepWarm('metrics', j); }
+      })
       .catch(function () {})
       .then(function () {
+        if (homeMetricsInflightPeriod !== period) return;
         homeMetricsInflight = null;
         var wasLoaded = homeMetricsLoaded;
         homeMetricsLoaded = true;
@@ -2804,6 +2829,24 @@
           mount(el, { fromLoad: true });
         }
       });
+  }
+
+  /*
+   * The picker changed. A different period is a different set of numbers, so
+   * the cards go back to skeletons rather than showing last month's figures
+   * under this week's label while the new ones load.
+   */
+  function setMetricsPeriod() {
+    // Someone with no KPI row has nothing to re-measure.
+    if (homeMetrics && homeMetrics.staff === false && !homeMetrics.provider) return;
+    var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+    if (!el) return;
+    homeMetrics = null;
+    homeMetricsLoaded = false;
+    homeMetricsAt = 0;
+    homeReal.metrics = false;
+    if (el.isConnected && el.childElementCount) mount(el, { fromLoad: true });
+    loadHomeMetrics(el);
   }
 
   // Shortcut badges: Email = exact inbox unread, Calendar = today's events,
@@ -3427,4 +3470,5 @@
 
   window.TMAPortalHome = window.TMAPortalHome || {};
   window.TMAPortalHome.restoreTodayToShell = restoreTodayToShell;
+  window.TMAPortalHome.setMetricsPeriod = setMetricsPeriod;
 })();
