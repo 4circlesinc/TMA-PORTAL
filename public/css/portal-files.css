@@ -499,11 +499,20 @@
   margin: 0; color: rgba(255, 255, 255, 0.7); font-size: var(--text-size-14);
   pointer-events: none;
 }
-/* Each page canvas — no border-radius, just a subtle shadow */
+/* Each page canvas — no border-radius, just a subtle shadow.
+ * color-scheme: light is load-bearing in the desktop app: Electron follows
+ * the OS dark theme, pdf.js uses an opaque 2d context, and Chromium then
+ * composites a white page as a white rectangle with no ink. */
 [data-lb-pdf-canvas] {
   display: block; flex: 0 0 auto;
   border-radius: 0 !important;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  background: #fff;
+  color-scheme: only light;
+}
+.tma-portal-viewer__pdf-canvas,
+.tma-portal-viewer__page-canvas {
+  color-scheme: only light;
   background: #fff;
 }
 /* Floating compact toolbar — centred at the bottom of the viewer */

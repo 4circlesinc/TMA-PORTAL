@@ -42,6 +42,7 @@ function documentParams(src) {
     wasmUrl: factoryUrl('./wasm/'),
     iccUrl: factoryUrl('./iccs/'),
     useWorkerFetch: false,
+    enableHWA: false,
   };
 
   if (src == null) return assets;

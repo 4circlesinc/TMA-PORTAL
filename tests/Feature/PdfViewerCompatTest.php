@@ -72,8 +72,21 @@ class PdfViewerCompatTest extends TestCase
         $this->assertStringContainsString("factoryUrl('./iccs/')", $loader);
         $this->assertStringContainsString('export function getDocument', $loader);
         $this->assertStringContainsString('useWorkerFetch: false', $loader);
+        $this->assertStringContainsString('enableHWA: false', $loader);
         // A star re-export of pdf.min.mjs would shadow this wrap in Electron 33.
         $this->assertStringNotContainsString("export * from './pdf.min.mjs'", $loader);
+    }
+
+    public function test_the_file_viewer_loads_the_whole_pdf(): void
+    {
+        // Range+disableAutoFetch is how the desktop app shows "1 / 1" on a
+        // white sheet: the trailer arrives, the page bytes do not.
+        $files = $this->js('js/portal-files.js');
+        $lightbox = $this->js('js/portal-lightbox.js');
+
+        $this->assertStringContainsString('pdfDocument(url, { complete: true })', $files);
+        $this->assertStringContainsString('loadPdfDocument(url, { complete: true })', $lightbox);
+        $this->assertStringContainsString('if (complete) return wholeFilePdf', $lightbox);
     }
 
     public function test_cid_and_standard_font_tables_are_shipped(): void

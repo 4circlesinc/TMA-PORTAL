@@ -49,6 +49,10 @@ const TYPES = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
+  '.bcmap': 'application/octet-stream',
+  '.pfb': 'application/octet-stream',
+  '.icc': 'application/vnd.iccprofile',
+  '.wasm': 'application/wasm',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
 };
@@ -157,18 +161,24 @@ function offlineResponse() {
 
 function networkFetch(request) {
   try {
+    const headers = sanitizeRequestHeaders(request.headers);
+    // Chromium's Request() constructor drops Range. pdf.js needs it; without
+    // it the desktop app gets the PDF trailer, reports a page count, and
+    // paints a white sheet.
+    const range = request.headers.get('Range') || request.headers.get('range');
+    if (range) headers.set('Range', range);
+
     const init = {
       method: request.method,
-      headers: sanitizeRequestHeaders(request.headers),
+      headers: headers,
+      bypassCustomProtocolHandlers: true,
     };
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       init.body = request.body;
       init.duplex = 'half';
     }
 
-    return net.fetch(new Request(request.url, init), {
-      bypassCustomProtocolHandlers: true,
-    }).catch((err) => {
+    return net.fetch(request.url, init).catch((err) => {
       console.error('[asset-cache] network fetch failed', request.url, err);
 
       return offlineResponse();

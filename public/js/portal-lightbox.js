@@ -117,7 +117,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=3').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=4').then(function (lib) {
       // An absolute worker URL: a path-only src is resolved against the
       // module, not the page, and that 404 leaves getDocument hanging forever.
       try {
@@ -148,27 +148,28 @@
   }
 
   /*
-   * Page one first, rather than the whole file first.
+   * Page one first, rather than the whole file first — except when the
+   * caller asks for `complete: true`.
    *
-   * This used to fetch every byte on the page and hand pdf.js the buffer,
-   * because the old file route could not answer a Range request, so opening a
-   * 40 MB scan meant waiting for all 40 MB before the first page could be
-   * drawn, and the reader watched "Loading preview…" for ten seconds to look
-   * at page one. The route speaks Range now (and object storage always did),
-   * so pdf.js is given the URL and pulls what it needs: the trailer, the page
-   * it is showing, and nothing else until the reader scrolls.
+   * Thumbnails still use Range: a folder of 40 MB scans must not download
+   * every file for a 28px icon. The File Library viewer always passes
+   * complete, because it paints every page, and in the desktop app a Range
+   * request through the protocol handler often returns just the trailer —
+   * numPages is honest, the canvas stays white.
    *
-   * The whole-file read is kept as the fallback. A file that is not a PDF is
-   * not a PDF either way, so only a transport failure is worth a second try —
-   * a proxy that strips Range, an ancient deploy, and there it is the same
-   * code that always worked.
+   * The whole-file read is also the fallback when Range itself fails (a
+   * proxy that strips it, an ancient deploy).
    */
-  function loadPdfDocument(url) {
+  function loadPdfDocument(url, options) {
     var path = pdfRequestUrl(url);
+    var complete = !!(options && options.complete);
 
     return loadPdfjs().then(function (pdfjs) {
+      if (complete) return wholeFilePdf(pdfjs, path);
+
       return pdfjs.getDocument({
         url: path,
+        withCredentials: true,
         rangeChunkSize: 262144,
         // Only what is on screen. Without this pdf.js quietly keeps pulling
         // the rest of the document in the background, which on a long scan is
@@ -241,9 +242,10 @@
         var unscaled = page.getViewport({ scale: 1 });
         var viewport = page.getViewport({ scale: Math.max(1, cssWidth * dpr) / unscaled.width });
         var canvas = document.createElement('canvas');
+        canvas.style.colorScheme = 'light';
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
-        return page.render({ canvas: canvas, viewport: viewport }).promise
+        return page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' }).promise
           .then(function () {
             if (dead) return;
             wrap.style.aspectRatio = '';
@@ -253,7 +255,7 @@
       }).catch(function () { /* page paint is best-effort */ });
     }
 
-    loadPdfDocument(url)
+    loadPdfDocument(url, { complete: true })
       .then(function (pdf) {
         if (!pdf) return;
         if (dead) {

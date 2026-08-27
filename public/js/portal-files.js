@@ -2047,7 +2047,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=3').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=4').then(function (lib) {
       try {
         lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
       } catch (e) {
@@ -2064,7 +2064,9 @@
   /* Bytes on the page, then pdf.js, see TMAPortalLightbox.pdfDocument. */
   function loadPdfDocument(url) {
     if (window.TMAPortalLightbox && typeof window.TMAPortalLightbox.pdfDocument === 'function') {
-      return window.TMAPortalLightbox.pdfDocument(url);
+      // The viewer paints every page. Range+disableAutoFetch is for thumbs;
+      // in Electron it is how a 1.7 MB scan reports "1 / 1" on a white sheet.
+      return window.TMAPortalLightbox.pdfDocument(url, { complete: true });
     }
     var path = url;
     try {
@@ -4804,6 +4806,7 @@
             canvas.style.display = 'block';
             canvas.style.margin = '0 auto';
             canvas.style.borderRadius = '0';
+            canvas.style.colorScheme = 'light';
             scroll.appendChild(canvas);
 
             pdf.getPage(pageNum).then(function (page) {
@@ -4817,7 +4820,7 @@
               // pdf.js 6: the element, not a 2d context already taken from it.
               // render() then calls getContext({ alpha: false }); a prior
               // getContext('2d') makes that return null and the page stays white.
-              var task = page.render({ canvas: canvas, viewport: viewport });
+              var task = page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' });
               canvas._pdfTask = task;
               return task.promise.then(
                 function () { canvas._pdfTask = null; },
@@ -4954,7 +4957,8 @@
             var viewport = page.getViewport({ scale: scale });
             canvas.width = Math.floor(viewport.width);
             canvas.height = Math.floor(viewport.height);
-            return page.render({ canvas: canvas, viewport: viewport }).promise;
+            canvas.style.colorScheme = 'light';
+            return page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' }).promise;
           }).catch(function () { /* thumb best-effort */ });
         })(p);
       }

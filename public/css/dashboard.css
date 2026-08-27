@@ -30045,6 +30045,7 @@ button.tma-dash__header-popup-item:focus-visible {
   display: block;
   width: 100%;
   height: auto;
+  color-scheme: only light;
 }
 
 .tma-lightbox__doc-pre {
