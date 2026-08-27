@@ -122,6 +122,8 @@
     comments: {},         // postId => { open, loading, items, draft, replyTo, error }
     reactionPicker: null, // postId currently showing the emoji picker
     menuFor: null,        // postId whose overflow menu is open
+    gallery: null,        // { postId, attachmentId }: the photo viewer, or null
+    mention: null,        // the open @/# autocomplete: { host, el, kind, term, index, results }
     modal: null,          // { kind, ... }, channel form, members, analytics, ...
     analytics: null,
     searchResults: null,
@@ -502,6 +504,7 @@
       mainHtml() +
       '</div>' +
       '</div>' +
+      galleryHtml() +
       (state.modal ? modalHtml() : '')
     );
   }
@@ -906,7 +909,7 @@
         : '') +
 
       editorHtml(draft) +
-      mentionMenuHtml(draft) +
+      mentionMenuHtml('post') +
       attachmentsTrayHtml(draft) +
       (draft.poll ? pollBuilderHtml(draft) : '') +
       (draft.showOptions ? composerOptionsHtml(draft) : '') +
@@ -928,7 +931,8 @@
         ? '<button type="button" class="tma-dash__feed-btn tma-dash__feed-btn--primary" data-feed-schedule' +
           (draft.busy ? ' disabled' : '') + '>Schedule</button>'
         : '<button type="button" class="tma-dash__feed-btn tma-dash__feed-btn--primary" data-feed-publish' +
-          (draft.busy ? ' disabled' : '') + '>' + (draft.id && draft.wasPublished ? 'Save changes' : 'Post') + '</button>') +
+          (draft.busy ? ' disabled' : '') + '>' +
+          (draft.pendingSubmit ? 'Uploading…' : (draft.id && draft.wasPublished ? 'Save changes' : 'Post')) + '</button>') +
       '</div>' +
       '</div>' +
 
@@ -1034,16 +1038,21 @@
     );
   }
 
-  /* The @ and # autocomplete list, anchored under the caret (§16, §17). */
-  function mentionMenuHtml(draft) {
-    if (!draft.mention || !draft.mention.results || !draft.mention.results.length) return '';
+  /*
+   * The @ and # autocomplete list (§16, §17), drawn under whichever field is
+   * being typed in: `host` is 'post' for the editor, or 'comment:<postId>'
+   * for a comment box, so only the field with the caret shows the list.
+   */
+  function mentionMenuHtml(host) {
+    var mention = state.mention;
+    if (!mention || mention.host !== host || !mention.results || !mention.results.length) return '';
 
     return (
       '<div class="tma-dash__menu tma-dash__feed-mention-menu" data-feed-mention-menu role="listbox">' +
-      draft.mention.results.map(function (item, i) {
-        var selected = i === (draft.mention.index || 0);
+      mention.results.map(function (item, i) {
+        var selected = i === (mention.index || 0);
 
-        if (draft.mention.kind === 'hashtag') {
+        if (mention.kind === 'hashtag') {
           return '<button type="button" class="tma-dash__menu-item' +
             (selected ? ' tma-dash__menu-item--active' : '') + '"' +
             ' data-feed-mention-pick="' + i + '" role="option" aria-selected="' + selected + '">' +
@@ -1064,43 +1073,66 @@
     );
   }
 
-  /* Staged files, with their upload progress (§18). */
+  /*
+   * Staged files, with their upload progress (§18).
+   *
+   * Photos tile at the size they will take in the post, a file still on its
+   * way up shows its own local preview under the progress bar, so nothing
+   * about attaching a picture is a surprise when it is published. Other
+   * files stay as chips.
+   */
   function attachmentsTrayHtml(draft) {
     var files = draft.attachments || [];
     var uploads = draft.uploads || [];
 
     if (!files.length && !uploads.length) return '';
 
+    var images = files.filter(function (file) { return file.kind === 'image'; });
+    var others = files.filter(function (file) { return file.kind !== 'image'; });
+
+    var removeHtml = function (file) {
+      return '<button type="button" class="tma-dash__feed-attach-remove" data-feed-attach-remove="' +
+        esc(file.id) + '" aria-label="Remove ' + esc(file.name) + '">' +
+        '<img src="' + ICON + 'X.svg" alt="" width="12" height="12"></button>';
+    };
+
+    var tiles = images.map(function (file) {
+      return '<div class="tma-dash__feed-attach-tile" data-key="att-' + esc(file.id) + '">' +
+        '<img src="' + esc(file.thumbUrl || file.url) + '" alt="' + esc(file.name) + '">' +
+        removeHtml(file) +
+        '</div>';
+    }).concat(uploads.map(function (upload) {
+      return '<div class="tma-dash__feed-attach-tile tma-dash__feed-attach-tile--uploading"' +
+        ' aria-label="Uploading ' + esc(upload.name) + '">' +
+        (upload.preview ? '<img src="' + esc(upload.preview) + '" alt="">' : '') +
+        '<span class="tma-dash__feed-attach-uploading">' +
+        '<span class="tma-dash__feed-attach-name">' + esc(upload.name) + '</span>' +
+        '<span class="tma-dash__feed-attach-progress">' +
+        '<span style="width:' + (upload.percent || 0) + '%"></span></span>' +
+        '</span>' +
+        '</div>';
+    }));
+
     return (
       '<div class="tma-dash__feed-attach-tray">' +
-      files.map(function (file) {
-        return (
-          '<div class="tma-dash__feed-attach" data-key="att-' + esc(file.id) + '">' +
-          (file.kind === 'image' && file.thumbUrl
-            ? '<img class="tma-dash__feed-attach-thumb" src="' + esc(file.thumbUrl) + '" alt="">'
-            : '<span class="tma-dash__feed-attach-icon">' +
-              '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="16" height="16"></span>') +
-          '<span class="tma-dash__feed-attach-meta">' +
-          '<span class="tma-dash__feed-attach-name">' + esc(file.name) + '</span>' +
-          '<span class="tma-dash__feed-attach-size">' + esc(bytes(file.size)) + '</span>' +
-          '</span>' +
-          '<button type="button" class="tma-dash__feed-attach-remove" data-feed-attach-remove="' +
-          esc(file.id) + '" aria-label="Remove ' + esc(file.name) + '">' +
-          '<img src="' + ICON + 'X.svg" alt="" width="12" height="12"></button>' +
+      (tiles.length ? '<div class="tma-dash__feed-attach-grid">' + tiles.join('') + '</div>' : '') +
+      (others.length
+        ? '<div class="tma-dash__feed-attach-list">' +
+          others.map(function (file) {
+            return (
+              '<div class="tma-dash__feed-attach" data-key="att-' + esc(file.id) + '">' +
+              '<span class="tma-dash__feed-attach-icon">' +
+              '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="16" height="16"></span>' +
+              '<span class="tma-dash__feed-attach-meta">' +
+              '<span class="tma-dash__feed-attach-name">' + esc(file.name) + '</span>' +
+              '<span class="tma-dash__feed-attach-size">' + esc(bytes(file.size)) + '</span>' +
+              '</span>' +
+              removeHtml(file) +
+              '</div>'
+            );
+          }).join('') +
           '</div>'
-        );
-      }).join('') +
-      uploads.map(function (upload) {
-        return (
-          '<div class="tma-dash__feed-attach tma-dash__feed-attach--uploading">' +
-          '<span class="tma-dash__feed-attach-meta">' +
-          '<span class="tma-dash__feed-attach-name">' + esc(upload.name) + '</span>' +
-          '<span class="tma-dash__feed-attach-progress">' +
-          '<span style="width:' + (upload.percent || 0) + '%"></span></span>' +
-          '</span>' +
-          '</div>'
-        );
-      }).join('') +
+        : '') +
       '</div>'
     );
   }
@@ -1155,14 +1187,16 @@
         : '') +
 
       '<div class="tma-dash__feed-poll-settings">' +
-      checkboxHtml('feed-poll-multiple', 'Allow several answers', poll.multipleChoice) +
-      checkboxHtml('feed-poll-anonymous', 'Hide who voted', poll.anonymous) +
-      checkboxHtml('feed-poll-hide', 'Hide results until it closes', poll.hideResults) +
-      '<label class="tma-dash__feed-field">' +
+      '<label class="tma-dash__feed-field tma-dash__feed-field--short">' +
       '<span class="tma-dash__feed-field-label">Closes</span>' +
       '<input type="datetime-local" class="tma-dash__feed-input" data-feed-poll-closes' +
       ' value="' + esc(poll.closesAt || '') + '">' +
       '</label>' +
+      '<div class="tma-dash__feed-option-row tma-dash__feed-option-row--checks">' +
+      checkboxHtml('feed-poll-multiple', 'Allow several answers', poll.multipleChoice) +
+      checkboxHtml('feed-poll-anonymous', 'Hide who voted', poll.anonymous) +
+      checkboxHtml('feed-poll-hide', 'Hide results until it closes', poll.hideResults) +
+      '</div>' +
       '</div>' +
       '</div>'
     );
@@ -1200,8 +1234,7 @@
 
       (draft.type === 'announcement'
         ? '<div class="tma-dash__feed-option-row">' +
-          checkboxHtml('feed-requires-ack', 'Ask people to acknowledge', draft.requiresAcknowledgement) +
-          '<label class="tma-dash__feed-field">' +
+          '<label class="tma-dash__feed-field tma-dash__feed-field--short">' +
           '<span class="tma-dash__feed-field-label">Expires</span>' +
           '<input type="datetime-local" class="tma-dash__feed-input" data-feed-expires' +
           ' value="' + esc(draft.expiresAt || '') + '">' +
@@ -1221,6 +1254,12 @@
         }).join('') +
       '</select>' +
       '</label>' +
+      '</div>' +
+
+      '<div class="tma-dash__feed-option-row tma-dash__feed-option-row--checks">' +
+      (draft.type === 'announcement'
+        ? checkboxHtml('feed-requires-ack', 'Ask people to acknowledge', draft.requiresAcknowledgement)
+        : '') +
       checkboxHtml('feed-notify-portal', 'Notify in the portal', draft.notifyPortal !== false) +
       '</div>' +
 
@@ -1398,18 +1437,21 @@
     var open = state.menuFor === post.id;
     var items = [];
 
-    items.push(['feed-copy-link', post.bookmarked ? 'Copy link' : 'Copy link']);
-    items.push(['feed-bookmark', post.bookmarked ? 'Remove bookmark' : 'Bookmark']);
+    items.push(['feed-copy-link', 'Copy link', 'link']);
+    items.push(['feed-bookmark', post.bookmarked ? 'Remove bookmark' : 'Bookmark', 'bookmark']);
 
-    if (can.pin) items.push(['feed-pin', post.isPinned ? 'Unpin' : 'Pin to top']);
-    if (can.lock) items.push(['feed-lock', post.commentsLocked ? 'Unlock comments' : 'Lock comments']);
-    if (can.edit) items.push(['feed-edit', 'Edit']);
-    if (can.edit) items.push(['feed-duplicate', 'Duplicate']);
-    if (post.poll && (can.edit || can.pin) && !post.poll.isClosed) items.push(['feed-close-poll', 'Close poll']);
-    if (can.viewAcknowledgements && post.requiresAcknowledgement) {
-      items.push(['feed-ack-stats', 'Acknowledgements']);
+    if (can.pin) items.push(['feed-pin', post.isPinned ? 'Unpin' : 'Pin to top', 'pin']);
+    if (can.lock) {
+      items.push(['feed-lock', post.commentsLocked ? 'Unlock comments' : 'Lock comments',
+        post.commentsLocked ? 'unlock' : 'lock']);
     }
-    if (can.delete) items.push(['feed-delete', 'Delete', true]);
+    if (can.edit) items.push(['feed-edit', 'Edit', 'edit']);
+    if (can.edit) items.push(['feed-duplicate', 'Duplicate', 'duplicate']);
+    if (post.poll && (can.edit || can.pin) && !post.poll.isClosed) items.push(['feed-close-poll', 'Close poll', 'poll']);
+    if (can.viewAcknowledgements && post.requiresAcknowledgement) {
+      items.push(['feed-ack-stats', 'Acknowledgements', 'ack']);
+    }
+    if (can.delete) items.push(['feed-delete', 'Delete', 'delete', true]);
 
     return (
       '<div class="tma-dash__feed-post-menu-wrap">' +
@@ -1419,9 +1461,13 @@
       (open
         ? '<div class="tma-dash__menu tma-dash__feed-post-menu" role="menu">' +
           items.map(function (item) {
+            // A masked span rather than an <img>: the glyph follows the row's
+            // colour, so Delete's icon is red with its label.
             return '<button type="button" class="tma-dash__menu-item' +
-              (item[2] ? ' tma-dash__menu-item--danger' : '') + '" role="menuitem"' +
-              ' data-' + item[0] + '="' + esc(post.id) + '">' + esc(item[1]) + '</button>';
+              (item[3] ? ' tma-dash__menu-item--danger' : '') + '" role="menuitem"' +
+              ' data-' + item[0] + '="' + esc(post.id) + '">' +
+              '<span class="tma-dash__feed-menu-icon tma-dash__feed-menu-icon--' + item[2] + '" aria-hidden="true"></span>' +
+              '<span>' + esc(item[1]) + '</span></button>';
           }).join('') +
           '</div>'
         : '') +
@@ -1488,7 +1534,12 @@
     );
   }
 
-  /* Images tile; everything else lists as a file row (§18). */
+  /*
+   * Images tile, video and audio play in place, and documents are cards with
+   * a real preview: a PDF's first page is painted in the browser by
+   * TMAFileThumbs (the server cannot rasterise one), anything else shows its
+   * type mark. Every one of them opens the viewer (§18).
+   */
   function attachmentGridHtml(post) {
     var images = post.attachments.filter(function (a) { return a.kind === 'image'; });
     var others = post.attachments.filter(function (a) { return a.kind !== 'image'; });
@@ -1496,12 +1547,17 @@
     var grid = images.length
       ? '<div class="tma-dash__feed-media tma-dash__feed-media--' +
         Math.min(images.length, 4) + '">' +
-        images.map(function (file) {
+        images.slice(0, 4).map(function (file, i) {
+          // The fourth tile stands in for the rest, the viewer steps through them.
+          var more = i === 3 && images.length > 4 ? images.length - 4 : 0;
           return '<button type="button" class="tma-dash__feed-media-item"' +
-            ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '">' +
+            ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '"' +
+            ' aria-label="Open ' + esc(file.name) + '">' +
             '<img src="' + esc(file.thumbUrl || file.url) + '" alt="' + esc(file.name) + '" loading="lazy"' +
             (file.width && file.height ? ' width="' + file.width + '" height="' + file.height + '"' : '') +
-            '></button>';
+            '>' +
+            (more ? '<span class="tma-dash__feed-media-more">+' + more + '</span>' : '') +
+            '</button>';
         }).join('') +
         '</div>'
       : '';
@@ -1518,26 +1574,47 @@
             return '<audio class="tma-dash__feed-audio" controls preload="metadata"' +
               ' src="' + esc(file.url) + '"></audio>';
           }
-          // The chip opens the lightbox (PDFs and text preview right there);
-          // the corner arrow keeps one-click download. A div rather than a
-          // button because a button may not contain the download anchor.
-          return '<div class="tma-dash__feed-file" role="button" tabindex="0"' +
-            ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '"' +
-            ' aria-label="Preview ' + esc(file.name) + '">' +
-            '<span class="tma-dash__feed-file-icon">' +
-            '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="16" height="16"></span>' +
-            '<span class="tma-dash__feed-file-meta">' +
-            '<span class="tma-dash__feed-file-name">' + esc(file.name) + '</span>' +
-            '<span class="tma-dash__feed-file-size">' + esc(bytes(file.size)) + '</span>' +
-            '</span>' +
-            '<a class="tma-dash__feed-file-download" data-feed-file-download href="' + esc(file.url) +
-            '" download aria-label="Download ' + esc(file.name) + '">' +
-            '<img src="' + ICON + 'DownloadSimple.svg" alt="" width="16" height="16"></a></div>';
+          return docCardHtml(post, file);
         }).join('') +
         '</div>'
       : '';
 
     return grid + list;
+  }
+
+  /*
+   * A document card. The stage holds the preview, the strip beneath names
+   * the file and keeps one-click download. A div rather than a button
+   * because a button may not contain the download anchor.
+   */
+  function docCardHtml(post, file) {
+    var icon = ICON + fileIcon(file) + '.svg';
+    var preview = window.TMAFileThumbs
+      ? window.TMAFileThumbs.imgHtml(
+        {
+          name: file.name, mime: file.mime, extension: file.extension, size: file.size,
+          previewUrl: file.url, thumbUrl: file.thumbUrl || null,
+        },
+        { size: null, cls: 'tma-dash__feed-doc-preview', iconCls: 'tma-dash__feed-doc-glyph', icon: icon, alt: '' }
+      )
+      : '<img class="tma-dash__feed-doc-glyph" src="' + esc(icon) + '" alt="">';
+
+    return '<div class="tma-dash__feed-doc" role="button" tabindex="0"' +
+      ' data-feed-lightbox="' + esc(file.id) + '" data-feed-post-ref="' + esc(post.id) + '"' +
+      ' aria-label="Preview ' + esc(file.name) + '">' +
+      '<div class="tma-dash__feed-doc-stage">' + preview + '</div>' +
+      '<div class="tma-dash__feed-file">' +
+      '<span class="tma-dash__feed-file-icon">' +
+      '<img src="' + esc(icon) + '" alt="" width="16" height="16"></span>' +
+      '<span class="tma-dash__feed-file-meta">' +
+      '<span class="tma-dash__feed-file-name">' + esc(file.name) + '</span>' +
+      '<span class="tma-dash__feed-file-size">' + esc(bytes(file.size)) + '</span>' +
+      '</span>' +
+      '<a class="tma-dash__feed-file-download" data-feed-file-download href="' + esc(file.url) +
+      '" download aria-label="Download ' + esc(file.name) + '">' +
+      '<img src="' + ICON + 'DownloadSimple.svg" alt="" width="16" height="16"></a>' +
+      '</div>' +
+      '</div>';
   }
 
   /* A live poll (§13). */
@@ -1630,9 +1707,16 @@
 
   /* Reactions, comment count and view count (§4, §10). */
   function postFooterHtml(post) {
+    return (
+      '<footer class="tma-dash__feed-post-foot">' +
+      postStatsHtml(post) +
+      postActionsHtml(post, false) +
+      '</footer>'
+    );
+  }
+
+  function postStatsHtml(post) {
     var reactions = post.reactions || { total: 0, groups: [], mine: null };
-    var can = post.can || {};
-    var thread = state.comments[post.id] || {};
 
     var summary = reactions.groups && reactions.groups.length
       ? '<button type="button" class="tma-dash__feed-react-summary" data-feed-reaction-people="' +
@@ -1649,49 +1733,64 @@
     if (post.counts.comments) counts.push(plural(post.counts.comments, 'comment'));
     if (post.counts.views) counts.push(plural(post.counts.views, 'view'));
 
-    return (
-      '<footer class="tma-dash__feed-post-foot">' +
-      (summary || counts.length
-        ? '<div class="tma-dash__feed-post-stats">' +
-          summary +
-          (counts.length ? '<span class="tma-dash__feed-post-counts">' + esc(counts.join(' · ')) + '</span>' : '') +
-          '</div>'
-        : '') +
+    if (!summary && !counts.length) return '';
 
+    return (
+      '<div class="tma-dash__feed-post-stats">' +
+      summary +
+      (counts.length ? '<span class="tma-dash__feed-post-counts">' + esc(counts.join(' · ')) + '</span>' : '') +
+      '</div>'
+    );
+  }
+
+  /*
+   * React, Comment, Save. The card and the photo viewer draw the same row;
+   * in the viewer the emoji picker is keyed apart so the two never open
+   * together, and Comment puts the caret in the viewer's own box instead of
+   * toggling the thread under the card.
+   *
+   * The icons are masked spans, not <img>s: a masked glyph takes the
+   * button's colour, so Saved tints with its label instead of needing a
+   * filled variant the icon set here does not ship.
+   */
+  function postActionsHtml(post, inGallery) {
+    var reactions = post.reactions || { total: 0, groups: [], mine: null };
+    var can = post.can || {};
+    var thread = state.comments[post.id] || {};
+    var pickerKey = inGallery ? 'g:' + post.id : post.id;
+
+    return (
       '<div class="tma-dash__feed-post-actions">' +
       (can.react
         ? '<div class="tma-dash__feed-react-wrap">' +
           '<button type="button" class="tma-dash__feed-action' +
           (reactions.mine ? ' tma-dash__feed-action--on' : '') + '"' +
-          ' data-feed-react-open="' + esc(post.id) + '"' +
-          ' aria-expanded="' + (state.reactionPicker === post.id ? 'true' : 'false') + '">' +
+          ' data-feed-react-open="' + esc(pickerKey) + '"' +
+          ' aria-expanded="' + (state.reactionPicker === pickerKey ? 'true' : 'false') + '">' +
           (reactions.mine
             ? '<span class="tma-dash__feed-action-emoji">' + reactions.mine + '</span>'
-            : '<img src="' + ICON + 'Smiley.svg" alt="" width="16" height="16">') +
+            : '<span class="tma-dash__feed-action-icon tma-dash__feed-action-icon--react" aria-hidden="true"></span>') +
           '<span>React</span></button>' +
-          (state.reactionPicker === post.id ? reactionPickerHtml(post) : '') +
+          (state.reactionPicker === pickerKey ? reactionPickerHtml(post) : '') +
           '</div>'
         : '') +
 
       (can.comment || post.counts.comments
         ? '<button type="button" class="tma-dash__feed-action' +
-          (thread.open ? ' tma-dash__feed-action--on' : '') + '"' +
-          ' data-feed-comments="' + esc(post.id) + '">' +
-          '<img src="' + ICON + 'ChatTeardropText.svg" alt="" width="16" height="16">' +
+          (!inGallery && thread.open ? ' tma-dash__feed-action--on' : '') + '"' +
+          (inGallery
+            ? ' data-feed-gallery-comment="' + esc(post.id) + '"'
+            : ' data-feed-comments="' + esc(post.id) + '"') + '>' +
+          '<span class="tma-dash__feed-action-icon tma-dash__feed-action-icon--comment" aria-hidden="true"></span>' +
           '<span>Comment' + (post.counts.comments ? ' (' + post.counts.comments + ')' : '') + '</span></button>'
         : '') +
 
       '<button type="button" class="tma-dash__feed-action' +
       (post.bookmarked ? ' tma-dash__feed-action--on' : '') + '"' +
       ' data-feed-bookmark="' + esc(post.id) + '" aria-pressed="' + (post.bookmarked ? 'true' : 'false') + '">' +
-      '<img src="' + ICON + (post.bookmarked ? 'BookmarkSimpleFill' : 'BookmarkSimple') +
-      '.svg" alt="" width="16" height="16">' +
+      '<span class="tma-dash__feed-action-icon tma-dash__feed-action-icon--save" aria-hidden="true"></span>' +
       '<span>' + (post.bookmarked ? 'Saved' : 'Save') + '</span></button>' +
-
-      '<button type="button" class="tma-dash__feed-action" data-feed-copy-link="' + esc(post.id) + '">' +
-      '<img src="' + ICON + 'ShareNetwork.svg" alt="" width="16" height="16"><span>Share</span></button>' +
-      '</div>' +
-      '</footer>'
+      '</div>'
     );
   }
 
@@ -1712,45 +1811,54 @@
 
   /* ── comments (§9) ───────────────────────────────────────── */
 
+  /*
+   * The thread under a card. The same pieces are drawn again inside the
+   * photo viewer's rail, with `scope` prefixed onto every key so morph does
+   * not confuse the two copies of one comment.
+   */
   function commentsHtml(post) {
     var thread = state.comments[post.id];
     if (!thread || !thread.open) return '';
 
-    var body;
-
-    if (thread.loading) {
-      body = '<div class="tma-dash__feed-comment-skel" aria-hidden="true"></div>';
-    } else if (thread.error) {
-      body = '<p class="tma-dash__feed-error">' + esc(thread.error) + '</p>';
-    } else if (!thread.items || !thread.items.length) {
-      body = '<p class="tma-dash__feed-comments-empty">No comments yet.</p>';
-    } else {
-      body = thread.items.map(function (comment) {
-        return commentHtml(post, comment, false);
-      }).join('');
-    }
-
     return (
       '<section class="tma-dash__feed-comments" data-key="comments-' + esc(post.id) + '">' +
-      body +
-      (post.can && post.can.comment ? commentComposerHtml(post, thread) : '') +
+      commentListHtml(post, thread, '') +
+      (post.can && post.can.comment ? commentComposerHtml(post, thread, '') : '') +
       '</section>'
     );
   }
 
-  function commentHtml(post, comment, isReply) {
+  function commentListHtml(post, thread, scope) {
+    if (!thread || thread.loading) {
+      return '<div class="tma-dash__feed-comment-skel" aria-hidden="true"></div>';
+    }
+    if (thread.error) {
+      return '<p class="tma-dash__feed-error">' + esc(thread.error) + '</p>';
+    }
+    if (!thread.items || !thread.items.length) {
+      return '<p class="tma-dash__feed-comments-empty">No comments yet.</p>';
+    }
+    return thread.items.map(function (comment) {
+      return commentHtml(post, comment, false, scope);
+    }).join('');
+  }
+
+  function commentHtml(post, comment, isReply, scope) {
     var can = comment.can || {};
     var author = comment.author || {};
     var reactions = comment.reactions || { total: 0, groups: [], mine: null };
+    var pickerKey = 'c:' + comment.id;
+    var keyPrefix = scope ? scope + '-' : '';
 
     return (
       '<div class="tma-dash__feed-comment' + (isReply ? ' tma-dash__feed-comment--reply' : '') + '"' +
-      ' data-key="comment-' + esc(comment.id) + '">' +
+      ' data-key="' + keyPrefix + 'comment-' + esc(comment.id) + '">' +
+
+      // The face sits inside the bubble with the words, one shape per comment.
+      '<div class="tma-dash__feed-comment-bubble">' +
       '<img class="tma-dash__feed-comment-avatar" src="' + esc(avatarFor(author)) + '" alt=""' +
       ' width="28" height="28" loading="lazy">' +
-
-      '<div class="tma-dash__feed-comment-main">' +
-      '<div class="tma-dash__feed-comment-bubble">' +
+      '<div class="tma-dash__feed-comment-content">' +
       '<div class="tma-dash__feed-comment-head">' +
       '<span class="tma-dash__feed-comment-author">' + esc(author.name || 'Unknown') + '</span>' +
       '<span class="tma-dash__feed-comment-time" title="' + esc(fullTime(comment.createdAt)) + '">' +
@@ -1769,14 +1877,33 @@
           '</div>'
         : '') +
       '</div>' +
+      (reactions.groups && reactions.groups.length
+        ? '<span class="tma-dash__feed-comment-reacts" aria-label="' + esc(plural(reactions.total, 'reaction')) + '">' +
+          reactions.groups.slice(0, 3).map(function (group) { return group.emoji; }).join('') +
+          '<span>' + (reactions.total || 0) + '</span></span>'
+        : '') +
+      '</div>' +
 
       '<div class="tma-dash__feed-comment-actions">' +
       (can.react
-        ? '<button type="button" class="tma-dash__feed-comment-action' +
+        ? '<div class="tma-dash__feed-react-wrap">' +
+          '<button type="button" class="tma-dash__feed-comment-action' +
           (reactions.mine ? ' tma-dash__feed-comment-action--on' : '') + '"' +
-          ' data-feed-comment-react="' + esc(comment.id) + '" data-feed-comment-post="' + esc(post.id) + '">' +
-          (reactions.mine || 'React') +
-          (reactions.total ? ' ' + reactions.total : '') + '</button>'
+          ' data-feed-comment-react-open="' + esc(comment.id) + '" data-feed-comment-post="' + esc(post.id) + '"' +
+          ' aria-expanded="' + (state.reactionPicker === pickerKey ? 'true' : 'false') + '">' +
+          (reactions.mine || 'React') + '</button>' +
+          (state.reactionPicker === pickerKey
+            ? '<div class="tma-dash__menu tma-dash__feed-react-picker" role="menu">' +
+              QUICK_REACTIONS.map(function (emoji) {
+                return '<button type="button" class="tma-dash__feed-react-option' +
+                  (reactions.mine === emoji ? ' tma-dash__feed-react-option--mine' : '') + '"' +
+                  ' data-feed-comment-react="' + esc(emoji) + '" data-feed-comment-react-id="' + esc(comment.id) + '"' +
+                  ' data-feed-comment-post="' + esc(post.id) + '"' +
+                  ' role="menuitem" aria-label="React ' + esc(emoji) + '">' + emoji + '</button>';
+              }).join('') +
+              '</div>'
+            : '') +
+          '</div>'
         : '') +
       (can.reply && !isReply
         ? '<button type="button" class="tma-dash__feed-comment-action"' +
@@ -1796,21 +1923,21 @@
 
       (comment.replies && comment.replies.length
         ? '<div class="tma-dash__feed-replies">' +
-          comment.replies.map(function (reply) { return commentHtml(post, reply, true); }).join('') +
+          comment.replies.map(function (reply) { return commentHtml(post, reply, true, scope); }).join('') +
           '</div>'
         : '') +
-      '</div>' +
       '</div>'
     );
   }
 
-  function commentComposerHtml(post, thread) {
+  function commentComposerHtml(post, thread, scope) {
+    var keyPrefix = scope ? scope + '-' : '';
     var replyTo = thread.replyTo
       ? (thread.items || []).filter(function (c) { return c.id === thread.replyTo; })[0]
       : null;
 
     return (
-      '<div class="tma-dash__feed-comment-composer">' +
+      '<div class="tma-dash__feed-comment-composer" data-key="' + keyPrefix + 'comment-composer-' + esc(post.id) + '">' +
       (replyTo
         ? '<div class="tma-dash__feed-reply-to">' +
           '<span>Replying to ' + esc((replyTo.author && replyTo.author.name) || 'a comment') + '</span>' +
@@ -1818,18 +1945,233 @@
           ' aria-label="Cancel reply"><img src="' + ICON + 'X.svg" alt="" width="12" height="12"></button>' +
           '</div>'
         : '') +
+      '<div class="tma-dash__feed-comment-box">' +
       '<img class="tma-dash__feed-comment-avatar" src="' + esc(myAvatar()) + '" alt="" width="28" height="28">' +
       // Skipped by morph for the same reason as the post editor: what is typed
       // here has no counterpart in the rendered string.
       '<div class="tma-dash__feed-comment-input" contenteditable="true" role="textbox"' +
-      ' data-feed-comment-input="' + esc(post.id) + '" data-key="comment-input-' + esc(post.id) + '"' +
+      ' data-feed-comment-input="' + esc(post.id) + '" data-key="' + keyPrefix + 'comment-input-' + esc(post.id) + '"' +
       ' data-morph-skip data-placeholder="Write a comment…" aria-label="Write a comment"></div>' +
       '<button type="button" class="tma-dash__feed-btn tma-dash__feed-btn--primary"' +
       ' data-feed-comment-send="' + esc(post.id) + '"' + (thread.sending ? ' disabled' : '') + '>' +
       (thread.sending ? 'Sending…' : 'Send') + '</button>' +
       '</div>' +
-      (thread.sendError ? '<p class="tma-dash__feed-error">' + esc(thread.sendError) + '</p>' : '')
+      mentionMenuHtml('comment:' + post.id) +
+      (thread.sendError ? '<p class="tma-dash__feed-error">' + esc(thread.sendError) + '</p>' : '') +
+      '</div>'
     );
+  }
+
+  /* ── the photo viewer (§18) ──────────────────────────────── */
+
+  /*
+   * One attachment full-size on the left, the post it belongs to on the
+   * right: who posted it, what they wrote, the reactions, and the whole
+   * comment thread with its own box, so a picture can be talked about
+   * without leaving it. Arrows and ←/→ step through the post's files.
+   */
+  function galleryHtml() {
+    var open = state.gallery;
+    if (!open) return '';
+
+    var post = findPost(open.postId);
+    var files = post ? (lightboxSetFor(post, open.attachmentId) || []) : [];
+    if (!post || !files.length) {
+      // The post went away underneath the viewer (deleted, or a view change
+      // dropped it): there is nothing left to show.
+      state.gallery = null;
+      document.documentElement.classList.remove('tma-feed-gallery-open');
+      return '';
+    }
+
+    var index = 0;
+    files.forEach(function (file, i) { if (file.id === open.attachmentId) index = i; });
+    var file = files[index];
+
+    var author = post.author || {};
+    var meta = [];
+    if (author.role) meta.push(author.role);
+    if (post.publishedAt) meta.push(shortTime(post.publishedAt));
+    if (!state.channel && post.channel) meta.push(post.channel.name);
+
+    var thread = state.comments[post.id];
+
+    return (
+      '<div class="tma-dash__feed-gallery" data-feed-gallery data-key="feed-gallery" role="dialog" aria-modal="true"' +
+      ' aria-label="' + esc(file.name) + '">' +
+
+      '<div class="tma-dash__feed-gallery-stage" data-feed-gallery-stage>' +
+      '<button type="button" class="tma-dash__feed-gallery-btn tma-dash__feed-gallery-close" data-feed-gallery-close' +
+      ' aria-label="Close"><img src="' + ICON + 'X.svg" alt="" width="18" height="18"></button>' +
+      (files.length > 1
+        ? '<button type="button" class="tma-dash__feed-gallery-btn tma-dash__feed-gallery-nav tma-dash__feed-gallery-nav--prev"' +
+          ' data-feed-gallery-go="-1" aria-label="Previous">' +
+          '<img src="' + ICON + 'CaretLeft.svg" alt="" width="20" height="20"></button>' +
+          '<button type="button" class="tma-dash__feed-gallery-btn tma-dash__feed-gallery-nav tma-dash__feed-gallery-nav--next"' +
+          ' data-feed-gallery-go="1" aria-label="Next">' +
+          '<img src="' + ICON + 'CaretRight.svg" alt="" width="20" height="20"></button>'
+        : '') +
+      galleryStageHtml(file) +
+      '<div class="tma-dash__feed-gallery-caption">' +
+      '<span class="tma-dash__feed-gallery-caption-name">' + esc(file.name) + '</span>' +
+      '<span>' + esc(bytes(file.size)) + (files.length > 1 ? ' · ' + (index + 1) + ' of ' + files.length : '') + '</span>' +
+      '<a class="tma-dash__feed-gallery-download" href="' + esc(file.url) + '" download' +
+      ' aria-label="Download ' + esc(file.name) + '">' +
+      '<img src="' + ICON + 'DownloadSimple.svg" alt="" width="16" height="16"><span>Download</span></a>' +
+      '</div>' +
+      '</div>' +
+
+      '<aside class="tma-dash__feed-gallery-rail" aria-label="Post">' +
+      '<div class="tma-dash__feed-gallery-scroll">' +
+      '<header class="tma-dash__feed-gallery-head">' +
+      '<img class="tma-dash__feed-post-avatar" src="' + esc(avatarFor(author)) + '" alt="" width="40" height="40">' +
+      '<div class="tma-dash__feed-post-meta">' +
+      '<span class="tma-dash__feed-post-author">' + esc(author.name || 'Unknown') + '</span>' +
+      '<span class="tma-dash__feed-post-sub" title="' + esc(fullTime(post.publishedAt || post.createdAt)) + '">' +
+      esc(meta.join(' · ')) + '</span>' +
+      '</div>' +
+      '</header>' +
+      (post.title || post.body || (post.hashtags && post.hashtags.length)
+        ? '<div class="tma-dash__feed-gallery-body">' +
+          (post.title ? '<h3 class="tma-dash__feed-post-title">' + esc(post.title) + '</h3>' : '') +
+          '<div class="tma-dash__feed-rich">' + (post.body || '') + '</div>' +
+          (post.hashtags && post.hashtags.length ? hashtagRowHtml(post) : '') +
+          '</div>'
+        : '') +
+      '<div class="tma-dash__feed-gallery-foot">' +
+      postStatsHtml(post) +
+      postActionsHtml(post, true) +
+      '</div>' +
+      '<div class="tma-dash__feed-comments tma-dash__feed-comments--gallery" data-key="g-comments-' + esc(post.id) + '">' +
+      commentListHtml(post, thread, 'g') +
+      '</div>' +
+      '</div>' +
+      (post.can && post.can.comment
+        ? '<div class="tma-dash__feed-gallery-compose">' + commentComposerHtml(post, thread || {}, 'g') + '</div>'
+        : '') +
+      '</aside>' +
+
+      '</div>'
+    );
+  }
+
+  /* What goes on the stage for one file. */
+  function galleryStageHtml(file) {
+    var key = ' data-key="gallery-file-' + esc(file.id) + '"';
+
+    if (file.kind === 'image') {
+      return '<img class="tma-dash__feed-gallery-img" src="' + esc(file.url) + '" alt="' + esc(file.name) + '"' + key + '>';
+    }
+    if (file.kind === 'video') {
+      return '<video class="tma-dash__feed-gallery-video" controls autoplay playsinline src="' + esc(file.url) + '"' +
+        (file.thumbUrl ? ' poster="' + esc(file.thumbUrl) + '"' : '') + key + '></video>';
+    }
+    if (file.kind === 'audio') {
+      return '<div class="tma-dash__feed-gallery-nopreview"' + key + '>' +
+        '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="48" height="48">' +
+        '<audio class="tma-dash__feed-audio" controls src="' + esc(file.url) + '"></audio></div>';
+    }
+
+    var doc = galleryDocKind(file);
+    if (doc && window.TMAPortalLightbox) {
+      // Painted after the render by mountGalleryDoc; morph-skipped because
+      // pdf.js owns what is inside, and keyed per file so stepping to the
+      // next document gets a fresh host.
+      return '<div class="tma-dash__feed-gallery-doc" data-feed-gallery-doc="' + doc + '"' +
+        ' data-feed-gallery-doc-url="' + esc(file.url) + '" data-feed-gallery-doc-size="' + (file.size || 0) + '"' +
+        ' data-morph-skip' + key + '></div>';
+    }
+
+    return '<div class="tma-dash__feed-gallery-nopreview"' + key + '>' +
+      '<img src="' + ICON + fileIcon(file) + '.svg" alt="" width="48" height="48">' +
+      '<p class="tma-dash__feed-gallery-nopreview-title">' + esc(file.name) + '</p>' +
+      '<p class="tma-dash__feed-gallery-nopreview-text">No preview for this file type. Download it to open it.</p>' +
+      '</div>';
+  }
+
+  /* 'pdf' or 'text' when the lightbox can draw it in place, else null. */
+  function galleryDocKind(file) {
+    var mime = String(file.mime || '').toLowerCase();
+    var ext = String(file.extension || '').toLowerCase();
+
+    if (mime.indexOf('application/pdf') === 0 || ext === 'pdf') return 'pdf';
+    if (mime.indexOf('text/') === 0 || ['txt', 'md', 'csv', 'log', 'json'].indexOf(ext) !== -1) return 'text';
+    return null;
+  }
+
+  function openGallery(postId, attachmentId) {
+    var post = findPost(postId);
+    if (!post) return;
+
+    var files = lightboxSetFor(post, attachmentId);
+    if (!files || !files.length) return;
+
+    state.gallery = { postId: postId, attachmentId: attachmentId };
+    state.menuFor = null;
+    state.reactionPicker = null;
+    document.documentElement.classList.add('tma-feed-gallery-open');
+
+    // The rail shows the thread whether or not it is open under the card.
+    var thread = state.comments[postId];
+    if (!thread || !thread.items) loadComments(postId, true);
+    else render();
+  }
+
+  function closeGallery() {
+    if (!state.gallery) return;
+    state.gallery = null;
+    state.reactionPicker = null;
+    if (state.mention && state.mention.host !== 'post') state.mention = null;
+    document.documentElement.classList.remove('tma-feed-gallery-open');
+    render();
+  }
+
+  function stepGallery(delta) {
+    var open = state.gallery;
+    if (!open) return;
+
+    var post = findPost(open.postId);
+    var files = post ? (lightboxSetFor(post, open.attachmentId) || []) : [];
+    if (files.length < 2) return;
+
+    var index = 0;
+    files.forEach(function (file, i) { if (file.id === open.attachmentId) index = i; });
+    open.attachmentId = files[(index + delta + files.length) % files.length].id;
+    render();
+  }
+
+  /* Paint a PDF or text file into the stage host the render just drew. */
+  function mountGalleryDoc(root) {
+    var host = root.querySelector('[data-feed-gallery-doc]:not([data-feed-gallery-doc-mounted])');
+    if (!host || !window.TMAPortalLightbox) return;
+
+    host.setAttribute('data-feed-gallery-doc-mounted', '1');
+
+    var url = host.getAttribute('data-feed-gallery-doc-url');
+    if (host.getAttribute('data-feed-gallery-doc') === 'pdf') {
+      window.TMAPortalLightbox.pdfInto(host, url);
+    } else {
+      window.TMAPortalLightbox.textInto(host, url, parseInt(host.getAttribute('data-feed-gallery-doc-size'), 10) || 0);
+    }
+  }
+
+  function wireGallery(root, M) {
+    each(root, M, '[data-feed-gallery-close]', 'click', function () { closeGallery(); });
+
+    each(root, M, '[data-feed-gallery-go]', 'click', function (e) {
+      stepGallery(parseInt(e.currentTarget.getAttribute('data-feed-gallery-go'), 10) || 1);
+    });
+
+    // A click on the dark stage itself, not on the picture, closes.
+    each(root, M, '[data-feed-gallery-stage]', 'click', function (e) {
+      if (e.target === e.currentTarget) closeGallery();
+    });
+
+    each(root, M, '[data-feed-gallery-comment]', 'click', function (e) {
+      focusCommentInput(e.currentTarget.getAttribute('data-feed-gallery-comment'));
+    });
+
+    mountGalleryDoc(root);
   }
 
   /* ── analytics (§19) ─────────────────────────────────────── */
@@ -2432,6 +2774,7 @@
     wirePosts(root, M);
     wireComments(root, M);
     wireModal(root, M);
+    wireGallery(root, M);
   }
 
   function each(root, M, selector, type, handler) {
@@ -2599,6 +2942,7 @@
 
     each(root, M, '[data-feed-compose-close]', 'click', function () {
       state.composer = null;
+      if (state.mention && state.mention.host === 'post') state.mention = null;
       render();
     });
 
@@ -2638,7 +2982,7 @@
         if (!state.composer) return;
         state.composer.body = editor.innerHTML;
         state.composer.savedAt = null;
-        detectMentionTrigger(editor);
+        detectMentionTrigger(editor, 'post', state.composer.channelId || state.channelId || '');
         queueAutosave();
       }, 'input');
 
@@ -2658,6 +3002,10 @@
       e.preventDefault();
       applyFormat(e.currentTarget.getAttribute('data-feed-format'));
     });
+
+    // mousedown would move the caret out of the field before the click
+    // lands, and the pick needs the caret where the @ was typed.
+    each(root, M, '[data-feed-mention-pick]', 'mousedown', function (e) { e.preventDefault(); });
 
     each(root, M, '[data-feed-mention-pick]', 'click', function (e) {
       pickMention(parseInt(e.currentTarget.getAttribute('data-feed-mention-pick'), 10));
@@ -2871,38 +3219,43 @@
   }
 
   function handleEditorKeys(e, editor) {
-    var mention = state.composer && state.composer.mention;
-
-    if (mention && mention.results && mention.results.length) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        mention.index = ((mention.index || 0) + 1) % mention.results.length;
-        render();
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        mention.index = ((mention.index || 0) - 1 + mention.results.length) % mention.results.length;
-        render();
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        pickMention(mention.index || 0);
-        return;
-      }
-      if (e.key === 'Escape') {
-        state.composer.mention = null;
-        render();
-        return;
-      }
-    }
+    if (handleMentionKeys(e, 'post')) return;
 
     // Ctrl/Cmd+Enter posts, which is what every other composer here does.
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       submitComposer(state.composer && state.composer.scheduledFor ? 'scheduled' : 'published');
     }
+  }
+
+  /* Arrow, Enter, Tab and Escape while the autocomplete for `host` is open. */
+  function handleMentionKeys(e, host) {
+    var mention = state.mention;
+    if (!mention || mention.host !== host || !mention.results || !mention.results.length) return false;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mention.index = ((mention.index || 0) + 1) % mention.results.length;
+      render();
+      return true;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mention.index = ((mention.index || 0) - 1 + mention.results.length) % mention.results.length;
+      render();
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      pickMention(mention.index || 0);
+      return true;
+    }
+    if (e.key === 'Escape') {
+      state.mention = null;
+      render();
+      return true;
+    }
+    return false;
   }
 
   /*
@@ -2914,12 +3267,12 @@
    */
   var mentionRequest = null;
 
-  function detectMentionTrigger(editor) {
+  function detectMentionTrigger(editor, host, channelId) {
     var selection = window.getSelection();
-    if (!selection || !selection.rangeCount || !state.composer) return;
+    if (!selection || !selection.rangeCount) return;
 
     var node = selection.anchorNode;
-    if (!node || node.nodeType !== 3) { closeMention(); return; }
+    if (!node || node.nodeType !== 3 || !editor.contains(node)) { closeMention(); return; }
 
     var before = node.textContent.slice(0, selection.anchorOffset);
     var match = before.match(/(^|\s)([@#])([\w\-]*)$/);
@@ -2929,32 +3282,32 @@
     var kind = match[2] === '@' ? 'user' : 'hashtag';
     var term = match[3];
 
-    state.composer.mention = state.composer.mention || {};
-    state.composer.mention.kind = kind;
-    state.composer.mention.term = term;
-    state.composer.mention.index = 0;
+    // A hashtag indexes posts; a comment only ever names people.
+    if (kind === 'hashtag' && host !== 'post') { closeMention(); return; }
+
+    var current = state.mention && state.mention.host === host ? state.mention : {};
+    state.mention = Object.assign(current, { host: host, el: editor, kind: kind, term: term, index: 0 });
 
     if (mentionRequest && mentionRequest.abort) mentionRequest.abort();
     var controller = window.AbortController ? new AbortController() : null;
     mentionRequest = controller;
 
-    var channelId = state.composer.channelId || state.channelId || '';
     var request = kind === 'hashtag'
       ? API.hashtags(term, controller && controller.signal)
-      : API.mentionable(term, channelId, controller && controller.signal);
+      : API.mentionable(term, channelId || '', controller && controller.signal);
 
     request
       .then(function (data) {
-        if (!state.composer || !state.composer.mention) return;
-        state.composer.mention.results = data.results || [];
+        if (!state.mention || state.mention.host !== host || state.mention.term !== term) return;
+        state.mention.results = data.results || [];
         render();
       })
       .catch(function () { /* an aborted or failed lookup just shows nothing */ });
   }
 
   function closeMention() {
-    if (state.composer && state.composer.mention) {
-      state.composer.mention = null;
+    if (state.mention) {
+      state.mention = null;
       render();
     }
   }
@@ -2967,10 +3320,10 @@
    * picked, not a name that might match two people.
    */
   function pickMention(index) {
-    var composer = state.composer;
-    if (!composer || !composer.mention || !composer.mention.results) return;
+    var mention = state.mention;
+    if (!mention || !mention.results) return;
 
-    var item = composer.mention.results[index];
+    var item = mention.results[index];
     if (!item) return;
 
     var selection = window.getSelection();
@@ -2985,13 +3338,17 @@
     if (!match) return;
 
     // Select the trigger text so it is replaced rather than appended to.
+    // The caret is read first: once setStart has moved the range, its
+    // startOffset *is* the new start, and ending there deletes nothing —
+    // which is how "@Bea" used to stay behind the token it had just become.
+    var caret = range.startOffset;
     var start = before.length - (match[2] + match[3]).length;
     range.setStart(node, start);
-    range.setEnd(node, range.startOffset);
+    range.setEnd(node, caret);
     range.deleteContents();
 
     var span = document.createElement('span');
-    if (composer.mention.kind === 'hashtag') {
+    if (mention.kind === 'hashtag') {
       span.setAttribute('data-hashtag', item.tag);
       span.className = 'tma-feed-hashtag';
       span.textContent = '#' + item.tag;
@@ -3012,10 +3369,12 @@
     selection.removeAllRanges();
     selection.addRange(range);
 
-    var editor = state.el.querySelector('[data-feed-editor]');
-    if (editor) composer.body = editor.innerHTML;
+    if (mention.host === 'post' && state.composer) {
+      var editor = state.el.querySelector('[data-feed-editor]');
+      if (editor) state.composer.body = editor.innerHTML;
+    }
 
-    composer.mention = null;
+    state.mention = null;
     render();
   }
 
@@ -3033,25 +3392,65 @@
     }
 
     files.forEach(function (file) {
-      var upload = { name: file.name, percent: 0 };
+      var upload = { name: file.name, percent: 0, preview: null };
+
+      // A photo shows itself straight away, from the local bytes, rather
+      // than as a name with a bar under it.
+      if (/^image\//.test(file.type) && window.URL && window.URL.createObjectURL) {
+        try { upload.preview = window.URL.createObjectURL(file); } catch (e) { upload.preview = null; }
+      }
+
       composer.uploads.push(upload);
       render();
+
+      var settle = function () {
+        composer.uploads.splice(composer.uploads.indexOf(upload), 1);
+        if (upload.preview) {
+          try { window.URL.revokeObjectURL(upload.preview); } catch (e) { /* already gone */ }
+        }
+      };
 
       API.uploadAttachment(channelId, file, function (percent) {
         upload.percent = percent;
         render();
       })
         .then(function (data) {
-          composer.uploads.splice(composer.uploads.indexOf(upload), 1);
+          settle();
+
+          // The composer this upload belonged to was closed meanwhile: the
+          // staged file has no post to join, so it is let go.
+          if (state.composer !== composer) {
+            API.deleteAttachment(data.attachment.id).catch(function () {});
+            return;
+          }
+
           composer.attachments.push(data.attachment);
           render();
+          flushPendingSubmit(composer);
         })
         .catch(function (err) {
-          composer.uploads.splice(composer.uploads.indexOf(upload), 1);
+          settle();
+          if (state.composer !== composer) return;
           composer.error = err.message;
+          composer.pendingSubmit = null;
+          composer.busy = false;
           render();
         });
     });
+  }
+
+  /*
+   * Post was pressed while a file was still uploading: the post waited for
+   * it. Once the last upload lands, the submit that was queued goes ahead
+   * with every attachment on it.
+   */
+  function flushPendingSubmit(composer) {
+    if (!composer.pendingSubmit || composer.uploads.length) return;
+
+    var status = composer.pendingSubmit;
+    composer.pendingSubmit = null;
+    composer.busy = false;
+    submitComposer(status);
   }
 
   function removeAttachment(id) {
@@ -3124,6 +3523,17 @@
         render();
         return;
       }
+    }
+
+    // A file still on its way up would be left behind: this used to publish
+    // the post at once and the photo, arriving a moment later, had nothing
+    // to attach to. The submit now waits for the upload and then runs.
+    if (composer.uploads && composer.uploads.length) {
+      composer.pendingSubmit = status;
+      composer.busy = true;
+      composer.error = null;
+      render();
+      return;
     }
 
     var payload = {
@@ -3223,6 +3633,10 @@
   }
 
   function removePost(id) {
+    if (state.gallery && state.gallery.postId === id) {
+      state.gallery = null;
+      document.documentElement.classList.remove('tma-feed-gallery-open');
+    }
     state.posts = state.posts.filter(function (post) { return post.id !== id; });
     state.pinned = state.pinned.filter(function (post) { return post.id !== id; });
     delete state.comments[id];
@@ -3619,21 +4033,7 @@
   }
 
   function openLightbox(postId, attachmentId) {
-    var post = findPost(postId);
-    if (!post || !window.TMAPortalLightbox) return;
-
-    var files = lightboxSetFor(post, attachmentId);
-    if (!files || !files.length) return;
-
-    var index = 0;
-    files.forEach(function (file, i) { if (file.id === attachmentId) index = i; });
-
-    window.TMAPortalLightbox.open(
-      files.map(function (file) {
-        return { url: file.url, name: file.name, size: file.size, mime: file.mime, thumbUrl: file.thumbUrl };
-      }),
-      index
-    );
+    openGallery(postId, attachmentId);
   }
 
   function openPostById(postId) {
@@ -3665,14 +4065,32 @@
     });
 
     each(root, M, '[data-feed-comment-send]', 'click', function (e) {
-      sendComment(e.currentTarget.getAttribute('data-feed-comment-send'));
+      var box = e.currentTarget.closest('.tma-dash__feed-comment-composer');
+      sendComment(
+        e.currentTarget.getAttribute('data-feed-comment-send'),
+        box && box.querySelector('[data-feed-comment-input]')
+      );
     });
 
     each(root, M, '[data-feed-comment-input]', 'keydown', function (e) {
+      var postId = e.currentTarget.getAttribute('data-feed-comment-input');
+      if (handleMentionKeys(e, 'comment:' + postId)) return;
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendComment(e.currentTarget.getAttribute('data-feed-comment-input'));
+        sendComment(postId, e.currentTarget);
       }
+    });
+
+    // @ in a comment offers the same people the post editor does.
+    each(root, M, '[data-feed-comment-input]', 'input', function (e) {
+      var postId = e.currentTarget.getAttribute('data-feed-comment-input');
+      var post = findPost(postId);
+      detectMentionTrigger(
+        e.currentTarget,
+        'comment:' + postId,
+        (post && post.channel && post.channel.id) || state.channelId || ''
+      );
     });
 
     each(root, M, '[data-feed-reply]', 'click', function (e) {
@@ -3681,11 +4099,7 @@
       if (!thread) return;
       thread.replyTo = e.currentTarget.getAttribute('data-feed-reply');
       render();
-
-      window.requestAnimationFrame(function () {
-        var input = root.querySelector('[data-feed-comment-input="' + postId + '"]');
-        if (input) input.focus();
-      });
+      focusCommentInput(postId);
     });
 
     each(root, M, '[data-feed-reply-cancel]', 'click', function (e) {
@@ -3694,11 +4108,21 @@
       render();
     });
 
-    each(root, M, '[data-feed-comment-react]', 'click', function (e) {
-      var commentId = e.currentTarget.getAttribute('data-feed-comment-react');
-      var postId = e.currentTarget.getAttribute('data-feed-comment-post');
+    each(root, M, '[data-feed-comment-react-open]', 'click', function (e) {
+      e.stopPropagation();
+      var key = 'c:' + e.currentTarget.getAttribute('data-feed-comment-react-open');
+      state.reactionPicker = state.reactionPicker === key ? null : key;
+      render();
+    });
 
-      API.reactToComment(commentId, '👍')
+    each(root, M, '[data-feed-comment-react]', 'click', function (e) {
+      var commentId = e.currentTarget.getAttribute('data-feed-comment-react-id');
+      var postId = e.currentTarget.getAttribute('data-feed-comment-post');
+      var emoji = e.currentTarget.getAttribute('data-feed-comment-react');
+      state.reactionPicker = null;
+      render();
+
+      API.reactToComment(commentId, emoji)
         .then(function (data) { replaceComment(postId, data.comment); })
         .catch(fail);
     });
@@ -3789,11 +4213,32 @@
       });
   }
 
-  function sendComment(postId) {
+  /*
+   * The box the caret should land in: the viewer's when it is open on this
+   * post, the card's otherwise. Both carry the same data attribute, so a
+   * bare query would always find the card's first.
+   */
+  function commentInputFor(postId) {
+    var root = state.el;
+    if (!root) return null;
+
+    return (state.gallery && state.gallery.postId === postId
+      ? root.querySelector('[data-feed-gallery] [data-feed-comment-input="' + postId + '"]')
+      : null) || root.querySelector('[data-feed-comment-input="' + postId + '"]');
+  }
+
+  function focusCommentInput(postId) {
+    window.requestAnimationFrame(function () {
+      var input = commentInputFor(postId);
+      if (input) input.focus();
+    });
+  }
+
+  function sendComment(postId, input) {
     var thread = state.comments[postId];
     if (!thread || thread.sending) return;
 
-    var input = state.el && state.el.querySelector('[data-feed-comment-input="' + postId + '"]');
+    input = input || commentInputFor(postId);
     if (!input) return;
 
     var body = input.innerHTML.trim();
@@ -3807,6 +4252,7 @@
       .then(function (data) {
         thread.sending = false;
         thread.replyTo = null;
+        if (state.mention && state.mention.host === 'comment:' + postId) state.mention = null;
         // Cleared by hand: the input is a preserved node, so re-rendering
         // would not empty it.
         input.innerHTML = '';
@@ -4268,14 +4714,30 @@
     });
 
     document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape' || !state.el) return;
+      if (!state.el) return;
+
+      // ←/→ step the viewer, unless the keys are being used to move a caret.
+      if (state.gallery && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !state.modal) {
+        var typing = e.target && e.target.closest &&
+          e.target.closest('[contenteditable="true"], input, textarea, select');
+        if (!typing) {
+          e.preventDefault();
+          stepGallery(e.key === 'ArrowLeft' ? -1 : 1);
+        }
+        return;
+      }
+
+      if (e.key !== 'Escape') return;
 
       if (state.modal) { state.modal = null; render(); return; }
-      if (state.menuFor || state.reactionPicker) {
+      if (state.menuFor || state.reactionPicker || state.mention) {
         state.menuFor = null;
         state.reactionPicker = null;
+        state.mention = null;
         render();
+        return;
       }
+      if (state.gallery) closeGallery();
     });
 
     // Leaving the page should not leave a socket subscribed to a channel

@@ -367,6 +367,23 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/feed.mjs
   ```
+- **`feed-media.mjs`** — attachments, the photo viewer and comments. Written
+  for "I upload a photo and the post shows nothing": the cause was Post being
+  pressed while the upload was still in flight, so the script attaches a photo
+  and a PDF and clicks Post at once, then expects both on the card. From there
+  it checks the rest of that report — the PDF card painting its first page
+  (scrolled into view first: the thumbnail helper is lazy on purpose), no Share
+  button, a Saved icon that is a resolved mask rather than a broken `<img>`,
+  icons on every overflow-menu item, the viewer with the post and its thread
+  beside the picture, an @mention typed in the viewer's comment box (and the
+  typed trigger actually replaced by the token), reacting to a comment and to
+  the post from the rail, ←/→ stepping to the PDF, Escape closing, and the
+  options / poll switch rows sharing a baseline instead of hanging off a taller
+  field. Same sentinel as `feed.mjs`.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/feed-media.mjs
+  ```
 - **`sync-toasts.mjs`** — the bottom-right sync cards, driven for the mailbox.
   The only script here that needs **no server and no login**: it loads
   `public/js/sync-toasts.js` into a blank page over a stubbed `/me/sync-status`,

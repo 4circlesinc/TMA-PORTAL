@@ -687,6 +687,59 @@ img.tma-dash__feed-badge {
 
 .tma-dash__feed-attach-tray {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* Photos tile at post size, so the composer shows what will be published. */
+.tma-dash__feed-attach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-attach-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+  overflow: hidden;
+}
+
+.tma-dash__feed-attach-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tma-dash__feed-attach-tile .tma-dash__feed-attach-remove {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  width: 24px;
+  height: 24px;
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+}
+
+.tma-dash__feed-attach-tile--uploading img { opacity: 0.55; }
+
+.tma-dash__feed-attach-uploading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.92) 40%);
+}
+
+.tma-dash__feed-attach-list {
+  display: flex;
   flex-wrap: wrap;
   gap: var(--space-8);
 }
@@ -858,6 +911,26 @@ img.tma-dash__feed-badge {
   cursor: pointer;
 }
 
+/* A date field does not want the whole width. In a row the basis is its
+   width; in the poll's column it would become its height, so there it is
+   sized outright. */
+.tma-dash__feed-field--short {
+  flex: 0 1 320px;
+  max-width: 320px;
+}
+
+.tma-dash__feed-poll-settings > .tma-dash__feed-field--short {
+  flex: none;
+  width: min(100%, 320px);
+}
+
+/* Switches share one line, centred on each other rather than hanging off
+   the bottom of a taller field beside them. */
+.tma-dash__feed-option-row--checks {
+  align-items: center;
+  gap: var(--space-16);
+}
+
 .tma-dash__feed-swatches {
   display: flex;
   flex-wrap: wrap;
@@ -974,9 +1047,9 @@ img.tma-dash__feed-badge {
 
 .tma-dash__feed-poll-settings {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-12);
-  align-items: flex-end;
+  flex-direction: column;
+  gap: var(--space-8);
+  align-items: stretch;
 }
 
 /* ── the stream ──────────────────────────────────────────── */
@@ -1264,6 +1337,7 @@ img.tma-dash__feed-badge {
 .tma-dash__feed-media--4 { grid-template-columns: 1fr 1fr; }
 
 .tma-dash__feed-media-item {
+  position: relative;
   appearance: none;
   border: 0;
   padding: 0;
@@ -1272,6 +1346,17 @@ img.tma-dash__feed-badge {
   overflow: hidden;
   cursor: zoom-in;
   aspect-ratio: 16 / 10;
+}
+
+.tma-dash__feed-media-more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .tma-dash__feed-media--1 .tma-dash__feed-media-item { aspect-ratio: auto; max-height: 460px; }
@@ -1356,6 +1441,46 @@ img.tma-dash__feed-badge {
   width: 100%;
   border-radius: var(--radius-12);
   background: #000;
+}
+
+/* A document as a card: its first page (or type mark) above its name. */
+.tma-dash__feed-doc {
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tma-dash__feed-doc:hover .tma-dash__feed-file { background: var(--color-hover); }
+
+.tma-dash__feed-doc-stage {
+  display: grid;
+  place-items: center;
+  height: 240px;
+  background: var(--color-hover);
+  overflow: hidden;
+}
+
+.tma-dash__feed-doc-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.tma-dash__feed-doc-glyph {
+  width: 56px;
+  height: 56px;
+  opacity: 0.55;
+}
+
+.tma-dash__feed-doc .tma-dash__feed-file {
+  border: 0;
+  border-top: 0.5px solid var(--dash-border);
+  border-radius: 0;
+  background: var(--color-white);
 }
 
 .tma-dash__feed-audio { background: transparent; }
@@ -1596,6 +1721,102 @@ img.tma-dash__feed-badge {
 .tma-dash__feed-action img { width: 16px; height: 16px; opacity: 0.72; }
 .tma-dash__feed-action-emoji { font-size: 14px; line-height: 16px; }
 
+/*
+ * The React / Comment / Save glyphs and the overflow menu's icons are masked
+ * spans, not <img>s: a Phosphor file drawn through <img> is always black,
+ * while a mask takes `currentColor`, so Saved tints with its label and
+ * Delete's bin is red with its text. The art is inlined by
+ * scripts/inline_icon_masks.py — re-run it after changing a filename.
+ */
+.tma-dash__feed-action-icon,
+.tma-dash__feed-menu-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  opacity: 0.72;
+}
+
+.tma-dash__feed-action--on .tma-dash__feed-action-icon { opacity: 1; }
+
+.tma-dash__feed-action-icon--react {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216ZM80,108a12,12,0,1,1,12,12A12,12,0,0,1,80,108Zm96,0a12,12,0,1,1-12-12A12,12,0,0,1,176,108Zm-1.07,48c-10.29,17.79-27.4,28-46.93,28s-36.63-10.2-46.92-28a8,8,0,1,1,13.84-8c7.47,12.91,19.21,20,33.08,20s25.61-7.1,33.07-20a8,8,0,0,1,13.86,8Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Smiley.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216ZM80,108a12,12,0,1,1,12,12A12,12,0,0,1,80,108Zm96,0a12,12,0,1,1-12-12A12,12,0,0,1,176,108Zm-1.07,48c-10.29,17.79-27.4,28-46.93,28s-36.63-10.2-46.92-28a8,8,0,1,1,13.84-8c7.47,12.91,19.21,20,33.08,20s25.61-7.1,33.07-20a8,8,0,0,1,13.86,8Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Smiley.svg */
+}
+
+.tma-dash__feed-action-icon--comment {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M172,112a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h68A8,8,0,0,1,172,112Zm-8,24H96a8,8,0,0,0,0,16h68a8,8,0,0,0,0-16Zm68-12A100.11,100.11,0,0,1,132,224H48a16,16,0,0,1-16-16V124a100,100,0,0,1,200,0Zm-16,0a84,84,0,0,0-168,0v84h84A84.09,84.09,0,0,0,216,124Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatTeardropText.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M172,112a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h68A8,8,0,0,1,172,112Zm-8,24H96a8,8,0,0,0,0,16h68a8,8,0,0,0,0-16Zm68-12A100.11,100.11,0,0,1,132,224H48a16,16,0,0,1-16-16V124a100,100,0,0,1,200,0Zm-16,0a84,84,0,0,0-168,0v84h84A84.09,84.09,0,0,0,216,124Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChatTeardropText.svg */
+}
+
+.tma-dash__feed-action-icon--save {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.77,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.77-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/BookmarkSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.77,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.77-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/BookmarkSimple.svg */
+}
+
+.tma-dash__feed-post-menu .tma-dash__menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10, 10px);
+}
+
+.tma-dash__feed-menu-icon--link {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,90.34a8,8,0,0,1,0,11.32l-64,64a8,8,0,0,1-11.32-11.32l64-64A8,8,0,0,1,165.66,90.34ZM215.6,40.4a56,56,0,0,0-79.2,0L106.34,70.45a8,8,0,0,0,11.32,11.32l30.06-30a40,40,0,0,1,56.57,56.56l-30.07,30.06a8,8,0,0,0,11.31,11.32L215.6,119.6a56,56,0,0,0,0-79.2ZM138.34,174.22l-30.06,30.06a40,40,0,1,1-56.56-56.57l30.05-30.05a8,8,0,0,0-11.32-11.32L40.4,136.4a56,56,0,0,0,79.2,79.2l30.06-30.07a8,8,0,0,0-11.32-11.31Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/LinkSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,90.34a8,8,0,0,1,0,11.32l-64,64a8,8,0,0,1-11.32-11.32l64-64A8,8,0,0,1,165.66,90.34ZM215.6,40.4a56,56,0,0,0-79.2,0L106.34,70.45a8,8,0,0,0,11.32,11.32l30.06-30a40,40,0,0,1,56.57,56.56l-30.07,30.06a8,8,0,0,0,11.31,11.32L215.6,119.6a56,56,0,0,0,0-79.2ZM138.34,174.22l-30.06,30.06a40,40,0,1,1-56.56-56.57l30.05-30.05a8,8,0,0,0-11.32-11.32L40.4,136.4a56,56,0,0,0,79.2,79.2l30.06-30.07a8,8,0,0,0-11.32-11.31Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/LinkSimple.svg */
+}
+
+.tma-dash__feed-menu-icon--bookmark {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.77,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.77-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/BookmarkSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.77,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,177.57-51.77-32.35a8,8,0,0,0-8.48,0L72,209.57V48H184Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/BookmarkSimple.svg */
+}
+
+.tma-dash__feed-menu-icon--pin {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M235.32,81.37,174.63,20.69a16,16,0,0,0-22.63,0L98.37,74.49c-10.66-3.34-35-7.37-60.4,13.14a16,16,0,0,0-1.29,23.78L85,159.71,42.34,202.34a8,8,0,0,0,11.32,11.32L96.29,171l48.29,48.29A16,16,0,0,0,155.9,224c.38,0,.75,0,1.13,0a15.93,15.93,0,0,0,11.64-6.33c19.64-26.1,17.75-47.32,13.19-60L235.33,104A16,16,0,0,0,235.32,81.37ZM224,92.69h0l-57.27,57.46a8,8,0,0,0-1.49,9.22c9.46,18.93-1.8,38.59-9.34,48.62L48,100.08c12.08-9.74,23.64-12.31,32.48-12.31A40.13,40.13,0,0,1,96.81,91a8,8,0,0,0,9.25-1.51L163.32,32,224,92.68Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PushPin.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M235.32,81.37,174.63,20.69a16,16,0,0,0-22.63,0L98.37,74.49c-10.66-3.34-35-7.37-60.4,13.14a16,16,0,0,0-1.29,23.78L85,159.71,42.34,202.34a8,8,0,0,0,11.32,11.32L96.29,171l48.29,48.29A16,16,0,0,0,155.9,224c.38,0,.75,0,1.13,0a15.93,15.93,0,0,0,11.64-6.33c19.64-26.1,17.75-47.32,13.19-60L235.33,104A16,16,0,0,0,235.32,81.37ZM224,92.69h0l-57.27,57.46a8,8,0,0,0-1.49,9.22c9.46,18.93-1.8,38.59-9.34,48.62L48,100.08c12.08-9.74,23.64-12.31,32.48-12.31A40.13,40.13,0,0,1,96.81,91a8,8,0,0,0,9.25-1.51L163.32,32,224,92.68Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PushPin.svg */
+}
+
+.tma-dash__feed-menu-icon--lock {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Lock.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Lock.svg */
+}
+
+.tma-dash__feed-menu-icon--unlock {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/LockOpen.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/LockOpen.svg */
+}
+
+.tma-dash__feed-menu-icon--edit {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PencilSimple.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PencilSimple.svg */
+}
+
+.tma-dash__feed-menu-icon--duplicate {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Copy.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Copy.svg */
+}
+
+.tma-dash__feed-menu-icon--poll {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M224,96H184V56a8,8,0,0,0-8-8H56V40a8,8,0,0,0-16,0V216a8,8,0,0,0,16,0v-8h88a8,8,0,0,0,8-8V160h72a8,8,0,0,0,8-8V104A8,8,0,0,0,224,96ZM168,64V96H56V64ZM136,192H56V160h80Zm80-48H56V112H216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChartBarHorizontal.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M224,96H184V56a8,8,0,0,0-8-8H56V40a8,8,0,0,0-16,0V216a8,8,0,0,0,16,0v-8h88a8,8,0,0,0,8-8V160h72a8,8,0,0,0,8-8V104A8,8,0,0,0,224,96ZM168,64V96H56V64ZM136,192H56V160h80Zm80-48H56V112H216Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/ChartBarHorizontal.svg */
+}
+
+.tma-dash__feed-menu-icon--ack {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M225.86,102.82c-3.77-3.94-7.67-8-9.14-11.57-1.36-3.27-1.44-8.69-1.52-13.94-.15-9.76-.31-20.82-8-28.51s-18.75-7.85-28.51-8c-5.25-.08-10.67-.16-13.94-1.52-3.56-1.47-7.63-5.37-11.57-9.14C146.28,23.51,138.44,16,128,16s-18.27,7.51-25.18,14.14c-3.94,3.77-8,7.67-11.57,9.14C88,40.64,82.56,40.72,77.31,40.8c-9.76.15-20.82.31-28.51,8S41,67.55,40.8,77.31c-.08,5.25-.16,10.67-1.52,13.94-1.47,3.56-5.37,7.63-9.14,11.57C23.51,109.72,16,117.56,16,128s7.51,18.27,14.14,25.18c3.77,3.94,7.67,8,9.14,11.57,1.36,3.27,1.44,8.69,1.52,13.94.15,9.76.31,20.82,8,28.51s18.75,7.85,28.51,8c5.25.08,10.67.16,13.94,1.52,3.56,1.47,7.63,5.37,11.57,9.14C109.72,232.49,117.56,240,128,240s18.27-7.51,25.18-14.14c3.94-3.77,8-7.67,11.57-9.14,3.27-1.36,8.69-1.44,13.94-1.52,9.76-.15,20.82-.31,28.51-8s7.85-18.75,8-28.51c.08-5.25.16-10.67,1.52-13.94,1.47-3.56,5.37-7.63,9.14-11.57C232.49,146.28,240,138.44,240,128S232.49,109.73,225.86,102.82Zm-11.55,39.29c-4.79,5-9.75,10.17-12.38,16.52-2.52,6.1-2.63,13.07-2.73,19.82-.1,7-.21,14.33-3.32,17.43s-10.39,3.22-17.43,3.32c-6.75.1-13.72.21-19.82,2.73-6.35,2.63-11.52,7.59-16.52,12.38S132,224,128,224s-9.15-4.92-14.11-9.69-10.17-9.75-16.52-12.38c-6.1-2.52-13.07-2.63-19.82-2.73-7-.1-14.33-.21-17.43-3.32s-3.22-10.39-3.32-17.43c-.1-6.75-.21-13.72-2.73-19.82-2.63-6.35-7.59-11.52-12.38-16.52S32,132,32,128s4.92-9.15,9.69-14.11,9.75-10.17,12.38-16.52c2.52-6.1,2.63-13.07,2.73-19.82.1-7,.21-14.33,3.32-17.43S70.51,56.9,77.55,56.8c6.75-.1,13.72-.21,19.82-2.73,6.35-2.63,11.52-7.59,16.52-12.38S124,32,128,32s9.15,4.92,14.11,9.69,10.17,9.75,16.52,12.38c6.1,2.52,13.07,2.63,19.82,2.73,7,.1,14.33.21,17.43,3.32s3.22,10.39,3.32,17.43c.1,6.75.21,13.72,2.73,19.82,2.63,6.35,7.59,11.52,12.38,16.52S224,124,224,128,219.08,137.15,214.31,142.11ZM173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/SealCheck.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M225.86,102.82c-3.77-3.94-7.67-8-9.14-11.57-1.36-3.27-1.44-8.69-1.52-13.94-.15-9.76-.31-20.82-8-28.51s-18.75-7.85-28.51-8c-5.25-.08-10.67-.16-13.94-1.52-3.56-1.47-7.63-5.37-11.57-9.14C146.28,23.51,138.44,16,128,16s-18.27,7.51-25.18,14.14c-3.94,3.77-8,7.67-11.57,9.14C88,40.64,82.56,40.72,77.31,40.8c-9.76.15-20.82.31-28.51,8S41,67.55,40.8,77.31c-.08,5.25-.16,10.67-1.52,13.94-1.47,3.56-5.37,7.63-9.14,11.57C23.51,109.72,16,117.56,16,128s7.51,18.27,14.14,25.18c3.77,3.94,7.67,8,9.14,11.57,1.36,3.27,1.44,8.69,1.52,13.94.15,9.76.31,20.82,8,28.51s18.75,7.85,28.51,8c5.25.08,10.67.16,13.94,1.52,3.56,1.47,7.63,5.37,11.57,9.14C109.72,232.49,117.56,240,128,240s18.27-7.51,25.18-14.14c3.94-3.77,8-7.67,11.57-9.14,3.27-1.36,8.69-1.44,13.94-1.52,9.76-.15,20.82-.31,28.51-8s7.85-18.75,8-28.51c.08-5.25.16-10.67,1.52-13.94,1.47-3.56,5.37-7.63,9.14-11.57C232.49,146.28,240,138.44,240,128S232.49,109.73,225.86,102.82Zm-11.55,39.29c-4.79,5-9.75,10.17-12.38,16.52-2.52,6.1-2.63,13.07-2.73,19.82-.1,7-.21,14.33-3.32,17.43s-10.39,3.22-17.43,3.32c-6.75.1-13.72.21-19.82,2.73-6.35,2.63-11.52,7.59-16.52,12.38S132,224,128,224s-9.15-4.92-14.11-9.69-10.17-9.75-16.52-12.38c-6.1-2.52-13.07-2.63-19.82-2.73-7-.1-14.33-.21-17.43-3.32s-3.22-10.39-3.32-17.43c-.1-6.75-.21-13.72-2.73-19.82-2.63-6.35-7.59-11.52-12.38-16.52S32,132,32,128s4.92-9.15,9.69-14.11,9.75-10.17,12.38-16.52c2.52-6.1,2.63-13.07,2.73-19.82.1-7,.21-14.33,3.32-17.43S70.51,56.9,77.55,56.8c6.75-.1,13.72-.21,19.82-2.73,6.35-2.63,11.52-7.59,16.52-12.38S124,32,128,32s9.15,4.92,14.11,9.69,10.17,9.75,16.52,12.38c6.1,2.52,13.07,2.63,19.82,2.73,7,.1,14.33.21,17.43,3.32s3.22,10.39,3.32,17.43c.1,6.75.21,13.72,2.73,19.82,2.63,6.35,7.59,11.52,12.38,16.52S224,124,224,128,219.08,137.15,214.31,142.11ZM173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/SealCheck.svg */
+}
+
+.tma-dash__feed-menu-icon--delete {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='32'%20height='32'%20viewBox='0%200%2032%2032'%20fill='none'%3E%3Cpath%20id='Vector'%20d='M27%206H22V5C22%204.20435%2021.6839%203.44129%2021.1213%202.87868C20.5587%202.31607%2019.7956%202%2019%202H13C12.2044%202%2011.4413%202.31607%2010.8787%202.87868C10.3161%203.44129%2010%204.20435%2010%205V6H5C4.73478%206%204.48043%206.10536%204.29289%206.29289C4.10536%206.48043%204%206.73478%204%207C4%207.26522%204.10536%207.51957%204.29289%207.70711C4.48043%207.89464%204.73478%208%205%208H6V26C6%2026.5304%206.21071%2027.0391%206.58579%2027.4142C6.96086%2027.7893%207.46957%2028%208%2028H24C24.5304%2028%2025.0391%2027.7893%2025.4142%2027.4142C25.7893%2027.0391%2026%2026.5304%2026%2026V8H27C27.2652%208%2027.5196%207.89464%2027.7071%207.70711C27.8946%207.51957%2028%207.26522%2028%207C28%206.73478%2027.8946%206.48043%2027.7071%206.29289C27.5196%206.10536%2027.2652%206%2027%206ZM12%205C12%204.73478%2012.1054%204.48043%2012.2929%204.29289C12.4804%204.10536%2012.7348%204%2013%204H19C19.2652%204%2019.5196%204.10536%2019.7071%204.29289C19.8946%204.48043%2020%204.73478%2020%205V6H12V5ZM24%2026H8V8H24V26ZM14%2013V21C14%2021.2652%2013.8946%2021.5196%2013.7071%2021.7071C13.5196%2021.8946%2013.2652%2022%2013%2022C12.7348%2022%2012.4804%2021.8946%2012.2929%2021.7071C12.1054%2021.5196%2012%2021.2652%2012%2021V13C12%2012.7348%2012.1054%2012.4804%2012.2929%2012.2929C12.4804%2012.1054%2012.7348%2012%2013%2012C13.2652%2012%2013.5196%2012.1054%2013.7071%2012.2929C13.8946%2012.4804%2014%2012.7348%2014%2013ZM20%2013V21C20%2021.2652%2019.8946%2021.5196%2019.7071%2021.7071C19.5196%2021.8946%2019.2652%2022%2019%2022C18.7348%2022%2018.4804%2021.8946%2018.2929%2021.7071C18.1054%2021.5196%2018%2021.2652%2018%2021V13C18%2012.7348%2018.1054%2012.4804%2018.2929%2012.2929C18.4804%2012.1054%2018.7348%2012%2019%2012C19.2652%2012%2019.5196%2012.1054%2019.7071%2012.2929C19.8946%2012.4804%2020%2012.7348%2020%2013Z'%20fill='black'%20/%3E%20%3C/svg%3E"); /* ../images/icons/phosphor/Trash.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='32'%20height='32'%20viewBox='0%200%2032%2032'%20fill='none'%3E%3Cpath%20id='Vector'%20d='M27%206H22V5C22%204.20435%2021.6839%203.44129%2021.1213%202.87868C20.5587%202.31607%2019.7956%202%2019%202H13C12.2044%202%2011.4413%202.31607%2010.8787%202.87868C10.3161%203.44129%2010%204.20435%2010%205V6H5C4.73478%206%204.48043%206.10536%204.29289%206.29289C4.10536%206.48043%204%206.73478%204%207C4%207.26522%204.10536%207.51957%204.29289%207.70711C4.48043%207.89464%204.73478%208%205%208H6V26C6%2026.5304%206.21071%2027.0391%206.58579%2027.4142C6.96086%2027.7893%207.46957%2028%208%2028H24C24.5304%2028%2025.0391%2027.7893%2025.4142%2027.4142C25.7893%2027.0391%2026%2026.5304%2026%2026V8H27C27.2652%208%2027.5196%207.89464%2027.7071%207.70711C27.8946%207.51957%2028%207.26522%2028%207C28%206.73478%2027.8946%206.48043%2027.7071%206.29289C27.5196%206.10536%2027.2652%206%2027%206ZM12%205C12%204.73478%2012.1054%204.48043%2012.2929%204.29289C12.4804%204.10536%2012.7348%204%2013%204H19C19.2652%204%2019.5196%204.10536%2019.7071%204.29289C19.8946%204.48043%2020%204.73478%2020%205V6H12V5ZM24%2026H8V8H24V26ZM14%2013V21C14%2021.2652%2013.8946%2021.5196%2013.7071%2021.7071C13.5196%2021.8946%2013.2652%2022%2013%2022C12.7348%2022%2012.4804%2021.8946%2012.2929%2021.7071C12.1054%2021.5196%2012%2021.2652%2012%2021V13C12%2012.7348%2012.1054%2012.4804%2012.2929%2012.2929C12.4804%2012.1054%2012.7348%2012%2013%2012C13.2652%2012%2013.5196%2012.1054%2013.7071%2012.2929C13.8946%2012.4804%2014%2012.7348%2014%2013ZM20%2013V21C20%2021.2652%2019.8946%2021.5196%2019.7071%2021.7071C19.5196%2021.8946%2019.2652%2022%2019%2022C18.7348%2022%2018.4804%2021.8946%2018.2929%2021.7071C18.1054%2021.5196%2018%2021.2652%2018%2021V13C18%2012.7348%2018.1054%2012.4804%2018.2929%2012.2929C18.4804%2012.1054%2018.7348%2012%2019%2012C19.2652%2012%2019.5196%2012.1054%2019.7071%2012.2929C19.8946%2012.4804%2020%2012.7348%2020%2013Z'%20fill='black'%20/%3E%20%3C/svg%3E"); /* ../images/icons/phosphor/Trash.svg */
+}
+
 .tma-dash__feed-react-wrap { position: relative; }
 
 .tma-dash__feed-react-picker {
@@ -1644,7 +1865,8 @@ img.tma-dash__feed-badge {
 
 .tma-dash__feed-comment {
   display: flex;
-  gap: var(--space-8);
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .tma-dash__feed-comment-avatar {
@@ -1664,10 +1886,39 @@ img.tma-dash__feed-badge {
 }
 
 .tma-dash__feed-comment-bubble {
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-12);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--space-8) var(--space-12) var(--space-8) var(--space-8);
+  border-radius: var(--radius-16);
   background: var(--color-white);
   border: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-comment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The tally of reactions sits on the bubble's corner. */
+.tma-dash__feed-comment-reacts {
+  position: absolute;
+  right: var(--space-8);
+  bottom: -10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 0.5px solid var(--dash-border);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
 }
 
 .tma-dash__feed-comment-head {
@@ -1693,8 +1944,11 @@ img.tma-dash__feed-badge {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding-left: var(--space-4);
+  /* Under the words, not under the face: avatar + gap + bubble padding. */
+  padding-left: 44px;
 }
+
+.tma-dash__feed-comment-actions .tma-dash__feed-react-picker { z-index: 25; }
 
 .tma-dash__feed-comment-action {
   appearance: none;
@@ -1718,6 +1972,7 @@ img.tma-dash__feed-badge {
   flex-direction: column;
   gap: var(--space-8);
   margin-top: var(--space-4);
+  margin-left: 44px;
   padding-left: var(--space-12);
   border-left: 1px solid var(--color-overlay-4);
 }
@@ -1729,26 +1984,52 @@ img.tma-dash__feed-badge {
 }
 
 .tma-dash__feed-comment-composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* The face, the field and Send share one pill, like the bubbles above it. */
+.tma-dash__feed-comment-box {
   display: flex;
   align-items: flex-end;
   gap: var(--space-8);
-  flex-wrap: wrap;
-}
-
-.tma-dash__feed-comment-input {
-  flex: 1;
-  min-width: 140px;
-  min-height: 34px;
-  max-height: 160px;
-  overflow: auto;
-  padding: var(--space-8) var(--space-12);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
   border: 0.5px solid var(--dash-border);
   border-radius: var(--radius-16);
   background: var(--color-white);
+}
+
+.tma-dash__feed-comment-box:focus-within {
+  border-color: var(--color-overlay-40);
+  box-shadow: 0 0 0 4px var(--color-overlay-4);
+}
+
+.tma-dash__feed-comment-box .tma-dash__feed-comment-avatar { margin-bottom: 3px; }
+
+.tma-dash__feed-comment-input {
+  flex: 1;
+  min-width: 100px;
+  min-height: 34px;
+  max-height: 160px;
+  overflow: auto;
+  padding: var(--space-8) 0;
+  border: 0;
+  background: transparent;
   font-size: var(--text-size-12);
   line-height: 18px;
   color: var(--color-text-primary);
   outline: none;
+}
+
+/* The @ list opens upward, out of a box that sits at the bottom of a thread. */
+.tma-dash__feed-comment-composer .tma-dash__feed-mention-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+  left: 36px;
+  right: auto;
+  min-width: 220px;
 }
 
 .tma-dash__feed-reply-to {
@@ -2244,4 +2525,211 @@ img.tma-dash__feed-badge {
 
   .tma-dash__feed-media--3,
   .tma-dash__feed-media--4 { grid-template-columns: 1fr; }
+}
+
+/* ── photo viewer ────────────────────────────────────────── */
+
+/*
+ * A full-screen layer, the file on the left and the post on the right. It
+ * sits at 250: above the page and the portal's title bar, below the Feed's
+ * own modal (260) so Delete's confirmation opens over it, and well below the
+ * toasts. See the z-index layer notes.
+ */
+html.tma-feed-gallery-open { overflow: hidden; }
+
+.tma-dash__feed-gallery {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  background: var(--color-white);
+}
+
+.tma-dash__feed-gallery-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-16);
+  background: #101418;
+  overflow: hidden;
+}
+
+.tma-dash__feed-gallery-img,
+.tma-dash__feed-gallery-video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__feed-gallery-doc {
+  width: min(100%, 960px);
+  height: 100%;
+  min-height: 0;
+  padding-bottom: var(--space-40, 40px);
+  box-sizing: border-box;
+}
+
+.tma-dash__feed-gallery-nopreview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+  max-width: 360px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.tma-dash__feed-gallery-nopreview img { filter: invert(1); opacity: 0.85; }
+
+.tma-dash__feed-gallery-nopreview-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  color: #fff;
+}
+
+.tma-dash__feed-gallery-nopreview-text {
+  margin: 0;
+  font-size: var(--text-size-12);
+}
+
+.tma-dash__feed-gallery-btn {
+  appearance: none;
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-popup);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.tma-dash__feed-gallery-btn:hover { background: #fff; }
+
+.tma-dash__feed-gallery-close {
+  top: var(--space-16);
+  left: var(--space-16);
+}
+
+.tma-dash__feed-gallery-nav {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.tma-dash__feed-gallery-nav--prev { left: var(--space-16); }
+.tma-dash__feed-gallery-nav--next { right: var(--space-16); }
+
+.tma-dash__feed-gallery-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-24) var(--space-16) var(--space-12);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  color: rgba(255, 255, 255, 0.78);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.tma-dash__feed-gallery-caption-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+  font-weight: 500;
+}
+
+.tma-dash__feed-gallery-download {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-left: auto;
+  padding: var(--space-4) var(--space-10, 10px);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.tma-dash__feed-gallery-download:hover { background: rgba(255, 255, 255, 0.24); }
+.tma-dash__feed-gallery-download img { filter: invert(1); }
+
+.tma-dash__feed-gallery-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-left: 0.5px solid var(--dash-border);
+  background: var(--color-white);
+}
+
+.tma-dash__feed-gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tma-dash__feed-gallery-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-gallery-body {
+  padding: 0 var(--space-20) var(--space-12);
+  font-size: var(--text-size-14);
+  line-height: 20px;
+}
+
+.tma-dash__feed-gallery-body .tma-dash__feed-hashtags { padding: var(--space-8) 0 0; }
+
+.tma-dash__feed-gallery-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-top: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-gallery-foot .tma-dash__feed-post-stats { padding: 0 var(--space-8); }
+
+.tma-dash__feed-comments--gallery {
+  background: var(--color-white);
+  padding: var(--space-12) var(--space-20) var(--space-16);
+}
+
+.tma-dash__feed-gallery-compose {
+  padding: var(--space-12) var(--space-20) var(--space-16);
+  border-top: 0.5px solid var(--dash-border);
+  background: var(--color-white);
+}
+
+@media (max-width: 900px) {
+  .tma-dash__feed-gallery {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 52vh) minmax(0, 1fr);
+  }
+
+  .tma-dash__feed-gallery-rail {
+    border-left: 0;
+    border-top: 0.5px solid var(--dash-border);
+  }
 }

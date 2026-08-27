@@ -139,7 +139,7 @@
    * viewer closing pumps it again.
    */
   function viewerOpen() {
-    return !!document.querySelector('.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox');
+    return !!document.querySelector('.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox, .tma-dash__feed-gallery');
   }
 
   function canRenderPdf() {
