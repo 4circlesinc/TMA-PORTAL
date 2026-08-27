@@ -2732,6 +2732,7 @@
             // Carried for the thumbnail: a PDF has no server thumbnail, so
             // TMAFileThumbs paints page one from the preview route.
             category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+            size: f.size,
             folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
           };
         });
@@ -2751,6 +2752,7 @@
             // Carried for the thumbnail: a PDF has no server thumbnail, so
             // TMAFileThumbs paints page one from the preview route.
             category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+            size: f.size,
             folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
           };
         });

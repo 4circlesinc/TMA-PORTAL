@@ -223,7 +223,47 @@ try {
     `and cost nothing to put there (${pdfRequests - before} new requests for the document` +
     (pdfRequests === before ? '' : ': ' + pdfLog.filter((r) => !seenBefore.has(r)).join(', ')) + ')');
 
-  step(7, 'No console errors');
+  step(7, 'A viewer wins: nothing is painted behind it');
+  /*
+   * The regression this exists to stop: a folder of scans painting thumbnails
+   * while the reader opens one of them. Every thumbnail is a pdf.js document —
+   * a worker, a download, a canvas — and the document they actually asked for
+   * was competing with the whole folder for the machine. It came back blank.
+   *
+   * So the queue holds while a viewer is on screen. Measured at the network,
+   * on a page whose thumbnails have NOT all been painted yet.
+   */
+  /*
+   * A real viewer, opened by its own deep link on a fresh page — the cache is
+   * empty there, so this measures work actually being held rather than a cache
+   * making the question moot. Everything except the open document is counted.
+   */
+  const opened = await page.evaluate(async (folder) => {
+    const r = await fetch('/portal/files/?folder=' + folder + '&perPage=40',
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const files = ((await r.json()).files || []).filter((f) => f.category === 'pdf');
+    return files.length ? files[0].id : null;
+  }, process.env.TMA_FOLDER);
+  check(!!opened, 'found a PDF to open');
+
+  const holder = await page.context().newPage();
+  const others = [];
+  holder.on('request', (r) => {
+    const m = /\/files\/([^/]+)\/preview/.exec(r.url());
+    if (m && m[1] !== opened) others.push(m[1]);
+  });
+  await holder.goto(`${BASE}/folders/all?folder=${process.env.TMA_FOLDER}&file=${opened}`,
+    { waitUntil: 'domcontentloaded' });
+  await holder.waitForSelector('.tma-portal-viewer', { timeout: 20000 });
+  await holder.waitForTimeout(6000);
+  check(others.length === 0, `nothing else is fetched behind the open viewer (${others.length})`);
+
+  await holder.keyboard.press('Escape');
+  await holder.waitForTimeout(7000);
+  check(others.length > 0, `and the queue is released when it closes (${others.length} painted after)`);
+  await holder.close();
+
+  step(8, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   errors.slice(0, 5).forEach((e) => log('      ' + e));
 } catch (e) {

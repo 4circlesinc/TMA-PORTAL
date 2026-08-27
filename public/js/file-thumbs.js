@@ -46,7 +46,27 @@
 
   /* The square the crop is scaled into. */
   var PDF_THUMB = 256;
-  var MAX_PARALLEL = 2;
+  /*
+   * One at a time.
+   *
+   * Every render is a pdf.js document, and a document is a worker: a folder of
+   * scans used to start a crowd of them, and the reader who then opened one of
+   * those files was competing with the whole crowd for the same machine. A
+   * thumbnail is never urgent — nothing on screen is waiting for it.
+   */
+  var MAX_PARALLEL = 1;
+
+  /*
+   * Under this, a thumbnail reads the file in one go rather than by range.
+   *
+   * Ranges are right for a reader opening a document — page one paints after a
+   * couple of hundred KB — but they are why scans came back blank: pdf.js
+   * renders the page it has, and the image it has not fetched yet is simply
+   * not there. For a file this size the complete read costs a moment and is
+   * always right. Above it, ranges, and a page that still comes back empty
+   * keeps its type icon rather than pulling 40 MB for a 28px picture.
+   */
+  var WHOLE_FILE_MAX = 12 * 1024 * 1024;
 
   var cache = {};   // previewUrl -> data: URL
   var failed = {};  // previewUrl -> true, so a broken file is tried once
@@ -88,6 +108,34 @@
     if (!isPdf(item)) return '';
     if (item.permissions && item.permissions.preview === false) return '';
     return item.previewUrl || '';
+  }
+
+  /* How big the file is, in bytes. Lists name that field differently — one of
+     them keeps `size` for the human label ("1.8 MB") and the number in
+     `bytes` — so both are read, and only a real number counts. */
+  function sizeOf(item) {
+    var n = Number(item && item.bytes);
+    if (!Number.isFinite(n) || n <= 0) n = Number(item && item.size);
+
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  }
+
+  function bytesOf(img) {
+    var n = Number(img.getAttribute('data-file-thumb-bytes'));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /*
+   * Is the reader looking at a document right now?
+   *
+   * If they are, nothing else may touch pdf.js. Painting thumbnails behind an
+   * open viewer competes with the one document the reader actually asked for —
+   * for the network, for memory, and for pdf.js's own workers — and the page
+   * they are staring at is the one that loses. The queue simply waits; the
+   * viewer closing pumps it again.
+   */
+  function viewerOpen() {
+    return !!document.querySelector('.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox');
   }
 
   function canRenderPdf() {
@@ -136,6 +184,7 @@
       // so a document that can't be painted simply keeps its icon.
       return '<img class="' + esc(iconCls) + '" src="' + esc(icon) + '"' + alt + iconBox + extra +
         ' data-file-thumb-pdf="' + esc(pdf) + '"' +
+        (sizeOf(item) ? ' data-file-thumb-bytes="' + sizeOf(item) + '"' : '') +
         ' data-file-thumb-cls="' + esc(cls + ' tma-file-thumb--doc') + '"' +
         (size ? ' data-file-thumb-size="' + size + '"' : '') +
         ' data-file-thumb-icon-cls="' + esc(iconCls) + '">';
@@ -220,11 +269,19 @@
    * the whole file, and only a page that is STILL blank after that is treated
    * as genuinely empty.
    */
-  function renderPdf(url) {
-    return paintPage(url, false).catch(function (err) {
-      if (err && err.blank) return paintPage(url, true);
-      throw err;
-    });
+  function renderPdf(url, bytes) {
+    /*
+     * One document per file, and the reading mode chosen up front.
+     *
+     * This used to read by range and, when the page came back empty, read the
+     * whole file and render a second time — two pdf.js documents, two workers
+     * and two downloads for one 28px picture, for every scan in the folder.
+     * The size decides instead: small enough and the complete read is the
+     * first and only attempt.
+     */
+    var whole = !!bytes && bytes <= WHOLE_FILE_MAX;
+
+    return paintPage(url, whole);
   }
 
   function paintPage(url, whole) {
@@ -247,22 +304,17 @@
 
         return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
           /*
-           * A blank page means "read the whole file and try again", nothing
-           * more. It is not a verdict.
+           * After a complete read, whatever came back IS the document: a first
+           * page that really is blank gets a picture of a blank page, which is
+           * honest, and beside its neighbours reads as paper rather than as a
+           * preview that failed.
            *
-           * It was one, briefly, and that is what put a red PDF mark on every
-           * scan in the portal: a page pdf.js had not finished fetching the
-           * image for renders empty, and a rule that threw empty pages away
-           * threw those away too. After a complete read, whatever came back is
-           * what the document looks like — a first page that really is blank
-           * gets a picture of a blank page, which is honest, and beside its
-           * neighbours it reads as paper rather than as a preview that failed.
+           * A page read by range is a different matter — empty there usually
+           * means pdf.js has not fetched the image yet, which is what put a red
+           * PDF mark on every scan in the portal. Those are the big files, so
+           * the icon is the honest answer rather than pulling 40 MB to be sure.
            */
-          if (!whole && !hasInk(canvas, ctx)) {
-            var blank = new Error('blank first page');
-            blank.blank = true;
-            throw blank;
-          }
+          if (!whole && !hasInk(canvas, ctx)) throw new Error('blank first page');
 
           return cropOf(canvas).toDataURL('image/jpeg', 0.78);
         });
@@ -314,6 +366,18 @@
   }
 
   function pump() {
+    // A cached picture still goes up — that costs nothing and the row is
+    // otherwise wearing an icon it does not need.
+    if (viewerOpen()) {
+      queue = queue.filter(function (job) {
+        if (!cache[job.url]) return true;
+        apply(job.img, cache[job.url]);
+        return false;
+      });
+
+      return;
+    }
+
     while (running < MAX_PARALLEL && queue.length) {
       var job = queue.shift();
       var url = job.url;
@@ -324,8 +388,8 @@
       inflight[url] = true;
       running += 1;
       /* eslint-disable no-loop-func */
-      (function (url) {
-        renderPdf(url).then(function (dataUrl) {
+      (function (url, bytes) {
+        renderPdf(url, bytes).then(function (dataUrl) {
           cache[url] = dataUrl;
           // Every row showing this file, not only the one that asked: a list
           // can hold the same document twice, and a repaint mid-render leaves
@@ -340,7 +404,7 @@
           running -= 1;
           pump();
         });
-      }(url));
+      }(url, job.bytes));
       /* eslint-enable no-loop-func */
     }
   }
@@ -354,7 +418,7 @@
         io.unobserve(img);
         var url = img.getAttribute('data-file-thumb-pdf');
         if (!url) return;
-        queue.push({ img: img, url: url });
+        queue.push({ img: img, url: url, bytes: bytesOf(img) });
       });
       pump();
     }, { rootMargin: '200px' });
@@ -388,10 +452,12 @@
         watcher.observe(img);
         return;
       }
-      queue.push({ img: img, url: url });
+      queue.push({ img: img, url: url, bytes: bytesOf(img) });
     });
 
-    if (!watcher) pump();
+    // Always: a job left in the queue by a viewer that was open has nothing
+    // else to restart it.
+    pump();
   }
 
   function scanSoon() {

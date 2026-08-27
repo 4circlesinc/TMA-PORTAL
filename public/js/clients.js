@@ -5899,6 +5899,9 @@
       extension: d.fileExt || '',
       category: d.fileCategory || '',
       mime: d.fileMime || '',
+      // Carried so the thumbnail can decide how to read the file: a small scan
+      // is read whole, which is the only way its first page paints.
+      size: d.fileSize || 0,
       thumbUrl: d.thumbUrl || null,
       previewUrl: d.previewUrl || null,
     };
