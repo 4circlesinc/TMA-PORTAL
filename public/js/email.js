@@ -6108,6 +6108,12 @@
 
   function openCompose(state, opts) {
     var draft = createComposeDraft(state, opts);
+    // Seed the body with the signature (or template) the window will paint.
+    // Otherwise draft.bodyHtml stays '' until the user types, and Send goes
+    // out blank even though the editor looked signed.
+    if (!(opts && opts.bodyHtml)) {
+      draft.bodyHtml = defaultComposeBody(draft);
+    }
     state.composeDrafts.push(draft);
     state.focusedComposeId = draft.id;
     return draft;
@@ -6472,7 +6478,19 @@
     }, 1200);
   }
 
+  /* Pull the compose body's HTML from the live editor when it is on screen.
+   * Prefer the DOM over draft.bodyHtml so an untouched signature (or any
+   * edits that have not yet fired an input handler) still leave with the
+   * message. */
+  function syncComposeBodyFromEditor(draft) {
+    if (!draft) return;
+    var win = document.querySelector('[data-email-compose-window="' + draft.id + '"]');
+    var editor = win && win.querySelector('[data-email-compose-body]');
+    if (editor) draft.bodyHtml = editor.innerHTML;
+  }
+
   function saveComposeDraft(state, draft) {
+    syncComposeBodyFromEditor(draft);
     return api().saveDraft({
       id: draft.serverId,
       to: parseAddresses(draft.to),
@@ -6492,7 +6510,9 @@
     var draft = findComposeDraft(state, id);
     if (!draft || draft.sending) return;
 
-    commitRecipientFields(document.querySelector('[data-email-compose-window="' + id + '"]'));
+    var win = document.querySelector('[data-email-compose-window="' + id + '"]');
+    commitRecipientFields(win);
+    syncComposeBodyFromEditor(draft);
     var to = parseAddresses(draft.to);
     if (!to.length) {
       showEmailToast(root, 'Add at least one recipient');
