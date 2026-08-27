@@ -15789,7 +15789,8 @@
   z-index: 1;
 }
 
-/* Inbox: the five members most recently online as an overlapping facepile. */
+/* Inbox: the five members most recently online as an overlapping facepile,
+ * never fewer than two circles (the reader fills in behind a lone member). */
 .tma-dash__messages-row-avatar--facepile {
   display: flex;
   flex-direction: row;
@@ -32747,6 +32748,45 @@ button.tma-dash__header-popup-item:focus-visible {
   background: var(--color-bg-card);
   overflow: hidden;
   cursor: pointer;
+}
+
+/* A group at profile size: the same circle cluster as the inbox row, larger.
+ * The box loses its ring and clip so the overlapping circles can breathe. */
+.tma-dash__messages-profile-avatar--group {
+  width: auto;
+  min-width: 80px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.tma-dash__messages-profile-part {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  margin-left: -16px;
+  border: 3px solid var(--color-bg-card);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-dash__messages-profile-part:first-child {
+  margin-left: 0;
+}
+
+.tma-dash__messages-profile-part--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-size-18, 18px);
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  text-transform: uppercase;
 }
 
 /* No photo means nothing to enlarge, so the tile is not a button. */

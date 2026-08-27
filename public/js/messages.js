@@ -544,12 +544,41 @@
     );
   }
 
-  /* Two people for a compact group stack: photos first so the photograph sits in front. */
+  /*
+   * A group is always drawn as a cluster of member circles, never a single
+   * tile: a lone initial reads as one person, and a group photo with a corner
+   * badge was retired for the same reason. These helpers decide who fills the
+   * circles. The reader's own face fills in when fewer than two others are
+   * available, so a two-person group still shows two faces. An uploaded group
+   * photo, where one exists, takes the front circle rather than replacing the
+   * cluster.
+   */
+  function selfClusterMember() {
+    var me = STORE.me;
+    if (!me || !me.name) return null;
+    return { id: me.id, name: me.name, photo: me.photo || me.avatar, self: true };
+  }
+
+  function groupPhotoClusterMember(row) {
+    if (!row || !row.photo) return null;
+    return { name: row.name, photo: row.photo, groupPhoto: true };
+  }
+
+  function padClusterWithSelf(pool, min) {
+    if (pool.length >= min) return pool;
+    var me = selfClusterMember();
+    if (!me) return pool;
+    var present = pool.some(function (m) { return m.self || (me.id != null && m.id === me.id); });
+    if (!present) pool.push(me);
+    return pool;
+  }
+
+  /* Two circles for the compact stack: photos first so a photograph sits in front. */
   function groupStackMembers(row) {
-    var pool = (row.members || []).slice();
-    if (pool.length < 2 && STORE.me && STORE.me.name) {
-      pool.push({ name: STORE.me.name, photo: STORE.me.photo || STORE.me.avatar });
-    }
+    var pool = (row.members || []).slice().filter(Boolean);
+    var photo = groupPhotoClusterMember(row);
+    if (photo) pool.unshift(photo);
+    pool = padClusterWithSelf(pool, 2);
     pool.sort(function (a, b) {
       return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
     });
@@ -559,8 +588,8 @@
   /*
    * Inbox facepile: the five members most recently online — anyone online
    * right now first, then by last seen. Members who are online carry the
-   * green dot; the rest sit plain. Falls back to the compact two-stack only
-   * when the row carries no members at all.
+   * green dot; the rest sit plain. Never fewer than two circles: the reader's
+   * own face fills in behind a lone member.
    */
   function groupOnlineFacepileMembers(row) {
     var pool = (row.members || []).slice().filter(Boolean);
@@ -573,7 +602,34 @@
       if (bt !== at) return bt - at;
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
+    pool = pool.slice(0, 5);
+    var photo = groupPhotoClusterMember(row);
+    if (photo) pool.unshift(photo);
+    return padClusterWithSelf(pool, 2).slice(0, 5);
+  }
+
+  /* Conversation info: every member, photographs first, at profile size. */
+  function groupProfileClusterMembers(row, members) {
+    var pool = (members || []).slice().filter(function (m) { return m && m.name; });
+    var photo = groupPhotoClusterMember(row);
+    if (photo) pool.unshift(photo);
+    pool = padClusterWithSelf(pool, 2);
+    pool.sort(function (a, b) {
+      return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
+    });
     return pool.slice(0, 5);
+  }
+
+  function renderGroupProfilePart(member) {
+    if (member.photo) {
+      return '<img class="tma-dash__messages-profile-part" src="' + esc(member.photo) + '" alt="" title="' + esc(member.name || '') + '">';
+    }
+    return (
+      '<span class="tma-dash__messages-profile-part tma-dash__messages-profile-part--initial tma-dash__messages-row-avatar--' +
+      initialColourFor(member.name) + '" title="' + esc(member.name || '') + '">' +
+      esc(initialsFor(member.name).charAt(0)) +
+      '</span>'
+    );
   }
 
   function renderGroupStackPart(member, index) {
@@ -612,9 +668,9 @@
   /*
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
-   * Groups stack member circles (photo in front, initials behind) rather than
-   * a single group photo with a corner badge. The inbox expands that into a
-   * facepile of the five members most recently online.
+   * Groups are always a cluster of member circles (photo in front, initials
+   * behind), never one tile. The inbox expands that into a facepile of the
+   * five members most recently online.
    */
   function threadIcon(row, opts) {
     opts = opts || {};
@@ -623,28 +679,20 @@
       var members = facepile
         ? groupOnlineFacepileMembers(row)
         : groupStackMembers(row);
-      if (facepile && !members.length) {
-        members = groupStackMembers(row);
+      if (!members.length) {
+        /* No members and no reader yet (a warm start before /me): the group's
+         * own name still sits in a circle of the cluster, not a tile. */
+        members = [{ name: row.name || 'Group', photo: row.photo || null }];
         facepile = false;
       }
-      if (members.length) {
-        return (
-          '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group' +
-          (facepile ? ' tma-dash__messages-row-avatar--facepile' : '') +
-          (facepile ? ' tma-dash__messages-row-avatar--facepile-' + members.length : '') +
-          '">' +
-          members.map(facepile ? renderGroupFacepilePart : renderGroupStackPart).join('') +
-          '</span>'
-        );
-      }
-      if (row.photo) {
-        return (
-          '<span class="tma-dash__messages-row-avatar">' +
-          '<img src="' + esc(row.photo) + '" alt="" loading="lazy">' +
-          '</span>'
-        );
-      }
-      return renderInitialAvatar(row.name, 'tma-dash__messages-row-avatar--group');
+      return (
+        '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group' +
+        (facepile ? ' tma-dash__messages-row-avatar--facepile' : '') +
+        (facepile ? ' tma-dash__messages-row-avatar--facepile-' + members.length : '') +
+        '">' +
+        members.map(facepile ? renderGroupFacepilePart : renderGroupStackPart).join('') +
+        '</span>'
+      );
     }
 
     if (row.photo) {
@@ -4133,12 +4181,18 @@
       // is a real photo, an initials tile has nothing to enlarge.
       '<div class="tma-dash__messages-profile-cover"></div>' +
       '<div class="tma-dash__messages-profile-head">' +
-      (p.photo
-        ? '<button type="button" class="tma-dash__messages-profile-avatar" ' +
-          'data-messages-profile-photo="' + esc(p.photo) + '" aria-label="View photo">' +
-          '<img src="' + esc(p.photo) + '" alt=""></button>'
-        : '<span class="tma-dash__messages-profile-avatar">' +
-          renderInitialAvatar(p.name, 'tma-dash__messages-profile-initial') + '</span>') +
+      (row.type === 'group'
+        // A group is its people: the same circle cluster as the list, at
+        // profile size, rather than one photo or one initials tile.
+        ? '<span class="tma-dash__messages-profile-avatar tma-dash__messages-profile-avatar--group">' +
+          groupProfileClusterMembers({ name: p.name, photo: p.photo }, p.members).map(renderGroupProfilePart).join('') +
+          '</span>'
+        : p.photo
+          ? '<button type="button" class="tma-dash__messages-profile-avatar" ' +
+            'data-messages-profile-photo="' + esc(p.photo) + '" aria-label="View photo">' +
+            '<img src="' + esc(p.photo) + '" alt=""></button>'
+          : '<span class="tma-dash__messages-profile-avatar">' +
+            renderInitialAvatar(p.name, 'tma-dash__messages-profile-initial') + '</span>') +
       '<h2 class="tma-dash__messages-profile-name">' + esc(p.name) + '</h2>' +
       (presence
         ? '<p class="tma-dash__messages-profile-presence">' + esc(presence) + '</p>'
