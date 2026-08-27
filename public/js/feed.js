@@ -1205,7 +1205,7 @@
   function checkboxHtml(action, label, checked) {
     return (
       '<label class="tma-dash__feed-check">' +
-      '<input type="checkbox" data-' + action + (checked ? ' checked' : '') + '>' +
+      '<input type="checkbox" class="tma-dash__check" data-' + action + (checked ? ' checked' : '') + '>' +
       '<span>' + esc(label) + '</span>' +
       '</label>'
     );
@@ -2783,6 +2783,51 @@
     });
   }
 
+  /*
+   * Resting on React opens the picker, the way Facebook does, so reacting is
+   * one movement rather than a click and then a choice. The delay on the way
+   * in stops a cursor crossing the action bar from popping pickers open; the
+   * delay on the way out covers the small gap between the button and the row
+   * of emojis above it. Wired on the wrap, which holds both, so moving up
+   * into the picker never counts as leaving. Touch and pen have no hover and
+   * keep the click path.
+   */
+  var HOVER_OPENS = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+  var hoverTimer = null;
+
+  function pickerKeyOf(wrap) {
+    var post = wrap.querySelector('[data-feed-react-open]');
+    if (post) return post.getAttribute('data-feed-react-open');
+    var comment = wrap.querySelector('[data-feed-comment-react-open]');
+    return comment ? 'c:' + comment.getAttribute('data-feed-comment-react-open') : null;
+  }
+
+  function wireHoverPicker(root, M) {
+    if (!HOVER_OPENS) return;
+
+    each(root, M, '.tma-dash__feed-react-wrap', 'mouseenter', function (e) {
+      var key = pickerKeyOf(e.currentTarget);
+      clearTimeout(hoverTimer);
+      if (!key || state.reactionPicker === key) return;
+      hoverTimer = setTimeout(function () {
+        if (state.reactionPicker === key) return;
+        state.menuFor = null;
+        state.reactionPicker = key;
+        render();
+      }, 250);
+    });
+
+    each(root, M, '.tma-dash__feed-react-wrap', 'mouseleave', function (e) {
+      var key = pickerKeyOf(e.currentTarget);
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () {
+        if (!key || state.reactionPicker !== key) return;
+        state.reactionPicker = null;
+        render();
+      }, 300);
+    });
+  }
+
   function wireSidebar(root, M) {
     each(root, M, '[data-feed-group-toggle]', 'click', function (e) {
       var key = e.currentTarget.getAttribute('data-feed-group-toggle');
@@ -3692,10 +3737,13 @@
 
     each(root, M, '[data-feed-react-open]', 'click', function (e) {
       e.stopPropagation();
+      clearTimeout(hoverTimer);
       var id = e.currentTarget.getAttribute('data-feed-react-open');
       state.reactionPicker = state.reactionPicker === id ? null : id;
       render();
     });
+
+    wireHoverPicker(root, M);
 
     each(root, M, '[data-feed-react]', 'click', function (e) {
       react(
@@ -4110,6 +4158,7 @@
 
     each(root, M, '[data-feed-comment-react-open]', 'click', function (e) {
       e.stopPropagation();
+      clearTimeout(hoverTimer);
       var key = 'c:' + e.currentTarget.getAttribute('data-feed-comment-react-open');
       state.reactionPicker = state.reactionPicker === key ? null : key;
       render();

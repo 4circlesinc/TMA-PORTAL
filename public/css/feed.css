@@ -1837,15 +1837,41 @@ img.tma-dash__feed-badge {
 
 .tma-dash__feed-react-wrap { position: relative; }
 
-.tma-dash__feed-react-picker {
+/*
+ * The picker borrows the menu's surface (.tma-dash__menu) but not its shape:
+ * a menu hangs below its trigger as a column, the picker sits above React as
+ * one row. Both classes are named so this outranks the menu rule wherever
+ * the stylesheets happen to be ordered — a bare `.tma-dash__feed-react-picker`
+ * kept the menu's top/right/column/min-width and the emojis fell below the
+ * button as a 160px-wide stack.
+ */
+.tma-dash__menu.tma-dash__feed-react-picker {
   position: absolute;
+  top: auto;
+  right: auto;
   bottom: 100%;
   left: 0;
   z-index: 20;
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 2px;
+  width: max-content;
+  min-width: 0;
   padding: var(--space-4);
   margin-bottom: var(--space-4);
+}
+
+/* Keyboard focus uses the documented ring; a mouse click shows none. */
+.tma-dash__feed-action:focus,
+.tma-dash__feed-comment-action:focus,
+.tma-dash__feed-react-option:focus { outline: none; }
+
+.tma-dash__feed-action:focus-visible,
+.tma-dash__feed-comment-action:focus-visible,
+.tma-dash__feed-react-option:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .tma-dash__feed-react-option {
