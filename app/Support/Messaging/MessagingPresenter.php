@@ -117,6 +117,34 @@ class MessagingPresenter
         ];
     }
 
+    /**
+     * Faces for the group inbox row: currently online first, then most recently
+     * seen, capped at five so the list can render a small facepile.
+     *
+     * @param  Collection<int, User>  $others
+     * @return list<array{id: int, name: string, photo: ?string, online: bool, lastSeenAt: ?string}>
+     */
+    private static function groupListMembers(Collection $others): array
+    {
+        return $others
+            ->sortBy(fn (User $u) => [
+                $u->presence?->isOnline() ? 0 : 1,
+                // Negated so never-seen (0) sorts after every real timestamp.
+                -($u->presence?->last_seen_at?->getTimestamp() ?? 0),
+                mb_strtolower((string) $u->name),
+            ])
+            ->take(5)
+            ->values()
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'photo' => $u->avatar_url,
+                'online' => (bool) $u->presence?->isOnline(),
+                'lastSeenAt' => $u->presence?->last_seen_at?->toIso8601String(),
+            ])
+            ->all();
+    }
+
     private static function memberCountLabel(int $count): string
     {
         return $count === 1 ? '1 member' : $count.' members';
@@ -160,14 +188,9 @@ class MessagingPresenter
             'photo' => $conversation->isGroup()
                 ? self::groupPhotoUrl($conversation)
                 : $counterpart?->avatar_url,
-            // Group rows stack the members' avatars, as the list already does.
+            // Inbox facepile: top online / most recently seen members.
             'members' => $conversation->isGroup()
-                ? $others->take(3)->map(fn (User $u) => [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'photo' => $u->avatar_url,
-                    'online' => (bool) $u->presence?->isOnline(),
-                ])->values()
+                ? self::groupListMembers($others)
                 : [],
             'memberCount' => $conversation->activeParticipants->count(),
             'preview' => self::preview($last, $viewer, $conversation),

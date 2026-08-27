@@ -544,7 +544,7 @@
     );
   }
 
-  /* Two people for a group stack: photos first so the photograph sits in front. */
+  /* Two people for a compact group stack: photos first so the photograph sits in front. */
   function groupStackMembers(row) {
     var pool = (row.members || []).slice();
     if (pool.length < 2 && STORE.me && STORE.me.name) {
@@ -554,6 +554,23 @@
       return (a.photo ? 0 : 1) - (b.photo ? 0 : 1);
     });
     return pool.slice(0, 2);
+  }
+
+  /*
+   * Inbox facepile: currently online members, most recently active first,
+   * capped at five. Falls back to the compact two-stack when nobody is online.
+   */
+  function groupOnlineFacepileMembers(row) {
+    var pool = (row.members || []).slice().filter(function (m) {
+      return m && m.online;
+    });
+    pool.sort(function (a, b) {
+      var at = a.lastSeenAt ? Date.parse(a.lastSeenAt) : 0;
+      var bt = b.lastSeenAt ? Date.parse(b.lastSeenAt) : 0;
+      if (bt !== at) return bt - at;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+    return pool.slice(0, 5);
   }
 
   function renderGroupStackPart(member, index) {
@@ -569,19 +586,51 @@
     );
   }
 
+  function renderGroupFacepilePart(member) {
+    var face;
+    if (member.photo) {
+      face = '<img class="tma-dash__messages-row-avatar-part" src="' + esc(member.photo) + '" alt="" loading="lazy">';
+    } else {
+      face = (
+        '<span class="tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--initial tma-dash__messages-row-avatar--' +
+        initialColourFor(member.name) + '">' +
+        esc(initialsFor(member.name).charAt(0)) +
+        '</span>'
+      );
+    }
+    return (
+      '<span class="tma-dash__messages-row-avatar-part-wrap" title="' + esc(member.name || '') + '">' +
+      face +
+      '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' +
+      '</span>'
+    );
+  }
+
   /*
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
-   * Groups always stack two member circles (photo in front, initials behind)
-   * rather than a single group photo with a corner badge.
+   * Groups stack member circles (photo in front, initials behind) rather than
+   * a single group photo with a corner badge. The inbox may expand that into
+   * a facepile of whoever is online right now.
    */
-  function threadIcon(row) {
+  function threadIcon(row, opts) {
+    opts = opts || {};
     if (row.type === 'group') {
-      var members = groupStackMembers(row);
+      var facepile = !!opts.facepile;
+      var members = facepile
+        ? groupOnlineFacepileMembers(row)
+        : groupStackMembers(row);
+      if (facepile && !members.length) {
+        members = groupStackMembers(row);
+        facepile = false;
+      }
       if (members.length) {
         return (
-          '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group">' +
-          members.map(renderGroupStackPart).join('') +
+          '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group' +
+          (facepile ? ' tma-dash__messages-row-avatar--facepile' : '') +
+          (facepile ? ' tma-dash__messages-row-avatar--facepile-' + members.length : '') +
+          '">' +
+          members.map(facepile ? renderGroupFacepilePart : renderGroupStackPart).join('') +
           '</span>'
         );
       }
@@ -611,8 +660,11 @@
   }
 
   function renderInboxThreadIcon(row) {
-    var icon = threadIcon(resolveThread(row));
-    if (!isDirectThread(row)) return icon;
+    var item = resolveThread(row);
+    if (!isDirectThread(row)) {
+      return threadIcon(item, { facepile: true });
+    }
+    var icon = threadIcon(item);
     var online = isThreadOnline(row);
     return (
       '<span class="tma-dash__messages-row-avatar-wrap tma-dash__messages-row-avatar-wrap--' +
@@ -6022,30 +6074,76 @@
    */
   function applyPresence(payload, render) {
     var changed = false;
+    var online = payload.status
+      ? payload.status !== 'offline'
+      : !!payload.online;
 
     (STORE.threads || []).forEach(function (row) {
-      if (!row.counterpartId || row.counterpartId !== payload.userId) return;
-
-      if (payload.status) {
-        row.presence = {
-          online: payload.status !== 'offline',
-          status: payload.status,
-          statusLabel: payload.label,
-          statusSource: payload.source,
-          statusMessage: payload.message,
-          statusIcon: payload.icon,
-        };
-      } else {
-        row.presence = payload.online
-          ? { online: true, status: 'online', statusLabel: 'Online' }
-          : { online: false, status: 'offline', statusLabel: 'Offline', lastSeen: payload.lastSeenLabel || 'Last seen recently' };
+      if (row.counterpartId && row.counterpartId === payload.userId) {
+        if (payload.status) {
+          row.presence = {
+            online: online,
+            status: payload.status,
+            statusLabel: payload.label,
+            statusSource: payload.source,
+            statusMessage: payload.message,
+            statusIcon: payload.icon,
+          };
+        } else {
+          row.presence = online
+            ? { online: true, status: 'online', statusLabel: 'Online' }
+            : { online: false, status: 'offline', statusLabel: 'Offline', lastSeen: payload.lastSeenLabel || 'Last seen recently' };
+        }
+        changed = true;
+        return;
       }
+
+      if (row.type !== 'group' || !Array.isArray(row.members)) return;
+
+      var member = null;
+      for (var i = 0; i < row.members.length; i++) {
+        if (row.members[i] && row.members[i].id === payload.userId) {
+          member = row.members[i];
+          break;
+        }
+      }
+      if (!member) return;
+
+      var wasOnline = !!member.online;
+      if (wasOnline === online) return;
+
+      member.online = online;
+      if (online) {
+        member.lastSeenAt = new Date().toISOString();
+      } else if (payload.lastSeenAt) {
+        member.lastSeenAt = payload.lastSeenAt;
+      }
+
+      if (!row.presence) row.presence = {};
+      var count = parseInt(row.presence.onlineCount, 10) || 0;
+      count = online ? count + 1 : Math.max(0, count - 1);
+      row.presence.onlineCount = count;
+      row.presence.label = count > 0
+        ? (count === 1 ? '1 online' : count + ' online')
+        : (parseInt(row.memberCount, 10) === 1
+          ? '1 member'
+          : (parseInt(row.memberCount, 10) || 0) + ' members');
+
+      row.members.sort(function (a, b) {
+        var ao = a.online ? 0 : 1;
+        var bo = b.online ? 0 : 1;
+        if (ao !== bo) return ao - bo;
+        var at = a.lastSeenAt ? Date.parse(a.lastSeenAt) : 0;
+        var bt = b.lastSeenAt ? Date.parse(b.lastSeenAt) : 0;
+        if (bt !== at) return bt - at;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
 
       changed = true;
     });
 
     // A typing indicator cannot outlive its typist's connection.
-    if (payload.online === false || payload.status === 'offline') {
+    if (!online) {
       Object.keys(typingBy).forEach(function (conversationId) {
         if (typingBy[conversationId][payload.userId]) {
           delete typingBy[conversationId][payload.userId];

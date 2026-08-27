@@ -15777,14 +15777,6 @@
   border: 2px solid var(--color-white);
 }
 
-.tma-dash__messages-row:hover .tma-dash__messages-row-avatar-part {
-  border-color: var(--color-hover);
-}
-
-.tma-dash__messages-row--active .tma-dash__messages-row-avatar-part {
-  border-color: var(--color-overlay-4);
-}
-
 .tma-dash__messages-row-avatar-part--1 {
   top: 0;
   left: 0;
@@ -15796,6 +15788,59 @@
   bottom: 0;
   z-index: 1;
 }
+
+/* Inbox: up to five currently-online members as an overlapping facepile. */
+.tma-dash__messages-row-avatar--facepile {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  height: 28px;
+  overflow: visible;
+}
+
+.tma-dash__messages-row-avatar-part-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: -8px;
+}
+
+.tma-dash__messages-row-avatar-part-wrap:first-child {
+  margin-left: 0;
+}
+
+.tma-dash__messages-row-avatar-part-wrap:nth-child(1) { z-index: 1; }
+.tma-dash__messages-row-avatar-part-wrap:nth-child(2) { z-index: 2; }
+.tma-dash__messages-row-avatar-part-wrap:nth-child(3) { z-index: 3; }
+.tma-dash__messages-row-avatar-part-wrap:nth-child(4) { z-index: 4; }
+.tma-dash__messages-row-avatar-part-wrap:nth-child(5) { z-index: 5; }
+
+.tma-dash__messages-row-avatar--facepile .tma-dash__messages-row-avatar-part {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: 24px;
+  height: 24px;
+  z-index: 1;
+}
+
+.tma-dash__messages-row-avatar-part-wrap .tma-dash__messages-row-online-dot {
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  z-index: 2;
+}
+
+.tma-dash__messages-row-avatar--facepile-1 { width: 24px; }
+.tma-dash__messages-row-avatar--facepile-2 { width: 40px; }
+.tma-dash__messages-row-avatar--facepile-3 { width: 56px; }
+.tma-dash__messages-row-avatar--facepile-4 { width: 72px; }
+.tma-dash__messages-row-avatar--facepile-5 { width: 88px; }
 
 .tma-dash__messages-row-avatar-wrap {
   position: relative;
@@ -15822,16 +15867,6 @@
 
 .tma-dash__messages-row-offline-dot {
   background: var(--color-text-tertiary, #98a2b3);
-}
-
-.tma-dash__messages-row:hover .tma-dash__messages-row-online-dot,
-.tma-dash__messages-row:hover .tma-dash__messages-row-offline-dot {
-  border-color: var(--color-hover);
-}
-
-.tma-dash__messages-row--active .tma-dash__messages-row-online-dot,
-.tma-dash__messages-row--active .tma-dash__messages-row-offline-dot {
-  border-color: var(--color-overlay-4);
 }
 
 .tma-dash__messages-row-avatar-wrap,
