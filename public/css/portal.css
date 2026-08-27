@@ -321,6 +321,23 @@
   line-height: var(--tma-table-line-height, 16px);
   color: var(--tma-table-text-color, var(--color-black));
   vertical-align: middle;
+  /* A value is one line. When the column cannot hold it, it goes to dots
+     ("Real Est…") and the whole of it is on hover (portal-views.js sets the
+     title from the text the moment a clipped cell is pointed at). A cell that
+     wrapped to three lines read as a paragraph in a grid of facts, and every
+     row around it grew to match. */
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Control cells hold a button, not a value: nothing to clip, and a focus ring
+   that must not be. */
+.tma-portal-table td.tma-portal-cell--tight,
+.tma-portal-table td.tma-portal-cell--menu {
+  max-width: none;
+  overflow: visible;
 }
 
 /* documented table cells are 12 Regular - name cells carry no extra weight */

@@ -167,6 +167,40 @@
       '</table></div>';
   }
 
+  /*
+   * The dots' other half. A clipped cell (portal.css: one line, ellipsis
+   * past 200px) shows the whole value as its tooltip, set on the first hover
+   * from the text itself, so no table has to remember to write a title on
+   * every cell. Cells that already explain themselves (the family chip's
+   * arithmetic, a date's full form) keep their own. An inner element that
+   * clips on its own, the applicant's name beside a face, gets the title
+   * rather than the cell, and a title we set is dropped again if a wider
+   * column has since let the value fit.
+   */
+  document.addEventListener('mouseover', function (e) {
+    var t = e.target;
+    if (!t || t.nodeType !== 1 || !t.closest) return;
+    var cell = t.closest('.tma-portal-table td');
+    if (!cell) return;
+    var el = t;
+    while (el && el !== cell.parentNode) {
+      var ours = el.hasAttribute('data-clip-title');
+      if (el.scrollWidth > el.clientWidth + 1 && (ours || !el.hasAttribute('title'))) {
+        var full = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (full) {
+          el.title = full;
+          el.setAttribute('data-clip-title', '');
+        }
+        return;
+      }
+      if (ours) {
+        el.removeAttribute('title');
+        el.removeAttribute('data-clip-title');
+      }
+      el = el.parentElement;
+    }
+  }, true);
+
   /* Settings-style section: heading + grey inner card */
   function section(title, bodyHtml, opts) {
     var o = opts || {};
