@@ -36,9 +36,16 @@
 (function (global) {
   'use strict';
 
-  /* Longest edge of a rendered page, in device pixels. Every thumbnail slot in
-     the portal is between 24 and 72 CSS px, so 200 covers a 2x display. */
-  var PDF_MAX = 200;
+  /* Longest edge of the rendered page, in device pixels. The thumbnail is cut
+     out of this, so it is rendered larger than the slot it lands in. */
+  var PDF_MAX = 420;
+
+  /* The side of the square taken out of the page, as a fraction of the page's
+     width. See cropOf: the whole page in a 28px row is unreadable. */
+  var PDF_CROP = 0.62;
+
+  /* The square the crop is scaled into. */
+  var PDF_THUMB = 256;
   var MAX_PARALLEL = 2;
 
   var cache = {};   // previewUrl -> data: URL
@@ -186,7 +193,10 @@
         if (data[i] < 242 || data[i + 1] < 242 || data[i + 2] < 242) marked += 1;
       }
 
-      return total > 0 && (marked / total) > 0.002;
+      // Deliberately low. This asks "is there anything on this page at all",
+      // not "is there enough to see": a scan with one letterhead line is a
+      // document, and a thumbnail of it is worth more than a red PDF mark.
+      return total > 0 && (marked / total) > 0.0004;
     } catch (e) {
       // A tainted or oversized canvas cannot be read. Keep the picture rather
       // than throwing away a thumbnail that may well be fine.
@@ -216,9 +226,12 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+          // Asked of the WHOLE page, before anything is cut out of it: whether
+          // the document has content is a different question from which corner
+          // of it we show.
           if (!hasInk(canvas, ctx)) throw new Error('blank first page');
 
-          return canvas.toDataURL('image/jpeg', 0.75);
+          return cropOf(canvas).toDataURL('image/jpeg', 0.78);
         });
       }).then(function (dataUrl) {
         try { pdf.destroy(); } catch (e) { /* already gone */ }
@@ -228,6 +241,43 @@
         throw err;
       });
     });
+  }
+
+  /*
+   * The top-left of the page, not the whole of it.
+   *
+   * A full A4 page squeezed into a 28px row is a white rectangle with a grey
+   * smudge where the words are — which is exactly what "the PDF thumbnails
+   * don't work" looks like, even though pdf.js rendered it perfectly. What
+   * tells one document from another at that size is the top-left corner: the
+   * letterhead, the title, the photograph on a passport page. So the thumbnail
+   * is a square cut from there and blown up, ~1.6x what the whole page would
+   * give, which is the difference between a smudge and a mark you recognise.
+   *
+   * Anchored with a small inset so a page border does not become the picture,
+   * and clamped so a landscape or square page cannot ask for more than exists.
+   */
+  function cropOf(canvas) {
+    var side = Math.max(1, Math.min(
+      Math.round(canvas.width * PDF_CROP),
+      canvas.width,
+      canvas.height
+    ));
+    var inset = Math.round(side * 0.03);
+    var sx = Math.min(inset, Math.max(0, canvas.width - side));
+    var sy = Math.min(inset, Math.max(0, canvas.height - side));
+
+    var out = document.createElement('canvas');
+    out.width = PDF_THUMB;
+    out.height = PDF_THUMB;
+
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, PDF_THUMB, PDF_THUMB);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, sx, sy, side, side, 0, 0, PDF_THUMB, PDF_THUMB);
+
+    return out;
   }
 
   function pump() {
