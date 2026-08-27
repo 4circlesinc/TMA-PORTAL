@@ -1,1 +1,1 @@
-- The window's close, minimise and zoom buttons no longer sit on top of a file you are viewing — they step aside while the viewer is open and come back when you close it
+- Document thumbnails now show the top of the page — a letterhead, a form's title, the photograph on a passport page — instead of the whole sheet shrunk until it looked blank
