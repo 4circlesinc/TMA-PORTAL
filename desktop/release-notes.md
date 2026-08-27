@@ -1,1 +1,1 @@
-- Opening a PDF shows the document again instead of blank pages — the app was busy drawing thumbnails for the rest of the folder while you waited for the one you asked for
+- Pages load again: drawing document thumbnails was pulling whole files through the server and starving everything else
