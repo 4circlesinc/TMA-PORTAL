@@ -65,7 +65,7 @@
       });
     }
 
-    return import('/js/vendor/pdf-loader.mjs?v=2').then(function (pdfjs) {
+    return import('/js/vendor/pdf-loader.mjs?v=3').then(function (pdfjs) {
       pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs';
       return pdfjs.getDocument({ url: url('/document'), withCredentials: true }).promise;
     }).then(function (pdf) {

@@ -2047,7 +2047,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=3').then(function (lib) {
       try {
         lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
       } catch (e) {

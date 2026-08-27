@@ -117,7 +117,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=3').then(function (lib) {
       // An absolute worker URL: a path-only src is resolved against the
       // module, not the page, and that 404 leaves getDocument hanging forever.
       try {

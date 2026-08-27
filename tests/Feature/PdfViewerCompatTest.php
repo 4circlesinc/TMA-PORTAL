@@ -71,6 +71,9 @@ class PdfViewerCompatTest extends TestCase
         $this->assertStringContainsString("factoryUrl('./wasm/')", $loader);
         $this->assertStringContainsString("factoryUrl('./iccs/')", $loader);
         $this->assertStringContainsString('export function getDocument', $loader);
+        $this->assertStringContainsString('useWorkerFetch: false', $loader);
+        // A star re-export of pdf.min.mjs would shadow this wrap in Electron 33.
+        $this->assertStringNotContainsString("export * from './pdf.min.mjs'", $loader);
     }
 
     public function test_cid_and_standard_font_tables_are_shipped(): void

@@ -12,11 +12,17 @@
  * Without those URLs a 15 KB Chinese medical certificate still reports 3 pages
  * and then paints nothing: CID glyphs never map, Helvetica never substitutes,
  * JPEG2000 scans stay empty. The directories live next to this file.
+ *
+ * Do not star-re-export pdf.min.mjs and then also export getDocument: in
+ * Electron 33 (Chromium 130) the star export wins, the wrap never runs, and
+ * the pages stay white. Named exports only, so the wrap is the only
+ * getDocument the page can see. CMaps are fetched on the page, not in the
+ * worker — the desktop protocol handler does not reliably reach a Worker.
  */
 import './pdf-compat.mjs';
-import { getDocument as pdfGetDocument } from './pdf.min.mjs';
+import * as pdfjs from './pdf.min.mjs';
 
-export * from './pdf.min.mjs';
+export const GlobalWorkerOptions = pdfjs.GlobalWorkerOptions;
 
 function factoryUrl(relative) {
   var href = new URL(relative, import.meta.url).href;
@@ -35,6 +41,7 @@ function documentParams(src) {
     standardFontDataUrl: factoryUrl('./standard_fonts/'),
     wasmUrl: factoryUrl('./wasm/'),
     iccUrl: factoryUrl('./iccs/'),
+    useWorkerFetch: false,
   };
 
   if (src == null) return assets;
@@ -49,5 +56,5 @@ function documentParams(src) {
 }
 
 export function getDocument(src) {
-  return pdfGetDocument(documentParams(src));
+  return pdfjs.getDocument(documentParams(src));
 }
