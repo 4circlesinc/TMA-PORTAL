@@ -1618,7 +1618,7 @@
           attrs: 'data-cipletter-title maxlength="191"',
           ariaLabel: 'Letter title',
         })) +
-        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="8" maxlength="8000">' + ui().esc(letter.body) + '</textarea>') +
+        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000">' + ui().esc(letter.body) + '</textarea>') +
         '<p class="tma-portal-table__muted">' + tokens + '</p>' +
         '<div class="tma-portal-form-actions">' +
           ui().btn({ label: 'Save', attrs: 'data-cipletter-save' }) +

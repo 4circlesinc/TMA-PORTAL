@@ -924,7 +924,7 @@ class Postcards
         $payload = [
             'preheader' => $facts['number'].' was '.strtolower(Status::label($decision)).'.',
             'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
+            'greeting' => $recipientName ? 'Dear '.$recipientName.',' : 'Dear Sir/Madam,',
             'title' => $title,
             'lead' => $lead,
             'details' => $details,

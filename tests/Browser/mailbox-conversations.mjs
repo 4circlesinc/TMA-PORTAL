@@ -195,7 +195,13 @@ try {
     () => document.querySelector('[data-email]')._emailState.inlineCompose?.mode
   );
   check(composeMode === 'reply-all', `Reply all opened the composer (mode ${composeMode})`);
-  const ccValue = await page.inputValue('[data-email-inline-compose-field="cc"]').catch(() => '');
+  const ccValue = await page.evaluate(() => {
+    const input = document.querySelector('[data-email-inline-compose-field="cc"]');
+    const field = input && input.closest('[data-email-recipients]');
+    return field
+      ? Array.from(field.querySelectorAll('[data-email-recipient]')).map((p) => p.getAttribute('data-email-recipient')).join(', ')
+      : '';
+  });
   check(/sam@example\.com/.test(ccValue), `Reply all carried the Cc list ("${ccValue}")`);
   await page.click('[data-email-inline-compose-close]');
   await page.waitForTimeout(300);

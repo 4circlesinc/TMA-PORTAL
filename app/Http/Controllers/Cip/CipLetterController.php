@@ -57,7 +57,7 @@ class CipLetterController extends Controller
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:191'],
-            'body' => ['required', 'string', 'max:8000'],
+            'body' => ['required', 'string', 'max:20000'],
         ]);
 
         $letter->forceFill([

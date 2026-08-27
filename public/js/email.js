@@ -737,22 +737,24 @@
     var ic = state.inlineCompose || {};
 
     var replyToLabel = ic.to || (row.sender + ' <' + metaEmail + '>');
-    var toRow = isReply
-      ? '<div class="tma-dash__email-inline-compose-row">' +
-        '<span class="tma-dash__email-inline-compose-label">To</span>' +
-        '<span class="tma-dash__email-inline-compose-value">' + esc(replyToLabel) + '</span>' +
-        '</div>'
-      : '<div class="tma-dash__email-inline-compose-row">' +
-        '<span class="tma-dash__email-inline-compose-label">To</span>' +
-        '<input type="text" class="tma-dash__email-inline-compose-input" data-email-inline-compose-field="to"' +
-        ' value="' + esc(ic.to || '') + '" placeholder="Recipients" aria-label="To">' +
-        '</div>';
+    var typing = ic._typing || {};
+    function inlineRecipientInput(field, placeholder, label) {
+      return '<input type="text" class="tma-dash__email-inline-compose-input" data-email-inline-compose-field="' + field + '"' +
+        ' value="' + esc(typing[field] || '') + '" placeholder="' + placeholder + '" aria-label="' + label + '">';
+    }
+    // A reply answers one address, shown as a fixed pill; reply-all and
+    // forward take an editable pill field.
+    var toRow = '<div class="tma-dash__email-inline-compose-row">' +
+      '<span class="tma-dash__email-inline-compose-label">To</span>' +
+      (isReply
+        ? renderRecipientField({ value: replyToLabel })
+        : renderRecipientField({ value: ic.to, input: inlineRecipientInput('to', 'Recipients', 'To') })) +
+      '</div>';
 
     var ccRow = isReplyAll
       ? '<div class="tma-dash__email-inline-compose-row">' +
         '<span class="tma-dash__email-inline-compose-label">Cc</span>' +
-        '<input type="text" class="tma-dash__email-inline-compose-input" data-email-inline-compose-field="cc"' +
-        ' value="' + esc(ic.cc || '') + '" placeholder="Cc" aria-label="Cc">' +
+        renderRecipientField({ value: ic.cc, input: inlineRecipientInput('cc', 'Cc', 'Cc') }) +
         '</div>'
       : '';
 
@@ -877,14 +879,21 @@
     if (!panel) return;
 
     MORPH.unwired(panel, '[data-email-inline-compose-field]').forEach(function (input) {
-      input.addEventListener('input', function () {
-        if (!state.inlineCompose) return;
-        state.inlineCompose[input.getAttribute('data-email-inline-compose-field')] = input.value;
-      });
       var field = input.getAttribute('data-email-inline-compose-field');
       if (field === 'to' || field === 'cc') {
+        wireRecipientField(input, function (value, typing) {
+          if (!state.inlineCompose) return;
+          state.inlineCompose[field] = value;
+          state.inlineCompose._typing = state.inlineCompose._typing || {};
+          state.inlineCompose._typing[field] = typing;
+        });
         wireRecipientSuggest(input);
+        return;
       }
+      input.addEventListener('input', function () {
+        if (!state.inlineCompose) return;
+        state.inlineCompose[field] = input.value;
+      });
     });
 
     var editor = panel.querySelector('[data-email-inline-compose-editor]');
@@ -928,6 +937,7 @@
       return;
     }
 
+    commitRecipientFields(root.querySelector('[data-email-inline-compose-panel]'));
     var to = parseAddresses(ic.to);
     if (!to.length && ic.mode === 'reply') to = replyRecipients(row);
     if (!to.length) {
@@ -5425,9 +5435,9 @@
     return {
       id: 'compose-' + state.nextComposeId++,
       templateId: opts.templateId || null,
-      // Addresses are held as the raw comma-separated text the user typed and
-      // only parsed on send, so a half-typed address is never destroyed by a
-      // re-render.
+      // Addresses are the "Name <a@b>, c@d" string the pill fields parse
+      // and write back; what is still being typed rides in _typing so a
+      // re-render never destroys a half-typed address.
       to: opts.to || '',
       cc: '',
       bcc: '',
@@ -5461,6 +5471,181 @@
       .filter(function (address) { return address.email.indexOf('@') !== -1; });
   }
 
+  /* ── Recipient pills ─────────────────────────────────────────────
+   * To, Cc and Bcc hold each address as a pill, the way every mail client
+   * does; the input after the pills only ever carries the address being
+   * typed. A comma, Enter, Tab or leaving the field turns that text into a
+   * pill, Backspace on an empty input takes the last pill back, and picks
+   * from the typeahead or a body @mention land as pills straight away.
+   *
+   * State keeps speaking the "Name <a@b>, c@d" string that drafts, send and
+   * reply already use: the pills are that string parsed, and the field hands
+   * it back through onChange whenever a pill is added or removed. Text still
+   * being typed rides beside it as `_typing`, so a re-render mid-word paints
+   * the same half-address instead of wiping it. */
+
+  function recipientFull(address) {
+    return address.name ? address.name + ' <' + address.email + '>' : address.email;
+  }
+
+  function renderRecipientPill(address, removable) {
+    var full = recipientFull(address);
+    return (
+      '<span class="tma-dash__email-recipient' + (removable ? '' : ' tma-dash__email-recipient--static') + '"' +
+      ' data-key="' + esc(address.email.toLowerCase()) + '"' +
+      ' data-email-recipient="' + esc(address.email) + '"' +
+      (address.name ? ' data-email-recipient-name="' + esc(address.name) + '"' : '') +
+      ' title="' + esc(full) + '">' +
+      '<span>' + esc(address.name || address.email) + '</span>' +
+      (removable
+        ? '<button type="button" class="tma-dash__email-recipient-remove" data-email-recipient-remove' +
+          ' tabindex="-1" aria-label="Remove ' + esc(full) + '">' +
+          '<img src="' + ICONS.X + '" alt=""></button>'
+        : '') +
+      '</span>'
+    );
+  }
+
+  /* `value` is the address string; `input` the field's <input> markup, or
+   * omitted for a read-only list such as a reply's To. */
+  function renderRecipientField(opts) {
+    var pills = parseAddresses(opts.value).map(function (address) {
+      return renderRecipientPill(address, !!opts.input);
+    }).join('');
+    if (!pills && !opts.input) {
+      pills = '<span class="tma-dash__email-inline-compose-value">' + esc(opts.value || '') + '</span>';
+    }
+    return (
+      '<div class="tma-dash__email-recipients' + (opts.input ? '' : ' tma-dash__email-recipients--static') + '" data-email-recipients>' +
+      pills + (opts.input || '') +
+      '</div>'
+    );
+  }
+
+  function recipientFieldOf(input) {
+    return input && input.closest ? input.closest('[data-email-recipients]') : null;
+  }
+
+  function recipientFieldAddresses(field) {
+    if (!field) return [];
+    return Array.prototype.map.call(field.querySelectorAll('[data-email-recipient]'), function (pill) {
+      return { name: pill.getAttribute('data-email-recipient-name') || null, email: pill.getAttribute('data-email-recipient') };
+    });
+  }
+
+  function recipientFieldHas(field, email) {
+    var needle = String(email || '').toLowerCase();
+    return recipientFieldAddresses(field).some(function (address) {
+      return address.email.toLowerCase() === needle;
+    });
+  }
+
+  function notifyRecipientField(input) {
+    var field = recipientFieldOf(input);
+    if (field && field._onChange) field._onChange(formatAddressList(recipientFieldAddresses(field)), input.value || '');
+  }
+
+  /* Adds addresses as pills, skipping any already there. Returns how many landed. */
+  function recipientFieldAdd(input, pieces) {
+    var field = recipientFieldOf(input);
+    if (!field) return 0;
+    var added = 0;
+    (pieces || []).forEach(function (piece) {
+      if (!piece || !piece.email || piece.email.indexOf('@') === -1) return;
+      if (recipientFieldHas(field, piece.email)) return;
+      input.insertAdjacentHTML('beforebegin', renderRecipientPill({ name: piece.name || null, email: piece.email }, true));
+      added++;
+    });
+    return added;
+  }
+
+  /* Turns the typed text into pills. With keepTail the last comma-separated
+   * piece stays in the input, which is what a pasted list wants while its
+   * final address is still being typed. Text that is not an address stays. */
+  function recipientFieldCommit(input, keepTail) {
+    var text = String(input.value || '');
+    if (text.indexOf('@') === -1) return false;
+    var parts = text.split(/[,;\n]/);
+    var tail = keepTail ? parts.pop() : '';
+    var pieces = [];
+    var keep = [];
+    parts.forEach(function (part) {
+      var address = parseAddresses(part)[0];
+      if (address) pieces.push(address);
+      else if (part.trim()) keep.push(part.trim());
+    });
+    if (!pieces.length) return false;
+    recipientFieldAdd(input, pieces);
+    if (tail.trim()) keep.push(tail.replace(/^\s+/, ''));
+    input.value = keep.join(', ');
+    notifyRecipientField(input);
+    return true;
+  }
+
+  /* Anything still typed in the fields under `scope` becomes a pill; run
+   * before reading the addresses to send. */
+  function commitRecipientFields(scope) {
+    if (!scope) return;
+    scope.querySelectorAll('[data-email-recipients] input').forEach(function (input) {
+      recipientFieldCommit(input, false);
+    });
+  }
+
+  function wireRecipientField(input, onChange) {
+    var field = recipientFieldOf(input);
+    if (!field) return;
+    field._onChange = onChange;
+
+    if (!field._recipientsWired) {
+      field._recipientsWired = true;
+      field.addEventListener('click', function (event) {
+        var current = field.querySelector('input');
+        var remove = event.target.closest('[data-email-recipient-remove]');
+        if (remove) {
+          var pill = remove.closest('[data-email-recipient]');
+          if (pill) pill.remove();
+          if (current) {
+            notifyRecipientField(current);
+            current.focus();
+          }
+          return;
+        }
+        if (current && !event.target.closest('[data-email-recipient]')) current.focus();
+      });
+    }
+
+    if (input._recipientsWired) return;
+    input._recipientsWired = true;
+
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Backspace' && !input.value) {
+        var pills = field.querySelectorAll('[data-email-recipient]');
+        if (!pills.length) return;
+        event.preventDefault();
+        pills[pills.length - 1].remove();
+        notifyRecipientField(input);
+        return;
+      }
+      if (event.key !== ',' && event.key !== ';' && event.key !== 'Enter' && event.key !== 'Tab') return;
+      // With the typeahead open, Enter is its pick.
+      if (event.key === 'Enter' && suggestActive && suggestActive.input === input) return;
+      if (input.value.indexOf('@') === -1) return;
+      if (event.key !== 'Tab') event.preventDefault();
+      recipientFieldCommit(input, false);
+    });
+
+    input.addEventListener('input', function () {
+      // A pasted "a@b, c@d" lands as pills at once.
+      if (!(/[,;\n]/.test(input.value) && recipientFieldCommit(input, true))) {
+        notifyRecipientField(input);
+      }
+    });
+
+    input.addEventListener('blur', function () {
+      recipientFieldCommit(input, false);
+    });
+  }
+
   /* ── Recipient typeahead (Phase 1) ───────────────────────────────
    * Portal users, clients, groups, and prior-mail addresses. The dropdown
    * is a body-level popup so compose re-renders / overflow never clip it,
@@ -5483,41 +5668,16 @@
     return { start: start, text: before.slice(start).replace(/^\s+/, '') };
   }
 
-  function alreadyAddressed(value, email) {
-    var needle = String(email || '').toLowerCase();
-    if (!needle) return false;
-    return parseAddresses(value).some(function (a) {
-      return String(a.email || '').toLowerCase() === needle;
-    });
-  }
-
+  /* A pick replaces whatever was being typed with a pill (every address of
+   * a group), skipping any already in the field. */
   function applyRecipientSuggestion(input, suggestion) {
-    var value = input.value || '';
-    var caret = input.selectionStart == null ? value.length : input.selectionStart;
-    var token = currentAddressToken(value, caret);
-    var after = value.slice(caret);
-    var comma = after.indexOf(',');
-    var rest = comma === -1 ? '' : after.slice(comma);
-
     var pieces = (suggestion.source === 'group' && suggestion.emails && suggestion.emails.length)
-      ? suggestion.emails.filter(function (e) { return !alreadyAddressed(value.slice(0, token.start), e.email); })
+      ? suggestion.emails
       : [{ name: suggestion.name, email: suggestion.email }];
 
-    if (!pieces.length) {
-      closeRecipientSuggest();
-      return;
-    }
-
-    var inserted = formatAddressList(pieces);
-    var prefix = value.slice(0, token.start).replace(/\s*$/, '');
-    if (prefix && !/,\s*$/.test(prefix)) prefix += ', ';
-    else if (/,$/.test(prefix)) prefix += ' ';
-
-    var next = (prefix + inserted + (rest ? rest : ', ')).replace(/^\s*,\s*/, '');
-    input.value = next;
-    var pos = (prefix + inserted).length + (rest ? 0 : 2);
-    try { input.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.value = '';
+    recipientFieldAdd(input, pieces);
+    notifyRecipientField(input);
     closeRecipientSuggest();
     input.focus();
   }
@@ -5733,21 +5893,7 @@
       ? suggestion.emails
       : [{ name: suggestion.name, email: suggestion.email }];
 
-    var value = toInput.value || '';
-    var added = [];
-    pieces.forEach(function (piece) {
-      if (!piece || !piece.email) return;
-      if (alreadyAddressed(value, piece.email)) return;
-      added.push(piece);
-    });
-    if (!added.length) return;
-
-    var insert = formatAddressList(added);
-    var next = value.replace(/\s*$/, '');
-    if (next && !/,\s*$/.test(next)) next += ', ';
-    else if (/,$/.test(next)) next += ' ';
-    toInput.value = (next + insert).replace(/^\s*,\s*/, '');
-    toInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (recipientFieldAdd(toInput, pieces)) notifyRecipientField(toInput);
   }
 
   function applyComposeMention(editor, suggestion) {
@@ -6238,17 +6384,26 @@
     /* Field edits write straight to the draft. No re-render on input —
      * repainting the window would move the caret out from under the user. */
     MORPH.unwired(root, '[data-email-compose-field]').forEach(function (input) {
+      var field = input.getAttribute('data-email-compose-field');
+      // To / Cc / Bcc are pill fields with the recipient typeahead; subject is plain.
+      if (field === 'to' || field === 'cc' || field === 'bcc') {
+        wireRecipientField(input, function (value, typing) {
+          var draft = findComposeDraft(state, input.getAttribute('data-email-compose-id'));
+          if (!draft) return;
+          draft[field] = value;
+          draft._typing = draft._typing || {};
+          draft._typing[field] = typing;
+          scheduleDraftSave(state, draft);
+        });
+        wireRecipientSuggest(input);
+        return;
+      }
       input.addEventListener('input', function () {
         var draft = findComposeDraft(state, input.getAttribute('data-email-compose-id'));
         if (!draft) return;
-        draft[input.getAttribute('data-email-compose-field')] = input.value;
+        draft[field] = input.value;
         scheduleDraftSave(state, draft);
       });
-      // To / Cc / Bcc get the recipient typeahead; subject does not.
-      var field = input.getAttribute('data-email-compose-field');
-      if (field === 'to' || field === 'cc' || field === 'bcc') {
-        wireRecipientSuggest(input);
-      }
     });
 
     MORPH.unwired(root, '[data-email-compose-body]').forEach(function (body) {
@@ -6337,6 +6492,7 @@
     var draft = findComposeDraft(state, id);
     if (!draft || draft.sending) return;
 
+    commitRecipientFields(document.querySelector('[data-email-compose-window="' + id + '"]'));
     var to = parseAddresses(draft.to);
     if (!to.length) {
       showEmailToast(root, 'Add at least one recipient');
@@ -6514,22 +6670,24 @@
     );
   }
 
-  /* A real form: the recipient chips, static subject span and read-only body
-   * the mock used are now inputs bound to the draft. */
+  /* A real form: recipient pill fields, and subject / body inputs bound to
+   * the draft. */
   function renderComposeContent(draft) {
     var bodyHtml = draft.bodyHtml || defaultComposeBody(draft);
+    var typing = draft._typing || {};
 
     function addressRow(field, label) {
       return (
         '<div class="tma-dash__email-compose-to">' +
         '<span class="tma-dash__email-compose-label">' + esc(label) + '</span>' +
-        '<div class="tma-dash__email-compose-recipients">' +
-        '<input type="text" class="tma-dash__email-compose-input"' +
-        ' data-email-compose-field="' + esc(field) + '" data-email-compose-id="' + esc(draft.id) + '"' +
-        ' value="' + esc(draft[field] || '') + '"' +
-        ' autocomplete="off" spellcheck="false"' +
-        ' aria-label="' + esc(label) + '" placeholder="name@example.com">' +
-        '</div>' +
+        renderRecipientField({
+          value: draft[field],
+          input: '<input type="text" class="tma-dash__email-compose-input"' +
+            ' data-email-compose-field="' + esc(field) + '" data-email-compose-id="' + esc(draft.id) + '"' +
+            ' value="' + esc(typing[field] || '') + '"' +
+            ' autocomplete="off" spellcheck="false"' +
+            ' aria-label="' + esc(label) + '" placeholder="name@example.com">',
+        }) +
         (field === 'to'
           ? '<button type="button" class="tma-dash__email-compose-expand"' +
             ' data-email-compose-cc="' + esc(draft.id) + '"' +
@@ -9633,24 +9791,65 @@
    * page-title row whenever the email view is the one on screen.
    */
   function emailViewIsActive(root) {
-    var view = root && root.closest ? root.closest('[data-view="email"]') : null;
-    if (!view) {
-      var dash = getEmailDashRoot(root);
-      view = dash && dash.querySelector('.tma-dash__view[data-view="email"]');
+    var dash = getEmailDashRoot(root);
+    var view = root && root.closest ? root.closest('.tma-dash__view[data-view="email"]') : null;
+    if (!view && dash) {
+      view = dash.querySelector('.tma-dash__main > .tma-dash__view[data-view="email"]');
     }
-    return !!(view && !view.hidden);
+    if (!view || view.hidden || view.hasAttribute('hidden')) return false;
+
+    /*
+     * Mail stays mounted after you leave it, and live patches still call
+     * lockEmailShellSpacing. If any other main view is on screen, the page
+     * title row belongs to that view — CIP Applications lifts the applicant
+     * name into it — and locking it here is how that head vanished.
+     */
+    if (dash) {
+      var shown = dash.querySelectorAll('.tma-dash__main > .tma-dash__view:not([hidden])');
+      for (var i = 0; i < shown.length; i++) {
+        if (shown[i].getAttribute('data-view') !== 'email') return false;
+      }
+    }
+    return true;
+  }
+
+  /*
+   * Inline properties lockEmailShellSpacing stamps on the shared page-title
+   * row. Leaving any of them behind — visibility, position, flex — keeps the
+   * row out of flow after Email, which is the CIP application head vanishing
+   * in the desktop app.
+   */
+  var EMAIL_HEAD_LOCK_PROPS = [
+    'display', 'margin', 'margin-bottom', 'height', 'max-height', 'min-height',
+    'padding', 'overflow', 'flex', 'position', 'visibility', 'width',
+    'pointer-events',
+  ];
+
+  function clearEmailMainHeadLock(head) {
+    if (!head) return;
+    /*
+     * Strip the mailbox extras only. Chromeless views (Dashboard, Calendar)
+     * still own [hidden]; removing it here would put Today back above the
+     * hello row. CIP Applications unhides the row itself when it lifts the
+     * applicant into it.
+     */
+    EMAIL_HEAD_LOCK_PROPS.forEach(function (prop) {
+      head.style.removeProperty(prop);
+    });
   }
 
   function releaseEmailShellSpacing(root) {
     var dash = getEmailDashRoot(root);
     if (!dash) return;
     var main = dash.querySelector('.tma-dash__main');
-    if (!main) return;
-    // Drop the email-only inline zeros so Dashboard / Messages / etc. can
-    // take the desktop-bar top inset again.
-    main.style.removeProperty('padding-top');
-    main.style.removeProperty('padding-left');
-    main.style.removeProperty('padding-right');
+    if (main) {
+      // Drop the email-only inline zeros so Dashboard / Messages / etc. can
+      // take the desktop-bar top inset again.
+      main.style.removeProperty('padding-top');
+      main.style.removeProperty('padding-left');
+      main.style.removeProperty('padding-right');
+    }
+    clearEmailMainHeadLock(dash.querySelector('.tma-dash__main-head'));
   }
 
   function lockEmailShellSpacing(root) {

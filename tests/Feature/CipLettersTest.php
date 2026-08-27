@@ -196,9 +196,13 @@ class CipLettersTest extends TestCase
             ->assertOk();
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) {
-            return str_contains($mail->payload['lead'], 'National Action Bonds')
+            $body = $mail->payload['bodyHtml'] ?? '';
+
+            return str_contains($mail->payload['lead'], 'congratulations')
                 && $mail->payload['title'] !== 'REAL ESTATE ONLY'
-                && ! str_contains($mail->payload['lead'], 'This must not go to a bonds file.');
+                && ! str_contains($mail->payload['lead'], 'This must not go to a bonds file.')
+                && ! str_contains($body, 'Escrow Documents')
+                && str_contains($body, 'POST-APPROVAL PROCESS');
         });
     }
 
@@ -217,9 +221,42 @@ class CipLettersTest extends TestCase
             ->assertOk();
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            $body = $mail->payload['bodyHtml'] ?? '';
+
             return str_starts_with($mail->subjectLine, 'AA - DENIED -')
-                && str_contains($mail->payload['lead'], 'Enterprise Project')
-                && str_contains($mail->payload['lead'], 'denied');
+                && str_contains($mail->payload['lead'], '10T1G12661P – Chen Wei')
+                && str_contains($mail->payload['lead'], 'denied')
+                && str_contains($body, 'Section 37(2)(b)')
+                && str_contains($body, 'sixty (60) days')
+                && $mail->payload['greeting'] === 'Dear Ada Admin,';
+        });
+    }
+
+    public function test_the_real_estate_grant_is_the_official_letter_with_escrow(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
+
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+                'decision' => Status::GRANTED,
+                'decidedAt' => '2026-08-18',
+            ])
+            ->assertOk();
+
+        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            $body = $mail->payload['bodyHtml'] ?? '';
+
+            return $mail->payload['title'] === '10T1G12661P was granted'
+                && str_contains($mail->payload['lead'], '10T1G12661P – Chen Wei')
+                && str_contains($mail->payload['lead'], 'granted citizenship of Saint Lucia')
+                && str_contains($body, 'Escrow Documents')
+                && str_contains($body, 'Sales &amp; Purchase Agreement')
+                && str_contains($body, 'STAGE 1')
+                && str_contains($body, 'font-weight:700')
+                && $mail->payload['greeting'] === 'Dear Ada Admin,';
         });
     }
 }

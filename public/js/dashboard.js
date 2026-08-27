@@ -934,12 +934,15 @@
           mainEl.style.removeProperty('padding-right');
         }
         if (mainHead) {
-          mainHead.style.removeProperty('display');
-          mainHead.style.removeProperty('margin');
-          mainHead.style.removeProperty('height');
-          mainHead.style.removeProperty('max-height');
-          mainHead.style.removeProperty('padding');
-          mainHead.style.removeProperty('overflow');
+          // lockEmailShellSpacing used to leave visibility / position / flex
+          // behind; those kept the CIP identity row invisible after Email.
+          [
+            'display', 'margin', 'margin-bottom', 'height', 'max-height', 'min-height',
+            'padding', 'overflow', 'flex', 'position', 'visibility', 'width',
+            'pointer-events',
+          ].forEach(function (prop) {
+            mainHead.style.removeProperty(prop);
+          });
           // Re-apply chromeless hide. Clearing the email lock above would
           // otherwise leave only [hidden], and .tma-dash__main-head{display:flex}
           // beats the UA [hidden] rule. Today then reappears above the
@@ -947,6 +950,9 @@
           if (hideMainChrome) {
             mainHead.style.display = 'none';
             mainHead.setAttribute('hidden', '');
+          } else {
+            mainHead.removeAttribute('hidden');
+            mainHead.hidden = false;
           }
         }
       }

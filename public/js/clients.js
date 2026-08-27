@@ -4109,12 +4109,35 @@
   }
 
   /* Full-page detail: put identity + actions in the global page-title row. */
+  function revealClientsMainHead(left) {
+    var head = left && left.closest ? left.closest('.tma-dash__main-head') : null;
+    if (!head) return;
+    /*
+     * Email collapses this row with inline !important (display, visibility,
+     * position, flex) so the mailbox sits flush under the desktop title bar.
+     * A stale lock after leaving Email is the CIP identity disappearing:
+     * the name lives here, the tabs live in the page, so the tabs jump up
+     * into the empty band.
+     */
+    head.hidden = false;
+    head.removeAttribute('hidden');
+    [
+      'display', 'margin', 'margin-bottom', 'height', 'max-height', 'min-height',
+      'padding', 'overflow', 'flex', 'position', 'visibility', 'width',
+      'pointer-events',
+    ].forEach(function (prop) {
+      head.style.removeProperty(prop);
+    });
+    if (left.style.display === 'none') left.style.removeProperty('display');
+  }
+
   function syncClientsDetailHead(state) {
     var left = document.querySelector('.tma-dash__main-head-left');
     if (!left) return;
     var titleEl = left.querySelector('[data-page-title]');
     var host = left.querySelector('[data-clients-detail-head]');
     var show = usesPagedClientsFlow(state) && state.screen !== 'list';
+    if (show) revealClientsMainHead(left);
 
     /*
      * The page title is hidden only where the record's own head has been
