@@ -29837,9 +29837,10 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-secondary);
 }
 
-/* Sandboxed HTML message body. Fixed height because a cross-origin sandbox
-   cannot report its content height back to us — the frame scrolls its own
-   overflow, the way every mail client handles remote markup. */
+/* Sandboxed HTML message body. The frame is same-origin, so sizeMessageFrames
+   grows it to its content once loaded; the CSS height only covers the moment
+   before that. No tall floor here: a two-line message must not hold 320px of
+   empty pane between its text and the attachments underneath. */
 .tma-dash__email-body--html {
   padding: 0;
 }
@@ -29847,7 +29848,7 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__email-body-frame {
   display: block;
   width: 100%;
-  min-height: 320px;
+  min-height: 48px;
   height: 60vh;
   border: none;
   background: var(--color-white);
@@ -29923,7 +29924,7 @@ button.tma-dash__header-popup-item:focus-visible {
 /* Thread view: attachments live in their own section under the body, never
    mixed into it — a clear rule at the top, then a grid of cards. */
 .tma-dash__email-attachments {
-  padding: var(--space-12) var(--space-16) var(--space-16);
+  padding: var(--space-8) var(--space-16) var(--space-16);
   border-top: 1px solid var(--color-border-soft);
 }
 .tma-dash__email-attachments-head {
@@ -29933,7 +29934,7 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: var(--text-size-12);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-10);
+  margin-bottom: var(--space-8);
 }
 .tma-dash__email-attachments-head img { width: 14px; height: 14px; opacity: 0.6; }
 .tma-dash__email-attachments-list {

@@ -5033,7 +5033,7 @@
             doc.body.scrollHeight,
             doc.documentElement ? doc.documentElement.scrollHeight : 0
           );
-          if (h > 0) frame.style.height = (h + 16) + 'px';
+          if (h > 0) frame.style.height = (h + 2) + 'px';
         } catch (e) { /* cross-origin or torn down; keep the CSS height */ }
       };
 
@@ -5072,7 +5072,7 @@
       ':where(html){margin:0;padding:0;}' +
       // Reading-pane gutter so plain HTML (no own margins) is not flush to
       // the frame edges. Senders that set their own body padding still win.
-      ':where(body){margin:0;padding:20px 24px;box-sizing:border-box;' +
+      ':where(body){margin:0;padding:20px 24px 12px;box-sizing:border-box;' +
       'font-family:Inter,system-ui,sans-serif;font-size:14px;' +
       'line-height:1.5;color:#1c1c1c;word-wrap:break-word;overflow-wrap:anywhere;}' +
       // Pictures are held to the pane width so they cannot force the message
