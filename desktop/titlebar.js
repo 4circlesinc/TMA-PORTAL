@@ -401,6 +401,24 @@ function buildCss(platform = process.platform) {
   }
 
   /*
+   * The same reserve, for anything that covers the whole window.
+   *
+   * A file viewer is fixed at inset: 0 — it covers the strip the OS draws its
+   * caption buttons in, and its own controls live at exactly that end, so on
+   * Windows the last few of them sat underneath minimise/maximise/close and
+   * could not be clicked. Nothing in the page can be layered over those
+   * buttons, so the viewer's bar gives up the width instead.
+   *
+   * Zero on macOS: the traffic lights are taken off screen while a viewer is
+   * open (see setViewerChrome), so there is nothing to clear.
+   */
+  ${caption ? `.tma-portal-viewer__head,
+  .tma-lightbox__bar,
+  .tma-portal-lightbox__head {
+    padding-right: ${caption + 16}px !important;
+  }` : '/* macOS: nothing to clear, the traffic lights are hidden instead. */'}
+
+  /*
    * The portal header is the rest of the blue strip. The injected
    * #tma-desktop-titlebar is only ${controls}px wide beside the shell, so
    * without drag on this header a click-and-hold on most of the bar — the

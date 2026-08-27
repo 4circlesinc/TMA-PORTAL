@@ -414,6 +414,42 @@ app.whenReady().then(async () => {
     windows.rightbarRight <= WIDTH - winMetrics.caption,
     true,
   );
+  /*
+   * And the same for anything that covers the whole window.
+   *
+   * A file viewer is fixed at inset: 0, so on Windows its own controls — which
+   * live at the right-hand end of its bar, where the caption buttons are — sat
+   * underneath minimise/maximise/close and could not be clicked. Nothing in the
+   * page can be layered over those buttons, so the bar gives up the width.
+   * Built here from the real classes against the real stylesheet.
+   */
+  const viewer = await w.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const el = document.createElement('div');
+      el.className = 'tma-portal-viewer';
+      el.innerHTML = '<header class="tma-portal-viewer__head">'
+        + '<div class="tma-portal-viewer__identity"><span>A file.pdf</span></div>'
+        + '<div class="tma-portal-viewer__tools">'
+        + '<button class="tma-portal-viewer__tool">1</button>'
+        + '<button class="tma-portal-viewer__tool">2</button>'
+        + '<button class="tma-portal-viewer__tool">3</button>'
+        + '</div></header>';
+      document.body.appendChild(el);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const tools = el.querySelector('.tma-portal-viewer__tools');
+        const right = Math.round(tools.getBoundingClientRect().right);
+        el.remove();
+        resolve({ toolsRight: right });
+      }));
+    })
+  `, true);
+
+  check(
+    'windows: the viewer\'s own controls clear the caption buttons',
+    viewer.toolsRight <= WIDTH - winMetrics.caption,
+    true,
+  );
+
   // The insets are on the cells, so the search stays on the window's centre.
   check('windows: search is still centred', Math.abs(windows.searchCentre - WIDTH / 2) <= 2, true);
   check('windows: the header is a drag handle', windows.headerDrag, 'drag');
