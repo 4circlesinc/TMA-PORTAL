@@ -2047,7 +2047,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
       try {
         lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
       } catch (e) {
@@ -4799,6 +4799,7 @@
         for (var p = 1; p <= pdf.numPages; p++) {
           (function (pageNum) {
             var canvas = document.createElement('canvas');
+            canvas.className = 'tma-portal-viewer__pdf-canvas';
             canvas.setAttribute('data-lb-pdf-canvas', pageNum);
             canvas.style.display = 'block';
             canvas.style.margin = '0 auto';
@@ -4813,7 +4814,10 @@
               canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
               canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
               if (canvas._pdfTask) canvas._pdfTask.cancel();
-              var task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
+              // pdf.js 6: the element, not a 2d context already taken from it.
+              // render() then calls getContext({ alpha: false }); a prior
+              // getContext('2d') makes that return null and the page stays white.
+              var task = page.render({ canvas: canvas, viewport: viewport });
               canvas._pdfTask = task;
               return task.promise.then(
                 function () { canvas._pdfTask = null; },
@@ -4950,7 +4954,7 @@
             var viewport = page.getViewport({ scale: scale });
             canvas.width = Math.floor(viewport.width);
             canvas.height = Math.floor(viewport.height);
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+            return page.render({ canvas: canvas, viewport: viewport }).promise;
           }).catch(function () { /* thumb best-effort */ });
         })(p);
       }

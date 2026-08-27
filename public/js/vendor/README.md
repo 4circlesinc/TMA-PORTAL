@@ -18,6 +18,11 @@ them in with a dynamic `import()` the first time the editor opens — the
 set at that point too; pdf.js needs the worker file served from the same
 origin.
 
+pdf.js 4+ no longer ships CMaps, substitution fonts, JPEG2000/JBIG2 wasm or
+the CMYK ICC profile inside the worker. `pdf-loader.mjs` points `getDocument`
+at the sibling `cmaps/`, `standard_fonts/`, `wasm/` and `iccs/` directories.
+A viewer that skips those paints the page count and a white rectangle.
+
 To update:
 
 ```sh
@@ -25,4 +30,9 @@ npm install pdfjs-dist@<version>
 cp node_modules/pdfjs-dist/build/pdf.min.mjs public/js/vendor/
 cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/js/vendor/
 cp node_modules/pdfjs-dist/LICENSE public/js/vendor/pdf.js-LICENSE
+rm -rf public/js/vendor/cmaps public/js/vendor/standard_fonts public/js/vendor/wasm public/js/vendor/iccs
+cp -R node_modules/pdfjs-dist/cmaps public/js/vendor/
+cp -R node_modules/pdfjs-dist/standard_fonts public/js/vendor/
+cp -R node_modules/pdfjs-dist/wasm public/js/vendor/
+cp -R node_modules/pdfjs-dist/iccs public/js/vendor/
 ```

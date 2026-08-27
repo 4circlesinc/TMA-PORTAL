@@ -280,16 +280,12 @@
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
 
-        var ctx = canvas.getContext('2d');
-        // Pages are transparent where nothing is drawn; JPEG has no alpha and
-        // would render that black.
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        return page.render({ canvas: canvas, viewport: viewport }).promise.then(function () {
           // Nothing on the page: the type icon says more than a white square,
-          // and there is nowhere cheap left to look.
-          if (!hasInk(canvas, ctx)) throw new Error('blank first page');
+          // and there is nowhere cheap left to look. pdf.js fills the bitmap
+          // white itself; taking a 2d context before render() leaves it blank.
+          var ctx = canvas.getContext('2d');
+          if (!ctx || !hasInk(canvas, ctx)) throw new Error('blank first page');
 
           return cropOf(canvas).toDataURL('image/jpeg', 0.78);
         });

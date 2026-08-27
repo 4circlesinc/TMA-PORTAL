@@ -106,8 +106,8 @@ try {
   step(4, 'Rendering the signed PDF to check the signature is really on it');
   // Render the stored signed PDF with pdf.js, in the portal session.
   const render = await page.evaluate(async (fileId) => {
-    const pdfjs = await import('/js/vendor/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf.worker.min.mjs';
+    const pdfjs = await import('/js/vendor/pdf-loader.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs';
     const url = '/portal/files/files/' + fileId + '/download';
     const pdf = await pdfjs.getDocument({ url, withCredentials: true }).promise;
 
@@ -117,7 +117,7 @@ try {
       const vp = p.getViewport({ scale: 1.5 });
       const c = document.createElement('canvas');
       c.width = vp.width; c.height = vp.height;
-      await p.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      await p.render({ canvas: c, viewport: vp }).promise;
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
 
       // Count dark pixels in horizontal bands so we can tell WHERE the ink is.
@@ -150,14 +150,14 @@ try {
 
   step(5, 'The original is still the original');
   const orig = await page.evaluate(async (fileId) => {
-    const pdfjs = await import('/js/vendor/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf.worker.min.mjs';
+    const pdfjs = await import('/js/vendor/pdf-loader.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs';
     const pdf = await pdfjs.getDocument({ url: '/portal/files/files/' + fileId + '/download', withCredentials: true }).promise;
     const p = await pdf.getPage(2);
     const vp = p.getViewport({ scale: 1.5 });
     const c = document.createElement('canvas');
     c.width = vp.width; c.height = vp.height;
-    await p.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    await p.render({ canvas: c, viewport: vp }).promise;
     const d = c.getContext('2d').getImageData(0, Math.floor(c.height * 0.7), c.width, Math.floor(c.height * 0.3)).data;
     let ink = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] < 128) ink++;

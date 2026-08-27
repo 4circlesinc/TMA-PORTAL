@@ -1154,7 +1154,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
       // The worker must be same-origin; pdf.js can't infer the path when it's
       // imported from a classic script.
       lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
@@ -1233,9 +1233,8 @@
     canvas.height = Math.floor(cssWidth * ratio * dpr);
     canvas.style.height = Math.floor(cssWidth * ratio) + 'px';
 
-    var ctx = canvas.getContext('2d');
-
     if (doc.kind === 'image') {
+      var ctx = canvas.getContext('2d');
       ctx.drawImage(doc.image, 0, 0, canvas.width, canvas.height);
       return Promise.resolve();
     }
@@ -1244,9 +1243,9 @@
       var unscaled = page.getViewport({ scale: 1 });
       var viewport = page.getViewport({ scale: (cssWidth * dpr) / unscaled.width });
       // Cancel a still-running paint for this canvas before starting another,
-      // or pdf.js throws when two renders share a context.
+      // or pdf.js throws when two renders share a canvas.
       if (canvas._sigRenderTask) canvas._sigRenderTask.cancel();
-      var task = page.render({ canvasContext: ctx, viewport: viewport });
+      var task = page.render({ canvas: canvas, viewport: viewport });
       canvas._sigRenderTask = task;
       return task.promise.then(
         function () { canvas._sigRenderTask = null; },

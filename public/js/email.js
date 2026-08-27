@@ -4904,7 +4904,7 @@
   function loadAttachmentPdfjs() {
     if (attachmentPdfjsPromise) return attachmentPdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    attachmentPdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
+    attachmentPdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
       lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
       return lib;
     }).catch(function (err) {
@@ -4922,18 +4922,16 @@
       .then(function (pdf) { return pdf.getPage(1); })
       .then(function (page) {
         var targetWidth = tile.clientWidth || 210;
-        var scale = targetWidth / page.getViewport({ scale: 1 }).width;
-        var viewport = page.getViewport({ scale: scale });
         var dpr = window.devicePixelRatio || 1;
+        var scale = (targetWidth * dpr) / page.getViewport({ scale: 1 }).width;
+        var viewport = page.getViewport({ scale: scale });
         var canvas = document.createElement('canvas');
         canvas.className = 'tma-dash__email-attachment-tile-pdf-canvas';
-        canvas.width = Math.ceil(viewport.width * dpr);
-        canvas.height = Math.ceil(viewport.height * dpr);
-        canvas.style.width = viewport.width + 'px';
-        canvas.style.height = viewport.height + 'px';
-        var ctx = canvas.getContext('2d');
-        ctx.scale(dpr, dpr);
-        return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
+        canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
+        return page.render({ canvas: canvas, viewport: viewport }).promise.then(function () {
           if (!iconImg.parentNode) return; // tile re-rendered while we were loading
           tile.classList.remove('tma-dash__email-attachment-tile--icon');
           iconImg.replaceWith(canvas);

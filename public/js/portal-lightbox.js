@@ -117,7 +117,7 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=2').then(function (lib) {
       // An absolute worker URL: a path-only src is resolved against the
       // module, not the page, and that 404 leaves getDocument hanging forever.
       try {
@@ -243,7 +243,7 @@
         var canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
-        return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise
+        return page.render({ canvas: canvas, viewport: viewport }).promise
           .then(function () {
             if (dead) return;
             wrap.style.aspectRatio = '';

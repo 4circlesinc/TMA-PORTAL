@@ -61,4 +61,51 @@ class PdfViewerCompatTest extends TestCase
             .'fail in the desktop app and on older browsers — import pdf-loader.mjs and point workerSrc at '
             .'pdf-worker.mjs instead: '.implode(', ', $offenders));
     }
+
+    public function test_the_loader_points_pdfjs_at_its_binary_tables(): void
+    {
+        $loader = $this->js('js/vendor/pdf-loader.mjs');
+
+        $this->assertStringContainsString("factoryUrl('./cmaps/')", $loader);
+        $this->assertStringContainsString("factoryUrl('./standard_fonts/')", $loader);
+        $this->assertStringContainsString("factoryUrl('./wasm/')", $loader);
+        $this->assertStringContainsString("factoryUrl('./iccs/')", $loader);
+        $this->assertStringContainsString('export function getDocument', $loader);
+    }
+
+    public function test_cid_and_standard_font_tables_are_shipped(): void
+    {
+        // A Chinese medical certificate is typically CID-keyed GB1 plus
+        // unembedded Helvetica. Missing either table is a white page that
+        // still reports a page count — the exact bug the Applications lightbox
+        // was showing.
+        $this->assertFileExists(public_path('js/vendor/cmaps/Adobe-GB1-UCS2.bcmap'));
+        $this->assertFileExists(public_path('js/vendor/cmaps/Adobe-CNS1-UCS2.bcmap'));
+        $this->assertFileExists(public_path('js/vendor/cmaps/Adobe-Japan1-UCS2.bcmap'));
+        $this->assertFileExists(public_path('js/vendor/cmaps/LICENSE'));
+        $this->assertFileExists(public_path('js/vendor/standard_fonts/LiberationSans-Regular.ttf'));
+        $this->assertFileExists(public_path('js/vendor/standard_fonts/FoxitSerif.pfb'));
+        $this->assertFileExists(public_path('js/vendor/wasm/openjpeg.wasm'));
+        $this->assertFileExists(public_path('js/vendor/iccs/CGATS001Compat-v2-micro.icc'));
+    }
+
+    public function test_page_renders_pass_the_canvas_not_a_prior_context(): void
+    {
+        // pdf.js 6's render() ignores a canvasContext when canvas is set
+        // (including the default canvas = context.canvas) and then calls
+        // getContext('2d', { alpha: false }). A context already taken with
+        // the default alpha makes that return null; CanvasGraphics never
+        // paints; the CSS white page background is all the reader sees.
+        $offenders = [];
+
+        foreach (glob(public_path('js/*.js')) as $path) {
+            $source = (string) file_get_contents($path);
+            if (preg_match('/\.render\(\s*\{[^}]*canvasContext\s*:/', $source)) {
+                $offenders[] = basename($path);
+            }
+        }
+
+        $this->assertSame([], $offenders, 'These still pass canvasContext into page.render(), which leaves PDF '
+            .'pages blank on pdf.js 6: '.implode(', ', $offenders));
+    }
 }

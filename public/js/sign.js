@@ -65,7 +65,7 @@
       });
     }
 
-    return import('/js/vendor/pdf-loader.mjs').then(function (pdfjs) {
+    return import('/js/vendor/pdf-loader.mjs?v=2').then(function (pdfjs) {
       pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs';
       return pdfjs.getDocument({ url: url('/document'), withCredentials: true }).promise;
     }).then(function (pdf) {
@@ -109,8 +109,8 @@
     canvas.width = Math.floor(cssWidth * dpr);
     canvas.height = Math.floor(cssWidth * (doc.ratios[index] || 1.294) * dpr);
 
-    var ctx = canvas.getContext('2d');
     if (doc.kind === 'image') {
+      var ctx = canvas.getContext('2d');
       ctx.drawImage(doc.image, 0, 0, canvas.width, canvas.height);
       return Promise.resolve();
     }
@@ -119,7 +119,7 @@
       var unscaled = page.getViewport({ scale: 1 });
       var viewport = page.getViewport({ scale: (cssWidth * dpr) / unscaled.width });
       if (canvas._task) canvas._task.cancel();
-      var task = page.render({ canvasContext: ctx, viewport: viewport });
+      var task = page.render({ canvas: canvas, viewport: viewport });
       canvas._task = task;
       return task.promise.then(function () { canvas._task = null; }, function (err) {
         canvas._task = null;
