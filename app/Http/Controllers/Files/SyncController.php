@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Everything in the library that has changed since a device last looked.
@@ -66,6 +67,7 @@ class SyncController extends BaseFilesController
         $presenter->prime(
             $files->filter(fn ($f) => ! $f->trashed())->values()->all(),
             $folders->filter(fn ($f) => ! $f->trashed())->values()->all(),
+            folderExtras: false,
         );
 
         return response()->json([
@@ -86,7 +88,7 @@ class SyncController extends BaseFilesController
         ]);
     }
 
-    /** @return array{0: \Illuminate\Support\Collection, 1: array, 2: bool} */
+    /** @return array{0: Collection, 1: array, 2: bool} */
     private function page(Builder $query, ?string $since, int $after): array
     {
         $time = $this->cursorTime($since);

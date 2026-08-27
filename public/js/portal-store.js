@@ -321,32 +321,29 @@
    * twice. The returned promise settles on the server's answer, so a caller
    * that needs certainty can still wait for it.
    *
-   * The fetch runs whether or not there was a hit. A cache that skipped the
-   * request when it had something would be a cache that goes out of date, and
-   * the whole point of showing the stale copy is that the fresh one is coming.
+   * The fetch starts immediately, in parallel with the disk read. Waiting for
+   * IndexedDB before even asking the server is how a large replica made the
+   * File Library spin forever on the desktop: the listing sat behind a lock
+   * held by the sync walker writing thousands of records.
    */
   function swr(key, fetcher, onData) {
     var delivered = false;
+    var finished = false;
 
-    var cached = get(key).then(function (value) {
-      if (value === undefined) return;
+    get(key).then(function (value) {
+      if (value === undefined || finished) return;
       delivered = true;
       if (onData) onData(value, { stale: true });
     });
 
-    return cached.then(function () {
-      return fetcher();
-    }).then(function (value) {
+    return fetcher().then(function (value) {
+      finished = true;
       put(key, value);
       if (onData) onData(value, { stale: false });
 
       return value;
     }).catch(function (err) {
-      /*
-       * A failed refresh over a good cached copy is not a failure the reader
-       * needs to see, that is the offline case, and it is the whole point.
-       * With nothing cached there is nothing to show, so the error travels.
-       */
+      finished = true;
       if (delivered) return undefined;
 
       throw err;

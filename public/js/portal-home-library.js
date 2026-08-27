@@ -85,7 +85,7 @@
 
   function fileIconSrc(item) {
     if (item.type === 'folder') {
-      var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var base = ((item.fileCount || 0) + (item.folderCount || 0)) === 0 ? 'FolderEmpty' : 'FolderFilled';
       return window.TMAFolderColours
         ? window.TMAFolderColours.iconSrc(base, item.colour)
         : 'images/icons/phosphor/' + base + '.svg';
@@ -96,7 +96,7 @@
 
   function folderIconHtml(item, size) {
     var px = size || 28;
-    var base = (item.fileCount === 0) ? 'FolderEmpty' : 'FolderFilled';
+    var base = ((item.fileCount || 0) + (item.folderCount || 0)) === 0 ? 'FolderEmpty' : 'FolderFilled';
     // Always wrap at a fixed size, bare .tma-folder-icon__base is styled
     // width/height:100% in portal-files.css and balloons inside these cards.
     var inner = window.TMAFolderIcons

@@ -14,6 +14,7 @@ use App\Support\Files\SyncScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * The one listing endpoint behind every file area (All / Clients / My /
@@ -33,10 +34,12 @@ class BrowserController extends BaseFilesController
             $section = 'all';
         }
 
-        // perPage=0 means everything: the library shows whole folders, not
-        // windows of them. The ceiling is a runaway guard, not a page size.
+        // A page of the folder, not the whole of it. perPage=0 used to mean
+        // "everything" (capped at 100,000), which is how Clients answered with
+        // 11,000 rows and never returned. The ceiling is 200, the same as an
+        // explicit page; callers that still send 0 get a full page, not a hang.
         $requested = (int) $request->query('perPage', 60);
-        $perPage = $requested === 0 ? 100000 : min(max($requested, 1), 200);
+        $perPage = min(max($requested > 0 ? $requested : 200, 1), 200);
         $page = max((int) $request->query('page', 1), 1);
         $search = trim((string) $request->query('search', ''));
 
@@ -68,6 +71,16 @@ class BrowserController extends BaseFilesController
         }
 
         /*
+         * Recent is the whole library in time order, tens of thousands of
+         * folders and hundreds of thousands of files. Counting them and
+         * grouping owners across both tables is a pair of full scans, which
+         * is what made Recent sit on a spinner after the listing itself
+         * was already cheap. A page plus one extra row answers "is there
+         * more?" without ever totalling the library.
+         */
+        $exactTotals = $section !== 'recent';
+
+        /*
          * Who owns things here, with a count each, what the Owner column's
          * filter offers.
          *
@@ -75,24 +88,30 @@ class BrowserController extends BaseFilesController
          * the whole trick: a facet that narrowed itself would list only the
          * owner already chosen, leaving no way back to anyone else.
          */
-        $owners = $this->ownerFacet($folderQuery, $fileQuery);
+        $owners = $exactTotals ? $this->ownerFacet($folderQuery, $fileQuery) : [];
 
         $this->applyOwnerFilter($folderQuery, $fileQuery, $request);
 
         [$sort, $dir] = $this->sort($request, $section);
-
-        $folderTotal = $folderQuery ? (clone $folderQuery)->count() : 0;
-        $fileTotal = $fileQuery ? (clone $fileQuery)->count() : 0;
-        $total = $folderTotal + $fileTotal;
-
         $offset = ($page - 1) * $perPage;
         $folders = collect();
         $files = collect();
 
+        $folderTotal = 0;
+        $fileTotal = 0;
+        $total = 0;
+        $hasMore = false;
+
         if ($section === 'recent' && $folderQuery && $fileQuery) {
-            [$folders, $files] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
-        } else {
-            // Folder-first windowing across the two tables without loading either.
+            [$folders, $files, $hasMore] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
+            $folderTotal = $folders->count();
+            $fileTotal = $files->count();
+            $total = $offset + $folderTotal + $fileTotal + ($hasMore ? 1 : 0);
+        } elseif ($exactTotals) {
+            $folderTotal = $folderQuery ? (clone $folderQuery)->count() : 0;
+            $fileTotal = $fileQuery ? (clone $fileQuery)->count() : 0;
+            $total = $folderTotal + $fileTotal;
+
             if ($folderQuery) {
                 $this->orderFolders($folderQuery, $sort, $dir);
                 $folders = $folderQuery->with(['owner', 'creator', 'parent'])
@@ -106,9 +125,30 @@ class BrowserController extends BaseFilesController
                 $files = $fileQuery->with(['owner', 'uploader', 'folder'])
                     ->offset($fileOffset)->limit($perPage - $taken)->get();
             }
-        }
 
-        $used = $folders->count();
+            $hasMore = ($offset + $folders->count() + $files->count()) < $total;
+        } else {
+            // Recent with only=files / only=folders: one table, still no scan.
+            $query = $folderQuery ?? $fileQuery;
+            if ($query) {
+                if ($folderQuery) {
+                    $this->orderFolders($query, $sort, $dir);
+                    $rows = $query->with(['owner', 'creator', 'parent'])
+                        ->offset($offset)->limit($perPage + 1)->get();
+                    $hasMore = $rows->count() > $perPage;
+                    $folders = $rows->take($perPage);
+                } else {
+                    $this->orderFiles($query, $sort, $dir);
+                    $rows = $query->with(['owner', 'uploader', 'folder'])
+                        ->offset($offset)->limit($perPage + 1)->get();
+                    $hasMore = $rows->count() > $perPage;
+                    $files = $rows->take($perPage);
+                }
+            }
+            $folderTotal = $folders->count();
+            $fileTotal = $files->count();
+            $total = $offset + $folderTotal + $fileTotal + ($hasMore ? 1 : 0);
+        }
 
         $presenter = $this->presenter($request);
         $presenter->prime($files->all(), $folders->all());
@@ -124,7 +164,7 @@ class BrowserController extends BaseFilesController
             'page' => $page,
             'perPage' => $perPage,
             'total' => $total,
-            'hasMore' => ($offset + $used + $files->count()) < $total,
+            'hasMore' => $hasMore,
             'counts' => ['folders' => $folderTotal, 'files' => $fileTotal],
             'owners' => $owners,
         ]);
@@ -211,10 +251,7 @@ class BrowserController extends BaseFilesController
         // file even if they have no access, and a large client folder returns
         // the whole unindexed table for non-admin users.
         if ($current) {
-            return [
-                $this->visibleFolders($user)->where('parent_id', $current->id),
-                $this->visibleFiles($user)->where('folder_id', $current->id),
-            ];
+            return $this->childrenQueries($user, $current);
         }
 
         return match ($section) {
@@ -269,7 +306,7 @@ class BrowserController extends BaseFilesController
                 // the "Clients" root (that root lists every client and is
                 // administrator-only). Staff see assigned clients, a provider
                 // contact sees the folders their firm filed.
-                $this->visibleFolders($user)->where('folder_type', Folder::TYPE_CLIENT),
+                $this->visibleFolders($user, withDescendants: false)->where('folder_type', Folder::TYPE_CLIENT),
                 null,
             ],
             default => $this->allSectionQueries($user),
@@ -294,8 +331,8 @@ class BrowserController extends BaseFilesController
         }
 
         return [
-            $this->visibleFolders($user)->whereNull('parent_id'),
-            $this->visibleFiles($user)->whereNull('folder_id'),
+            $this->visibleFolders($user, withDescendants: false)->whereNull('parent_id'),
+            $this->visibleFiles($user, withDescendants: false)->whereNull('folder_id'),
         ];
     }
 
@@ -310,17 +347,59 @@ class BrowserController extends BaseFilesController
         return FileAccess::can($user, 'view', $root) ? $root : null;
     }
 
+    /**
+     * Direct children of a folder the viewer may already open.
+     *
+     * Access flows down, so once authorize(view) has passed, the children are
+     * visible — except on a TYPE_ROOT container (Clients, Staff Files), whose
+     * children are peer folders with independent grants. Those still have to
+     * be filtered to what this account is actually granted, without walking
+     * every descendant of every grant just to list the first level.
+     *
+     * @return array{0: Builder, 1: Builder}
+     */
+    private function childrenQueries(User $user, Folder $current): array
+    {
+        if (FileAccess::isAdmin($user)) {
+            return [
+                $this->visibleFolders($user)->where('parent_id', $current->id),
+                $this->visibleFiles($user)->where('folder_id', $current->id),
+            ];
+        }
+
+        if ($current->folder_type === Folder::TYPE_ROOT) {
+            $granted = SyncScope::grantedFolderIds($user);
+
+            return [
+                Folder::query()->where('parent_id', $current->id)->whereIn('id', $granted ?: [0]),
+                FileItem::query()->where('folder_id', $current->id)->where(function ($w) use ($user) {
+                    $w->where('owner_id', $user->id)
+                        ->orWhereIn('id', FileAccess::sharedFileIds($user) ?: [0]);
+                }),
+            ];
+        }
+
+        return [
+            Folder::query()->where('parent_id', $current->id),
+            FileItem::query()->where('folder_id', $current->id),
+        ];
+    }
+
     /* ── visibility scopes ─────────────────────────── */
 
-    private function visibleFolders(User $user): Builder
+    private function visibleFolders(User $user, bool $withDescendants = true): Builder
     {
-        return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
+        return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user, $withDescendants) {
             // Non-admin access flows downward from visible roots (assigned
-            // client folders, org folders, their own staff folder). Using only
-            // those root ids made "Clients" open to an empty listing for
-            // assigned staff because the contents live beneath the granted
-            // folder, not at the root id itself.
-            $ids = SyncScope::folderIds($user);
+            // client folders, org folders, their own staff folder). Recent
+            // needs the descendant closure so a nested folder that just
+            // changed still appears. All Files and the Clients directory
+            // already constrain by parent / type, so the granted ids alone
+            // are enough — expanding the whole tree was a BFS of the library
+            // before the first row could draw.
+            $ids = $withDescendants
+                ? SyncScope::folderIds($user)
+                : SyncScope::grantedFolderIds($user);
             $q->whereIn('id', $ids ?: [0]);
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
             // Administrators see the whole library EXCEPT other people's
@@ -335,10 +414,12 @@ class BrowserController extends BaseFilesController
         });
     }
 
-    private function visibleFiles(User $user): Builder
+    private function visibleFiles(User $user, bool $withDescendants = true): Builder
     {
-        return FileItem::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
-            $folderIds = SyncScope::folderIds($user);
+        return FileItem::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user, $withDescendants) {
+            $folderIds = $withDescendants
+                ? SyncScope::folderIds($user)
+                : SyncScope::grantedFolderIds($user);
             $ids = FileAccess::sharedFileIds($user);
             $q->where(fn ($w) => $w->where('owner_id', $user->id)
                 ->orWhereIn('id', $ids ?: [0])
@@ -391,7 +472,7 @@ class BrowserController extends BaseFilesController
             ->where('item_type', 'folder')->whereNull('revoked_at')
             ->pluck('item_id')->unique()->all();
 
-        return $this->visibleFolders($user)->whereIn('id', $ids ?: [0]);
+        return $this->visibleFolders($user, withDescendants: false)->whereIn('id', $ids ?: [0]);
     }
 
     private function trashedFolderIds(): array
@@ -488,11 +569,11 @@ class BrowserController extends BaseFilesController
      * PHP. That costs `offset + perPage` rows per table, which is bounded by
      * the same clamp as any other page.
      *
-     * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection}
+     * @return array{0: Collection, 1: Collection, 2: bool}
      */
     private function recencyWindow(Builder $folderQuery, Builder $fileQuery, string $sort, string $dir, int $offset, int $perPage): array
     {
-        $reach = $offset + $perPage;
+        $reach = $offset + $perPage + 1;
 
         $this->orderFolders($folderQuery, $sort, $dir);
         $this->orderFiles($fileQuery, $sort, $dir);
@@ -514,12 +595,15 @@ class BrowserController extends BaseFilesController
         $merged = $folders->map(fn ($row) => ['kind' => 'folder', 'row' => $row, 'key' => $key($row)])
             ->concat($files->map(fn ($row) => ['kind' => 'file', 'row' => $row, 'key' => $key($row)]))
             ->sortBy('key', SORT_REGULAR, $dir === 'desc')
-            ->values()
-            ->slice($offset, $perPage);
+            ->values();
+
+        $hasMore = $merged->count() > $offset + $perPage;
+        $page = $merged->slice($offset, $perPage);
 
         return [
-            $merged->where('kind', 'folder')->pluck('row')->values(),
-            $merged->where('kind', 'file')->pluck('row')->values(),
+            $page->where('kind', 'folder')->pluck('row')->values(),
+            $page->where('kind', 'file')->pluck('row')->values(),
+            $hasMore,
         ];
     }
 

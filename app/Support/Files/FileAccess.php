@@ -854,6 +854,7 @@ class FileAccess
     public static function forgetFolders(): void
     {
         Package::forget();
+        SyncScope::forget();
 
         self::$folders = [];
 

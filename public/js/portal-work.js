@@ -2103,7 +2103,7 @@
             // Real folders from the library - the destination has to be a
             // place the signed copy can actually be written.
             net().fetchJSON((window.__TMA_SITE_ROOT || '') +
-              '/portal/files/?section=my&perPage=0')
+              '/portal/files/?section=my&perPage=200')
               .then(function (res) {
                 var folders = (res.folders || []).map(function (f) {
                   return { value: f.id, label: f.name };

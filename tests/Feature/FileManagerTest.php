@@ -461,7 +461,7 @@ class FileManagerTest extends TestCase
         $this->assertNotContains('Never Visible', $named);
     }
 
-    public function test_browsing_a_folder_returns_nested_counts_in_a_bounded_number_of_queries(): void
+    public function test_browsing_a_folder_returns_direct_counts_in_a_bounded_number_of_queries(): void
     {
         $user = $this->approvedUser();
         $parent = $this->folder($user, 'Client documents');
@@ -483,8 +483,12 @@ class FileManagerTest extends TestCase
         }
 
         $aggregateQueries = 0;
-        DB::listen(function ($q) use (&$aggregateQueries) {
+        $recursiveTotals = 0;
+        DB::listen(function ($q) use (&$aggregateQueries, &$recursiveTotals) {
             $sql = strtolower($q->sql);
+            if (str_contains($sql, 'recursive') && str_contains($sql, 'total_size')) {
+                $recursiveTotals++;
+            }
             if (str_contains($sql, 'file_count') || str_contains($sql, 'total_size')) {
                 $aggregateQueries++;
             }
@@ -496,14 +500,20 @@ class FileManagerTest extends TestCase
 
         $byName = collect($browse->json('folders'))->keyBy('name');
 
-        $this->assertSame(2, $byName['Passports']['fileCount']);
+        // Direct children: the nested bio page is inside Bio pages, not a
+        // file of Passports. Recursive totals used to walk the whole tree
+        // here, which is what made All Files / Clients hang.
+        $this->assertSame(1, $byName['Passports']['fileCount']);
         $this->assertSame(1, $byName['Passports']['folderCount']);
         $this->assertSame(1, $byName['Photos']['fileCount']);
         $this->assertSame(0, $byName['Photos']['folderCount']);
         $this->assertSame(1, $browse->json('counts.files'));
+        $this->assertSame(200, $browse->json('perPage'));
 
-        // One grouped file query for every child, not a COUNT+SUM per row.
+        // One grouped file query for every child, not a COUNT+SUM per row,
+        // and no recursive CTE over the subtree.
         $this->assertSame(1, $aggregateQueries);
+        $this->assertSame(0, $recursiveTotals);
     }
 
     public function test_assigned_staff_can_browse_the_contents_of_a_client_folder(): void
@@ -617,6 +627,53 @@ class FileManagerTest extends TestCase
         $this->actingAs($other)->getJson('/portal/files/?section=clients')
             ->assertOk()
             ->assertJsonCount(0, 'folders');
+    }
+
+    public function test_listing_all_files_does_not_walk_the_library_tree(): void
+    {
+        $user = $this->approvedUser(['account_type' => 'Administrator']);
+        $root = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Clients',
+            'folder_type' => Folder::TYPE_ROOT,
+            'owner_id' => $user->id,
+            'created_by' => $user->id,
+        ]);
+
+        for ($i = 0; $i < 40; $i++) {
+            $client = $this->folder($user, 'Client '.$i, $root);
+            $client->forceFill(['folder_type' => Folder::TYPE_CLIENT])->save();
+            $docs = $this->folder($user, 'Docs', $client);
+            $this->fileIn($user, $docs, 'a.pdf', 10);
+            $this->fileIn($user, $docs, 'b.pdf', 10);
+        }
+
+        $recursiveTotals = 0;
+        DB::listen(function ($q) use (&$recursiveTotals) {
+            $sql = strtolower($q->sql);
+            if (str_contains($sql, 'recursive') && str_contains($sql, 'total_size')) {
+                $recursiveTotals++;
+            }
+        });
+
+        $browse = $this->actingAs($user)
+            ->getJson('/portal/files/?section=all')
+            ->assertOk();
+
+        $this->assertSame(0, $recursiveTotals, 'All Files must not recurse the library to draw its roots');
+        $clients = collect($browse->json('folders'))->firstWhere('name', 'Clients');
+        $this->assertNotNull($clients);
+        $this->assertSame(40, $clients['folderCount']);
+        $this->assertSame(0, $clients['fileCount']);
+
+        $inside = $this->actingAs($user)
+            ->getJson('/portal/files/?section=all&folder='.$root->uuid)
+            ->assertOk();
+
+        $this->assertSame(0, $recursiveTotals, 'Opening Clients must not walk every client tree');
+        $this->assertSame(40, $inside->json('counts.folders'));
+        $this->assertCount(40, $inside->json('folders'));
+        $this->assertFalse($inside->json('hasMore'));
     }
 
     private function folder(User $user, string $name, ?Folder $parent = null): Folder

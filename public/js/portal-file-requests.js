@@ -77,7 +77,7 @@
 
   function folderIconHtml(folder, size) {
     var px = size || 20;
-    var base = folder && folder.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    var base = folder && ((folder.fileCount || 0) + (folder.folderCount || 0)) === 0 ? 'FolderEmpty' : 'FolderFilled';
     if (window.TMAFolderIcons) return window.TMAFolderIcons.html(base, folder && folder.colour, folder && folder.iconName, px);
     return '<img src="images/icons/phosphor/' + base + '.svg" alt="" width="' + px + '" height="' + px + '">';
   }

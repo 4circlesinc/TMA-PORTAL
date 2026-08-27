@@ -6301,7 +6301,7 @@
     var html = '';
     folders.forEach(function (f) {
       var count = (f.fileCount || 0) + (f.folderCount || 0);
-      var folderBase = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var folderBase = count === 0 ? 'FolderEmpty' : 'FolderFilled';
       var folderIcon = window.TMAFolderIcons
         ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
         : '<img src="' + (window.TMAFolderColours ? window.TMAFolderColours.iconSrc(folderBase, f.colour) : ICONS[folderBase]) + '" alt="">';
@@ -6623,7 +6623,7 @@
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    var url = filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0');
+    var url = filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200');
 
     // Something just changed this folder, an upload, a rename, a delete. The
     // held copy describes the folder as it was a moment ago, and showing it

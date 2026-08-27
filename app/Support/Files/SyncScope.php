@@ -37,12 +37,64 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class SyncScope
 {
+    /** @var array<int, list<int>> */
+    private static array $folderIds = [];
+
+    /** @var array<int, list<int>> */
+    private static array $grantedIds = [];
+
+    public static function forget(): void
+    {
+        self::$folderIds = [];
+        self::$grantedIds = [];
+    }
+
     /**
      * Every folder id this account may see, descendants included.
      *
      * @return list<int>
      */
     public static function folderIds(User $user): array
+    {
+        $key = (int) $user->id;
+        if (! isset(self::$folderIds[$key])) {
+            self::$folderIds[$key] = self::computeFolderIds($user);
+        }
+
+        return self::$folderIds[$key];
+    }
+
+    /**
+     * The roots this account is granted, without walking their trees.
+     *
+     * Listings that already constrain by parent (All Files, the Clients
+     * directory, children of a TYPE_ROOT) only need these ids. Expanding
+     * every descendant just to throw them away on `parent_id IS NULL` is
+     * what made a non-admin listing wait on a BFS of the whole library.
+     *
+     * @return list<int>
+     */
+    public static function grantedFolderIds(User $user): array
+    {
+        if (FileAccess::isAdmin($user)) {
+            return self::folderIds($user);
+        }
+
+        $key = (int) $user->id;
+        if (! isset(self::$grantedIds[$key])) {
+            $owned = Folder::query()->where('owner_id', $user->id)->pluck('id')->all();
+            self::$grantedIds[$key] = array_values(array_unique(array_merge(
+                FileAccess::sharedFolderIds($user),
+                FileAccess::systemVisibleFolderIds($user),
+                $owned,
+            )));
+        }
+
+        return self::$grantedIds[$key];
+    }
+
+    /** @return list<int> */
+    private static function computeFolderIds(User $user): array
     {
         if (FileAccess::isAdmin($user)) {
             return self::adminFolderQuery($user)->pluck('id')->all();

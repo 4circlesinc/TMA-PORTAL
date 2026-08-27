@@ -165,6 +165,67 @@ class FolderTree
     }
 
     /**
+     * Direct children only: how many folders, how many files, how many bytes
+     * sit in each of these, not beneath them.
+     *
+     * A listing used to ask {@see self::aggregateMany} so a closed folder could
+     * report everything it hid. That is one recursive CTE joining every file
+     * in those subtrees. Opening All Files therefore summed the whole library
+     * (Clients, Staff Files, …) before it could draw five rows; opening the
+     * Clients directory walked every client tree on the page. Against the
+     * remote database that was the two-minute hang, and past a gateway timeout
+     * it was the spinner that never finished.
+     *
+     * Direct counts answer the question the row actually asks — is this folder
+     * empty, how many things are in it — with two indexed GROUP BYs on the
+     * page's ids. Recursive totals stay on {@see self::aggregate} for the
+     * one-folder callers that still want them (ZIP, a details panel).
+     *
+     * @param  Folder[]  $folders
+     * @return array<int, array{fileCount: int, folderCount: int, size: int}>
+     */
+    public static function directCounts(array $folders): array
+    {
+        if ($folders === []) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($folders as $folder) {
+            $ids[(int) $folder->id] = true;
+        }
+        $ids = array_keys($ids);
+
+        $empty = ['fileCount' => 0, 'folderCount' => 0, 'size' => 0];
+        $out = array_fill_keys($ids, $empty);
+
+        $childFolders = Folder::query()
+            ->whereIn('parent_id', $ids)
+            ->reorder()
+            ->selectRaw('parent_id, count(*) as n')
+            ->groupBy('parent_id')
+            ->pluck('n', 'parent_id');
+
+        foreach ($childFolders as $parentId => $n) {
+            $out[(int) $parentId]['folderCount'] = (int) $n;
+        }
+
+        $childFiles = FileItem::query()
+            ->whereIn('folder_id', $ids)
+            ->reorder()
+            ->selectRaw('folder_id, count(*) as file_count, coalesce(sum(size), 0) as total_size')
+            ->groupBy('folder_id')
+            ->get();
+
+        foreach ($childFiles as $row) {
+            $out[(int) $row->folder_id]['fileCount'] = (int) $row->file_count;
+            $out[(int) $row->folder_id]['size'] = (int) $row->total_size;
+        }
+
+        return $out;
+    }
+
+    /**
      * Recursive counts for many folders, in one query.
      *
      * A listing of twenty subfolders used to run twenty descendant walks plus
@@ -215,7 +276,7 @@ class FolderTree
                  select t.root_id, f.id, t.depth + 1
                    from folders f
                    join tree t on f.parent_id = t.id
-                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH."
+                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH.'
              )
              select t.root_id as root_id,
                     count(distinct case when t.id <> t.root_id then t.id end) as folder_count,
@@ -223,7 +284,7 @@ class FolderTree
                     coalesce(sum(f.size), 0) as total_size
                from tree t
                left join files f on f.folder_id = t.id and f.deleted_at is null
-              group by t.root_id",
+              group by t.root_id',
             $rootIds,
         );
 
@@ -269,9 +330,9 @@ class FolderTree
                  select t.root_id, f.id, t.depth + 1
                    from folders f
                    join tree t on f.parent_id = t.id
-                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH."
+                  where f.deleted_at is null and t.depth < ".self::MAX_DEPTH.'
              )
-             select root_id, id from tree",
+             select root_id, id from tree',
             $rootIds,
         );
 

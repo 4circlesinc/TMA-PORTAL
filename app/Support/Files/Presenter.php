@@ -14,7 +14,6 @@ use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
-use App\Support\Files\CommentReads;
 use App\Support\Files\Workflow\Status;
 
 /**
@@ -135,8 +134,11 @@ class Presenter
     /**
      * @param  FileItem[]  $files
      * @param  Folder[]  $folders
+     * @param  bool  $folderExtras  Folder subtree work (direct counts, unread
+     *                              chips). The sync cursor presents rows with
+     *                              stats off and must not pay for them.
      */
-    public function prime(array $files, array $folders): void
+    public function prime(array $files, array $folders, bool $folderExtras = true): void
     {
         $fileIds = array_values(array_map(fn ($f) => $f->id, $files));
         $folderIds = array_values(array_map(fn ($f) => $f->id, $folders));
@@ -156,13 +158,18 @@ class Presenter
         $this->statusFile = $this->statusMap($fileIds);
         $this->cipFile = $this->cipMap($fileIds);
         $this->commentFile = $this->commentMap($fileIds);
-        $this->commentFolder = CommentReads::unreadByFolder($this->viewer, $folderIds);
         $this->primed = true;
         $this->attachCipSlots($files);
         $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
         $this->primeFolderIndex($files, $folders);
-        $this->folderStats = FolderTree::aggregateMany($folders);
+
+        if ($folderExtras) {
+            $this->commentFolder = $this->shouldWalkFolderComments($folders)
+                ? CommentReads::unreadByFolder($this->viewer, $folderIds)
+                : [];
+            $this->folderStats = FolderTree::directCounts($folders);
+        }
 
         // Every row's permission block walks its folder chain through
         // FileAccess. Warming them together turns one round trip per level
@@ -171,6 +178,32 @@ class Presenter
             array_map(fn (Folder $f) => $f->id, $folders),
             array_map(fn (FileItem $f) => (int) $f->folder_id, $files),
         ));
+    }
+
+    /**
+     * Unread chips on a folder row walk that folder's whole subtree.
+     *
+     * Cheap for a client folder with a handful of person folders. Deadly for
+     * All Files (the Clients root's subtree is the library) and for the
+     * Clients directory (a hundred client trees). Skip those; keep the walk
+     * for the listings small enough that a closed folder can still say it
+     * is hiding a question.
+     *
+     * @param  Folder[]  $folders
+     */
+    private function shouldWalkFolderComments(array $folders): bool
+    {
+        if ($folders === [] || count($folders) > 24) {
+            return false;
+        }
+
+        foreach ($folders as $folder) {
+            if ($folder->folder_type === Folder::TYPE_ROOT) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function file(FileItem $file): array

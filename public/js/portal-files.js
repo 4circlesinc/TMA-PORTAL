@@ -180,7 +180,7 @@
 
   function fileIconSrc(item) {
     if (item.type === 'folder') {
-      var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var base = folderLooksEmpty(item) ? 'FolderEmpty' : 'FolderFilled';
       return window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, item.colour) : 'images/icons/phosphor/' + base + '.svg';
     }
     if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc(item.icon, item.name);
@@ -191,7 +191,7 @@
   // stamped content icon layered on its front panel. Falls back to a bare
   // <img> (today's exact markup) when no custom icon is set.
   function folderIconHtml(item, size) {
-    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    var base = folderLooksEmpty(item) ? 'FolderEmpty' : 'FolderFilled';
     return window.TMAFolderIcons
       ? window.TMAFolderIcons.html(base, item.colour, item.iconName, size)
       : '<img src="' + esc(fileIconSrc(item)) + '" alt="" width="' + size + '" height="' + size + '">';
@@ -225,6 +225,18 @@
     var sameDay = d.toDateString() === now.toDateString();
     if (sameDay) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  /*
+   * A folder with no files and no subfolders is empty. Counts that were not
+   * sent (recycle, a replica row) must not be read as zero — that is how a
+   * full Clients tree drew as an empty folder while the listing was still
+   * answering.
+   */
+  function folderLooksEmpty(item) {
+    if (!item) return false;
+    if (item.fileCount == null && item.folderCount == null) return false;
+    return (item.fileCount || 0) === 0 && (item.folderCount || 0) === 0;
   }
 
   /* Something happened that may change which folders exist or what they're
@@ -369,6 +381,14 @@
     return 'files:listing:' + params.toString();
   }
 
+  function withTimeout(promise, ms, message) {
+    var timer;
+    var timeout = new Promise(function (_, reject) {
+      timer = setTimeout(function () { reject(new Error(message)); }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(function () { clearTimeout(timer); });
+  }
+
   function load(silent) {
     // Status is cheap and answers "where are my files?" before anyone asks.
     if (!silent) loadSyncStatus();
@@ -377,6 +397,7 @@
     var url = net().url('/?' + params.toString());
     var key = window.TMAStore ? listingCacheKey(params) : null;
     var expected = params.toString();
+    var painted = false;
 
     /*
      * Guard every paint against the reader having moved on. The cached copy
@@ -388,6 +409,7 @@
      */
     var apply = function (res, meta) {
       if (listingParams().toString() !== expected) return;
+      painted = true;
       state.loading = false;
       state.error = null;
       state.data = { folders: res.folders || [], files: res.files || [] };
@@ -415,14 +437,28 @@
      * The skeleton only goes up when there is nothing better to show. With a
      * memory hit the cached rows paint in the same breath; holding a
      * skeleton in front of them for one frame is the flash the store exists
-     * to end.
+     * to end. On the desktop the listing may still be on disk — wait a tick
+     * for that before drawing a spinner, so a warm library opens instantly
+     * instead of flashing empty.
      */
     if (!silent && !(key && window.TMAStore.peek(key))) {
-      state.loading = true;
-      render();
+      var mayHaveDisk = !!(key && window.TMAStore && window.TMAStore.persistent);
+      if (mayHaveDisk) {
+        setTimeout(function () {
+          if (!painted && listingParams().toString() === expected) {
+            state.loading = true;
+            render();
+          }
+        }, 80);
+      } else {
+        state.loading = true;
+        render();
+      }
     }
 
-    var fetcher = function () { return net().fetchJSON(url); };
+    var fetcher = function () {
+      return withTimeout(net().fetchJSON(url), 30000, 'This folder is taking too long to load.');
+    };
 
     /*
      * A silent refresh, a live signal, a background poll, skips the cached
@@ -453,8 +489,8 @@
       // Before admitting defeat: the replica. A folder nobody ever visited
       // has no cached listing, but on the desktop its rows may all be
       // sitting in the record layer the sync walker filled.
-      return assembleFromReplica(expected).then(function (painted) {
-        if (painted) return;
+      return assembleFromReplica(expected).then(function (fromReplica) {
+        if (fromReplica) { painted = true; return; }
         state.loading = false;
         state.error = err.message || 'Could not load this folder.';
         render();
@@ -1150,7 +1186,7 @@
               ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
             : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">'));
       var sub = it.type === 'folder'
-        ? ((it.fileCount != null ? it.fileCount : 0) + ' items')
+        ? (((it.fileCount || 0) + (it.folderCount || 0)) + ' items')
         : (it.sizeLabel || '');
       var busySpin = busy ? '<img class="tma-portal-row-spinner tma-portal-row-spinner--card" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
       return '<div class="tma-portal-file-card' + cls + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0"' +
@@ -5638,7 +5674,7 @@
     if (!colours) return;
 
     var isDefaultFolder = item.folderType && item.folderType !== 'user';
-    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    var base = folderLooksEmpty(item) ? 'FolderEmpty' : 'FolderFilled';
 
     var startColour = colours.isValid(item.colour) ? item.colour : 'default';
     var startIcon = (icons && icons.isValid(item.iconName)) ? item.iconName : null;
@@ -7031,7 +7067,7 @@
           var p = new URLSearchParams();
           p.set('section', 'my');
           if (pick.folder) p.set('folder', pick.folder);
-          p.set('perPage', '0'); p.set('sort', 'name');
+          p.set('perPage', '200'); p.set('sort', 'name');
           net().fetchJSON(net().url('/?' + p.toString())).then(function (res) {
             pick.crumb = res.breadcrumb || [];
             var crumbHtml = '<button type="button" class="tma-portal-picker__crumb" data-pick-crumb="">Top level</button>';

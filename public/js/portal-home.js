@@ -299,7 +299,7 @@
   // to the file-type icon if it can't be produced); the type icon otherwise.
   function rowIconHtml(f) {
     if (f.kind === 'folder') {
-      var base = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var base = ((f.fileCount || 0) + (f.folderCount || 0)) === 0 ? 'FolderEmpty' : 'FolderFilled';
       if (window.TMAFolderIcons) return window.TMAFolderIcons.html(base, f.colour, f.iconName, 24);
       var src = window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, f.colour) : 'images/icons/phosphor/' + base + '.svg';
       return '<img src="' + ui().esc(src) + '" alt="">';

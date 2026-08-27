@@ -1109,7 +1109,7 @@
     var html = '';
     folders.forEach(function (f) {
       var count = (f.fileCount || 0) + (f.folderCount || 0);
-      var folderBase = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var folderBase = count === 0 ? 'FolderEmpty' : 'FolderFilled';
       var folderIcon = window.TMAFolderIcons
         ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
         : '<img src="' + PH_ICON + 'FolderNotch.svg" alt="">';
@@ -1204,7 +1204,7 @@
     var net = filesNet();
     if (!wrap || !net) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    var url = net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0');
+    var url = net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200');
 
     if (opts && opts.changed) invalidateCbiFolder(uuid);
 
