@@ -1061,12 +1061,16 @@
             '</button>';
         }
 
+        // The same row the File Library's comment box draws: a small face,
+        // then the name over the detail.
         return '<button type="button" class="tma-dash__menu-item' +
           (selected ? ' tma-dash__menu-item--active' : '') + '"' +
           ' data-feed-mention-pick="' + i + '" role="option" aria-selected="' + selected + '">' +
-          '<img class="tma-dash__feed-mention-avatar" src="' + esc(avatarFor(item)) + '" alt="">' +
+          '<img class="tma-dash__feed-mention-avatar" src="' + esc(avatarFor(item)) + '" alt="" width="22" height="22">' +
+          '<span class="tma-dash__feed-mention-ident">' +
           '<span class="tma-dash__feed-mention-name">' + esc(item.name) + '</span>' +
           (item.meta ? '<span class="tma-dash__feed-mention-meta">' + esc(item.meta) + '</span>' : '') +
+          '</span>' +
           '</button>';
       }).join('') +
       '</div>'

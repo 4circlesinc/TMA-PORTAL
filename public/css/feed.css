@@ -661,27 +661,72 @@ img.tma-dash__feed-badge {
 
 /* ── mention menu ────────────────────────────────────────── */
 
+/* The same list the File Library's comment box shows: a small face, the
+   name over the detail, one row per person (.tma-portal-viewer__mention-item). */
 .tma-dash__feed-mention-menu {
+  min-width: 240px;
+  max-width: 320px;
   max-height: 240px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: var(--space-4);
 }
 
+.tma-dash__feed-mention-menu .tma-dash__menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-6) var(--space-10, 10px);
+  font-size: var(--text-size-13, 13px);
+  line-height: 18px;
+}
+
 .tma-dash__feed-mention-avatar {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--radius-pill);
   object-fit: cover;
   flex-shrink: 0;
 }
 
-.tma-dash__feed-mention-name { flex: 1; min-width: 0; }
+.tma-dash__feed-mention-ident {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tma-dash__feed-mention-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
 
 .tma-dash__feed-mention-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
+  line-height: 14px;
+  font-weight: 400;
   color: var(--color-text-muted);
-  margin-left: auto;
 }
+
+.tma-dash__feed-mention-menu .tma-dash__feed-hashtag { flex: 1; }
+
+/* The channel's add-member results share the row. */
+.tma-dash__feed-member-results .tma-dash__menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  font-size: var(--text-size-13, 13px);
+}
+
+.tma-dash__feed-member-results .tma-dash__feed-mention-meta { margin-left: auto; }
 
 /* ── attachments tray ────────────────────────────────────── */
 
