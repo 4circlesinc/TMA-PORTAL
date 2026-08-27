@@ -915,7 +915,6 @@
         : '') +
 
       editorHtml(draft) +
-      mentionMenuHtml('post') +
       attachmentsTrayHtml(draft) +
       (draft.poll ? pollBuilderHtml(draft) : '') +
       (draft.showOptions ? composerOptionsHtml(draft) : '') +
@@ -1040,6 +1039,10 @@
       '<div class="tma-dash__feed-editor" contenteditable="true" role="textbox" aria-multiline="true"' +
       ' data-feed-editor data-key="feed-editor" data-morph-skip aria-label="Write your post"' +
       ' data-placeholder="Write something worth reading…"></div>' +
+      // Inside the wrap, which is positioned, so the list opens under the
+      // editor; as a sibling of the composer it anchored to the page and
+      // landed below the fold, where nobody saw it.
+      mentionMenuHtml('post') +
       '</div>'
     );
   }

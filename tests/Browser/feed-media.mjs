@@ -284,6 +284,20 @@ try {
   check(pollChecks.every((t) => Math.abs(t - pollChecks[0]) < 2), 'the poll switches share a baseline');
   await page.locator('.tma-dash__feed-composer--open').screenshot({ path: path.join(here, 'feed-media-composer.png') });
 
+  step('10b', '@ in the post editor opens the list under it');
+  await page.click('[data-feed-editor]');
+  await page.keyboard.type(' @' + OTHER_NAME, { delay: 8 });
+  await page.waitForSelector('.tma-dash__feed-editor-wrap [data-feed-mention-menu]', { timeout: 5000 })
+    .catch(() => {});
+  const postMenu = await page.locator('.tma-dash__feed-editor-wrap [data-feed-mention-menu]').boundingBox()
+    .catch(() => null);
+  const editorBox = await page.locator('[data-feed-editor]').boundingBox();
+  check(!!postMenu, 'the list opens for @ in the post editor');
+  check(!!postMenu && postMenu.y >= editorBox.y + editorBox.height - 1 && postMenu.y < editorBox.y + editorBox.height + 40
+    && postMenu.x >= editorBox.x && postMenu.x < editorBox.x + editorBox.width,
+    'it sits right under the editor, not somewhere on the page');
+  await page.keyboard.press('Escape');
+
   step(11, 'Nothing navigated');
   check(await page.evaluate(() => window.__feedSentinel === 'alive'), 'the page never reloaded');
 } catch (e) {

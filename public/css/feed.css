@@ -586,6 +586,7 @@ img.tma-dash__feed-badge {
 }
 
 .tma-dash__feed-editor-wrap {
+  position: relative;
   border: 0.5px solid var(--dash-border);
   border-radius: var(--radius-12);
   background: var(--color-bg-input);
@@ -2113,6 +2114,15 @@ img.tma-dash__feed-badge {
   color: var(--color-text-primary);
   outline: none;
 }
+
+/* Under the post editor, from its left edge. */
+.tma-dash__feed-editor-wrap .tma-dash__feed-mention-menu {
+  top: calc(100% + 4px);
+  left: var(--space-12);
+  right: auto;
+}
+
+.tma-dash__feed-composer--open { overflow: visible; }
 
 /* The @ list opens upward, out of a box that sits at the bottom of a thread. */
 .tma-dash__feed-comment-composer .tma-dash__feed-mention-menu {
