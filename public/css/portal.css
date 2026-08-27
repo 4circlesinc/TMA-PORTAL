@@ -1450,12 +1450,23 @@
  * dialog, and the share modal's link row. Only the layout that holds them —
  * sections, the label/control rows, the type chips — is new.
  */
+/* The card decides the width, never the form. A min-width on the form used to
+   ask for 560px inside a card whose inner width is 440px, so the destination
+   row, the name/email pair and the type chips all ran off the right edge. */
+.tma-portal-modal__card:has(.tma-portal-request) { width: min(640px, 100%); }
+
 .tma-portal-request {
   display: flex;
   flex-direction: column;
   gap: var(--space-20);
-  min-width: min(560px, 78vw);
+  min-width: 0;
 }
+
+/* One flush right edge: the title, instructions and name/email fields fill the
+   form like every other row in it. */
+.tma-portal-request .tma-portal-input,
+.tma-portal-request .tma-portal-select,
+.tma-portal-request .tma-portal-textarea { max-width: none; }
 
 .tma-portal-request__section {
   display: flex;
@@ -1616,7 +1627,6 @@
 }
 
 @media (max-width: 640px) {
-  .tma-portal-request { min-width: 0; }
   .tma-portal-request__row { flex-direction: column; align-items: stretch; }
   .tma-portal-request__row-control { max-width: 100%; justify-content: flex-start; }
   .tma-portal-request__chips { justify-content: flex-start; }
