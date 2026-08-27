@@ -65,8 +65,8 @@
       });
     }
 
-    return import('/js/vendor/pdf-loader.mjs?v=4').then(function (pdfjs) {
-      pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs';
+    return import('/js/vendor/pdf-loader.mjs?v=5').then(function (pdfjs) {
+      pdfjs.GlobalWorkerOptions.workerSrc = '/js/vendor/pdf-worker.mjs?v=2';
       return pdfjs.getDocument({ url: url('/document'), withCredentials: true }).promise;
     }).then(function (pdf) {
       var ratios = [];

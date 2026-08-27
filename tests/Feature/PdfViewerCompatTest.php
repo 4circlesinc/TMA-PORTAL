@@ -27,23 +27,83 @@ class PdfViewerCompatTest extends TestCase
         return (string) file_get_contents(public_path($relative));
     }
 
+    /**
+     * Built-ins Chromium 130 does not have, as pdf.js would call them, mapped
+     * to the name the shim defines. A pdf.js upgrade that starts calling one
+     * of these fails here instead of as a white page in the desktop app.
+     * Float16Array is absent on purpose: pdf.js feature-detects it.
+     */
+    private const POST_130_BUILTINS = [
+        '.toHex(' => "'toHex'",
+        '.fromHex(' => "'fromHex'",
+        'Uint8Array.fromBase64(' => "'fromBase64'",
+        '.toBase64(' => "'toBase64'",
+        '.setFromBase64(' => "'setFromBase64'",
+        '.setFromHex(' => "'setFromHex'",
+        '.getOrInsert(' => "'getOrInsert'",
+        '.getOrInsertComputed(' => "'getOrInsertComputed'",
+        'Math.sumPrecise(' => "'sumPrecise'",
+        'Math.f16round(' => "'f16round'",
+        'Error.isError(' => "'isError'",
+        'RegExp.escape(' => "'escape'",
+        'Iterator.concat(' => "'concat'",
+        'Atomics.pause(' => "'pause'",
+    ];
+
     public function test_the_shim_supplies_what_pdfjs_calls(): void
     {
         $compat = $this->js('js/vendor/pdf-compat.mjs');
+        $vendor = $this->js('js/vendor/pdf.min.mjs').$this->js('js/vendor/pdf.worker.min.mjs');
 
-        $this->assertStringContainsString("'toHex'", $compat);
-        $this->assertStringContainsString("'fromBase64'", $compat);
+        // The ones that broke the desktop app so far; each must stay.
+        foreach (["'toHex'", "'fromBase64'", "'toBase64'", "'getOrInsertComputed'", "'sumPrecise'"] as $name) {
+            $this->assertStringContainsString($name, $compat);
+        }
+
+        $missing = [];
+        foreach (self::POST_130_BUILTINS as $call => $shim) {
+            if (str_contains($vendor, $call) && ! str_contains($compat, $shim)) {
+                $missing[] = $call;
+            }
+        }
+
+        $this->assertSame([], $missing, 'pdf.js calls these built-ins that Chromium 130 (the desktop app) '
+            .'does not have, and pdf-compat.mjs does not supply them — every PDF page will render white in '
+            .'the app: '.implode(', ', $missing));
     }
 
     public function test_the_loader_and_worker_both_install_it(): void
     {
         // The worker matters most: it has its own global scope, so the page's
-        // shim never reaches it, and toHex() is called in there.
-        $this->assertStringContainsString("import './pdf-compat.mjs'", $this->js('js/vendor/pdf-worker.mjs'));
+        // shim never reaches it, and toHex() is called in there. The query on
+        // the import is the cache key — the desktop serves /js/vendor/ as
+        // immutable, so a changed shim at the same URL never reaches an app.
+        $this->assertStringContainsString("import './pdf-compat.mjs?v=2'", $this->js('js/vendor/pdf-worker.mjs'));
         $this->assertStringContainsString("'./pdf.worker.min.mjs'", $this->js('js/vendor/pdf-worker.mjs'));
 
-        $this->assertStringContainsString("import './pdf-compat.mjs'", $this->js('js/vendor/pdf-loader.mjs'));
+        $this->assertStringContainsString("import './pdf-compat.mjs?v=2'", $this->js('js/vendor/pdf-loader.mjs'));
         $this->assertStringContainsString("'./pdf.min.mjs'", $this->js('js/vendor/pdf-loader.mjs'));
+    }
+
+    public function test_every_caller_loads_the_current_loader_and_worker(): void
+    {
+        // A stale ?v= keeps an older shim alive in a cache somewhere, and the
+        // bug comes back only for the people who had the app open last week.
+        $stale = [];
+
+        foreach (glob(public_path('js/*.js')) as $path) {
+            $source = (string) file_get_contents($path);
+            if (! str_contains($source, 'pdf-loader.mjs')) {
+                continue;
+            }
+            if (! str_contains($source, 'pdf-loader.mjs?v=5')
+                || preg_match('/pdf-loader\.mjs\?v=(?!5\b)/', $source)
+                || preg_match("/pdf-worker\.mjs(?!\?v=2)['\"]/", $source)) {
+                $stale[] = basename($path);
+            }
+        }
+
+        $this->assertSame([], $stale, 'These import an older pdf-loader.mjs / pdf-worker.mjs version: '.implode(', ', $stale));
     }
 
     public function test_no_shipped_script_loads_the_vendor_files_directly(): void

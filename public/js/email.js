@@ -4904,8 +4904,8 @@
   function loadAttachmentPdfjs() {
     if (attachmentPdfjsPromise) return attachmentPdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    attachmentPdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=4').then(function (lib) {
-      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
+    attachmentPdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=5').then(function (lib) {
+      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs?v=2';
       return lib;
     }).catch(function (err) {
       attachmentPdfjsPromise = null; // let a later attempt retry

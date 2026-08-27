@@ -117,13 +117,13 @@
   function loadPdfjs() {
     if (pdfjsPromise) return pdfjsPromise;
     var root = window.__TMA_SITE_ROOT || '';
-    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=4').then(function (lib) {
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=5').then(function (lib) {
       // An absolute worker URL: a path-only src is resolved against the
       // module, not the page, and that 404 leaves getDocument hanging forever.
       try {
-        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs', window.location.href).href;
+        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs?v=2', window.location.href).href;
       } catch (e) {
-        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs';
+        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs?v=2';
       }
       return lib;
     }).catch(function (err) {

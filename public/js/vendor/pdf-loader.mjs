@@ -19,7 +19,9 @@
  * getDocument the page can see. CMaps are fetched on the page, not in the
  * worker — the desktop protocol handler does not reliably reach a Worker.
  */
-import './pdf-compat.mjs';
+// The query is the cache key: the desktop serves /js/vendor/ as immutable,
+// so a changed shim at the same URL would never reach an installed app.
+import './pdf-compat.mjs?v=2';
 import * as pdfjs from './pdf.min.mjs';
 
 export const GlobalWorkerOptions = pdfjs.GlobalWorkerOptions;

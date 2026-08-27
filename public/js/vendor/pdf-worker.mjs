@@ -6,5 +6,5 @@
  * fingerprinting the document) happens in here. This is what workerSrc must
  * point at. See pdf-compat.mjs.
  */
-import './pdf-compat.mjs';
+import './pdf-compat.mjs?v=2';
 import './pdf.worker.min.mjs';
