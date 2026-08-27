@@ -2005,8 +2005,6 @@
       ' aria-label="' + esc(file.name) + '">' +
 
       '<div class="tma-dash__feed-gallery-stage" data-feed-gallery-stage>' +
-      '<button type="button" class="tma-dash__feed-gallery-btn tma-dash__feed-gallery-close" data-feed-gallery-close' +
-      ' aria-label="Close"><img src="' + ICON + 'X.svg" alt="" width="18" height="18"></button>' +
       (files.length > 1
         ? '<button type="button" class="tma-dash__feed-gallery-btn tma-dash__feed-gallery-nav tma-dash__feed-gallery-nav--prev"' +
           ' data-feed-gallery-go="-1" aria-label="Previous">' +
@@ -2034,6 +2032,11 @@
       '<span class="tma-dash__feed-post-sub" title="' + esc(fullTime(post.publishedAt || post.createdAt)) + '">' +
       esc(meta.join(' · ')) + '</span>' +
       '</div>' +
+      // Close lives on the rail, the plain icon button every panel here uses,
+      // not a badge over the picture (where the desktop app's window
+      // controls sit).
+      '<button type="button" class="tma-dash__tool-btn tma-dash__feed-gallery-close" data-feed-gallery-close' +
+      ' aria-label="Close"><img src="' + ICON + 'X.svg" alt="" width="16" height="16"></button>' +
       '</header>' +
       (post.title || post.body || (post.hashtags && post.hashtags.length)
         ? '<div class="tma-dash__feed-gallery-body">' +

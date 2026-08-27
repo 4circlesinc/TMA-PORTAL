@@ -2637,10 +2637,17 @@ html.tma-feed-gallery-open { overflow: hidden; }
   background: var(--color-white);
 }
 
+/*
+ * Flex, not a grid with place-items: a centred grid item sits in an
+ * auto-sized row, so the picture's `max-height: 100%` resolved to nothing
+ * and a 2000px photo drew at 2000px, clipped. A flex item's percentage
+ * resolves against the stage, which has the viewport's height.
+ */
 .tma-dash__feed-gallery-stage {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   min-height: 0;
   padding: var(--space-16);
@@ -2651,6 +2658,8 @@ html.tma-feed-gallery-open { overflow: hidden; }
 .tma-dash__feed-gallery-img,
 .tma-dash__feed-gallery-video {
   display: block;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -2707,10 +2716,7 @@ html.tma-feed-gallery-open { overflow: hidden; }
 
 .tma-dash__feed-gallery-btn:hover { background: #fff; }
 
-.tma-dash__feed-gallery-close {
-  top: var(--space-16);
-  left: var(--space-16);
-}
+.tma-dash__feed-gallery-close { margin-left: auto; align-self: flex-start; }
 
 .tma-dash__feed-gallery-nav {
   top: 50%;
@@ -2781,8 +2787,10 @@ html.tma-feed-gallery-open { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: var(--space-16) var(--space-20) var(--space-12);
+  padding: var(--space-16) var(--space-16) var(--space-12) var(--space-20);
 }
+
+.tma-dash__feed-gallery-head .tma-dash__feed-post-meta { flex: 1; min-width: 0; }
 
 .tma-dash__feed-gallery-body {
   padding: 0 var(--space-20) var(--space-12);

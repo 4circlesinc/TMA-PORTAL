@@ -176,7 +176,17 @@ try {
   await page.waitForTimeout(900);
   const gallery = page.locator('.tma-dash__feed-gallery');
 
-  check(await gallery.locator('.tma-dash__feed-gallery-img').isVisible(), 'the photo fills the stage');
+  check(await gallery.locator('.tma-dash__feed-gallery-img').isVisible(), 'the photo is on the stage');
+  // The whole picture, inside the stage: a grid row once let a 2000px photo
+  // draw at 2000px and clip.
+  const fit = await page.evaluate(() => {
+    const img = document.querySelector('.tma-dash__feed-gallery-img').getBoundingClientRect();
+    const stage = document.querySelector('.tma-dash__feed-gallery-stage').getBoundingClientRect();
+    return img.width <= stage.width && img.height <= stage.height && img.top >= stage.top;
+  });
+  check(fit, 'the photo fits inside the stage');
+  check(await gallery.locator('.tma-dash__feed-gallery-rail [data-feed-gallery-close]').count() === 1,
+    'Close is a plain icon button on the rail, not a badge over the picture');
   check((await gallery.locator('.tma-dash__feed-gallery-head').textContent() || '').includes('E2E Staff'),
     'the rail names who posted it');
   check((await gallery.locator('.tma-dash__feed-gallery-body').textContent() || '').includes(postText),
