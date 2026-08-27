@@ -2716,7 +2716,12 @@ html.tma-feed-gallery-open { overflow: hidden; }
 
 .tma-dash__feed-gallery-btn:hover { background: #fff; }
 
-.tma-dash__feed-gallery-close { margin-left: auto; align-self: flex-start; }
+/* Up in the corner: pulled clear of the header's top padding. */
+.tma-dash__feed-gallery-close {
+  margin-left: auto;
+  margin-top: calc(-1 * var(--space-8));
+  align-self: flex-start;
+}
 
 .tma-dash__feed-gallery-nav {
   top: 50%;
