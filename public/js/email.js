@@ -840,7 +840,16 @@
       to = formatAddressList(all.to);
       cc = formatAddressList(all.cc);
     }
-    state.inlineCompose = { mode: mode, messageId: state.selectedId, to: to, cc: cc, bodyHtml: '', sending: false };
+    // Same as new compose: seed the signature into the draft so it paints and
+    // leaves with the reply even if the user never types in the body.
+    state.inlineCompose = {
+      mode: mode,
+      messageId: state.selectedId,
+      to: to,
+      cc: cc,
+      bodyHtml: composeSignatureHtml(),
+      sending: false,
+    };
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc

@@ -13189,6 +13189,18 @@
   z-index: 2;
 }
 
+/* When Reply opens, the composer (plus quoted mail) can be taller than the
+   reading pane. Without a cap, overflow:hidden on .email-detail clips it and
+   Reply looks like it did nothing. Shrink and scroll the footer instead. */
+.tma-dash__email-detail-footer:has([data-email-inline-compose-panel]) {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(70%, 32rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .tma-dash__email-thread-actions {
   flex-shrink: 0;
   padding: 0;
@@ -14501,6 +14513,15 @@
     padding-bottom: calc(var(--space-12) + env(safe-area-inset-bottom, 0px));
     background: var(--color-white);
     border-top: 1px solid var(--color-overlay-4);
+  }
+
+  .tma-dash__email-detail-mobile-footer:has([data-email-inline-compose-panel]) {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: min(75%, 28rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tma-dash__email-thread-actions--mobile {
