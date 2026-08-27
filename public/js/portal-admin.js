@@ -1377,6 +1377,35 @@
     });
   }
 
+  // A modal, not window.prompt(): the desktop app's renderer has no prompt()
+  // at all, so the pencil did nothing there. Same shape as renameOrgModal.
+  function cipDocRenameModal(f, saved) {
+    ui().openModal({
+      title: 'Rename document',
+      body: ui().field('Document name', ui().input({ value: f.r.label, attrs: 'data-cipdoc-rename maxlength="191"' })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipdoc-rename-save' }) + '</div>',
+      onMount: function (host) {
+        var input = host.querySelector('[data-cipdoc-rename]');
+        function save() {
+          var label = (input.value || '').trim();
+          if (!label) { ui().toastError('Name the document first.'); return; }
+          if (label === f.r.label) { ui().closeModal(); return; }
+          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { label: label })
+            .then(function () { ui().closeModal(); ui().toast('Renamed'); saved(); })
+            .catch(function (e) { ui().toastError(e.message); });
+        }
+        host.querySelector('[data-cipdoc-rename-save]').addEventListener('click', save);
+        input.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          save();
+        });
+        input.focus();
+        input.select();
+      },
+    });
+  }
+
   function cipDocRow(r, canEdit) {
     // A retired row keeps its place in the list but drops to the muted ink —
     // the same grey the table already uses, so the eye reads it as history.
@@ -1500,11 +1529,7 @@
       el.querySelectorAll('[data-cipdoc-edit]').forEach(function (b) {
         b.addEventListener('click', function () {
           var f = req(b.getAttribute('data-cipdoc-edit'));
-          if (!f) return;
-          var label = window.prompt('Rename this document', f.r.label);
-          if (!label || !label.trim() || label.trim() === f.r.label) return;
-          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { label: label.trim() })
-            .then(function () { ui().toast('Renamed'); saved(); }).catch(failed);
+          if (f) cipDocRenameModal(f, saved);
         });
       });
 
