@@ -217,10 +217,23 @@ app.whenReady().then(async () => {
   try {
     titlebar.setWindowButtonsVisible(win, false);
     titlebar.setWindowButtonsVisible(win, true);
+    titlebar.setViewerChrome(win, true);
+    titlebar.setViewerChrome(win, false);
   } catch {
     buttonsThrew = true;
   }
-  check('hiding and restoring the window buttons is safe', buttonsThrew, false);
+  check('hiding and restoring the window chrome is safe', buttonsThrew, false);
+
+  /*
+   * Windows cannot hide its caption buttons — they are the compositor's — so
+   * the strip under them is repainted in the viewer's own colour instead of
+   * leaving three buttons in a blue box in front of the document. Checked as a
+   * value, the way the Windows layout is, so it can be verified from a Mac.
+   */
+  check('windows: the caption strip takes the viewer\'s colour',
+    titlebar.viewerOverlayColor(true), titlebar.VIEWER_BAR);
+  check('windows: and the brand blue back when it closes',
+    titlebar.viewerOverlayColor(false), titlebar.BLUE);
 
   await win.webContents.executeJavaScript(
     "document.querySelector('.tma-dash').classList.add('is-sidebar-collapsed')", true,

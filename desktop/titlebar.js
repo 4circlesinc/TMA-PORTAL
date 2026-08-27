@@ -26,6 +26,17 @@ const HEIGHT = 52;
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
 const BLUE = '#03a5e9';
 
+/*
+ * The file viewer's own header (.tma-portal-viewer__head in portal-files.css).
+ *
+ * Windows draws its minimise/maximise/close over the window and no z-index in
+ * the page reaches them, so while a viewer is open they cannot be put behind
+ * it — but the strip they sit in can be painted the viewer's colour, which is
+ * the difference between three buttons in a blue box interrupting a document
+ * and three buttons that belong to the viewer's own bar.
+ */
+const VIEWER_BAR = '#17181a';
+
 /**
  * Every platform-dependent number in one place, taken as an argument rather
  * than read from process.platform, so the Windows layout can be built, and
@@ -807,6 +818,35 @@ function setWindowButtonsVisible(win, visible) {
   }
 }
 
+/** What the caption strip is painted while a viewer is or is not open. */
+function viewerOverlayColor(open) {
+  return open ? VIEWER_BAR : BLUE;
+}
+
+/**
+ * Get the window chrome out of a full-screen viewer's way, as far as each
+ * platform allows.
+ *
+ * macOS hands us the traffic lights, so they come off screen entirely. Windows
+ * does not: its caption buttons are the compositor's and there is no API to
+ * hide them, so the strip beneath them is repainted in the viewer's own colour
+ * instead — they stop reading as a blue bar in front of the document.
+ *
+ * @param {Electron.BrowserWindow} win
+ * @param {boolean} open
+ */
+function setViewerChrome(win, open) {
+  if (!win || win.isDestroyed()) return;
+
+  if (process.platform === 'darwin') {
+    setWindowButtonsVisible(win, !open);
+
+    return;
+  }
+
+  setOverlayColor(win, viewerOverlayColor(open));
+}
+
 function windowOptions() {
   if (process.platform === 'darwin') {
     return {
@@ -872,5 +912,6 @@ async function apply(webContents) {
 // found by shipping.
 module.exports = {
   apply, refresh, windowOptions, setOverlayColor, setWindowButtonsVisible,
-  script, buildCss, metrics, CSS, HEIGHT, BLUE,
+  setViewerChrome, viewerOverlayColor,
+  script, buildCss, metrics, CSS, HEIGHT, BLUE, VIEWER_BAR,
 };

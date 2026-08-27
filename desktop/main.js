@@ -1317,12 +1317,16 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('tma:badge', (event, count) => fromMainWindow(event) && applyBadge(count));
     ipcMain.on('tma:call', (event, phase) => fromMainWindow(event) && applyCallPhase(phase));
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
-    // A file viewer covers the whole window, including the corner AppKit draws
-    // the traffic lights in. They cannot be layered under it, so they come off
-    // screen until it closes.
+    /*
+     * A file viewer covers the whole window, including the corner the window
+     * controls live in. They are the OS's, drawn above the page, so they
+     * cannot be layered under it: macOS takes its traffic lights off screen,
+     * and Windows — which has no way to hide its caption buttons — repaints
+     * the strip beneath them in the viewer's own colour.
+     */
     ipcMain.on('tma:overlay', (event, open) => {
       if (!fromMainWindow(event)) return;
-      titlebar.setWindowButtonsVisible(mainWindow, !open);
+      titlebar.setViewerChrome(mainWindow, !!open);
     });
     ipcMain.on('tma:signin-reopen', (event) => {
       if (!fromMainWindow(event) || !pendingBrowserSignInUrl) return;
