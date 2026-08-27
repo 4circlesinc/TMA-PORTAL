@@ -1,1 +1,1 @@
-- Pages load again: drawing document thumbnails was pulling whole files through the server and starving everything else
+- On Windows, the minimise/maximise/close buttons no longer sit in a blue box on top of a file you are viewing — the strip takes the viewer's own colour
