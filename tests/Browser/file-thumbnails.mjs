@@ -136,16 +136,18 @@ try {
     `a .docx keeps its type icon — nothing can preview it (${docx ? docx.src.split('/').pop() : 'no row'})`);
 
   /*
-   * Every PDF gets a picture, including one whose first page is blank.
+   * A page with nothing on it keeps its icon.
    *
-   * That page is read twice — the fast range-fed pass, then the whole file —
-   * because an empty render is what a scan looks like when pdf.js has not
-   * fetched its image yet, and treating empty as "no preview" is what put a
-   * red PDF mark on every scan in the portal. After a complete read, whatever
-   * came back is the document.
+   * This is the cheap read talking: a thumbnail is fetched by range, never as
+   * a whole file — document bytes stream through PHP, and pulling complete
+   * files for pictures starved the requests the pages themselves were waiting
+   * on. So what page one shows after a few hundred KB is the answer, and a
+   * white rectangle is not worth showing.
    */
-  const blank = await waitForPainted('Cover sheet.pdf');
-  check(!!blank, 'a PDF whose first page is blank is still painted, not iconed');
+  shown = await previews();
+  const blank = shown.find((p) => p.name.includes('Cover sheet.pdf'));
+  check(!!blank && !blank.painted && /FilePdf/.test(blank.src),
+    `a PDF with nothing on page one keeps its icon (${blank ? blank.src.split('/').pop() : 'no row'})`);
 
   step(3, 'File Library → list');
   await page.goto(`${BASE}/folders/all?folder=${process.env.TMA_FOLDER}`, { waitUntil: 'domcontentloaded' });

@@ -163,20 +163,8 @@
    * a proxy that strips Range, an ancient deploy, and there it is the same
    * code that always worked.
    */
-  /**
-   * @param {string} url
-   * @param {{whole?: boolean}} [opts] `whole: true` reads the file in one go
-   *   rather than by range. The range path is right for a reader opening a
-   *   document — page one paints after a couple of hundred KB — but a caller
-   *   that got a blank page out of it (a scan whose image pdf.js decided it
-   *   did not need yet) has somewhere to go before giving up.
-   */
-  function loadPdfDocument(url, opts) {
+  function loadPdfDocument(url) {
     var path = pdfRequestUrl(url);
-
-    if (opts && opts.whole) {
-      return loadPdfjs().then(function (pdfjs) { return wholeFilePdf(pdfjs, path); });
-    }
 
     return loadPdfjs().then(function (pdfjs) {
       return pdfjs.getDocument({

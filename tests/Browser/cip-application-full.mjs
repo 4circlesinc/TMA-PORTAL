@@ -238,13 +238,15 @@ try {
   const photoLine = filed.find((l) => /Passport photo/i.test(l.label));
   check(!!photoLine && /thumb/.test(photoLine.src || ''),
     `the passport photo draws the server's thumbnail (${photoLine ? photoLine.src.split('/').pop() : 'no line'})`);
-  // Even these — the fixture's scans are one blank US-Letter page, and a blank
-  // render is what a real scan looks like before pdf.js has fetched its image,
-  // so the page is read a second time in full rather than written off. What
-  // comes back is a picture either way.
+  /*
+   * The fixture's scans are one blank US-Letter page, and a thumbnail is read
+   * by range — cheaply, because document bytes stream through PHP and pulling
+   * whole files for pictures starves the pages themselves. Nothing on page one
+   * after that read means the type icon, which says more than a white square.
+   */
   const scanLine = filed.find((l) => /bio page|Birth/i.test(l.label));
-  check(!!scanLine && /^data:image/.test(scanLine.src || ''),
-    `a filed scan carries a picture of its first page (${scanLine ? (scanLine.src || '').slice(0, 22) : 'no line'})`);
+  check(!!scanLine && /FilePdf/.test(scanLine.src || ''),
+    `a scan with nothing on page one keeps its type icon (${scanLine ? scanLine.src.split('/').pop() : 'no line'})`);
   check(owed.length > 0 && owed.every((l) => l.slot && !l.src),
     'an unfiled line keeps the space, so the labels stay in one column');
 

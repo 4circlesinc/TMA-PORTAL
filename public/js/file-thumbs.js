@@ -57,16 +57,20 @@
   var MAX_PARALLEL = 1;
 
   /*
-   * Under this, a thumbnail reads the file in one go rather than by range.
+   * Never read a whole file for a thumbnail.
    *
-   * Ranges are right for a reader opening a document — page one paints after a
-   * couple of hundred KB — but they are why scans came back blank: pdf.js
-   * renders the page it has, and the image it has not fetched yet is simply
-   * not there. For a file this size the complete read costs a moment and is
-   * always right. Above it, ranges, and a page that still comes back empty
-   * keeps its type icon rather than pulling 40 MB for a 28px picture.
+   * This briefly did, for files under 12 MB, because a complete read is the
+   * one certain way to make a scan's first page paint. It is also the one
+   * certain way to bring the portal down: document bytes are streamed through
+   * PHP (they are not a redirect to the bucket), so every thumbnail held a
+   * worker for a whole download, and a couple of readers browsing folders of
+   * scans starved every other request in the app — pages that would not load
+   * at all, which is a far worse fault than a document wearing its type icon.
+   *
+   * Ranges only, then: page one costs a few hundred KB, and a page that comes
+   * back empty keeps its icon.
    */
-  var WHOLE_FILE_MAX = 12 * 1024 * 1024;
+  var SKIP_ABOVE = 60 * 1024 * 1024;
 
   var cache = {};   // previewUrl -> data: URL
   var failed = {};  // previewUrl -> true, so a broken file is tried once
@@ -256,36 +260,16 @@
   /* Page one, painted onto a canvas and handed back as a data: URL. The page's
      own shape is kept (a portrait page stays portrait); the slot it lands in
      decides how it is cropped. */
-  /*
-   * Paint page one, and if it comes back with nothing on it, paint it again
-   * from the whole file before believing that.
-   *
-   * The fast path hands pdf.js a URL and lets it pull ranges as it needs them,
-   * which is right for a reader opening a document. For a thumbnail it has one
-   * failure mode that looks exactly like a blank document: a scan whose image
-   * pdf.js has not fetched yet renders as an empty page, and every scan in the
-   * folder then falls back to a red PDF mark — which is what "the thumbnails
-   * don't work" turned out to be. So a blank first attempt is retried against
-   * the whole file, and only a page that is STILL blank after that is treated
-   * as genuinely empty.
-   */
   function renderPdf(url, bytes) {
-    /*
-     * One document per file, and the reading mode chosen up front.
-     *
-     * This used to read by range and, when the page came back empty, read the
-     * whole file and render a second time — two pdf.js documents, two workers
-     * and two downloads for one 28px picture, for every scan in the folder.
-     * The size decides instead: small enough and the complete read is the
-     * first and only attempt.
-     */
-    var whole = !!bytes && bytes <= WHOLE_FILE_MAX;
+    // One document, read by range, once. A file this big is not worth reaching
+    // into at all for a 28px picture.
+    if (bytes && bytes > SKIP_ABOVE) throw new Error('too big to preview');
 
-    return paintPage(url, whole);
+    return paintPage(url);
   }
 
-  function paintPage(url, whole) {
-    return global.TMAPortalLightbox.pdfDocument(url, { whole: whole }).then(function (pdf) {
+  function paintPage(url) {
+    return global.TMAPortalLightbox.pdfDocument(url).then(function (pdf) {
       if (!pdf) throw new Error('no document');
 
       return pdf.getPage(1).then(function (page) {
@@ -303,18 +287,9 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
-          /*
-           * After a complete read, whatever came back IS the document: a first
-           * page that really is blank gets a picture of a blank page, which is
-           * honest, and beside its neighbours reads as paper rather than as a
-           * preview that failed.
-           *
-           * A page read by range is a different matter — empty there usually
-           * means pdf.js has not fetched the image yet, which is what put a red
-           * PDF mark on every scan in the portal. Those are the big files, so
-           * the icon is the honest answer rather than pulling 40 MB to be sure.
-           */
-          if (!whole && !hasInk(canvas, ctx)) throw new Error('blank first page');
+          // Nothing on the page: the type icon says more than a white square,
+          // and there is nowhere cheap left to look.
+          if (!hasInk(canvas, ctx)) throw new Error('blank first page');
 
           return cropOf(canvas).toDataURL('image/jpeg', 0.78);
         });
@@ -366,9 +341,17 @@
   }
 
   function pump() {
+    /*
+     * A tab nobody is looking at paints nothing.
+     *
+     * Left running, a portal open in a background tab kept asking the server
+     * for documents while the person was working somewhere else — and those
+     * requests come out of the same pool as the pages they are actually
+     * waiting on.
+     */
     // A cached picture still goes up — that costs nothing and the row is
     // otherwise wearing an icon it does not need.
-    if (viewerOpen()) {
+    if (viewerOpen() || document.hidden) {
       queue = queue.filter(function (job) {
         if (!cache[job.url]) return true;
         apply(job.img, cache[job.url]);
@@ -389,7 +372,9 @@
       running += 1;
       /* eslint-disable no-loop-func */
       (function (url, bytes) {
-        renderPdf(url, bytes).then(function (dataUrl) {
+        Promise.resolve().then(function () {
+          return renderPdf(url, bytes);
+        }).then(function (dataUrl) {
           cache[url] = dataUrl;
           // Every row showing this file, not only the one that asked: a list
           // can hold the same document twice, and a repaint mid-render leaves
@@ -402,7 +387,9 @@
         }).then(function () {
           delete inflight[url];
           running -= 1;
-          pump();
+          // A breath between documents. Fifty scans in a folder is fifty
+          // requests, and the reader is waiting on the page, not on them.
+          setTimeout(pump, 250);
         });
       }(url, job.bytes));
       /* eslint-enable no-loop-func */
@@ -471,6 +458,10 @@
 
   function start() {
     scan(document);
+    // Coming back to the tab, or closing a viewer, releases whatever was held.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) scanSoon();
+    });
     if (typeof MutationObserver !== 'function') return;
     // The portal repaints these lists on every background poll, so rows arrive
     // long after load and go on arriving. Watching the document is what makes
