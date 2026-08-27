@@ -1,1 +1,1 @@
-- Scanned PDFs show a picture of the document again instead of a red PDF mark — the app was giving up on a page before it had finished reading it
+- Opening a PDF shows the document again instead of blank pages — the app was busy drawing thumbnails for the rest of the folder while you waited for the one you asked for
