@@ -557,14 +557,17 @@
   }
 
   /*
-   * Inbox facepile: currently online members, most recently active first,
-   * capped at five. Falls back to the compact two-stack when nobody is online.
+   * Inbox facepile: the five members most recently online — anyone online
+   * right now first, then by last seen. Members who are online carry the
+   * green dot; the rest sit plain. Falls back to the compact two-stack only
+   * when the row carries no members at all.
    */
   function groupOnlineFacepileMembers(row) {
-    var pool = (row.members || []).slice().filter(function (m) {
-      return m && m.online;
-    });
+    var pool = (row.members || []).slice().filter(Boolean);
     pool.sort(function (a, b) {
+      var ao = a.online ? 0 : 1;
+      var bo = b.online ? 0 : 1;
+      if (ao !== bo) return ao - bo;
       var at = a.lastSeenAt ? Date.parse(a.lastSeenAt) : 0;
       var bt = b.lastSeenAt ? Date.parse(b.lastSeenAt) : 0;
       if (bt !== at) return bt - at;
@@ -601,7 +604,7 @@
     return (
       '<span class="tma-dash__messages-row-avatar-part-wrap" title="' + esc(member.name || '') + '">' +
       face +
-      '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' +
+      (member.online ? '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' : '') +
       '</span>'
     );
   }
@@ -610,8 +613,8 @@
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
    * Groups stack member circles (photo in front, initials behind) rather than
-   * a single group photo with a corner badge. The inbox may expand that into
-   * a facepile of whoever is online right now.
+   * a single group photo with a corner badge. The inbox expands that into a
+   * facepile of the five members most recently online.
    */
   function threadIcon(row, opts) {
     opts = opts || {};
