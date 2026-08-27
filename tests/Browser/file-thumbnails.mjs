@@ -136,14 +136,16 @@ try {
     `a .docx keeps its type icon — nothing can preview it (${docx ? docx.src.split('/').pop() : 'no row'})`);
 
   /*
-   * A blank first page is the case that made this look broken: pdf.js renders
-   * it perfectly and the result is a white rectangle, which in a 28px row
-   * reads as a picture that failed to load rather than as a document. The ink
-   * is counted before the thumbnail is accepted, so this one keeps its icon.
+   * Every PDF gets a picture, including one whose first page is blank.
+   *
+   * That page is read twice — the fast range-fed pass, then the whole file —
+   * because an empty render is what a scan looks like when pdf.js has not
+   * fetched its image yet, and treating empty as "no preview" is what put a
+   * red PDF mark on every scan in the portal. After a complete read, whatever
+   * came back is the document.
    */
-  const blank = shown.find((p) => p.name.includes('Cover sheet.pdf'));
-  check(!!blank && !blank.painted && /FilePdf/.test(blank.src),
-    `a PDF with nothing on page one keeps its icon (${blank ? blank.src.split('/').pop() : 'no row'})`);
+  const blank = await waitForPainted('Cover sheet.pdf');
+  check(!!blank, 'a PDF whose first page is blank is still painted, not iconed');
 
   step(3, 'File Library → list');
   await page.goto(`${BASE}/folders/all?folder=${process.env.TMA_FOLDER}`, { waitUntil: 'domcontentloaded' });

@@ -207,8 +207,28 @@
   /* Page one, painted onto a canvas and handed back as a data: URL. The page's
      own shape is kept (a portrait page stays portrait); the slot it lands in
      decides how it is cropped. */
+  /*
+   * Paint page one, and if it comes back with nothing on it, paint it again
+   * from the whole file before believing that.
+   *
+   * The fast path hands pdf.js a URL and lets it pull ranges as it needs them,
+   * which is right for a reader opening a document. For a thumbnail it has one
+   * failure mode that looks exactly like a blank document: a scan whose image
+   * pdf.js has not fetched yet renders as an empty page, and every scan in the
+   * folder then falls back to a red PDF mark — which is what "the thumbnails
+   * don't work" turned out to be. So a blank first attempt is retried against
+   * the whole file, and only a page that is STILL blank after that is treated
+   * as genuinely empty.
+   */
   function renderPdf(url) {
-    return global.TMAPortalLightbox.pdfDocument(url).then(function (pdf) {
+    return paintPage(url, false).catch(function (err) {
+      if (err && err.blank) return paintPage(url, true);
+      throw err;
+    });
+  }
+
+  function paintPage(url, whole) {
+    return global.TMAPortalLightbox.pdfDocument(url, { whole: whole }).then(function (pdf) {
       if (!pdf) throw new Error('no document');
 
       return pdf.getPage(1).then(function (page) {
@@ -226,10 +246,23 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
-          // Asked of the WHOLE page, before anything is cut out of it: whether
-          // the document has content is a different question from which corner
-          // of it we show.
-          if (!hasInk(canvas, ctx)) throw new Error('blank first page');
+          /*
+           * A blank page means "read the whole file and try again", nothing
+           * more. It is not a verdict.
+           *
+           * It was one, briefly, and that is what put a red PDF mark on every
+           * scan in the portal: a page pdf.js had not finished fetching the
+           * image for renders empty, and a rule that threw empty pages away
+           * threw those away too. After a complete read, whatever came back is
+           * what the document looks like — a first page that really is blank
+           * gets a picture of a blank page, which is honest, and beside its
+           * neighbours it reads as paper rather than as a preview that failed.
+           */
+          if (!whole && !hasInk(canvas, ctx)) {
+            var blank = new Error('blank first page');
+            blank.blank = true;
+            throw blank;
+          }
 
           return cropOf(canvas).toDataURL('image/jpeg', 0.78);
         });
