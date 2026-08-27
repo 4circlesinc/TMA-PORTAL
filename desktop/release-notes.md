@@ -1,1 +1,1 @@
-- Document thumbnails now show the top of the page — a letterhead, a form's title, the photograph on a passport page — instead of the whole sheet shrunk until it looked blank
+- Scanned PDFs show a picture of the document again instead of a red PDF mark — the app was giving up on a page before it had finished reading it
