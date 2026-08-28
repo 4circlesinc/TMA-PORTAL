@@ -203,9 +203,9 @@ try {
   const guestPage = await guest.newPage();
   await guestPage.goto(link, { waitUntil: 'domcontentloaded' });
 
-  const heading = (await guestPage.textContent('.card__title').catch(() => '')) || '';
+  const heading = (await guestPage.textContent('.tma-auth__title').catch(() => '')) || '';
   check(/Passport and proof of address/.test(heading), 'the request title is on the page');
-  const body = (await guestPage.textContent('.card__body')) || '';
+  const body = (await guestPage.textContent('.tma-auth__card')) || '';
   check(/Colour scans please/.test(body), 'along with the instructions');
   check(/10 MB/.test(body), 'and the size limit that was set');
 

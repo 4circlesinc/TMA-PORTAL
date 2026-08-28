@@ -15,10 +15,14 @@
       default => ['This link is no longer available', 'It may have been removed, or the address may be incomplete.'],
   };
 @endphp
-<div class="card" style="max-width:460px;margin:40px auto 0">
-  <div class="card__body" style="text-align:center">
-    <h1 style="font-size:18px;margin:0 0 6px">{{ $copy[0] }}</h1>
-    <p style="color:var(--muted);font-size:14px;margin:0">{{ $copy[1] }}</p>
+<section class="tma-auth__card" aria-labelledby="request-title">
+  <div class="tma-auth__icon" aria-hidden="true">
+    <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="80" height="80">
   </div>
-</div>
+
+  <div class="tma-auth__intro">
+    <h1 class="tma-auth__title" id="request-title">{{ $copy[0] }}</h1>
+    <p class="tma-auth__subtitle">{{ $copy[1] }}</p>
+  </div>
+</section>
 @endsection

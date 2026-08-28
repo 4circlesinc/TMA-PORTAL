@@ -1,17 +1,31 @@
 @extends('request.layout')
 @section('title', 'Password required')
 @section('content')
-<div class="card" style="max-width:420px;margin:40px auto 0">
-  <div class="card__body">
-    <p class="eyebrow">Document request</p>
-    <h1 style="font-size:18px;margin:0 0 6px">Password required</h1>
-    <p style="color:var(--muted);font-size:14px;margin:0 0 16px">Enter the password you were given to open this upload link.</p>
-    <form method="POST" action="/r/{{ $token }}/unlock">
-      @csrf
-      <input type="password" name="password" placeholder="Password" autofocus required autocomplete="off">
-      @if($error)<div class="err">Incorrect password. Please try again.</div>@endif
-      <button class="btn" style="margin-top:14px;width:100%" type="submit">Unlock</button>
-    </form>
+<section class="tma-auth__card" aria-labelledby="request-title">
+  <div class="tma-request__brand">
+    <img src="/images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Advisory">
   </div>
-</div>
+
+  <div class="tma-auth__intro">
+    <h1 class="tma-auth__title" id="request-title">Password required</h1>
+    <p class="tma-auth__subtitle">Enter the password you were given to open this upload link.</p>
+  </div>
+
+  <form class="tma-auth__form" method="POST" action="/r/{{ $token }}/unlock">
+    @csrf
+    @if($error)
+      <div class="tma-auth__alert tma-auth__alert--error" role="alert">
+        <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+        <span>Incorrect password. Please try again.</span>
+      </div>
+    @endif
+    <label class="tma-auth__field tma-auth__field--password{{ $error ? ' tma-auth__field--error' : '' }}">
+      <input class="tma-auth__input" type="password" name="password" placeholder="Password" aria-label="Password" autofocus required autocomplete="off">
+      <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+        <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+      </button>
+    </label>
+    <button type="submit" class="tma-auth__submit">Unlock</button>
+  </form>
+</section>
 @endsection

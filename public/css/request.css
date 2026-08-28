@@ -1,0 +1,139 @@
+/*
+ * The public upload page (/r/{token}).
+ *
+ * Drawn from the sign-in pages' parts — tokens.css, theme.css, auth.css and
+ * auth-flow.css carry the card, the intro, the fields, the button and the
+ * alerts — so a stranger opening a request sees the same firm the portal
+ * shows. Only what those pages never needed lives here: the brand at the top
+ * of the card, the requester's note, the drop zone and the list of files.
+ */
+
+/* The firm, at the top of the card. The horizontal lockup carries generous
+   transparent padding, so it is taller than it looks. */
+.tma-request__brand {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tma-request__brand img {
+  height: 72px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* What the requester wrote. Their words, on the card's own surface, kept
+   the way they typed them. */
+.tma-request__note {
+  width: min(384px, 100%);
+  margin: 0;
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  flex-shrink: 0;
+}
+
+/* An empty alert host must not hold a gap open in the column. */
+[data-banner]:empty { display: none; }
+
+/* The drop zone: a field-shaped target, dashed because it takes files rather
+   than text. Hover and drag-over tint it the portal's blue. */
+.tma-request__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-28) var(--space-20);
+  border: 1px dashed var(--color-border-medium);
+  border-radius: var(--radius-16);
+  background: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.tma-request__drop img {
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--space-4);
+  opacity: 0.6;
+}
+
+.tma-request__drop:hover,
+.tma-request__drop.is-over {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-white));
+}
+
+.tma-request__drop:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tma-request__drop-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-request__rules { text-align: center; }
+
+/* The files, one row each, with where each one got to at the end. */
+.tma-request__queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.tma-request__queue:empty { display: none; }
+
+.tma-request__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) 0;
+  border-top: 0.5px solid var(--color-border-soft);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-request__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.tma-request__state {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-8);
+  background: var(--color-overlay-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-request__state.is-done {
+  background: color-mix(in srgb, var(--color-green) 18%, transparent);
+  color: var(--color-black);
+}
+
+.tma-request__state.is-error {
+  background: color-mix(in srgb, var(--color-red) 10%, transparent);
+  color: var(--color-red);
+}

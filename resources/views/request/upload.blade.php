@@ -3,55 +3,55 @@
 @section('content')
 @php
   use App\Support\Files\Presenter;
+
+  // The rules, one line. Three bullets read as a form's small print; one
+  // quiet line under the drop zone reads as a caption to it.
+  $rules = array_values(array_filter([
+      $allowedLabel ? ucfirst($allowedLabel).' only' : null,
+      'Up to '.Presenter::humanSize($maxBytes).' per file',
+      $multiple
+          ? $remaining.' '.\Illuminate\Support\Str::plural('file', $remaining).' can still be added'
+          : 'One file',
+  ]));
 @endphp
-<div class="card">
-  <div class="card__head">
-    <p class="eyebrow">Document request</p>
-    <h1 class="card__title">{{ $request->title }}</h1>
-    <p class="card__from">
-      From {{ $requester }}@if($request->expires_at) · Please upload by {{ $request->expires_at->format('j M Y') }}@endif
+<section class="tma-auth__card" aria-labelledby="request-title">
+  <div class="tma-request__brand">
+    <img src="/images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Advisory">
+  </div>
+
+  <div class="tma-auth__intro">
+    <h1 class="tma-auth__title" id="request-title">{{ $request->title }}</h1>
+    <p class="tma-auth__subtitle">
+      Requested by {{ $requester }}@if($request->expires_at) · Upload by {{ $request->expires_at->format('j M Y') }}@endif
     </p>
   </div>
-  <div class="card__body">
-    @if($request->message)
-      <p class="note">{{ $request->message }}</p>
-    @endif
 
-    <ul class="rules">
-      @if($allowedLabel)
-        <li>{{ ucfirst($allowedLabel) }} only</li>
-      @endif
-      <li>Up to {{ Presenter::humanSize($maxBytes) }} per file</li>
-      @if($multiple)
-        <li>{{ $remaining }} {{ \Illuminate\Support\Str::plural('file', $remaining) }} can still be added</li>
-      @else
-        <li>One file</li>
-      @endif
-    </ul>
+  @if($request->message)
+    <p class="tma-request__note">{{ $request->message }}</p>
+  @endif
 
+  <div class="tma-auth__form">
     <div data-banner></div>
 
-    <div class="row">
-      <div class="field">
-        <label for="uploader-name">Your name</label>
-        <input type="text" id="uploader-name" data-uploader-name value="{{ $request->recipient_name }}" autocomplete="name">
-      </div>
-      <div class="field">
-        <label for="uploader-email">Your email <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-        <input type="email" id="uploader-email" data-uploader-email value="{{ $request->recipient_email }}" autocomplete="email">
-      </div>
-    </div>
+    <label class="tma-auth__field">
+      <input class="tma-auth__input" type="text" data-uploader-name value="{{ $request->recipient_name }}" placeholder="Your name" aria-label="Your name" autocomplete="name">
+    </label>
+    <label class="tma-auth__field">
+      <input class="tma-auth__input" type="email" data-uploader-email value="{{ $request->recipient_email }}" placeholder="Your email (optional)" aria-label="Your email (optional)" autocomplete="email">
+    </label>
 
-    <div class="drop" data-drop tabindex="0" role="button" aria-label="Choose files to upload">
-      <p class="drop__title">Drop {{ $multiple ? 'files' : 'a file' }} here</p>
-      <p class="drop__hint">or click to browse your device</p>
+    <div class="tma-request__drop" data-drop tabindex="0" role="button" aria-label="Choose files to upload">
+      <img src="/images/icons/phosphor/CloudArrowUp.svg" alt="" width="32" height="32" aria-hidden="true">
+      <p class="tma-request__drop-title">Drop {{ $multiple ? 'files' : 'a file' }} here</p>
+      <p class="tma-auth__hint">or click to browse your device</p>
     </div>
+    <p class="tma-auth__hint tma-request__rules">{{ implode(' · ', $rules) }}</p>
 
     <input type="file" data-picker hidden @if($multiple) multiple @endif @if($accept) accept="{{ $accept }}" @endif>
 
-    <ul class="queue" data-queue></ul>
+    <ul class="tma-request__queue" data-queue></ul>
   </div>
-</div>
+</section>
 
 <script>
 (function () {
@@ -82,12 +82,25 @@
   var bannerHost = document.querySelector('[data-banner]');
   var busy = false;
 
+  /* The same alert the sign-in pages draw, so "it worked" and "it did not"
+     look the way they do everywhere else in the firm's pages. */
   function banner(kind, text) {
     bannerHost.innerHTML = '';
     if (!text) return;
+    var ok = kind === 'ok';
     var el = document.createElement('div');
-    el.className = 'banner banner--' + kind;
-    el.textContent = text;
+    el.className = 'tma-auth__alert tma-auth__alert--' + (ok ? 'success' : 'error');
+    el.setAttribute('role', ok ? 'status' : 'alert');
+    var icon = document.createElement('img');
+    icon.src = '/images/icons/phosphor/' + (ok ? 'CheckCircle' : 'WarningCircle') + '.svg';
+    icon.alt = '';
+    icon.width = 16;
+    icon.height = 16;
+    icon.setAttribute('aria-hidden', 'true');
+    var copy = document.createElement('span');
+    copy.textContent = text;
+    el.appendChild(icon);
+    el.appendChild(copy);
     bannerHost.appendChild(el);
   }
 
@@ -110,11 +123,12 @@
 
   function addRow(file) {
     var li = document.createElement('li');
+    li.className = 'tma-request__row';
     var name = document.createElement('span');
-    name.className = 'name';
+    name.className = 'tma-request__name';
     name.textContent = file.name;
     var state = document.createElement('span');
-    state.className = 'state';
+    state.className = 'tma-request__state';
     state.textContent = 'Waiting';
     li.appendChild(name);
     li.appendChild(state);
@@ -129,7 +143,7 @@
     body.append('email', (document.querySelector('[data-uploader-email]').value || '').trim());
 
     state.textContent = 'Uploading…';
-    state.className = 'state';
+    state.className = 'tma-request__state';
 
     return fetch('/r/' + encodeURIComponent(TOKEN) + '/upload', {
       method: 'POST',
@@ -143,11 +157,11 @@
       });
     }).then(function (json) {
       state.textContent = 'Uploaded';
-      state.className = 'state is-done';
+      state.className = 'tma-request__state is-done';
       if (typeof json.remaining === 'number') remaining = json.remaining;
     }).catch(function (err) {
       state.textContent = 'Failed';
-      state.className = 'state is-error';
+      state.className = 'tma-request__state is-error';
       state.title = err.message;
       banner('err', err.message);
     });
@@ -169,7 +183,7 @@
       var reason = localReason(file);
       if (reason) {
         state.textContent = reason;
-        state.className = 'state is-error';
+        state.className = 'tma-request__state is-error';
         return;
       }
       chain = chain.then(function () {
