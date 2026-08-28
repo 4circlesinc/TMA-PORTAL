@@ -18183,21 +18183,20 @@ button.tma-cip-status-chip:focus-visible {
 /*
  * The application's verb — record the submission, a query, acceptance.
  *
- * Between the tabs and the panels, for the same reason the sync notice is —
- * it acts on the whole application, and inside one tab it would read as an
- * action on that section. Correcting the CIP number sits in the profile
- * head with the other actions; only the workflow verbs stand here, and
- * when there is no verb there is no band. Takes the tab row's bottom
- * margin so the panels sit where they always did.
+ * At the end of the facts strip, pushed to its far edge: it acts on the
+ * whole application, and inside one tab it would read as an action on that
+ * section. It used to be a band of its own under the strip, where every
+ * button carried its own `margin-left: auto` and two of them floated about
+ * the row with nothing between them. Correcting the CIP number sits in the
+ * profile head with the other actions; only the workflow verbs stand here.
  */
 .tma-dash__clients-appbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-12);
-  flex-shrink: 0;
-  margin-top: calc(var(--space-24) * -1 + var(--space-4));
-  margin-bottom: var(--space-24);
+  gap: var(--space-8);
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /* The number the whole portal calls this application (§7). Monospaced digits
@@ -18264,28 +18263,48 @@ button.tma-cip-status-chip:focus-visible {
   color: var(--color-text-secondary);
 }
 
-/* Pushed to the far end — it acts on the application, it does not describe
-   it like everything to its left. */
+/* The same box as the hub's own buttons (Add client, the profile's Edit):
+   32px tall, pill-cornered, 12px type. Outlined by default; the verb that
+   moves the file forward is filled, the way the primary button is
+   everywhere else. */
 .tma-dash__clients-appbar-action {
-  margin-left: auto;
-  padding: var(--space-4) var(--space-12);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: var(--space-8) var(--space-16);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12);
   background: var(--color-white);
-  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
   color: var(--color-text-primary);
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .tma-dash__clients-appbar-action:hover { background: var(--color-hover); }
 
+.tma-dash__clients-appbar-action--primary {
+  border-color: var(--color-black);
+  background: var(--color-black);
+  color: var(--color-text-white);
+}
+
+.tma-dash__clients-appbar-action--primary:hover {
+  background: var(--color-black);
+  opacity: 0.9;
+}
+
 .tma-dash__clients-appbar-action--quiet {
   border-color: transparent;
+  background: transparent;
   color: var(--color-text-secondary);
 }
 
 .tma-dash__clients-appbar-note {
-  margin: 0 0 0 auto;
+  margin: 0;
   font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
   color: var(--color-text-secondary);
 }
@@ -35923,33 +35942,51 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /*
- * CBI's facts strip: Received, Submitted, Investment, Referred by, Assigned.
+ * The application's facts strip: number, the three dates, Investment,
+ * Referred by, Assigned, and at its far end the verbs that act on the file.
  * Outside the tab panels so it stays on Overview, the people, Documents —
  * every section of the file. Empty dates are omitted in the markup; Assigned
  * always answers.
+ *
+ * One card, the same surface as the panels below it. The facts take the
+ * width and the verbs take what is left of the row; when there is not
+ * enough for both the verbs drop to a line of their own, still at the edge.
  */
 .tma-dash__cip-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16) var(--space-32);
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
   margin-bottom: var(--space-24);
-  padding: var(--space-20);
+  padding: var(--space-16) var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-card, var(--color-white));
 }
 
 .tma-dash__cip-strip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-12) var(--space-24);
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12) var(--space-32);
+}
+
+/* Each fact is as wide as it needs to be, then shares what is left, so the
+   row keeps to one line and the verbs beside it wrap before the facts do. */
+.tma-dash__cip-strip-grid > .tma-dash__clients-list-main {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tma-dash__cip-strip .tma-dash__clients-list-value {
   overflow-wrap: anywhere;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
-.tma-dash__cip-strip + .tma-dash__clients-appbar,
 .tma-dash__cip-strip + .tma-dash__clients-sync-notice {
   margin-top: 0;
 }

@@ -5524,6 +5524,9 @@
    * stopped would be missing from every file anybody was waiting on. Empty
    * decision dates still drop out; Assigned always answers, Unassigned if
    * nobody.
+   *
+   * The verbs stand at the strip's end, beside the facts they act on: one
+   * card that says what the file is and what can be done to it next.
    */
   function cipFact(label, value, rawHtml) {
     if (value == null || value === '') return '';
@@ -5566,7 +5569,7 @@
     return esc(people.map(function (p) { return p.first || p.name; }).join(', ') || 'Unassigned');
   }
 
-  function renderFactsStrip(app) {
+  function renderFactsStrip(state, app) {
     if (!app) return '';
 
     var decision = cipMilestone(app, 'decision');
@@ -5579,19 +5582,21 @@
       cipFact('Referred by', app.provider) +
       cipFact('Assigned', cipAssignedFaces(app), true);
 
-    if (!html) return '';
+    var actions = renderApplicationBar(state, app);
+    if (!html && !actions) return '';
 
     return '<section class="tma-dash__cip-strip" aria-label="Application facts">' +
-      '<div class="tma-dash__cip-strip-grid">' + html + '</div></section>';
+      '<div class="tma-dash__cip-strip-grid">' + html + '</div>' + actions + '</section>';
   }
 
   /*
-   * What can be DONE to this application, above the panels.
+   * What can be DONE to this application, at the end of the facts strip.
    *
-   * The facts strip already names the file; what is left here is the verb.
-   * When there is no verb to offer there is no band either: an empty strip
-   * between the tabs and the panels would be a row of chrome standing in
-   * for nothing.
+   * The strip names the file; the verb sits beside the facts rather than on
+   * a band of its own under them, where two buttons with nothing between
+   * them floated about the row. The verb that moves the file forward, record
+   * it, accept it, decide it, is the filled one; a query is a detour and
+   * stays outlined. When there is no verb to offer there is no slot either.
    */
   function renderApplicationBar(state, app) {
     if (!app) return '';
@@ -5621,12 +5626,12 @@
    */
   function renderSubmissionAction(state, app) {
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
-      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-confirm>' +
+      return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-confirm>' +
         'Confirm submission</button>';
     }
 
     if (app.status === 'ready_to_submit' && app.locked && canRecordSubmission()) {
-      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-submit>' +
+      return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-submit>' +
         'Record submission</button>';
     }
 
@@ -5678,7 +5683,7 @@
     if (!canRecordSubmission()) return '';
     if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
 
-    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-accept>' +
+    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-accept>' +
       'Accepted for processing</button>';
   }
 
@@ -5698,7 +5703,7 @@
     if (!canRecordDecision()) return '';
     if (['background_check', 'delayed'].indexOf(app.status) === -1) return '';
 
-    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-decide>' +
+    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-decide>' +
       'Record decision</button>';
   }
 
@@ -7503,8 +7508,7 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
-      renderFactsStrip(app) +
-      renderApplicationBar(state, app) +
+      renderFactsStrip(state, app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
       // of the way, the same reason a company's and the intake form's do.
