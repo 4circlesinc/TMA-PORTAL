@@ -3065,17 +3065,78 @@
       method: method,
       json: method === 'DELETE' ? undefined : { userId: userId },
     })
-      .then(function () {
+      .then(function (json) {
         clientsToast(method === 'DELETE' ? 'Assignment ended' : 'Assigned', 'positive');
         // The first assignment moves the application into review, so the
         // buckets and the row both have to be read again rather than patched.
-        forgetApplicationTable();
-        forgetBuckets();
-        repaintClients();
+        var row = applicationRowById(applicationId);
+        afterCipAssignmentChanged(row && row.clientUid, json);
       })
       .catch(function (err) {
         clientsToast((err && err.message) || 'Could not change the assignment.', 'negative');
       });
+  }
+
+  function cipApplicationForClient(clientUid) {
+    var cached = applicationFor(clientUid);
+    if (cached && cached.id) return cached;
+
+    return applicationRowByClient(clientUid) || null;
+  }
+
+  /*
+   * Staff on a client. When the client has a CIP application, assignment must
+   * go through the CIP endpoint so §10 can move a NEW file into review;
+   * the client hub endpoint only writes client_assignments.
+   */
+  function assignStaffForClient(clientUid, userId) {
+    var app = cipApplicationForClient(clientUid);
+    if (app && app.id) {
+      return clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/assignments', {
+        method: 'POST',
+        json: { userId: userId },
+      }).then(function (json) {
+        afterCipAssignmentChanged(clientUid, json);
+
+        return json;
+      });
+    }
+
+    return ClientsAPI.assign(clientUid, { userId: userId, level: 'editor' });
+  }
+
+  function unassignStaffForClient(clientUid, userId) {
+    var app = cipApplicationForClient(clientUid);
+    if (app && app.id) {
+      return clientsFetch(
+        '/portal/cip/applications/' + encodeURIComponent(app.id) + '/assignments/' + encodeURIComponent(userId),
+        { method: 'DELETE' }
+      ).then(function (json) {
+        afterCipAssignmentChanged(clientUid, json);
+
+        return json;
+      });
+    }
+
+    return ClientsAPI.unassign(clientUid, userId);
+  }
+
+  function afterCipAssignmentChanged(clientUid, json) {
+    forgetApplicationTable();
+    forgetBuckets();
+
+    if (clientUid) {
+      refreshAfterCipMove(clientUid);
+    } else {
+      repaintClients({ forceFull: true });
+    }
+
+    var state = (clientsMenuCtx && clientsMenuCtx.state) || clientsMountState;
+    if (!state || !clientUid || state.selectedId !== clientUid || !json) return;
+
+    if (json.assignments) state.assignments = json.assignments;
+    if (json.assignable) state.assignable = json.assignable;
+    state.assignPick = '';
   }
 
   function familyTitle(a) {
@@ -9183,18 +9244,22 @@
     var key = kind + ':' + id;
     var req = kind === 'company'
       ? CompanyStaffAPI.assign(id, { userId: userId, level: 'editor', appliesToClients: 'company_only' })
-      : ClientsAPI.assign(id, { userId: userId, level: 'editor' });
+      : assignStaffForClient(id, userId);
 
-    req.then(function () {
+    req.then(function (res) {
       delete clientsAssignable[key];
       clientsToast('Staff assigned', 'positive');
       if (!clientsMenuCtx) return;
-      // The panels cache what they loaded; a render alone would redraw the
-      // same stale list the assignment was just added to.
       var state = clientsMenuCtx.state;
       if (kind === 'company') {
         state.companyPanelsFor = null;
         ensureCompanyPanelsLoaded(state, clientsMenuCtx.render);
+        return;
+      }
+      if (res && res.assignments) {
+        state.assignments = res.assignments;
+        if (res.assignable) state.assignable = res.assignable;
+        state.assignPick = '';
       } else {
         state.assignmentsLoadedFor = null;
         ensureAssignmentsLoaded(state, clientsMenuCtx.render, { force: true });
@@ -10299,11 +10364,7 @@
           clientsToast('Choose a staff member to assign', 'negative');
           return;
         }
-        ClientsAPI.assign(state.selectedId, {
-          userId: userId,
-          // Everyone starts as Editor; the row's own controls change it.
-          level: 'editor',
-        }).then(function (res) {
+        assignStaffForClient(state.selectedId, userId).then(function (res) {
           state.assignments = (res && res.assignments) || [];
           // Chosen and gone: they are on the list now, not in the picker.
           state.assignPick = '';
@@ -10311,8 +10372,13 @@
           if (usesPagedClientsFlow(state)) render();
           else render({ detailOnly: true });
           // Refresh assignable list (assigned people drop out of the picker).
-          ClientsAPI.assignments(state.selectedId).then(function (data) {
+          var app = cipApplicationForClient(state.selectedId);
+          var assignReq = app && app.id
+            ? clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/assignments')
+            : ClientsAPI.assignments(state.selectedId);
+          assignReq.then(function (data) {
             state.assignable = (data && data.assignable) || [];
+            if (data && data.history) state.assignmentHistory = data.history;
             if (usesPagedClientsFlow(state)) render();
             else render({ detailOnly: true });
           });
@@ -10326,12 +10392,17 @@
       btn.addEventListener('click', function () {
         var userId = btn.getAttribute('data-clients-unassign');
         if (!userId || !window.confirm('End this staff assignment? Their access is removed, but the record is kept.')) return;
-        ClientsAPI.unassign(state.selectedId, userId).then(function (res) {
+        unassignStaffForClient(state.selectedId, userId).then(function (res) {
           state.assignments = (res && res.assignments) || [];
           state.assignmentHistory = (res && res.history) || state.assignmentHistory;
           clientsToast('Assignment ended', 'positive');
-          ClientsAPI.assignments(state.selectedId).then(function (data) {
+          var app = cipApplicationForClient(state.selectedId);
+          var assignReq = app && app.id
+            ? clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/assignments')
+            : ClientsAPI.assignments(state.selectedId);
+          assignReq.then(function (data) {
             state.assignable = (data && data.assignable) || [];
+            if (data && data.history) state.assignmentHistory = data.history;
             if (usesPagedClientsFlow(state)) render();
             else render({ detailOnly: true });
           });
