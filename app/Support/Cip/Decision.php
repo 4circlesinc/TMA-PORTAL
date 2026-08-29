@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -45,6 +46,7 @@ class Decision
         string $decision,
         ?Carbon $decidedAt = null,
         string $note = '',
+        ?UploadedFile $letter = null,
     ): CipApplication {
         if (! Status::isTerminal($decision)) {
             throw ValidationException::withMessages([
@@ -69,7 +71,16 @@ class Decision
             );
         }
 
-        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already) {
+        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already, $letter) {
+            if ($letter !== null) {
+                DecisionLetter::store($application, $letter, $actor, $decision);
+                $application->refresh();
+            } elseif (! $already && $application->decision_letter_file_id === null) {
+                throw ValidationException::withMessages([
+                    'decisionLetter' => 'Upload the decision letter as a PDF.',
+                ]);
+            }
+
             /*
              * Written before the transition, so the trail and the milestone
              * both name what was decided on the day it was. A status change

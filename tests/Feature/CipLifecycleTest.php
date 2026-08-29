@@ -153,8 +153,7 @@ class CipLifecycleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
 
-        $body = $this->actingAs($ada)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $body = $this->postCipDecision($ada, $application->uuid, [
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-18',
             ])

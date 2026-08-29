@@ -1074,6 +1074,22 @@ class CipApplicationController extends Controller
     }
 
     /**
+     * @return array{fileId:string,fileName:string}|null
+     */
+    private function decisionLetter(CipApplication $application): ?array
+    {
+        if ($application->decision_letter_file_id === null) {
+            return null;
+        }
+
+        $file = $application->relationLoaded('decisionLetterFile')
+            ? $application->decisionLetterFile
+            : $application->decisionLetterFile()->first();
+
+        return $file ? ['fileId' => $file->uuid, 'fileName' => $file->name] : null;
+    }
+
+    /**
      * @param  ?array<int, array{comments: int, mentionsMe: bool, messages: int}>  $attention
      *                                Primed by the caller when it is drawing more than one
      *                                application; measured here for a single record.
@@ -1122,6 +1138,7 @@ class CipApplicationController extends Controller
             'acceptedAt' => $application->accepted_at?->toDateString(),
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
+            'decisionLetter' => $this->decisionLetter($application),
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),

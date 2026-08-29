@@ -312,6 +312,8 @@
     if (opts.json !== undefined) {
       headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.json);
+    } else if (!(opts.body instanceof FormData)) {
+      /* FormData sets its own multipart boundary; other bodies stay as passed. */
     }
     return fetch(url, {
       method: opts.method || 'GET',
@@ -9177,13 +9179,32 @@
     return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
   }
 
-  function openDecisionDialog(applicationId, clientUid, decision) {
+  function openDecisionDialog(applicationId, clientUid, decision, opts) {
+    opts = opts || {};
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
 
     var today = new Date().toISOString().slice(0, 10);
     var chosen = decision === 'granted' || decision === 'denied' ? decision : '';
     var picking = !chosen;
+    var letterOptional = !!opts.letterOptional;
+    var existingLetter = opts.existingLetter;
+
+    var letterHint = letterOptional
+      ? 'Leave blank to keep the letter already on file when correcting the date.'
+      : 'PDF only. Word documents and other formats cannot be uploaded.';
+    var letterField =
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-decision-letter">Decision letter (PDF)' +
+      (letterOptional ? '' : ' <span aria-hidden="true">*</span>') +
+      '</label>' +
+      '<input type="file" id="cip-decision-letter" class="tma-dash__clients-field-input"' +
+      ' accept="application/pdf,.pdf" data-cip-decision-letter>' +
+      (existingLetter && existingLetter.fileName
+        ? '<p class="tma-portal-modal__text">On file: ' + esc(existingLetter.fileName) + '</p>'
+        : '') +
+      '<p class="tma-portal-modal__text">' + esc(letterHint) + '</p>' +
+      '</div>';
 
     var typeField = picking
       ?         '<div class="tma-dash__clients-field">' +
@@ -9205,6 +9226,7 @@
         ' data-cip-decided value="' + esc(today) + '">' +
         '</div>' +
         typeField +
+        letterField +
         '<p class="tma-portal-modal__text">' +
         (picking
           ? 'The application will move to Approved or Denied. This cannot be undone from here.'
@@ -9241,12 +9263,28 @@
             return;
           }
 
+          var letterEl = el.querySelector('[data-cip-decision-letter]');
+          var letterFile = letterEl && letterEl.files && letterEl.files[0] ? letterEl.files[0] : null;
+          if (letterFile && !isPdfDecisionLetter(letterFile)) {
+            clientsToast('Upload the decision letter as a PDF.', 'negative');
+            return;
+          }
+          if (!letterOptional && !letterFile && !(existingLetter && existingLetter.fileId)) {
+            clientsToast('Upload the decision letter as a PDF.', 'negative');
+            return;
+          }
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
+          var form = new FormData();
+          form.append('decision', picked);
+          form.append('decidedAt', date);
+          if (letterFile) form.append('decisionLetter', letterFile);
+
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
             method: 'POST',
-            json: { decision: picked, decidedAt: date },
+            body: form,
           })
             .then(function () {
               ui.closeModal();
@@ -9261,6 +9299,18 @@
         });
       },
     });
+  }
+
+  function isPdfDecisionLetter(file) {
+    if (!file) return false;
+    var name = String(file.name || '').toLowerCase();
+    var blocked = ['.doc', '.docx', '.rtf', '.pages', '.odt'];
+    for (var i = 0; i < blocked.length; i++) {
+      if (name.endsWith(blocked[i])) return false;
+    }
+    if (name.endsWith('.pdf')) return true;
+    var type = String(file.type || '').toLowerCase();
+    return type === 'application/pdf';
   }
 
   function assignFromContextMenu(kind, id, userId) {
@@ -10775,7 +10825,10 @@
       MORPH.on(btn, 'click', function () {
         var app = applicationFor(state.selectedId);
         if (!app) return;
-        openDecisionDialog(app.id, app.clientUid);
+        openDecisionDialog(app.id, app.clientUid, null, {
+          letterOptional: app.status === 'granted' || app.status === 'denied',
+          existingLetter: app.decisionLetter || null,
+        });
       });
     });
 

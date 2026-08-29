@@ -155,8 +155,7 @@ class CipLettersTest extends TestCase
 
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
 
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($admin, $application->uuid, [
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-18',
             ])
@@ -188,8 +187,7 @@ class CipLettersTest extends TestCase
 
         $application = $this->inBackgroundCheck($admin, InvestmentType::NATIONAL_ACTION_BONDS);
 
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($admin, $application->uuid, [
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-18',
             ])
@@ -213,8 +211,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($admin, InvestmentType::ENTERPRISE_PROJECT);
 
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($admin, $application->uuid, [
                 'decision' => Status::DENIED,
                 'decidedAt' => '2026-08-18',
             ])
@@ -239,8 +236,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
 
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($admin, $application->uuid, [
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-18',
             ])

@@ -10,6 +10,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Decision;
+use App\Support\Cip\DecisionLetter;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\NonCompliance;
@@ -232,15 +233,25 @@ class CipTransitionController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
+        $firstDecision = ! Status::isTerminal($application->status);
+
         $data = $request->validate([
             'decision' => ['required', 'string', Rule::in([Status::GRANTED, Status::DENIED])],
             // Recorded, not assumed: a decision letter is dated, and staff
             // enter it after the fact as often as on the day.
             'decidedAt' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'decisionLetter' => DecisionLetter::rules($firstDecision),
         ], [
             'decidedAt.required' => 'Enter the decision date.',
+            'decisionLetter.required' => 'Upload the decision letter as a PDF.',
+            'decisionLetter.mimes' => 'Upload the decision letter as a PDF.',
+            'decisionLetter.mimetypes' => 'Upload the decision letter as a PDF.',
         ]);
+
+        if ($request->hasFile('decisionLetter')) {
+            DecisionLetter::guardPdf($request->file('decisionLetter'));
+        }
 
         try {
             $application = Decision::record(
@@ -249,6 +260,7 @@ class CipTransitionController extends Controller
                 $data['decision'],
                 Carbon::parse($data['decidedAt']),
                 trim($data['note'] ?? ''),
+                $request->file('decisionLetter'),
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -381,6 +393,21 @@ class CipTransitionController extends Controller
     }
 
     /**
+     * @return array{fileId:string,fileName:string}|null
+     */
+    private function decisionLetter(CipApplication $application): ?array
+    {
+        if ($application->decision_letter_file_id === null) {
+            return null;
+        }
+
+        $application->loadMissing('decisionLetterFile');
+        $file = $application->decisionLetterFile;
+
+        return $file ? ['fileId' => $file->uuid, 'fileName' => $file->name] : null;
+    }
+
+    /**
      * The application as a status screen reads it back.
      *
      * Deliberately not the whole record, that is what
@@ -411,6 +438,7 @@ class CipTransitionController extends Controller
             'acceptedAt' => $application->accepted_at?->toDateString(),
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
+            'decisionLetter' => $this->decisionLetter($application),
             'availableTransitions' => collect(Engine::availableTransitions($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,

@@ -2,8 +2,10 @@
 
 namespace Tests;
 
+use App\Models\User;
 use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -48,5 +50,36 @@ abstract class TestCase extends BaseTestCase
         }
 
         return $response->getContent();
+    }
+
+    /** A minimal PDF for CIP decision-letter uploads in feature tests. */
+    protected function cipDecisionLetterPdf(): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent('decision-letter.pdf', '%PDF-1.4 decision');
+    }
+
+    /**
+     * POST a CIP decision (multipart). Omits `decisionLetter` from `$data` to
+     * exercise validation; pass `decisionLetter => null` to skip the default PDF.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function postCipDecision(User $user, string $applicationUuid, array $data = []): TestResponse
+    {
+        $letter = array_key_exists('decisionLetter', $data)
+            ? $data['decisionLetter']
+            : $this->cipDecisionLetterPdf();
+
+        unset($data['decisionLetter']);
+
+        if ($letter !== null) {
+            $data['decisionLetter'] = $letter;
+        }
+
+        return $this->actingAs($user)->post(
+            '/portal/cip/applications/'.$applicationUuid.'/decision',
+            $data,
+            ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'],
+        );
     }
 }

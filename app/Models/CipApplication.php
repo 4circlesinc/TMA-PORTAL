@@ -108,6 +108,11 @@ class CipApplication extends Model
         return $this->belongsTo(Folder::class, 'post_approval_folder_id');
     }
 
+    public function decisionLetterFile(): BelongsTo
+    {
+        return $this->belongsTo(FileItem::class, 'decision_letter_file_id');
+    }
+
     public function people(): HasMany
     {
         return $this->hasMany(CipPerson::class, 'application_id');

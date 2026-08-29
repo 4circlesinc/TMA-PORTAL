@@ -6,6 +6,7 @@ use App\Models\EmailDelivery;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
@@ -37,6 +38,7 @@ class Postcard extends Mailable implements ShouldQueue
         public string $subjectLine,
         public array $payload,
         public ?string $deliveryUuid = null,
+        public ?\App\Models\FileItem $attachment = null,
     ) {}
 
     public function envelope(): Envelope
@@ -56,6 +58,20 @@ class Postcard extends Mailable implements ShouldQueue
         // Laravel injects its own $message into every mail view; our payload is
         // passed under explicit keys so nothing collides with it.
         return new Content(view: 'emails.postcard', with: $this->payload);
+    }
+
+    /** @return array<int, Attachment> */
+    public function attachments(): array
+    {
+        if ($this->attachment === null) {
+            return [];
+        }
+
+        return [
+            Attachment::fromStorageDisk($this->attachment->disk, $this->attachment->storage_path)
+                ->as($this->attachment->name)
+                ->withMime('application/pdf'),
+        ];
     }
 
     /**

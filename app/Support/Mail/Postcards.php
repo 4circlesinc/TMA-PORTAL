@@ -902,6 +902,7 @@ class Postcards
         ?User $actor = null,
         ?string $subject = null,
         ?array $copy = null,
+        ?\App\Models\FileItem $attachment = null,
     ): Postcard {
         $subject ??= Notices::line($facts, $decision, $actor);
         $granted = $decision === Status::GRANTED;
@@ -934,7 +935,7 @@ class Postcards
             $payload['bodyHtml'] = $copy['bodyHtml'];
         }
 
-        return new Postcard($subject, $payload);
+        return new Postcard($subject, $payload, attachment: $attachment);
     }
 
     /**

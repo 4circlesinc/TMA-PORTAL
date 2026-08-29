@@ -9,6 +9,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -19,7 +20,9 @@ use App\Support\Cip\Decision;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\Status;
 use App\Support\Cip\Timeline;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -80,11 +83,10 @@ class CipDecisionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $body = $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $body = $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk()
             ->json('application');
 
@@ -92,6 +94,7 @@ class CipDecisionTest extends TestCase
         $this->assertSame('Approved', $body['statusLabel']);
         $this->assertSame(Status::GRANTED, $body['decision']);
         $this->assertSame('2026-08-18', $body['decidedAt']);
+        $this->assertNotNull($body['decisionLetter']['fileId'] ?? null);
 
         $show = $this->actingAs($staff)
             ->getJson('/portal/cip/applications/'.$application->uuid)
@@ -108,6 +111,7 @@ class CipDecisionTest extends TestCase
         $this->assertSame(Status::GRANTED, $fresh->status);
         $this->assertSame(CipApplication::DECISION_GRANTED, $fresh->decision);
         $this->assertSame('2026-08-18', $fresh->decided_at->toDateString());
+        $this->assertNotNull($fresh->decision_letter_file_id);
 
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
@@ -132,11 +136,10 @@ class CipDecisionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::DENIED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::DENIED)
             ->assertJsonPath('application.statusLabel', 'Denied')
@@ -155,28 +158,37 @@ class CipDecisionTest extends TestCase
         $application = $this->inBackgroundCheck($staff);
         $application->forceFill(['status' => Status::DELAYED])->save();
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::GRANTED);
     }
 
-    public function test_the_decision_date_and_type_are_required(): void
+    public function test_the_decision_date_type_and_letter_are_required(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['decision', 'decidedAt']);
+        $response = $this->actingAs($staff)
+            ->post('/portal/cip/applications/'.$application->uuid.'/decision', [], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('decision');
+        $response->assertJsonValidationErrors('decidedAt');
+        $response->assertJsonValidationErrors('decisionLetter');
 
         $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+            ->post('/portal/cip/applications/'.$application->uuid.'/decision', [
                 'decision' => Status::GRANTED,
+                'decisionLetter' => $this->cipDecisionLetterPdf(),
+            ], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('decidedAt');
@@ -186,6 +198,44 @@ class CipDecisionTest extends TestCase
         $this->assertNull($application->fresh()->decided_at);
     }
 
+    public function test_the_decision_letter_must_be_a_pdf(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($staff);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/'.$application->uuid.'/decision', [
+                'decision' => Status::GRANTED,
+                'decidedAt' => '2026-08-18',
+                'decisionLetter' => UploadedFile::fake()->create('letter.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+            ], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('decisionLetter');
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
+    }
+
+    public function test_a_granted_letter_lands_in_the_post_approval_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($staff);
+        $main = $application->people()->first();
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])->assertOk();
+
+        $application = $application->fresh()->load(['decisionLetterFile', 'people']);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $postFolder = Tree::postApprovalPersonFolder($main, null, $staff);
+
+        $this->assertSame($postFolder->id, $application->decisionLetterFile->folder_id);
+    }
+
     public function test_a_compliance_officer_may_record_a_decision(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
@@ -193,11 +243,10 @@ class CipDecisionTest extends TestCase
         $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com', 'Colin Compliance');
         Assignments::assign($application->fresh(), $colin, $admin, CipAccess::COMPLIANCE_OFFICER);
 
-        $this->actingAs($colin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::DENIED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $this->postCipDecision($colin, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::DENIED);
     }
@@ -209,11 +258,10 @@ class CipDecisionTest extends TestCase
         $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
         Assignments::assign($application->fresh(), $rita, $admin);
 
-        $this->actingAs($rita)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $this->postCipDecision($rita, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::GRANTED);
     }
@@ -240,12 +288,10 @@ class CipDecisionTest extends TestCase
         $application = $this->inBackgroundCheck($staff);
         $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
-            ->assertStatus(422);
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])->assertStatus(422);
 
         $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
         $this->assertNull($application->fresh()->decision);
@@ -259,15 +305,22 @@ class CipDecisionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        Decision::record($application, $staff, Status::GRANTED, now()->startOfDay()->setDate(2026, 8, 10));
+        Decision::record(
+            $application,
+            $staff,
+            Status::GRANTED,
+            now()->startOfDay()->setDate(2026, 8, 10),
+            '',
+            $this->cipDecisionLetterPdf(),
+        );
         $mails = count(Mail::sent(Postcard::class));
         $this->assertGreaterThan(0, $mails);
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+            'decisionLetter' => null,
+        ])
             ->assertOk()
             ->assertJsonPath('application.decidedAt', '2026-08-18')
             ->assertJsonPath('application.status', Status::GRANTED);
@@ -288,14 +341,20 @@ class CipDecisionTest extends TestCase
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
-        Decision::record($application, $staff, Status::GRANTED, now()->startOfDay()->setDate(2026, 8, 10));
+        Decision::record(
+            $application,
+            $staff,
+            Status::GRANTED,
+            now()->startOfDay()->setDate(2026, 8, 10),
+            '',
+            $this->cipDecisionLetterPdf(),
+        );
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::DENIED,
-                'decidedAt' => '2026-08-18',
-            ])
-            ->assertStatus(422);
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-18',
+            'decisionLetter' => null,
+        ])->assertStatus(422);
 
         $this->assertSame(Status::GRANTED, $application->fresh()->status);
         $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
@@ -322,19 +381,18 @@ class CipDecisionTest extends TestCase
 
         Mail::fake();
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
-            ->assertOk();
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])->assertOk();
 
         $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected
                 && $mail->hasTo('ada@example.com')
-                && str_contains($mail->payload['lead'], 'granted');
+                && str_contains($mail->payload['lead'], 'granted')
+                && $mail->attachment instanceof FileItem;
         });
         Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
         Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));

@@ -524,8 +524,7 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
 
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($admin, $application->uuid, [
                 'decision' => Status::GRANTED,
                 'decidedAt' => '2026-08-10',
             ])
@@ -561,8 +560,7 @@ class CipTransitionTest extends TestCase
         Assignments::assign($application->fresh(), $reviewer, $admin);
         $application = $application->fresh();
 
-        $this->actingAs($reviewer)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+        $this->postCipDecision($reviewer, $application->uuid, [
                 'decision' => Status::DENIED,
                 'decidedAt' => '2026-08-10',
             ])

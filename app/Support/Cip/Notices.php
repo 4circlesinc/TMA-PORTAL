@@ -109,6 +109,10 @@ class Notices
     ): Postcard {
         $subject = self::line($facts, $to, $actor, $initials);
 
+        $letter = in_array($to, [Status::GRANTED, Status::DENIED], true)
+            ? $application->decisionLetterFile
+            : null;
+
         return match ($to) {
             Status::UPDATE_REQUIRED => Postcards::cipUpdatesRequired(
                 $facts, self::sentBack($application), $actor, $url, $recipientName, $subject,
@@ -123,6 +127,7 @@ class Notices
             Status::GRANTED, Status::DENIED => Postcards::cipDecision(
                 $facts, $url, $to, $application->decided_at?->toDateString(), $recipientName, $actor, $subject,
                 Letters::copy($application, $to, $recipientName),
+                $letter,
             ),
             Status::REVIEW_APPLICATION => Postcards::cipAssigned(
                 array_merge($facts, [
