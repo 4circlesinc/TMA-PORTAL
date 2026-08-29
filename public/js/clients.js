@@ -9192,8 +9192,8 @@
 
     var letterField =
       '<div class="tma-portal-drop' + (existingLetter && existingLetter.fileName ? ' is-filled' : '') + '" data-cip-decision-drop>' +
-      '<span class="tma-dash__clients-field-label">Decision letter (PDF)' +
-      (letterOptional ? '' : ' <span aria-hidden="true">*</span>') + '</span>' +
+      '<span class="tma-portal-field__label">Decision letter (PDF)' +
+      (letterOptional ? '' : '<span class="tma-portal-field__required" aria-hidden="true">*</span>') + '</span>' +
       (existingLetter && existingLetter.fileName
         ? '<p class="tma-portal-drop__meta">On file: ' + esc(existingLetter.fileName) + '</p>'
         : '') +
