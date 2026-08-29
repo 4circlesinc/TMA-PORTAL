@@ -9190,20 +9190,21 @@
     var letterOptional = !!opts.letterOptional;
     var existingLetter = opts.existingLetter;
 
-    var letterHint = letterOptional
-      ? 'Leave blank to keep the letter already on file when correcting the date.'
-      : 'PDF only. Word documents and other formats cannot be uploaded.';
     var letterField =
-      '<div class="tma-dash__clients-field">' +
-      '<label class="tma-dash__clients-field-label" for="cip-decision-letter">Decision letter (PDF)' +
-      (letterOptional ? '' : ' <span aria-hidden="true">*</span>') +
-      '</label>' +
-      '<input type="file" id="cip-decision-letter" class="tma-dash__clients-field-input"' +
-      ' accept="application/pdf,.pdf" data-cip-decision-letter>' +
+      '<div class="tma-portal-drop' + (existingLetter && existingLetter.fileName ? ' is-filled' : '') + '" data-cip-decision-drop>' +
+      '<span class="tma-dash__clients-field-label">Decision letter (PDF)' +
+      (letterOptional ? '' : ' <span aria-hidden="true">*</span>') + '</span>' +
       (existingLetter && existingLetter.fileName
-        ? '<p class="tma-portal-modal__text">On file: ' + esc(existingLetter.fileName) + '</p>'
+        ? '<p class="tma-portal-drop__meta">On file: ' + esc(existingLetter.fileName) + '</p>'
         : '') +
-      '<p class="tma-portal-modal__text">' + esc(letterHint) + '</p>' +
+      '<input type="file" accept="application/pdf,.pdf" class="tma-dash__clients-photo-input"' +
+      ' data-cip-decision-letter aria-hidden="true">' +
+      '<button type="button" class="tma-portal-drop__zone" data-cip-decision-letter-btn>' +
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
+      '<span class="tma-portal-drop__hint">Drop the letter here, or choose one</span>' +
+      '<span class="tma-portal-drop__meta">PDF only</span>' +
+      '</button>' +
+      '<ul class="tma-portal-drop__files" data-cip-decision-letter-list hidden></ul>' +
       '</div>';
 
     var typeField = picking
@@ -9241,6 +9242,8 @@
       onMount: function (el) {
         var cancel = el.querySelector('[data-cip-cancel-decision]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        wireDecisionLetterDrop(el);
 
         var save = el.querySelector('[data-cip-save-decision]');
         if (!save) return;
@@ -9298,6 +9301,96 @@
             });
         });
       },
+    });
+  }
+
+  function wireDecisionLetterDrop(root) {
+    var zone = root.querySelector('[data-cip-decision-drop]');
+    if (!zone) return;
+
+    var input = zone.querySelector('[data-cip-decision-letter]');
+    var btn = zone.querySelector('[data-cip-decision-letter-btn]');
+    var list = zone.querySelector('[data-cip-decision-letter-list]');
+    if (!input || !btn) return;
+
+    function paint(file) {
+      if (!file) {
+        zone.classList.remove('is-filled');
+        if (list) {
+          list.innerHTML = '';
+          list.hidden = true;
+        }
+        return;
+      }
+
+      zone.classList.add('is-filled');
+      if (!list) return;
+
+      var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
+        ? window.TMAFileIcons.fileIconSrc('', file.name)
+        : ICON + 'File.svg';
+
+      list.hidden = false;
+      list.innerHTML =
+        '<li class="tma-portal-drop__file">' +
+        '<img class="tma-portal-drop__file-icon" src="' + esc(icon) + '" alt="" width="20" height="20">' +
+        '<span class="tma-portal-drop__file-name">' + esc(file.name) + '</span>' +
+        '<button type="button" class="tma-portal-drop__file-remove" data-cip-decision-letter-remove' +
+        ' aria-label="Remove ' + esc(file.name) + '">' +
+        '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>' +
+        '</li>';
+
+      var remove = list.querySelector('[data-cip-decision-letter-remove]');
+      if (remove) {
+        remove.addEventListener('click', function () {
+          input.value = '';
+          paint(null);
+        });
+      }
+    }
+
+    function take(files) {
+      var file = files && files[0];
+      if (!file) return;
+
+      if (!isPdfDecisionLetter(file)) {
+        clientsToast('Upload the decision letter as a PDF.', 'negative');
+        input.value = '';
+        return;
+      }
+
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch (e) {
+        /* Older browsers fall back to the native picker value. */
+      }
+
+      paint(file);
+    }
+
+    btn.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () { take(input.files); });
+
+    ['dragenter', 'dragover'].forEach(function (type) {
+      zone.addEventListener(type, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragging');
+      });
+    });
+
+    zone.addEventListener('dragleave', function (e) {
+      if (zone.contains(e.relatedTarget)) return;
+      zone.classList.remove('is-dragging');
+    });
+
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('is-dragging');
+      take(e.dataTransfer && e.dataTransfer.files);
     });
   }
 
