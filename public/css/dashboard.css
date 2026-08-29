@@ -17488,7 +17488,9 @@
   gap: var(--space-16);
 }
 
-.tma-dash__clients-profile-panel--dependents > .tma-dash__clients-card {
+.tma-dash__clients-profile-panel--dependents > .tma-dash__clients-card,
+.tma-dash__clients-profile-panel[data-clients-panel="applicant"] > .tma-dash__clients-card,
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] > .tma-dash__clients-card {
   margin: 0;
 }
 
@@ -18438,20 +18440,16 @@ button.tma-cip-status-chip:focus-visible {
 }
 
 /*
- * With the wrapper gone, the panel is the card.
+ * With the wrapper gone, the panel is the card — except where the panel
+ * already contains a person card.
  *
- * The tabs moved out of the panel and the panel's fill went with them, which
- * was right — it was a card sitting behind cards. But it was also the only
- * surface the applicant, the sponsor and the documents had, so they were left
- * on bare page while the dependants, which build their own cards, kept theirs.
- * The same person read from two tabs looked like two different designs.
- *
- * So each panel carries the surface itself, and the one panel that is a LIST
- * of cards is left alone — giving it one would put cards back inside a card,
- * which is the thing this whole change was undoing.
+ * Main applicant, sponsor, and dependents all draw `.tma-dash__clients-card`.
+ * Padding and fill on those panels would nest a card inside a card (the extra
+ * inset on applicant/sponsor that dependents never had). Documents and folders
+ * still need the panel as their surface.
  */
 .tma-dash__clients-profile--cards >
-  .tma-dash__clients-profile-panel:not([data-clients-panel="dependents"]):not([data-clients-panel="overview"]) {
+  .tma-dash__clients-profile-panel:not([data-clients-panel="dependents"]):not([data-clients-panel="overview"]):not([data-clients-panel="applicant"]):not([data-clients-panel="sponsor"]) {
   padding: var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-card, var(--color-white));
