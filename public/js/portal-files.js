@@ -854,11 +854,16 @@
   function toolBtn(icon, action, label, opts) {
     opts = opts || {};
     var hook = opts.view ? ' data-files-view="' + opts.view + '"' : ' data-files-action="' + esc(action) + '"';
-    return '<button type="button" class="tma-dash__tool-btn' + (opts.active ? ' is-active' : '') + '"' + hook +
+    var labeled = !!opts.label;
+    return '<button type="button" class="tma-dash__tool-btn' +
+      (labeled ? ' tma-dash__tool-btn--labeled' : '') +
+      (opts.active ? ' is-active' : '') + '"' + hook +
       (opts.disabled ? ' disabled' : '') +
       ' aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
       (opts.pressed != null ? ' aria-pressed="' + opts.pressed + '"' : '') + '>' +
-      '<img src="images/icons/phosphor/' + icon + '.svg" alt=""></button>';
+      '<img src="images/icons/phosphor/' + icon + '.svg" alt="">' +
+      (labeled ? '<span>' + esc(label) + '</span>' : '') +
+      '</button>';
   }
 
   /*
@@ -971,7 +976,7 @@
     var canDelete = sel.every(function (i) { return perm(i, 'delete'); });
     var canMove = sel.every(function (i) { return perm(i, 'move'); });
     var canCopy = sel.every(function (i) { return perm(i, 'copy'); });
-    var canBulkReview = sharedReviewStatuses(sel).length > 0;
+    var hasFiles = sel.some(function (i) { return i && i.type !== 'folder'; });
     // A request signs exactly one document, so this appears only for a single
     // signable file - never for a folder or a multi-selection.
     var signable = sel.length === 1 && sel[0].type === 'file' && canSendForSignature(sel[0]);
@@ -981,7 +986,7 @@
     var colourable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'colour');
     var iconable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'icon');
     return toolBtn('ArrowLineDown', 'bulk-download', 'Download') +
-      (canBulkReview ? toolBtn('SealCheck', 'bulk-status', 'Change status') : '') +
+      (hasFiles ? toolBtn('Flag', 'bulk-status', 'Change status', { label: true }) : '') +
       (signable ? toolBtn('Signature', 'bulk-signature', 'Send for signature') : '') +
       (colourable || iconable ? toolBtn('Palette', 'bulk-appearance', 'Folder appearance') : '') +
       toolBtn('ArrowsOutCardinal', 'bulk-move', 'Move', { disabled: !canMove }) +
@@ -6435,6 +6440,10 @@
     return !!(item && item.type !== 'folder' && item.review && item.review.status && item.review.canReview);
   }
 
+  function reviewableFiles(list) {
+    return (list || []).filter(canReview);
+  }
+
   /**
    * Move a document to a review state.
    *
@@ -6501,8 +6510,8 @@
    * file somewhere the lifecycle (or an officer's grants) would refuse.
    */
   function sharedReviewStatuses(list) {
-    var files = (list || []).filter(canReview);
-    if (!files.length || files.length !== (list || []).length) return [];
+    var files = reviewableFiles(list);
+    if (!files.length) return [];
 
     var allowed = allowedReviewStatuses(files[0]).map(function (s) { return s.id; });
 
@@ -6514,21 +6523,21 @@
   }
 
   function bulkReviewMenu(list, onDone) {
-    var ids = sharedReviewStatuses(list);
+    var files = reviewableFiles(list);
+    var ids = sharedReviewStatuses(files);
     var states = REVIEW_STATES.filter(function (s) { return ids.indexOf(s.id) !== -1; });
 
     return states.map(function (s) {
       return {
         label: s.label,
         icon: s.icon,
-        fn: function () { bulkSetReviewStatus(list, s.id, onDone); },
+        fn: function () { bulkSetReviewStatus(files, s.id, onDone); },
       };
     });
   }
 
   function bulkSetReviewStatus(list, status, onDone) {
-    var payload = (list || [])
-      .filter(function (i) { return i && i.type === 'file' && i.id; })
+    var payload = reviewableFiles(list)
       .map(function (i) { return { type: 'file', id: i.id }; });
     if (!payload.length) return;
 
@@ -6560,9 +6569,19 @@
 
   function bulkReview() {
     var sel = selectedItems();
+    var files = reviewableFiles(sel);
+    if (!files.length) {
+      ui().toast('Status is for client documents. Open a client folder or an application’s Documents tab, then select those files.', false);
+      return;
+    }
+    if (!sharedReviewStatuses(files).length) {
+      ui().toast('These files don’t share a next status. Select files at the same step, or change them one at a time.', false);
+      return;
+    }
+
     var btn = state.el && state.el.querySelector('[data-files-action="bulk-status"]');
     var box = btn ? btn.getBoundingClientRect() : { left: 0, bottom: 0 };
-    openContextMenu(box.left, box.bottom + 4, sel[0], bulkReviewMenu(sel, function () {
+    openContextMenu(box.left, box.bottom + 4, files[0], bulkReviewMenu(files, function () {
       clearSelection();
       load(true);
     }));
@@ -6762,7 +6781,7 @@
     if (canReview(item)) {
       list.push({
         label: 'Change status',
-        icon: 'SealCheck',
+        icon: 'Flag',
         submenu: function (fill) {
           fill(reviewSubmenu(item, function () { load(true); notifyExternal(); }));
         },
@@ -6842,7 +6861,7 @@
     if (reviewStates.length) {
       out.push({
         label: 'Change status',
-        icon: 'SealCheck',
+        icon: 'Flag',
         submenu: function (fill) {
           fill(bulkReviewMenu(list, done));
         },
@@ -7519,7 +7538,7 @@
     },
 
     canReviewBulk: function (items) {
-      return sharedReviewStatuses(items || []).length > 0;
+      return (items || []).some(function (i) { return i && i.type !== 'folder'; });
     },
 
     /**
@@ -7528,8 +7547,15 @@
      * of the files would be refused.
      */
     reviewBulk: function (x, y, items, onChange) {
-      var list = (items || []).filter(canReview);
-      if (!list.length || !sharedReviewStatuses(list).length) return;
+      var list = reviewableFiles(items);
+      if (!list.length) {
+        ui().toast('Status is for client documents. Select files from a client folder.', false);
+        return;
+      }
+      if (!sharedReviewStatuses(list).length) {
+        ui().toast('These files don’t share a next status. Select files at the same step, or change them one at a time.', false);
+        return;
+      }
       externalItems = list.slice();
       externalOnChange = onChange || null;
       openContextMenu(x, y, list[0], bulkReviewMenu(list, onChange || function () {}));

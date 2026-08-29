@@ -6714,7 +6714,7 @@
           '<div class="tma-dash__toolbar-bulk" data-clients-folder-bulk hidden>' +
           '<span class="tma-dash__toolbar-selection" data-clients-folder-bulk-count>0 Selected</span>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-status>' +
-          '<img src="images/icons/phosphor/SealCheck.svg" alt=""><span>Change status</span></button>' +
+          '<img src="images/icons/phosphor/Flag.svg" alt=""><span>Change status</span></button>' +
           '</div>' +
           '<input type="file" multiple hidden data-clients-folder-fileinput>' +
           '</div>'
@@ -6893,8 +6893,7 @@
 
     var statusBtn = bar.querySelector('[data-clients-folder-bulk-status]');
     if (!statusBtn) return;
-    var acts = window.TMAFileActions;
-    statusBtn.hidden = !(acts && acts.canReviewBulk && acts.canReviewBulk(files));
+    statusBtn.hidden = n === 0;
   }
 
   function clientFolderCanvas(root) {

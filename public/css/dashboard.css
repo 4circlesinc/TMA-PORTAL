@@ -2221,6 +2221,17 @@
   border-radius: var(--radius-8);
   cursor: pointer;
 }
+.tma-dash__tool-btn--labeled {
+  width: auto;
+  padding: 0 var(--space-8);
+  gap: var(--space-6);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-size-13);
+  line-height: 1;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
 .tma-dash__tool-btn:hover { background: var(--color-hover); }
 .tma-dash__tool-btn[aria-pressed="true"] { background: var(--color-hover); }
 .tma-dash__tool-btn img { width: var(--dash-icon-md); height: var(--dash-icon-md); }
