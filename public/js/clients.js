@@ -2339,51 +2339,17 @@
 
     var people = onPeopleTab(state);
     var providers = onProvidersTab(state);
-    var noun = people ? 'provider contact' : (providers ? 'service provider' : 'client');
 
-    if (searching || filtered) {
-      // Nothing to add here: the records exist, the query is what is wrong.
-      var what = searching ? 'search' : 'filters';
-      if (!noData) return 'No ' + noun + 's match this ' + what;
-      return noData.render({
-        title: 'No matches',
-        subtitle: searching
-          ? 'No ' + noun + ' matches “' + state.search.trim() + '”.'
-          : 'No ' + noun + ' matches these filters.',
-        illustrationName: 'Illustration19',
-        showButton: false,
-      });
+    if (searching) {
+      return clientsEmpty('No results for “' + state.search.trim() + '”', 'Illustration19');
     }
+    if (filtered) return clientsEmpty('No matches', 'Illustration19');
 
-    if (people) {
-      if (!noData) return 'No provider contacts yet';
-      return noData.render({
-        title: 'No provider contacts yet',
-        subtitle: 'Contacts appear here once they belong to a service provider.',
-        illustrationName: 'Illustration04',
-        showButton: false,
-      });
-    }
+    if (people) return clientsEmpty('No provider contacts', 'Illustration04');
+    if (providers) return clientsEmpty('No service providers', 'Illustration07');
 
-    if (providers) {
-      if (!noData) return 'No service providers yet';
-      return noData.render({
-        title: 'No service providers yet',
-        subtitle: 'Add the firms that file applications with you.',
-        illustrationName: 'Illustration07',
-        buttonLabel: 'New service provider',
-        showButton: canManageClients(),
-      });
-    }
-
-    if (!noData) return 'No applications yet';
-    return noData.render({
-      title: 'No applications yet',
-      subtitle: 'Create your first application to get started.',
-      illustrationName: 'Illustration07',
-      buttonLabel: 'Create New Application',
-      showButton: canManageClients(),
-    });
+    if (!noData) return 'No clients';
+    return clientsEmpty('No clients', 'Illustration07');
   }
 
   /* Whether this reader may add a client, an empty state offering a button
@@ -2943,7 +2909,7 @@
 
     if (APP_TABLE.error) {
       return '<div class="tma-dash__clients-directory-empty">' +
-        '<p class="tma-portal-modal__text">' + esc(APP_TABLE.error) + '</p></div>';
+        clientsEmpty('Could not load applications', 'Illustration11') + '</div>';
     }
 
     var headers = applicationTableHeaders();
@@ -2953,15 +2919,8 @@
     }
 
     if (!APP_TABLE.rows.length) {
-      var emptyMsg = state.search
-        ? 'No application matches “' + state.search + '”.'
-        : (listTabOf(state) === 'post_approval'
-          ? 'No post-approval applications yet. Approved applications can be moved to post-approval after a decision is recorded.'
-          : 'No applications yet.');
-      return ui.table(headers,
-        '<tr class="tma-portal-table__empty"><td colspan="10">' +
-        esc(emptyMsg) +
-        '</td></tr>', { cls: 'tma-cip-table' });
+      return '<div class="tma-dash__clients-directory-empty">' +
+        renderApplicationTableEmptyState(state) + '</div>';
     }
 
     var rows = APP_TABLE.rows.map(function (a) {
@@ -4621,12 +4580,32 @@
     );
   }
 
-  /* The documented empty state (portal-views.js): an illustration and four
-     words, instead of a grey apology. */
-  function clientsEmpty(title, illustration) {
+  /* The documented empty state (portal-views.js): an illustration and a short
+     title — no grey table row, no long explanation. */
+  function clientsEmpty(title, illustration, subtitle) {
     var ui = window.TMAPortalUI;
-    if (ui && ui.emptyState) return ui.emptyState({ title: title, illustration: illustration });
+    if (ui && ui.emptyState) {
+      return ui.emptyState({
+        title: title,
+        subtitle: subtitle,
+        illustration: illustration || 'Illustration07',
+      });
+    }
     return '<div class="tma-dash__clients-assigned-empty">' + esc(title) + '</div>';
+  }
+
+  /** Empty application table — search, filters, or which tab is open. */
+  function renderApplicationTableEmptyState(state) {
+    var searching = !!String(state.search || '').trim();
+    if (searching) {
+      return clientsEmpty('No results for “' + state.search.trim() + '”', 'Illustration19');
+    }
+    if (anyTableFilterSet()) return clientsEmpty('No matches', 'Illustration19');
+
+    var tab = listTabOf(state);
+    if (tab === 'post_approval') return clientsEmpty('No post-approval applications', 'Illustration07');
+    if (tab === 'pre_approval') return clientsEmpty('No pre-approval applications', 'Illustration07');
+    return clientsEmpty('No applications', 'Illustration07');
   }
 
   function companyPersonRow(p) {
