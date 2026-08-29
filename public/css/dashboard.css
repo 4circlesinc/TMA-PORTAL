@@ -35906,9 +35906,22 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-cip-table__member {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-8);
+  padding-left: var(--space-16);
+}
+
+.tma-cip-table__member-avatar {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.tma-cip-table__member-text {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: var(--space-16);
+  min-width: 0;
 }
 
 .tma-cip-table__member-role {

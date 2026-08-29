@@ -2946,10 +2946,49 @@
       label: 'Main Applicant',
       name: a.applicantName,
       profileTab: 'applicant',
+      photo: a.photo || null,
       docFiled: 0,
       docTotal: 0,
       docPending: 0,
+      status: 'not_started',
+      statusLabel: 'Not started',
+      statusTone: 'neutral',
     }];
+  }
+
+  function memberFace(member) {
+    var photo = member && (member.photo || member.passportPhotoUrl);
+    if (photo) {
+      return '<img class="tma-cip-table__applicant-face" src="' + esc(photo) +
+        '" alt="" width="26" height="26">';
+    }
+
+    var name = (member && member.name) || '';
+    var uri = initialsAvatarUri(name, (member && member.id) || name);
+    if (uri) {
+      return '<img class="tma-cip-table__applicant-face" src="' + esc(uri) +
+        '" alt="" width="26" height="26">';
+    }
+
+    return '<span class="tma-cip-table__applicant-face tma-cip-table__applicant-face--initial">' +
+      esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
+  }
+
+  function cipPersonStatusChip(member) {
+    if (!member || !member.statusLabel) return memberProgressCell(member);
+
+    var title = '';
+    if (member.docTotal) {
+      title = (member.label || 'Member') + ': ' + (member.docFiled || 0) + ' of ' +
+        member.docTotal + ' documents filed';
+      if (member.docPending) title += ', ' + member.docPending + ' pending';
+      title = ' title="' + esc(title) + '"';
+    }
+
+    return '<span class="tma-portal-status tma-portal-status--' +
+      esc(member.statusTone || 'neutral') +
+      ' tma-portal-status--inline"' + title + '>' +
+      esc(member.statusLabel) + '</span>';
   }
 
   function memberProgressCell(member) {
@@ -2994,11 +3033,13 @@
       ' data-cip-profile-tab="' + esc(member.profileTab || 'applicant') + '">' +
       '<td></td>' +
       '<td><div class="tma-cip-table__member">' +
+      '<span class="tma-cip-table__member-avatar">' + memberFace(member) + '</span>' +
+      '<div class="tma-cip-table__member-text">' +
       '<span class="tma-cip-table__member-role">' + esc(member.label || '') + '</span>' +
       '<span class="tma-cip-table__member-name">' + esc(member.name || '-') + '</span>' +
-      '</div></td>' +
+      '</div></div></td>' +
       '<td colspan="5"></td>' +
-      '<td>' + memberProgressCell(member) + '</td>' +
+      '<td>' + cipPersonStatusChip(member) + '</td>' +
       '<td></td>' +
       '<td></td>' +
       '</tr>';

@@ -539,6 +539,9 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('dependents', $row['familyMembers'][2]['profileTab']);
         $this->assertArrayHasKey('docFiled', $row['familyMembers'][0]);
         $this->assertArrayHasKey('docTotal', $row['familyMembers'][0]);
+        $this->assertArrayHasKey('statusLabel', $row['familyMembers'][0]);
+        $this->assertArrayHasKey('statusTone', $row['familyMembers'][0]);
+        $this->assertArrayHasKey('photo', $row['familyMembers'][0]);
     }
 
     public function test_phase_counts_respect_application_scope(): void

@@ -731,10 +731,11 @@ class CipApplicationController extends Controller
     /**
      * Post-approval family members for an expandable table row.
      *
-     * Each person carries document progress for their phase checklist, not a
-     * workflow status — per-person statuses arrive in a later spec pass.
+     * Each person carries their own checklist status (derived from document
+     * slots until dedicated post-approval statuses are defined), plus photo
+     * and document progress for the expandable row.
      *
-     * @return list<array{id:string,role:string,label:string,name:string,profileTab:string,docFiled:int,docTotal:int,docPending:int}>
+     * @return list<array{id:string,role:string,label:string,name:string,profileTab:string,photo:?string,passportPhotoUrl:?string,status:string,statusLabel:string,statusTone:string,docFiled:int,docTotal:int,docPending:int}>
      */
     private function familyMembersForRow(CipApplication $application): array
     {
@@ -758,6 +759,7 @@ class CipApplicationController extends Controller
             ->values()
             ->map(function (CipPerson $person) use ($phase) {
                 $progress = $this->documentProgress($person, $phase);
+                $status = $this->personStatus($person, $phase);
 
                 return [
                     'id' => $person->uuid,
@@ -765,14 +767,55 @@ class CipApplicationController extends Controller
                     'label' => Dependents::label($person),
                     'name' => $person->fullName(),
                     'profileTab' => $this->profileTabForPerson($person),
+                    'photo' => $person->photoUrl(),
+                    'passportPhotoUrl' => $person->photo_path
+                        ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
+                        : null,
+                    ...$status,
                     ...$progress,
                 ];
             })
             ->all();
     }
 
-    /** @return array{docFiled:int,docTotal:int,docPending:int} */
-    private function documentProgress(CipPerson $person, string $phase): array
+    /**
+     * The status chip one family member earns from their post-approval checklist.
+     *
+     * Uses the document-slot vocabulary for now. The worst open slot wins:
+     * update required beats pending upload beats review beats ready.
+     *
+     * @return array{status:string,statusLabel:string,statusTone:string}
+     */
+    private function personStatus(CipPerson $person, string $phase): array
+    {
+        $docs = $this->documentsForPhase($person, $phase);
+
+        if ($docs->isEmpty()) {
+            return [
+                'status' => 'not_started',
+                'statusLabel' => 'Not started',
+                'statusTone' => 'neutral',
+            ];
+        }
+
+        $statuses = $docs->map(fn ($slot) => $slot->displayStatus())->all();
+
+        foreach ([
+            DocumentStatus::UPDATE_REQUIRED,
+            DocumentStatus::PENDING_UPLOAD,
+            DocumentStatus::APPLICATION_REVIEW,
+            DocumentStatus::READY_FOR_SUBMISSION,
+        ] as $priority) {
+            if (in_array($priority, $statuses, true)) {
+                return DocumentStatus::badge($priority);
+            }
+        }
+
+        return DocumentStatus::badge(DocumentStatus::READY_FOR_SUBMISSION);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\CipDocument> */
+    private function documentsForPhase(CipPerson $person, string $phase)
     {
         $allowed = Requirements::forPhase(ApplicantType::for($person), $phase)
             ->pluck('id')
@@ -783,14 +826,19 @@ class CipApplicationController extends Controller
             ? $person->documents
             : $person->documents()->get();
 
-        $docs = $docs->filter(function ($slot) use ($allowed) {
+        return $docs->filter(function ($slot) use ($allowed) {
             if ($slot->requirement_id === null) {
                 return true;
             }
 
             return in_array((int) $slot->requirement_id, $allowed, true);
         });
+    }
 
+    /** @return array{docFiled:int,docTotal:int,docPending:int} */
+    private function documentProgress(CipPerson $person, string $phase): array
+    {
+        $docs = $this->documentsForPhase($person, $phase);
         $total = $docs->count();
         $filed = $docs->filter(fn ($slot) => $slot->file_id !== null)->count();
 
