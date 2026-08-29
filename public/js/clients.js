@@ -6192,11 +6192,8 @@
   }
 
   function renderCipPersonProfileColumns(person) {
-    var col1 = [];
-    var col2 = [];
-    var col3 = [];
-
-    col1.push(renderCipPersonPhoto(person));
+    var col1 = [renderCipPersonPhoto(person)];
+    var fields = [];
 
     var item = function (icon, label, value) {
       if (!value) return null;
@@ -6204,22 +6201,23 @@
     };
 
     var i;
-    if ((i = item(ICONS.IdentificationCard, 'Passport number', person.passportNumber))) col1.push(i);
-    if ((i = item(ICONS.User, 'Gender', person.gender))) col1.push(i);
-    if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth))) col1.push(i);
-    if ((i = item(ICONS.MapPin, 'Country of birth', person.countryOfBirth))) col2.push(i);
-    if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) col2.push(i);
-    if ((i = item(ICONS.MapPin, 'Region', person.region))) col2.push(i);
-    if ((i = item(ICONS.Briefcase, 'Occupation', person.occupation))) col3.push(i);
+    if ((i = item(ICONS.IdentificationCard, 'Passport number', person.passportNumber))) fields.push(i);
+    if ((i = item(ICONS.User, 'Gender', person.gender))) fields.push(i);
+    if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth))) fields.push(i);
+    if ((i = item(ICONS.MapPin, 'Country of birth', person.countryOfBirth))) fields.push(i);
+    if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) fields.push(i);
+    if ((i = item(ICONS.MapPin, 'Region', person.region))) fields.push(i);
+    if ((i = item(ICONS.Briefcase, 'Occupation', person.occupation))) fields.push(i);
 
-    var all = col1.concat(col2, col3);
+    var all = col1.concat(fields);
     if (!all.length) return '';
 
     if (isClientsMobile()) {
       return renderProfileListColumns(all);
     }
 
-    var columns = [col1, col2, col3].filter(function (c) { return c.length; });
+    var fieldCols = splitEvenColumns(fields);
+    var columns = [col1].concat(fieldCols).filter(function (c) { return c.length; });
 
     return (
       '<div class="tma-dash__clients-profile-body tma-dash__clients-profile-body--cols-3">' +
