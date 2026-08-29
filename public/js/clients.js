@@ -6172,6 +6172,62 @@
       'Move to post-approval</button>';
   }
 
+  function renderCipPersonProfileColumns(person) {
+    var col1 = [];
+    var col2 = [];
+    var col3 = [];
+
+    var photo = renderCipPersonPhoto(person);
+    if (photo) col1.push(photo);
+
+    var item = function (icon, label, value) {
+      if (!value) return null;
+      return renderListItem({ icon: icon, label: label, value: value });
+    };
+
+    var i;
+    if ((i = item(ICONS.IdentificationCard, 'Passport number', person.passportNumber))) col1.push(i);
+    if ((i = item(ICONS.User, 'Gender', person.gender))) col1.push(i);
+    if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth))) col1.push(i);
+    if ((i = item(ICONS.MapPin, 'Country of birth', person.countryOfBirth))) col2.push(i);
+    if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) col2.push(i);
+    if ((i = item(ICONS.MapPin, 'Region', person.region))) col2.push(i);
+    if ((i = item(ICONS.Briefcase, 'Occupation', person.occupation))) col3.push(i);
+
+    var all = col1.concat(col2, col3);
+    if (!all.length) return '';
+
+    if (isClientsMobile()) {
+      return renderProfileListColumns(all);
+    }
+
+    var columns = [col1, col2, col3].filter(function (c) { return c.length; });
+
+    return (
+      '<div class="tma-dash__clients-profile-body tma-dash__clients-profile-body--cols-3">' +
+      columns.map(function (columnItems) {
+        return (
+          '<ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
+          columnItems.join('') +
+          '</ul>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function renderCipPersonCard(person, app) {
+    if (!person) return '';
+
+    return (
+      '<div class="tma-dash__clients-card">' +
+      renderCipPersonCardHead(person, app) +
+      renderCipPersonProfileColumns(person) +
+      renderCipChecklist(person, app) +
+      '</div>'
+    );
+  }
+
   /*
    * One person from the application, as the profile's own list rows.
    *
@@ -6182,30 +6238,12 @@
     if (!person) return '';
 
     var app = applicationFor(state.selectedId);
-    var rows = [
-      { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
-      { icon: ICONS.User, label: 'Gender', value: person.gender },
-      { icon: ICONS.CalendarBlank, label: 'Date of birth', value: person.dateOfBirth },
-      { icon: ICONS.MapPin, label: 'Country of birth', value: person.countryOfBirth },
-      { icon: ICONS.MapPin, label: 'Country of residence', value: person.countryOfResidence },
-      { icon: ICONS.MapPin, label: 'Region', value: person.region },
-      { icon: ICONS.Briefcase, label: 'Occupation', value: person.occupation },
-    ].filter(function (r) { return !!r.value; }).map(renderListItem);
-
-    var photoRow = renderCipPersonPhoto(person);
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
-      '<div class="tma-dash__clients-card">' +
-      renderCipPersonCardHead(person, app) +
-      (photoRow
-        ? '<ul class="tma-dash__clients-list tma-dash__clients-list--profile tma-dash__clients-list--photo" role="list">' +
-          photoRow + '</ul>'
-        : '') +
-      renderProfileListColumns(rows, { columns: 3, even: true }) +
-      renderCipChecklist(person, app) +
-      '</div></div>'
+      renderCipPersonCard(person, app) +
+      '</div>'
     );
   }
 
@@ -6538,21 +6576,16 @@
     );
   }
 
-  /* Every dependant, each with their classification and their checklist. */
+  /* Every dependant, each with the same card layout as the main applicant. */
   function renderCipDependentsPanel(state, app, hidden) {
     var list = (app.dependents || []);
 
     return (
-      '<div class="tma-dash__clients-profile-panel" data-clients-panel="dependents" role="tabpanel"' +
+      '<div class="tma-dash__clients-profile-panel tma-dash__clients-profile-panel--dependents"' +
+      ' data-clients-panel="dependents" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       list.map(function (d) {
-        return '<div class="tma-dash__clients-card">' +
-          renderCipPersonCardHead(d, app) +
-          renderProfileListColumns([
-            { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
-          ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
-          renderCipChecklist(d, app) +
-          '</div>';
+        return renderCipPersonCard(d, app);
       }).join('') +
       '</div>'
     );

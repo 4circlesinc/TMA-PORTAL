@@ -17491,12 +17491,23 @@
   grid-template-columns: 1fr;
 }
 
-.tma-dash__clients-card .tma-dash__clients-list--photo {
-  margin-bottom: var(--space-8);
+.tma-dash__clients-card .tma-dash__clients-person__photo,
+.tma-dash__clients-card .tma-dash__clients-person__photo-open {
+  margin-left: 0;
 }
 
-.tma-dash__clients-card .tma-dash__clients-list--photo .tma-dash__clients-person__photo-row {
-  padding-top: 0;
+.tma-dash__clients-card .tma-dash__clients-person__photo-row .tma-dash__clients-list-main {
+  min-width: 0;
+}
+
+.tma-dash__clients-profile-panel--dependents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tma-dash__clients-profile-panel--dependents > .tma-dash__clients-card {
+  margin: 0;
 }
 
 /* Section headers carry a count on the right. */
