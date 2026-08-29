@@ -181,22 +181,34 @@
     /* ── clients data ──────────────────────────────────────────── */
     function loadClients() {
       if (clients.loaded || clients.loading) return;
-      clients.loading = true;
-      renderClients();
-      // Preview only, the sidebar paints ≤10 rows. Pulling /portal/clients
-      // here used to download the entire firm directory on every page.
-      var limit = Math.max(CLIENTS_MAX, previewLimits().clients);
-      window.TMANotifyAPI.api(ROOT + '/portal/clients/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
-        clients.items = (data && data.clients) || [];
-        clients.loaded = true;
-        clients.loading = false;
+      var access = window.TMAPortalAccess;
+      var start = function () {
+        if (clients.loaded || clients.loading) return;
+        if (access && typeof access.holds === 'function' && !access.holds('clients.view')) {
+          clients.forbidden = true;
+          clients.loaded = true;
+          renderClients();
+          return;
+        }
+        clients.loading = true;
         renderClients();
-      }).catch(function (err) {
-        clients.loading = false;
-        clients.error = true;
-        if (err && (err.status === 403 || err.status === 401)) clients.forbidden = true;
-        renderClients();
-      });
+        // Preview only, the sidebar paints ≤10 rows. Pulling /portal/clients
+        // here used to download the entire firm directory on every page.
+        var limit = Math.max(CLIENTS_MAX, previewLimits().clients);
+        window.TMANotifyAPI.api(ROOT + '/portal/clients/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
+          clients.items = (data && data.clients) || [];
+          clients.loaded = true;
+          clients.loading = false;
+          renderClients();
+        }).catch(function (err) {
+          clients.loading = false;
+          clients.error = true;
+          if (err && (err.status === 403 || err.status === 401)) clients.forbidden = true;
+          renderClients();
+        });
+      };
+      if (access && typeof access.ready === 'function') access.ready().then(start);
+      else start();
     }
 
     /* ── data wiring ───────────────────────────────────────────── */

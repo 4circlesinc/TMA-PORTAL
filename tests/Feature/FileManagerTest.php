@@ -174,6 +174,21 @@ class FileManagerTest extends TestCase
         );
     }
 
+    public function test_a_lean_listing_skips_the_owner_facet(): void
+    {
+        $user = $this->approvedUser();
+        $this->actingAs($user)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('a.pdf', '%PDF-1.4 a'),
+        ])->assertCreated();
+
+        $lean = $this->actingAs($user)->getJson('/portal/files/?section=recent&perPage=10&lean=1')->assertOk();
+        $this->assertSame([], $lean->json('owners'));
+        $this->assertNotEmpty($lean->json('files'));
+
+        $full = $this->actingAs($user)->getJson('/portal/files/?section=shared&perPage=10')->assertOk();
+        $this->assertIsArray($full->json('owners'));
+    }
+
     public function test_duplicate_upload_keep_both_appends_counter(): void
     {
         $user = $this->approvedUser();

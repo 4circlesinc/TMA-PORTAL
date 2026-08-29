@@ -263,7 +263,7 @@
   function loadLatestFiles() {
     // only=files. Recent is folder-first, so a busy org folder list would
     // otherwise return zero files for a small perPage window.
-    return apiGet('/portal/files?section=recent&perPage=8&only=files')
+    return apiGet('/portal/files?section=recent&perPage=8&only=files&lean=1')
       .then(function (j) {
         var files = (j && j.files) || [];
         FILES = files.slice(0, 6).map(function (f) {

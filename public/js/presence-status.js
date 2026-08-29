@@ -1103,7 +1103,8 @@
     var rt = window.TMAMessagingRealtime;
     if (!rt) return;
     realtimeBound = true;
-    rt.listen('private-portal.staff', 'presence.status', onRemoteStatus);
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (me && me.isStaff) rt.listen('private-portal.staff', 'presence.status', onRemoteStatus);
     rt.listen('private-App.Models.User.' + userId, 'presence.status', onRemoteStatus);
   }
 

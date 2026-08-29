@@ -191,15 +191,12 @@
 
   function bind(rt, me) {
     /*
-     * Subscribe to both and let the server decide.
-     *
-     * portal.staff is refused for a client account, and the transport leaves a
-     * refused channel unsubscribed without fuss. Deciding here instead would
-     * mean a second copy of "who counts as staff" in the browser, and
-     * client-side role checks in this portal have a habit of failing towards
-     * the wrong answer.
+     * Staff live updates ride private-portal.staff. Asking /broadcasting/auth
+     * for that channel as a client is a 403 the console prints even though
+     * the transport then leaves it unsubscribed. /me already says isStaff;
+     * the user channel still delivers this account's own data.changed events.
      */
-    rt.listen('private-portal.staff', 'data.changed', onSignal);
+    if (me.isStaff) rt.listen('private-portal.staff', 'data.changed', onSignal);
     rt.listen('private-App.Models.User.' + me.id, 'data.changed', onSignal);
 
     if (rt.onState) {

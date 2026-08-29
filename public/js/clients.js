@@ -1687,6 +1687,12 @@
     return !!(me && me.isProviderContact);
   }
 
+  function holdsClientDirectory() {
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.holds === 'function') return access.holds('clients.view');
+    return !isExternalCipUser();
+  }
+
   function isExternalCipUser() {
     if (isProviderCipUser()) return true;
     var access = window.TMAPortalAccess;
@@ -1695,7 +1701,11 @@
     // and keep using the hub show endpoint.
     var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true'
       || (access && typeof access.cipReach === 'function' && access.cipReach());
-    if (cipReach && access && typeof access.can === 'function' && !access.can('clients.view')) {
+    if (cipReach && access && typeof access.holds === 'function' && !access.holds('clients.view')) {
+      return true;
+    }
+    if (cipReach && access && typeof access.can === 'function' && typeof access.holds !== 'function'
+      && !access.can('clients.view')) {
       return true;
     }
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
@@ -12544,6 +12554,19 @@
      * A failure is now its own state, it says so, and it offers a retry.
      */
     function loadClients() {
+      /*
+       * CIP-reach accounts mount this view for applications, not the staff
+       * directory. Asking /portal/clients and /portal/companies is a 403 the
+       * browser prints even when we catch it, and the tables never used the
+       * answer.
+       */
+      if (!holdsClientDirectory()) {
+        state.loadState = 'ready';
+        state.loadError = null;
+        startClients();
+        return;
+      }
+
       state.loadState = 'loading';
       state.loadError = null;
       startClients();
@@ -12622,6 +12645,7 @@
    */
   if (window.TMALive) {
     window.TMALive.register(window.TMALive.RESOURCES.CLIENTS, function () {
+      if (!holdsClientDirectory()) return Promise.resolve();
       ClientsAPI.invalidateList();
       return Promise.all([
         ClientsAPI.list({ force: true }).catch(function () { return null; }),

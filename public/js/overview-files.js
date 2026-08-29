@@ -774,7 +774,7 @@
       var only = section === 'recent' ? '&only=files' : '';
       state.loading = true;
       state.loadError = false;
-      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50' + only, {
+      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50' + only + '&lean=1', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })

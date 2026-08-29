@@ -191,6 +191,10 @@
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
     var term = String(q || '').trim();
     if (term.length < 2) return Promise.resolve([]);
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.holds === 'function' && !access.holds('clients.view')) {
+      return Promise.resolve([]);
+    }
     // Server-side search with a capped record set, never the full directory.
     return a.api(root() + '/portal/clients/search?q=' + encodeURIComponent(term) + '&limit=12')
       .then(function (data) {

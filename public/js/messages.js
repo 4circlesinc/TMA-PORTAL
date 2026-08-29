@@ -6213,10 +6213,12 @@
       render();
     });
 
-    window.TMAMessagingRealtime.listen('private-portal.staff', 'presence.status', function (payload) {
-      if (STORE.me && payload.userId === STORE.me.id) return;
-      applyPresence(payload, render);
-    });
+    if (STORE.me && STORE.me.isStaff) {
+      window.TMAMessagingRealtime.listen('private-portal.staff', 'presence.status', function (payload) {
+        if (STORE.me && payload.userId === STORE.me.id) return;
+        applyPresence(payload, render);
+      });
+    }
   }
 
   /*

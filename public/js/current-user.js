@@ -243,7 +243,10 @@
     // round trip per page to be told nothing moved.
     if (window.TMACipSync) window.TMACipSync.run();
     if (window.TMAFilesSync) window.TMAFilesSync.run();
-    if (window.TMAClientsSync) window.TMAClientsSync.run();
+    if (window.TMAClientsSync && j && Array.isArray(j.capabilities)
+      && j.capabilities.indexOf('clients.view') !== -1) {
+      window.TMAClientsSync.run();
+    }
     if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
       window.TMAToast.applyToastPrefs(j.toasts);
       try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}

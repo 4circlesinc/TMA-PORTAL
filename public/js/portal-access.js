@@ -14,7 +14,7 @@
  * This is presentation only. Every capability below is enforced again on the
  * server, see App\Support\Access\Role.
  *
- * Global: window.TMAPortalAccess  ({ can, ready, apply })
+ * Global: window.TMAPortalAccess  ({ can, holds, ready, apply })
  */
 (function () {
   'use strict';
@@ -134,6 +134,21 @@
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
 
   if (boot) readyResolve(boot.slice());
+
+  /*
+   * The matrix, without the nav spoofs in can().
+   *
+   * can('clients.view') is true for a CIP-reach account so Applications stays
+   * in the sidebar. The directory APIs still 403 for that account. Callers
+   * that would hit /portal/clients, /portal/companies or the staff live
+   * channel must ask holds() instead, or the browser logs a failed request
+   * even when the catch path is already correct.
+   */
+  function holds(capability) {
+    if (!capability) return true;
+    if (!caps) return false;
+    return caps.indexOf(capability) !== -1;
+  }
 
   function can(capability) {
     if (!capability) return true;
@@ -346,6 +361,7 @@
 
   window.TMAPortalAccess = {
     can: can,
+    holds: holds,
     canSettingsPage: function (pageId) { return can(SETTINGS_CAPABILITIES[pageId]); },
     settingsCapabilities: function () { return SETTINGS_CAPABILITIES; },
     apply: apply,

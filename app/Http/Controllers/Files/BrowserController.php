@@ -70,6 +70,8 @@ class BrowserController extends BaseFilesController
             $this->applyFileFilters($fileQuery, $request, $search);
         }
 
+        $lean = $request->boolean('lean');
+
         /*
          * Recent is the whole library in time order, tens of thousands of
          * folders and hundreds of thousands of files. Counting them and
@@ -77,8 +79,12 @@ class BrowserController extends BaseFilesController
          * is what made Recent sit on a spinner after the listing itself
          * was already cheap. A page plus one extra row answers "is there
          * more?" without ever totalling the library.
+         *
+         * `lean=1` is the same deal for Dashboard strips that never draw an
+         * owner filter or a total: skip the scans so two of these at once
+         * do not sit past the gateway's 504.
          */
-        $exactTotals = $section !== 'recent';
+        $exactTotals = $section !== 'recent' && ! $lean;
 
         /*
          * Who owns things here, with a count each, what the Owner column's
@@ -102,7 +108,7 @@ class BrowserController extends BaseFilesController
         $total = 0;
         $hasMore = false;
 
-        if ($section === 'recent' && $folderQuery && $fileQuery) {
+        if (! $exactTotals && $folderQuery && $fileQuery) {
             [$folders, $files, $hasMore] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
             $folderTotal = $folders->count();
             $fileTotal = $files->count();
@@ -151,9 +157,8 @@ class BrowserController extends BaseFilesController
         }
 
         $presenter = $this->presenter($request);
-        $presenter->prime($files->all(), $folders->all());
-
-        $withStats = $section !== 'recycle';
+        $withStats = $section !== 'recycle' && ! $lean;
+        $presenter->prime($files->all(), $folders->all(), $withStats);
 
         return response()->json([
             'section' => $section,
@@ -294,7 +299,7 @@ class BrowserController extends BaseFilesController
                 // NOT IN (...)` is never true for NULL, so they'd silently drop.
                 $this->visibleFiles($user)
                     ->where(fn ($q) => $q->whereNull('folder_id')
-                        ->orWhereNotIn('folder_id', $this->trashedFolderIds() ?: [0]))
+                        ->orWhereNotIn('folder_id', Folder::onlyTrashed()->select('id')))
                     ->orderByDesc('updated_at'),
             ],
             'recycle' => [

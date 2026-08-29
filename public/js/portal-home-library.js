@@ -1029,8 +1029,8 @@
 
     state.inflight = Promise.all([
       net().fetchJSON(net().url('/shortcuts')).catch(function () { return null; }),
-      net().fetchJSON(net().url('/?section=recent&perPage=40')).catch(function () { return null; }),
-      net().fetchJSON(net().url('/?section=shared&perPage=40')).catch(function () { return null; }),
+      net().fetchJSON(net().url('/?section=recent&perPage=40&lean=1')).catch(function () { return null; }),
+      net().fetchJSON(net().url('/?section=shared&perPage=40&lean=1')).catch(function () { return null; }),
       // Admin File Library list, backup if shortcuts race or cache is stale.
       fetchAdminOrgFolders(),
     ]).then(function (res) {

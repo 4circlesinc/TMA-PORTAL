@@ -2715,8 +2715,8 @@
     // folders and cut off a file modified a minute ago. Ask for a wider
     // candidate pool and do the true recency merge across both types here.
     homeFilesInflight = Promise.all([
-      net.fetchJSON(net.url('/?section=recent&perPage=24')).catch(function () { return null; }),
-      net.fetchJSON(net.url('/?section=favorites&perPage=8')).catch(function () { return null; }),
+      net.fetchJSON(net.url('/?section=recent&perPage=24&lean=1')).catch(function () { return null; }),
+      net.fetchJSON(net.url('/?section=favorites&perPage=8&lean=1')).catch(function () { return null; }),
     ]).then(function (res) {
       clearTimeout(giveUp);
       homeFilesInflight = null;
