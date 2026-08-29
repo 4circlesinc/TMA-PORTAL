@@ -35866,6 +35866,58 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
 
+.tma-cip-table tbody tr[data-cip-open-member] { cursor: pointer; }
+
+.tma-cip-table__family-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tma-cip-table__expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-4);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-cip-table__expand:hover { background: var(--color-overlay-4); }
+
+.tma-cip-table__progress {
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-cip-table__member-row { background: var(--color-surface-muted, var(--color-hover)); }
+
+.tma-cip-table__member-row:hover { background: var(--color-hover); }
+
+.tma-cip-table__member {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-16);
+}
+
+.tma-cip-table__member-role {
+  font-size: var(--text-size-11);
+  line-height: 1.2;
+  color: var(--color-text-secondary);
+}
+
+.tma-cip-table__member-name {
+  font-size: var(--text-size-12);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
 .tma-cip-table tbody tr[data-cip-open]:hover { background: var(--color-hover); }
 
 /*

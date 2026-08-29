@@ -330,6 +330,7 @@ class CipApplicationController extends Controller
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
+        $postApprovalList = ($data['phase'] ?? '') === Phase::POST_APPROVAL;
 
         $query = ApplicationScope::query($user)
             ->with([
@@ -353,10 +354,14 @@ class CipApplicationController extends Controller
                 'client.assignments' => fn ($q) => $q->live()
                     ->with('user:id,name,email,avatar_url,provider_avatar_url')
                     ->orderByDesc('is_primary'),
-                // Only the main applicant: the table shows one name, and
-                // loading a whole family per row to read it would be six times
-                // the rows for one column.
-                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+                /*
+                 * Pre-approval lists need only the main applicant's name.
+                 * Post-approval lists need the whole family so each member can
+                 * show their own document progress in an expandable row.
+                 */
+                'people' => $postApprovalList
+                    ? fn ($q) => $q->with('documents')->orderBy('id')
+                    : fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
             ])
             ->withCount('people');
 
@@ -719,7 +724,90 @@ class CipApplicationController extends Controller
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer),
             'assignedTo' => $this->assignees($application),
+            'familyMembers' => $this->familyMembersForRow($application),
         ];
+    }
+
+    /**
+     * Post-approval family members for an expandable table row.
+     *
+     * Each person carries document progress for their phase checklist, not a
+     * workflow status — per-person statuses arrive in a later spec pass.
+     *
+     * @return list<array{id:string,role:string,label:string,name:string,profileTab:string,docFiled:int,docTotal:int,docPending:int}>
+     */
+    private function familyMembersForRow(CipApplication $application): array
+    {
+        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+            return [];
+        }
+
+        $phase = Phase::POST_APPROVAL;
+        $roles = [
+            CipPerson::ROLE_MAIN_APPLICANT => 0,
+            CipPerson::ROLE_SPONSOR => 1,
+            CipPerson::ROLE_DEPENDENT => 2,
+        ];
+
+        return $application->people
+            ->sortBy(fn (CipPerson $person) => [
+                $roles[$person->role] ?? 3,
+                $person->dependent_ordinal ?? 0,
+                $person->id,
+            ])
+            ->values()
+            ->map(function (CipPerson $person) use ($phase) {
+                $progress = $this->documentProgress($person, $phase);
+
+                return [
+                    'id' => $person->uuid,
+                    'role' => $person->role,
+                    'label' => Dependents::label($person),
+                    'name' => $person->fullName(),
+                    'profileTab' => $this->profileTabForPerson($person),
+                    ...$progress,
+                ];
+            })
+            ->all();
+    }
+
+    /** @return array{docFiled:int,docTotal:int,docPending:int} */
+    private function documentProgress(CipPerson $person, string $phase): array
+    {
+        $allowed = Requirements::forPhase(ApplicantType::for($person), $phase)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $docs = $person->relationLoaded('documents')
+            ? $person->documents
+            : $person->documents()->get();
+
+        $docs = $docs->filter(function ($slot) use ($allowed) {
+            if ($slot->requirement_id === null) {
+                return true;
+            }
+
+            return in_array((int) $slot->requirement_id, $allowed, true);
+        });
+
+        $total = $docs->count();
+        $filed = $docs->filter(fn ($slot) => $slot->file_id !== null)->count();
+
+        return [
+            'docFiled' => $filed,
+            'docTotal' => $total,
+            'docPending' => max(0, $total - $filed),
+        ];
+    }
+
+    private function profileTabForPerson(CipPerson $person): string
+    {
+        return match ($person->role) {
+            CipPerson::ROLE_MAIN_APPLICANT => 'applicant',
+            CipPerson::ROLE_SPONSOR => 'sponsor',
+            default => 'dependents',
+        };
     }
 
     /**

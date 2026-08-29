@@ -2546,6 +2546,7 @@
     // before the first response has landed.
     assignees: [], providers: [], statuses: [],
     phaseCounts: { all: 0, pre_approval: 0, post_approval: 0 },
+    expanded: {},
   };
 
   /*
@@ -2905,9 +2906,16 @@
     };
   }
 
-  function applicationTableHeaders() {
-    var headers = Object.keys(CIP_SORTS).map(function (key) {
-      return applicationSortHeader(key, CIP_SORTS[key]);
+  function isPostApprovalApplicationsTab(state) {
+    return onApplicationsTable(state) && listTabOf(state) === 'post_approval';
+  }
+
+  function applicationTableHeaders(state) {
+    var labels = Object.assign({}, CIP_SORTS);
+    if (isPostApprovalApplicationsTab(state)) labels.status = 'Progress';
+
+    var headers = Object.keys(labels).map(function (key) {
+      return applicationSortHeader(key, labels[key]);
     });
     headers.push({ html: '', attrs: ' class="tma-portal-cell--menu"' });
 
@@ -2928,6 +2936,89 @@
     repaintClients();
   }
 
+  function memberProgressCell(member) {
+    if (!member) return '<span class="tma-portal-table__muted">—</span>';
+    var filed = member.docFiled || 0;
+    var total = member.docTotal || 0;
+    var title = (member.label || 'Member') + ': ' + filed + ' of ' + total + ' documents filed';
+    if (member.docPending) title += ', ' + member.docPending + ' pending';
+
+    return '<span class="tma-cip-table__progress" title="' + esc(title) + '">' +
+      esc(filed + ' / ' + total) + '</span>';
+  }
+
+  function familyExpandButton(a, expanded) {
+    var members = a.familyMembers || [];
+    if (members.length <= 1) return '';
+
+    return '<button type="button" class="tma-cip-table__expand"' +
+      ' data-cip-family-expand="' + esc(a.id) + '"' +
+      ' aria-expanded="' + (expanded ? 'true' : 'false') + '"' +
+      ' aria-label="' + esc(expanded ? 'Hide family members' : 'Show family members') + '">' +
+      '<img src="' + ICON + (expanded ? 'CaretUp.svg' : 'CaretDown.svg') +
+      '" alt="" width="12" height="12"></button>';
+  }
+
+  function renderApplicationTableMemberRow(a, member) {
+    return '<tr class="tma-cip-table__member-row" data-cip-open-member="' + esc(a.clientUid || '') + '"' +
+      ' data-cip-app="' + esc(a.id) + '"' +
+      ' data-cip-profile-tab="' + esc(member.profileTab || 'applicant') + '">' +
+      '<td></td>' +
+      '<td><div class="tma-cip-table__member">' +
+      '<span class="tma-cip-table__member-role">' + esc(member.label || '') + '</span>' +
+      '<span class="tma-cip-table__member-name">' + esc(member.name || '-') + '</span>' +
+      '</div></td>' +
+      '<td colspan="5"></td>' +
+      '<td>' + memberProgressCell(member) + '</td>' +
+      '<td></td>' +
+      '<td></td>' +
+      '</tr>';
+  }
+
+  function renderApplicationTableRow(a, state, postApproval) {
+    var members = postApproval ? (a.familyMembers || []) : [];
+    var mainMember = members[0] || null;
+    var expanded = !!(APP_TABLE.expanded && APP_TABLE.expanded[a.id]);
+    var progressCell = postApproval && members.length
+      ? memberProgressCell(mainMember)
+      : cipStatusChip(a);
+
+    var html = '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
+      '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
+      (a.cipNumber && a.internalNumber
+        ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
+        : '') + '</td>' +
+      '<td>' + applicantCell(a) + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' +
+      (a.contactEmail
+        ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
+          esc(a.contactEmail) + '</a>'
+        : '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
+      '<td><span class="tma-cip-table__family-wrap">' +
+      familyExpandButton(a, expanded) +
+      '<span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
+      esc(a.familyLabel || '-') + '</span></span></td>' +
+      '<td>' + progressCell + '</td>' +
+      '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
+      '<td class="tma-portal-cell--menu">' +
+      '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +
+      esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+      ' aria-label="More actions" aria-haspopup="menu">' +
+      '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
+      '</tr>';
+
+    if (expanded && members.length > 1) {
+      html += members.slice(1).map(function (member) {
+        return renderApplicationTableMemberRow(a, member);
+      }).join('');
+    }
+
+    return html;
+  }
+
   function renderApplicationTable(state) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.table) return '';
@@ -2937,7 +3028,7 @@
         clientsEmpty('Could not load applications', 'Illustration11') + '</div>';
     }
 
-    var headers = applicationTableHeaders();
+    var headers = applicationTableHeaders(state);
 
     if (APP_TABLE.loading && !APP_TABLE.rows.length) {
       return ui.table(headers, applicationTableSkeleton(), { cls: 'tma-cip-table' });
@@ -2948,34 +3039,9 @@
         renderApplicationTableEmptyState(state) + '</div>';
     }
 
+    var postApproval = isPostApprovalApplicationsTab(state);
     var rows = APP_TABLE.rows.map(function (a) {
-      return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
-        // The number leads: §7 makes it the name of the application, and the
-        // internal one rides underneath once the CIP number has taken over.
-        '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
-        (a.cipNumber && a.internalNumber
-          ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
-          : '') + '</td>' +
-        '<td>' + applicantCell(a) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '-') + '</td>' +
-        '<td class="tma-portal-table__muted">' +
-        (a.contactEmail
-          ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
-            esc(a.contactEmail) + '</a>'
-          : '-') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
-        // "F6". §8's own shorthand, with the arithmetic behind it on hover.
-        '<td><span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
-        esc(a.familyLabel || '-') + '</span></td>' +
-        '<td>' + cipStatusChip(a) + '</td>' +
-        '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
-        '<td class="tma-portal-cell--menu">' +
-        '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +
-        esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
-        ' aria-label="More actions" aria-haspopup="menu">' +
-        '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
-        '</tr>';
+      return renderApplicationTableRow(a, state, postApproval);
     }).join('');
 
     return ui.table(headers, rows, { cls: 'tma-cip-table' }) + renderApplicationTablePagination();
@@ -3479,18 +3545,52 @@
         return;
       }
 
+      var expand = e.target.closest('[data-cip-family-expand]');
+      if (expand) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        var appId = expand.getAttribute('data-cip-family-expand');
+        if (!appId) return;
+        if (!APP_TABLE.expanded) APP_TABLE.expanded = {};
+        APP_TABLE.expanded[appId] = !APP_TABLE.expanded[appId];
+        repaintClients();
+
+        return;
+      }
+
+      var memberRow = e.target.closest('[data-cip-open-member]');
+      if (memberRow) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target.closest('a')) return;
+        var memberUid = memberRow.getAttribute('data-cip-open-member');
+        if (!memberUid) return;
+        var memberController = clientsMountRoot && clientsMountRoot._clientsController;
+        if (!memberController) return;
+        if (clientsMountState) {
+          clientsMountState.profileTab = memberRow.getAttribute('data-cip-profile-tab') || 'applicant';
+        }
+        memberController.navigate('detail', memberUid);
+
+        return;
+      }
+
       var row = e.target.closest('[data-cip-open]');
       if (!row) return;
       // The Contact email column is a mailto, its own destination.
       if (e.target.closest('a')) return;
+      if (e.target.closest('[data-cip-family-expand]')) return;
 
       var uid = row.getAttribute('data-cip-open');
       if (!uid) return;
       var controller = clientsMountRoot && clientsMountRoot._clientsController;
       if (!controller) return;
-      // Opened on Overview: the row is an application, and that tab is its
-      // journey, the Timeline card CBI keeps on the same tab.
-      if (clientsMountState) clientsMountState.profileTab = 'overview';
+      if (clientsMountState) {
+        clientsMountState.profileTab = (clientsMountState && listTabOf(clientsMountState) === 'post_approval')
+          ? 'applicant'
+          : 'overview';
+      }
       controller.navigate('detail', uid);
     });
   }

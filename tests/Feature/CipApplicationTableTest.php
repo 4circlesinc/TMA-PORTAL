@@ -514,6 +514,33 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(Phase::POST_APPROVAL, $body['applications'][0]['phase']);
     }
 
+    public function test_post_approval_listings_include_family_members_with_progress(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $application = $this->application($staff, $provider, 1, true);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+        ])->save();
+
+        $row = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=post_approval')
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame(Phase::POST_APPROVAL, $row['phase']);
+        $this->assertCount(3, $row['familyMembers']);
+        $this->assertSame('applicant', $row['familyMembers'][0]['profileTab']);
+        $this->assertSame('Chen Wei', $row['familyMembers'][0]['name']);
+        $this->assertSame('sponsor', $row['familyMembers'][1]['profileTab']);
+        $this->assertSame('dependents', $row['familyMembers'][2]['profileTab']);
+        $this->assertArrayHasKey('docFiled', $row['familyMembers'][0]);
+        $this->assertArrayHasKey('docTotal', $row['familyMembers'][0]);
+    }
+
     public function test_phase_counts_respect_application_scope(): void
     {
         $staff = $this->staff();
