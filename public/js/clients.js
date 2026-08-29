@@ -5747,6 +5747,8 @@
     if (accepted) parts.push(accepted);
     var decision = renderDecisionAction(app);
     if (decision) parts.push(decision);
+    var postApproval = renderPostApprovalAction(app);
+    if (postApproval) parts.push(postApproval);
     if (!parts.length) return '';
 
     return '<div class="tma-dash__clients-appbar">' + parts.join('') + '</div>';
@@ -5842,6 +5844,19 @@
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-decide>' +
       'Record decision</button>';
+  }
+
+  function canEnterPostApproval() {
+    return canRecordDecision();
+  }
+
+  function renderPostApprovalAction(app) {
+    if (!canEnterPostApproval()) return '';
+    if (app.phase === 'post_approval') return '';
+    if (app.status !== 'granted' && app.decision !== 'granted') return '';
+
+    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-post-approval>' +
+      'Move to post-approval</button>';
   }
 
   /*
@@ -9289,15 +9304,74 @@
             method: 'POST',
             body: form,
           })
-            .then(function () {
+            .then(function (data) {
               ui.closeModal();
               clientsToast(picked === 'granted' ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
+              var app = data && data.application;
+              if (picked === 'granted' && app && app.phase === 'pre_approval') {
+                openPostApprovalPrompt(applicationId, clientUid);
+                return;
+              }
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
               save.disabled = false;
               save.textContent = 'Record decision';
               clientsToast((err && err.message) || 'Could not record the decision.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  function enterPostApproval(applicationId, clientUid) {
+    return clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/post-approval', {
+      method: 'POST',
+    });
+  }
+
+  function openPostApprovalPrompt(applicationId, clientUid) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) {
+      refreshAfterCipMove(clientUid);
+      return;
+    }
+
+    ui.openModal({
+      title: 'Move to post-approval?',
+      body:
+        '<p class="tma-portal-modal__text">' +
+        'Would you like to place this applicant in Post-Approval?</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-decline-post>Not now</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-confirm-post>Move to post-approval</button>' +
+        '</div>',
+      onMount: function (el) {
+        var decline = el.querySelector('[data-cip-decline-post]');
+        if (decline) {
+          decline.addEventListener('click', function () {
+            ui.closeModal();
+            refreshAfterCipMove(clientUid);
+          });
+        }
+
+        var confirm = el.querySelector('[data-cip-confirm-post]');
+        if (!confirm) return;
+
+        confirm.addEventListener('click', function () {
+          confirm.disabled = true;
+          confirm.textContent = 'Moving…';
+
+          enterPostApproval(applicationId, clientUid)
+            .then(function () {
+              ui.closeModal();
+              clientsToast('Moved to post-approval.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              confirm.disabled = false;
+              confirm.textContent = 'Move to post-approval';
+              clientsToast((err && err.message) || 'Could not move to post-approval.', 'negative');
             });
         });
       },
@@ -10922,6 +10996,14 @@
           letterOptional: app.status === 'granted' || app.status === 'denied',
           existingLetter: app.decisionLetter || null,
         });
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-post-approval]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openPostApprovalPrompt(app.id, app.clientUid);
       });
     });
 

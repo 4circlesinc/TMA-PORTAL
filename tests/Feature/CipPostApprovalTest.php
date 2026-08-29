@@ -221,6 +221,28 @@ class CipPostApprovalTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_enter_post_approval_endpoint_moves_a_granted_application(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $this->mainApplicant($application);
+
+        $application->forceFill([
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+        ])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/post-approval')
+            ->assertOk()
+            ->assertJsonPath('application.phase', Phase::POST_APPROVAL)
+            ->assertJsonPath('application.status', Status::GRANTED);
+
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+        $this->assertNotNull($application->fresh()->post_approval_folder_id);
+    }
+
     public function test_admin_can_update_requirement_workflow_flags(): void
     {
         $admin = $this->staff(Role::ADMINISTRATOR);

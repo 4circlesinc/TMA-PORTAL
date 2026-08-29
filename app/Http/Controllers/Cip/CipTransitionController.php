@@ -14,6 +14,7 @@ use App\Support\Cip\DecisionLetter;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\NonCompliance;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Realtime\Live;
@@ -439,6 +440,9 @@ class CipTransitionController extends Controller
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
             'decisionLetter' => $this->decisionLetter($application),
+            'phase' => $application->phase ?? Phase::PRE_APPROVAL,
+            'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
+            'postApprovalAt' => $application->post_approval_at?->toIso8601String(),
             'availableTransitions' => collect(Engine::availableTransitions($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,
