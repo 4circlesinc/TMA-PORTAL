@@ -31,6 +31,14 @@ class PostApproval
         Tree::provisionPostApproval($application, $actor);
         Requirements::materialiseApplication($application);
 
+        foreach ($application->people as $person) {
+            if ($person->post_approval_status === null) {
+                $person->forceFill([
+                    'post_approval_status' => PersonStatus::NOT_STARTED,
+                ])->save();
+            }
+        }
+
         return $application->refresh();
     }
 

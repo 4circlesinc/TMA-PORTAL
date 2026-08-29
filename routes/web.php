@@ -15,6 +15,7 @@ use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
+use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
@@ -542,6 +543,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // already open the application it belongs to.
         Route::get('/people/{uuid}/passport-photo', [CipApplicationController::class, 'passportPhoto'])
             ->name('people.passport-photo');
+        Route::post('/people/{uuid}/status', [CipPersonStatusController::class, 'update'])
+            ->name('people.status');
     });
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])

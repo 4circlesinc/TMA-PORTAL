@@ -17,6 +17,7 @@ use Illuminate\Support\Str;
     'uuid', 'application_id', 'role', 'relationship', 'dependent_ordinal',
     'first_name', 'last_name', 'gender', 'date_of_birth', 'country_of_birth',
     'country_of_residence', 'occupation', 'passport_number', 'folder_id',
+    'post_approval_status',
 ])]
 class CipPerson extends Model
 {

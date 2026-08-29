@@ -28,6 +28,7 @@ use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Phase;
+use App\Support\Cip\PersonStatus;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
@@ -453,6 +454,7 @@ class CipApplicationController extends Controller
                 'label' => Status::label($s),
                 'tone' => Status::tone($s),
             ])->all(),
+            'personStatuses' => PersonStatus::listed(),
             /*
              * What the filter menu can offer, and how much sits behind each.
              *
@@ -759,7 +761,7 @@ class CipApplicationController extends Controller
             ->values()
             ->map(function (CipPerson $person) use ($phase) {
                 $progress = $this->documentProgress($person, $phase);
-                $status = $this->personStatus($person, $phase);
+                $status = PersonStatus::forPerson($person);
 
                 return [
                     'id' => $person->uuid,
@@ -776,42 +778,6 @@ class CipApplicationController extends Controller
                 ];
             })
             ->all();
-    }
-
-    /**
-     * The status chip one family member earns from their post-approval checklist.
-     *
-     * Uses the document-slot vocabulary for now. The worst open slot wins:
-     * update required beats pending upload beats review beats ready.
-     *
-     * @return array{status:string,statusLabel:string,statusTone:string}
-     */
-    private function personStatus(CipPerson $person, string $phase): array
-    {
-        $docs = $this->documentsForPhase($person, $phase);
-
-        if ($docs->isEmpty()) {
-            return [
-                'status' => 'not_started',
-                'statusLabel' => 'Not started',
-                'statusTone' => 'neutral',
-            ];
-        }
-
-        $statuses = $docs->map(fn ($slot) => $slot->displayStatus())->all();
-
-        foreach ([
-            DocumentStatus::UPDATE_REQUIRED,
-            DocumentStatus::PENDING_UPLOAD,
-            DocumentStatus::APPLICATION_REVIEW,
-            DocumentStatus::READY_FOR_SUBMISSION,
-        ] as $priority) {
-            if (in_array($priority, $statuses, true)) {
-                return DocumentStatus::badge($priority);
-            }
-        }
-
-        return DocumentStatus::badge(DocumentStatus::READY_FOR_SUBMISSION);
     }
 
     /** @return \Illuminate\Support\Collection<int, \App\Models\CipDocument> */
@@ -968,6 +934,15 @@ class CipApplicationController extends Controller
         return response()->json([
             'application' => $this->record($application, $request->user()),
         ]);
+    }
+
+    /** The application record shape, for controllers that update and re-read. */
+    public function showRecord(CipApplication $application, User $user): array
+    {
+        Requirements::materialiseApplication($application);
+        $application->unsetRelation('people');
+
+        return $this->record($application->fresh(), $user);
     }
 
     /**
@@ -1263,6 +1238,8 @@ class CipApplicationController extends Controller
             ->sortBy(fn (CipPerson $p) => ($p->dependent_ordinal ?? 9999) * 1000000 + $p->id)
             ->values();
 
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+
         return [
             'id' => $application->uuid,
             // §7: the internal number until the CIP number takes over.
@@ -1281,6 +1258,9 @@ class CipApplicationController extends Controller
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'postApprovalAt' => $application->post_approval_at?->toIso8601String(),
+            'personStatuses' => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+                ? PersonStatus::listed()
+                : [],
             ...Confirmation::payload($application, $viewer),
             'availableTransitions' => $this->transitions($application, $viewer),
             'provider' => $application->provider?->name,
@@ -1298,9 +1278,9 @@ class CipApplicationController extends Controller
             'sponsored' => (bool) $application->sponsored,
             'familySize' => $application->familySize(),
             'familyLabel' => $application->familyLabel(),
-            'applicant' => $main ? $this->person($main, $presenter) : null,
-            'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
-            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
+            'applicant' => $main ? $this->person($main, $presenter, $phase) : null,
+            'sponsor' => $sponsor ? $this->person($sponsor, $presenter, $phase) : null,
+            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter, $phase))->all(),
             // §4d's Timeline card on Overview: how far the file has travelled,
             // and, because the steps it has not reached are answered too —
             // how far it has left to go.
@@ -1418,10 +1398,10 @@ class CipApplicationController extends Controller
      * asked for, and a sponsor that described itself differently from an
      * applicant would mean two ways to read the same person.
      */
-    private function person(CipPerson $person, Presenter $presenter): array
+    private function person(CipPerson $person, Presenter $presenter, string $applicationPhase): array
     {
         $photoFile = $this->photoFileModel($person);
-        $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
+        $phase = $applicationPhase;
         $allowedRequirements = Requirements::forPhase(
             ApplicantType::for($person),
             $phase,
@@ -1541,6 +1521,13 @@ class CipApplicationController extends Controller
                     ];
                 })->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
+            ...($applicationPhase === Phase::POST_APPROVAL
+                ? PersonStatus::forPerson($person)
+                : []),
+            'availableStatuses' => $applicationPhase === Phase::POST_APPROVAL
+                && CipAccess::canChangeApplicationStatus($presenter->viewer())
+                ? PersonStatus::listed()
+                : [],
         ];
     }
 

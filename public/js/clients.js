@@ -2544,7 +2544,7 @@
     // What the filter menu can offer, from the last listing. Empty arrays
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
-    assignees: [], providers: [], statuses: [],
+    assignees: [], providers: [], statuses: [], personStatuses: [],
     phaseCounts: { all: 0, pre_approval: 0, post_approval: 0 },
     expanded: {},
   };
@@ -2585,6 +2585,16 @@
     { value: 'delayed', label: 'Delayed', tone: 'copper' },
     { value: 'granted', label: 'Approved', tone: 'success' },
     { value: 'denied', label: 'Denied', tone: 'danger' },
+  ];
+
+  var CIP_PERSON_STATUSES = [
+    { value: 'not_started', label: 'Not started', tone: 'neutral' },
+    { value: 'documents_pending', label: 'Documents pending', tone: 'neutral' },
+    { value: 'documents_in_review', label: 'Documents in review', tone: 'pending' },
+    { value: 'update_required', label: 'Update required', tone: 'danger' },
+    { value: 'ready_for_submission', label: 'Ready for submission', tone: 'teal' },
+    { value: 'processing', label: 'Processing', tone: 'indigo' },
+    { value: 'completed', label: 'Completed', tone: 'success' },
   ];
 
   /*
@@ -2855,6 +2865,7 @@
         APP_TABLE.lastPage = (json && json.lastPage) || 1;
         APP_TABLE.total = (json && json.total) || 0;
         APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
+        if (json && json.personStatuses) APP_TABLE.personStatuses = json.personStatuses;
         /*
          * What the menu can offer, measured over the whole slice rather than
          * this page. Held even when a request answers with none, so a filter
@@ -2974,21 +2985,108 @@
       esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
   }
 
-  function cipPersonStatusChip(member) {
-    if (!member || !member.statusLabel) return memberProgressCell(member);
+  function canChangeCipPersonStatus(app) {
+    if (!app || app.phase !== 'post_approval') return false;
 
+    return canChangeCipStatus(app);
+  }
+
+  function cipPersonStatusList(app) {
+    if (app && Array.isArray(app.personStatuses) && app.personStatuses.length) {
+      return app.personStatuses;
+    }
+
+    if (APP_TABLE.personStatuses && APP_TABLE.personStatuses.length) {
+      return APP_TABLE.personStatuses;
+    }
+
+    return CIP_PERSON_STATUSES;
+  }
+
+  function cipPersonStatusChip(member, app, clickable) {
+    var appRecord = app || {};
+    var person = member;
+
+    if (appRecord.phase === 'post_approval' && person && !person.statusLabel) {
+      person = Object.assign({}, person, {
+        status: 'not_started',
+        statusLabel: 'Not started',
+        statusTone: 'neutral',
+      });
+    }
+
+    if (!person || !person.statusLabel) {
+      return memberProgressCell(member);
+    }
+
+    var label = esc(person.statusLabel);
     var title = '';
-    if (member.docTotal) {
-      title = (member.label || 'Member') + ': ' + (member.docFiled || 0) + ' of ' +
-        member.docTotal + ' documents filed';
-      if (member.docPending) title += ', ' + member.docPending + ' pending';
+    if (person.docTotal) {
+      title = (person.label || 'Member') + ': ' + (person.docFiled || 0) + ' of ' +
+        person.docTotal + ' documents filed';
+      if (person.docPending) title += ', ' + person.docPending + ' pending';
       title = ' title="' + esc(title) + '"';
     }
 
-    return '<span class="tma-portal-status tma-portal-status--' +
-      esc(member.statusTone || 'neutral') +
-      ' tma-portal-status--inline"' + title + '>' +
-      esc(member.statusLabel) + '</span>';
+    if (!clickable || !canChangeCipPersonStatus(appRecord)) {
+      return '<span class="tma-portal-status tma-portal-status--' +
+        esc(person.statusTone || 'neutral') +
+        ' tma-portal-status--inline"' + title + '>' + label + '</span>';
+    }
+
+    return '<button type="button" class="tma-portal-status tma-portal-status--' +
+      esc(person.statusTone || 'neutral') +
+      ' tma-portal-status--inline tma-cip-person-status-chip" data-cip-person-status-chip' +
+      ' data-cip-person="' + esc(person.id || '') + '"' +
+      ' data-cip-app="' + esc(appRecord.id || '') + '"' +
+      ' data-cip-client="' + esc(appRecord.clientUid || '') + '"' +
+      ' aria-haspopup="menu" aria-label="Change status, currently ' + label + '"' +
+      title + '>' + label + '</button>';
+  }
+
+  function renderCipPersonCardFace(person, size) {
+    size = size || 48;
+    var photo = person && (person.photo || person.passportPhotoUrl);
+    var cls = 'tma-dash__clients-card-person-face';
+
+    if (photo) {
+      return '<img class="' + cls + '" src="' + esc(photo) + '" alt="" width="' + size + '" height="' + size + '">';
+    }
+
+    var name = (person && person.name) || '';
+    var uri = initialsAvatarUri(name, (person && person.id) || name);
+    if (uri) {
+      return '<img class="' + cls + '" src="' + esc(uri) + '" alt="" width="' + size + '" height="' + size + '">';
+    }
+
+    return '<span class="' + cls + ' ' + cls + '--initial" aria-hidden="true">' +
+      esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
+  }
+
+  function renderCipPersonCardHead(person, app) {
+    if (!person) return '';
+
+    var appRecord = app || {};
+    var status = appRecord.phase === 'post_approval'
+      ? cipPersonStatusChip(person, appRecord, true)
+      : '';
+
+    return '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
+      '<div class="tma-dash__clients-card-person">' +
+      renderCipPersonCardFace(person) +
+      '<div class="tma-dash__clients-card-person-text">' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(person.label || person.applicantTypeLabel || 'Applicant') + '</h3>' +
+      '<span class="tma-dash__clients-card-person-name">' + esc(person.name || '-') + '</span>' +
+      '</div></div>' +
+      status +
+      '</header>';
+  }
+
+  function renderCipPersonStatusBar(person, app) {
+    if (!person || !app || app.phase !== 'post_approval') return '';
+
+    return '<div class="tma-dash__cip-person-status">' +
+      cipPersonStatusChip(person, app, true) + '</div>';
   }
 
   function memberProgressCell(member) {
@@ -3039,7 +3137,7 @@
       '<span class="tma-cip-table__member-name">' + esc(member.name || '-') + '</span>' +
       '</div></div></td>' +
       '<td colspan="5"></td>' +
-      '<td>' + cipPersonStatusChip(member) + '</td>' +
+      '<td>' + cipPersonStatusChip(member, a, true) + '</td>' +
       '<td></td>' +
       '<td></td>' +
       '</tr>';
@@ -3614,6 +3712,25 @@
         return;
       }
 
+      var personChip = e.target.closest('[data-cip-person-status-chip]');
+      if (personChip) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        if (clientsCtxEl && clientsCtxAnchor === personChip) {
+          closeClientsContextMenu();
+
+          return;
+        }
+        openCipPersonStatusPicker(personChip, {
+          applicationId: personChip.getAttribute('data-cip-app'),
+          personId: personChip.getAttribute('data-cip-person'),
+        }, personChip.getAttribute('data-cip-client') || undefined);
+        clientsCtxAnchor = personChip;
+
+        return;
+      }
+
       var expand = e.target.closest('[data-cip-family-expand]');
       if (expand) {
         e.preventDefault();
@@ -3633,6 +3750,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (e.target.closest('a')) return;
+        if (e.target.closest('[data-cip-person-status-chip]')) return;
         var memberUid = memberRow.getAttribute('data-cip-open-member');
         if (!memberUid) return;
         var memberController = clientsMountRoot && clientsMountRoot._clientsController;
@@ -6037,9 +6155,9 @@
   function renderCipPersonPanel(state, person, panelId, hidden) {
     if (!person) return '';
 
+    var app = applicationFor(state.selectedId);
     var rows = [
       { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
-      { icon: ICONS.User, label: 'Name', value: person.name },
       { icon: ICONS.User, label: 'Gender', value: person.gender },
       { icon: ICONS.CalendarBlank, label: 'Date of birth', value: person.dateOfBirth },
       { icon: ICONS.MapPin, label: 'Country of birth', value: person.countryOfBirth },
@@ -6048,18 +6166,17 @@
       { icon: ICONS.Briefcase, label: 'Occupation', value: person.occupation },
     ].filter(function (r) { return !!r.value; }).map(renderListItem);
 
-    // Directly under the number, so the two passport fields read as one
-    // block at the top of the first column rather than the photo dropping
-    // under whatever field happened to come last.
     var photo = renderCipPersonPhoto(person);
-    if (photo) rows.splice(person.passportNumber ? 1 : 0, 0, photo);
+    if (photo) rows.splice(person.passportNumber ? 0 : 0, 0, photo);
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
+      '<div class="tma-dash__clients-card">' +
+      renderCipPersonCardHead(person, app) +
       renderProfileListColumns(rows, { even: true }) +
       renderCipChecklist(person) +
-      '</div>'
+      '</div></div>'
     );
   }
 
@@ -6077,9 +6194,10 @@
    * filed.
    */
   function renderCipPersonPhoto(person) {
-    if (!person.photo) return '';
+    if (!person || (!person.photo && !person.passportPhotoUrl)) return '';
 
-    var img = '<img class="tma-dash__clients-person__photo" src="' + esc(person.photo) +
+    var src = person.photo || person.passportPhotoUrl;
+    var img = '<img class="tma-dash__clients-person__photo" src="' + esc(src) +
       '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
 
     /*
@@ -6385,11 +6503,8 @@
       (hidden ? ' hidden' : '') + '>' +
       list.map(function (d) {
         return '<div class="tma-dash__clients-card">' +
-          '<header class="tma-dash__clients-card-head">' +
-          '<h3 class="tma-dash__clients-card-title">' + esc(d.label) + '</h3>' +
-          '</header>' +
+          renderCipPersonCardHead(d, app) +
           renderProfileListColumns([
-            { icon: ICONS.User, label: 'Name', value: d.name },
             { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
           ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
           renderCipChecklist(d) +
@@ -9059,6 +9174,98 @@
       document.addEventListener('keydown', onClientsCtxKey);
       document.addEventListener('scroll', closeClientsContextMenu, true);
     }, 0);
+  }
+
+  function cipPersonForStatus(extra, clientUid) {
+    var personId = extra && extra.personId;
+    if (!personId) return null;
+
+    var app = cipSourceFor(extra, clientUid);
+    if (app) {
+      var fromPeople = [app.applicant, app.sponsor].concat(app.dependents || []).filter(Boolean);
+      var hit = fromPeople.filter(function (p) { return p.id === personId; })[0];
+      if (hit) return hit;
+
+      if (app.familyMembers) {
+        hit = app.familyMembers.filter(function (m) { return m.id === personId; })[0];
+        if (hit) return hit;
+      }
+    }
+
+    var row = applicationRowById(extra && extra.applicationId) ||
+      applicationRowByClient(clientUid);
+    if (row && row.familyMembers) {
+      return row.familyMembers.filter(function (m) { return m.id === personId; })[0] || null;
+    }
+
+    return null;
+  }
+
+  function openCipPersonStatusPicker(anchor, extra, clientUid) {
+    closeClientsContextMenu();
+    extra = extra || {};
+
+    var app = cipSourceFor(extra, clientUid);
+    var person = cipPersonForStatus(extra, clientUid);
+    var list = cipPersonStatusList(app);
+    var current = person && person.status;
+
+    clientsCtxEl = document.createElement('div');
+    clientsCtxEl.className = 'tma-portal-context-menu';
+    clientsCtxEl.setAttribute('role', 'menu');
+    clientsCtxEl.innerHTML = renderCipStatusSub(list, current);
+    document.body.appendChild(clientsCtxEl);
+
+    var box = anchor.getBoundingClientRect();
+    placeCtxMenu(clientsCtxEl, box.left, box.bottom + 4);
+
+    clientsCtxEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-cip-status-to]');
+      if (!btn) return;
+      var to = btn.getAttribute('data-cip-status-to');
+      var label = btn.getAttribute('data-cip-status-label') || to;
+      closeClientsContextMenu();
+      changeCipPersonStatus(to, extra, clientUid, label);
+    });
+
+    setTimeout(function () {
+      document.addEventListener('click', onClientsCtxDocClick);
+      document.addEventListener('keydown', onClientsCtxKey);
+      document.addEventListener('scroll', closeClientsContextMenu, true);
+    }, 0);
+  }
+
+  function changeCipPersonStatus(to, extra, clientUid, label) {
+    var personId = extra && extra.personId;
+    if (!personId) {
+      clientsToast('Could not find this person.', 'negative');
+
+      return;
+    }
+
+    var person = cipPersonForStatus(extra, clientUid);
+    if (person && person.status === to) return;
+
+    var ctx = clientsMenuCtx;
+    var state = (ctx && ctx.state) || clientsMountState;
+    var render = (ctx && ctx.render) || repaintClients;
+
+    clientsFetch('/portal/cip/people/' + encodeURIComponent(personId) + '/status', {
+      method: 'POST',
+      json: { status: to },
+    })
+      .then(function (json) {
+        if (json && json.application && clientUid) {
+          rememberApplication(clientUid, json.application);
+        }
+        clientsToast('Moved to ' + (label || 'the next status'), 'positive');
+        refreshAfterCipMove(clientUid);
+        if (state) ensureApplicationLoaded(state, render);
+        render({ forceFull: true });
+      })
+      .catch(function (err) {
+        clientsToast((err && err.message) || 'Could not change the status.', 'negative');
+      });
   }
 
   /*
