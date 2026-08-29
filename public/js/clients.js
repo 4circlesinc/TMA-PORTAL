@@ -3109,25 +3109,6 @@
     return null;
   }
 
-  function renderCipPersonCardFace(person, size) {
-    size = size || 48;
-    var photo = cipPersonPhotoSrc(person);
-    var cls = 'tma-dash__clients-card-person-face';
-
-    if (photo) {
-      return '<img class="' + cls + '" src="' + esc(photo) + '" alt="" width="' + size + '" height="' + size + '">';
-    }
-
-    var name = (person && person.name) || '';
-    var uri = initialsAvatarUri(name, (person && person.id) || name);
-    if (uri) {
-      return '<img class="' + cls + '" src="' + esc(uri) + '" alt="" width="' + size + '" height="' + size + '">';
-    }
-
-    return '<span class="' + cls + ' ' + cls + '--initial" aria-hidden="true">' +
-      esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
-  }
-
   function renderCipPersonCardHead(person, app) {
     if (!person) return '';
 
@@ -3138,7 +3119,6 @@
 
     return '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
       '<div class="tma-dash__clients-card-person">' +
-      renderCipPersonCardFace(person) +
       '<div class="tma-dash__clients-card-person-text">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(person.label || person.applicantTypeLabel || 'Applicant') + '</h3>' +
       '<span class="tma-dash__clients-card-person-name">' + esc(person.name || '-') + '</span>' +

@@ -17425,24 +17425,6 @@
   color: var(--color-text-secondary);
 }
 
-.tma-dash__clients-card-person-face {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-full, 999px);
-  object-fit: cover;
-}
-
-.tma-dash__clients-card-person-face--initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-size-16);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  background: var(--color-surface-muted, var(--color-hover));
-}
-
 .tma-dash__clients-card-title {
   margin: 0;
   font-size: var(--text-size-14);
