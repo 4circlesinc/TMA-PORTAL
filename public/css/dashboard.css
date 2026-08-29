@@ -35895,6 +35895,11 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-primary);
 }
 
+.tma-cip-table__progress--empty {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
 .tma-cip-table__member-row { background: var(--color-surface-muted, var(--color-hover)); }
 
 .tma-cip-table__member-row:hover { background: var(--color-hover); }

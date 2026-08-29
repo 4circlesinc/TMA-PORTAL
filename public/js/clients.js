@@ -2912,7 +2912,7 @@
 
   function applicationTableHeaders(state) {
     var labels = Object.assign({}, CIP_SORTS);
-    if (isPostApprovalApplicationsTab(state)) labels.status = 'Progress';
+    if (isPostApprovalApplicationsTab(state)) labels.status = 'Status';
 
     var headers = Object.keys(labels).map(function (key) {
       return applicationSortHeader(key, labels[key]);
@@ -2936,10 +2936,30 @@
     repaintClients();
   }
 
+  function postApprovalFamilyMembers(a) {
+    var members = a.familyMembers || [];
+    if (members.length) return members;
+
+    if (!a.applicantName) return [];
+
+    return [{
+      label: 'Main Applicant',
+      name: a.applicantName,
+      profileTab: 'applicant',
+      docFiled: 0,
+      docTotal: 0,
+      docPending: 0,
+    }];
+  }
+
   function memberProgressCell(member) {
     if (!member) return '<span class="tma-portal-table__muted">—</span>';
     var filed = member.docFiled || 0;
     var total = member.docTotal || 0;
+    if (!total) {
+      return '<span class="tma-cip-table__progress tma-cip-table__progress--empty" title="Checklist not started">' +
+        'No documents yet</span>';
+    }
     var title = (member.label || 'Member') + ': ' + filed + ' of ' + total + ' documents filed';
     if (member.docPending) title += ', ' + member.docPending + ' pending';
 
@@ -2947,9 +2967,10 @@
       esc(filed + ' / ' + total) + '</span>';
   }
 
-  function familyExpandButton(a, expanded) {
-    var members = a.familyMembers || [];
-    if (members.length <= 1) return '';
+  function familyExpandButton(a, expanded, postApproval) {
+    if (!postApproval) return '';
+    var members = postApprovalFamilyMembers(a);
+    if (!members.length) return '';
 
     return '<button type="button" class="tma-cip-table__expand"' +
       ' data-cip-family-expand="' + esc(a.id) + '"' +
@@ -2957,6 +2978,14 @@
       ' aria-label="' + esc(expanded ? 'Hide family members' : 'Show family members') + '">' +
       '<img src="' + ICON + (expanded ? 'CaretUp.svg' : 'CaretDown.svg') +
       '" alt="" width="12" height="12"></button>';
+  }
+
+  function postApprovalProgressCell(a, members, expanded) {
+    if (expanded && members.length) {
+      return '<span class="tma-portal-table__muted">—</span>';
+    }
+
+    return cipStatusChip(a);
   }
 
   function renderApplicationTableMemberRow(a, member) {
@@ -2976,11 +3005,10 @@
   }
 
   function renderApplicationTableRow(a, state, postApproval) {
-    var members = postApproval ? (a.familyMembers || []) : [];
-    var mainMember = members[0] || null;
+    var members = postApproval ? postApprovalFamilyMembers(a) : [];
     var expanded = !!(APP_TABLE.expanded && APP_TABLE.expanded[a.id]);
-    var progressCell = postApproval && members.length
-      ? memberProgressCell(mainMember)
+    var progressCell = postApproval
+      ? postApprovalProgressCell(a, members, expanded)
       : cipStatusChip(a);
 
     var html = '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
@@ -2998,7 +3026,7 @@
         : '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
       '<td><span class="tma-cip-table__family-wrap">' +
-      familyExpandButton(a, expanded) +
+      familyExpandButton(a, expanded, postApproval) +
       '<span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
       esc(a.familyLabel || '-') + '</span></span></td>' +
       '<td>' + progressCell + '</td>' +
@@ -3010,8 +3038,8 @@
       '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
       '</tr>';
 
-    if (expanded && members.length > 1) {
-      html += members.slice(1).map(function (member) {
+    if (expanded && members.length) {
+      html += members.map(function (member) {
         return renderApplicationTableMemberRow(a, member);
       }).join('');
     }
