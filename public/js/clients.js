@@ -2968,7 +2968,7 @@
   }
 
   function memberFace(member) {
-    var photo = member && (member.photo || member.passportPhotoUrl);
+    var photo = cipPersonPhotoSrc(member);
     if (photo) {
       return '<img class="tma-cip-table__applicant-face" src="' + esc(photo) +
         '" alt="" width="26" height="26">';
@@ -3044,9 +3044,28 @@
       title + '>' + label + '</button>';
   }
 
+  function cipPersonPhotoSrc(person) {
+    if (!person) return null;
+    if (person.photo) return person.photo;
+    if (person.passportPhotoUrl) return person.passportPhotoUrl;
+    if (person.photoFile) {
+      return person.photoFile.thumbUrl || person.photoFile.previewUrl || null;
+    }
+
+    var docs = person.documents || [];
+    for (var i = 0; i < docs.length; i++) {
+      var slot = docs[i];
+      if (slot.type === 'passport_photo' && slot.uploaded && slot.fileId) {
+        return slot.thumbUrl || slot.previewUrl || null;
+      }
+    }
+
+    return null;
+  }
+
   function renderCipPersonCardFace(person, size) {
     size = size || 48;
-    var photo = person && (person.photo || person.passportPhotoUrl);
+    var photo = cipPersonPhotoSrc(person);
     var cls = 'tma-dash__clients-card-person-face';
 
     if (photo) {
@@ -6177,8 +6196,7 @@
     var col2 = [];
     var col3 = [];
 
-    var photo = renderCipPersonPhoto(person);
-    if (photo) col1.push(photo);
+    col1.push(renderCipPersonPhoto(person));
 
     var item = function (icon, label, value) {
       if (!value) return null;
@@ -6261,11 +6279,13 @@
    * filed.
    */
   function renderCipPersonPhoto(person) {
-    if (!person || (!person.photo && !person.passportPhotoUrl)) return '';
+    if (!person) return '';
 
-    var src = person.photo || person.passportPhotoUrl;
-    var img = '<img class="tma-dash__clients-person__photo" src="' + esc(src) +
-      '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
+    var src = cipPersonPhotoSrc(person);
+    var img = src
+      ? '<img class="tma-dash__clients-person__photo" src="' + esc(src) +
+        '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">'
+      : '<span class="tma-dash__clients-person__photo tma-dash__clients-person__photo--empty" aria-hidden="true"></span>';
 
     /*
      * Opened in the File Library's viewer, because it is a library file.

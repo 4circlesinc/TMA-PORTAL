@@ -35723,6 +35723,10 @@ span.tma-dash__messages-profile-avatar {
   margin: var(--space-4) 0 0 calc(-16px - var(--space-12));
 }
 
+.tma-dash__clients-person__photo--empty {
+  display: block;
+}
+
 /* The photo opens the file it was filed as, so it is a button — but a button
    that is entirely the picture. Everything a button brings of its own is
    taken back off, and the margin moves out to the wrapper so the picture

@@ -763,16 +763,16 @@ class CipApplicationController extends Controller
                 $progress = $this->documentProgress($person, $phase);
                 $status = PersonStatus::forPerson($person);
 
+                $photoFile = $person->documents
+                    ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO)?->file;
+
                 return [
                     'id' => $person->uuid,
                     'role' => $person->role,
                     'label' => Dependents::label($person),
                     'name' => $person->fullName(),
                     'profileTab' => $this->profileTabForPerson($person),
-                    'photo' => $person->photoUrl(),
-                    'passportPhotoUrl' => $person->photo_path
-                        ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
-                        : null,
+                    ...$this->personPhotoUrls($person, $photoFile),
                     ...$status,
                     ...$progress,
                 ];
@@ -1434,10 +1434,7 @@ class CipApplicationController extends Controller
             'occupation' => $person->occupation,
             'passportNumber' => $person->passport_number,
             // The passport photo, doubling as the avatar every list draws.
-            'photo' => $person->photoUrl(),
-            'passportPhotoUrl' => $person->photo_path
-                ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
-                : null,
+            ...$this->personPhotoUrls($person, $photoFile),
             /*
              * The photo as it was filed, in the File Library's own shape.
              *
@@ -1559,5 +1556,42 @@ class CipApplicationController extends Controller
     {
         return $person->documents
             ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO)?->file;
+    }
+
+    /**
+     * Portrait URLs for one person.
+     *
+     * The avatar column on {@see CipPerson} is filled at intake, but a
+     * dependant's face can exist only in the passport-photo slot until
+     * something backfills it — every tab should still draw the same 168px row
+     * the main applicant gets.
+     *
+     * @return array{photo:?string,passportPhotoUrl:?string}
+     */
+    private function personPhotoUrls(CipPerson $person, ?FileItem $photoFile = null): array
+    {
+        $photoUrl = $person->photoUrl();
+        $passportPhotoUrl = $person->photo_path
+            ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
+            : null;
+
+        if ($photoFile) {
+            $thumb = $this->slotThumb($photoFile);
+            if (! $photoUrl) {
+                $photoUrl = $thumb['thumbUrl'] ?? $thumb['previewUrl'] ?? null;
+            }
+            if (! $passportPhotoUrl) {
+                $passportPhotoUrl = $thumb['previewUrl'] ?? $thumb['thumbUrl'] ?? null;
+            }
+        }
+
+        if (! $photoUrl && $person->role === CipPerson::ROLE_MAIN_APPLICANT) {
+            $photoUrl = $person->application?->client?->photo_url;
+        }
+
+        return [
+            'photo' => $photoUrl,
+            'passportPhotoUrl' => $passportPhotoUrl,
+        ];
     }
 }
