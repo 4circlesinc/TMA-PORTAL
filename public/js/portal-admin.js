@@ -1406,6 +1406,13 @@
     });
   }
 
+  function cipDocCheck(canEdit, attr, checked, label) {
+    if (!canEdit && !checked) return '';
+    return '<input type="checkbox" class="tma-dash__check" ' + attr +
+      (checked ? ' checked' : '') + (canEdit ? '' : ' disabled') +
+      ' aria-label="' + ui().esc(label) + '">';
+  }
+
   function cipDocRow(r, canEdit) {
     // A retired row keeps its place in the list but drops to the muted ink —
     // the same grey the table already uses, so the eye reads it as history.
@@ -1413,39 +1420,46 @@
       ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
       : '<strong>' + ui().esc(r.label) + '</strong>';
 
-    // Required is a tick in its own column. Ticked means required; unticked
-    // means optional. The old inverted reading, a filled circle for optional
-    //, is the thing this column exists to stop.
-    var tick = r.retired ? '' :
-      '<input type="checkbox" class="tma-dash__check" data-cipdoc-toggle="' + ui().esc(r.id) + '"' +
-      (r.required ? ' checked' : '') + (canEdit ? '' : ' disabled') +
-      ' title="' + (r.required ? 'Required, untick to make it optional' : 'Optional, tick to make it required') + '"' +
-      ' aria-label="Required, ' + ui().esc(r.label) + '">';
+    var tick = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-toggle="' + ui().esc(r.id) + '"',
+      r.required,
+      'Required, ' + r.label,
+    );
+
+    var pre = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-pre="' + ui().esc(r.id) + '"',
+      r.atPreApproval,
+      'Pre-approval, ' + r.label,
+    );
+
+    var post = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-post="' + ui().esc(r.id) + '"',
+      r.atPostApproval,
+      'Post-approval, ' + r.label,
+    );
+
+    var carry = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-carry="' + ui().esc(r.id) + '"',
+      r.carryForward,
+      'Carry forward, ' + r.label,
+    );
 
     var meta = [];
     if (r.help) meta.push(ui().esc(r.help));
     if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
-    if (r.atPreApproval && !r.atPostApproval) meta.push('Pre-approval only');
-    else if (!r.atPreApproval && r.atPostApproval) meta.push('Post-approval only');
-    else if (r.atPreApproval && r.atPostApproval) meta.push('Pre- and post-approval');
-    if (r.carryForward) meta.push('Carries forward');
-
-    var workflow = r.retired ? '' :
-      '<div class="tma-portal-cipdoc-workflow">' +
-      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-pre="' + ui().esc(r.id) + '"' +
-      (r.atPreApproval ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Pre</label>' +
-      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-post="' + ui().esc(r.id) + '"' +
-      (r.atPostApproval ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Post</label>' +
-      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-carry="' + ui().esc(r.id) + '"' +
-      (r.carryForward ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Carry</label>' +
-      '</div>';
 
     return '<tr>' +
       '<td class="tma-portal-table__check">' + tick + '</td>' +
+      '<td class="tma-portal-table__check">' + pre + '</td>' +
+      '<td class="tma-portal-table__check">' + post + '</td>' +
+      '<td class="tma-portal-table__check">' + carry + '</td>' +
       '<td>' + name +
       (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
       (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
-      (workflow ? workflow : '') +
       '</td>' +
       '<td>' + (canEdit
         ? '<div class="tma-portal-row-actions">' +
@@ -1467,14 +1481,21 @@
 
       var canEdit = true;
 
-      return '<p class="tma-portal-subtitle">What each person on an application must upload. Tick a document to make it required; choose Pre, Post, or both for when it is asked; tick Carry to keep a pre-approval answer in post-approval without re-uploading.</p>' +
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval.</p>' +
         CIPDOCS.types.map(function (t) {
           var live = t.requirements.filter(function (r) { return !r.retired; });
           var retired = t.requirements.filter(function (r) { return r.retired; });
 
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
             (t.requirements.length
-              ? ui().table(['Required', 'Document', ''], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
+              ? ui().table([
+                  { label: 'Required', attrs: ' class="tma-portal-table__check" title="Must be uploaded"' },
+                  { label: 'Pre', attrs: ' class="tma-portal-table__check" title="Asked in pre-approval"' },
+                  { label: 'Post', attrs: ' class="tma-portal-table__check" title="Asked in post-approval"' },
+                  { label: 'Carry', attrs: ' class="tma-portal-table__check" title="Reuse the pre-approval file in post-approval"' },
+                  'Document',
+                  '',
+                ], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
               : '<p class="tma-portal-note">Nothing required of this person yet.</p>') +
             '<div class="tma-dash__clients-assign-form">' +
             '<input class="tma-dash__clients-field-input" type="text" placeholder="Add a document…" data-cipdoc-label="' + ui().esc(t.value) + '" aria-label="Document name for ' + ui().esc(t.label) + '">' +

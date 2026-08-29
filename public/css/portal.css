@@ -362,11 +362,12 @@
   vertical-align: middle;
 }
 
-.tma-portal-table--cipdocs th:first-child,
-.tma-portal-table--cipdocs td:first-child {
-  width: 5.5rem;
+.tma-portal-table--cipdocs th.tma-portal-table__check,
+.tma-portal-table--cipdocs td.tma-portal-table__check {
+  width: 4.25rem;
   text-align: center;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .tma-portal-table th.tma-portal-cell--tight,
