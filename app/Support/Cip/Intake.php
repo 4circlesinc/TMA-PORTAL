@@ -83,9 +83,34 @@ class Intake
                 'label' => $t->label,
                 'help' => $t->help,
                 'required' => (bool) $t->required,
-                'atFiling' => (bool) $t->required && in_array($t->key, self::AT_FILING, true),
+                // Only the main applicant's uploads gate filing. A sponsor's
+                // paperwork is often added after the application exists, and
+                // dependants follow the same rule — their required flags still
+                // drive the checklist once the file is open.
+                'atFiling' => $applicantType === ApplicantType::PRINCIPAL_APPLICANT
+                    && (bool) $t->required,
             ])
             ->values();
+    }
+
+    /** The passport-photo template for one applicant type in a workflow lane. */
+    public static function photoRequirement(string $applicantType, string $phase = Phase::PRE_APPROVAL): ?CipDocumentRequirement
+    {
+        return Requirements::forPhase($applicantType, $phase)
+            ->firstWhere('key', DocumentTypes::PASSPORT_PHOTO);
+    }
+
+    /**
+     * Which workflow lane a new filing belongs to.
+     *
+     * Updates inherit the application's existing phase elsewhere; this only
+     * answers for create.
+     */
+    public static function filingPhase(): string
+    {
+        $phase = (string) request()->input('phase', Phase::PRE_APPROVAL);
+
+        return Phase::isValid($phase) ? $phase : Phase::PRE_APPROVAL;
     }
 
     /**
@@ -106,10 +131,9 @@ class Intake
     }
 
     /** Is the photo still asked of this applicant type, and demanded? */
-    private static function photoTemplate(string $applicantType): ?CipDocumentRequirement
+    private static function photoTemplate(string $applicantType, string $phase = Phase::PRE_APPROVAL): ?CipDocumentRequirement
     {
-        return Requirements::forType($applicantType)
-            ->firstWhere('key', DocumentTypes::PASSPORT_PHOTO);
+        return self::photoRequirement($applicantType, $phase);
     }
 
     /** The shared person field set. §2's list, which §4 says a sponsor repeats. */
@@ -175,8 +199,9 @@ class Intake
         // nothing keeps what is there.
         $need = $editing ? 'nullable' : 'required';
         $min = $editing ? [] : ['min:1'];
+        $phase = self::filingPhase();
 
-        $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT);
+        $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT, $phase);
         $rules = [
             'passportPhoto' => [
                 ! $editing && $photo && $photo->required ? 'required' : 'nullable',
@@ -184,7 +209,7 @@ class Intake
             ],
         ];
 
-        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT) as $doc) {
+        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase) as $doc) {
             $demanded = ! $editing && $doc['atFiling'];
             $rules[$doc['field']] = array_merge(
                 [$demanded ? $need : 'nullable', 'array'],
@@ -303,7 +328,7 @@ class Intake
         // The sponsor's scans are offered, never demanded at filing (§2): a
         // sponsor is often added before their paperwork is in hand, and the
         // checklist holds the door.
-        foreach (self::documentFields(ApplicantType::SPONSOR) as $doc) {
+        foreach (self::documentFields(ApplicantType::SPONSOR, self::filingPhase()) as $doc) {
             $rules['sponsor.'.$doc['field']] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
             $rules['sponsor.'.$doc['field'].'.*'] = self::documentRule();
         }
@@ -312,7 +337,7 @@ class Intake
     }
 
     /** §5: each dependent is a name, a date of birth, a relationship, and the same uploads the settings ask of their type. */
-    private static function dependentRules(): array
+    private static function dependentRules(bool $editing = false): array
     {
         $rules = [
             'dependents' => ['nullable', 'array', 'max:20'],

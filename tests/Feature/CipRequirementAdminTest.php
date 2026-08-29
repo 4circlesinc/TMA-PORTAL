@@ -334,6 +334,35 @@ class CipRequirementAdminTest extends TestCase
         $this->assertTrue($required['required'], 'ticked means required');
     }
 
+    public function test_a_required_principal_requirement_gates_filing_and_the_form(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $requirement = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Proof of funds',
+            'required' => true,
+        ])->assertCreated()->json('requirement');
+
+        $field = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'))
+            ->firstWhere('label', 'Proof of funds');
+
+        $this->assertTrue($field['required']);
+        $this->assertTrue($field['atFiling']);
+
+        $optional = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$requirement['id'], [
+            'required' => false,
+        ])->assertOk()->json('requirement');
+
+        $field = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'))
+            ->firstWhere('label', 'Proof of funds');
+
+        $this->assertFalse($optional['required']);
+        $this->assertFalse($field['atFiling']);
+    }
+
     public function test_the_order_the_checklist_reads_in_is_the_firms(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com');

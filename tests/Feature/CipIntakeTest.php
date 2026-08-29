@@ -130,6 +130,10 @@ class CipIntakeTest extends TestCase
             'passportPhoto' => $this->photo(),
             'passportBioPage' => $this->scan('bio.pdf'),
             'birthCertificate' => $this->scan('birth.pdf'),
+            'policeCertificate' => [$this->scan('police.pdf')],
+            'medicalCertificate' => [$this->scan('medical.pdf')],
+            'proofOfAddress' => [$this->scan('address.pdf')],
+            'evidenceOfFunds' => [$this->scan('funds.pdf')],
             'investmentType' => InvestmentType::REAL_ESTATE,
             'sponsored' => '0',
         ], $overrides);

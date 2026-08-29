@@ -119,6 +119,15 @@ class CipApplicationController extends Controller
                 'dependent_16_over' => Intake::documentFields(ApplicantType::DEPENDENT_16_OVER, $phase),
             ],
             'phase' => $phase,
+            'photoRequired' => collect([
+                'principal' => ApplicantType::PRINCIPAL_APPLICANT,
+                'sponsor' => ApplicantType::SPONSOR,
+                'spouse' => ApplicantType::SPOUSE,
+                'dependent_under_16' => ApplicantType::DEPENDENT_UNDER_16,
+                'dependent_16_over' => ApplicantType::DEPENDENT_16_OVER,
+            ])->mapWithKeys(fn (string $type, string $key) => [
+                $key => (bool) (Intake::photoRequirement($type, $phase)?->required ?? ($key === 'principal')),
+            ])->all(),
             'dependentAgeCutoff' => ApplicantType::cutoff(),
         ]);
     }

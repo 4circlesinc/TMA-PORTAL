@@ -175,6 +175,17 @@
 
   function sponsored() { return String(state.draft.sponsored) === '1'; }
 
+  function photoRequiredFor(path) {
+    if (path === 'passportPhoto') {
+      var settings = state.options && state.options.photoRequired;
+      return settings ? !!settings.principal : true;
+    }
+
+    if (path === 'sponsor.passportPhoto') return sponsored();
+
+    return false;
+  }
+
   /* Every path this form must have an answer for, given what it now says. */
   function requiredPaths() {
     var paths = ['providerId'].concat(PERSON_FIELDS)
@@ -195,17 +206,15 @@
   /* Files are required in their own right, an empty one is not a blank
      string, so it cannot be checked the same way. */
   function requiredFiles() {
-    var paths = ['passportPhoto'];
-    if (sponsored()) paths.push('sponsor.passportPhoto');
+    var paths = [];
+    if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
+    if (photoRequiredFor('sponsor.passportPhoto')) paths.push('sponsor.passportPhoto');
 
     return paths;
   }
 
   /* The requirements that take a list, and must have at least one. */
   function requiredDocuments() {
-    // The main applicant's only, and only the ones the templates demand at
-    // filing. §2's upload list is theirs; a sponsor's scans are offered here
-    // but not made the reason a draft cannot start.
     return docFields('principal')
       .filter(function (d) { return d.atFiling; })
       .map(function (d) { return d.field; });
@@ -290,7 +299,9 @@
    * in beside each field, so a mark can never promise something the check
    * does not enforce. It follows the form as it changes: a sponsor's fields
    * are required only once Sponsored is Yes, "Specify investment type" only
-   * once Other is picked, and a sponsor's scans never, those are offered.
+   * once Other is picked. The main applicant's required documents also gate
+   * filing; everyone else's required flags show on the form but the checklist
+   * holds the door until those uploads arrive.
    */
   function isRequired(path) {
     if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
