@@ -1425,12 +1425,27 @@
     var meta = [];
     if (r.help) meta.push(ui().esc(r.help));
     if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
+    if (r.atPreApproval && !r.atPostApproval) meta.push('Pre-approval only');
+    else if (!r.atPreApproval && r.atPostApproval) meta.push('Post-approval only');
+    else if (r.atPreApproval && r.atPostApproval) meta.push('Pre- and post-approval');
+    if (r.carryForward) meta.push('Carries forward');
+
+    var workflow = r.retired ? '' :
+      '<div class="tma-portal-cipdoc-workflow">' +
+      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-pre="' + ui().esc(r.id) + '"' +
+      (r.atPreApproval ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Pre</label>' +
+      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-post="' + ui().esc(r.id) + '"' +
+      (r.atPostApproval ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Post</label>' +
+      '<label class="tma-portal-check"><input type="checkbox" class="tma-dash__check" data-cipdoc-carry="' + ui().esc(r.id) + '"' +
+      (r.carryForward ? ' checked' : '') + (canEdit ? '' : ' disabled') + '> Carry</label>' +
+      '</div>';
 
     return '<tr>' +
       '<td class="tma-portal-table__check">' + tick + '</td>' +
       '<td>' + name +
       (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
       (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
+      (workflow ? workflow : '') +
       '</td>' +
       '<td>' + (canEdit
         ? '<div class="tma-portal-row-actions">' +
@@ -1452,7 +1467,7 @@
 
       var canEdit = true;
 
-      return '<p class="tma-portal-subtitle">What each person on an application must upload. Tick a document to make it required; leave it unticked for optional. Every new application is measured against these lists.</p>' +
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Tick a document to make it required; choose Pre, Post, or both for when it is asked; tick Carry to keep a pre-approval answer in post-approval without re-uploading.</p>' +
         CIPDOCS.types.map(function (t) {
           var live = t.requirements.filter(function (r) { return !r.retired; });
           var retired = t.requirements.filter(function (r) { return r.retired; });
@@ -1516,6 +1531,43 @@
             // The box flipped the moment it was clicked; a redraw from the
             // unchanged state snaps it back so it never shows a saved lie.
             .catch(function (e) { failed(e); render(); });
+        });
+      });
+
+      function patchPhase(id, payload) {
+        filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(id), payload)
+          .then(function () { ui().toast('Saved'); saved(); })
+          .catch(function (e) { failed(e); render(); });
+      }
+
+      el.querySelectorAll('[data-cipdoc-pre]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-pre');
+          var f = req(id);
+          if (!f) return;
+          var pre = !!box.checked;
+          var post = f.r.atPostApproval;
+          if (!pre && !post) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
+          patchPhase(id, { atPreApproval: pre });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-post]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-post');
+          var f = req(id);
+          if (!f) return;
+          var post = !!box.checked;
+          var pre = f.r.atPreApproval;
+          if (!pre && !post) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
+          patchPhase(id, { atPostApproval: post });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-carry]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-carry');
+          patchPhase(id, { carryForward: !!box.checked });
         });
       });
 

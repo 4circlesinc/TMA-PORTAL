@@ -1403,7 +1403,9 @@
     // The options and, when editing, the record to put back into them. Asked
     // for together so the form paints once with everything it needs rather
     // than filling in under the reader.
-    var wants = [held('cip:form', '/portal/cip/applications/form')];
+    var formUrl = '/portal/cip/applications/form';
+    if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
+    var wants = [held('cip:form', formUrl)];
 
     if (state.applicationId) {
       wants.push(held(

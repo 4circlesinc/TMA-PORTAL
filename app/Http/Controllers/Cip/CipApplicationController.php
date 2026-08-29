@@ -28,6 +28,7 @@ use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Phase;
+use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
@@ -84,6 +85,12 @@ class CipApplicationController extends Controller
         $user = $request->user();
         abort_unless(CipAccess::canCreate($user), 404);
 
+        $phase = Phase::PRE_APPROVAL;
+        $requested = (string) $request->query('phase', '');
+        if ($requested === Phase::POST_APPROVAL) {
+            $phase = Phase::POST_APPROVAL;
+        }
+
         $providers = Intake::providersFor($user)
             ->map(fn (CipProvider $p) => ['id' => $p->uuid, 'name' => $p->name, 'code' => $p->code])
             ->values();
@@ -105,12 +112,13 @@ class CipApplicationController extends Controller
              * are gated by the passport_photo template's own flags.
              */
             'requirements' => [
-                'principal' => Intake::documentFields(ApplicantType::PRINCIPAL_APPLICANT),
-                'sponsor' => Intake::documentFields(ApplicantType::SPONSOR),
-                'spouse' => Intake::documentFields(ApplicantType::SPOUSE),
-                'dependent_under_16' => Intake::documentFields(ApplicantType::DEPENDENT_UNDER_16),
-                'dependent_16_over' => Intake::documentFields(ApplicantType::DEPENDENT_16_OVER),
+                'principal' => Intake::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase),
+                'sponsor' => Intake::documentFields(ApplicantType::SPONSOR, $phase),
+                'spouse' => Intake::documentFields(ApplicantType::SPOUSE, $phase),
+                'dependent_under_16' => Intake::documentFields(ApplicantType::DEPENDENT_UNDER_16, $phase),
+                'dependent_16_over' => Intake::documentFields(ApplicantType::DEPENDENT_16_OVER, $phase),
             ],
+            'phase' => $phase,
             'dependentAgeCutoff' => ApplicantType::cutoff(),
         ]);
     }
@@ -920,6 +928,25 @@ class CipApplicationController extends Controller
     }
 
     /**
+     * Move a granted pre-approval application into the post-approval lane.
+     *
+     * Provisions the post-approval folder tree and materialises the post-approval
+     * checklist without duplicating files that carry forward.
+     */
+    public function enterPostApproval(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+        abort_unless(CipAccess::canChangeApplicationStatus($user), 403);
+
+        $application = PostApproval::enter($application, $user);
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
      * The Unit has it: record the date and the CIP number (§16, §7).
      *
      * The number is the point. Every surface renders `displayNumber()`, so
@@ -1232,6 +1259,11 @@ class CipApplicationController extends Controller
     private function person(CipPerson $person, Presenter $presenter): array
     {
         $photoFile = $this->photoFileModel($person);
+        $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
+        $allowedRequirements = Requirements::forPhase(
+            ApplicantType::for($person),
+            $phase,
+        )->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         // One lookup for this person's whole checklist rather than one per
         // line: a main applicant owes a dozen documents.
@@ -1280,12 +1312,19 @@ class CipApplicationController extends Controller
             'applicantType' => ApplicantType::for($person),
             'applicantTypeLabel' => ApplicantType::label(ApplicantType::for($person)),
             'documents' => $person->documents
+                ->filter(function ($slot) use ($allowedRequirements) {
+                    if ($slot->requirement_id === null) {
+                        return true;
+                    }
+
+                    return in_array((int) $slot->requirement_id, $allowedRequirements, true);
+                })
                 ->sortBy(fn ($slot) => [
                     $slot->requirement?->sort_order ?? 10000,
                     $slot->id,
                 ])
                 ->values()
-                ->map(function ($slot) use ($slotComments) {
+                ->map(function ($slot) use ($slotComments, $phase) {
                     DocumentSlots::reconcile($slot, null, false);
                     $slot->refresh();
                     $slot->loadMissing('file');
@@ -1296,6 +1335,10 @@ class CipApplicationController extends Controller
                         'type' => $slot->type,
                         'label' => $slot->label,
                         'required' => (bool) $slot->required,
+                        'carriedForward' => $phase === Phase::POST_APPROVAL
+                            && $slot->requirement
+                            && $slot->requirement->at_pre_approval
+                            && $slot->requirement->carry_forward,
                         'uploaded' => $slot->isFilled(),
                         /*
                      * §12's own status, not the file library's review_status.

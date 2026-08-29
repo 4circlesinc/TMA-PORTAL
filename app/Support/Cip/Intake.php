@@ -73,9 +73,9 @@ class Intake
      *
      * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, atFiling:bool}>
      */
-    public static function documentFields(string $applicantType): Collection
+    public static function documentFields(string $applicantType, string $phase = Phase::PRE_APPROVAL): Collection
     {
-        return Requirements::forType($applicantType)
+        return Requirements::forPhase($applicantType, $phase)
             ->reject(fn ($t) => $t->key === DocumentTypes::PASSPORT_PHOTO)
             ->map(fn ($t) => [
                 'key' => $t->key,
@@ -439,8 +439,12 @@ class Intake
             $application->load('people');
             Tree::provision($application, $creator);
 
-            foreach ($application->people as $person) {
-                DocumentSlots::open($person);
+            if ($phase === Phase::POST_APPROVAL) {
+                PostApproval::prepare($application->fresh(), $creator);
+            } else {
+                foreach ($application->people as $person) {
+                    DocumentSlots::open($person);
+                }
             }
 
             self::fileUploads($application, $data, $creator, $dependentUuids);

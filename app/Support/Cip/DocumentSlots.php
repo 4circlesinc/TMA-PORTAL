@@ -379,27 +379,50 @@ class DocumentSlots
             ->first();
     }
 
-    /**
-     * Where the file lands: the person's folder, or the drawer the template
-     * names inside it.
-     *
-     * The template hands over a NAME and {@see Tree::subfolder} creates the
-     * child under the person's own folder, which is the constraint made
-     * structural: whatever an administrator types, an upload cannot land
-     * outside the person's repository. A template naming no folder, or a type
-     * with no template, files where uploads always did.
-     */
     private static function destination(CipPerson $person, ?CipDocumentRequirement $template, User $actor): ?int
     {
-        $name = trim((string) $template?->folder);
+        $person->loadMissing('application');
+        $application = $person->application;
 
-        if ($name === '' || ! $person->folder_id) {
+        $parent = null;
+
+        if ($application?->phase === Phase::POST_APPROVAL
+            && $template !== null
+            && self::filesInPostApprovalFolder($template)) {
+            $parent = Tree::postApprovalPersonFolder($person, null, $actor);
+        } elseif ($person->folder_id) {
+            $parent = Folder::find($person->folder_id);
+        }
+
+        if ($parent === null) {
             return $person->folder_id;
         }
 
-        $parent = Folder::find($person->folder_id);
+        $name = trim((string) $template?->folder);
 
-        return $parent ? Tree::subfolder($parent, $name, $actor)->id : $person->folder_id;
+        if ($name === '') {
+            return $parent->id;
+        }
+
+        return Tree::subfolder($parent, $name, $actor)->id;
+    }
+
+    /**
+     * Post-approval uploads land under the post-approval person folder unless
+     * the requirement is only carried forward from pre-approval, in which case
+     * the existing file stays where it was filed.
+     */
+    private static function filesInPostApprovalFolder(CipDocumentRequirement $template): bool
+    {
+        if (! $template->at_post_approval) {
+            return false;
+        }
+
+        if ($template->at_pre_approval && $template->carry_forward) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

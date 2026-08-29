@@ -8,6 +8,7 @@ use App\Models\CipDocumentRequirement;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use Illuminate\Http\JsonResponse;
@@ -62,6 +63,9 @@ class CipRequirementController extends Controller
             'required' => ['nullable', 'boolean'],
             'help' => ['nullable', 'string', 'max:2000'],
             'folder' => ['nullable', 'string', 'max:64'],
+            'atPreApproval' => ['nullable', 'boolean'],
+            'atPostApproval' => ['nullable', 'boolean'],
+            'carryForward' => ['nullable', 'boolean'],
         ]);
 
         abort_unless(ApplicantType::isValid($data['applicantType']), 422, 'That is not an applicant type.');
@@ -91,6 +95,12 @@ class CipRequirementController extends Controller
                 $changes['folder'] = $this->folder($data);
             }
 
+            foreach (['atPreApproval' => 'at_pre_approval', 'atPostApproval' => 'at_post_approval', 'carryForward' => 'carry_forward'] as $from => $to) {
+                if (array_key_exists($from, $data)) {
+                    $changes[$to] = $data[$from];
+                }
+            }
+
             $requirement->forceFill($changes)->save();
         } else {
             $requirement = CipDocumentRequirement::create([
@@ -100,6 +110,9 @@ class CipRequirementController extends Controller
                 'required' => $data['required'] ?? true,
                 'help' => $data['help'] ?? null,
                 'folder' => $this->folder($data),
+                'at_pre_approval' => $data['atPreApproval'] ?? true,
+                'at_post_approval' => $data['atPostApproval'] ?? false,
+                'carry_forward' => $data['carryForward'] ?? false,
                 'sort_order' => $this->nextOrder($data['applicantType']),
             ]);
         }
@@ -119,6 +132,9 @@ class CipRequirementController extends Controller
             'required' => ['sometimes', 'boolean'],
             'help' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'folder' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'atPreApproval' => ['sometimes', 'boolean'],
+            'atPostApproval' => ['sometimes', 'boolean'],
+            'carryForward' => ['sometimes', 'boolean'],
         ]);
 
         /*
@@ -130,6 +146,8 @@ class CipRequirementController extends Controller
         if (array_key_exists('folder', $data)) {
             $data['folder'] = $this->folder($data);
         }
+
+        $data = $this->mapPhaseFields($data);
 
         /*
          * The key is not in that list, and cannot be.
@@ -259,13 +277,41 @@ class CipRequirementController extends Controller
     private function reachOpenApplications(): void
     {
         CipApplication::query()
-            ->whereNotIn('status', Status::TERMINAL)
+            ->whereNull('locked_at')
+            ->where(function ($query) {
+                $query->whereNotIn('status', Status::TERMINAL)
+                    ->orWhere('phase', Phase::POST_APPROVAL);
+            })
             ->with('people')
             ->chunkById(50, function ($applications) {
                 foreach ($applications as $application) {
                     Requirements::materialiseApplication($application);
                 }
             });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function mapPhaseFields(array $data): array
+    {
+        if (array_key_exists('atPreApproval', $data)) {
+            $data['at_pre_approval'] = $data['atPreApproval'];
+            unset($data['atPreApproval']);
+        }
+
+        if (array_key_exists('atPostApproval', $data)) {
+            $data['at_post_approval'] = $data['atPostApproval'];
+            unset($data['atPostApproval']);
+        }
+
+        if (array_key_exists('carryForward', $data)) {
+            $data['carry_forward'] = $data['carryForward'];
+            unset($data['carryForward']);
+        }
+
+        return $data;
     }
 
     /** @return array<string, mixed> */
@@ -279,6 +325,9 @@ class CipRequirementController extends Controller
             'required' => (bool) $requirement->required,
             'help' => $requirement->help,
             'folder' => $requirement->folder,
+            'atPreApproval' => (bool) $requirement->at_pre_approval,
+            'atPostApproval' => (bool) $requirement->at_post_approval,
+            'carryForward' => (bool) $requirement->carry_forward,
             'sortOrder' => (int) $requirement->sort_order,
             'retired' => $requirement->trashed() || ! $requirement->active,
         ];

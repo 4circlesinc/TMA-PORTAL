@@ -46,6 +46,8 @@ class Tree
 {
     public const ADDITIONAL = 'Additional Documents';
 
+    public const POST_APPROVAL = 'Post-Approval Documents';
+
     /**
      * Give the application a client record, a folder tree, and one folder per
      * person. Safe to call again: it fills in what is missing.
@@ -87,6 +89,59 @@ class Tree
         self::stampClient($root, $client);
 
         return $root;
+    }
+
+    /**
+     * The post-approval repository tree under the client folder.
+     *
+     * One drawer for the lane, then one folder per person on the file. The
+     * link lives on {@see CipApplication::$post_approval_folder_id} so uploads
+     * can be filed there without walking the tree by name.
+     */
+    public static function provisionPostApproval(CipApplication $application, ?User $actor = null): Folder
+    {
+        $application->loadMissing(['people', 'client']);
+
+        $root = $application->folder_id
+            ? Folder::find($application->folder_id)
+            : self::provision($application, $actor);
+
+        if ($root === null) {
+            $root = self::provision($application, $actor);
+        }
+
+        $postRoot = self::childNamed($root, self::POST_APPROVAL, $actor);
+
+        foreach ($application->people as $person) {
+            self::postApprovalPersonFolder($person, $postRoot, $actor);
+        }
+
+        if ($application->post_approval_folder_id !== $postRoot->id) {
+            $application->forceFill(['post_approval_folder_id' => $postRoot->id])->save();
+        }
+
+        return $postRoot;
+    }
+
+    /**
+     * One person's folder inside the post-approval tree.
+     */
+    public static function postApprovalPersonFolder(
+        CipPerson $person,
+        ?Folder $postRoot = null,
+        ?User $actor = null,
+    ): Folder {
+        $person->loadMissing('application');
+
+        $postRoot ??= $person->application->post_approval_folder_id
+            ? Folder::find($person->application->post_approval_folder_id)
+            : null;
+
+        if ($postRoot === null) {
+            $postRoot = self::provisionPostApproval($person->application, $actor);
+        }
+
+        return self::childNamed($postRoot, self::folderName($person), $actor);
     }
 
     /**

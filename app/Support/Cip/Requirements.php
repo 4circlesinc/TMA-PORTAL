@@ -47,10 +47,37 @@ class Requirements
      */
     public static function forType(string $applicantType): Collection
     {
-        return CipDocumentRequirement::query()
+        return self::forPhase($applicantType, Phase::PRE_APPROVAL);
+    }
+
+    /**
+     * Active templates for one applicant type in a workflow lane.
+     *
+     * Pre-approval lists requirements flagged for that lane. Post-approval
+     * lists post-only requirements plus any pre-approval row marked to carry
+     * forward without re-uploading the file.
+     *
+     * @return Collection<int, CipDocumentRequirement>
+     */
+    public static function forPhase(string $applicantType, string $phase): Collection
+    {
+        $query = CipDocumentRequirement::query()
             ->where('applicant_type', $applicantType)
-            ->active()
-            ->get();
+            ->active();
+
+        if ($phase === Phase::POST_APPROVAL) {
+            $query->where(function ($inner) {
+                $inner->where('at_post_approval', true)
+                    ->orWhere(function ($carry) {
+                        $carry->where('at_pre_approval', true)
+                            ->where('carry_forward', true);
+                    });
+            });
+        } else {
+            $query->where('at_pre_approval', true);
+        }
+
+        return $query->get();
     }
 
     /**
@@ -78,7 +105,8 @@ class Requirements
             return $person->documents()->get();
         }
 
-        $templates = self::forType(ApplicantType::for($person));
+        $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
+        $templates = self::forPhase(ApplicantType::for($person), $phase);
 
         // One transaction: a half-applied template change would leave a
         // checklist that is neither the old one nor the new one, and the next
@@ -335,8 +363,14 @@ class Requirements
      */
     private static function isOpen(?CipApplication $application): bool
     {
-        return $application !== null
-            && ! $application->isLocked()
-            && ! Status::isTerminal($application->status);
+        if ($application === null || $application->isLocked()) {
+            return false;
+        }
+
+        if ($application->phase === Phase::POST_APPROVAL) {
+            return true;
+        }
+
+        return ! Status::isTerminal($application->status);
     }
 }

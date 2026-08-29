@@ -371,6 +371,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.
         Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
+        Route::post('/applications/{uuid}/post-approval', [CipApplicationController::class, 'enterPostApproval'])
+            ->name('applications.post-approval');
         /*
          * §9: the buckets a reader opens their day on, counted.
          *
