@@ -5853,7 +5853,7 @@
   function renderPostApprovalAction(app) {
     if (!canEnterPostApproval()) return '';
     if (app.phase === 'post_approval') return '';
-    if (app.status !== 'granted' && app.decision !== 'granted') return '';
+    if (app.status !== 'granted') return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-post-approval>' +
       'Move to post-approval</button>';
@@ -9308,7 +9308,7 @@
               ui.closeModal();
               clientsToast(picked === 'granted' ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
               var app = data && data.application;
-              if (picked === 'granted' && app && app.phase === 'pre_approval') {
+              if (picked === 'granted' && app && app.status === 'granted' && app.phase === 'pre_approval') {
                 openPostApprovalPrompt(applicationId, clientUid);
                 return;
               }
@@ -11002,7 +11002,7 @@
     MORPH.unwired(root, '[data-cip-post-approval]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         var app = applicationFor(state.selectedId);
-        if (!app) return;
+        if (!app || app.status !== 'granted' || app.phase === 'post_approval') return;
         openPostApprovalPrompt(app.id, app.clientUid);
       });
     });
