@@ -77,7 +77,7 @@ class BrowserController extends BaseFilesController
         $wantFacets = $request->boolean('facets');
         $wantTotals = $request->boolean('totals');
 
-        $exactTotals = $section !== 'recent' && ! $lean && ($wantTotals || $current !== null);
+        $exactTotals = $section !== 'recent' && ! $lean && $wantTotals;
         $owners = ($wantFacets && ! $lean) ? $this->ownerFacet($folderQuery, $fileQuery) : [];
 
         $this->applyOwnerFilter($folderQuery, $fileQuery, $request);
@@ -142,6 +142,9 @@ class BrowserController extends BaseFilesController
         }
 
         $presenter = $this->presenter($request);
+        // Direct child counts on the page, not unread-comment walks of each
+        // subtree. Opening a client folder used to recurse every person and
+        // document folder under it before a single row could paint.
         $withStats = $section !== 'recycle' && ! $lean;
         $presenter->prime($files->all(), $folders->all(), $withStats);
 
@@ -643,16 +646,12 @@ class BrowserController extends BaseFilesController
 
     private function breadcrumb(Folder $folder): array
     {
-        $trail = [];
-        $seen = [];
-        $node = $folder;
+        FileAccess::warmChains([$folder->id]);
 
-        while ($node && ! isset($seen[$node->id])) {
-            $seen[$node->id] = true;
-            array_unshift($trail, ['id' => $node->uuid, 'name' => $node->name]);
-            $node = $node->parent;
-        }
-
-        return $trail;
+        return FileAccess::lineage($folder->id)
+            ->reverse()
+            ->values()
+            ->map(fn (Folder $node) => ['id' => $node->uuid, 'name' => $node->name])
+            ->all();
     }
 }

@@ -71,8 +71,27 @@ class FileAccess
         return Role::isStaff($user);
     }
 
+    /** @var array<string, string|null> */
+    private static array $resolvedRoles = [];
+
+    /** @var array<string, ClientAssignment|null> */
+    private static array $liveAssignments = [];
+
+    /** @var array<string, string|null> */
+    private static array $companyStaffRoles = [];
+
     /** Effective role a user holds over a file (null = no access). */
     public static function fileRole(User $user, FileItem $file): ?string
+    {
+        $key = 'file|'.$user->id.'|'.$file->id;
+        if (array_key_exists($key, self::$resolvedRoles)) {
+            return self::$resolvedRoles[$key];
+        }
+
+        return self::$resolvedRoles[$key] = self::computeFileRole($user, $file);
+    }
+
+    private static function computeFileRole(User $user, FileItem $file): ?string
     {
         // Checked BEFORE the admin short-circuit on purpose, see the method.
         $driveOwner = self::personalSpaceOwner($file->folder_id, $file->owner_id);
@@ -315,6 +334,16 @@ class FileAccess
     /** Effective role a user holds over a folder (null = no access). */
     public static function folderRole(User $user, Folder $folder): ?string
     {
+        $key = 'folder|'.$user->id.'|'.$folder->id;
+        if (array_key_exists($key, self::$resolvedRoles)) {
+            return self::$resolvedRoles[$key];
+        }
+
+        return self::$resolvedRoles[$key] = self::computeFolderRole($user, $folder);
+    }
+
+    private static function computeFolderRole(User $user, Folder $folder): ?string
+    {
         $driveOwner = self::personalSpaceOwner($folder->id, $folder->owner_id);
         if ($driveOwner !== null) {
             if ($driveOwner === $user->id) {
@@ -375,10 +404,7 @@ class FileAccess
                 // Ended assignments are kept as history, so this must ask for the
                 // live one, without the scope an expired row could be picked up
                 // and hand back access that was taken away.
-                $assignment = ClientAssignment::live()
-                    ->where('client_id', $folder->client_id)
-                    ->where('user_id', $user->id)
-                    ->first();
+                $assignment = self::liveClientAssignment($user, (int) $folder->client_id);
 
                 // Staff assigned to the whole company reach the folders of the
                 // contacts beneath it, when their assignment says it should.
@@ -456,16 +482,34 @@ class FileAccess
      * The role a staff member holds over a client's folder because they are
      * assigned to the company that client belongs to.
      */
+    private static function liveClientAssignment(User $user, int $clientId): ?ClientAssignment
+    {
+        $key = $user->id.'|'.$clientId;
+        if (! array_key_exists($key, self::$liveAssignments)) {
+            self::$liveAssignments[$key] = ClientAssignment::live()
+                ->where('client_id', $clientId)
+                ->where('user_id', $user->id)
+                ->first();
+        }
+
+        return self::$liveAssignments[$key];
+    }
+
     private static function companyStaffRole(User $user, int $clientId): ?string
     {
+        $cacheKey = $user->id.'|'.$clientId;
+        if (array_key_exists($cacheKey, self::$companyStaffRoles)) {
+            return self::$companyStaffRoles[$cacheKey];
+        }
+
         if (! self::isStaff($user)) {
-            return null;
+            return self::$companyStaffRoles[$cacheKey] = null;
         }
 
         $companyId = Client::whereKey($clientId)->value('company_id');
 
         if (! $companyId) {
-            return null;
+            return self::$companyStaffRoles[$cacheKey] = null;
         }
 
         $assignment = CompanyStaffAssignment::live()
@@ -476,17 +520,17 @@ class FileAccess
         // An assignment scoped to the company alone stops at the company's own
         // files, it is not a way to read every contact's folder.
         if (! $assignment || ! $assignment->reachesClients()) {
-            return null;
+            return self::$companyStaffRoles[$cacheKey] = null;
         }
 
         if (! $assignment->reachesFutureClients()) {
             $addedAt = Client::whereKey($clientId)->value('created_at');
             if ($addedAt !== null && $addedAt > $assignment->created_at) {
-                return null;
+                return self::$companyStaffRoles[$cacheKey] = null;
             }
         }
 
-        return $assignment->fileRole();
+        return self::$companyStaffRoles[$cacheKey] = $assignment->fileRole();
     }
 
     public static function can(User $user, string $ability, FileItem|Folder $item): bool
@@ -558,6 +602,90 @@ class FileAccess
         }
 
         return true;
+    }
+
+    /**
+     * Listing-row permissions from one role lookup.
+     *
+     * The File Library used to call {@see self::can()} once per ability per
+     * row. Each call re-walked the folder chain and re-queried shares, which
+     * is why opening a client folder sat on a skeleton long after the root
+     * listing had painted.
+     *
+     * @return array<string, bool>
+     */
+    public static function fileListingPerms(User $user, FileItem $file): array
+    {
+        $perms = self::listingPerms($user, $file, [
+            'preview', 'download', 'upload', 'rename', 'move', 'copy', 'delete', 'share', 'assign',
+        ]);
+        $perms['review'] = $perms['upload'];
+        unset($perms['upload']);
+
+        return $perms;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    public static function folderListingPerms(User $user, Folder $folder): array
+    {
+        return self::listingPerms($user, $folder, [
+            'view', 'upload', 'download', 'rename', 'move', 'copy', 'delete', 'share', 'assign',
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $abilities
+     * @return array<string, bool>
+     */
+    private static function listingPerms(User $user, FileItem|Folder $item, array $abilities): array
+    {
+        $role = $item instanceof FileItem
+            ? self::fileRole($user, $item)
+            : self::folderRole($user, $item);
+        $caps = self::CAPS[$role] ?? [];
+
+        $frozen = false;
+        foreach (self::PACKAGE_LOCKED as $locked) {
+            if (in_array($locked, $caps, true)) {
+                $frozen = $item instanceof FileItem
+                    ? Package::locksFile($item)
+                    : Package::locksFolder($item);
+                break;
+            }
+        }
+
+        $inClient = self::inClientTree($item);
+        $out = [];
+
+        foreach ($abilities as $ability) {
+            if (! in_array($ability, $caps, true)) {
+                $out[$ability] = false;
+                continue;
+            }
+            if (in_array($ability, self::PACKAGE_LOCKED, true) && $frozen) {
+                $out[$ability] = false;
+                continue;
+            }
+            if ($ability === 'share' && Role::isClient($user) && ! PortalPermissions::allowsClientSharing()) {
+                $out[$ability] = false;
+                continue;
+            }
+            if ($ability === 'assign' && $inClient) {
+                $out[$ability] = false;
+                continue;
+            }
+            $out[$ability] = true;
+        }
+
+        return $out;
+    }
+
+    /** Folder and its ancestors, self first, using the warmed chain cache. */
+    public static function lineage(?int $folderId): Collection
+    {
+        return self::chainFolders($folderId);
     }
 
     /**
@@ -639,6 +767,11 @@ class FileAccess
 
     private static function shareRole(User $user, string $type, int $id): ?string
     {
+        $key = $user->id.'|'.$type.'|'.$id;
+        if (array_key_exists($key, self::$shareRoles)) {
+            return self::$shareRoles[$key];
+        }
+
         $share = Share::where('kind', 'user')
             ->where('target_user_id', $user->id)
             ->where('item_type', $type)
@@ -647,7 +780,7 @@ class FileAccess
             ->get()
             ->first(fn (Share $s) => $s->isActive());
 
-        return self::highest(array_filter([
+        return self::$shareRoles[$key] = self::highest(array_filter([
             $share?->role,
             self::companyShareRole($user, $type, $id),
         ]));
@@ -664,7 +797,11 @@ class FileAccess
      */
     private static function companyShareRole(User $user, string $type, int $id): ?string
     {
-        $memberships = CompanyMember::active()->where('user_id', $user->id)->get();
+        $uid = (int) $user->id;
+        if (! isset(self::$companyMemberships[$uid])) {
+            self::$companyMemberships[$uid] = CompanyMember::active()->where('user_id', $uid)->get();
+        }
+        $memberships = self::$companyMemberships[$uid];
 
         if ($memberships->isEmpty()) {
             return null;
@@ -749,6 +886,12 @@ class FileAccess
      * written, from the observer that already watches them.
      */
     private static array $folders = [];
+
+    /** @var array<string, string|null> */
+    private static array $shareRoles = [];
+
+    /** @var array<int, \Illuminate\Support\Collection> */
+    private static array $companyMemberships = [];
 
     /**
      * Fetch whole ancestor chains up front, one query per depth level.
@@ -857,6 +1000,11 @@ class FileAccess
         SyncScope::forget();
 
         self::$folders = [];
+        self::$shareRoles = [];
+        self::$companyMemberships = [];
+        self::$resolvedRoles = [];
+        self::$liveAssignments = [];
+        self::$companyStaffRoles = [];
 
         /*
          * The personal-drive answers go with them. Both caches are keyed by

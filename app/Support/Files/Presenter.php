@@ -165,9 +165,6 @@ class Presenter
         $this->primeFolderIndex($files, $folders);
 
         if ($folderExtras) {
-            $this->commentFolder = $this->shouldWalkFolderComments($folders)
-                ? CommentReads::unreadByFolder($this->viewer, $folderIds)
-                : [];
             $this->folderStats = FolderTree::directCounts($folders);
         }
 
@@ -178,32 +175,6 @@ class Presenter
             array_map(fn (Folder $f) => $f->id, $folders),
             array_map(fn (FileItem $f) => (int) $f->folder_id, $files),
         ));
-    }
-
-    /**
-     * Unread chips on a folder row walk that folder's whole subtree.
-     *
-     * Cheap for a client folder with a handful of person folders. Deadly for
-     * All Files (the Clients root's subtree is the library) and for the
-     * Clients directory (a hundred client trees). Skip those; keep the walk
-     * for the listings small enough that a closed folder can still say it
-     * is hiding a question.
-     *
-     * @param  Folder[]  $folders
-     */
-    private function shouldWalkFolderComments(array $folders): bool
-    {
-        if ($folders === [] || count($folders) > 24) {
-            return false;
-        }
-
-        foreach ($folders as $folder) {
-            if ($folder->folder_type === Folder::TYPE_ROOT) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     public function file(FileItem $file): array
@@ -566,43 +537,20 @@ class Presenter
 
     private function filePerms(FileItem $file): array
     {
-        return [
-            'preview' => FileAccess::can($this->viewer, 'preview', $file),
-            'download' => FileAccess::can($this->viewer, 'download', $file),
-            'rename' => FileAccess::can($this->viewer, 'rename', $file),
-            'move' => FileAccess::can($this->viewer, 'move', $file),
-            'copy' => FileAccess::can($this->viewer, 'copy', $file),
-            'delete' => FileAccess::can($this->viewer, 'delete', $file),
-            'share' => FileAccess::can($this->viewer, 'share', $file),
-            'assign' => FileAccess::can($this->viewer, 'assign', $file),
-            // Reviewing takes the same bar as adding a version: a client who
-            // can see their own folder must not be able to approve their own
-            // passport. Computed here with the rest so the review block below
-            // costs no extra permission checks.
-            'review' => FileAccess::can($this->viewer, 'upload', $file),
-        ];
+        return FileAccess::fileListingPerms($this->viewer, $file);
     }
 
     private function folderPerms(Folder $folder): array
     {
-        return [
-            'upload' => FileAccess::can($this->viewer, 'upload', $folder),
-            'download' => FileAccess::can($this->viewer, 'download', $folder),
-            'rename' => FileAccess::can($this->viewer, 'rename', $folder),
-            'move' => FileAccess::can($this->viewer, 'move', $folder),
-            'copy' => FileAccess::can($this->viewer, 'copy', $folder),
-            'delete' => FileAccess::can($this->viewer, 'delete', $folder),
-            'share' => FileAccess::can($this->viewer, 'share', $folder),
-            'assign' => FileAccess::can($this->viewer, 'assign', $folder),
-            // Regular folders: anyone who can see it may set their own colour/icon.
-            // Default/system folders: admin-only, since it's shared.
-            'colour' => $folder->folder_type === Folder::TYPE_USER
-                ? FileAccess::can($this->viewer, 'view', $folder)
-                : FileAccess::isAdmin($this->viewer),
-            'icon' => $folder->folder_type === Folder::TYPE_USER
-                ? FileAccess::can($this->viewer, 'view', $folder)
-                : FileAccess::isAdmin($this->viewer),
-        ];
+        $perms = FileAccess::folderListingPerms($this->viewer, $folder);
+        $canTint = $folder->folder_type === Folder::TYPE_USER
+            ? ($perms['view'] ?? false)
+            : FileAccess::isAdmin($this->viewer);
+        $perms['colour'] = $canTint;
+        $perms['icon'] = $canTint;
+        unset($perms['view']);
+
+        return $perms;
     }
 
     private function person(?User $user): ?array

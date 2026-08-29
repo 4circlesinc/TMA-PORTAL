@@ -94,7 +94,7 @@
      * listing rather than a smaller version of it.
      */
     page: 1,
-    pageSize: 100,
+    pageSize: 50,
     total: 0,
     selected: {},        // uuid -> { type, name, perms, favorite }
     data: { folders: [], files: [] },
