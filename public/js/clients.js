@@ -50,7 +50,9 @@
    * hide one company at a time.
    */
   var LIST_TABS = [
-    { id: 'applications', label: 'Applications' },
+    { id: 'all_applications', label: 'All Applications' },
+    { id: 'pre_approval', label: 'Pre-Approval Applications' },
+    { id: 'post_approval', label: 'Post-Approval Applications' },
     { id: 'providers', label: 'Service providers' },
     { id: 'people', label: 'Provider contacts' },
   ];
@@ -58,14 +60,21 @@
   function listTabOf(state) {
     var tab = state && state.listTab;
     if (tab === 'providers' || tab === 'people') return tab;
-    return 'applications';
+    if (tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval') return tab;
+    // The old single Applications tab — treat as All Applications.
+    if (tab === 'applications') return 'all_applications';
+    return 'all_applications';
   }
 
   function loadListTab() {
     try {
-      return listTabOf({ listTab: localStorage.getItem(LIST_TAB_KEY) });
+      var fromUrl = new URLSearchParams(window.location.search || '').get('listTab');
+      if (fromUrl) return listTabOf({ listTab: fromUrl });
+      var stored = localStorage.getItem(LIST_TAB_KEY);
+      if (stored) return listTabOf({ listTab: stored });
+      return 'all_applications';
     } catch (e) {
-      return 'applications';
+      return 'all_applications';
     }
   }
 
@@ -79,6 +88,36 @@
 
   function onPeopleTab(state) {
     return listTabOf(state) === 'people';
+  }
+
+  /*
+   * Which list is on screen.
+   *
+   * One filter menu serves the application tabs on this page, and every field
+   * it offers asks about an application: what state it is in, whose desk it is
+   * on, whose firm filed it. A service provider is a firm, it is the answer to
+   * the third question, not a subject of any of them, so on that tab the menu
+   * has nothing to say and is not offered at all. Every field below starts here.
+   */
+  function onApplicationsTable(state) {
+    if (!state || state.screen !== 'list') return false;
+    var tab = listTabOf(state);
+    return tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval';
+  }
+
+  /** Which workflow lane the current application tab filters to, if any. */
+  function applicationPhaseForTab(state) {
+    var tab = listTabOf(state);
+    if (tab === 'pre_approval') return 'pre_approval';
+    if (tab === 'post_approval') return 'post_approval';
+    return null;
+  }
+
+  function tabPhaseCountKey(tab) {
+    if (tab.id === 'all_applications') return 'all';
+    if (tab.id === 'pre_approval') return 'pre_approval';
+    if (tab.id === 'post_approval') return 'post_approval';
+    return null;
   }
 
   var ICONS = {
@@ -1035,6 +1074,10 @@
      * the screen in front of them.
      */
     var listParams = [];
+    if (clientsMountState && clientsMountState.screen === 'list') {
+      var listTab = listTabOf(clientsMountState);
+      if (listTab) listParams.push('listTab=' + encodeURIComponent(listTab));
+    }
     ['bucket', 'assignee', 'provider'].forEach(function (field) {
       var ticked = filterValues(field);
       if (ticked.length) listParams.push(field + '=' + encodeURIComponent(ticked.join(',')));
@@ -1263,19 +1306,6 @@
 
   function anyClientFilter(filters) {
     return !!(filters && (filters.referral || filters.clientType));
-  }
-
-  /*
-   * Which list is on screen.
-   *
-   * One filter menu serves both tabs on this page, and every field it offers
-   * asks about an application: what state it is in, whose desk it is on, whose
-   * firm filed it. A service provider is a firm, it is the answer to the
-   * third question, not a subject of any of them, so on that tab the menu has
-   * nothing to say and is not offered at all. Every field below starts here.
-   */
-  function onApplicationsTable(state) {
-    return !!state && state.screen === 'list' && listTabOf(state) === 'applications';
   }
 
   /*
@@ -1620,7 +1650,7 @@
 
     // Provider contacts / private clients: applications only, no staff tabs.
     if (isExternalCipUser()) {
-      state.listTab = 'applications';
+      state.listTab = 'all_applications';
       slot.hidden = true;
       slot.innerHTML = '';
       return;
@@ -2472,12 +2502,15 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-list-tabs"' +
       ' role="tablist" aria-label="CIP Applications sections">' +
       LIST_TABS.map(function (tab) {
-        var active = (state.listTab || 'applications') === tab.id;
-        var count = loading ? null : (tab.id === 'providers'
-          ? providerRowEntries(state).length
-          : tab.id === 'people'
-            ? peopleRowEntries(state).length
-            : applicationRowEntries(state).length);
+        var active = listTabOf(state) === tab.id;
+        var phaseKey = tabPhaseCountKey(tab);
+        var count = loading ? null : (phaseKey
+          ? ((APP_TABLE.phaseCounts && APP_TABLE.phaseCounts[phaseKey]) || 0)
+          : tab.id === 'providers'
+            ? providerRowEntries(state).length
+            : tab.id === 'people'
+              ? peopleRowEntries(state).length
+              : null);
 
         return (
           '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
@@ -2521,6 +2554,7 @@
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
     assignees: [], providers: [], statuses: [],
+    phaseCounts: { all: 0, pre_approval: 0, post_approval: 0 },
   };
 
   /*
@@ -2756,11 +2790,11 @@
      * would otherwise arrive at a filter they cannot see. Saved as well as
      * set, because an unmounted view reads the stored tab when it comes up.
      */
-    saveListTab('applications');
+    saveListTab('pre_approval');
 
     var state = clientsMountState;
     if (state) {
-      state.listTab = 'applications';
+      state.listTab = 'pre_approval';
       state.page = 1;
       state.selected = {};
       syncClientsListUrl(state);
@@ -2781,6 +2815,7 @@
      */
     return [
       state.search || '',
+      applicationPhaseForTab(state) || '',
       APP_TABLE.status || '',
       filterValues('bucket').join(','),
       filterValues('assignee').join(','),
@@ -2800,6 +2835,8 @@
     APP_TABLE.error = null;
 
     var params = ['perPage=50', 'page=' + APP_TABLE.page];
+    var phase = applicationPhaseForTab(state);
+    if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
     /*
@@ -2834,6 +2871,7 @@
          */
         if (json && json.assignees) APP_TABLE.assignees = json.assignees;
         if (json && json.providers) APP_TABLE.providers = json.providers;
+        if (json && json.phaseCounts) APP_TABLE.phaseCounts = json.phaseCounts;
         APP_TABLE.loadedKey = key;
       })
       .catch(function (err) {
@@ -2915,9 +2953,14 @@
     }
 
     if (!APP_TABLE.rows.length) {
+      var emptyMsg = state.search
+        ? 'No application matches “' + state.search + '”.'
+        : (listTabOf(state) === 'post_approval'
+          ? 'No post-approval applications yet. Approved applications can be moved to post-approval after a decision is recorded.'
+          : 'No applications yet.');
       return ui.table(headers,
         '<tr class="tma-portal-table__empty"><td colspan="10">' +
-        esc(state.search ? 'No application matches “' + state.search + '”.' : 'No applications yet.') +
+        esc(emptyMsg) +
         '</td></tr>', { cls: 'tma-cip-table' });
     }
 
@@ -7808,8 +7851,8 @@
         state.page = 1;
         state.selected = {};
         state.search = '';
-        state.listTab = 'applications';
-        saveListTab('applications');
+        state.listTab = 'pre_approval';
+        saveListTab('pre_approval');
         // The filter only has a surface in the table view; landing on the
         // directory list would apply it invisibly.
         state.viewMode = 'list';
@@ -9451,6 +9494,8 @@
       saveListTab(id);
       state.page = 1;
       state.selected = {};
+      forgetApplicationTable();
+      syncClientsListUrl(state);
       render();
     };
 

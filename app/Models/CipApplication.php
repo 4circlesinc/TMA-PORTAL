@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -37,6 +38,7 @@ class CipApplication extends Model
         static::creating(function (self $application) {
             $application->uuid ??= (string) Str::uuid();
             $application->status ??= Status::NEW;
+            $application->phase ??= Phase::PRE_APPROVAL;
         });
     }
 
@@ -48,6 +50,7 @@ class CipApplication extends Model
             'accepted_at' => 'date',
             'decided_at' => 'date',
             'locked_at' => 'datetime',
+            'post_approval_at' => 'datetime',
             'sponsored' => 'boolean',
         ];
     }
@@ -68,6 +71,11 @@ class CipApplication extends Model
     public function isLocked(): bool
     {
         return $this->locked_at !== null;
+    }
+
+    public function isPostApproval(): bool
+    {
+        return $this->phase === Phase::POST_APPROVAL;
     }
 
     public function provider(): BelongsTo

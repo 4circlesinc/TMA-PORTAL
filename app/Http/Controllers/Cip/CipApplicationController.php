@@ -27,6 +27,7 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
@@ -308,6 +309,7 @@ class CipApplicationController extends Controller
              */
             'sort' => ['nullable', 'string', 'max:32'],
             'dir' => ['nullable', 'string', 'max:4'],
+            'phase' => ['nullable', 'string', 'max:24'],
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
@@ -343,6 +345,10 @@ class CipApplicationController extends Controller
 
         if (! empty($data['status']) && Status::isValid($data['status'])) {
             $query->where('status', $data['status']);
+        }
+
+        if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
+            $query->where('phase', $data['phase']);
         }
 
         /*
@@ -436,7 +442,33 @@ class CipApplicationController extends Controller
              */
             'assignees' => Facets::assignees($user),
             'providers' => Facets::providers($user),
+            'phaseCounts' => $this->phaseCounts($user),
         ]);
+    }
+
+    /**
+     * How many applications sit in each workflow lane for this reader.
+     *
+     * Measured over the whole scoped set, not the current page or phase filter,
+     * so tab badges stay honest while the table narrows.
+     *
+     * @return array{all: int, pre_approval: int, post_approval: int}
+     */
+    private function phaseCounts(User $user): array
+    {
+        $counts = ApplicationScope::query($user)
+            ->selectRaw('phase, COUNT(*) as aggregate')
+            ->groupBy('phase')
+            ->pluck('aggregate', 'phase');
+
+        $pre = (int) ($counts[Phase::PRE_APPROVAL] ?? 0);
+        $post = (int) ($counts[Phase::POST_APPROVAL] ?? 0);
+
+        return [
+            'all' => $pre + $post,
+            'pre_approval' => $pre,
+            'post_approval' => $post,
+        ];
     }
 
     /**
@@ -666,6 +698,8 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            'phase' => $application->phase ?? Phase::PRE_APPROVAL,
+            'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer),
             'assignedTo' => $this->assignees($application),
         ];
@@ -1055,6 +1089,9 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            'phase' => $application->phase ?? Phase::PRE_APPROVAL,
+            'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
+            'postApprovalAt' => $application->post_approval_at?->toIso8601String(),
             ...Confirmation::payload($application, $viewer),
             'availableTransitions' => $this->transitions($application, $viewer),
             'provider' => $application->provider?->name,

@@ -8,8 +8,10 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -440,5 +442,121 @@ class CipApplicationTableTest extends TestCase
         $application->client->forceFill(['name' => $first.' '.$last])->save();
 
         return $application->refresh();
+    }
+
+    public function test_the_list_returns_all_phases_by_default(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $pre = $this->application($staff, $provider, 0, false);
+        $post = $this->application($staff, $provider, 0, false);
+        $post->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(2, $body['applications']);
+        $this->assertSame(2, $body['phaseCounts']['all']);
+        $this->assertSame(1, $body['phaseCounts']['pre_approval']);
+        $this->assertSame(1, $body['phaseCounts']['post_approval']);
+        $this->assertEqualsCanonicalizing(
+            [Phase::PRE_APPROVAL, Phase::POST_APPROVAL],
+            array_column($body['applications'], 'phase'),
+        );
+    }
+
+    public function test_phase_filter_narrows_to_pre_approval(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $this->application($staff, $provider, 0, false);
+        $post = $this->application($staff, $provider, 0, false);
+        $post->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=pre_approval')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $body['applications']);
+        $this->assertSame(Phase::PRE_APPROVAL, $body['applications'][0]['phase']);
+        $this->assertSame(2, $body['phaseCounts']['all']);
+    }
+
+    public function test_phase_filter_narrows_to_post_approval(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $this->application($staff, $provider, 0, false);
+        $post = $this->application($staff, $provider, 0, false);
+        $post->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=post_approval')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $body['applications']);
+        $this->assertSame(Phase::POST_APPROVAL, $body['applications'][0]['phase']);
+    }
+
+    public function test_phase_counts_respect_application_scope(): void
+    {
+        $staff = $this->staff();
+        $providerA = $this->provider($staff);
+        $providerB = CipProvider::create(['name' => 'Orion', 'code' => 'ORI']);
+
+        $this->application($staff, $providerA, 0, false);
+        $post = $this->application($staff, $providerA, 0, false);
+        $post->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+        $this->application($staff, $providerB, 0, false);
+
+        $contact = User::create([
+            'name' => 'Galaxy Contact',
+            'email' => 'galaxy@example.com',
+            'password' => bcrypt('password12345'),
+        ]);
+        $contact->forceFill([
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ])->save();
+
+        CompanyMember::create([
+            'company_id' => $providerA->company_id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $body = $this->actingAs($contact)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(2, $body['phaseCounts']['all']);
+        $this->assertSame(1, $body['phaseCounts']['pre_approval']);
+        $this->assertSame(1, $body['phaseCounts']['post_approval']);
     }
 }
