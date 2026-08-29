@@ -131,8 +131,17 @@
     var s = it.status;
     if (!s || !s.label) return '';
 
-    return '<span class="tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
-      ' tma-portal-status--inline">' + esc(s.label) + '</span>';
+    var cls = 'tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
+      ' tma-portal-status--inline';
+    var label = esc(s.label);
+
+    if (it.type !== 'folder' && documentReviewStatus(it)) {
+      return '<button type="button" class="' + cls + ' tma-file-status-chip" data-files-status="' +
+        esc(it.id) + '" aria-haspopup="menu" aria-label="Change status, currently ' + label + '">' +
+        label + '</button>';
+    }
+
+    return '<span class="' + cls + '">' + label + '</span>';
   }
 
   /*
@@ -1391,6 +1400,18 @@
     var menu = e.target.closest('[data-files-menu]');
     if (menu) { e.preventDefault(); e.stopPropagation(); var it = findItem(menu.getAttribute('data-files-menu')); if (it) { rowMenuFor(it, menu); } return; }
 
+    var statusBtn = e.target.closest('[data-files-status]');
+    if (statusBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      var file = findItem(statusBtn.getAttribute('data-files-status'));
+      if (file) {
+        var box = statusBtn.getBoundingClientRect();
+        openReviewStatusMenu(box.left, box.bottom + 4, file, function () { load(true); });
+      }
+      return;
+    }
+
     /*
      * A click picks the row. It does not open it.
      *
@@ -1408,7 +1429,7 @@
 
     var row = e.target.closest('[data-files-row]');
     if (row) {
-      if (e.target.closest('.tma-portal-star, [data-files-menu], input, .tma-portal-rename-input')) return;
+      if (e.target.closest('.tma-portal-star, [data-files-menu], [data-files-status], input, .tma-portal-rename-input')) return;
       e.preventDefault();
       selectRow(row.getAttribute('data-id'), e);
       return;
@@ -1434,7 +1455,7 @@
       return;
     }
 
-    if (e.target.closest('.tma-portal-star, [data-files-menu], .tma-portal-rename-input')) return;
+    if (e.target.closest('.tma-portal-star, [data-files-menu], [data-files-status], .tma-portal-rename-input')) return;
 
     /*
      * The row, or failing that the one the first click took.
@@ -7563,6 +7584,13 @@
 
     canReviewBulk: function (items) {
       return (items || []).some(function (i) { return i && i.type !== 'folder'; });
+    },
+
+    reviewAt: function (x, y, item, onChange) {
+      if (!item || item.type === 'folder') return;
+      externalItems = [item];
+      externalOnChange = onChange || null;
+      openReviewStatusMenu(x, y, item, onChange || function () {});
     },
 
     /**

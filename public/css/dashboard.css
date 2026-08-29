@@ -18220,6 +18220,26 @@ button.tma-cip-status-chip:focus-visible {
   outline-offset: 2px;
 }
 
+button.tma-file-status-chip,
+.tma-file-status-chip[role="button"] {
+  appearance: none;
+  margin-left: var(--space-8);
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+button.tma-file-status-chip:hover,
+.tma-file-status-chip[role="button"]:hover {
+  filter: brightness(0.92);
+}
+
+button.tma-file-status-chip:focus-visible,
+.tma-file-status-chip[role="button"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .tma-dash__clients-profile--form {
   overflow: hidden;
 }

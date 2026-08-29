@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipDocument;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Realtime\Live;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -187,11 +188,12 @@ class DocumentEngine
     }
 
     /**
-     * Set a slot's status off the mapped cycle.
+     * Set a slot's status to any file-review state.
      *
-     * Officers judge along {@see apply()}. An administrator may pull a
-     * document back (Ready for submission → Application review) without a
-     * re-upload. Pending upload stays an upload, not a picker choice.
+     * Application status still follows the lifecycle map. File status is a
+     * working label: employees, officers and administrators who can reach
+     * the document may move it back and forth. Pending upload stays an
+     * upload, not a picker choice. Clients still cannot judge their own files.
      */
     public static function set(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
     {
@@ -206,17 +208,8 @@ class DocumentEngine
             return $document;
         }
 
-        if ($actor !== null && ! CipAccess::canOverrideStatus($actor)) {
-            throw new AuthorizationException(
-                'Only an administrator can pull a document back to an earlier status.'
-            );
-        }
-
-        if ($actor !== null && ! self::allows($actor, $document, $to)
-            && $to !== DocumentStatus::APPLICATION_REVIEW) {
-            throw new AuthorizationException(
-                'You cannot move this document to '.DocumentStatus::label($to).'.'
-            );
+        if ($actor !== null && ! Role::isStaff($actor)) {
+            throw new AuthorizationException('You cannot change this document’s status.');
         }
 
         Confirmation::guard($document->loadMissing('application')->application);
@@ -236,7 +229,7 @@ class DocumentEngine
                 'document' => $document->uuid,
                 'fromStatus' => $from,
                 'toStatus' => $to,
-                'override' => true,
+                'override' => ($meta['override'] ?? true),
             ]));
 
             ActivityLogger::log([
@@ -261,7 +254,7 @@ class DocumentEngine
      */
     public static function availableOverrides(CipDocument $document, ?User $actor): array
     {
-        if (! CipAccess::canOverrideStatus($actor)) {
+        if (! Role::isStaff($actor)) {
             return [];
         }
 

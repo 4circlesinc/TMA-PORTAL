@@ -178,4 +178,88 @@ class CipDocumentFileStatusTest extends TestCase
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
         $this->assertTrue($slot->comments()->exists(), 'The reason lands on the slot, where the checklist reads it.');
     }
+
+    public function test_staff_can_move_a_file_status_back_and_forth(): void
+    {
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        [$slot, $file, $folder] = $this->filedFor($staff, DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/?section=all&folder='.$folder->uuid)
+            ->assertOk()
+            ->assertJsonPath('files.0.review.canReview', true)
+            ->assertJsonPath('files.0.review.next', [
+                ReviewStatus::APPLICATION_REVIEW,
+                ReviewStatus::UPDATE_REQUIRED,
+            ]);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::APPLICATION_REVIEW);
+
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->fresh()->status);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'note' => 'Dates on page 2 do not match.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED);
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+    }
+
+    /**
+     * @return array{0: CipDocument, 1: FileItem, 2: Folder, 3: User}
+     */
+    private function filedFor(User $staff, string $status = DocumentStatus::APPLICATION_REVIEW): array
+    {
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'G'.substr(uniqid(), -4)]);
+        $client = Client::create([
+            'uid' => 'chen-'.uniqid(), 'name' => 'Chen Wei',
+            'created_by' => $staff->id, 'data' => [],
+        ]);
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $client->name,
+            'folder_type' => Folder::TYPE_CLIENT,
+            'client_id' => $client->id,
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+        ]);
+        $application = Applications::create($provider, $staff, ['client_id' => $client->id]);
+        $person = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+            'folder_id' => $folder->id,
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folder->id,
+            'name' => 'Chen Wei — Birth certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/birth.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+        $slot = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $person->id,
+            'type' => DocumentTypes::BIRTH_CERTIFICATE,
+            'label' => 'Birth certificate',
+            'file_id' => $file->id,
+        ]);
+        $slot->forceFill(['status' => $status])->save();
+
+        return [$slot, $file, $folder, $staff];
+    }
 }

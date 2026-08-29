@@ -186,6 +186,30 @@ class ClientDocumentReviewTest extends TestCase
         $this->assertNotNull($file->reviewed_at);
     }
 
+    public function test_staff_can_move_review_status_back_and_forth(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $this->actingAs($staff)
+            ->patchJson("/portal/files/files/{$file->uuid}/review", [
+                'status' => ReviewStatus::READY_FOR_SUBMISSION,
+            ])
+            ->assertOk();
+
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $file->fresh()->review_status);
+
+        $this->actingAs($staff)
+            ->patchJson("/portal/files/files/{$file->uuid}/review", [
+                'status' => ReviewStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk();
+
+        $this->assertSame(ReviewStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
+    }
+
     public function test_an_update_must_say_why(): void
     {
         $staff = $this->staff();

@@ -83,22 +83,24 @@ class FileReviewController extends BaseFilesController
     }
 
     /**
-     * A CIP slot: the engine's edges, the officer's two verbs.
+     * A CIP slot: any file-review status, both directions, for staff.
      *
-     * Application review is reached by uploading, not by picking it here —
-     * a picker that could skip the new version would short the revision loop.
+     * Officers still settle the application checklist after a verdict.
+     * Employees change only the document; they cannot drive application status.
      */
     private function judgeCip(CipDocument $slot, User $user, string $to, string $note): void
     {
         try {
-            if ($to === DocumentStatus::READY_FOR_SUBMISSION) {
-                CipReview::approve($slot, $user);
-            } elseif ($to === DocumentStatus::UPDATE_REQUIRED) {
+            $meta = array_filter(['note' => $note !== '' ? $note : null]);
+            $officer = CipAccess::can($user, 'cip.review') || CipAccess::canOverrideStatus($user);
+
+            if ($officer && $to === DocumentStatus::UPDATE_REQUIRED) {
                 CipReview::requestChanges($slot, $user, $note);
-            } elseif (CipAccess::canOverrideStatus($user)) {
-                DocumentEngine::set($slot, $to, $user, array_filter(['note' => $note !== '' ? $note : null]));
+            } elseif ($officer && $to === DocumentStatus::READY_FOR_SUBMISSION
+                && DocumentEngine::canTransition($slot, $to)) {
+                CipReview::approve($slot, $user);
             } else {
-                abort(422, 'Re-upload the document to put it back into application review.');
+                DocumentEngine::set($slot, $to, $user, $meta);
             }
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());

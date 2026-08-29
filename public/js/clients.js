@@ -6402,6 +6402,38 @@
     if (net) window.open(net.url('/files/' + encodeURIComponent(fileId) + '/preview'), '_blank', 'noopener');
   }
 
+  function refreshCipAfterFileChange(state, render) {
+    delete APPLICATIONS[state.selectedId];
+    forgetApplication(state.selectedId);
+    state.applicationFreshFor = null;
+    ensureApplicationLoaded(state, render);
+  }
+
+  function openCipFileStatusMenu(state, chip, render) {
+    var fileId = chip.getAttribute('data-cip-file-status');
+    var acts = window.TMAFileActions;
+    if (!fileId || !acts || !acts.reviewAt) return;
+
+    var file = cipLibraryFile(state, fileId) || {
+      id: fileId,
+      type: 'file',
+      status: {
+        status: chip.getAttribute('data-cip-file-status-value'),
+        label: chip.getAttribute('data-cip-file-status-label'),
+        tone: chip.getAttribute('data-cip-file-status-tone'),
+      },
+      review: {
+        status: chip.getAttribute('data-cip-file-status-value'),
+        canReview: true,
+        next: null,
+      },
+    };
+    var box = chip.getBoundingClientRect();
+    acts.reviewAt(box.left, box.bottom + 4, file, function () {
+      refreshCipAfterFileChange(state, render);
+    });
+  }
+
   function cipLibraryFile(state, fileId) {
     var people = cipPeople(state);
     var i;
@@ -6427,10 +6459,7 @@
       // the face on the page is derived from the passport photo, so read the
       // application back either way.
       window.TMAFileActions.open(file, function () {
-        delete APPLICATIONS[state.selectedId];
-        forgetApplication(state.selectedId);
-        state.applicationFreshFor = null;
-        ensureApplicationLoaded(state, render);
+        refreshCipAfterFileChange(state, render);
       });
       return;
     }
@@ -6559,13 +6588,26 @@
         ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
         : '') +
       '</span>';
-    var chip =
-      clientCommentChip(d) +
-      '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
-      ' tma-portal-status--inline">' + esc(status) + '</span>';
+    var chip;
+    if (filed && d.fileId) {
+      chip =
+        clientCommentChip(d) +
+        '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+        ' tma-portal-status--inline tma-file-status-chip" data-cip-file-status="' +
+        esc(d.fileId) + '" data-cip-file-status-value="' + esc(d.status || '') +
+        '" data-cip-file-status-label="' + esc(status) +
+        '" data-cip-file-status-tone="' + esc(tone) +
+        '" role="button" tabindex="0" aria-haspopup="menu" aria-label="Change status, currently ' +
+        esc(status) + '">' + esc(status) + '</span>';
+    } else {
+      chip =
+        clientCommentChip(d) +
+        '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+        ' tma-portal-status--inline">' + esc(status) + '</span>';
+    }
     var body = opens
       ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
-        esc(d.fileId) + '" title="Open the filed document">' + thumb + name + chip + '</button>'
+        esc(d.fileId) + '" title="Open the filed document">' + thumb + name + '</button>' + chip
       : thumb + name + chip;
 
     return (
@@ -6791,8 +6833,16 @@
     var s = f && f.status;
     if (!s || !s.label) return '';
 
-    return '<span class="tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
-      ' tma-portal-status--inline">' + esc(s.label) + '</span>';
+    var cls = 'tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
+      ' tma-portal-status--inline tma-file-status-chip';
+
+    if (f.type === 'file' && f.id) {
+      return '<span class="' + cls + '" data-clients-file-status="' + esc(f.id) +
+        '" role="button" tabindex="0" aria-haspopup="menu" aria-label="Change status, currently ' +
+        esc(s.label) + '">' + esc(s.label) + '</span>';
+    }
+
+    return '<span class="' + cls + '">' + esc(s.label) + '</span>';
   }
 
   /*
@@ -7135,6 +7185,16 @@
     acts.menu(e.clientX, e.clientY, row, done);
   }
 
+  function openClientFileStatusMenu(root, chip, id) {
+    var row = clientFolderRow(id);
+    var acts = window.TMAFileActions;
+    if (!row || !acts || !acts.reviewAt) return;
+    var box = chip.getBoundingClientRect();
+    acts.reviewAt(box.left, box.bottom + 4, row, function () {
+      loadClientFolder(root, { changed: true });
+    });
+  }
+
   /* Drill into a folder, or open a file in the File Library's viewer. */
   function openClientFolderItem(root, id) {
     var row = clientFolderRow(id);
@@ -7183,6 +7243,15 @@
       btn.addEventListener('click', function (e) {
         // A drag that ended on this row raises a click nobody asked for.
         if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
+
+        var statusChip = e.target.closest('[data-clients-file-status]');
+        if (statusChip) {
+          e.preventDefault();
+          e.stopPropagation();
+          openClientFileStatusMenu(root, statusChip, id);
+          return;
+        }
+
         e.preventDefault();
 
         // Enter or Space on a focused row: no pointer behind it, and nobody
@@ -11639,6 +11708,19 @@
     MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         openCipFile(state, btn.getAttribute('data-cip-file'), render);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-file-status]').forEach(function (chip) {
+      MORPH.on(chip, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCipFileStatusMenu(state, chip, render);
+      });
+      MORPH.on(chip, 'keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        openCipFileStatusMenu(state, chip, render);
       });
     });
   }

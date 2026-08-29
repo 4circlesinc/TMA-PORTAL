@@ -890,15 +890,13 @@ class Presenter
 
         if ($slot) {
             $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
-            // Re-upload is what puts a slot back into application review.
-            // Offering that status in the picker would let a reviewer skip
-            // the new version the revision loop is for.
-            $next = array_values(array_filter(
-                DocumentEngine::next($slot),
-                fn (string $to) => $to !== DocumentStatus::APPLICATION_REVIEW
-                    && $to !== DocumentStatus::PENDING_UPLOAD,
-            ));
-            $overrides = DocumentEngine::availableOverrides($slot, $this->viewer);
+            $from = ReviewStatus::normalize($status) ?? $status;
+            $staff = Role::isStaff($this->viewer);
+            $canReview = $staff && (
+                ($perms['review'] ?? false)
+                || CipAccess::can($this->viewer, 'cip.review')
+                || CipAccess::canOverrideStatus($this->viewer)
+            );
 
             return [
                 'status' => $status,
@@ -906,14 +904,10 @@ class Presenter
                 'note' => $file->review_note,
                 'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
                 'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
-                // Judging a CIP slot is cip.review / admin override, not
-                // upload. Tying it to upload hid Change status on files that
-                // already showed a review badge (package lock, view-only).
-                'canReview' => CipAccess::can($this->viewer, 'cip.review')
-                    || CipAccess::canOverrideStatus($this->viewer),
+                'canReview' => $canReview,
                 'all' => ReviewStatus::ALL,
-                'next' => $next,
-                'overrides' => $overrides,
+                'next' => $canReview ? ReviewStatus::next($from) : DocumentEngine::next($slot),
+                'overrides' => [],
             ];
         }
 
