@@ -20,6 +20,7 @@ use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use App\Support\Clients\ClientDirectory;
@@ -316,6 +317,37 @@ class CipIntakeTest extends TestCase
             ->assertCreated()->json('application');
 
         $this->assertStringStartsWith('PRI', $body['internalNumber']);
+    }
+
+    public function test_a_post_approval_application_can_be_created_at_intake(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff,
+            $this->payload($provider, ['phase' => Phase::POST_APPROVAL]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
+        $this->assertNotNull($body['postApprovalAt']);
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $this->assertSame(Phase::POST_APPROVAL, $application->phase);
+        $this->assertNotNull($application->post_approval_at);
+    }
+
+    public function test_intake_defaults_to_pre_approval_when_phase_is_omitted(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame(Phase::PRE_APPROVAL, $body['phase']);
+        $this->assertNull($body['postApprovalAt']);
     }
 
     public function test_a_stranger_cannot_reach_the_wizard_at_all(): void

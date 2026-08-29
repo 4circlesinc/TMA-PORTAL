@@ -131,7 +131,10 @@ class Intake
     public static function rules(bool $editing = false): array
     {
         return array_merge(
-            $editing ? [] : ['providerId' => ['required', 'string']],
+            $editing ? [] : [
+                'providerId' => ['required', 'string'],
+                'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+            ],
             self::personRules(),
             self::mainApplicantDocumentRules($editing),
             self::investmentRules(),
@@ -393,13 +396,27 @@ class Intake
     public static function create(CipProvider $provider, User $creator, array $data): CipApplication
     {
         return DB::transaction(function () use ($provider, $creator, $data) {
-            $application = Applications::create($provider, $creator, [
+            $phase = Phase::PRE_APPROVAL;
+            if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
+                $phase = $data['phase'];
+            }
+
+            $attributes = [
                 'investment_type' => $data['investmentType'],
                 'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
                     ? trim((string) ($data['investmentTypeOther'] ?? ''))
                     : null,
                 'sponsored' => (bool) $data['sponsored'],
-            ]);
+            ];
+
+            $application = Applications::create($provider, $creator, $attributes);
+
+            if ($phase === Phase::POST_APPROVAL) {
+                $application->forceFill([
+                    'phase' => Phase::POST_APPROVAL,
+                    'post_approval_at' => now(),
+                ])->save();
+            }
 
             self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
 

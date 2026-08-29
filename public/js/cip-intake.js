@@ -129,6 +129,8 @@
     filedMeta: {},
     /* The application being edited, or null when this is a new one. */
     applicationId: null,
+    /* pre_approval or post_approval for a new filing; null when editing. */
+    phase: 'pre_approval',
     /* The filed record the form was opened on. Kept so a save that has to be
        parked offline can say what the record will look like once it lands. */
     record: null,
@@ -656,7 +658,11 @@
 
   /* The whole ask on one page. Investment first, it is whose file this is
      and what they are filing for, then the people on it. */
-  function formBody() {
+  function isPostApprovalIntake() {
+    return state.phase === 'post_approval';
+  }
+
+  function preApprovalFormBody() {
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       investmentCard() +
       applicantCard() +
@@ -664,6 +670,20 @@
       sponsorCard() +
       dependentsCard() +
       '</div>';
+  }
+
+  /*
+   * Post-approval intake duplicates pre-approval for now. When PAD-specific
+   * fields arrive they belong here, not in preApprovalFormBody().
+   */
+  function postApprovalFormBody() {
+    return preApprovalFormBody();
+  }
+
+  function formBody() {
+    if (isPostApprovalIntake()) return postApprovalFormBody();
+
+    return preApprovalFormBody();
   }
 
   function render(root) {
@@ -676,7 +696,8 @@
     var count = Object.keys(state.errors).length;
 
     MORPH.patch(root,
-      '<div class="tma-dash__clients-form" data-cip-form>' +
+      '<div class="tma-dash__clients-form" data-cip-form data-cip-intake-phase="' +
+      esc(state.phase || 'pre_approval') + '">' +
       // One summary at the top: a reader who pressed Add and nothing
       // happened deserves to be told why without hunting the page.
       (count
@@ -1063,6 +1084,10 @@
 
     out.push({ name: 'sponsored', value: sponsored() ? '1' : '0' });
 
+    if (!state.applicationId && state.phase) {
+      out.push({ name: 'phase', value: state.phase });
+    }
+
     return out;
   }
 
@@ -1368,6 +1393,7 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
+    state.phase = state.applicationId ? null : (opts.phase === 'post_approval' ? 'post_approval' : 'pre_approval');
     state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;

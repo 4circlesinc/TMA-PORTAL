@@ -113,6 +113,24 @@
     return null;
   }
 
+  /** Which workflow lane a new application is filed into. */
+  function parseNewApplicationPhase(search) {
+    var phase = new URLSearchParams(search || window.location.search || '').get('phase');
+    return phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+  }
+
+  function newApplicationLabel(phase) {
+    return phase === 'post_approval'
+      ? 'New post-approval application'
+      : 'New pre-approval application';
+  }
+
+  function pathForNewApplication(phase) {
+    return phase === 'post_approval'
+      ? '/clients/applications/new?phase=post_approval'
+      : '/clients/applications/new';
+  }
+
   function tabPhaseCountKey(tab) {
     if (tab.id === 'all_applications') return 'all';
     if (tab.id === 'pre_approval') return 'pre_approval';
@@ -996,7 +1014,7 @@
       return { screen: 'list' };
     }
     if (p === '/clients/applications/new') {
-      return { screen: 'new-application' };
+      return { screen: 'new-application', applicationPhase: parseNewApplicationPhase() };
     }
     var editApp = p.match(/^\/clients\/applications\/([^/]+)\/edit$/);
     if (editApp) {
@@ -1041,8 +1059,10 @@
     return null;
   }
 
-  function pathForClientsScreen(screen, contactId, companyId) {
-    if (screen === 'new-application') return '/clients/applications/new';
+  function pathForClientsScreen(screen, contactId, companyId, applicationPhase) {
+    if (screen === 'new-application') {
+      return pathForNewApplication(applicationPhase || 'pre_approval');
+    }
     if (screen === 'edit-application' && contactId) {
       return '/clients/applications/' + encodeURIComponent(contactId) + '/edit';
     }
@@ -1557,31 +1577,34 @@
           '</div></div>'
         : '') +
       /*
-       * One choice is a button, not a menu.
+       * Staff choose which lane they are filing into. Service provider contacts
+       * file pre-approval applications only, so they keep one button.
        *
        * Registering a service provider and importing a spreadsheet are the
-       * firm's work; a provider contact files applications for the one firm
-       * they belong to and may do neither. Leaving the caret there gave them a
-       * menu whose only live entry was the thing the button already said, and
-       * two entries that answer 403.
+       * firm's work; those entries sit below the two application choices.
        */
-      (canCreateBeyondApplications()
-        ? '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+      (isExternalCipUser()
+        ? '<div class="tma-dash__head-dropdown-wrap">' +
+          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-clients-create-application>' +
+          'Create New Application' +
+          '</button></div>'
+        : '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
           '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
           'Create New Application' +
           '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
           '</button>' +
           '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create New Application">' +
-          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">New application</button>' +
-          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
-          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-pre-approval">Create New Pre-Approval Application</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-post-approval">Create New Post-Approval Application</button>' +
+          (canCreateBeyondApplications()
+            ? '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
+              '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>'
+            : '') +
           '</div>' +
-          '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">' +
-          '</div>'
-        : '<div class="tma-dash__head-dropdown-wrap">' +
-          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-clients-create-application>' +
-          'Create New Application' +
-          '</button></div>')
+          (canCreateBeyondApplications()
+            ? '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">'
+            : '') +
+          '</div>')
     );
   }
 
@@ -4180,11 +4203,12 @@
       // blank application depicts nobody, and the applicant's actual face is
       // asked for in the form a few inches below.
       var editingApp = state.screen === 'edit-application';
+      var newPhase = state.applicationPhase || 'pre_approval';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
         renderClientsBackArrow(state) +
         '<span class="tma-dash__clients-profile-name">' +
-        (editingApp ? 'Edit application' : 'New application') + '</span>' +
+        (editingApp ? 'Edit application' : newApplicationLabel(newPhase)) + '</span>' +
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
@@ -9882,8 +9906,16 @@
         navigateToClientsAdminPage(action.slice(6));
         return;
       }
+      if (action === 'create-pre-approval' && clientsHeadActionsNavigate) {
+        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'pre_approval' });
+        return;
+      }
+      if (action === 'create-post-approval' && clientsHeadActionsNavigate) {
+        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'post_approval' });
+        return;
+      }
       if (action === 'create-new' && clientsHeadActionsNavigate) {
-        clientsHeadActionsNavigate('new-application');
+        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'pre_approval' });
         return;
       }
       if (action === 'create-company' && clientsHeadActionsNavigate) {
@@ -9902,7 +9934,9 @@
       var btn = event.target.closest('[data-clients-create-application]');
       if (!btn || !btn.closest('[data-clients-page-actions]')) return;
       event.preventDefault();
-      if (clientsHeadActionsNavigate) clientsHeadActionsNavigate('new-application');
+      if (clientsHeadActionsNavigate) {
+        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'pre_approval' });
+      }
     });
 
     document.addEventListener('change', function (event) {
@@ -9982,12 +10016,23 @@
     // The intake wizard owns its own subtree once mounted; re-mounting on a
     // re-render would wipe a half-typed application.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
-    if (intakeMount && !intakeMount.querySelector('[data-cip-wizard]')) intakeMount._cipMounted = false;
+    if (intakeMount && !intakeMount.querySelector('[data-cip-form]')) intakeMount._cipMounted = false;
+    if (intakeMount) {
+      var editing = state.screen === 'edit-application';
+      var wantPhase = state.applicationPhase || 'pre_approval';
+      if (intakeMount._cipPhase !== wantPhase || intakeMount._cipEditing !== editing) {
+        intakeMount._cipMounted = false;
+        intakeMount.innerHTML = '';
+      }
+    }
     if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
       intakeMount._cipMounted = true;
       var editing = state.screen === 'edit-application';
+      intakeMount._cipPhase = state.applicationPhase || 'pre_approval';
+      intakeMount._cipEditing = editing;
       window.TMACipIntake.open(intakeMount, {
         applicationId: editing ? state.applicationId : null,
+        phase: editing ? null : (state.applicationPhase || 'pre_approval'),
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
           if (!btn) return;
@@ -11253,7 +11298,14 @@
       if (usesPagedClientsFlow(state) && screen !== 'list') {
         return { title: '', crumb: 'CIP Applications' };
       }
-      if (screen === 'new-application' || screen === 'add') {
+      if (screen === 'new-application') {
+        var phase = state.applicationPhase || 'pre_approval';
+        return {
+          title: newApplicationLabel(phase),
+          crumb: 'CIP Applications / ' + newApplicationLabel(phase),
+        };
+      }
+      if (screen === 'add') {
         return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
       if (screen === 'edit-application') {
@@ -11285,6 +11337,11 @@
       // Which application the form is editing. Cleared on the way out, or a
       // later New application would open with the last one's answers in it.
       state.applicationId = screen === 'edit-application' ? (applicationId || state.applicationId) : null;
+      if (screen === 'new-application') {
+        state.applicationPhase = state.applicationPhase || 'pre_approval';
+      } else if (screen !== 'edit-application') {
+        state.applicationPhase = null;
+      }
       if (companyId) state.companyId = companyId;
       if (contactId) state.selectedId = contactId;
       if (contactId && contactId !== previousId) {
@@ -11437,6 +11494,10 @@
         contactId = contactId || null;
       }
 
+      if (screen === 'new-application') {
+        state.applicationPhase = navOpts.applicationPhase || 'pre_approval';
+      }
+
       if (!usesPagedClientsFlow(state)) {
         var dirBody = root.querySelector('.tma-dash__clients-directory-body');
         if (dirBody) state.listScrollTop = dirBody.scrollTop;
@@ -11461,7 +11522,9 @@
           '',
           screen === 'edit-application'
             ? pathForClientsScreen(screen, state.applicationId)
-            : pathForClientsScreen(screen === 'list' ? 'list' : screen, state.selectedId, state.companyId)
+            : (screen === 'new-application'
+              ? pathForNewApplication(state.applicationPhase || 'pre_approval')
+              : pathForClientsScreen(screen === 'list' ? 'list' : screen, state.selectedId, state.companyId))
         );
 
         if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
@@ -11504,7 +11567,9 @@
         // ask the server for an application with a client's uid.
         screen === 'edit-application'
           ? pathForClientsScreen(screen, state.applicationId)
-          : pathForClientsScreen(screen, contactId || state.selectedId, state.companyId)
+          : (screen === 'new-application'
+            ? pathForNewApplication(state.applicationPhase || 'pre_approval')
+            : pathForClientsScreen(screen, contactId || state.selectedId, state.companyId))
       );
 
       if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
@@ -11541,6 +11606,7 @@
       }
 
       if (!isClientsMobile() && state.viewMode !== 'list') {
+        if (route.applicationPhase) state.applicationPhase = route.applicationPhase;
         applyScreen(route.screen || 'detail', route.contactId || state.selectedId, route.companyId || null, route.applicationId);
         if (!state.selectedId && route.screen !== 'add' && route.screen !== 'add-company' &&
             route.screen !== 'company' && route.screen !== 'edit-company' &&
@@ -11579,6 +11645,7 @@
         return;
       }
 
+      if (route.applicationPhase) state.applicationPhase = route.applicationPhase;
       applyScreen(route.screen || 'list', route.contactId, route.companyId || null, route.applicationId);
       syncClientsShell(state.screen, state.viewMode);
 
