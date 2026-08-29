@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Review as CipReview;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Presenter;
@@ -49,9 +50,23 @@ class FileReviewController extends BaseFilesController
         $to = ReviewStatus::normalize($data['status']) ?? $data['status'];
         $note = trim((string) ($data['note'] ?? ''));
 
-        // Sending a document back without a reason leaves whoever uploaded it
-        // with nothing to act on, which is the one outcome that always needs
-        // an explanation. CIP and ordinary client files alike.
+        $this->applyTo($user, $file, $to, $note);
+
+        $presented = (new Presenter($user))->file($file->fresh());
+
+        return response()->json([
+            'status' => $presented['status'] ?? ReviewStatus::badge($to),
+            'file' => $presented,
+        ]);
+    }
+
+    /**
+     * Judge one file, the same path the single-file endpoint and bulk review use.
+     */
+    public function applyTo(User $user, FileItem $file, string $to, string $note): void
+    {
+        FileAccess::authorize($user, 'upload', $file);
+
         abort_if($to === ReviewStatus::UPDATE_REQUIRED && $note === '', 422, 'Say what needs changing.');
 
         $slot = CipDocument::query()->where('file_id', $file->id)->first();
@@ -63,17 +78,8 @@ class FileReviewController extends BaseFilesController
             $this->judgeFile($file, $user, $to, $note);
         }
 
-        $presented = (new Presenter($user))->file($file->fresh());
-
-        // The library, the client's Documents tab and any open viewer all show
-        // this, and none of them know the others exist.
         Live::staff(Live::FILES);
         Live::user(Live::FILES, $file->owner_id);
-
-        return response()->json([
-            'status' => $presented['status'] ?? ReviewStatus::badge($to),
-            'file' => $presented,
-        ]);
     }
 
     /**
@@ -89,6 +95,8 @@ class FileReviewController extends BaseFilesController
                 CipReview::approve($slot, $user);
             } elseif ($to === DocumentStatus::UPDATE_REQUIRED) {
                 CipReview::requestChanges($slot, $user, $note);
+            } elseif (CipAccess::canOverrideStatus($user)) {
+                DocumentEngine::set($slot, $to, $user, array_filter(['note' => $note !== '' ? $note : null]));
             } else {
                 abort(422, 'Re-upload the document to put it back into application review.');
             }

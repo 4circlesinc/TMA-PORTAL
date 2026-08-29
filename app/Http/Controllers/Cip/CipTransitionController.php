@@ -449,6 +449,12 @@ class CipTransitionController extends Controller
                     'label' => Status::label($status),
                     'tone' => Status::tone($status),
                 ])->all(),
+            'availableOverrides' => collect(Engine::availableOverrides($application, $actor))
+                ->map(fn (string $status) => [
+                    'value' => $status,
+                    'label' => Status::label($status),
+                    'tone' => Status::tone($status),
+                ])->all(),
             // A screen holding an older copy has to be able to tell that this
             // one is newer, the same way the offline cache does.
             'updatedAt' => $application->updated_at?->toIso8601String(),

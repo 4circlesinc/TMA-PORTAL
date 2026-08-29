@@ -725,8 +725,9 @@ class CipApplicationController extends Controller
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer),
+            'availableOverrides' => $this->overrides($application, $viewer),
             'assignedTo' => $this->assignees($application),
-            'familyMembers' => $this->familyMembersForRow($application),
+            'familyMembers' => $this->familyMembersForRow($application, $viewer),
         ];
     }
 
@@ -739,7 +740,7 @@ class CipApplicationController extends Controller
      *
      * @return list<array{id:string,role:string,label:string,name:string,profileTab:string,photo:?string,passportPhotoUrl:?string,status:string,statusLabel:string,statusTone:string,docFiled:int,docTotal:int,docPending:int}>
      */
-    private function familyMembersForRow(CipApplication $application): array
+    private function familyMembersForRow(CipApplication $application, User $viewer): array
     {
         if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
             return [];
@@ -759,7 +760,7 @@ class CipApplicationController extends Controller
                 $person->id,
             ])
             ->values()
-            ->map(function (CipPerson $person) use ($phase) {
+            ->map(function (CipPerson $person) use ($phase, $viewer) {
                 $progress = $this->documentProgress($person, $phase);
                 $status = PersonStatus::forPerson($person);
 
@@ -774,6 +775,8 @@ class CipApplicationController extends Controller
                     'profileTab' => $this->profileTabForPerson($person),
                     ...$this->personPhotoUrls($person, $photoFile),
                     ...$status,
+                    'availableStatuses' => PersonStatus::availableTransitions($person, $viewer),
+                    'availableStatusOverrides' => PersonStatus::availableOverrides($person, $viewer),
                     ...$progress,
                 ];
             })
@@ -835,6 +838,21 @@ class CipApplicationController extends Controller
     private function transitions($application, User $viewer): array
     {
         return collect(Engine::availableTransitions($application, $viewer))
+            ->map(fn (string $status) => [
+                'value' => $status,
+                'label' => Status::label($status),
+                'tone' => Status::tone($status),
+            ])            ->values()->all();
+    }
+
+    /**
+     * Administrator-only jumps off the lifecycle map.
+     *
+     * @return list<array{value:string,label:string,tone:string}>
+     */
+    private function overrides($application, User $viewer): array
+    {
+        return collect(Engine::availableOverrides($application, $viewer))
             ->map(fn (string $status) => [
                 'value' => $status,
                 'label' => Status::label($status),
@@ -1263,6 +1281,7 @@ class CipApplicationController extends Controller
                 : [],
             ...Confirmation::payload($application, $viewer),
             'availableTransitions' => $this->transitions($application, $viewer),
+            'availableOverrides' => $this->overrides($application, $viewer),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
@@ -1523,7 +1542,10 @@ class CipApplicationController extends Controller
                 : []),
             'availableStatuses' => $applicationPhase === Phase::POST_APPROVAL
                 && CipAccess::canChangeApplicationStatus($presenter->viewer())
-                ? PersonStatus::listed()
+                ? PersonStatus::availableTransitions($person, $presenter->viewer())
+                : [],
+            'availableStatusOverrides' => $applicationPhase === Phase::POST_APPROVAL
+                ? PersonStatus::availableOverrides($person, $presenter->viewer())
                 : [],
         ];
     }

@@ -59,11 +59,37 @@
 
   function listTabOf(state) {
     var tab = state && state.listTab;
-    if (tab === 'providers' || tab === 'people') return tab;
-    if (tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval') return tab;
-    // The old single Applications tab — treat as All Applications.
-    if (tab === 'applications') return 'all_applications';
+    var allowed = listTabsForViewer();
+    if (allowed.length) {
+      for (var i = 0; i < allowed.length; i++) {
+        if (allowed[i].id === tab) return tab;
+      }
+      // The old single Applications tab — treat as All Applications.
+      if (tab === 'applications') return 'all_applications';
+      return 'all_applications';
+    }
+
     return 'all_applications';
+  }
+
+  /*
+   * Staff see the full set. A service provider contact sees their firm's
+   * applications split the same way — All / Pre-Approval / Post-Approval —
+   * but not the firm's registry of providers and contacts. A private client
+   * has no list tabs; they only have their own files.
+   */
+  function listTabsForViewer() {
+    if (isProviderCipUser()) {
+      return LIST_TABS.filter(function (tab) {
+        return tab.id === 'all_applications'
+          || tab.id === 'pre_approval'
+          || tab.id === 'post_approval';
+      });
+    }
+
+    if (isExternalCipUser()) return [];
+
+    return LIST_TABS;
   }
 
   function loadListTab() {
@@ -1649,7 +1675,7 @@
    * Rendered into the shell's head, so it is synced on every render the way
    * the head actions are; the page's own DOM no longer contains them.
    */
-  function isExternalCipUser() {
+  function isProviderCipUser() {
     var access = window.TMAPortalAccess;
     if (access && typeof access.isProviderContact === 'function' && access.isProviderContact()) {
       return true;
@@ -1657,6 +1683,13 @@
     if (window.TMABootProviderContact === true || window.TMABootProviderContact === 'true') {
       return true;
     }
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && me.isProviderContact);
+  }
+
+  function isExternalCipUser() {
+    if (isProviderCipUser()) return true;
+    var access = window.TMAPortalAccess;
     // CIP reach without the staff directory: a private client, or a provider
     // contact whose boot flag has not been read yet. Officers hold clients.view
     // and keep using the hub show endpoint.
@@ -1673,8 +1706,10 @@
     var slot = document.querySelector('[data-page-head-tabs]');
     if (!slot) return;
 
-    // Provider contacts / private clients: applications only, no staff tabs.
-    if (isExternalCipUser()) {
+    // Private clients: applications only, no list tabs.
+    // Service provider contacts keep All / Pre-Approval / Post-Approval.
+    var tabs = listTabsForViewer();
+    if (!tabs.length) {
       state.listTab = 'all_applications';
       slot.hidden = true;
       slot.innerHTML = '';
@@ -2492,7 +2527,7 @@
     return (
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-list-tabs"' +
       ' role="tablist" aria-label="CIP Applications sections">' +
-      LIST_TABS.map(function (tab) {
+      listTabsForViewer().map(function (tab) {
         var active = listTabOf(state) === tab.id;
         var phaseKey = tabPhaseCountKey(tab);
         var count = loading ? null : (phaseKey
@@ -2985,10 +3020,21 @@
       esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
   }
 
-  function canChangeCipPersonStatus(app) {
+  function canChangeCipPersonStatus(app, person) {
     if (!app || app.phase !== 'post_approval') return false;
+    if (isExternalCipUser()) return false;
 
-    return canChangeCipStatus(app);
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (me && me.isAdmin) return true;
+
+    var access = window.TMAPortalAccess;
+    if (!(access && access.can && access.can('cip.review'))) return false;
+
+    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length) {
+      return false;
+    }
+
+    return true;
   }
 
   function cipPersonStatusList(app) {
@@ -3028,7 +3074,7 @@
       title = ' title="' + esc(title) + '"';
     }
 
-    if (!clickable || !canChangeCipPersonStatus(appRecord)) {
+    if (!clickable || !canChangeCipPersonStatus(appRecord, person)) {
       return '<span class="tma-portal-status tma-portal-status--' +
         esc(person.statusTone || 'neutral') +
         ' tma-portal-status--inline"' + title + '>' + label + '</span>';
@@ -4280,6 +4326,23 @@
     if (!(access && access.can && access.can('cip.review'))) return false;
 
     if (app && Array.isArray(app.availableTransitions) && !app.availableTransitions.length) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function canChangeCipPersonStatus(app, person) {
+    if (!app || app.phase !== 'post_approval') return false;
+    if (isExternalCipUser()) return false;
+
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (me && me.isAdmin) return true;
+
+    var access = window.TMAPortalAccess;
+    if (!(access && access.can && access.can('cip.review'))) return false;
+
+    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length) {
       return false;
     }
 
@@ -6658,6 +6721,11 @@
           '<img src="images/icons/phosphor/DownloadSimple.svg" alt=""><span>Request files</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-library>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
+          '<div class="tma-dash__toolbar-bulk" data-clients-folder-bulk hidden>' +
+          '<span class="tma-dash__toolbar-selection" data-clients-folder-bulk-count>0 Selected</span>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-status>' +
+          '<img src="images/icons/phosphor/SealCheck.svg" alt=""><span>Change status</span></button>' +
+          '</div>' +
           '<input type="file" multiple hidden data-clients-folder-fileinput>' +
           '</div>'
         : '') +
@@ -6818,6 +6886,25 @@
       el.classList.toggle('is-selected', on);
       el.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    paintClientFolderBulk(root);
+  }
+
+  function paintClientFolderBulk(root) {
+    var bar = root.querySelector('[data-clients-folder-bulk]');
+    if (!bar) return;
+
+    var picked = clientFolderSelectedRows();
+    var files = picked.filter(function (r) { return r && r.type === 'file'; });
+    var n = files.length;
+    bar.hidden = n === 0;
+
+    var count = bar.querySelector('[data-clients-folder-bulk-count]');
+    if (count) count.textContent = n === 1 ? '1 Selected' : n + ' Selected';
+
+    var statusBtn = bar.querySelector('[data-clients-folder-bulk-status]');
+    if (!statusBtn) return;
+    var acts = window.TMAFileActions;
+    statusBtn.hidden = !(acts && acts.canReviewBulk && acts.canReviewBulk(files));
   }
 
   function clientFolderCanvas(root) {
@@ -7464,6 +7551,18 @@
 
     MORPH.unwired(root, '[data-clients-open-library]').forEach(function (btn) {
       btn.addEventListener('click', function () { openCurrentFolderInLibrary(root); });
+    });
+    MORPH.unwired(root, '[data-clients-folder-bulk-status]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var acts = window.TMAFileActions;
+        var files = clientFolderSelectedRows().filter(function (r) { return r && r.type === 'file'; });
+        if (!acts || !acts.reviewBulk || !files.length) return;
+        var box = btn.getBoundingClientRect();
+        acts.reviewBulk(box.left, box.bottom + 4, files, function () {
+          clearClientFolderSelection();
+          loadClientFolder(root, { changed: true });
+        });
+      });
     });
 
     // Breadcrumb: jump back up to any ancestor (delegated, survives repaints).
@@ -9180,25 +9279,33 @@
     return cipRowForMenu(extra, clientUid) || applicationFor(clientUid) || null;
   }
 
+  function statusValues(list) {
+    return (list || []).map(function (t) { return t.value || t; });
+  }
+
   function cipStatusMenu(extra, clientUid) {
     var source = cipSourceFor(extra, clientUid);
     var all = (APP_TABLE.statuses && APP_TABLE.statuses.length)
       ? APP_TABLE.statuses
       : CIP_STATUSES;
+    var nextValues = statusValues(source && source.availableTransitions);
+    var overrideValues = statusValues(source && source.availableOverrides);
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
 
-    if (me && me.isAdmin) {
-      return { list: all, current: source && source.status };
-    }
-
-    var allowed = source && Array.isArray(source.availableTransitions)
-      ? source.availableTransitions.map(function (t) { return t.value || t; })
-      : [];
-    var list = all.filter(function (status) {
-      return allowed.indexOf(status.value) !== -1;
+    var next = all.filter(function (status) {
+      return nextValues.indexOf(status.value) !== -1;
+    });
+    var overrides = all.filter(function (status) {
+      return overrideValues.indexOf(status.value) !== -1;
     });
 
-    return { list: list, current: source && source.status };
+    if (me && me.isAdmin && source && !overrides.length) {
+      overrides = all.filter(function (status) {
+        return status.value !== source.status && nextValues.indexOf(status.value) === -1;
+      });
+    }
+
+    return { next: next, overrides: overrides, current: source && source.status };
   }
 
   function renderCipStatusSub(list, current) {
@@ -9215,6 +9322,29 @@
     }).join('');
   }
 
+  function renderCipStatusGroup(title, list, current) {
+    if (!list.length) return '';
+
+    return (
+      (title
+        ? '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static" role="presentation">' +
+          '<span class="tma-portal-context-menu__note">' + esc(title) + '</span></div>'
+        : '') +
+      renderCipStatusSub(list, current)
+    );
+  }
+
+  function renderCipStatusPickerHtml(menu) {
+    var next = menu.next || menu.list || [];
+    var overrides = menu.overrides || [];
+
+    if (!overrides.length) return renderCipStatusSub(next, menu.current);
+
+    return renderCipStatusGroup(next.length ? 'Next' : '', next, menu.current) +
+      (next.length ? '<div class="tma-portal-context-menu__sep" role="separator"></div>' : '') +
+      renderCipStatusGroup('Admin override', overrides, menu.current);
+  }
+
   function openCipStatusSub(parentBtn, kind, id, extra) {
     if (clientsCtxSubEl && parentBtn.hasAttribute('data-open')) return;
     closeClientsCtxSub();
@@ -9225,7 +9355,7 @@
     clientsCtxSubEl = document.createElement('div');
     clientsCtxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
     clientsCtxSubEl.setAttribute('role', 'menu');
-    clientsCtxSubEl.innerHTML = renderCipStatusSub(menu.list, menu.current);
+    clientsCtxSubEl.innerHTML = renderCipStatusPickerHtml(menu);
     document.body.appendChild(clientsCtxSubEl);
 
     var rect = parentBtn.getBoundingClientRect();
@@ -9249,7 +9379,7 @@
     clientsCtxEl = document.createElement('div');
     clientsCtxEl.className = 'tma-portal-context-menu';
     clientsCtxEl.setAttribute('role', 'menu');
-    clientsCtxEl.innerHTML = renderCipStatusSub(menu.list, menu.current);
+    clientsCtxEl.innerHTML = renderCipStatusPickerHtml(menu);
     document.body.appendChild(clientsCtxEl);
 
     var box = anchor.getBoundingClientRect();
@@ -9296,19 +9426,43 @@
     return null;
   }
 
+  function cipPersonStatusMenu(extra, clientUid) {
+    var app = cipSourceFor(extra, clientUid);
+    var person = cipPersonForStatus(extra, clientUid);
+    var all = cipPersonStatusList(app);
+    var nextValues = statusValues(person && person.availableStatuses);
+    var overrideValues = statusValues(person && person.availableStatusOverrides);
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+
+    var next = all.filter(function (status) {
+      return nextValues.indexOf(status.value) !== -1;
+    });
+    var overrides = all.filter(function (status) {
+      return overrideValues.indexOf(status.value) !== -1;
+    });
+
+    if (me && me.isAdmin && person && !overrides.length) {
+      overrides = all.filter(function (status) {
+        return status.value !== person.status && nextValues.indexOf(status.value) === -1;
+      });
+    } else if (!next.length && !overrides.length) {
+      next = all.filter(function (status) {
+        return nextValues.indexOf(status.value) !== -1;
+      });
+    }
+
+    return { next: next, overrides: overrides, current: person && person.status };
+  }
+
   function openCipPersonStatusPicker(anchor, extra, clientUid) {
     closeClientsContextMenu();
     extra = extra || {};
 
-    var app = cipSourceFor(extra, clientUid);
-    var person = cipPersonForStatus(extra, clientUid);
-    var list = cipPersonStatusList(app);
-    var current = person && person.status;
-
+    var menu = cipPersonStatusMenu(extra, clientUid);
     clientsCtxEl = document.createElement('div');
     clientsCtxEl.className = 'tma-portal-context-menu';
     clientsCtxEl.setAttribute('role', 'menu');
-    clientsCtxEl.innerHTML = renderCipStatusSub(list, current);
+    clientsCtxEl.innerHTML = renderCipStatusPickerHtml(menu);
     document.body.appendChild(clientsCtxEl);
 
     var box = anchor.getBoundingClientRect();

@@ -94,6 +94,9 @@ class Engine
      * order is the lifecycle's own, which is the order a reader expects to
      * see the choices in.
      *
+     * Officers only see these mapped next steps. Administrators also receive
+     * {@see availableOverrides()} for pulling a file backwards.
+     *
      * @return list<string>
      */
     public static function availableTransitions(CipApplication $application, ?User $actor): array
@@ -101,6 +104,28 @@ class Engine
         return array_values(array_filter(
             Status::ALL,
             fn (string $to) => self::canTransition($application, $to) && self::allows($actor, $application, $to),
+        ));
+    }
+
+    /**
+     * Statuses an administrator may set that are not the next mapped step.
+     *
+     * Empty for everyone else: pulling Approved back to Assessment Feedback
+     * is an override, not ordinary workflow.
+     *
+     * @return list<string>
+     */
+    public static function availableOverrides(CipApplication $application, ?User $actor): array
+    {
+        if (! CipAccess::canOverrideStatus($actor)) {
+            return [];
+        }
+
+        $next = self::availableTransitions($application, $actor);
+
+        return array_values(array_filter(
+            Status::listed(),
+            fn (string $to) => $to !== $application->status && ! in_array($to, $next, true),
         ));
     }
 
@@ -130,10 +155,9 @@ class Engine
      * Put the application on this status, whether or not the lifecycle has
      * an edge there from here.
      *
-     * The status picker lists every status, not only the next one, and a
-     * choice it offers has to land. Permission is still {@see allows()} —
-     * a reviewing officer cannot write a compliance status just because
-     * the menu named it. DRAFT is not a destination: nothing files into it.
+     * Administrators only. Officers drive {@see apply()} along the mapped
+     * next steps; jumping from Approved back to Assessment Feedback is an
+     * override and is logged as one. DRAFT is not a destination.
      */
     public static function set(CipApplication $application, string $to, ?User $actor, array $meta = []): CipApplication
     {
@@ -148,19 +172,41 @@ class Engine
             return $application;
         }
 
-        if (! self::allows($actor, $application, $to)) {
+        if ($actor !== null && ! CipAccess::canOverrideStatus($actor)) {
+            throw new AuthorizationException(
+                'Only an administrator can pull an application back to an earlier status.'
+            );
+        }
+
+        if ($actor !== null && ! self::allows($actor, $application, $to)) {
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
         }
 
-        return self::write($application, $to, $actor, $meta);
+        $from = $application->status;
+        $extra = [];
+        $meta = array_merge($meta, ['override' => true]);
+
+        if (Status::isTerminal($from) && ! Status::isTerminal($to)) {
+            $meta['clearedDecision'] = $application->decision;
+            $meta['clearedDecidedAt'] = $application->decided_at?->toDateString();
+            $extra['decision'] = null;
+            $extra['decided_at'] = null;
+
+            if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+                $meta['revertedPhase'] = Phase::POST_APPROVAL;
+                $extra['phase'] = Phase::PRE_APPROVAL;
+            }
+        }
+
+        return self::write($application, $to, $actor, $meta, $extra);
     }
 
     /** The row and the audit, once the move has already been allowed. */
-    private static function write(CipApplication $application, string $to, ?User $actor, array $meta): CipApplication
+    private static function write(CipApplication $application, string $to, ?User $actor, array $meta, array $extra = []): CipApplication
     {
         $from = $application->status;
-        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from) {
-            $application->forceFill(['status' => $to])->save();
+        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra) {
+            $application->forceFill(array_merge(['status' => $to], $extra))->save();
 
             self::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $to);
 
@@ -168,7 +214,9 @@ class Engine
                 'actor' => $actor,
                 'type' => 'cip.status_changed',
                 'module' => 'cip',
-                'description' => $application->displayNumber().' moved to '.Status::label($to),
+                'description' => ! empty($meta['override'])
+                    ? $application->displayNumber().' status overridden to '.Status::label($to)
+                    : $application->displayNumber().' moved to '.Status::label($to),
                 'subject' => $application,
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],

@@ -129,24 +129,24 @@ class CipPersonStatusTest extends TestCase
 
         $body = $this->actingAs($staff)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
-                'status' => PersonStatus::DOCUMENTS_IN_REVIEW,
+                'status' => PersonStatus::DOCUMENTS_PENDING,
             ])
             ->assertOk()
             ->json('application');
 
-        $this->assertSame(PersonStatus::DOCUMENTS_IN_REVIEW, $body['applicant']['status']);
-        $this->assertSame('Documents in review', $body['applicant']['statusLabel']);
+        $this->assertSame(PersonStatus::DOCUMENTS_PENDING, $body['applicant']['status']);
+        $this->assertSame('Documents pending', $body['applicant']['statusLabel']);
 
         $this->assertDatabaseHas('cip_people', [
             'id' => $person->id,
-            'post_approval_status' => PersonStatus::DOCUMENTS_IN_REVIEW,
+            'post_approval_status' => PersonStatus::DOCUMENTS_PENDING,
         ]);
 
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
             'action' => 'person_status_changed',
             'from_status' => PersonStatus::NOT_STARTED,
-            'to_status' => PersonStatus::DOCUMENTS_IN_REVIEW,
+            'to_status' => PersonStatus::DOCUMENTS_PENDING,
         ]);
     }
 

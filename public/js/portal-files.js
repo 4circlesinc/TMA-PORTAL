@@ -956,6 +956,7 @@
     var canDelete = sel.every(function (i) { return perm(i, 'delete'); });
     var canMove = sel.every(function (i) { return perm(i, 'move'); });
     var canCopy = sel.every(function (i) { return perm(i, 'copy'); });
+    var canBulkReview = sharedReviewStatuses(sel).length > 0;
     // A request signs exactly one document, so this appears only for a single
     // signable file - never for a folder or a multi-selection.
     var signable = sel.length === 1 && sel[0].type === 'file' && canSendForSignature(sel[0]);
@@ -965,6 +966,7 @@
     var colourable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'colour');
     var iconable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'icon');
     return toolBtn('ArrowLineDown', 'bulk-download', 'Download') +
+      (canBulkReview ? toolBtn('SealCheck', 'bulk-status', 'Change status') : '') +
       (signable ? toolBtn('Signature', 'bulk-signature', 'Send for signature') : '') +
       (colourable || iconable ? toolBtn('Palette', 'bulk-appearance', 'Folder appearance') : '') +
       toolBtn('ArrowsOutCardinal', 'bulk-move', 'Move', { disabled: !canMove }) +
@@ -5509,6 +5511,7 @@
       case 'empty-bin': return emptyBin();
       case 'clear-selection': return clearSelection();
       case 'bulk-download': return bulkDownload();
+      case 'bulk-status': return bulkReview();
       case 'bulk-signature': return sendSelectionForSignature();
       case 'bulk-appearance': return bulkAppearance();
       case 'bulk-move': return bulkDestination('move');
@@ -6461,6 +6464,94 @@
     });
   }
 
+  function allowedReviewStatuses(item) {
+    var current = (item.review || {}).status;
+    var next = (item.review && item.review.next) || null;
+    var overrides = (item.review && item.review.overrides) || [];
+
+    return reviewStatesFor(item).filter(function (s) {
+      if (s.id === current) return false;
+      var isNext = !next || next.indexOf(s.id) !== -1;
+      var isOverride = overrides.indexOf(s.id) !== -1;
+
+      return isNext || isOverride;
+    });
+  }
+
+  /*
+   * Statuses every selected document may move to.
+   *
+   * A mixed selection only offers the intersection, so bulk never sends a
+   * file somewhere the lifecycle (or an officer's grants) would refuse.
+   */
+  function sharedReviewStatuses(list) {
+    var files = (list || []).filter(canReview);
+    if (!files.length || files.length !== (list || []).length) return [];
+
+    var allowed = allowedReviewStatuses(files[0]).map(function (s) { return s.id; });
+
+    return allowed.filter(function (id) {
+      return files.every(function (item) {
+        return allowedReviewStatuses(item).some(function (s) { return s.id === id; });
+      });
+    });
+  }
+
+  function bulkReviewMenu(list, onDone) {
+    var ids = sharedReviewStatuses(list);
+    var states = REVIEW_STATES.filter(function (s) { return ids.indexOf(s.id) !== -1; });
+
+    return states.map(function (s) {
+      return {
+        label: s.label,
+        icon: s.icon,
+        fn: function () { bulkSetReviewStatus(list, s.id, onDone); },
+      };
+    });
+  }
+
+  function bulkSetReviewStatus(list, status, onDone) {
+    var payload = (list || [])
+      .filter(function (i) { return i && i.type === 'file' && i.id; })
+      .map(function (i) { return { type: 'file', id: i.id }; });
+    if (!payload.length) return;
+
+    var send = function (note) {
+      postBulk('review', payload, null, onDone || function () {}, { status: status, note: note || '' });
+    };
+
+    if (status !== 'update_required' && status !== 'rejected') {
+      send('');
+
+      return;
+    }
+
+    confirmModal({
+      title: 'Request an update',
+      message: 'The uploader will see why these need changing.',
+      prompt: { label: 'Reason', placeholder: 'e.g. Expired, please send a current copy' },
+      confirmLabel: 'Request update',
+      onConfirm: function (note) {
+        if (!String(note || '').trim()) {
+          ui().toast('Say what needs changing.', false);
+
+          return;
+        }
+        send(note);
+      },
+    });
+  }
+
+  function bulkReview() {
+    var sel = selectedItems();
+    var btn = state.el && state.el.querySelector('[data-files-action="bulk-status"]');
+    var box = btn ? btn.getBoundingClientRect() : { left: 0, bottom: 0 };
+    openContextMenu(box.left, box.bottom + 4, sel[0], bulkReviewMenu(sel, function () {
+      clearSelection();
+      load(true);
+    }));
+  }
+
   /**
    * The status picker, on the portal's own menu.
    *
@@ -6472,16 +6563,19 @@
   function reviewSubmenu(item, onDone) {
     var current = (item.review || {}).status;
     var next = (item.review && item.review.next) || null;
+    var overrides = (item.review && item.review.overrides) || [];
     var states = reviewStatesFor(item);
 
     return states.map(function (s) {
       var isCurrent = s.id === current;
-      var allowed = !next || next.indexOf(s.id) !== -1;
+      var isNext = !next || next.indexOf(s.id) !== -1;
+      var isOverride = overrides.indexOf(s.id) !== -1;
+      var allowed = isNext || isOverride;
 
       return {
         label: s.label,
         icon: s.icon,
-        note: isCurrent ? '✓' : '',
+        note: isCurrent ? '✓' : (isOverride && !isCurrent ? 'Override' : ''),
         disabled: !isCurrent && !allowed,
         fn: (isCurrent || !allowed) ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
       };
@@ -6728,6 +6822,17 @@
       });
     }
     out.push({ sep: true });
+    var reviewStates = sharedReviewStatuses(list);
+    if (reviewStates.length) {
+      out.push({
+        label: 'Change status',
+        icon: 'SealCheck',
+        submenu: function (fill) {
+          fill(bulkReviewMenu(list, done));
+        },
+      });
+      out.push({ sep: true });
+    }
     out.push({
       label: 'Add to favourites', icon: 'Star',
       fn: function () { bulkRun('favorite', payload, null, done); },
@@ -6996,12 +7101,13 @@
     postBulk(action, payload, target, onDone);
   }
 
-  function postBulk(action, payload, target, onDone) {
+  function postBulk(action, payload, target, onDone, extra) {
     payload = payload.filter(function (p) { return !isBusy(p.id); });
     if (!payload.length) return;
     payload.forEach(function (p) { setBusy(p.id, true); });
     rerender();
-    net().fetchJSON(net().url('/bulk'), { method: 'POST', json: { action: action, items: payload, target: target } })
+    var body = Object.assign({ action: action, items: payload, target: target }, extra || {});
+    net().fetchJSON(net().url('/bulk'), { method: 'POST', json: body })
       .then(function (res) {
         payload.forEach(function (p) { setBusy(p.id, false); });
         if (res.errors && res.errors.length) ui().toast(res.errors[0].message);
@@ -7049,6 +7155,14 @@
         case 'copy':
           // A new id - only shows up if the destination is the open folder.
           if (byId[ref.id]) insertItem(byId[ref.id]);
+          break;
+        case 'review':
+          if (byId[ref.id]) {
+            updateItem(ref.id, {
+              review: byId[ref.id].review,
+              status: byId[ref.id].status,
+            });
+          }
           break;
       }
     });
@@ -7386,6 +7500,23 @@
 
       var pickTarget = action === 'move' || action === 'copy';
       bulkRun(action, payload, null, onDone || function () {}, pickTarget);
+    },
+
+    canReviewBulk: function (items) {
+      return sharedReviewStatuses(items || []).length > 0;
+    },
+
+    /**
+     * Status picker for a selection, the same intersection the File Library
+     * toolbar uses, so a Documents tab bulk change cannot offer a move one
+     * of the files would be refused.
+     */
+    reviewBulk: function (x, y, items, onChange) {
+      var list = (items || []).filter(canReview);
+      if (!list.length || !sharedReviewStatuses(list).length) return;
+      externalItems = list.slice();
+      externalOnChange = onChange || null;
+      openContextMenu(x, y, list[0], bulkReviewMenu(list, onChange || function () {}));
     },
 
     /** The shared confirm dialog, so destructive actions read identically. */

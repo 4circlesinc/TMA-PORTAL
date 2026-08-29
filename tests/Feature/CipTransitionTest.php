@@ -361,9 +361,12 @@ class CipTransitionTest extends TestCase
         );
         $this->assertSame([], Engine::availableTransitions($ready, $employee));
 
-        // Nothing leaves a decision, whoever is asking.
+        // Officers cannot leave a decision; administrators may override back.
         $granted = $this->at($this->application($admin), Status::GRANTED);
         $this->assertSame([], Engine::availableTransitions($granted, $admin));
+        $this->assertSame([], Engine::availableTransitions($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
+        $this->assertSame([], Engine::availableOverrides($granted, $officer));
     }
 
     public function test_the_payload_says_what_this_reader_may_do_next(): void

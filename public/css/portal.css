@@ -613,6 +613,12 @@
 
 .tma-portal-context-menu__item--static:hover { background: transparent; }
 
+.tma-portal-context-menu__sep {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: var(--color-border-soft);
+}
+
 /* The submenu is the same menu, one level along. */
 .tma-portal-context-menu--sub { z-index: 641; }
 

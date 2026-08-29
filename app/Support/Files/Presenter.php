@@ -950,6 +950,7 @@ class Presenter
                 fn (string $to) => $to !== DocumentStatus::APPLICATION_REVIEW
                     && $to !== DocumentStatus::PENDING_UPLOAD,
             ));
+            $overrides = DocumentEngine::availableOverrides($slot, $this->viewer);
 
             return [
                 'status' => $status,
@@ -957,9 +958,13 @@ class Presenter
                 'note' => $file->review_note,
                 'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
                 'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
-                'canReview' => $perms['review'] && CipAccess::can($this->viewer, 'cip.review'),
+                'canReview' => $perms['review'] && (
+                    CipAccess::can($this->viewer, 'cip.review')
+                    || CipAccess::canOverrideStatus($this->viewer)
+                ),
                 'all' => ReviewStatus::ALL,
                 'next' => $next,
+                'overrides' => $overrides,
             ];
         }
 

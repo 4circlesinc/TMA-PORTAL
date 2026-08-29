@@ -10,6 +10,7 @@ use App\Support\Cip\Engine;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Realtime\Live;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -55,12 +56,21 @@ class CipPersonStatusController extends Controller
             ]);
         }
 
+        try {
+            PersonStatus::assertMayMove($person, $to, $user);
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
         $note = trim($data['note'] ?? '');
         $meta = array_filter([
             'person_id' => $person->uuid,
             'person_name' => $person->fullName(),
             'person_role' => $person->role,
             'note' => $note !== '' ? $note : null,
+            'override' => PersonStatus::canTransition($person, $to) ? null : true,
         ]);
 
         $person->forceFill(['post_approval_status' => $to])->save();

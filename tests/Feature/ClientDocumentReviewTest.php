@@ -369,4 +369,76 @@ class ClientDocumentReviewTest extends TestCase
         $this->assertNotContains($creator->id, $ids, 'The creator is already the default assignee.');
         $this->assertContains($colleague->id, $ids, 'Other employees are still offered.');
     }
+
+    public function test_staff_can_change_review_status_in_bulk(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $a = $this->file(['folder_id' => $folder->id, 'name' => 'A.pdf', 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+        $b = $this->file(['folder_id' => $folder->id, 'name' => 'B.pdf', 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+        $left = $this->file(['folder_id' => $folder->id, 'name' => 'C.pdf', 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/files/bulk', [
+                'action' => 'review',
+                'status' => ReviewStatus::READY_FOR_SUBMISSION,
+                'items' => [
+                    ['type' => 'file', 'id' => $a->uuid],
+                    ['type' => 'file', 'id' => $b->uuid],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('processed', 2);
+
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $a->fresh()->review_status);
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $b->fresh()->review_status);
+        $this->assertSame(ReviewStatus::APPLICATION_REVIEW, $left->fresh()->review_status);
+    }
+
+    public function test_bulk_review_skips_a_folder_and_keeps_going(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/files/bulk', [
+                'action' => 'review',
+                'status' => ReviewStatus::READY_FOR_SUBMISSION,
+                'items' => [
+                    ['type' => 'folder', 'id' => $folder->uuid],
+                    ['type' => 'file', 'id' => $file->uuid],
+                ],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertFalse($body['ok']);
+        $this->assertSame(1, $body['processed']);
+        $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $file->fresh()->review_status);
+    }
+
+    public function test_a_client_cannot_bulk_approve_documents(): void
+    {
+        $staff = $this->staff();
+        $owner = $this->client($staff);
+        $folder = $this->clientFolder($owner, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+        $clientUser = $this->staff('Client');
+
+        $this->actingAs($clientUser)
+            ->postJson('/portal/files/bulk', [
+                'action' => 'review',
+                'status' => ReviewStatus::READY_FOR_SUBMISSION,
+                'items' => [['type' => 'file', 'id' => $file->uuid]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('processed', 0);
+
+        $this->assertNotSame(ReviewStatus::READY_FOR_SUBMISSION, $file->fresh()->review_status);
+    }
 }

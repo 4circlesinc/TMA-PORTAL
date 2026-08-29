@@ -18567,6 +18567,10 @@ button.tma-cip-status-chip:focus-visible {
   gap: var(--space-4);
 }
 
+.tma-dash__clients-folders-actions .tma-dash__toolbar-bulk {
+  margin-left: var(--space-4);
+}
+
 /* Breadcrumb inside the client Folders tab (in-place folder drilling). */
 .tma-dash__clients-folders-title {
   display: inline-flex;

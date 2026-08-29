@@ -147,6 +147,22 @@ class CipAccess
     }
 
     /**
+     * May this account pull a status backwards, or jump off the lifecycle map?
+     *
+     * Officers and other staff may only drive the next mapped step. Going
+     * from Approved back to Assessment Feedback (or any other earlier
+     * status) is an administrator override.
+     */
+    public static function canOverrideStatus(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isAdmin($user);
+    }
+
+    /**
      * The officer roles this user holds.
      *
      * @return list<string>

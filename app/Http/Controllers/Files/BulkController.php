@@ -11,9 +11,12 @@ use App\Support\Files\FileValidationException;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Naming;
 use App\Support\Files\Presenter;
+use App\Support\Files\ReviewStatus;
 use App\Support\Files\Vault;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Multi-select actions over a mixed set of files and folders. Each item is
@@ -25,11 +28,13 @@ class BulkController extends BaseFilesController
     public function handle(Request $request): JsonResponse
     {
         $request->validate([
-            'action' => ['required', 'in:delete,restore,forceDelete,move,copy,favorite,unfavorite'],
+            'action' => ['required', 'in:delete,restore,forceDelete,move,copy,favorite,unfavorite,review'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.type' => ['required', 'in:file,folder'],
             'items.*.id' => ['required', 'string'],
             'target' => ['nullable', 'string'],
+            'status' => ['required_if:action,review', 'nullable', Rule::in(ReviewStatus::ALL)],
+            'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $user = $this->user($request);
@@ -54,12 +59,19 @@ class BulkController extends BaseFilesController
                     ? $this->findFile($ref['id'], $trashed)
                     : $this->findFolder($ref['id'], $trashed);
 
-                $result = $this->apply($action, $item, $user, $target);
+                $result = $this->apply($action, $item, $user, $target, $request);
                 if ($result !== null) {
                     $resultRefs[] = ['ref' => $ref, 'item' => $result];
                 }
                 $done++;
             } catch (FileValidationException $e) {
+                $errors[] = ['id' => $ref['id'], 'message' => $e->getMessage()];
+            } catch (ValidationException $e) {
+                $errors[] = [
+                    'id' => $ref['id'],
+                    'message' => collect($e->errors())->flatten()->first() ?: $e->getMessage(),
+                ];
+            } catch (\InvalidArgumentException $e) {
                 $errors[] = ['id' => $ref['id'], 'message' => $e->getMessage()];
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
                 $errors[] = ['id' => $ref['id'], 'message' => $e->getStatusCode() === 403 ? 'Permission denied.' : $e->getMessage()];
@@ -86,7 +98,7 @@ class BulkController extends BaseFilesController
         return response()->json(['ok' => empty($errors), 'processed' => $done, 'errors' => $errors, 'results' => $results]);
     }
 
-    private function apply(string $action, FileItem|Folder $item, $user, ?Folder $target): FileItem|Folder|null
+    private function apply(string $action, FileItem|Folder $item, $user, ?Folder $target, Request $request): FileItem|Folder|null
     {
         $isFile = $item instanceof FileItem;
 
@@ -98,7 +110,20 @@ class BulkController extends BaseFilesController
             'copy' => $this->copy($item, $user, $target, $isFile),
             'favorite' => $this->favorite($item, $user, $isFile, true),
             'unfavorite' => $this->favorite($item, $user, $isFile, false),
+            'review' => $this->review($item, $user, $request),
         };
+    }
+
+    private function review(FileItem|Folder $item, $user, Request $request): FileItem
+    {
+        abort_unless($item instanceof FileItem, 422, 'Folders do not have a review status.');
+
+        $to = ReviewStatus::normalize((string) $request->input('status')) ?? (string) $request->input('status');
+        $note = trim((string) $request->input('note', ''));
+
+        app(FileReviewController::class)->applyTo($user, $item, $to, $note);
+
+        return $item->fresh();
     }
 
     private function delete(FileItem|Folder $item, $user, bool $isFile): void

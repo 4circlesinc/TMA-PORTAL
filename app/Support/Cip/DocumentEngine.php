@@ -187,6 +187,94 @@ class DocumentEngine
     }
 
     /**
+     * Set a slot's status off the mapped cycle.
+     *
+     * Officers judge along {@see apply()}. An administrator may pull a
+     * document back (Ready for submission → Application review) without a
+     * re-upload. Pending upload stays an upload, not a picker choice.
+     */
+    public static function set(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
+    {
+        if (! DocumentStatus::isValid($to) || $to === DocumentStatus::PENDING_UPLOAD) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s is not a status this document can be set to.',
+                DocumentStatus::label($to),
+            ));
+        }
+
+        if (($document->status ?? DocumentStatus::PENDING_UPLOAD) === $to) {
+            return $document;
+        }
+
+        if ($actor !== null && ! CipAccess::canOverrideStatus($actor)) {
+            throw new AuthorizationException(
+                'Only an administrator can pull a document back to an earlier status.'
+            );
+        }
+
+        if ($actor !== null && ! self::allows($actor, $document, $to)
+            && $to !== DocumentStatus::APPLICATION_REVIEW) {
+            throw new AuthorizationException(
+                'You cannot move this document to '.DocumentStatus::label($to).'.'
+            );
+        }
+
+        Confirmation::guard($document->loadMissing('application')->application);
+
+        return DB::transaction(function () use ($document, $to, $actor, $meta) {
+            $from = $document->status;
+            $document->forceFill(['status' => $to, 'status_changed_at' => now()])->save();
+
+            if ($document->file_id) {
+                $document->loadMissing('file');
+                $document->file?->forceFill(['review_status' => $to])->save();
+            }
+
+            $application = $document->loadMissing('application')->application;
+
+            Engine::record($application, self::ACTION_STATUS_CHANGED, $actor, array_merge($meta, [
+                'document' => $document->uuid,
+                'fromStatus' => $from,
+                'toStatus' => $to,
+                'override' => true,
+            ]));
+
+            ActivityLogger::log([
+                'actor' => $actor,
+                'type' => 'cip.document_status_changed',
+                'module' => 'cip',
+                'description' => $document->label.' on '.$application->displayNumber()
+                    .' status overridden to '.DocumentStatus::label($to),
+                'subject' => $document,
+                'old' => ['status' => $from],
+                'new' => ['status' => $to],
+            ]);
+
+            Live::staff(Live::CIP);
+
+            return $document;
+        });
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function availableOverrides(CipDocument $document, ?User $actor): array
+    {
+        if (! CipAccess::canOverrideStatus($actor)) {
+            return [];
+        }
+
+        $current = $document->status ?? DocumentStatus::PENDING_UPLOAD;
+        $next = self::next($document);
+
+        return array_values(array_filter(
+            [DocumentStatus::APPLICATION_REVIEW, DocumentStatus::UPDATE_REQUIRED, DocumentStatus::READY_FOR_SUBMISSION],
+            fn (string $to) => $to !== $current && ! in_array($to, $next, true),
+        ));
+    }
+
+    /**
      * A linked file was deleted (soft or hard). The slot loses its file
      * reference and returns to Pending upload so a replacement can be provided.
      *
