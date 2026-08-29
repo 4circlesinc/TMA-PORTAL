@@ -8,6 +8,8 @@ use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -100,6 +102,26 @@ class CipTransitionTest extends TestCase
     private function provider(): CipProvider
     {
         return CipProvider::firstOrCreate(['code' => 'GAL'], ['name' => 'Galaxy']);
+    }
+
+    /** A provider firm with one active contact who can sign in. */
+    private function providerWithContact(string $code = 'GAL'): array
+    {
+        $company = Company::create(['uid' => strtolower($code).'-firm', 'name' => $code.' Firm']);
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create([
+            'name' => $code.' Provider', 'code' => $code, 'company_id' => $company->id,
+        ]);
+
+        return [$provider, $contact];
     }
 
     /** An application, and the main applicant every application is filed for. */
@@ -251,12 +273,11 @@ class CipTransitionTest extends TestCase
         $this->assertSame($events, CipEvent::count(), 'a refused submission half-happened');
     }
 
-    public function test_the_creator_may_submit_their_own_draft_without_the_create_capability(): void
+    public function test_external_accounts_cannot_change_application_status(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
 
-        // A private client: an external account that holds no matrix
-        // capability by design, filing for themselves.
+        // A private client filing for themselves.
         $account = $this->user(Role::CLIENT);
         $client = Client::create([
             'uid' => 'chen-wei',
@@ -270,20 +291,51 @@ class CipTransitionTest extends TestCase
         $application->forceFill(['status' => Status::DRAFT])->save();
         $this->slot($application, 'marriage_certificate', 'Marriage certificate', required: false);
 
-        $this->assertFalse(CipAccess::can($account, 'cip.create'), 'the premise of this test');
+        $this->assertFalse(CipAccess::canChangeApplicationStatus($account));
 
         $this->actingAs($account)
             ->postJson($this->submitUrl($application))
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::NEW);
+            ->assertForbidden();
 
-        $this->assertDatabaseHas('cip_events', [
+        $this->assertSame(Status::DRAFT, $application->fresh()->status);
+        $this->assertDatabaseMissing('cip_events', [
             'application_id' => $application->id,
             'action' => 'status_changed',
-            'from_status' => Status::DRAFT,
-            'to_status' => Status::NEW,
-            'actor_id' => $account->id,
         ]);
+    }
+
+    public function test_a_service_provider_contact_cannot_change_application_status(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$provider, $contact] = $this->providerWithContact();
+
+        $application = $this->application($contact, ['provider_id' => $provider->id]);
+        $application->forceFill(['status' => Status::NEW])->save();
+
+        $this->assertTrue(CipAccess::isProviderContact($contact));
+        $this->assertFalse(CipAccess::canChangeApplicationStatus($contact));
+
+        $this->actingAs($contact)
+            ->postJson($this->statusUrl($application), ['status' => Status::REVIEW_APPLICATION])
+            ->assertForbidden();
+
+        $this->assertSame(Status::NEW, $application->fresh()->status);
+    }
+
+    public function test_reviewing_officers_and_administrators_may_change_application_status(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $application = $this->application($admin);
+        Assignments::assign($application->fresh(), $officer, $admin);
+
+        $this->assertTrue(CipAccess::canChangeApplicationStatus($admin));
+        $this->assertTrue(CipAccess::canChangeApplicationStatus($officer));
+
+        $this->actingAs($officer)
+            ->postJson($this->statusUrl($application), ['status' => Status::REVIEW_APPLICATION])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
     }
 
     public function test_the_available_transitions_are_the_readers_own(): void

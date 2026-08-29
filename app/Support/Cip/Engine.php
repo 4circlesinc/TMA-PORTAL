@@ -37,8 +37,8 @@ class Engine
 
     /**
      * Entering this status needs this capability (through CipAccess, so
-     * officer grants count). Submission (→ NEW) is additionally open to the
-     * application's creator, the provider side submits a leftover draft.
+     * officer grants count). Only administrators and CRO / Reviewing officers
+     * may drive any edge; see {@see CipAccess::canChangeApplicationStatus()}.
      */
     private const TRANSITION_CAPABILITIES = [
         Status::NEW => 'cip.create',
@@ -75,13 +75,8 @@ class Engine
             return false;
         }
 
-        // Submission is special: a leftover draft is filed by the side that
-        // wrote it, and external accounts hold no matrix capability, the
-        // creator check is their whole grant. New files start at NEW, so this
-        // edge is only for rows that have not yet been moved.
-        if ($to === Status::NEW) {
-            return $application->created_by === $actor->id
-                || CipAccess::can($actor, 'cip.create');
+        if (! CipAccess::canChangeApplicationStatus($actor)) {
+            return false;
         }
 
         $capability = self::TRANSITION_CAPABILITIES[$to] ?? null;

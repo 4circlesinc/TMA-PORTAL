@@ -131,6 +131,22 @@ class CipAccess
     }
 
     /**
+     * May this account drive application workflow status changes?
+     *
+     * Administrators and CRO / Reviewing officers only. Service provider
+     * contacts and private clients may create, edit, and upload documents,
+     * but they must not move an application through the lifecycle.
+     */
+    public static function canChangeApplicationStatus(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isAdmin($user) || self::isOfficer($user);
+    }
+
+    /**
      * The officer roles this user holds.
      *
      * @return list<string>

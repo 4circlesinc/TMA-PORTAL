@@ -142,11 +142,9 @@ class CipTransitionController extends Controller
      * File a leftover draft: Draft → New Applications (§6).
      *
      * New files start at NEW, so this door is only for rows that have not yet
-     * been moved. Its own endpoint because of the guard below, and open to the
-     * application's creator as well as to `cip.create`, the provider side and
-     * the private client both file their own leftovers, and neither holds a
-     * matrix capability. That grant lives in {@see Engine::allows()}, where the
-     * rest of the lifecycle's permissions are.
+     * been moved. Its own endpoint because of the document guard below.
+     * Only administrators and CRO / Reviewing officers may drive lifecycle
+     * moves; service provider contacts and private clients may not.
      */
     public function submit(Request $request, string $uuid): JsonResponse
     {

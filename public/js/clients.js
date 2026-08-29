@@ -3857,13 +3857,41 @@
   function cipStatusChip(app) {
     if (!app || !app.statusLabel) return '';
 
+    var label = esc(app.statusLabel);
+    if (!canChangeCipStatus(app)) {
+      return '<span class="tma-portal-status tma-portal-status--' +
+        esc(app.statusTone || 'neutral') +
+        ' tma-portal-status--inline">' + label + '</span>';
+    }
+
     return '<button type="button" class="tma-portal-status tma-portal-status--' +
       esc(app.statusTone || 'neutral') +
       ' tma-portal-status--inline tma-cip-status-chip" data-cip-status-chip' +
       ' data-cip-app="' + esc(app.id || '') + '"' +
       ' data-cip-client="' + esc(app.clientUid || '') + '"' +
       ' aria-haspopup="menu" aria-label="Change status, currently ' +
-      esc(app.statusLabel) + '">' + esc(app.statusLabel) + '</button>';
+      label + '">' + label + '</button>';
+  }
+
+  /*
+   * Lifecycle moves are for administrators and CRO / Reviewing officers only.
+   * Service provider contacts and private clients may file and upload, but they
+   * must not drive an application through its statuses.
+   */
+  function canChangeCipStatus(app) {
+    if (isExternalCipUser()) return false;
+
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (me && me.isAdmin) return true;
+
+    var access = window.TMAPortalAccess;
+    if (!(access && access.can && access.can('cip.review'))) return false;
+
+    if (app && Array.isArray(app.availableTransitions) && !app.availableTransitions.length) {
+      return false;
+    }
+
+    return true;
   }
 
 
@@ -8451,7 +8479,7 @@
     return !!(access && access.can && access.can('clients.assign'));
   }
 
-  function clientsContextItems(kind) {
+  function clientsContextItems(kind, extra, clientUid) {
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
       // On §8's table the row IS an application, so Edit means the
@@ -8466,7 +8494,10 @@
     ];
     if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
     if (kind === 'application') {
-      items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
+      var app = cipSourceFor(extra, clientUid);
+      if (canChangeCipStatus(app)) {
+        items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
+      }
     }
     // Assigning staff is `clients.assign`, the same capability the server
     // enforces, read through the access mirror rather than guessed from the
@@ -8538,7 +8569,7 @@
   function openClientsContextMenu(kind, id, x, y, extra) {
     closeClientsContextMenu();
     extra = extra || {};
-    var items = clientsContextItems(kind);
+    var items = clientsContextItems(kind, extra, id);
 
     clientsCtxEl = document.createElement('div');
     clientsCtxEl.className = 'tma-portal-context-menu';
@@ -8670,9 +8701,21 @@
 
   function cipStatusMenu(extra, clientUid) {
     var source = cipSourceFor(extra, clientUid);
-    var list = (APP_TABLE.statuses && APP_TABLE.statuses.length)
+    var all = (APP_TABLE.statuses && APP_TABLE.statuses.length)
       ? APP_TABLE.statuses
       : CIP_STATUSES;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+
+    if (me && me.isAdmin) {
+      return { list: all, current: source && source.status };
+    }
+
+    var allowed = source && Array.isArray(source.availableTransitions)
+      ? source.availableTransitions.map(function (t) { return t.value || t; })
+      : [];
+    var list = all.filter(function (status) {
+      return allowed.indexOf(status.value) !== -1;
+    });
 
     return { list: list, current: source && source.status };
   }

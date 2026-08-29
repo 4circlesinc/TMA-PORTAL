@@ -189,16 +189,17 @@ class CipRoleMatrixTest extends TestCase
         $this->assertCount(0, ApplicationScope::query($stranger)->get());
     }
 
-    public function test_the_submitting_party_submits_its_own_draft_only(): void
+    public function test_external_accounts_cannot_drive_lifecycle_moves(): void
     {
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $owner = $this->user(Role::CLIENT);
         $stranger = $this->user(Role::CLIENT);
 
         $application = Applications::create($provider, $owner);
+        $application->forceFill(['status' => Status::DRAFT])->save();
 
-        // §1: Service Providers "submit applications for processing".
-        $this->assertTrue(Engine::allows($owner, $application, Status::NEW));
+        $this->assertFalse(CipAccess::canChangeApplicationStatus($owner));
+        $this->assertFalse(Engine::allows($owner, $application, Status::NEW));
         $this->assertFalse(Engine::allows($stranger, $application, Status::NEW));
     }
 
