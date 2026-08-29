@@ -5256,6 +5256,20 @@
    * the same number of fields, or the right carries the spare when the count
    * is odd.
    */
+  function splitIntoColumns(items, count) {
+    count = count || 2;
+    if (count <= 1 || items.length <= 1) return [items];
+
+    var cols = [];
+    var perCol = Math.ceil(items.length / count);
+    for (var c = 0; c < count; c++) {
+      var slice = items.slice(c * perCol, (c + 1) * perCol);
+      if (slice.length) cols.push(slice);
+    }
+
+    return cols.length ? cols : [items];
+  }
+
   function splitEvenColumns(items) {
     if (items.length <= 1) return [items, []];
     var mid = Math.floor(items.length / 2);
@@ -5263,6 +5277,7 @@
   }
 
   function renderProfileListColumns(listItems, opts) {
+    opts = opts || {};
     if (isClientsMobile()) {
       return (
         '<div class="tma-dash__clients-profile-body">' +
@@ -5271,11 +5286,22 @@
         '</ul></div>'
       );
     }
-    var columns = (opts && opts.even)
-      ? splitEvenColumns(listItems)
-      : splitListColumns(listItems, 6);
+
+    var columnCount = opts.columns || (opts.even ? 2 : 0);
+    var columns;
+    if (columnCount >= 3) {
+      columns = splitIntoColumns(listItems, columnCount);
+    } else if (opts.even) {
+      columns = splitEvenColumns(listItems);
+    } else {
+      columns = splitListColumns(listItems, opts.maxPerColumn || 6);
+    }
+
+    var bodyCls = 'tma-dash__clients-profile-body';
+    if (columnCount >= 3) bodyCls += ' tma-dash__clients-profile-body--cols-3';
+
     return (
-      '<div class="tma-dash__clients-profile-body">' +
+      '<div class="' + bodyCls + '">' +
       columns.map(function (columnItems) {
         return (
           '<ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
@@ -6166,16 +6192,19 @@
       { icon: ICONS.Briefcase, label: 'Occupation', value: person.occupation },
     ].filter(function (r) { return !!r.value; }).map(renderListItem);
 
-    var photo = renderCipPersonPhoto(person);
-    if (photo) rows.splice(person.passportNumber ? 0 : 0, 0, photo);
+    var photoRow = renderCipPersonPhoto(person);
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       '<div class="tma-dash__clients-card">' +
       renderCipPersonCardHead(person, app) +
-      renderProfileListColumns(rows, { even: true }) +
-      renderCipChecklist(person) +
+      (photoRow
+        ? '<ul class="tma-dash__clients-list tma-dash__clients-list--profile tma-dash__clients-list--photo" role="list">' +
+          photoRow + '</ul>'
+        : '') +
+      renderProfileListColumns(rows, { columns: 3, even: true }) +
+      renderCipChecklist(person, app) +
       '</div></div>'
     );
   }
@@ -6302,9 +6331,24 @@
   }
 
   /* What this person owes, and what they have handed over. */
-  function renderCipChecklist(person) {
-    var docs = person.documents || [];
-    if (!docs.length) return '';
+  function renderCipChecklist(person, app) {
+    var docs = (person && person.documents) || [];
+    var postApproval = app && app.phase === 'post_approval';
+
+    if (!docs.length) {
+      if (!postApproval) return '';
+
+      return (
+        '<div class="tma-dash__clients-checklist-block">' +
+        '<header class="tma-dash__clients-card-head">' +
+        '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
+        '</header>' +
+        '<p class="tma-dash__clients-checklist-empty">' +
+        'No document requirements are assigned to this person for post-approval. ' +
+        'Configure them in Settings → Document Requirements.' +
+        '</p></div>'
+      );
+    }
 
     /*
      * Never a card, wherever it sits.
@@ -6507,7 +6551,7 @@
           renderProfileListColumns([
             { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
           ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
-          renderCipChecklist(d) +
+          renderCipChecklist(d, app) +
           '</div>';
       }).join('') +
       '</div>'

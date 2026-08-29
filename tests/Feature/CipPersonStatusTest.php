@@ -73,7 +73,50 @@ class CipPersonStatusTest extends TestCase
 
         PostApproval::enter($application->fresh(), $staff);
 
-        return $application->fresh();
+        return $application->fresh(['people']);
+    }
+
+    private function postApprovalFamilyApplication(User $staff): CipApplication
+    {
+        $company = \App\Models\Company::create(['uid' => 'galaxy2', 'name' => 'Galaxy', 'created_by' => $staff->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL2', 'company_id' => $company->id]);
+
+        $application = Applications::create($provider, $staff, [
+            'investment_type' => 'real_estate',
+            'sponsored' => false,
+        ]);
+
+        $client = Client::create([
+            'uid' => 'wei-family',
+            'name' => 'Chen Wei',
+            'email' => 'family@example.com',
+            'created_by' => $staff->id,
+            'data' => [],
+        ]);
+        $application->forceFill([
+            'client_id' => $client->id,
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+        ])->save();
+
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            'first_name' => 'Jian',
+            'last_name' => 'Wei',
+            'date_of_birth' => '2012-08-30',
+        ]);
+
+        PostApproval::enter($application->fresh(), $staff);
+
+        return $application->fresh(['people']);
     }
 
     public function test_post_approval_person_status_can_be_changed(): void
@@ -141,5 +184,23 @@ class CipPersonStatusTest extends TestCase
 
         $this->assertSame(PersonStatus::PROCESSING, $row['familyMembers'][0]['status']);
         $this->assertSame('Processing', $row['familyMembers'][0]['statusLabel']);
+    }
+
+    public function test_post_approval_dependents_include_document_checklist_from_settings(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalFamilyApplication($staff);
+        $dependent = $application->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $this->assertNotNull($dependent);
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $match = collect($body['dependents'])->firstWhere('id', $dependent->uuid);
+        $this->assertNotNull($match);
+        $this->assertNotEmpty($match['documents']);
+        $this->assertArrayHasKey('statusLabel', $match['documents'][0]);
     }
 }
