@@ -176,6 +176,31 @@ class SyncScope
     }
 
     /**
+     * Folder ids this account may see, as a SQL subquery (roots plus descendants).
+     *
+     * Listings used to pluck that closure into PHP and send it back as
+     * `WHERE id IN (ten thousand integers)`, which is what made Recent and
+     * All Files sit past the gateway. The database walks its own tree.
+     */
+    public static function visibleFolderTreeSql(User $user): string
+    {
+        $roots = array_map('intval', self::grantedFolderIds($user));
+        if ($roots === []) {
+            return 'SELECT id FROM folders WHERE 0 = 1';
+        }
+
+        $list = implode(',', $roots);
+
+        return 'SELECT id FROM ('
+            .'WITH RECURSIVE tree AS ('
+            .'SELECT id FROM folders WHERE id IN ('.$list.') AND deleted_at IS NULL '
+            .'UNION ALL '
+            .'SELECT f.id FROM folders f INNER JOIN tree ON f.parent_id = tree.id WHERE f.deleted_at IS NULL'
+            .') SELECT id FROM tree'
+            .') AS tree';
+    }
+
+    /**
      * Every descendant of a set of roots, trashed branches included, the
      * same BFS as FolderTree::descendantIdsWithTrashed, seeded with a set
      * instead of one folder so the whole closure costs one query per depth

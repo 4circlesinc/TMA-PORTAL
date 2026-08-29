@@ -71,30 +71,14 @@ class BrowserController extends BaseFilesController
         }
 
         $lean = $request->boolean('lean');
+        // Owner facet and exact totals scan the whole visible set. The File
+        // Library paints a page of rows; those scans are what 504'd /portal/files
+        // on a real library. Opt in with facets=1 / totals=1.
+        $wantFacets = $request->boolean('facets');
+        $wantTotals = $request->boolean('totals');
 
-        /*
-         * Recent is the whole library in time order, tens of thousands of
-         * folders and hundreds of thousands of files. Counting them and
-         * grouping owners across both tables is a pair of full scans, which
-         * is what made Recent sit on a spinner after the listing itself
-         * was already cheap. A page plus one extra row answers "is there
-         * more?" without ever totalling the library.
-         *
-         * `lean=1` is the same deal for Dashboard strips that never draw an
-         * owner filter or a total: skip the scans so two of these at once
-         * do not sit past the gateway's 504.
-         */
-        $exactTotals = $section !== 'recent' && ! $lean;
-
-        /*
-         * Who owns things here, with a count each, what the Owner column's
-         * filter offers.
-         *
-         * Measured before the owner constraint is applied, and that ordering is
-         * the whole trick: a facet that narrowed itself would list only the
-         * owner already chosen, leaving no way back to anyone else.
-         */
-        $owners = $exactTotals ? $this->ownerFacet($folderQuery, $fileQuery) : [];
+        $exactTotals = $section !== 'recent' && ! $lean && ($wantTotals || $current !== null);
+        $owners = ($wantFacets && ! $lean) ? $this->ownerFacet($folderQuery, $fileQuery) : [];
 
         $this->applyOwnerFilter($folderQuery, $fileQuery, $request);
 
@@ -108,7 +92,7 @@ class BrowserController extends BaseFilesController
         $total = 0;
         $hasMore = false;
 
-        if (! $exactTotals && $folderQuery && $fileQuery) {
+        if ($section === 'recent' && $folderQuery && $fileQuery) {
             [$folders, $files, $hasMore] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
             $folderTotal = $folders->count();
             $fileTotal = $files->count();
@@ -134,22 +118,23 @@ class BrowserController extends BaseFilesController
 
             $hasMore = ($offset + $folders->count() + $files->count()) < $total;
         } else {
-            // Recent with only=files / only=folders: one table, still no scan.
-            $query = $folderQuery ?? $fileQuery;
-            if ($query) {
-                if ($folderQuery) {
-                    $this->orderFolders($query, $sort, $dir);
-                    $rows = $query->with(['owner', 'creator', 'parent'])
-                        ->offset($offset)->limit($perPage + 1)->get();
-                    $hasMore = $rows->count() > $perPage;
-                    $folders = $rows->take($perPage);
-                } else {
-                    $this->orderFiles($query, $sort, $dir);
-                    $rows = $query->with(['owner', 'uploader', 'folder'])
-                        ->offset($offset)->limit($perPage + 1)->get();
-                    $hasMore = $rows->count() > $perPage;
-                    $files = $rows->take($perPage);
-                }
+            // A page plus one extra row, no COUNT. Folders first, then files,
+            // the same windowing as the totals path — Recent is handled above.
+            if ($folderQuery) {
+                $this->orderFolders($folderQuery, $sort, $dir);
+                $folderRows = $folderQuery->with(['owner', 'creator', 'parent'])
+                    ->offset($offset)->limit($perPage + 1)->get();
+                $hasMore = $folderRows->count() > $perPage;
+                $folders = $folderRows->take($perPage);
+            }
+            if ($fileQuery && $folders->count() < $perPage) {
+                $this->orderFiles($fileQuery, $sort, $dir);
+                $need = $perPage - $folders->count();
+                $fileOffset = $offset > 0 && $folders->isEmpty() ? $offset : 0;
+                $fileRows = $fileQuery->with(['owner', 'uploader', 'folder'])
+                    ->offset($fileOffset)->limit($need + 1)->get();
+                $hasMore = $hasMore || $fileRows->count() > $need;
+                $files = $fileRows->take($need);
             }
             $folderTotal = $folders->count();
             $fileTotal = $files->count();
@@ -367,8 +352,8 @@ class BrowserController extends BaseFilesController
     {
         if (FileAccess::isAdmin($user)) {
             return [
-                $this->visibleFolders($user)->where('parent_id', $current->id),
-                $this->visibleFiles($user)->where('folder_id', $current->id),
+                Folder::query()->where('parent_id', $current->id),
+                FileItem::query()->where('folder_id', $current->id),
             ];
         }
 
@@ -395,16 +380,12 @@ class BrowserController extends BaseFilesController
     private function visibleFolders(User $user, bool $withDescendants = true): Builder
     {
         return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user, $withDescendants) {
-            // Non-admin access flows downward from visible roots (assigned
-            // client folders, org folders, their own staff folder). Recent
-            // needs the descendant closure so a nested folder that just
-            // changed still appears. All Files and the Clients directory
-            // already constrain by parent / type, so the granted ids alone
-            // are enough — expanding the whole tree was a BFS of the library
-            // before the first row could draw.
-            $ids = $withDescendants
-                ? SyncScope::folderIds($user)
-                : SyncScope::grantedFolderIds($user);
+            if ($withDescendants) {
+                $q->whereRaw('id IN ('.SyncScope::visibleFolderTreeSql($user).')');
+
+                return;
+            }
+            $ids = SyncScope::grantedFolderIds($user);
             $q->whereIn('id', $ids ?: [0]);
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
             // Administrators see the whole library EXCEPT other people's
@@ -422,28 +403,39 @@ class BrowserController extends BaseFilesController
     private function visibleFiles(User $user, bool $withDescendants = true): Builder
     {
         return FileItem::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user, $withDescendants) {
-            $folderIds = $withDescendants
-                ? SyncScope::folderIds($user)
-                : SyncScope::grantedFolderIds($user);
             $ids = FileAccess::sharedFileIds($user);
-            $q->where(fn ($w) => $w->where('owner_id', $user->id)
-                ->orWhereIn('id', $ids ?: [0])
-                ->orWhereIn('folder_id', $folderIds ?: [0]));
+            $folderSql = $withDescendants
+                ? SyncScope::visibleFolderTreeSql($user)
+                : null;
+            $granted = $withDescendants ? [] : SyncScope::grantedFolderIds($user);
+            $q->where(function ($w) use ($user, $ids, $folderSql, $granted, $withDescendants) {
+                $w->where('owner_id', $user->id)
+                    ->orWhereIn('id', $ids ?: [0]);
+                if ($withDescendants) {
+                    $w->orWhereRaw('folder_id IN ('.$folderSql.')');
+                } else {
+                    $w->orWhereIn('folder_id', $granted ?: [0]);
+                }
+            });
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
-            // Mirror of the folder rule, at ANY depth. Recent and search list
-            // nested files, so "top level only" here leaked the inside of
-            // people's drives. A hidden owner's file is personal space when it
-            // is unfiled or inside a personal (user-type) folder; only an
-            // explicit share overrides that.
             $hidden = array_values(array_diff(FileAccess::personalRootOwnerIds(), [$user->id]));
-            if ($hidden !== []) {
-                $q->whereNot(fn ($w) => $w->whereIn('owner_id', $hidden)
-                    ->where(fn ($p) => $p->whereNull('folder_id')
-                        ->orWhereIn('folder_id', Folder::query()->select('id')
-                            ->where('folder_type', Folder::TYPE_USER)
-                            ->whereIn('owner_id', $hidden)))
-                    ->whereNotIn('id', FileAccess::sharedFileIds($user) ?: [0]));
+            if ($hidden === []) {
+                return;
             }
+            // Keep this off the Recent hot path's ORDER BY updated_at: a
+            // correlated NOT over personal folders forced a sequential scan
+            // of file_items. Unfiled files owned by a hidden account are
+            // dropped; foldered personal files are excluded by folder_type.
+            $q->where(function ($w) use ($user, $hidden) {
+                $w->whereNotIn('owner_id', $hidden)
+                    ->orWhereIn('id', FileAccess::sharedFileIds($user) ?: [0])
+                    ->orWhere(function ($p) use ($hidden) {
+                        $p->whereNotNull('folder_id')
+                            ->whereNotIn('folder_id', Folder::query()->select('id')
+                                ->where('folder_type', Folder::TYPE_USER)
+                                ->whereIn('owner_id', $hidden));
+                    });
+            });
         });
     }
 

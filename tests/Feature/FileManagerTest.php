@@ -370,7 +370,7 @@ class FileManagerTest extends TestCase
         $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'One'])->assertCreated();
         $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'Two'])->assertCreated();
 
-        $owners = $this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('owners');
+        $owners = $this->actingAs($me)->getJson('/portal/files/?facets=1')->assertOk()->json('owners');
 
         $mine = collect($owners)->firstWhere('id', $me->id);
         $this->assertNotNull($mine, 'the facet should name the owner of the folders in view');
@@ -386,7 +386,7 @@ class FileManagerTest extends TestCase
         $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'Mine'])->assertCreated();
         $this->actingAs($them)->postJson('/portal/files/folders', ['name' => 'Theirs'])->assertCreated();
 
-        $res = $this->actingAs($me)->getJson('/portal/files/?owner='.$me->id)->assertOk();
+        $res = $this->actingAs($me)->getJson('/portal/files/?owner='.$me->id.'&facets=1')->assertOk();
 
         $this->assertSame(['Mine'], array_column($res->json('folders'), 'name'));
 
@@ -468,7 +468,7 @@ class FileManagerTest extends TestCase
         // The facet is built from the same access-scoped queries as the rows,
         // so it must not leak the existence of somebody else's files.
         $named = array_column(
-            $this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('owners'),
+            $this->actingAs($me)->getJson('/portal/files/?section=my&facets=1')->assertOk()->json('owners'),
             'name'
         );
 

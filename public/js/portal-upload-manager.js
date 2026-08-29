@@ -53,7 +53,12 @@
       var parse = ct.indexOf('application/json') !== -1 ? res.json() : Promise.resolve(null);
       return parse.then(function (data) {
         if (!res.ok) {
-          var err = new Error((data && data.message) || 'Request failed');
+          var err = new Error(
+            (data && data.message)
+            || (res.status === 504 || res.status === 502
+              ? 'The File Library is busy. Try again in a moment.'
+              : 'Request failed')
+          );
           err.status = res.status;
           err.data = data;
           throw err;

@@ -456,8 +456,15 @@
       }
     }
 
-    var fetcher = function () {
-      return withTimeout(net().fetchJSON(url), 30000, 'This folder is taking too long to load.');
+    var fetcher = function (attempt) {
+      attempt = attempt || 0;
+      return withTimeout(net().fetchJSON(url), 45000, 'This folder is taking too long to load.')
+        .catch(function (err) {
+          if (attempt < 1 && err && (err.status === 504 || err.status === 502)) {
+            return fetcher(attempt + 1);
+          }
+          throw err;
+        });
     };
 
     /*
@@ -492,7 +499,10 @@
       return assembleFromReplica(expected).then(function (fromReplica) {
         if (fromReplica) { painted = true; return; }
         state.loading = false;
-        state.error = err.message || 'Could not load this folder.';
+        var status = err && err.status;
+        state.error = (status === 504 || status === 502)
+          ? 'The File Library is busy. Try again in a moment.'
+          : (err.message || 'Could not load this folder.');
         render();
       });
     });
@@ -773,7 +783,12 @@
 
     html += '<div class="tma-portal-files__body" data-files-body>';
     if (state.loading) html += renderLoading();
-    else if (state.error) html += ui().banner('warning', esc(state.error));
+    else if (state.error) {
+      html += ui().banner('warning', esc(state.error));
+      html += '<div style="padding:12px 0">' +
+        ui().btn({ label: 'Try again', attrs: ' data-files-retry' }) +
+        '</div>';
+    }
     else if (!items().length) html += renderEmpty(meta);
     else html += (state.view === 'grid' ? renderGrid() : renderTable());
     html += '</div>';
@@ -1358,6 +1373,7 @@
   function onClick(e) {
     if (e.target.closest('[data-sync-dismiss]')) { e.preventDefault(); dismissSyncNotice(); return; }
     if (e.target.closest('[data-sync-retry]')) { retrySync(); return; }
+    if (e.target.closest('[data-files-retry]')) { e.preventDefault(); load(); return; }
     var actionEl = e.target.closest('[data-files-action]');
     if (actionEl && !actionEl.disabled) { e.preventDefault(); handleAction(actionEl.getAttribute('data-files-action')); return; }
 

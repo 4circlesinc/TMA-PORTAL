@@ -280,7 +280,7 @@ class Presenter
         $folderAudience = $this->audienceFor($folder);
 
         $stats = $withStats
-            ? ($this->folderStats[$folder->id] ?? FolderTree::aggregate($folder))
+            ? ($this->folderStats[$folder->id] ?? ['fileCount' => 0, 'folderCount' => 0, 'size' => 0])
             : ['fileCount' => null, 'folderCount' => null, 'size' => null];
 
         return [

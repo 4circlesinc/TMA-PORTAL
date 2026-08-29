@@ -2681,6 +2681,30 @@
     homeFilePayloads[f.id] = f;
   }
 
+  function applyRecentFromLibrary() {
+    var lib = window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.state;
+    if (!lib || !lib.recent) return;
+    var s = data().state();
+    var recentFolders = (lib.recent.folders || []).map(function (f) {
+      return {
+        kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
+        path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
+      };
+    });
+    var recentFiles = (lib.recent.files || []).map(function (f) {
+      rememberFilePayload(f);
+      return {
+        kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+        category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+        size: f.size,
+        folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
+      };
+    });
+    s.recentFiles = recentFolders.concat(recentFiles)
+      .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
+      .slice(0, 6);
+  }
+
   function loadHomeFiles(el) {
     var net = window.TMAFilesNet;
     if (!net) { homeFilesLoaded = true; return; }
@@ -2715,16 +2739,13 @@
     // folders and cut off a file modified a minute ago. Ask for a wider
     // candidate pool and do the true recency merge across both types here.
     homeFilesInflight = Promise.all([
-      net.fetchJSON(net.url('/?section=recent&perPage=24&lean=1')).catch(function () { return null; }),
       net.fetchJSON(net.url('/?section=favorites&perPage=8&lean=1')).catch(function () { return null; }),
     ]).then(function (res) {
       clearTimeout(giveUp);
       homeFilesInflight = null;
+      var favRes = res[0];
 
-      // A failed refresh keeps whatever is already on screen rather than
-      // clearing the panel: the rows shown are still the last known-good truth,
-      // and blanking them is both a worse answer and a visible flash.
-      if (!res[0] && !res[1]) { homeFilesLoaded = true; return; }
+      if (!favRes) { homeFilesLoaded = true; return; }
 
       var wasLoaded = homeFilesLoaded;
       homeFilesLoaded = true;
@@ -2733,49 +2754,20 @@
       var beforeRecent = fileListSignature(s.recentFiles);
       var beforeFavs = fileListSignature(s.folders && s.folders.favorites);
 
-      // Each section is applied only if its own request succeeded, so a failing
-      // Favorites call cannot wipe a good Recent Files list.
-      if (res[0]) {
-        var recentFolders = (res[0].folders || []).map(function (f) {
-          return {
-            kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
-            path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
-          };
-        });
-        var recentFiles = (res[0].files || []).map(function (f) {
-          rememberFilePayload(f);
-          return {
-            kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-            // Carried for the thumbnail: a PDF has no server thumbnail, so
-            // TMAFileThumbs paints page one from the preview route.
-            category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
-            size: f.size,
-            folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
-          };
-        });
-        s.recentFiles = recentFolders.concat(recentFiles)
-          .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
-          .slice(0, 6);
-      }
-
-      if (res[1]) {
-        var favFolders = (res[1].folders || []).map(function (f) {
-          return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
-        });
-        var favFiles = (res[1].files || []).map(function (f) {
-          rememberFilePayload(f);
-          return {
-            kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-            // Carried for the thumbnail: a PDF has no server thumbnail, so
-            // TMAFileThumbs paints page one from the preview route.
-            category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
-            size: f.size,
-            folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
-          };
-        });
-        s.folders = s.folders || {};
-        s.folders.favorites = favFolders.concat(favFiles);
-      }
+      var favFolders = (favRes.folders || []).map(function (f) {
+        return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
+      });
+      var favFiles = (favRes.files || []).map(function (f) {
+        rememberFilePayload(f);
+        return {
+          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+          category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+          size: f.size,
+          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
+        };
+      });
+      s.folders = s.folders || {};
+      s.folders.favorites = favFolders.concat(favFiles);
 
       homeReal.files = true;
       keepWarm('files', {
@@ -2783,9 +2775,6 @@
         favorites: (s.folders && s.folders.favorites) || [],
       });
 
-      // A revalidation that found nothing new is not a reason to touch the
-      // page. Re-rendering an identical board is where the "cards keep
-      // refreshing" feeling came from.
       var changed = !wasLoaded ||
         fileListSignature(s.recentFiles) !== beforeRecent ||
         fileListSignature(s.folders && s.folders.favorites) !== beforeFavs;
@@ -3297,6 +3286,7 @@
         // back, the Default Folders blanking on every visit. Left to itself the
         // strip revalidates on its own schedule and repaints only what changed.
         window.TMAPortalHomeLibrary.load(function () {
+          applyRecentFromLibrary();
           if (el.isConnected) mount(el, { fromLoad: true });
         }, force);
       }

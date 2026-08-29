@@ -872,7 +872,7 @@
 
   function loadFolderPreview(folder) {
     if (!net()) return Promise.resolve(folder);
-    return net().fetchJSON(net().url('/?folder=' + encodeURIComponent(folder.id) + '&perPage=' + PREVIEW_FILES))
+    return net().fetchJSON(net().url('/?folder=' + encodeURIComponent(folder.id) + '&perPage=' + PREVIEW_FILES + '&lean=1'))
       .then(function (j) {
         folder.files = (j && j.files) || [];
         // Subfolders matter as much as files. A synced library keeps its
