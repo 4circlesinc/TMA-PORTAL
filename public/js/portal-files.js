@@ -6434,14 +6434,41 @@
     { id: 'ready_for_submission', label: 'Ready for submission', icon: 'CheckCircle' },
   ];
 
-  /* Only a document actually in a review, and only for a reader who may move
-     it, the same two conditions the viewer's panel has always applied. */
+  function documentReviewStatus(item) {
+    if (!item || item.type === 'folder') return null;
+    var id = (item.review && item.review.status) || (item.status && item.status.status) || null;
+    if (!id) return null;
+    for (var i = 0; i < REVIEW_STATES.length; i++) {
+      if (REVIEW_STATES[i].id === id) return id;
+    }
+    return null;
+  }
+
+  /* A row the viewer can move, the same two conditions the panel has always
+     applied. Bulk uses documentReviewStatus instead, so a CIP checklist file
+     (or a cached listing that still has the badge) is not treated as “not a
+     client document”. */
   function canReview(item) {
-    return !!(item && item.type !== 'folder' && item.review && item.review.status && item.review.canReview);
+    return !!(documentReviewStatus(item) && item.review && item.review.canReview);
   }
 
   function reviewableFiles(list) {
-    return (list || []).filter(canReview);
+    return (list || []).filter(documentReviewStatus);
+  }
+
+  function explainBulkReview(items) {
+    var files = (items || []).filter(function (i) { return i && i.type !== 'folder'; });
+    if (!files.length) {
+      return 'Select files, not folders.';
+    }
+    var inReview = reviewableFiles(files);
+    if (!inReview.length) {
+      return 'These files are not in document review.';
+    }
+    if (!sharedReviewStatuses(inReview).length) {
+      return 'These files don’t share a next status. Select files at the same step, or change them one at a time.';
+    }
+    return null;
   }
 
   /**
@@ -6490,7 +6517,7 @@
   }
 
   function allowedReviewStatuses(item) {
-    var current = (item.review || {}).status;
+    var current = documentReviewStatus(item);
     var next = (item.review && item.review.next) || null;
     var overrides = (item.review && item.review.overrides) || [];
 
@@ -6569,16 +6596,13 @@
 
   function bulkReview() {
     var sel = selectedItems();
-    var files = reviewableFiles(sel);
-    if (!files.length) {
-      ui().toast('Status is for client documents. Open a client folder or an application’s Documents tab, then select those files.', false);
-      return;
-    }
-    if (!sharedReviewStatuses(files).length) {
-      ui().toast('These files don’t share a next status. Select files at the same step, or change them one at a time.', false);
+    var why = explainBulkReview(sel);
+    if (why) {
+      ui().toast(why, false);
       return;
     }
 
+    var files = reviewableFiles(sel);
     var btn = state.el && state.el.querySelector('[data-files-action="bulk-status"]');
     var box = btn ? btn.getBoundingClientRect() : { left: 0, bottom: 0 };
     openContextMenu(box.left, box.bottom + 4, files[0], bulkReviewMenu(files, function () {
@@ -7547,15 +7571,12 @@
      * of the files would be refused.
      */
     reviewBulk: function (x, y, items, onChange) {
+      var why = explainBulkReview(items);
+      if (why) {
+        ui().toast(why, false);
+        return;
+      }
       var list = reviewableFiles(items);
-      if (!list.length) {
-        ui().toast('Status is for client documents. Select files from a client folder.', false);
-        return;
-      }
-      if (!sharedReviewStatuses(list).length) {
-        ui().toast('These files don’t share a next status. Select files at the same step, or change them one at a time.', false);
-        return;
-      }
       externalItems = list.slice();
       externalOnChange = onChange || null;
       openContextMenu(x, y, list[0], bulkReviewMenu(list, onChange || function () {}));

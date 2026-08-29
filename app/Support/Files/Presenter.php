@@ -906,10 +906,11 @@ class Presenter
                 'note' => $file->review_note,
                 'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
                 'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
-                'canReview' => $perms['review'] && (
-                    CipAccess::can($this->viewer, 'cip.review')
-                    || CipAccess::canOverrideStatus($this->viewer)
-                ),
+                // Judging a CIP slot is cip.review / admin override, not
+                // upload. Tying it to upload hid Change status on files that
+                // already showed a review badge (package lock, view-only).
+                'canReview' => CipAccess::can($this->viewer, 'cip.review')
+                    || CipAccess::canOverrideStatus($this->viewer),
                 'all' => ReviewStatus::ALL,
                 'next' => $next,
                 'overrides' => $overrides,
