@@ -11,7 +11,7 @@ use App\Models\FolderColourPreference;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
-use App\Support\Cip\CipAccess;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Files\Workflow\Status;
@@ -73,6 +73,9 @@ class Presenter
 
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
+
+    /** application id => true, the CIP files this viewer may judge. */
+    private ?array $visibleApplicationIds = null;
 
     /**
      * id => Folder, ancestors of the primed listing.
@@ -860,6 +863,18 @@ class Presenter
         return $file->cipDocument;
     }
 
+    private function canSeeApplication(int $applicationId): bool
+    {
+        if ($this->visibleApplicationIds === null) {
+            $this->visibleApplicationIds = array_fill_keys(
+                ApplicationScope::query($this->viewer)->pluck('id')->all(),
+                true,
+            );
+        }
+
+        return isset($this->visibleApplicationIds[$applicationId]);
+    }
+
     /** @return array{status:string,label:string,tone:string}|null */
     private function fileBadge(FileItem $file): ?array
     {
@@ -891,11 +906,9 @@ class Presenter
         if ($slot) {
             $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
             $from = ReviewStatus::normalize($status) ?? $status;
-            $staff = Role::isStaff($this->viewer);
-            $canReview = $staff && (
+            $canReview = Role::isStaff($this->viewer) && (
                 ($perms['review'] ?? false)
-                || CipAccess::can($this->viewer, 'cip.review')
-                || CipAccess::canOverrideStatus($this->viewer)
+                || $this->canSeeApplication((int) $slot->application_id)
             );
 
             return [

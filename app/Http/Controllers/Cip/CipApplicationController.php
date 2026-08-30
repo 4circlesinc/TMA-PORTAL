@@ -9,6 +9,7 @@ use App\Models\CipProvider;
 use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
@@ -1508,6 +1509,7 @@ class CipApplicationController extends Controller
                         'status' => $status,
                         'statusLabel' => DocumentStatus::label($status),
                         'statusTone' => DocumentStatus::tone($status),
+                        'canReview' => Role::isStaff($presenter->viewer()),
                         'fileId' => $slot->isFilled() ? $slot->file?->uuid : null,
                         // The same chip the File Library and the Documents tab
                         // draw, from the same source, so a checklist line and

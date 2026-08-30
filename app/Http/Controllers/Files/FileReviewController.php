@@ -6,6 +6,8 @@ use App\Models\CipDocument;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\CipAccess;
@@ -39,8 +41,9 @@ class FileReviewController extends BaseFilesController
     {
         $user = $this->user($request);
         $file = $this->findFile($uuid);
+        $slot = CipDocument::query()->where('file_id', $file->id)->first();
 
-        FileAccess::authorize($user, 'upload', $file);
+        $this->authorizeReview($user, $file, $slot);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(ReviewStatus::ALL)],
@@ -50,7 +53,7 @@ class FileReviewController extends BaseFilesController
         $to = ReviewStatus::normalize($data['status']) ?? $data['status'];
         $note = trim((string) ($data['note'] ?? ''));
 
-        $this->applyTo($user, $file, $to, $note);
+        $this->applyTo($user, $file, $to, $note, $slot);
 
         $presented = (new Presenter($user))->file($file->fresh());
 
@@ -63,13 +66,12 @@ class FileReviewController extends BaseFilesController
     /**
      * Judge one file, the same path the single-file endpoint and bulk review use.
      */
-    public function applyTo(User $user, FileItem $file, string $to, string $note): void
+    public function applyTo(User $user, FileItem $file, string $to, string $note, ?CipDocument $slot = null): void
     {
-        FileAccess::authorize($user, 'upload', $file);
+        $slot ??= CipDocument::query()->where('file_id', $file->id)->first();
+        $this->authorizeReview($user, $file, $slot);
 
         abort_if($to === ReviewStatus::UPDATE_REQUIRED && $note === '', 422, 'Say what needs changing.');
-
-        $slot = CipDocument::query()->where('file_id', $file->id)->first();
 
         if ($slot) {
             $this->judgeCip($slot, $user, $to, $note);
@@ -80,6 +82,30 @@ class FileReviewController extends BaseFilesController
 
         Live::staff(Live::FILES);
         Live::user(Live::FILES, $file->owner_id);
+    }
+
+    /**
+     * Judging a document is not the same as rewriting the file.
+     *
+     * Upload is the right bar for a loose client document: a viewer must not
+     * mark somebody's passport ready. A CIP slot in Review Applications is
+     * the officer's job, and assignment often grants only view on the folder
+     * so they cannot replace the scan. They still have to set its status.
+     */
+    private function authorizeReview(User $user, FileItem $file, ?CipDocument $slot): void
+    {
+        abort_unless(Role::isStaff($user), 403, 'Permission denied.');
+
+        if (FileAccess::can($user, 'upload', $file)) {
+            return;
+        }
+
+        abort_unless(
+            $slot !== null
+            && ApplicationScope::query($user)->whereKey($slot->application_id)->exists(),
+            403,
+            'Permission denied.',
+        );
     }
 
     /**

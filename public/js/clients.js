@@ -6589,7 +6589,7 @@
         : '') +
       '</span>';
     var chip;
-    if (filed && d.fileId) {
+    if (filed && d.fileId && d.canReview) {
       chip =
         clientCommentChip(d) +
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
@@ -6836,7 +6836,7 @@
     var cls = 'tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
       ' tma-portal-status--inline tma-file-status-chip';
 
-    if (f.type === 'file' && f.id) {
+    if (f.type === 'file' && f.id && f.review && f.review.canReview) {
       return '<span class="' + cls + '" data-clients-file-status="' + esc(f.id) +
         '" role="button" tabindex="0" aria-haspopup="menu" aria-label="Change status, currently ' +
         esc(s.label) + '">' + esc(s.label) + '</span>';

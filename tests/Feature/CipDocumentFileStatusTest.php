@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -13,6 +15,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Status;
 use App\Support\Files\ReviewStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -211,6 +214,40 @@ class CipDocumentFileStatusTest extends TestCase
             ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED);
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+    }
+
+    public function test_an_assigned_officer_can_review_without_folder_upload(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        [$slot, $file] = $this->filedFor($admin, DocumentStatus::APPLICATION_REVIEW);
+        $slot->loadMissing('application');
+        $slot->application->forceFill(['status' => Status::REVIEW_APPLICATION])->save();
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        ClientAssignment::create([
+            'client_id' => $slot->application->client_id,
+            'user_id' => $officer->id,
+            'role' => 'reviewing_officer',
+            'permission_level' => 'view_files',
+            'status' => ClientAssignment::STATUS_ACTIVE,
+            'assigned_by' => $admin->id,
+        ]);
+        CipApplicationAssignment::create([
+            'application_id' => $slot->application_id,
+            'user_id' => $officer->id,
+            'role' => 'reviewing_officer',
+            'status' => CipApplicationAssignment::STATUS_ACTIVE,
+            'assigned_by' => $admin->id,
+        ]);
+
+        $this->actingAs($officer)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::READY_FOR_SUBMISSION,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
     }
 
     /**

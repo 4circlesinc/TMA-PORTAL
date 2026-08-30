@@ -135,7 +135,7 @@
       ' tma-portal-status--inline';
     var label = esc(s.label);
 
-    if (it.type !== 'folder' && documentReviewStatus(it)) {
+    if (it.type !== 'folder' && canReview(it)) {
       return '<button type="button" class="' + cls + ' tma-file-status-chip" data-files-status="' +
         esc(it.id) + '" aria-haspopup="menu" aria-label="Change status, currently ' + label + '">' +
         label + '</button>';
