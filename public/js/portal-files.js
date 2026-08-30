@@ -2443,6 +2443,17 @@
       if (f.folder) bits.push('in ' + esc(f.folder.name));
 
       var line = bits.join(' &middot; ');
+      var r = f.review;
+      if (r && r.status && r.label) {
+        var chip = r.canReview
+          ? '<button type="button" class="tma-portal-status tma-portal-status--' + esc(reviewTone(r.status)) +
+            ' tma-portal-status--inline tma-file-status-chip" data-lb-review-open data-files-status="' +
+            esc(f.id) + '" aria-haspopup="menu" aria-label="Change status, currently ' +
+            esc(r.label) + '">' + esc(r.label) + '</button>'
+          : '<span class="tma-portal-status tma-portal-status--' + esc(reviewTone(r.status)) + '">' +
+            esc(r.label) + '</span>';
+        line = line ? (chip + ' &middot; ' + line) : chip;
+      }
       var b = f.workflowBadge;
       if (b) {
         // A badge on a file whose content has moved on since the decision must
@@ -3799,6 +3810,8 @@
 
       openReviewStatusMenu(box.left, box.bottom + 4, current(), function () {
         paintPanel();
+        var head = lb.querySelector('.tma-portal-viewer__head');
+        if (head) head.outerHTML = viewerHead(current());
         load(true);
       });
     }
@@ -3959,7 +3972,7 @@
       var e = entry(f);
 
       host.innerHTML = '<div data-lb-approvals>' +
-        (e.approvals ? approvalsHtml(e.approvals) : ui().loading({ count: 3 })) + '</div>';
+        (e.approvals ? approvalsHtml(e.approvals) : (reviewHtml(current()) + ui().loading({ count: 3 }))) + '</div>';
 
       loadApprovals(f);
     }
@@ -4009,7 +4022,11 @@
 
     function approvalsHtml(data) {
       var list = (data && data.workflows) || [];
-      var html = '';
+      // File status is a working label, including after Confirm submission.
+      // This tab is where the Reviews toolbar lands, so the picker has to
+      // live here rather than only on Details, or the freeze banner reads
+      // as if Update required cannot be moved.
+      var html = reviewHtml(current());
 
       /*
        * One primary action, the rest as text.
@@ -4046,7 +4063,7 @@
       }
 
       if (!list.length) {
-        return html + '<p class="tma-portal-viewer__empty">This file hasn’t been sent for review.</p>';
+        return html + '<p class="tma-portal-viewer__empty">This file hasn’t been sent for approval.</p>';
       }
 
       return html + list.map(workflowHtml).join('');
@@ -5444,6 +5461,7 @@
           if (head) head.outerHTML = viewerHead(full);
 
           repaintStage(full);
+          paintPanel();
 
           var foot = lb.querySelector('[data-lb-foot]');
           if (foot) foot.innerHTML = footHtml(full);
@@ -6629,14 +6647,19 @@
     });
   }
 
+  function staffMaySetAnyFileStatus(item) {
+    return !!(item && item.review && item.review.canReview);
+  }
+
   function allowedReviewStatuses(item) {
     var current = documentReviewStatus(item);
     var next = (item.review && item.review.next) || null;
     var overrides = (item.review && item.review.overrides) || [];
+    var any = staffMaySetAnyFileStatus(item);
 
     return reviewStatesFor(item).filter(function (s) {
       if (s.id === current) return false;
-      var isNext = !next || next.indexOf(s.id) !== -1;
+      var isNext = any || !next || next.indexOf(s.id) !== -1;
       var isOverride = overrides.indexOf(s.id) !== -1;
 
       return isNext || isOverride;
@@ -6738,10 +6761,11 @@
     var next = (item.review && item.review.next) || null;
     var overrides = (item.review && item.review.overrides) || [];
     var states = reviewStatesFor(item);
+    var any = staffMaySetAnyFileStatus(item);
 
     return states.map(function (s) {
       var isCurrent = s.id === current;
-      var isNext = !next || next.indexOf(s.id) !== -1;
+      var isNext = any || !next || next.indexOf(s.id) !== -1;
       var isOverride = overrides.indexOf(s.id) !== -1;
       var allowed = isNext || isOverride;
 

@@ -213,6 +213,34 @@ class CipLockingTest extends TestCase
         );
     }
 
+    public function test_the_approvals_tab_does_not_treat_a_locked_scan_as_an_unchangeable_file_status(): void
+    {
+        ['staff' => $staff, 'slot' => $slot] = $this->lockedPackage();
+        $file = $slot->fresh()->file;
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/files/'.$file->uuid)
+            ->assertOk()
+            ->assertJsonPath('review.canReview', true);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/files/'.$file->uuid.'/workflows')
+            ->assertOk()
+            ->assertJsonPath('canSend', false)
+            ->assertJsonPath(
+                'lockReason',
+                'The original scan is locked in the confirmed package and cannot be replaced. File status can still be changed.',
+            );
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'note' => 'The bio page is cropped.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED);
+    }
+
     public function test_marking_update_required_after_lock_puts_the_application_in_updates_required(): void
     {
         ['staff' => $staff, 'slot' => $slot, 'application' => $application] = $this->lockedPackage();

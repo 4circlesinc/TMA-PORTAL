@@ -212,7 +212,7 @@ class Versions
     public static function lockReason(FileItem $file): ?string
     {
         if (Confirmation::locksFile($file)) {
-            return 'This file is part of a confirmed submission package and cannot be modified.';
+            return 'The original scan is locked in the confirmed package and cannot be replaced. File status can still be changed.';
         }
 
         $lock = Engine::isLocked($file);

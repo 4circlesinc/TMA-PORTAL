@@ -89,7 +89,7 @@ try {
   await page.click('[data-lb-act="approvals"]');
   await page.waitForTimeout(1600);
   let panel = await page.textContent('.tma-portal-viewer__panel-body');
-  check(/hasn’t been sent for review/.test(panel), 'empty state, not invented requests');
+  check(/hasn’t been sent for approval/.test(panel), 'empty state, not invented requests');
   check(/Send for approval/.test(panel), 'the send action is offered');
 
   step(3, 'Compose a request with real options');
