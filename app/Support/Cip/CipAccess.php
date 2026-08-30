@@ -110,6 +110,23 @@ class CipAccess
             ->exists();
     }
 
+    /**
+     * May this account open the Workflows section?
+     *
+     * The matrix grants it to staff. Service-provider contacts reach the same
+     * inbox — requests and comments on the client files their firm filed —
+     * without holding `workflows.view`, which would also open it to every
+     * other Client account.
+     */
+    public static function canViewWorkflows(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return Role::can($user, 'workflows.view') || self::isProviderContact($user);
+    }
+
     /** Somebody the firm holds a client record for. */
     public static function isPrivateClient(User $user): bool
     {

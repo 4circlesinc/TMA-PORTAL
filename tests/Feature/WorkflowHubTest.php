@@ -16,10 +16,15 @@ use App\Models\User;
 use App\Support\Cip\Applications;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentComments;
+use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Review;
+use App\Support\Cip\Tree;
+use App\Support\Files\FileAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -505,6 +510,101 @@ class WorkflowHubTest extends TestCase
             ->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.reason', 'Crop the edges.')
             ->assertJsonPath('items.0.label', 'Passport bio page');
+    }
+
+    /**
+     * A provider contact's Workflows inbox is the comments and requests on
+     * the client files their firm filed, not only threads they authored.
+     *
+     * CIP uploads are owned by the service account, so "files you own" never
+     * includes them. Feedback still has to land in Involving you, the same
+     * place a reviewer already looks.
+     */
+    public function test_a_provider_contact_sees_comments_and_feedback_on_their_firm_files(): void
+    {
+        config(['services.cip.enabled' => true]);
+        Storage::fake(config('filesystems.files_disk', 'local'));
+
+        $ada = $this->user('Administrator', 'ada-wf@example.com', 'Ada Admin');
+        $gil = $this->user('Client', 'gil-wf@example.com', 'Gil Contact');
+        $stranger = $this->user('Client', 'cleo-wf@example.com', 'Cleo Client');
+        $company = Company::create(['uid' => 'gal-wf-firm', 'name' => 'Galaxy Firm', 'created_by' => $ada->id]);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GWF', 'company_id' => $company->id,
+        ]);
+
+        $application = Applications::create($provider, $ada);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        Tree::provision($application->fresh(), $ada);
+
+        $slot = DocumentSlots::fill(
+            $application->people()->first(),
+            'passport_bio_page',
+            UploadedFile::fake()->create('passport.pdf', 40, 'application/pdf'),
+            $gil,
+        );
+        $file = $slot->fresh()->file;
+        $this->assertNotNull($file);
+        FileAccess::forgetFolders();
+        $this->assertNotNull(FileAccess::fileRole($gil, $file), 'the contact can open the document they filed');
+
+        $this->actingAs($ada)->postJson('/portal/files/files/'.$file->uuid.'/comments', [
+            'body' => 'The scan is cut off at the bottom.',
+        ])->assertCreated();
+
+        $this->send($ada, $file, [
+            'type' => 'feedback',
+            'recipients' => [['userId' => $gil->id]],
+            'message' => 'Please confirm this scan.',
+        ]);
+
+        Review::requestChanges($slot->fresh(), $ada, 'Rescan the bio page.');
+
+        $bodies = collect(
+            $this->actingAs($gil)->getJson('/portal/files/workflows/comments?scope=mine')
+                ->assertOk()
+                ->json('items')
+        )->pluck('body');
+
+        $this->assertTrue(
+            $bodies->contains('The scan is cut off at the bottom.'),
+            'a reviewer’s file comment must appear in the contact’s Feedback list: '.$bodies->implode(' | '),
+        );
+        $this->assertTrue(
+            $bodies->contains('Rescan the bio page.'),
+            'checklist feedback must appear in the contact’s Feedback list: '.$bodies->implode(' | '),
+        );
+
+        $this->actingAs($gil)->getJson('/portal/files/workflows?scope=inbox')
+            ->assertOk()
+            ->assertJsonPath('counts.waiting', 1)
+            ->assertJsonPath('items.0.type', 'feedback')
+            ->assertJsonPath('items.0.onMe', true);
+
+        $board = $this->actingAs($gil)->getJson('/portal/dashboard/work')->assertOk();
+        $board->assertJsonPath('enabled', true);
+        $this->assertGreaterThanOrEqual(1, count($board->json('comments')));
+        $this->assertGreaterThanOrEqual(1, count($board->json('requests')));
+
+        $this->actingAs($stranger)->getJson('/portal/files/workflows/comments?scope=mine')
+            ->assertOk()
+            ->assertJsonCount(0, 'items');
+        $this->actingAs($stranger)->getJson('/portal/dashboard/work')
+            ->assertOk()
+            ->assertJsonPath('enabled', false);
     }
 
     public function test_updates_required_can_be_searched_by_document_label(): void

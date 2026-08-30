@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Events\PortalDataChanged;
+use App\Models\CipProvider;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\Folder;
@@ -390,5 +393,34 @@ class DashboardWorkTest extends TestCase
             ->assertJsonPath('enabled', false)
             ->assertJsonCount(0, 'requests')
             ->assertJsonCount(0, 'comments');
+    }
+
+    /**
+     * A Service Provider contact is still a Client account type, but they
+     * reach Workflows, so the board has to serve the same tiles the page
+     * opens onto rather than claiming the section is closed.
+     */
+    public function test_a_service_provider_contact_gets_the_work_tiles(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $gil = $this->user('Client', 'gil@example.com', 'Gil Contact');
+        $company = Company::create(['uid' => 'gal-dash', 'name' => 'Galaxy Firm']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GLD', 'company_id' => $company->id,
+        ]);
+
+        $this->actingAs($gil)->getJson('/portal/dashboard/work')
+            ->assertOk()
+            ->assertJsonPath('enabled', true);
     }
 }

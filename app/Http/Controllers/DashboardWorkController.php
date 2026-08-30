@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Access\Role;
+use App\Support\Cip\CipAccess;
 use App\Support\Files\Workflow\Hub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,7 +29,7 @@ class DashboardWorkController extends Controller
     {
         $user = $request->user();
 
-        if (! Role::can($user, 'workflows.view')) {
+        if (! CipAccess::canViewWorkflows($user)) {
             return response()->json([
                 'enabled' => false,
                 'requests' => [],

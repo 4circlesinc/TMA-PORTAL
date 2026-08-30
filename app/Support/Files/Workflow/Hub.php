@@ -11,8 +11,10 @@ use App\Models\FileWorkflowStep;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\FolderAccess;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
@@ -507,10 +509,15 @@ final class Hub
         return $query;
     }
 
-    /** Comments that name me, answer me, or sit on a file I own. */
     /**
-     * Threads that concern this reader: they wrote in it, were named in it, or
-     * the file is theirs.
+     * Threads that concern this reader: they wrote in it, were named in it,
+     * the file is theirs, or — for a service-provider contact — it sits in a
+     * client tree their firm filed.
+     *
+     * CIP uploads are owned by the service account, so "the file is yours"
+     * never fires for the contact who actually works the document. Without
+     * the folder grant they would never see a reviewer's reason in Feedback
+     * and Comments, even when the File Library already opens the file.
      *
      * Public because it is the definition of "yours" for comments, and the
      * unread count has to use the same one — a badge that counted a wider set
@@ -526,6 +533,7 @@ final class Hub
          * somebody joins the query, which is exactly what happened.
          */
         $memberIds = ContactIdentity::idsFor($viewer);
+        $clientIds = FileAccess::isStaff($viewer) ? [] : FolderAccess::clientIdsFor($viewer);
 
         $query
             ->where('file_comments.author_id', $viewer->id)
@@ -560,6 +568,20 @@ final class Hub
                     })
                     ->whereNotNull('mine.root_id');
             });
+
+        if ($clientIds !== []) {
+            $query->orWhereHas(
+                'file.folder',
+                fn ($folder) => $folder->whereIn('folders.client_id', $clientIds),
+            );
+
+            if (CipAccess::enabled()) {
+                $query->orWhereHas(
+                    'file.cipDocument',
+                    fn ($d) => $d->whereIn('application_id', ApplicationScope::query($viewer)->select('id')),
+                );
+            }
+        }
     }
 
     /**

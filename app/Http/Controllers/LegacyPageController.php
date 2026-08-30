@@ -256,6 +256,6 @@ class LegacyPageController extends Controller
     {
         $user = $request->user();
 
-        return Role::canViewPage($user, 'workflows') || CipAccess::isProviderContact($user);
+        return CipAccess::canViewWorkflows($user);
     }
 }

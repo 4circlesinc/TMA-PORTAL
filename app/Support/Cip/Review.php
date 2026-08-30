@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\User;
+use App\Support\Files\Comments;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -83,7 +84,7 @@ class Review
             ]);
         }
 
-        return DB::transaction(function () use ($document, $actor, $reason) {
+        $document = DB::transaction(function () use ($document, $actor, $reason) {
             $before = $document->loadMissing('application')->application->status;
 
             /*
@@ -111,6 +112,23 @@ class Review
 
             return $document;
         });
+
+        /*
+         * Workflows → Feedback and Comments lists file threads, not the slot
+         * conversation. The File Library chip already mirrors the reason onto
+         * the file; the checklist path has to do the same or the provider
+         * side would only see it under Updates required.
+         */
+        $file = $document->file;
+        if ($file) {
+            try {
+                Comments::create($file, $actor, $reason);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $document;
     }
 
     /**
