@@ -949,27 +949,39 @@
 
 .tma-dash__icon-btn-badge[hidden] { display: none; }
 
+/* Header controls sit on a 36px row: icon buttons, the search field and the
+   presence pill share it, so the header reads as one line rather than a
+   scatter of small targets. The mobile header (dashboard-tma-overrides.css)
+   restyles these as 44px glass pills and hides the search. */
 .tma-dash__header .tma-dash__icon-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
-.tma-dash__header .tma-dash__icon-btn img,
+.tma-dash__header .tma-dash__icon-btn img {
+  width: 22px;
+  height: 22px;
+}
+
 .tma-dash__header .tma-dash__search img {
   width: var(--dash-icon-md);
   height: var(--dash-icon-md);
 }
 
 .tma-dash__header .tma-dash__email-topbar-btn {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .tma-dash__header .tma-dash__email-topbar-btn img {
-  width: var(--dash-icon-md);
-  height: var(--dash-icon-md);
+  width: 22px;
+  height: 22px;
+}
+
+.tma-dash__header .tma-presence-pill {
+  min-height: 36px;
 }
 
 .tma-dash__header .tma-dash__email-search img {
@@ -981,8 +993,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
+  font-size: 15px;
+  line-height: 22px;
   min-width: 0;
   overflow: hidden;
 }
@@ -1018,6 +1030,28 @@
 
 .tma-dash:not(.tma-dash--email) .tma-dash__header-center .tma-dash__email-search {
   display: none;
+}
+
+/* Header search (portal and mailbox): the one field in the header, so it gets
+   more room than the toolbar searches that share its chrome below. */
+.tma-dash__header .tma-dash__search,
+.tma-dash__header .tma-dash__email-search {
+  width: 320px;
+  min-height: 36px;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-pill);
+}
+
+.tma-dash__header .tma-dash__search-text,
+.tma-dash__header .tma-dash__email-search-input {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.tma-dash__header .tma-dash__kbd {
+  min-width: 22px;
+  line-height: 18px;
 }
 
 /* Search pill */
