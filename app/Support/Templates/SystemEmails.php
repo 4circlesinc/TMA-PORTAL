@@ -1117,6 +1117,37 @@ class SystemEmails
         $sample = ['number' => 'GAL26-00001', 'applicant' => 'Chen Wei', 'provider' => 'Galaxy Consultants', 'recipient' => 'Priya'];
         $details = ['details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['Service provider', 'Galaxy Consultants']]];
 
+        // The plain status-change notice, one template per §22 status so each
+        // stage can be worded on its own. Shipped copy is identical for all
+        // of them; the point of the split is that an edit to one stage's
+        // email leaves the others alone. Postcards::cipStatus picks
+        // cip-status-<status> and falls back to cip-status.
+        $statusCopy = [
+            'preheader' => '{{number}} now stands at {{status}}.',
+            'eyebrow' => 'CIP Applications',
+            'greeting' => self::CIP_HI,
+            'title' => '{{number}}: {{status}}',
+            'lead' => '{{applicant}}’s application now stands at {{status}}.',
+            'button' => 'Open the application',
+        ];
+        $statuses = [];
+        foreach ([
+            'cip-status-new' => ['New Application', 'New Applications', 'Sent when a file is registered as a new application.'],
+            'cip-status-assessment-feedback' => ['Assessment Feedback', 'Assessment Feedback', 'Sent when a file moves to Assessment Feedback.'],
+            'cip-status-pending-review' => ['Pending Review', 'Pending Review', 'Sent when a file moves to Pending Review.'],
+            'cip-status-background-check' => ['Background Check', 'Background Check', 'Sent when a file moves to Background Check.'],
+        ] as $key => [$name, $label, $moment]) {
+            $statuses[$key] = [
+                'name' => $name,
+                'category' => 'CIP Applications',
+                'when' => $moment.' '.$when,
+                'variables' => $vars + ['status' => 'The new status'],
+                'sample' => $sample + ['status' => $label],
+                'sampleExtras' => $details,
+                'copy' => $statusCopy,
+            ];
+        }
+
         return [
             'cip-assigned' => [
                 'name' => 'Application assigned',
@@ -1238,21 +1269,15 @@ class SystemEmails
                     'button' => 'Open the application',
                 ],
             ],
+        ] + $statuses + [
             'cip-status' => [
-                'name' => 'Status changed',
+                'name' => 'Status changed (other)',
                 'category' => 'CIP Applications',
-                'when' => 'Sent when a file moves to a status with no notice of its own. '.$when,
+                'when' => 'Sent when a file moves to a status without its own template above. '.$when,
                 'variables' => $vars + ['status' => 'The new status'],
                 'sample' => $sample + ['status' => 'Background Check'],
                 'sampleExtras' => $details,
-                'copy' => [
-                    'preheader' => '{{number}} now stands at {{status}}.',
-                    'eyebrow' => 'CIP Applications',
-                    'greeting' => self::CIP_HI,
-                    'title' => '{{number}}: {{status}}',
-                    'lead' => '{{applicant}}’s application now stands at {{status}}.',
-                    'button' => 'Open the application',
-                ],
+                'copy' => $statusCopy,
             ],
         ];
     }

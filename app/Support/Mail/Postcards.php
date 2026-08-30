@@ -812,7 +812,14 @@ class Postcards
         $subject ??= Notices::line($facts, $status);
         $label = Status::label($status);
 
-        return self::postcard('cip-status', self::cipVars($facts, $recipientName) + [
+        // Each §22 stage is its own template on the Templates page; DRAFT
+        // still files as NEW, and anything unmapped keeps the shared one.
+        $key = 'cip-status-'.str_replace('_', '-', $status === Status::DRAFT ? Status::NEW : $status);
+        if (! in_array($key, SystemEmails::keys(), true)) {
+            $key = 'cip-status';
+        }
+
+        return self::postcard($key, self::cipVars($facts, $recipientName) + [
             'status' => $label,
             'url' => $url,
         ], [

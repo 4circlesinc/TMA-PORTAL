@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Status;
 use App\Support\Mail\Postcards;
 use App\Support\Templates\Markup;
 use App\Support\Templates\SystemEmails;
@@ -179,6 +180,27 @@ class SystemEmailTemplatesTest extends TestCase
         $this->assertSame('Hi Dana,', $with['greeting']);
         $this->assertArrayNotHasKey('greeting', $without);
         $this->assertSame('Please sign: Lease.pdf', $with['subject']);
+    }
+
+    public function test_each_cip_status_email_is_its_own_template(): void
+    {
+        $facts = ['number' => 'GAL26-00004', 'applicant' => 'Testing Francis', 'provider' => 'Galaxy Partners', 'familySize' => 1];
+
+        $this->actingAs($this->user(Role::ADMINISTRATOR))
+            ->patchJson('/portal/templates/system-emails/cip-status-assessment-feedback', ['fields' => [
+                'lead' => 'Our team is assessing {{applicant}}’s documents.',
+            ]])
+            ->assertOk()
+            ->assertJsonPath('customized', true);
+
+        $feedback = Postcards::cipStatus($facts, Status::ASSESSMENT_FEEDBACK, 'https://x.test', 'Travis Grant', 'SUBJ-AF');
+        $check = Postcards::cipStatus($facts, Status::BACKGROUND_CHECK, 'https://x.test', 'Travis Grant', 'SUBJ-BC');
+
+        $this->assertSame('Our team is assessing Testing Francis’s documents.', $feedback->payload['lead']);
+        $this->assertSame('Testing Francis’s application now stands at Background Check.', $check->payload['lead'], 'the sibling status must keep its own copy');
+        $this->assertSame('Hi Travis,', $feedback->payload['greeting']);
+        $this->assertSame('SUBJ-AF', $feedback->subjectLine, 'the filing subject stays with the caller');
+        $this->assertSame('GAL26-00004: Assessment Feedback', $feedback->payload['title']);
     }
 
     public function test_the_markup_escapes_what_people_typed(): void
