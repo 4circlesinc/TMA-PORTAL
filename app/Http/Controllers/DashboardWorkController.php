@@ -8,21 +8,21 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The two work tiles on the portal home: requests waiting on you, and the
- * latest discussion that concerns you.
+ * Work on the portal home: the Requests and Comments tiles, and the combined
+ * latest-updates strip under the KPI row.
  *
- * Both are the Workflows section's default tabs, read through {@see Hub} so a
- * tile and the page it opens onto can never disagree about what "yours" means.
- * Nothing is authorized here that is not already authorized there: Hub
- * re-checks every row against the file it belongs to.
+ * All three read through {@see Hub} so a tile, the strip, and the page they
+ * open onto can never disagree about what "yours" means. Nothing is authorized
+ * here that is not already authorized there: Hub re-checks every row against
+ * the file it belongs to.
  *
  * Accounts without the section get `enabled: false` rather than a 403, the
- * same bargain the presence board makes — the dashboard drops the tiles, and a
- * refused request would be indistinguishable from a broken one.
+ * same bargain the presence board makes — the dashboard drops the chrome, and
+ * a refused request would be indistinguishable from a broken one.
  */
 class DashboardWorkController extends Controller
 {
-    /** Rows per tile. Ten is what the board has room for before it scrolls. */
+    /** Rows per tile, and the strip's cap. */
     private const LIMIT = 10;
 
     public function __invoke(Request $request): JsonResponse
@@ -34,6 +34,7 @@ class DashboardWorkController extends Controller
                 'enabled' => false,
                 'requests' => [],
                 'comments' => [],
+                'feed' => [],
                 'counts' => null,
             ]);
         }
@@ -41,14 +42,21 @@ class DashboardWorkController extends Controller
         // A tile the reader turned off must not cost a query. Each list is a
         // page of rows plus a per-file access walk over it, so asking for both
         // when the board shows one is half the request wasted, every minute it
-        // stays open.
+        // stays open. The strip reuses those same lists rather than walking
+        // them a second time.
         $want = self::wanted($request);
+        $wantFeed = in_array('feed', $want, true);
+        $wantRequests = in_array('requests', $want, true);
+        $wantComments = in_array('comments', $want, true);
 
-        $requests = in_array('requests', $want, true)
+        $requests = ($wantRequests || $wantFeed)
             ? Hub::requests($user, ['scope' => Hub::SCOPE_INBOX, 'limit' => self::LIMIT])
             : null;
-        $comments = in_array('comments', $want, true)
+        $comments = ($wantComments || $wantFeed)
             ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT])
+            : null;
+        $updates = $wantFeed
+            ? Hub::updates($user, ['limit' => self::LIMIT])
             : null;
 
         return response()->json([
@@ -56,16 +64,56 @@ class DashboardWorkController extends Controller
             // Echoed back so the board can tell "nothing waiting on you" from
             // "this tile was switched on after the last request went out".
             'want' => $want,
-            'requests' => $requests['items'] ?? [],
-            'comments' => $comments['items'] ?? [],
+            'requests' => $wantRequests ? ($requests['items'] ?? []) : [],
+            'comments' => $wantComments ? ($comments['items'] ?? []) : [],
+            'feed' => $wantFeed ? self::feed(
+                $requests['items'] ?? [],
+                $comments['items'] ?? [],
+                $updates['items'] ?? [],
+            ) : [],
             // The same figures the sidebar badge carries, so the board can
             // hand them across rather than the shell asking a second time.
-            'counts' => $requests['counts'] ?? $comments['counts'] ?? Hub::counts($user),
+            'counts' => $requests['counts']
+                ?? $comments['counts']
+                ?? $updates['counts']
+                ?? Hub::counts($user),
         ]);
     }
 
     /**
-     * Which tiles are on screen, defaulting to both.
+     * The three workflow streams, newest first, capped at the strip's length.
+     *
+     * @param  list<array<string, mixed>>  $requests
+     * @param  list<array<string, mixed>>  $comments
+     * @param  list<array<string, mixed>>  $updates
+     * @return list<array{kind:string,at:string,item:array<string, mixed>}>
+     */
+    private static function feed(array $requests, array $comments, array $updates): array
+    {
+        $entries = [];
+
+        foreach ($requests as $item) {
+            $entries[] = ['kind' => 'request', 'at' => (string) ($item['sentAt'] ?? ''), 'item' => $item];
+        }
+        foreach ($comments as $item) {
+            $entries[] = ['kind' => 'comment', 'at' => (string) ($item['createdAt'] ?? ''), 'item' => $item];
+        }
+        foreach ($updates as $item) {
+            $entries[] = ['kind' => 'update', 'at' => (string) ($item['updatedAt'] ?? ''), 'item' => $item];
+        }
+
+        usort($entries, function (array $a, array $b): int {
+            return strcmp($b['at'], $a['at']);
+        });
+
+        return array_values(array_slice($entries, 0, self::LIMIT));
+    }
+
+    /**
+     * Which lists are on screen, defaulting to both tiles.
+     *
+     * The strip is opt-in (`feed`) so a caller that has not heard of it still
+     * gets the two tiles it asked for, and nothing extra.
      *
      * @return list<string>
      */
@@ -74,7 +122,7 @@ class DashboardWorkController extends Controller
         $raw = (string) $request->query('want', '');
 
         $want = array_values(array_intersect(
-            ['requests', 'comments'],
+            ['requests', 'comments', 'feed'],
             array_map('trim', explode(',', $raw)),
         ));
 

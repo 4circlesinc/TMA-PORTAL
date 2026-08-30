@@ -37,6 +37,7 @@ await page.waitForSelector('[data-tile-id="requests"]', { timeout: 30000 });
 await page.waitForSelector('[data-tile-id="comments"]', { timeout: 30000 });
 await page.waitForSelector('.tma-portal-request-row', { timeout: 30000 });
 await page.waitForSelector('.tma-portal-comment-row', { timeout: 30000 });
+await page.waitForSelector('[data-home-wf-strip-root]', { timeout: 30000 });
 await page.waitForTimeout(1200);
 
 const read = async (sel, shape) => page.$$eval(sel, shape);
@@ -102,6 +103,9 @@ if (SHOT) await page.screenshot({ path: SHOT, fullPage: true });
 const fail = [];
 if (!requests.length) fail.push('no request rows');
 if (!comments.length) fail.push('no comment rows');
+const stripCards = await page.$$eval('[data-home-wf-strip-root] .tma-portal-wf-card', (ns) => ns.length);
+if (!stripCards) fail.push('no workflow strip cards under the KPIs');
+if (stripCards > 10) fail.push(`workflow strip shows ${stripCards} cards, cap is 10`);
 for (const r of requests) {
   if (!r.file) fail.push('request row with no file');
   if (!r.headline) fail.push('request row with no headline');

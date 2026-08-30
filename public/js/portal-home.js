@@ -1406,6 +1406,7 @@
      reason that is nothing to do with the reader, and must not say so. */
   var homeWorkWant = [];
   var homeWorkRetry = false;
+  var homeWfExpanded = {};
 
   /* Comments and requests are not broadcast on any live channel, so the board
      polls, at the same cadence as presence and the inbox. */
@@ -1479,10 +1480,23 @@
    * navigates away in the same tick: an ordinary fetch would be cancelled on
    * the way out and the row would still be unread on the way back.
    */
-  function markWorkCommentRead(commentId) {
-    if (!commentId || !homeWork) return;
-
+  function findWorkComment(commentId) {
+    if (!commentId || !homeWork) return null;
     var row = (homeWork.comments || []).filter(function (c) { return c.id === commentId; })[0];
+    if (row) return row;
+    var feed = homeWork.feed || [];
+    for (var i = 0; i < feed.length; i++) {
+      if (feed[i].kind === 'comment' && feed[i].item && feed[i].item.id === commentId) {
+        return feed[i].item;
+      }
+    }
+    return null;
+  }
+
+  function markWorkCommentRead(commentId) {
+    if (!commentId) return;
+
+    var row = findWorkComment(commentId);
     if (!row || row.unread === false) return;   // already read; nothing to spend
     row.unread = false;
 
@@ -1583,6 +1597,158 @@
     );
   }
 
+  function workflowStripVisible() {
+    if (!canReach('workflows.view')) return false;
+    var s = data().state();
+    return s.dashboardWorkflowStrip !== false;
+  }
+
+  function wfStripSkeleton() {
+    var card = '<article class="tma-portal-wf-card tma-portal-wf-card--preview tma-portal-wf-strip__skel" aria-hidden="true">' +
+      '<span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span>' +
+      '<span class="tma-skeleton" style="display:block;height:128px;border-radius:8px"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:70%"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:45%"></span>' +
+      '</article>';
+    return new Array(4).fill('<div class="tma-portal-wf-strip__slide">' + card + '</div>').join('');
+  }
+
+  function renderWfStrip() {
+    if (!canReach('workflows.view') || !workflowStripVisible()) return '';
+
+    var ready = workListReady('feed');
+    var items = (homeWork && homeWork.feed) || [];
+    var cards = '';
+    var work = window.TMAPortalWork;
+
+    if (!ready) {
+      cards = wfStripSkeleton();
+    } else if (items.length && work && work.homeCard) {
+      cards = items.map(function (entry) {
+        var item = entry.item || {};
+        var key = (entry.kind || 'request') + '-' + (item.id || '');
+        return '<div class="tma-portal-wf-strip__slide" data-key="wf-strip-' + ui().esc(key) + '">' +
+          work.homeCard(entry, { preview: true, expanded: homeWfExpanded }) +
+          '</div>';
+      }).join('');
+    }
+
+    var arrows = ready && items.length
+      ? '<div class="tma-portal-wf-strip__nav">' +
+        '<button type="button" class="tma-portal-wf-strip__arrow" data-home-wf-prev aria-label="Previous workflows">' +
+        '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="16" height="16">' +
+        '</button>' +
+        '<button type="button" class="tma-portal-wf-strip__arrow" data-home-wf-next aria-label="Next workflows">' +
+        '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16">' +
+        '</button>' +
+        '</div>'
+      : '';
+
+    var body = !ready
+      ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
+      : (cards
+        ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
+        : '<p class="tma-portal-panel__note">Nothing in workflows yet.</p>');
+
+    return '<section class="tma-portal-wf-strip" data-key="wf-strip" data-home-wf-strip-root' +
+      (ready ? '' : ' aria-busy="true"') + ' aria-label="Workflows">' +
+      '<div class="tma-portal-wf-strip__head">' +
+      '<h2 class="tma-portal-home-defaults__title">Workflows</h2>' +
+      '<div class="tma-portal-wf-strip__tools">' +
+      '<button type="button" class="tma-portal-link" data-home-wf-all>See all</button>' +
+      arrows +
+      '</div></div>' +
+      body +
+      '</section>';
+  }
+
+  function wireWfStrip(el, bind) {
+    var root = el.querySelector('[data-home-wf-strip-root]');
+    if (!root) return;
+
+    bind(root.querySelector('[data-home-wf-all]'), 'click', function () {
+      navigate({
+        navId: 'workflows-automated',
+        view: 'workflows',
+        title: 'Requests',
+        crumb: 'Workflows / Requests',
+      });
+    });
+
+    bind(root, 'click', function (e) {
+      var t = e.target;
+      var hit = t.closest && t.closest('[data-wfh-expand]');
+      if (hit) {
+        e.preventDefault();
+        e.stopPropagation();
+        var expandId = hit.getAttribute('data-wfh-expand');
+        homeWfExpanded[expandId] = !homeWfExpanded[expandId];
+        if (el.isConnected) mount(el, { fromLoad: true });
+        return;
+      }
+
+      hit = t.closest && t.closest('[data-wfh-open-app]');
+      if (hit) {
+        e.preventDefault();
+        e.stopPropagation();
+        var uid = hit.getAttribute('data-wfh-open-app');
+        if (uid && window.TMADashboard && window.TMADashboard.navigate) {
+          window.TMADashboard.navigate({
+            navId: 'clients',
+            view: 'clients',
+            title: 'Application',
+            crumb: 'Citizenship Applications',
+            contactId: uid,
+            clientsScreen: 'detail',
+          });
+        }
+        return;
+      }
+
+      hit = t.closest && t.closest('[data-wfh-open]');
+      if (hit) {
+        var card = hit.closest('[data-wfh-card]');
+        markWorkCommentRead(card ? card.getAttribute('data-wfh-card') : null);
+        openWorkFile(hit.getAttribute('data-wfh-open'), hit.getAttribute('data-wfh-folder'));
+      }
+    });
+
+    var track = root.querySelector('[data-home-wf-track]');
+    var prev = root.querySelector('[data-home-wf-prev]');
+    var next = root.querySelector('[data-home-wf-next]');
+    if (!track || !prev || !next) return;
+
+    function stepSize() {
+      var slide = track.querySelector('.tma-portal-wf-strip__slide');
+      if (!slide) return Math.max(240, track.clientWidth * 0.8);
+      var gap = parseFloat(getComputedStyle(track).gap) || 12;
+      return slide.getBoundingClientRect().width + gap;
+    }
+
+    function syncArrows() {
+      var max = Math.max(0, track.scrollWidth - track.clientWidth);
+      var overflow = max > 4;
+      prev.hidden = !overflow;
+      next.hidden = !overflow;
+      prev.disabled = track.scrollLeft <= 2;
+      next.disabled = track.scrollLeft >= max - 2;
+    }
+
+    bind(prev, 'click', function () {
+      track.scrollBy({ left: -stepSize(), behavior: 'smooth' });
+    });
+    bind(next, 'click', function () {
+      track.scrollBy({ left: stepSize(), behavior: 'smooth' });
+    });
+    bind(track, 'scroll', syncArrows);
+
+    if (!track._wfStripRo && typeof ResizeObserver !== 'undefined') {
+      track._wfStripRo = new ResizeObserver(syncArrows);
+      track._wfStripRo.observe(track);
+    }
+    syncArrows();
+  }
+
   /* Same rows, same numbers, leave both tiles alone — every loader on this
      board answers on every visit, and each answer would otherwise repaint. */
   function workSignature(payload) {
@@ -1601,6 +1767,10 @@
           c.editedAt || '', c.deleted ? 1 : 0,
         ].join(':');
       }).join('|'),
+      (payload.feed || []).map(function (e) {
+        var item = e.item || {};
+        return [e.kind || '', item.id || '', e.at || '', item.unread === false ? 0 : 1].join(':');
+      }).join('|'),
     ].join('~');
   }
 
@@ -1609,6 +1779,7 @@
   function wantedWorkTiles() {
     var show = tiles();
     var want = [];
+    if (workflowStripVisible()) want.push('feed');
     if (show.requests !== false) want.push('requests');
     if (show.comments !== false) want.push('comments');
     return want;
@@ -1649,7 +1820,7 @@
           // tiles settle into their empty state rather than spinning, the same
           // bargain every other tile on this board makes, and the poll behind
           // them corrects it as soon as the network is back.
-          homeWork = { enabled: true, want: want.slice(), requests: [], comments: [], counts: null };
+          homeWork = { enabled: true, want: want.slice(), requests: [], comments: [], feed: [], counts: null };
           homeWorkWant = want.slice();
         }
 
@@ -2357,6 +2528,7 @@
       dashboardLayout: {
         order: tileOrder(),
       },
+      dashboardWorkflowStrip: data().state().dashboardWorkflowStrip !== false,
     };
   }
 
@@ -2394,6 +2566,7 @@
     return JSON.stringify({
       tiles: s.dashboardTiles || {},
       order: s.dashboardTileOrder || [],
+      workflowStrip: s.dashboardWorkflowStrip !== false,
     });
   }
 
@@ -2449,6 +2622,9 @@
 
         if (prefs.dashboardTiles && typeof prefs.dashboardTiles === 'object') {
           s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, prefs.dashboardTiles);
+        }
+        if (typeof prefs.dashboardWorkflowStrip === 'boolean') {
+          s.dashboardWorkflowStrip = prefs.dashboardWorkflowStrip;
         }
 
         // After a layout-gen bump, keep the new defaults and push them to the account.
@@ -3028,8 +3204,18 @@
       '</div></div>' +
       '<div class="tma-portal-hello__actions">' +
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
+      (canReach('workflows.view')
+        ? ui().btn({
+            label: workflowStripVisible() ? 'Hide workflows' : 'Show workflows',
+            icon: workflowStripVisible() ? 'EyeSlash' : 'Eye',
+            variant: 'ghost',
+            small: true,
+            attrs: 'data-home-wf-strip',
+          })
+        : '') +
       '</div></div>' +
       renderKpis() +
+      renderWfStrip() +
       '<div class="tma-portal-home-grid">' +
       renderHomeGrid(s, show) +
       '</div>' +
@@ -3265,6 +3451,15 @@
      * The picture picker itself is owned by current-user.js (delegated click). */
 
     bind(el.querySelector('[data-home-edit]'), 'click', function () { editDashboardModal(rerender); });
+    bind(el.querySelector('[data-home-wf-strip]'), 'click', function () {
+      var s = data().state();
+      s.dashboardWorkflowStrip = !workflowStripVisible();
+      data().save();
+      queueLayoutServerSave();
+      refreshWorkForTiles();
+      rerender();
+    });
+    wireWfStrip(el, bind);
 
     fillShortcutCounts(el);
     watchLiveFiles();

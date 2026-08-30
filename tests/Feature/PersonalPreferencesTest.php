@@ -37,7 +37,22 @@ class PersonalPreferencesTest extends TestCase
             ->assertJsonPath('accentColor', 'indigo')
             ->assertJsonPath('historyDays', 30)
             // null, not [] — the client falls back to its shipped catalog.
-            ->assertJsonPath('plugins', null);
+            ->assertJsonPath('plugins', null)
+            ->assertJsonPath('dashboardWorkflowStrip', true);
+    }
+
+    public function test_dashboard_workflow_strip_round_trips(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)->putJson('/me/preferences', [
+            'dashboardWorkflowStrip' => false,
+        ])->assertOk()
+            ->assertJsonPath('dashboardWorkflowStrip', false);
+
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('dashboardWorkflowStrip', false);
     }
 
     public function test_theme_preferences_round_trip(): void

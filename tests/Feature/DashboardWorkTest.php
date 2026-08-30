@@ -232,6 +232,75 @@ class DashboardWorkTest extends TestCase
     }
 
     /**
+     * The strip under the KPIs is the three workflow streams as one list,
+     * newest first, and it stops at ten even when each stream could fill it.
+     */
+    public function test_the_feed_combines_streams_newest_first_and_caps_at_ten(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)
+            ->postJson("/portal/files/files/{$file->uuid}/workflows", [
+                'type' => 'approval',
+                'recipients' => [['userId' => $ben->id]],
+            ])->assertCreated();
+
+        $this->travel(2)->seconds();
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'The later note',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $feed = $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonPath('want', ['feed'])
+            ->assertJsonCount(0, 'requests')
+            ->assertJsonCount(0, 'comments')
+            ->assertJsonCount(2, 'feed')
+            ->json('feed');
+
+        $this->assertSame('comment', $feed[0]['kind']);
+        $this->assertSame('The later note', $feed[0]['item']['body']);
+        $this->assertSame('request', $feed[1]['kind']);
+        $this->assertSame('Contract.txt', $feed[1]['item']['file']['name']);
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->travel(1)->seconds();
+            $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => "Later {$i}",
+                'mentions' => [$ben->id],
+            ])->assertCreated();
+        }
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(10, 'feed')
+            ->assertJsonPath('feed.0.kind', 'comment')
+            ->assertJsonPath('feed.0.item.body', 'Later 11');
+    }
+
+    /** Asking for the tiles does not build the strip. */
+    public function test_feed_is_opt_in(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Only on the tile',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'comments')
+            ->assertJsonCount(0, 'feed');
+    }
+
+    /**
      * The channels a piece of work signalled, so a test can ask "did this
      * reach that person" rather than only "did something fire".
      *

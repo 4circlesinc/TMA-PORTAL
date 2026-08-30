@@ -62,6 +62,8 @@ class PreferencesController extends Controller
          * error both still show, because those are worth interrupting for.
          */
         'fileSyncNoticeDismissed' => false,
+        // Dashboard workflow strip under the KPI row. On until they hide it.
+        'dashboardWorkflowStrip' => true,
     ];
 
     private const RULES = [
@@ -86,6 +88,7 @@ class PreferencesController extends Controller
         'calendarView' => ['string', 'in:week,month,agenda,day,work_week'],
         'calendarSidebarOpen' => ['boolean'],
         'fileSyncNoticeDismissed' => ['boolean'],
+        'dashboardWorkflowStrip' => ['boolean'],
         // Nested toast prefs, validated + cleaned by ToastSettings.
         'toasts' => ['array'],
         'toasts.enabled' => ['boolean'],
@@ -179,6 +182,7 @@ class PreferencesController extends Controller
         $current = $user->preferences ?? [];
         $booleans = [
             'autoTimezone', 'calendarSidebarOpen', 'notifyAlwaysEmail',
+            'dashboardWorkflowStrip',
         ];
         foreach ($data as $key => $value) {
             if ($key === 'toasts') {
