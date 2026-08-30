@@ -1,1 +1,1 @@
-- On Windows, the window's minimise/maximise/close no longer cover the file viewer's own buttons — the viewer's bar keeps clear of them
+- The window title bar is taller, so navigation, search and header actions have more space around them
