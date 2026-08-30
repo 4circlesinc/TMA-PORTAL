@@ -1,15 +1,15 @@
 /*
  * TMA - Dashboard home library strip
- * Default (organization) folders listed as panels, each holding a grid of
- * file cards in the same shape as Workflow comments, plus a Recent Files /
- * Shared with me table that mirrors the Folders → All Files list.
+ * Default (organization) folders listed as panels, each with a scrollable
+ * list of files and a See more control past the first twenty, plus a Recent
+ * Files / Shared with me table that mirrors the Folders → All Files list.
  * Global: window.TMAPortalHomeLibrary
  */
 (function () {
   'use strict';
 
   var DEFAULT_VISIBLE = 3;
-  var PREVIEW_FILES = 4;
+  var PREVIEW_FILES = 20;
 
   /*
    * The type pills, in the order they are offered.
@@ -105,34 +105,6 @@
     var px = size || 32;
     return '<span class="tma-portal-default-folder__icon" style="width:' + px + 'px;height:' + px + 'px">' +
       folderGlyph(item, px) + '</span>';
-  }
-
-  function itemPreview(item, isFolder) {
-    if (isFolder) {
-      return '<span class="tma-portal-default-folder__glyph">' + folderGlyph(item, 48) + '</span>';
-    }
-    var icon = fileIconSrc(item);
-    if (window.TMAFileThumbs) {
-      return window.TMAFileThumbs.imgHtml(item, {
-        size: null,
-        iconSize: 48,
-        cls: 'tma-portal-default-folder__thumb',
-        iconCls: 'tma-portal-default-folder__thumb-icon',
-        icon: icon,
-      });
-    }
-    if (item.thumbUrl) {
-      return '<img class="tma-portal-default-folder__thumb" src="' + esc(item.thumbUrl) + '" alt="" loading="lazy"' +
-        ' onerror="this.onerror=null;this.className=\'tma-portal-default-folder__thumb-icon\';this.src=\'' + esc(icon) + '\'">';
-    }
-    return '<img class="tma-portal-default-folder__thumb-icon" src="' + esc(icon) + '" alt="" width="48" height="48">';
-  }
-
-  function itemTypeMark(item, isFolder) {
-    if (isFolder) {
-      return '<span class="tma-portal-default-folder__type">' + folderGlyph(item, 24) + '</span>';
-    }
-    return '<img class="tma-portal-default-folder__type" src="' + esc(fileIconSrc(item)) + '" alt="" width="24" height="24">';
   }
 
   function thumbOrIcon(item, size) {
@@ -235,22 +207,21 @@
 
   /* ── default folders cards ─────────────────────────── */
 
-  function renderPreviewItem(item, folder, isFolder) {
+  function renderListItem(item, folder, isFolder) {
     var meta = isFolder ? folderMeta(item) : (item.sizeLabel || '');
     var attrs = isFolder
       ? ' data-home-lib-open-folder="' + esc(item.id) + '"'
       : (' data-home-lib-open-file="' + esc(item.id) + '"' +
         ' data-home-lib-open-folder="' + esc((item.folder && item.folder.id) || folder.id) + '"');
+    var mark = isFolder ? folderGlyph(item, 24) : thumbOrIcon(item, 24);
 
-    return '<button type="button" class="tma-portal-default-folder__item" data-key="home-lib-' +
+    return '<button type="button" class="tma-portal-file-row" data-key="home-lib-' +
       (isFolder ? 'sub-' : 'file-') + esc(item.id) + '"' + attrs + '>' +
-      '<span class="tma-portal-default-folder__preview">' + itemPreview(item, isFolder) + '</span>' +
-      '<span class="tma-portal-default-folder__file">' +
-      itemTypeMark(item, isFolder) +
-      '<span class="tma-portal-default-folder__file-text">' +
-      '<span class="tma-portal-default-folder__name">' + esc(item.name) + '</span>' +
-      (meta ? '<span class="tma-portal-default-folder__path">' + esc(meta) + '</span>' : '') +
-      '</span></span></button>';
+      mark +
+      '<span class="tma-portal-file-row__meta">' +
+      '<span class="tma-portal-file-row__name">' + esc(item.name) + '</span>' +
+      (meta ? '<span class="tma-portal-file-row__path">' + esc(meta) + '</span>' : '') +
+      '</span></button>';
   }
 
   function renderDefaultFolderCard(folder) {
@@ -258,15 +229,18 @@
     var subfolders = folder.folders || [];
 
     // Subfolders first, then files, the same order the library itself uses.
-    // Every tile carries a data-key so a background poll re-render reuses the
-    // existing node instead of rebuilding it (and re-requesting its thumbnail).
-    var items = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
-      return renderPreviewItem(sub, folder, true);
+    var rows = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
+      return renderListItem(sub, folder, true);
     }).join('');
 
-    items += files.slice(0, Math.max(0, PREVIEW_FILES - subfolders.length)).map(function (f) {
-      return renderPreviewItem(f, folder, false);
+    rows += files.slice(0, Math.max(0, PREVIEW_FILES - subfolders.length)).map(function (f) {
+      return renderListItem(f, folder, false);
     }).join('');
+
+    var more = hasMore(folder)
+      ? '<button type="button" class="tma-portal-link tma-portal-default-folder__more" data-home-lib-open-folder="' +
+        esc(folder.id) + '">See more</button>'
+      : '';
 
     return '<section class="tma-portal-default-folder" data-key="default-folder-' + esc(folder.id) + '">' +
       '<button type="button" class="tma-portal-default-folder__head" data-home-lib-open-folder="' + esc(folder.id) + '">' +
@@ -277,9 +251,8 @@
       '</span>' +
       '</button>' +
       '<div class="tma-portal-default-folder__body">' +
-      (items || '<p class="tma-portal-panel__note" data-key="home-lib-empty-' + esc(folder.id) + '">Nothing in this folder yet.</p>') +
-      (extraCount(folder) ? '<p class="tma-portal-panel__note" data-key="home-lib-more-' + esc(folder.id) + '">' + extraCount(folder) + '</p>' : '') +
-      '</div></section>';
+      (rows || '<p class="tma-portal-panel__note" data-key="home-lib-empty-' + esc(folder.id) + '">Nothing in this folder yet.</p>') +
+      '</div>' + more + '</section>';
   }
 
   /** "3 files · 2 folders", or "Empty", the same shape the library uses. */
@@ -292,13 +265,13 @@
     return parts.length ? parts.join(' · ') : 'Empty';
   }
 
-  /** "+ 8 more" when the card shows only the first few. */
-  function extraCount(folder) {
+  function hasMore(folder) {
+    if (folder.hasMore) return true;
     var shown = Math.min((folder.folders || []).length, PREVIEW_FILES) +
       Math.max(0, Math.min((folder.files || []).length, PREVIEW_FILES - (folder.folders || []).length));
     var total = (folder.folderCount || 0) + (folder.fileCount || 0);
 
-    return total > shown ? '+ ' + (total - shown) + ' more' : '';
+    return total > shown;
   }
 
   function renderDefaultFolders() {
@@ -920,6 +893,7 @@
         folder.folders = (j && j.folders) || [];
         folder.fileCount = j && j.counts ? j.counts.files : folder.files.length;
         folder.folderCount = j && j.counts ? j.counts.folders : folder.folders.length;
+        folder.hasMore = !!(j && j.hasMore);
         return folder;
       })
       .catch(function () { folder.files = folder.files || []; return folder; });
@@ -939,6 +913,7 @@
         iconName: f.iconName,
         fileCount: f.fileCount != null ? f.fileCount : null,
         folderCount: f.folderCount != null ? f.folderCount : null,
+        hasMore: !!f.hasMore,
         files: [],
         folders: [],
       });
@@ -995,6 +970,7 @@
         f.id, f.name || '', f.colour || '', f.iconName || '',
         f.fileCount == null ? '' : f.fileCount,
         f.folderCount == null ? '' : f.folderCount,
+        f.hasMore ? 1 : 0,
         (f.folders || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
         (f.files || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
       ].join('~');
@@ -1023,6 +999,7 @@
       if (!prev) return f;
       f.files = prev.files || [];
       f.folders = prev.folders || [];
+      f.hasMore = prev.hasMore;
       if (prev.fileCount != null) f.fileCount = prev.fileCount;
       if (prev.folderCount != null) f.folderCount = prev.folderCount;
       return f;

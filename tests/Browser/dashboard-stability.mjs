@@ -339,7 +339,7 @@ try {
     return {
       marks: Object.keys(marks),
       defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
-      defaultRows: document.querySelectorAll('.tma-portal-default-folder__item').length,
+      defaultRows: document.querySelectorAll('.tma-portal-default-folder .tma-portal-file-row').length,
       recentRows: document.querySelectorAll('[data-tile-id="recentFiles"] [data-home-file]').length,
     };
   });
@@ -371,7 +371,7 @@ try {
 
   const mid = await page.evaluate(() => ({
     defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
-    defaultRows: document.querySelectorAll('.tma-portal-default-folder__item').length,
+    defaultRows: document.querySelectorAll('.tma-portal-default-folder .tma-portal-file-row').length,
     emptyNotes: Array.from(document.querySelectorAll('.tma-portal-default-folder .tma-portal-panel__note'))
       .filter((n) => /Nothing in this folder yet/.test(n.textContent || '')).length,
     recentRows: document.querySelectorAll('[data-tile-id="recentFiles"] [data-home-file]').length,

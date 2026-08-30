@@ -5129,8 +5129,8 @@ label.tma-portal-check-row:hover {
   .tma-portal-home-defaults__grid { grid-template-columns: 1fr; }
 }
 
-/* One panel per default folder. Files inside use the same card as Workflow
-   comments: preview on top, name + meta underneath. */
+/* One panel per default folder. Files are a scrollable list of twenty,
+   then a See more control that opens the folder. */
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
@@ -5145,7 +5145,7 @@ label.tma-portal-check-row:hover {
 }
 
 .tma-portal-default-folder--skeleton {
-  min-height: 280px;
+  min-height: 220px;
   background: color-mix(in srgb, var(--color-white) 70%, var(--color-hover));
 }
 
@@ -5175,108 +5175,32 @@ label.tma-portal-check-row:hover {
 }
 
 .tma-portal-default-folder__body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-12);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-width: 0;
+  max-height: 800px;
+  overflow-y: auto;
 }
 
 .tma-portal-default-folder__body .tma-portal-panel__note {
-  grid-column: 1 / -1;
   margin: 0;
+  padding: var(--space-8);
 }
 
-.tma-portal-default-folder__item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-12);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
-  min-width: 0;
-  box-sizing: border-box;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  font: inherit;
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.tma-portal-default-folder__item:hover {
-  filter: brightness(0.99);
-}
-
-.tma-portal-default-folder__item:hover .tma-portal-default-folder__name {
-  text-decoration: underline;
-}
-
-.tma-portal-default-folder__item:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.tma-portal-default-folder__preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 128px;
-  border-radius: var(--radius-8);
-  background: var(--color-hover);
-  overflow: hidden;
-}
-
-.tma-portal-default-folder__thumb,
-.tma-portal-default-folder__preview .tma-file-thumb {
-  max-width: 100%;
-  max-height: 128px;
-  object-fit: contain;
-  border-radius: var(--radius-6);
-}
-
-.tma-portal-default-folder__preview .tma-file-thumb--doc {
-  object-fit: contain;
-  object-position: top center;
-  height: 128px;
-  width: auto;
-  background: #fff;
-}
-
-.tma-portal-default-folder__thumb-icon {
-  width: 48px;
-  height: 48px;
-}
-
-.tma-portal-default-folder__glyph {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-}
-
-.tma-portal-default-folder__glyph .tma-folder-icon,
-.tma-portal-default-folder__glyph .tma-folder-icon__base,
-.tma-portal-default-folder__glyph img {
-  width: 48px !important;
-  height: 48px !important;
-  max-width: 48px;
-  max-height: 48px;
+.tma-portal-default-folder__body .tma-portal-file-row .tma-folder-icon,
+.tma-portal-default-folder__body .tma-portal-file-row .tma-folder-icon__base,
+.tma-portal-default-folder__body .tma-portal-file-row img {
+  width: 24px !important;
+  height: 24px !important;
+  max-width: 24px;
+  max-height: 24px;
   object-fit: contain;
 }
 
-.tma-portal-default-folder__file {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-4) 0 0;
-  min-width: 0;
-  width: 100%;
+.tma-portal-default-folder__more {
+  align-self: flex-start;
+  padding: var(--space-4);
 }
 
 .tma-portal-default-folder__file-text {
@@ -5305,24 +5229,6 @@ label.tma-portal-check-row:hover {
   max-width: 32px;
   max-height: 32px;
   flex: 0 0 32px;
-  object-fit: contain;
-}
-
-.tma-portal-default-folder__type {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.tma-portal-default-folder__type img,
-.tma-portal-default-folder__type .tma-folder-icon,
-.tma-portal-default-folder__type .tma-folder-icon__base {
-  width: 24px !important;
-  height: 24px !important;
   object-fit: contain;
 }
 
