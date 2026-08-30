@@ -34,6 +34,12 @@ class BrowserController extends BaseFilesController
             $section = 'all';
         }
 
+        // Rewrite a leftover "Clients" root the first time anyone lists files,
+        // not only when they open the citizenship library. Recent Files and
+        // All Files both print that folder's name, and waiting on the nested
+        // sidebar item left the old label on the dashboard until someone did.
+        FolderProvisioner::clientsRoot();
+
         // A page of the folder, not the whole of it. perPage=0 used to mean
         // "everything" (capped at 100,000), which is how Clients answered with
         // 11,000 rows and never returned. The ceiling is 200, the same as an
@@ -150,7 +156,7 @@ class BrowserController extends BaseFilesController
 
         return response()->json([
             'section' => $section,
-            'folder' => $current ? ['id' => $current->uuid, 'name' => $current->name] : null,
+            'folder' => $current ? ['id' => $current->uuid, 'name' => FolderProvisioner::displayName($current)] : null,
             'breadcrumb' => $current ? $this->breadcrumb($current) : [],
             'folders' => $folders->map(fn (Folder $f) => $presenter->folder($f, $withStats))->values(),
             'files' => $files->map(fn (FileItem $f) => $presenter->file($f))->values(),
@@ -651,7 +657,7 @@ class BrowserController extends BaseFilesController
         return FileAccess::lineage($folder->id)
             ->reverse()
             ->values()
-            ->map(fn (Folder $node) => ['id' => $node->uuid, 'name' => $node->name])
+            ->map(fn (Folder $node) => ['id' => $node->uuid, 'name' => FolderProvisioner::displayName($node)])
             ->all();
     }
 }

@@ -142,6 +142,32 @@ class FileManagerTest extends TestCase
         $this->assertTrue($names->contains('filed.pdf'), 'Foldered file must appear in Recent Files');
     }
 
+    public function test_recent_paths_print_the_citizenship_library_and_rename_a_clients_root(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        $root = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Clients',
+            'folder_type' => Folder::TYPE_ROOT,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        $person = $this->folder($admin, 'Chen Wei', $root);
+        $person->forceFill(['folder_type' => Folder::TYPE_CLIENT])->save();
+        $docs = $this->folder($admin, 'Post-Approval Documents', $person);
+        $this->fileIn($admin, $docs, 'passport.pdf', 10);
+
+        $row = collect($this->actingAs($admin)->getJson('/portal/files/?section=recent')->assertOk()->json('files'))
+            ->firstWhere('name', 'passport.pdf');
+
+        $this->assertNotNull($row);
+        $this->assertSame(
+            [FolderProvisioner::ROOT_CLIENTS, 'Chen Wei', 'Post-Approval Documents'],
+            collect($row['path'])->pluck('name')->all()
+        );
+        $this->assertSame(FolderProvisioner::ROOT_CLIENTS, $root->fresh()->name);
+    }
+
     /**
      * Recent is ordered by recency — across both tables, not folders first.
      *

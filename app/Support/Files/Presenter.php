@@ -207,7 +207,7 @@ class Presenter
             // What the row's comment indicator draws. Absent (null) when the
             // file has no open thread, so the client has nothing to decide.
             'comments' => $this->commentFile[$file->id] ?? null,
-            'folder' => $file->folder ? ['id' => $file->folder->uuid, 'name' => $file->folder->name] : null,
+            'folder' => $file->folder ? ['id' => $file->folder->uuid, 'name' => FolderProvisioner::displayName($file->folder)] : null,
             'path' => $this->folderPath($file->folder),
             'createdAt' => optional($file->created_at)->toIso8601String(),
             'uploadedAt' => optional($file->created_at)->toIso8601String(),
@@ -260,7 +260,7 @@ class Presenter
         return [
             'id' => $folder->uuid,
             'type' => 'folder',
-            'name' => $folder->name,
+            'name' => FolderProvisioner::displayName($folder),
             'folderType' => $folder->folder_type,
             'colour' => $this->effectiveColour($folder),
             'iconName' => $this->effectiveIcon($folder),
@@ -273,7 +273,7 @@ class Presenter
             'folderCount' => $stats['folderCount'],
             'size' => $stats['size'],
             'sizeLabel' => $stats['size'] === null ? null : self::humanSize((int) $stats['size']),
-            'parent' => $folder->parent ? ['id' => $folder->parent->uuid, 'name' => $folder->parent->name] : null,
+            'parent' => $folder->parent ? ['id' => $folder->parent->uuid, 'name' => FolderProvisioner::displayName($folder->parent)] : null,
             'path' => $this->folderPath($folder->parent),
             'createdAt' => optional($folder->created_at)->toIso8601String(),
             'modifiedAt' => optional($folder->updated_at)->toIso8601String(),
@@ -313,7 +313,7 @@ class Presenter
 
         while ($node && ! isset($seen[$node->id])) {
             $seen[$node->id] = true;
-            array_unshift($trail, ['id' => $node->uuid, 'name' => $node->name]);
+            array_unshift($trail, ['id' => $node->uuid, 'name' => FolderProvisioner::displayName($node)]);
             $node = $this->parentOf($node);
         }
 

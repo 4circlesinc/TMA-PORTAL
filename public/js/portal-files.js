@@ -20,6 +20,33 @@
     return !!(me && me.isAdmin);
   }
 
+  /*
+   * The citizenship library's printed name.
+   *
+   * The folder has gone by Client, Clients and Client Files. Paths in Recent
+   * Files, breadcrumbs and shortcuts are those stored names joined up, so a
+   * root that the server has not rewritten yet (or a row painted before it
+   * did) would keep saying the old word. One map, used wherever a folder
+   * name is shown.
+   */
+  var LIBRARY_ROOT_NAME = 'Citizenship By Investment Application';
+  var LIBRARY_ROOT_ALIASES = { Client: 1, Clients: 1, 'Client Files': 1 };
+
+  function displayLibraryFolderName(name) {
+    return LIBRARY_ROOT_ALIASES[name] ? LIBRARY_ROOT_NAME : name;
+  }
+
+  function displayLibraryPath(path) {
+    if (!path) return path;
+    return String(path).replace(/^(Clients|Client Files|Client)( \/|$)/, LIBRARY_ROOT_NAME + '$2');
+  }
+
+  window.TMALibraryFolders = {
+    name: LIBRARY_ROOT_NAME,
+    displayName: displayLibraryFolderName,
+    displayPath: displayLibraryPath,
+  };
+
   // Promote an existing top-level folder to a shared organization default.
   function makeDefaultFolder(item) {
     var url = (window.__TMA_SITE_ROOT || '') + '/portal/file-library/adopt-folder';
@@ -852,8 +879,8 @@
       var last = i === state.breadcrumb.length - 1;
       crumbs += '<span class="tma-portal-breadcrumb__sep">/</span>';
       crumbs += last
-        ? '<span class="tma-portal-breadcrumb__item tma-portal-breadcrumb__item--current">' + esc(c.name) + '</span>'
-        : '<button type="button" class="tma-portal-breadcrumb__item" data-files-crumb="' + esc(c.id) + '">' + esc(c.name) + '</button>';
+        ? '<span class="tma-portal-breadcrumb__item tma-portal-breadcrumb__item--current">' + esc(displayLibraryFolderName(c.name)) + '</span>'
+        : '<button type="button" class="tma-portal-breadcrumb__item" data-files-crumb="' + esc(c.id) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
     });
     return '<nav class="tma-portal-breadcrumb" aria-label="Folder path">' + crumbs + '</nav>';
   }
@@ -7274,13 +7301,13 @@
             pick.crumb = res.breadcrumb || [];
             var crumbHtml = '<button type="button" class="tma-portal-picker__crumb" data-pick-crumb="">Top level</button>';
             (res.breadcrumb || []).forEach(function (c) {
-              crumbHtml += ' / <button type="button" class="tma-portal-picker__crumb" data-pick-crumb="' + esc(c.id) + '">' + esc(c.name) + '</button>';
+              crumbHtml += ' / <button type="button" class="tma-portal-picker__crumb" data-pick-crumb="' + esc(c.id) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
             });
             var folders = (res.folders || []);
             var listHtml = folders.length
               ? folders.map(function (f) {
                   return '<button type="button" class="tma-portal-picker__folder" data-pick-open="' + esc(f.id) + '">' +
-                    folderIconHtml(f, 20) + '<span>' + esc(f.name) + '</span></button>';
+                    folderIconHtml(f, 20) + '<span>' + esc(displayLibraryFolderName(f.name)) + '</span></button>';
                 }).join('')
               : '<p class="tma-portal-picker__empty">No subfolders here.</p>';
             body.innerHTML = '<div class="tma-portal-picker__crumbs">' + crumbHtml + '</div><div class="tma-portal-picker__list">' + listHtml + '</div>';

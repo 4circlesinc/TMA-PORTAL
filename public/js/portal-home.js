@@ -308,8 +308,16 @@
   // breadcrumb string. A file directly in the File Box (no folder) has an
   // empty path; a top-level folder does too, but only files get the label.
   function pathLabel(kind, crumbs) {
-    var names = (crumbs || []).map(function (c) { return c.name; });
+    var display = (window.TMALibraryFolders && window.TMALibraryFolders.displayName)
+      || function (n) { return n; };
+    var names = (crumbs || []).map(function (c) { return display(c.name); });
     return names.length ? names.join(' / ') : (kind === 'file' ? 'File Box' : '');
+  }
+
+  function shownPath(path) {
+    return (window.TMALibraryFolders && window.TMALibraryFolders.displayPath)
+      ? window.TMALibraryFolders.displayPath(path)
+      : path;
   }
 
   // Folder icon for folders; the real server thumbnail for images (falling back
@@ -365,7 +373,7 @@
         rowIconHtml(f) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
-        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
+        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(shownPath(f.path)) + '</span>' : '') +
         '</span></button>';
     }).join('');
     return tileShell(
@@ -2640,7 +2648,7 @@
         rowIconHtml(f) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
-        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
+        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(shownPath(f.path)) + '</span>' : '') +
         '</span></button>';
     }).join('');
     return tileShell(

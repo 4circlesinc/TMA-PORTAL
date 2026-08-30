@@ -50,7 +50,7 @@ class ShortcutController extends BaseFilesController
     {
         $map = fn ($folders) => $folders->map(fn (Folder $f) => [
             'id' => $f->uuid,
-            'name' => $f->name,
+            'name' => FolderProvisioner::displayName($f),
             'colour' => FolderColours::effective($f, null),
             'iconName' => FolderIcons::effective($f, null),
         ])->values()->all();
@@ -207,8 +207,8 @@ class ShortcutController extends BaseFilesController
 
                 return [
                     'id' => $s->folder->uuid,
-                    'name' => $s->folder->name,
-                    'parent' => $s->folder->parent?->name,
+                    'name' => FolderProvisioner::displayName($s->folder),
+                    'parent' => $s->folder->parent ? FolderProvisioner::displayName($s->folder->parent) : null,
                     'colour' => FolderColours::effective($s->folder, $pref['colour'] ?? null),
                     'iconName' => FolderIcons::effective($s->folder, $pref['iconName'] ?? null),
                 ];

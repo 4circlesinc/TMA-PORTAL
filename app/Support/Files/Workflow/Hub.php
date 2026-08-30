@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Files\Comments;
 use App\Support\Files\CommentReads;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -579,7 +580,8 @@ final class Hub
     }
 
     /**
-     * folder id => "Clients / Acme Ltd", plus "uuid:<id>" => folder uuid.
+     * folder id => "Citizenship By Investment Application / Acme Ltd", plus
+     * "uuid:<id>" => folder uuid.
      *
      * One query for the whole page rather than walking each file's ancestry on
      * its own; the trail is short and the parents repeat heavily.
@@ -603,7 +605,7 @@ final class Hub
         for ($depth = 0; $depth < 12 && $wanted !== []; $depth++) {
             $rows = Folder::withTrashed()
                 ->whereIn('id', $wanted)
-                ->get(['id', 'uuid', 'name', 'parent_id']);
+                ->get(['id', 'uuid', 'name', 'parent_id', 'folder_type']);
 
             $wanted = [];
             foreach ($rows as $folder) {
@@ -622,7 +624,7 @@ final class Hub
 
             while ($node && ! isset($seen[$node->id])) {
                 $seen[$node->id] = true;
-                array_unshift($trail, $node->name);
+                array_unshift($trail, FolderProvisioner::displayName($node));
                 $node = $node->parent_id ? ($index[$node->parent_id] ?? null) : null;
             }
 

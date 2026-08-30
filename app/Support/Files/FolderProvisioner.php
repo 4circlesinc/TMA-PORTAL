@@ -74,6 +74,25 @@ class FolderProvisioner
         return array_values(array_unique(array_merge([self::ROOT_CLIENTS], self::ROOT_CLIENTS_ALIASES)));
     }
 
+    /**
+     * The name every surface should print for this folder.
+     *
+     * The citizenship library has gone by Client, Clients and Client Files.
+     * Listings, breadcrumbs and Recent Files walk the stored name, so a root
+     * that has not been rewritten yet would keep advertising the old label.
+     * The folder's own name is still what it is; this is only what we show.
+     */
+    public static function displayName(Folder $folder): string
+    {
+        if ($folder->folder_type === Folder::TYPE_ROOT
+            && $folder->parent_id === null
+            && in_array($folder->name, self::clientsRootNames(), true)) {
+            return self::ROOT_CLIENTS;
+        }
+
+        return $folder->name;
+    }
+
     public static function staffRoot(): Folder
     {
         return self::ensureRoot(self::ROOT_STAFF);
