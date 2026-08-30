@@ -5143,7 +5143,12 @@
 
       /* ── versions ─────────────────────────────────── */
       var pick = e.target.closest('[data-lb-review-open]');
-      if (pick) { openReviewMenu(pick); return; }
+      if (pick) {
+        e.preventDefault();
+        e.stopPropagation();
+        openReviewMenu(pick);
+        return;
+      }
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
       if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }
@@ -6771,24 +6776,20 @@
    * nothing instead.
    */
   function reviewSubmenu(item, onDone) {
-    var current = (item.review || {}).status;
-    var next = (item.review && item.review.next) || null;
-    var overrides = (item.review && item.review.overrides) || [];
+    var current = documentReviewStatus(item) || (item.review || {}).status || '';
     var states = reviewStatesFor(item);
-    var any = staffMaySetAnyFileStatus(item);
 
     return states.map(function (s) {
       var isCurrent = s.id === current;
-      var isNext = any || !next || next.indexOf(s.id) !== -1;
-      var isOverride = overrides.indexOf(s.id) !== -1;
-      var allowed = isNext || isOverride;
 
       return {
         label: s.label,
         icon: s.icon,
-        note: isCurrent ? '✓' : (isOverride && !isCurrent ? 'Override' : ''),
-        disabled: !isCurrent && !allowed,
-        fn: (isCurrent || !allowed) ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
+        note: isCurrent ? '✓' : '',
+        fn: function () {
+          if (isCurrent) return;
+          setItemReviewStatus(item, s.id, onDone);
+        },
       };
     });
   }
@@ -7172,8 +7173,8 @@
     ctxSubEl = document.createElement('div');
     ctxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
     ctxSubEl.setAttribute('role', 'menu');
-    if (lb) ctxSubEl.style.zIndex = '701';
-    document.body.appendChild(ctxSubEl);
+    ctxSubEl.style.zIndex = '810';
+    (lb || document.body).appendChild(ctxSubEl);
 
     // Vertically off the entry, horizontally off the MENU: the entry sits
     // inside the menu's padding, so hanging the flyout off it left the two
@@ -7185,22 +7186,11 @@
     var fill = function (items) {
       if (sub !== ctxSubEl) return;
       sub.innerHTML = items.map(menuItemHtml).join('');
-      // Placed after filling: an empty flyout has no width, so there was
-      // nothing yet to measure against the window's edge.
-      // Left of the menu when the right will not hold it, rather than clamped
-      // back over the menu it belongs beside.
       var w = sub.offsetWidth;
       var right = menu.right + 2;
       var x = right + w + 8 <= window.innerWidth ? right : menu.left - w - 2;
       placeMenu(sub, x, box.top - 4);
-
-      sub.onclick = function (e) {
-        var b = e.target.closest('[data-ctx]');
-        if (!b || b.disabled) return;
-        var picked = items[parseInt(b.getAttribute('data-ctx'), 10)];
-        closeContextMenu();
-        if (picked && picked.fn) picked.fn();
-      };
+      bindMenuPicks(sub, items);
     };
 
     fill([{ label: 'Loading…', static: true }]);
@@ -7217,9 +7207,42 @@
    * application uuid, a menu that cannot assign anybody, which is how that
    * column's control came to look broken.
    */
+  /**
+   * Apply a menu pick on pointerdown, not click.
+   *
+   * Closing the menu on click lets the same gesture land on whatever was
+   * under it — the file viewer, the Approvals panel — so the status never
+   * ran. Pointerdown on the row itself is the choice; the later click is
+   * swallowed.
+   */
+  function bindMenuPicks(el, list) {
+    if (!el || el._picksBound) return;
+    el._picksBound = true;
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      var off = e.target.closest('[data-ctx-off]');
+      if (off) {
+        e.preventDefault();
+        e.stopPropagation();
+        var take = list[parseInt(off.getAttribute('data-ctx-off'), 10)];
+        closeContextMenu();
+        if (take && take.remove) take.remove();
+        return;
+      }
+      var b = e.target.closest('[data-ctx]');
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
+      if (picked && picked.submenu) { openCtxSub(b, picked); return; }
+      var fn = picked && picked.fn;
+      closeContextMenu();
+      if (fn) fn();
+    }, true);
+  }
+
   function openContextMenu(x, y, item, list) {
     closeContextMenu();
-    // Right-clicking an item selects just it, matching common file managers.
     if (item && item.id && !state.selected[item.id]) { /* keep multi-select if already selected */ }
 
     list = list || contextItems(item);
@@ -7227,33 +7250,11 @@
     ctxEl.className = 'tma-portal-context-menu';
     ctxEl.setAttribute('role', 'menu');
     ctxEl.innerHTML = list.map(menuItemHtml).join('');
-    document.body.appendChild(ctxEl);
+    (lb || document.body).appendChild(ctxEl);
     placeMenu(ctxEl, x, y);
-
-    // The menu is z-index 640, the file viewer is 600, opened from inside the
-    // viewer it lands *behind* it: in the DOM, readable, and entirely
-    // invisible. Always lift it above the viewer, including CIP overlays.
     ctxEl.style.zIndex = '800';
+    bindMenuPicks(ctxEl, list);
 
-    ctxEl.addEventListener('click', function (e) {
-      var off = e.target.closest('[data-ctx-off]');
-      if (off) {
-        var take = list[parseInt(off.getAttribute('data-ctx-off'), 10)];
-        closeContextMenu();
-        if (take && take.remove) take.remove();
-        return;
-      }
-      var b = e.target.closest('[data-ctx]');
-      if (!b || b.disabled) return;
-      var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
-      // A parent row only opens its flyout; it is not an action itself.
-      if (picked && picked.submenu) { openCtxSub(b, picked); return; }
-      closeContextMenu();
-      if (picked && picked.fn) picked.fn();
-    });
-
-    // Hovering a parent opens its flyout; hovering any other row closes it, so
-    // two can never be open at once.
     ctxEl.addEventListener('mouseover', function (e) {
       var b = e.target.closest('[data-ctx]');
       if (!b) return;
