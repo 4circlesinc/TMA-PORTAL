@@ -176,11 +176,31 @@ class CipDocumentFileStatusTest extends TestCase
                 'note' => 'The bio page is cropped. Please rescan.',
             ])
             ->assertOk()
-            ->assertJsonPath('status.label', 'Update required');
+            ->assertJsonPath('status.label', 'Update required')
+            ->assertJsonPath('updateReason', 'The bio page is cropped. Please rescan.')
+            ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
         $this->assertTrue($slot->comments()->exists(), 'The reason lands on the slot, where the checklist reads it.');
+        $this->assertDatabaseHas('file_comments', [
+            'file_id' => $file->id,
+            'body' => 'The bio page is cropped. Please rescan.',
+        ]);
+        $this->actingAs($staff)
+            ->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonFragment(['body' => 'The bio page is cropped. Please rescan.']);
         $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
+
+        $clientUid = $slot->application->fresh()->loadMissing('client')->client->uid;
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$clientUid.'/application')
+            ->assertOk()
+            ->json('application.applicant.documents');
+        $this->assertSame(
+            'The bio page is cropped. Please rescan.',
+            collect($docs)->firstWhere('id', $slot->uuid)['updateReason'] ?? null,
+        );
     }
 
     public function test_marking_update_required_on_the_library_chip_moves_the_application(): void

@@ -6519,6 +6519,57 @@
     return null;
   }
 
+  function reviewStateMeta(status) {
+    for (var i = 0; i < REVIEW_STATES.length; i++) {
+      if (REVIEW_STATES[i].id === status) {
+        return { id: status, label: REVIEW_STATES[i].label, tone: reviewTone(status) };
+      }
+    }
+
+    return { id: status, label: status, tone: reviewTone(status) };
+  }
+
+  function applyReviewToItem(item, status, note) {
+    var meta = reviewStateMeta(status);
+    var nextNote = status === 'update_required'
+      ? (note || (item.review && item.review.note) || '')
+      : '';
+    item.review = Object.assign({}, item.review || {}, {
+      status: status,
+      label: meta.label,
+      note: nextNote || null,
+    });
+    item.status = { status: status, label: meta.label, tone: meta.tone };
+  }
+
+  function paintFileStatusEverywhere(fileId, item) {
+    if (!fileId || !item || !item.status) return;
+    var s = item.status;
+    var tone = s.tone || 'neutral';
+    var nodes = document.querySelectorAll(
+      '[data-files-status="' + fileId + '"], [data-cip-file-status="' + fileId + '"], [data-clients-file-status="' + fileId + '"]'
+    );
+    Array.prototype.forEach.call(nodes, function (el) {
+      el.className = String(el.className || '').replace(/tma-portal-status--[a-z-]+/g, '').trim();
+      if (el.className.indexOf('tma-portal-status') === -1) el.className += (el.className ? ' ' : '') + 'tma-portal-status';
+      el.className += ' tma-portal-status--' + tone + ' tma-portal-status--inline';
+      if (el.className.indexOf('tma-file-status-chip') === -1) el.className += ' tma-file-status-chip';
+      el.textContent = s.label || '';
+      if (el.hasAttribute('data-cip-file-status-value')) {
+        el.setAttribute('data-cip-file-status-value', s.status || '');
+        el.setAttribute('data-cip-file-status-label', s.label || '');
+        el.setAttribute('data-cip-file-status-tone', tone);
+      }
+      el.setAttribute('aria-label', 'Change status, currently ' + (s.label || ''));
+    });
+  }
+
+  function emitFileReview(detail) {
+    try {
+      window.dispatchEvent(new CustomEvent('tma:file-review', { detail: detail }));
+    } catch (err) { /* CustomEvent missing */ }
+  }
+
   /**
    * Move a document to a review state.
    *
@@ -6526,22 +6577,34 @@
    * refuses one without it, and finding that out through an error message
    * after the click would be the interface hiding a rule it could have just
    * asked about. Every other move goes straight through.
+   *
+   * The chip paints before the request returns: waiting on mail and a
+   * refetch made a click feel like it had done nothing.
    */
   function setItemReviewStatus(item, status, onDone) {
     var send = function (note) {
+      var previous = { review: item.review, status: item.status };
+      applyReviewToItem(item, status, note);
+      paintFileStatusEverywhere(item.id, item);
+      emitFileReview({ file: item, status: status, note: note || '', optimistic: true });
+
       net().fetchJSON(net().url('/files/' + encodeURIComponent(item.id) + '/review'), {
         method: 'PATCH',
         json: { status: status, note: note || '' },
       })
         .then(function (res) {
-          // Written back onto the row the caller holds, so a list that keeps
-          // its own copy is not left showing the badge this just changed.
           item.review = (res && res.file && res.file.review) || item.review;
           item.status = (res && res.file && res.file.status) || item.status;
+          paintFileStatusEverywhere(item.id, item);
+          emitFileReview({ file: item, status: status, note: note || '', response: res });
           if (onDone) onDone(res);
           ui().toast('Status updated.');
         })
         .catch(function (err) {
+          item.review = previous.review;
+          item.status = previous.status;
+          paintFileStatusEverywhere(item.id, item);
+          emitFileReview({ file: item, rollback: true });
           ui().toast((err && err.message) || 'Could not update the status.', false);
         });
     };

@@ -303,8 +303,12 @@ class Timeline
             return "{$who} changed {$label}";
         }
 
+        $reason = trim((string) ($meta['note'] ?? ''));
+
         return match ($to) {
-            DocumentStatus::UPDATE_REQUIRED => "{$who} sent back {$label}",
+            DocumentStatus::UPDATE_REQUIRED => $reason !== ''
+                ? "{$who} sent back {$label}: {$reason}"
+                : "{$who} sent back {$label}",
             DocumentStatus::READY_FOR_SUBMISSION => "{$who} approved {$label}",
             // The only way into review is a file arriving: both edges the
             // engine allows into it come from an upload.

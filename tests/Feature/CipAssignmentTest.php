@@ -331,7 +331,7 @@ class CipAssignmentTest extends TestCase
          * the subject carries — so the format is pinned literally, not "some
          * subject mentioning the number".
          */
-        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($application) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
             $expected = 'AA - REVIEW APPLICATION - '.$application->displayNumber()
                 .' - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
@@ -380,8 +380,8 @@ class CipAssignmentTest extends TestCase
          * to every named class; none of those copies is the client-assignment
          * welcome.
          */
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
         $this->assertDatabaseMissing('email_deliveries', [
             'template' => 'staffAssignedToClient',
         ]);

@@ -65,7 +65,10 @@ class Notices
         foreach (Contacts::notices($application) as $recipient) {
             $card = self::postcard($application, $facts, $to, $url, $actor, $initials, $recipient['name']);
 
-            Deliveries::send($card, $recipient['email'], $application, $template, immediate: true);
+            // Queue: a status click must not wait on the mailbox. Walking
+            // Assessment feedback then Updates Required would otherwise send
+            // eight letters before the chip could move.
+            Deliveries::send($card, $recipient['email'], $application, $template);
 
             if ($recipient['userId'] === null) {
                 continue;

@@ -13,6 +13,9 @@ use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Package;
 use App\Support\Cip\Review as CipReview;
+use App\Support\Cip\DocumentComments;
+use App\Support\Cip\Status;
+use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Presenter;
 use App\Support\Files\ReviewStatus;
@@ -57,11 +60,29 @@ class FileReviewController extends BaseFilesController
         $this->applyTo($user, $file, $to, $note, $slot);
 
         $presented = (new Presenter($user))->file($file->fresh());
-
-        return response()->json([
+        $payload = [
             'status' => $presented['status'] ?? ReviewStatus::badge($to),
             'file' => $presented,
-        ]);
+        ];
+
+        if ($slot) {
+            $slot->refresh()->loadMissing(['application.client']);
+            $application = $slot->application;
+            if ($application) {
+                $payload['application'] = [
+                    'id' => $application->uuid,
+                    'clientUid' => $application->client?->uid,
+                    'status' => $application->status,
+                    'statusLabel' => Status::label($application->status),
+                    'statusTone' => Status::tone($application->status),
+                ];
+            }
+            if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {
+                $payload['updateReason'] = $note;
+            }
+        }
+
+        return response()->json($payload);
     }
 
     /**
@@ -126,14 +147,20 @@ class FileReviewController extends BaseFilesController
             // chip. Asking the provider for a replacement still has nowhere
             // to land, so that verdict stays refused; the working label does not.
             $frozen = Package::locksDocument($slot);
+            $wroteSlotReason = false;
 
             if (! $frozen && $officer && $to === DocumentStatus::UPDATE_REQUIRED) {
                 CipReview::requestChanges($slot, $user, $note);
+                $wroteSlotReason = true;
             } elseif (! $frozen && $officer && $to === DocumentStatus::READY_FOR_SUBMISSION
                 && DocumentEngine::canTransition($slot, $to)) {
                 CipReview::approve($slot, $user);
             } else {
                 DocumentEngine::set($slot, $to, $user, $meta);
+            }
+
+            if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '' && ! $wroteSlotReason) {
+                DocumentComments::create($slot, $user, $note);
             }
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -150,6 +177,17 @@ class FileReviewController extends BaseFilesController
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(),
             ])->save();
+
+            // Workflows → Feedback and Comments lists file threads, not the
+            // slot conversation. Mirror the reason there so it is not only
+            // on the checklist.
+            if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {
+                try {
+                    Comments::create($file, $user, $note);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
         }
     }
 
@@ -170,6 +208,14 @@ class FileReviewController extends BaseFilesController
             'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ])->save();
+
+        if ($to === ReviewStatus::UPDATE_REQUIRED && $note !== '') {
+            try {
+                Comments::create($file, $user, $note);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         ActivityLogger::log([
             'actor' => $user,

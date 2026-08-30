@@ -19,6 +19,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
+use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -1433,6 +1434,9 @@ class CipApplicationController extends Controller
             $presenter->viewer(),
             $person->documents->map(fn ($slot) => $slot->file?->id)->filter()->all()
         );
+        $updateReasons = DocumentComments::latestOpenBodies(
+            $person->documents->pluck('id')->all()
+        );
 
         return [
             'id' => $person->uuid,
@@ -1483,11 +1487,14 @@ class CipApplicationController extends Controller
                     $slot->id,
                 ])
                 ->values()
-                ->map(function ($slot) use ($slotComments, $phase, $presenter) {
+                ->map(function ($slot) use ($slotComments, $phase, $presenter, $updateReasons) {
                     DocumentSlots::reconcile($slot, null, false);
                     $slot->refresh();
                     $slot->loadMissing('file');
                     $status = $slot->displayStatus();
+                    $reason = $status === DocumentStatus::UPDATE_REQUIRED
+                        ? ($updateReasons[$slot->id] ?? $slot->file?->review_note)
+                        : null;
 
                     return [
                         'id' => $slot->uuid,
@@ -1509,6 +1516,7 @@ class CipApplicationController extends Controller
                         'status' => $status,
                         'statusLabel' => DocumentStatus::label($status),
                         'statusTone' => DocumentStatus::tone($status),
+                        'updateReason' => $reason ? (string) $reason : null,
                         'canReview' => Role::isStaff($presenter->viewer()),
                         'fileId' => $slot->isFilled() ? $slot->file?->uuid : null,
                         // The same chip the File Library and the Documents tab

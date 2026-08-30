@@ -4411,6 +4411,133 @@
     return true;
   }
 
+  function cipStatusMeta(value) {
+    var i;
+    for (i = 0; i < CIP_STATUSES.length; i++) {
+      if (CIP_STATUSES[i].value === value) return CIP_STATUSES[i];
+    }
+    return null;
+  }
+
+  function cipFileStatusMeta(value) {
+    if (value === 'update_required') return { label: 'Update required', tone: 'danger' };
+    if (value === 'ready_for_submission') return { label: 'Ready for submission', tone: 'success' };
+    if (value === 'application_review') return { label: 'Application review', tone: 'pending' };
+    if (value === 'pending_upload') return { label: 'Pending upload', tone: 'neutral' };
+    return { label: value, tone: 'neutral' };
+  }
+
+  function cipCanRollToUpdatesRequired(status) {
+    return status === 'new'
+      || status === 'review_application'
+      || status === 'assessment_feedback'
+      || status === 'ready_to_submit';
+  }
+
+  function applyCipStatusFields(record, to, extra) {
+    if (!record) return;
+    var meta = cipStatusMeta(to);
+    record.status = to;
+    record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
+    record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
+    if (extra) {
+      ['availableTransitions', 'availableOverrides', 'locked', 'canConfirm', 'submittedAt', 'phase', 'phaseLabel']
+        .forEach(function (k) {
+          if (extra[k] !== undefined) record[k] = extra[k];
+        });
+    }
+  }
+
+  function paintCipApplicationStatus(clientUid, to, extra) {
+    var app = applicationFor(clientUid);
+    if (app) {
+      app._statusPending = true;
+      applyCipStatusFields(app, to, extra);
+      rememberApplication(clientUid, app);
+    }
+    (APP_TABLE.rows || []).forEach(function (row) {
+      if (row.clientUid === clientUid || (app && row.id === app.id)) {
+        applyCipStatusFields(row, to, extra);
+      }
+    });
+  }
+
+  function cipDocForFile(app, fileId) {
+    if (!app || !fileId) return null;
+    var people = cipFamily(app);
+    var i;
+    var j;
+    var docs;
+    for (i = 0; i < people.length; i++) {
+      docs = (people[i] && people[i].documents) || [];
+      for (j = 0; j < docs.length; j++) {
+        if (docs[j].fileId === fileId || (docs[j].file && docs[j].file.id === fileId)) {
+          return docs[j];
+        }
+      }
+    }
+    return null;
+  }
+
+  function applyCipFileReviewLocally(detail) {
+    var file = detail && detail.file;
+    var fileId = file && file.id;
+    if (!fileId) return;
+    var status = detail.status || (file.status && file.status.status);
+    var note = detail.note || (file.review && file.review.note) || '';
+    var clientUid = null;
+    var app = null;
+
+    Object.keys(APPLICATIONS).forEach(function (id) {
+      if (cipDocForFile(APPLICATIONS[id], fileId)) {
+        clientUid = id;
+        app = APPLICATIONS[id];
+      }
+    });
+    if (!app) return;
+
+    if (detail.rollback) {
+      app._statusPending = false;
+      forgetApplication(clientUid);
+      if (clientsMountState && clientsMountState.selectedId === clientUid) {
+        clientsMountState.applicationFreshFor = null;
+        ensureApplicationLoaded(clientsMountState, repaintClients);
+      }
+      return;
+    }
+
+    var doc = cipDocForFile(app, fileId);
+    var meta = cipFileStatusMeta(status);
+    if (doc && status) {
+      doc.status = status;
+      doc.statusLabel = (file.status && file.status.label) || meta.label;
+      doc.statusTone = (file.status && file.status.tone) || meta.tone;
+      doc.updateReason = status === 'update_required' ? (note || doc.updateReason || null) : null;
+    }
+
+    if (status === 'update_required' && cipCanRollToUpdatesRequired(app.status)) {
+      paintCipApplicationStatus(clientUid, 'update_required');
+    }
+    if (detail.response && detail.response.application) {
+      paintCipApplicationStatus(clientUid, detail.response.application.status, detail.response.application);
+    }
+
+    app._statusPending = true;
+    rememberApplication(clientUid, app);
+
+    (clientFolderFiles || []).forEach(function (row) {
+      if (row.id === fileId) {
+        row.status = file.status;
+        row.review = file.review;
+      }
+    });
+
+    var ctx = clientsMenuCtx;
+    var state = (ctx && ctx.state) || clientsMountState;
+    var render = (ctx && ctx.render) || repaintClients;
+    if (state && render) render({ forceFull: true });
+  }
+
   function canChangeCipPersonStatus(app, person) {
     if (!app || app.phase !== 'post_approval') return false;
     if (isExternalCipUser()) return false;
@@ -6059,6 +6186,25 @@
     );
   }
 
+  function renderOverviewUpdateReasonsCard(app) {
+    var rows = [];
+    cipFamily(app).forEach(function (p) {
+      ((p && p.documents) || []).forEach(function (d) {
+        if (d.status !== 'update_required' || !d.updateReason) return;
+        rows.push(overviewRow(
+          (p.name ? p.name + ' · ' : '') + (d.label || 'Document'),
+          d.updateReason
+        ));
+      });
+    });
+    if (!rows.length) return '';
+
+    return companyCard('Updates required', overviewList(rows.join('')), {
+      half: true,
+      count: rows.length,
+    });
+  }
+
   function overviewDocCount(app) {
     var filed = 0;
     var total = 0;
@@ -6111,6 +6257,7 @@
         half: true, count: overviewDocCount(app),
       }) +
       companyCard('Document status', renderOverviewDocStatus(app), { half: true }) +
+      renderOverviewUpdateReasonsCard(app) +
       companyCard('Assigned', renderOverviewAssigned(app), {
         half: true, count: Array.isArray(app.assignedTo) ? app.assignedTo.length : 0,
       });
@@ -6703,12 +6850,16 @@
       ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
         esc(d.fileId) + '" title="Open the filed document">' + thumb + name + '</button>' + chip
       : thumb + name + chip;
+    var reason = (d.status === 'update_required' && d.updateReason)
+      ? '<p class="tma-dash__clients-checklist-reason">' + esc(d.updateReason) + '</p>'
+      : '';
 
     return (
       '<li class="tma-dash__clients-checklist-row">' +
       '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
       ' disabled tabindex="-1" aria-hidden="true">' +
       body +
+      reason +
       '</li>'
     );
   }
@@ -7144,6 +7295,9 @@
           '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
             clientCommentChip(f) + clientStatusChip(f) + '</span>' +
           (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
+          (f.review && f.review.note && ((f.review.status || (f.status && f.status.status)) === 'update_required')
+            ? '<span class="tma-dash__clients-folder-reason">' + esc(f.review.note) + '</span>'
+            : '') +
         '</span></button>';
     });
     canvas.innerHTML = html;
@@ -9780,14 +9934,31 @@
     var leftoverDraft = to === 'new' && source && source.status === 'draft';
     var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
       (leftoverDraft ? '/submit' : '/status');
+    var previous = source ? {
+      status: source.status,
+      statusLabel: source.statusLabel,
+      statusTone: source.statusTone,
+    } : null;
+
+    if (clientUid) paintCipApplicationStatus(clientUid, to, { statusLabel: label });
+    if (state && render) render({ forceFull: true });
 
     clientsFetch(url, leftoverDraft ? { method: 'POST' } : { method: 'POST', json: { status: to } })
-      .then(function () {
+      .then(function (json) {
         clientsToast('Moved to ' + (label || 'the next status'), 'positive');
+        if (clientUid && json && json.application) {
+          paintCipApplicationStatus(clientUid, json.application.status, json.application);
+        }
         refreshAfterCipMove(clientUid);
       })
       .catch(function (err) {
+        if (clientUid && previous) {
+          paintCipApplicationStatus(clientUid, previous.status, previous);
+          var held = applicationFor(clientUid);
+          if (held) held._statusPending = false;
+        }
         clientsToast((err && err.message) || 'Could not change the status.', 'negative');
+        if (state && render) render({ forceFull: true });
       });
   }
 
@@ -11934,8 +12105,10 @@
        * a file we are about to read for real.
        */
       if (meta && meta.stale && !next) return;
+      if (meta && meta.stale && APPLICATIONS[id] && APPLICATIONS[id]._statusPending) return;
 
       if (next) {
+        if (next._statusPending) delete next._statusPending;
         rememberApplication(id, next);
       } else if (isCipApplicant(id) || isApplicationProfile(APPLICATIONS[id])) {
         // Keep the file that is on screen. Absence is not "this is a client".
@@ -13005,6 +13178,10 @@
 
     if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
     clientsMountRoot._clientsController.syncRoute(parseClientsPath(window.location.pathname));
+  });
+
+  window.addEventListener('tma:file-review', function (e) {
+    applyCipFileReviewLocally(e.detail || {});
   });
 
   window.TMAClients = {

@@ -404,6 +404,10 @@
     var files = state.documents[path] || [];
     var meta = state.filedMeta[path];
     var locked = meta && meta.uploaded && meta.status !== 'update_required';
+    var updateReason = meta && meta.status === 'update_required' && meta.updateReason
+      ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' +
+        esc(meta.updateReason) + '</p>'
+      : '';
 
     if (locked) {
       var lockedFile = meta.fileId
@@ -427,6 +431,7 @@
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
       (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
       fieldLabel(path, labelFor(path)) +
+      updateReason +
       '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
       '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
@@ -1360,6 +1365,7 @@
           uploaded: !!slot.uploaded,
           status: slot.status || 'pending_upload',
           statusLabel: slot.statusLabel || '',
+          updateReason: slot.updateReason || '',
           fileId: slot.fileId || null,
           fileName: slot.fileName || null,
           fileSize: slot.fileSize || null,

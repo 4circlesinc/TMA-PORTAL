@@ -18738,6 +18738,14 @@ button.tma-file-status-chip:focus-visible,
   color: var(--color-text-secondary);
 }
 
+.tma-dash__clients-folder-reason {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-red);
+}
+
 .tma-dash__clients-folder-count {
   display: inline-flex;
   align-items: center;
@@ -35581,6 +35589,7 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__clients-checklist-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-8);
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -35697,6 +35706,14 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__clients-checklist-optional {
   font-size: var(--text-size-12);
   color: var(--color-text-secondary);
+}
+
+.tma-dash__clients-checklist-reason {
+  flex: 1 0 100%;
+  margin: 0 0 0 calc(18px + var(--space-8) + 28px + var(--space-8));
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-16);
+  color: var(--color-red);
 }
 
 .tma-dash__clients-checklist-block {

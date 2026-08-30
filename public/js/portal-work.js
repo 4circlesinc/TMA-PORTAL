@@ -345,6 +345,9 @@
 
     var chips = '';
     if (c.mentionsMe) chips += '<span class="tma-portal-status tma-portal-status--action">Mentioned you</span>';
+    if (c.file && c.file.reviewStatus === 'update_required') {
+      chips += '<span class="tma-portal-status tma-portal-status--danger">Update required</span>';
+    }
     if (c.resolved) chips += '<span class="tma-portal-status tma-portal-status--success">Resolved</span>';
     else if (!c.isReply) chips += '<span class="tma-portal-status tma-portal-status--pending">Open</span>';
 

@@ -97,6 +97,7 @@ class Review
                 DocumentEngine::apply($document, DocumentStatus::UPDATE_REQUIRED, $actor, [
                     'reason' => 'changes_requested',
                     'comment' => $note->uuid,
+                    'note' => $reason,
                 ]);
             }
 

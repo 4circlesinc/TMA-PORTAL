@@ -978,6 +978,17 @@
 }
 .tma-portal-drop__locked-note strong { font-weight: 500; color: var(--color-text-secondary); }
 
+.tma-portal-drop__update-reason {
+  margin: 0 0 var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-red) 10%, transparent);
+  color: var(--color-red);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-16);
+}
+.tma-portal-drop__update-reason strong { font-weight: 600; }
+
 .tma-portal-drop.is-invalid .tma-portal-drop__zone { border-color: var(--color-red); }
 
 /*

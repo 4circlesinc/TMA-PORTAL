@@ -163,7 +163,7 @@ class CipLettersTest extends TestCase
 
         $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected
                 && $mail->payload['title'] === '10T1G12661P — real estate granted'
                 && $mail->payload['lead'] === 'Citizenship granted to Chen Wei on the Real Estate Project route. Family F1.';
@@ -193,7 +193,7 @@ class CipLettersTest extends TestCase
             ])
             ->assertOk();
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
             $body = $mail->payload['bodyHtml'] ?? '';
 
             return str_contains($mail->payload['lead'], 'congratulations')
@@ -217,7 +217,7 @@ class CipLettersTest extends TestCase
             ])
             ->assertOk();
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
             $body = $mail->payload['bodyHtml'] ?? '';
 
             return str_starts_with($mail->subjectLine, 'AA - DENIED -')
@@ -242,7 +242,7 @@ class CipLettersTest extends TestCase
             ])
             ->assertOk();
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
             $body = $mail->payload['bodyHtml'] ?? '';
 
             return $mail->payload['title'] === '10T1G12661P was granted'

@@ -14,6 +14,7 @@ use App\Support\Cip\Assignments;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Timeline;
@@ -173,6 +174,22 @@ class CipTimelineTest extends TestCase
         $this->assertContains('Rita Officer sent back Police certificate', $lines);
         $this->assertContains('Rita Officer approved Police certificate', $lines);
         $this->assertContains('Ada Admin uploaded Police certificate', $lines);
+    }
+
+    public function test_sending_a_document_back_names_the_reason(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $application = $this->application($admin);
+        $document = $this->document($application, 'Police certificate');
+
+        DocumentEngine::apply($document, DocumentStatus::APPLICATION_REVIEW, $admin);
+        Review::requestChanges($document->fresh(), $rita, 'The stamp is not visible.');
+
+        $this->assertContains(
+            'Rita Officer sent back Police certificate: The stamp is not visible.',
+            $this->lines($application, $admin),
+        );
     }
 
     public function test_an_action_nobody_has_taught_it_still_reads_as_something(): void

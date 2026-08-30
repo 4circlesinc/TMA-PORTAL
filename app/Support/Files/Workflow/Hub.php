@@ -150,7 +150,7 @@ final class Hub
                 // Not withTrashed: a comment on a binned file loads a null
                 // file and drops out below. The bin is where that history
                 // belongs, not somebody's open-work list.
-                'file:id,uuid,name,extension,folder_id,owner_id',
+                'file:id,uuid,name,extension,folder_id,owner_id,review_status',
             ]);
 
         if ($scope !== self::COMMENTS_ALL) {
@@ -312,7 +312,7 @@ final class Hub
                 'version:id,version_number',
                 'supersededByVersion:id,version_number',
                 'steps.user:id,name,email,avatar_url,provider_avatar_url',
-                'file:id,uuid,name,extension,folder_id,owner_id',
+                'file:id,uuid,name,extension,folder_id,owner_id,review_status',
             ]);
 
         match ($scope) {
@@ -576,6 +576,7 @@ final class Hub
             // are required: the browser loads a folder, then looks for the file
             // inside the folder it just loaded.
             'folderId' => $paths['uuid:'.$file->folder_id] ?? null,
+            'reviewStatus' => $file->review_status,
         ];
     }
 

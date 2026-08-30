@@ -124,14 +124,14 @@ class CipDelayTest extends TestCase
 
         $expected = 'RO - DELAYED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected
                 && $mail->hasTo('ada@example.com');
         });
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
-        Mail::assertSent(Postcard::class, 4);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+        Mail::assertQueued(Postcard::class, 4);
 
         foreach ([$admin, $officer, $contact] as $user) {
             $this->assertDatabaseHas('portal_notifications', [
@@ -152,7 +152,7 @@ class CipDelayTest extends TestCase
 
         $this->assertSame(Status::DELAYED, $application->fresh()->status);
         $this->assertSame($events, CipEvent::count(), 'a second tick wrote another event');
-        Mail::assertSent(Postcard::class, $mails);
+        Mail::assertQueued(Postcard::class, $mails);
         $this->assertSame(3, Notification::where('type', 'cip.delayed')->count());
     }
 

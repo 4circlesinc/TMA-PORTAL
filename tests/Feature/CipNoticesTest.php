@@ -159,11 +159,11 @@ class CipNoticesTest extends TestCase
             .' - CHEN WEI (F1) - 18.08.2026';
 
         foreach (['ada@example.com', 'rita@example.com', 'gil@galaxy.example', 'notices@galaxy.example', 'kim@dist.example'] as $mailbox) {
-            Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $expected
+            Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $expected
                 && $mail->hasTo($mailbox));
         }
 
-        Mail::assertSentCount(5);
+        Mail::assertQueuedCount(5);
     }
 
     public function test_a_status_change_is_one_notice_per_recipient(): void
@@ -182,8 +182,8 @@ class CipNoticesTest extends TestCase
 
         Engine::apply($application->fresh(), Status::DELAYED, null);
 
-        Mail::assertSentCount(1);
-        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($application) {
+        Mail::assertQueuedCount(1);
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
             return $mail->subjectLine === 'DELAYED - '.$application->displayNumber()
                 .' - CHEN WEI (F1) - 18.08.2026'
                 && $mail->hasTo('ada@example.com');

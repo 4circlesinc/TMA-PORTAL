@@ -313,7 +313,7 @@ class CipDecisionTest extends TestCase
             '',
             $this->cipDecisionLetterPdf(),
         );
-        $mails = count(Mail::sent(Postcard::class));
+        $mails = count(Mail::queued(Postcard::class));
         $this->assertGreaterThan(0, $mails);
 
         $this->postCipDecision($staff, $application->uuid, [
@@ -334,7 +334,7 @@ class CipDecisionTest extends TestCase
             ->where('application_id', $application->id)
             ->where('action', CipEvent::ACTION_DECISION_RECORDED)
             ->count());
-        Mail::assertSent(Postcard::class, $mails);
+        Mail::assertQueued(Postcard::class, $mails);
     }
 
     public function test_an_approved_file_cannot_be_flipped_to_denied(): void
@@ -388,15 +388,15 @@ class CipDecisionTest extends TestCase
 
         $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
 
-        Mail::assertSent(Postcard::class, function (Postcard $mail) use ($expected) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected
                 && $mail->hasTo('ada@example.com')
                 && str_contains($mail->payload['lead'], 'granted')
                 && $mail->attachment instanceof FileItem;
         });
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
-        Mail::assertSent(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
 
         // The actor is not bell'd about their own recording; the postcard is
         // how they see it on the audit trail. The other two classes get both.

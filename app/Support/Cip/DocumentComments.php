@@ -169,4 +169,38 @@ class DocumentComments
             ->map(fn ($n) => (int) $n)
             ->all();
     }
+
+    /**
+     * The latest open reason on each slot, for the checklist and Overview.
+     *
+     * One query for the family rather than one per row: a main applicant
+     * owes a dozen documents, and the reason has to ride with the chip.
+     *
+     * @param  array<int, int>  $documentIds
+     * @return array<int, string>  document id => body
+     */
+    public static function latestOpenBodies(array $documentIds): array
+    {
+        $documentIds = array_values(array_filter(array_map('intval', $documentIds)));
+        if ($documentIds === []) {
+            return [];
+        }
+
+        $latestIds = CipDocumentComment::query()
+            ->selectRaw('MAX(id) as id')
+            ->whereIn('document_id', $documentIds)
+            ->whereNull('parent_id')
+            ->whereNull('resolved_at')
+            ->groupBy('document_id')
+            ->pluck('id');
+
+        if ($latestIds->isEmpty()) {
+            return [];
+        }
+
+        return CipDocumentComment::query()
+            ->whereIn('id', $latestIds)
+            ->pluck('body', 'document_id')
+            ->all();
+    }
 }
