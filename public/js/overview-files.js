@@ -380,7 +380,11 @@
     window.location.assign(root + '/folders?folder=' + encodeURIComponent(folderId));
   }
 
-  function openFilePreview(row) {
+  function openFilePreview(row, onChange) {
+    if (window.TMAFileActions && window.TMAFileActions.open) {
+      window.TMAFileActions.open(row, onChange || function () {});
+      return;
+    }
     var url = row.previewUrl || row.downloadUrl;
     if (!url) return;
     if (window.TMAPortalLightbox) {
@@ -696,7 +700,7 @@
           if (e.target.closest('[data-files-row-more], [data-files-uploader-photo], [data-files-open-folder]')) return;
           e.preventDefault();
           var row = rowById(rowEl.getAttribute('data-id'));
-          if (row) openFilePreview(row);
+          if (row) openFilePreview(row, reloadFiles);
         });
 
         body.addEventListener('contextmenu', function (e) {

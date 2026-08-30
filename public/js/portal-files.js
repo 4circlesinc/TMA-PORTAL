@@ -307,14 +307,35 @@
   }
 
   /**
+   * The File Library page the reader is actually looking at, not merely the
+   * mount node still sitting in the DOM.
+   *
+   * Views stay in the document when the reader leaves them (they are hidden,
+   * not unmounted), so `document.contains(state.el)` is true on CIP, the
+   * Dashboard, a client folder — everywhere this menu is borrowed. Treating
+   * that as "this view is on screen" made every rename, delete and status
+   * change from those lists look like it had done nothing: the library
+   * re-rendered behind a hidden attribute, and the list that raised the menu
+   * was never told.
+   */
+  function libraryViewOnScreen() {
+    if (!state.el || !state.el.isConnected) return false;
+    var view = state.el.closest('.tma-dash__view');
+    if (view && view.hasAttribute('hidden')) return false;
+    return true;
+  }
+
+  /**
    * Tell an external list its rows may have changed.
    *
-   * Only when this view is not the one on screen, otherwise every ordinary
-   * re-render inside the File Library would also poke the dashboard.
+   * Skip only when the File Library itself is the visible page and nothing
+   * is open over it — an ordinary re-render in here must not poke the
+   * Dashboard. With the viewer open, or with this view hidden, the caller
+   * that handed us the row is the one that has to refresh.
    */
   function notifyExternal() {
     if (!externalOnChange) return;
-    if (state.el && document.body.contains(state.el)) return;
+    if (libraryViewOnScreen() && !lb) return;
     externalOnChange();
   }
   function selectedIds() { return Object.keys(state.selected); }
@@ -728,6 +749,22 @@
     return it;
   }
 
+  /* A PATCH/bulk response applied to every copy we hold — the library row,
+     a caller's row, and the name in the open viewer — so a rename from CIP
+     does not leave the lightbox still saying the old name. */
+  function applyServerItem(updated) {
+    if (!updated || !updated.id) return null;
+    var held = updateItem(updated.id, updated) || updated;
+    if (lb && state.openFile === updated.id && updated.name) {
+      var nameEl = lb.querySelector('.tma-portal-viewer__name');
+      if (nameEl) {
+        nameEl.textContent = updated.name;
+        nameEl.setAttribute('title', updated.name);
+      }
+    }
+    return held;
+  }
+
   // The page's own scroll container (.tma-dash__main) is never part of the
   // innerHTML that render() replaces, so it already keeps its scroll
   // position across a render() call - this just makes that guarantee
@@ -757,13 +794,18 @@
   }
 
   // Turn an item's name into an inline editable field. Enter or clicking away
-  // keeps the name; Escape reverts. No modal, no right-click.
+  // keeps the name; Escape reverts. No modal, no right-click — except when
+  // there is no row to type into: the viewer covers the listing, CIP and
+  // the Dashboard never have one, and a silent no-op from Rename is how
+  // this menu used to look broken everywhere except the File Library table.
   function startRename(id) {
     if (isBusy(id)) return;
     var it = findItem(id);
-    if (!it || !perm(it, 'rename') || !state.el) return;
-    var nameEl = state.el.querySelector('[data-files-row][data-id="' + id + '"] [data-files-name="' + id + '"]');
-    if (!nameEl) return;
+    if (!it || !perm(it, 'rename')) return;
+    var nameEl = (!lb && libraryViewOnScreen())
+      ? state.el.querySelector('[data-files-row][data-id="' + id + '"] [data-files-name="' + id + '"]')
+      : null;
+    if (!nameEl) { renameModal(it); return; }
 
     var input = document.createElement('input');
     input.type = 'text';
@@ -806,9 +848,9 @@
     net().fetchJSON(net().url(url), { method: 'PATCH', json: { name: next } })
       .then(function (updated) {
         setBusy(it.id, false);
+        applyServerItem(updated);
         var list = it.type === 'folder' ? state.data.folders : state.data.files;
-        for (var i = 0; i < list.length; i++) { if (list[i].id === it.id) { list[i] = updated; break; } }
-        sortList(list);
+        if (list && list.length) sortList(list);
         rerender();
         if (it.type === 'folder') foldersChanged();
       })
@@ -5558,9 +5600,18 @@
      * entries that only make sense inside the viewer.
      */
     function openViewerMenu(anchor, f) {
+      var shown = stageFile(f);
       var list = contextItems(f).filter(function (it) {
         // "Preview" is meaningless here: the file is already open.
         return it.label !== 'Preview';
+      }).map(function (it) {
+        // Download the revision on the stage, not always the live file —
+        // Preview of an older version already put those bytes in front of
+        // the reader, and the toolbar Download already follows that.
+        if (it.label === 'Download') {
+          return Object.assign({}, it, { fn: function () { downloadItem(shown); } });
+        }
+        return it;
       });
       list.push({ sep: true });
       list.push({
@@ -5877,7 +5928,7 @@
   }
 
   function renameModal(item) {
-    ui().openModal({
+    var host = ui().openModal({
       title: 'Rename ' + (item.type === 'folder' ? 'folder' : 'file'),
       body: '<div class="tma-portal-field"><span class="tma-portal-field__label">Name</span>' +
         ui().input({ value: item.name, attrs: 'data-rename-name maxlength="255"' }) + '</div>' +
@@ -5893,9 +5944,9 @@
           var url = item.type === 'folder' ? '/folders/' + item.id : '/files/' + item.id;
           net().fetchJSON(net().url(url), { method: 'PATCH', json: { name: name } })
             .then(function (updated) {
+              applyServerItem(updated);
               var list = item.type === 'folder' ? state.data.folders : state.data.files;
-              for (var i = 0; i < list.length; i++) { if (list[i].id === item.id) { list[i] = updated; break; } }
-              sortList(list);
+              if (list && list.length) sortList(list);
               ui().closeModal();
               ui().toast('Renamed');
               if (item.type === 'folder') foldersChanged();
@@ -5907,6 +5958,7 @@
         inputEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
       },
     });
+    if (lb && host) host.style.zIndex = '800';
   }
 
   /*
@@ -6263,7 +6315,8 @@
   function downloadItem(item) {
     var url = item.type === 'folder'
       ? net().url('/folders/' + item.id + '/download')
-      : item.downloadUrl;
+      : (item.downloadUrl || net().url('/files/' + encodeURIComponent(item.id) + '/download'));
+    if (!url) { ui().toast('This file can’t be downloaded'); return; }
     var a = document.createElement('a');
     a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
   }
@@ -6424,11 +6477,12 @@
   function openShareUi(item, mode) {
     var need = mode === 'assign' ? 'assign' : 'share';
     if (!perm(item, need)) { ui().toast('You can’t ' + (mode === 'assign' ? 'assign' : 'share') + ' this item'); return; }
-    ui().openModal({
+    var host = ui().openModal({
       title: (mode === 'assign' ? 'Assign “' : 'Share “') + item.name + '”',
       body: '<div class="tma-portal-share" data-share-body>' + ui().loading({ count: 3 }) + '</div>',
       onMount: function (host) { loadShareAccess(host, item, mode); },
     });
+    if (lb && host) host.style.zIndex = '800';
   }
 
   function loadShareAccess(host, item, mode) {
@@ -6626,6 +6680,14 @@
   }
 
   function sendForSignature(item) {
+    if (!window.TMAPortalSignatures || !window.TMAPortalSignatures.sendFileForSignature) {
+      ui().toast('Signing isn’t available here');
+      return;
+    }
+    // The wizard lives on the Signatures view. Leaving the lightbox up would
+    // cover that page after navigate, which is how Send for signature from
+    // the viewer's menu looked like it did nothing.
+    if (lb) closeLightbox();
     window.TMAPortalSignatures.sendFileForSignature(item.id)
       .catch(function () { /* toast already shown */ });
   }
@@ -7547,7 +7609,7 @@
   function openDestinationPicker(title, onPick) {
     var pick = { folder: null, name: (SECTIONS[state.section] || SECTIONS.all).title, crumb: [] };
 
-    ui().openModal({
+    var host = ui().openModal({
       title: title,
       body: '<div class="tma-portal-picker" data-picker>' + ui().loading({ count: 4 }) + '</div>' +
         '<div class="tma-portal-modal__foot">' +
@@ -7590,6 +7652,7 @@
         loadPicker();
       },
     });
+    if (lb && host) host.style.zIndex = '800';
   }
 
   /* ── mount / registration ───────────────────────────── */

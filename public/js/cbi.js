@@ -1394,6 +1394,17 @@
     if (root._cbiFolderWired) return;
     root._cbiFolderWired = true;
 
+    root.addEventListener('contextmenu', function (e) {
+      var row = e.target.closest('[data-cbi-file], [data-cbi-subfolder]');
+      if (!row || !root.contains(row)) return;
+      var id = row.getAttribute('data-cbi-file') || row.getAttribute('data-cbi-subfolder');
+      var item = cbiFolderRow(id);
+      var acts = window.TMAFileActions;
+      if (!item || !acts || !acts.menu) return;
+      e.preventDefault();
+      acts.menu(e.clientX, e.clientY, item, function () { loadCbiFolder(root, { changed: true }); });
+    });
+
     root.addEventListener('click', function (e) {
       if (e.target.closest('.tma-portal-rename-input')) return;
 

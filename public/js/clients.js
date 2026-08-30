@@ -6772,6 +6772,39 @@
     if (net) window.open(net.url('/files/' + encodeURIComponent(fileId) + '/preview'), '_blank', 'noopener');
   }
 
+  /*
+   * The File Library's row menu, on a filed checklist document.
+   *
+   * Opening the file was the only way to rename, share, download or change
+   * it from this list, so the same verbs the viewer already carries sat
+   * behind a click. Right-click (and the long-press the browser reports as
+   * contextmenu) now raises that menu on the slot itself.
+   */
+  function openCipFileMenu(state, e, fileId, render) {
+    var acts = window.TMAFileActions;
+    if (!fileId || !acts || !acts.menu) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    var done = function () { refreshCipAfterFileChange(state, render); };
+    var known = cipLibraryFile(state, fileId);
+    if (known) {
+      acts.menu(e.clientX, e.clientY, known, done);
+      return;
+    }
+
+    var net = filesNet();
+    if (!net || !net.fetchJSON) return;
+    net.fetchJSON(net.url('/files/' + encodeURIComponent(fileId)))
+      .then(function (item) {
+        if (!item || !item.id) return;
+        if (!item.type) item.type = 'file';
+        acts.menu(e.clientX, e.clientY, item, done);
+      })
+      .catch(function () { /* gone, or not this reader's to open */ });
+  }
+
   function refreshCipAfterFileChange(state, render) {
     rememberCipApplicant(state.selectedId);
     forgetApplication(state.selectedId);
@@ -12206,6 +12239,9 @@
     MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         openCipFile(state, btn.getAttribute('data-cip-file'), render);
+      });
+      MORPH.on(btn, 'contextmenu', function (e) {
+        openCipFileMenu(state, e, btn.getAttribute('data-cip-file'), render);
       });
     });
 

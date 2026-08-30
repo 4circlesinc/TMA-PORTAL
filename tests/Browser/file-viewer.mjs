@@ -210,6 +210,20 @@ try {
     return !!(hit && hit.closest('.tma-portal-context-menu'));
   });
   check(menuVisible, 'the menu is actually on top of the viewer, not behind it');
+
+  step(10.5, 'Rename from the viewer is a dialog, not a hidden table row');
+  await page.click('.tma-portal-context-menu button:has-text("Rename")');
+  await page.waitForTimeout(500);
+  const renameDlg = await page.$('.tma-portal-modal');
+  check(!!renameDlg, 'Rename opens a dialog');
+  const renameOnTop = await page.evaluate(() => {
+    const m = document.querySelector('.tma-portal-modal');
+    if (!m) return false;
+    const r = m.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 24);
+    return !!(hit && hit.closest('.tma-portal-modal'));
+  });
+  check(renameOnTop, 'the rename dialog is in front of the viewer');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
 

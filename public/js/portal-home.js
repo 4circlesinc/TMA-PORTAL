@@ -3157,6 +3157,14 @@
           ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
           : { navId: 'folders-filebox', view: 'folders', title: 'File Box', crumb: 'File Library / File Box' });
       });
+      b.addEventListener('contextmenu', function (e) {
+        if (b.getAttribute('data-home-file-kind') === 'folder') return;
+        var row = homeFilePayloads[b.getAttribute('data-home-file')];
+        var acts = window.TMAFileActions;
+        if (!row || !acts || !acts.menu) return;
+        e.preventDefault();
+        acts.menu(e.clientX, e.clientY, row, function () { loadHomeFiles(el); });
+      });
     });
 
     pick('[data-home-favorite]').forEach(function (b) {
@@ -3174,6 +3182,14 @@
         navigate(folderId
           ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
           : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' });
+      });
+      b.addEventListener('contextmenu', function (e) {
+        if (b.getAttribute('data-home-favorite-kind') === 'folder') return;
+        var row = homeFilePayloads[b.getAttribute('data-home-favorite')];
+        var acts = window.TMAFileActions;
+        if (!row || !acts || !acts.menu) return;
+        e.preventDefault();
+        acts.menu(e.clientX, e.clientY, row, function () { loadHomeFiles(el); });
       });
     });
 
