@@ -44,17 +44,21 @@
   function docFields(section) {
     var reqs = state.options && state.options.requirements;
     var list = reqs && reqs[section];
-    if (list && list.length !== undefined) return list;
+    if (!list || list.length === undefined) {
+      list = section === 'principal'
+        ? [
+            { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: true, atFiling: true },
+            { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: true, atFiling: true },
+          ]
+        : [
+            { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: false, atFiling: false },
+            { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: false, atFiling: false },
+          ];
+    }
 
-    return section === 'principal'
-      ? [
-          { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: true, atFiling: true },
-          { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: true, atFiling: true },
-        ]
-      : [
-          { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: false, atFiling: false },
-          { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: false, atFiling: false },
-        ];
+    return list.filter(function (d) {
+      return !d.realEstateOnly || state.draft.investmentType === 'real_estate';
+    });
   }
 
   function requirementSections() {
@@ -434,6 +438,16 @@
    * file and the target for a click are the same shape, a drop area that is
    * smaller than it looks is worse than none.
    */
+  function documentHelp(path) {
+    var tail = path.split('.').pop();
+    var help = '';
+    docFields(sectionForPath(path)).forEach(function (d) {
+      if (d.field === tail && d.help) help = d.help;
+    });
+
+    return help ? '<p class="tma-portal-drop__meta">' + esc(help) + '</p>' : '';
+  }
+
   function documentField(path) {
     var files = state.documents[path] || [];
     var meta = state.filedMeta[path];
@@ -455,6 +469,7 @@
       return '<div class="tma-portal-drop' + (meta && meta.uploaded ? ' is-filled' : '') + ' is-locked' +
         (state.errors[path] ? ' is-invalid' : '') + '">' +
         fieldLabel(path, labelFor(path)) +
+        documentHelp(path) +
         lockedFile +
         '<p class="tma-portal-drop__locked-note">' +
         (packageFrozen
@@ -472,6 +487,7 @@
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
       (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
       fieldLabel(path, labelFor(path)) +
+      documentHelp(path) +
       updateReason +
       '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +

@@ -33,6 +33,7 @@ use App\Support\Cip\Phase;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
+use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
@@ -234,6 +235,7 @@ class CipApplicationController extends Controller
 
         $presenter = self::presenterFor($user, $page);
         $attention = Attention::forClients($user, $page->pluck('client_id')->filter()->all());
+        Review::primeTally($page);
 
         return response()->json([
             'applications' => $page->map(fn ($application) => $this->record($application, $user, $presenter, $attention))->all(),
@@ -727,8 +729,8 @@ class CipApplicationController extends Controller
             'locked' => $application->isLocked(),
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
-            'availableTransitions' => $this->transitions($application, $viewer),
-            'availableOverrides' => $this->overrides($application, $viewer),
+            'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
+            'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
             'assignedTo' => $this->assignees($application),
             'familyMembers' => $this->familyMembersForRow($application, $viewer),
         ];
@@ -763,7 +765,8 @@ class CipApplicationController extends Controller
                 $person->id,
             ])
             ->values()
-            ->map(function (CipPerson $person) use ($phase, $viewer) {
+            ->map(function (CipPerson $person) use ($phase, $viewer, $application) {
+                $person->setRelation('application', $application);
                 $progress = $this->documentProgress($person, $phase);
                 $status = PersonStatus::forPerson($person);
 
@@ -789,7 +792,7 @@ class CipApplicationController extends Controller
     /** @return \Illuminate\Support\Collection<int, \App\Models\CipDocument> */
     private function documentsForPhase(CipPerson $person, string $phase)
     {
-        $allowed = Requirements::forPhase(ApplicantType::for($person), $phase)
+        $allowed = Requirements::forPhase(ApplicantType::for($person), $phase, $person->application)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
@@ -838,9 +841,9 @@ class CipApplicationController extends Controller
      *
      * @return list<array{value:string,label:string,tone:string}>
      */
-    private function transitions($application, User $viewer): array
+    private function transitions($application, User $viewer, bool $forListing = false): array
     {
-        return collect(Engine::availableTransitions($application, $viewer))
+        return collect(Engine::availableTransitions($application, $viewer, $forListing))
             ->map(fn (string $status) => [
                 'value' => $status,
                 'label' => Status::label($status),
@@ -853,9 +856,9 @@ class CipApplicationController extends Controller
      *
      * @return list<array{value:string,label:string,tone:string}>
      */
-    private function overrides($application, User $viewer): array
+    private function overrides($application, User $viewer, bool $forListing = false): array
     {
-        return collect(Engine::availableOverrides($application, $viewer))
+        return collect(Engine::availableOverrides($application, $viewer, $forListing))
             ->map(fn (string $status) => [
                 'value' => $status,
                 'label' => Status::label($status),
@@ -906,11 +909,15 @@ class CipApplicationController extends Controller
         ];
 
         if ($application->client !== null) {
-            return collect($application->client->assignments)
+            $fromClient = collect($application->client->assignments)
                 ->filter(fn ($a) => $a->user !== null)
                 ->map(fn ($a) => $person($a, $a->roleLabel()))
                 ->values()
                 ->all();
+
+            if ($fromClient !== []) {
+                return $fromClient;
+            }
         }
 
         /*
@@ -1249,6 +1256,10 @@ class CipApplicationController extends Controller
          */
         $presenter ??= self::presenterFor($viewer, [$application]);
 
+        foreach ($application->people as $person) {
+            $person->setRelation('application', $application);
+        }
+
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
         // Numbered first and in their number, then the unnumbered, a spouse
@@ -1427,6 +1438,7 @@ class CipApplicationController extends Controller
         $allowedRequirements = Requirements::forPhase(
             ApplicantType::for($person),
             $phase,
+            $person->application,
         )->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         // One lookup for this person's whole checklist rather than one per

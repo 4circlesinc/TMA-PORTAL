@@ -15,6 +15,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
+use App\Support\Cip\CorRequirements;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
@@ -328,17 +329,66 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
-        $body = $this->file($staff,
-            $this->payload($provider, ['phase' => Phase::POST_APPROVAL]))
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
             ->assertCreated()
             ->json('application');
 
         $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
+        $this->assertSame(Status::POST_APPROVAL, $body['status']);
         $this->assertNotNull($body['postApprovalAt']);
 
         $application = CipApplication::where('uuid', $body['id'])->first();
         $this->assertSame(Phase::POST_APPROVAL, $application->phase);
+        $this->assertSame(Status::POST_APPROVAL, $application->status);
         $this->assertNotNull($application->post_approval_at);
+
+        $main = $application->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first();
+        $this->assertTrue(
+            $main->documents()->where('type', CorRequirements::OATH_OF_ALLEGIANCE)->whereNotNull('file_id')->exists()
+        );
+        $this->assertTrue(
+            $main->documents()->where('type', CorRequirements::PROOF_OF_PAYMENT)->whereNotNull('file_id')->exists()
+        );
+        $this->assertTrue(
+            $main->documents()->where('type', CorRequirements::LETTER_OF_CONFIRMATION)->exists(),
+            'Real Estate COR documents belong on the post-approval checklist even when filed at intake.',
+        );
+    }
+
+    public function test_post_approval_intake_demands_required_cor_documents(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, ['phase' => Phase::POST_APPROVAL]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['oathOfAllegiance', 'proofOfPayment']);
+    }
+
+    public function test_donation_post_approval_intake_does_not_demand_real_estate_documents(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'investmentType' => InvestmentType::NATIONAL_ECONOMIC_FUND,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $main = CipApplication::where('uuid', $body['id'])->first()
+            ->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first();
+
+        $this->assertFalse(
+            $main->documents()->where('type', CorRequirements::LETTER_OF_CONFIRMATION)->exists()
+        );
     }
 
     public function test_intake_defaults_to_pre_approval_when_phase_is_omitted(): void

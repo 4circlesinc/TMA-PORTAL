@@ -146,6 +146,7 @@ class Timeline
             CipEvent::ACTION_ACCEPTED_FOR_PROCESSING => self::acceptedSentence($meta, $who),
             CipEvent::ACTION_MILESTONE_CORRECTED => self::milestoneSentence($meta, $who),
             CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
+            CipEvent::ACTION_POST_APPROVAL_ENTERED => "{$who} started the post-approval process (Certificate of Registration)",
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.

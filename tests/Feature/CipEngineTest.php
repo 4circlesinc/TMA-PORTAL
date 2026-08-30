@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,7 +67,27 @@ class CipEngineTest extends TestCase
         Engine::apply($application, Status::GRANTED, $this->user(Role::ADMINISTRATOR));
     }
 
-    public function test_terminal_statuses_are_final(): void
+    public function test_granted_may_move_to_post_approval(): void
+    {
+        $creator = $this->user(Role::EMPLOYEE);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $creator);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        $application->forceFill(['status' => Status::GRANTED])->save();
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        Engine::apply($application, Status::POST_APPROVAL, $admin);
+
+        $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+    }
+
+    public function test_granted_cannot_move_to_an_unmapped_status(): void
     {
         $creator = $this->user(Role::EMPLOYEE);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);

@@ -393,10 +393,11 @@ class CipFacetsTest extends TestCase
          * queries. Every query either listing makes is a whereIn over the
          * whole page; the facets add four flat ones — the grouped tally, the
          * names behind it, the unassigned count and the providers — and none
-         * of them is per officer.
+         * of them is per officer. The listing also spends one grouped count
+         * on the Pre-Approval / Post-Approval tab badges.
          */
         $this->assertLessThanOrEqual($cheap, $dear, "One officer cost {$cheap} queries and ten cost {$dear}: "
             .'the facets are being counted an officer at a time.');
-        $this->assertLessThanOrEqual(16, $dear, 'the listing has grown a query nobody accounted for');
+        $this->assertLessThanOrEqual(18, $dear, 'the listing has grown a query nobody accounted for');
     }
 }

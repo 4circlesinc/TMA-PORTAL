@@ -3,8 +3,10 @@
 namespace Database\Seeders;
 
 use App\Models\CipDocumentRequirement;
+use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentTypes;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -62,9 +64,77 @@ class CipDocumentRequirementSeeder extends Seeder
             }
         }
 
+        if (Schema::hasColumn('cip_document_requirements', 'real_estate_only')) {
+            $this->syncPostApproval();
+        }
+
         $this->command?->info($added === 0
             ? 'CIP document requirements: already in place, nothing changed.'
             : "CIP document requirements: {$added} added.");
+    }
+
+    /**
+     * Stage 1 COR defaults, and the phase flags the post-approval checklist
+     * actually reads.
+     *
+     * Safe to run more than once: new COR rows are firstOrCreate, existing
+     * COR rows keep an administrator's wording, and only the workflow flags
+     * (phase, carry-forward, real-estate-only, folder) are brought into line
+     * with the brief. Pre-approval documents that were mirrored into
+     * post-approval by an earlier migration lose that Post tick unless they
+     * are a COR document.
+     */
+    public function syncPostApproval(): void
+    {
+        foreach (CorRequirements::defaults() as $applicantType => $requirements) {
+            foreach (array_values($requirements) as $index => $requirement) {
+                $row = CipDocumentRequirement::query()
+                    ->where('applicant_type', $applicantType)
+                    ->where('key', $requirement['key'])
+                    ->first();
+
+                if ($row === null) {
+                    CipDocumentRequirement::create([
+                        'uuid' => (string) Str::uuid(),
+                        'applicant_type' => $applicantType,
+                        'key' => $requirement['key'],
+                        'label' => $requirement['label'],
+                        'required' => $requirement['required'],
+                        'help' => $requirement['help'],
+                        'folder' => $requirement['folder'],
+                        'at_pre_approval' => $requirement['at_pre_approval'],
+                        'at_post_approval' => $requirement['at_post_approval'],
+                        'carry_forward' => $requirement['carry_forward'],
+                        'real_estate_only' => $requirement['real_estate_only'],
+                        'sort_order' => 500 + (($index + 1) * 10),
+                        'active' => true,
+                    ]);
+
+                    continue;
+                }
+
+                $row->forceFill([
+                    'at_pre_approval' => $requirement['at_pre_approval'] || $row->at_pre_approval,
+                    'at_post_approval' => $requirement['at_post_approval'],
+                    'carry_forward' => $requirement['carry_forward'],
+                    'real_estate_only' => $requirement['real_estate_only'],
+                    'folder' => $requirement['folder'] ?? $row->folder,
+                ])->save();
+            }
+        }
+
+        CipDocumentRequirement::query()
+            ->whereNotIn('key', CorRequirements::keys())
+            ->where(function ($query) {
+                $query->where('at_post_approval', true)
+                    ->orWhere('carry_forward', true)
+                    ->orWhere('real_estate_only', true);
+            })
+            ->update([
+                'at_post_approval' => false,
+                'carry_forward' => false,
+                'real_estate_only' => false,
+            ]);
     }
 
     /**

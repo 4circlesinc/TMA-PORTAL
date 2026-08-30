@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
+use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\CompanyMember;
@@ -71,18 +72,24 @@ class Intake
      * field name is the template key in camel case, which lands the legacy
      * three on exactly the names the endpoint has always documented.
      *
-     * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, atFiling:bool}>
+     * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, realEstateOnly:bool, atFiling:bool}>
      */
-    public static function documentFields(string $applicantType, string $phase = Phase::PRE_APPROVAL): Collection
+    public static function documentFields(string $applicantType, string $phase = Phase::PRE_APPROVAL, ?CipApplication $application = null): Collection
     {
-        return Requirements::forPhase($applicantType, $phase)
+        $investment = $application?->investment_type ?? request()->input('investmentType');
+
+        return Requirements::forPhase($applicantType, $phase, $application)
             ->reject(fn ($t) => $t->key === DocumentTypes::PASSPORT_PHOTO)
+            ->reject(fn ($t) => $t->real_estate_only
+                && $investment
+                && $investment !== InvestmentType::REAL_ESTATE)
             ->map(fn ($t) => [
                 'key' => $t->key,
                 'field' => Str::camel($t->key),
                 'label' => $t->label,
                 'help' => $t->help,
                 'required' => (bool) $t->required,
+                'realEstateOnly' => (bool) $t->real_estate_only,
                 // Only the main applicant's uploads gate filing. A sponsor's
                 // paperwork is often added after the application exists, and
                 // dependants follow the same rule — their required flags still
@@ -125,7 +132,10 @@ class Intake
     private static function allDocumentFieldNames(): Collection
     {
         return collect(ApplicantType::ALL)
-            ->flatMap(fn (string $type) => self::documentFields($type)->pluck('field'))
+            ->flatMap(function (string $type) {
+                return collect([Phase::PRE_APPROVAL, Phase::POST_APPROVAL])
+                    ->flatMap(fn (string $phase) => self::documentFields($type, $phase)->pluck('field'));
+            })
             ->unique()
             ->values();
     }
@@ -232,7 +242,7 @@ class Intake
      */
     public static function normaliseDocuments(Request $request): void
     {
-        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT)->pluck('field') as $field) {
+        foreach (self::allDocumentFieldNames() as $field) {
             /*
              * The bag, not $request->file().
              *
@@ -249,7 +259,7 @@ class Intake
             }
         }
 
-        self::wrapNestedDocumentLists($request, 'sponsor', self::documentFields(ApplicantType::SPONSOR)->pluck('field')->all());
+        self::wrapNestedDocumentLists($request, 'sponsor', self::allDocumentFieldNames()->all());
 
         $dependents = $request->files->get('dependents');
         if (is_array($dependents)) {
@@ -420,7 +430,9 @@ class Intake
      */
     public static function create(CipProvider $provider, User $creator, array $data): CipApplication
     {
-        return DB::transaction(function () use ($provider, $creator, $data) {
+        $announcePostApproval = false;
+
+        $application = DB::transaction(function () use ($provider, $creator, $data, &$announcePostApproval) {
             $phase = Phase::PRE_APPROVAL;
             if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
                 $phase = $data['phase'];
@@ -437,10 +449,15 @@ class Intake
             $application = Applications::create($provider, $creator, $attributes);
 
             if ($phase === Phase::POST_APPROVAL) {
+                $from = $application->status;
                 $application->forceFill([
                     'phase' => Phase::POST_APPROVAL,
+                    'status' => Status::POST_APPROVAL,
                     'post_approval_at' => now(),
                 ])->save();
+                Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
+                Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
+                $announcePostApproval = true;
             }
 
             self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
@@ -465,17 +482,27 @@ class Intake
             Tree::provision($application, $creator);
 
             if ($phase === Phase::POST_APPROVAL) {
-                PostApproval::prepare($application->fresh(), $creator);
+                $application = PostApproval::prepare($application->fresh(), $creator);
             } else {
                 foreach ($application->people as $person) {
                     DocumentSlots::open($person);
                 }
             }
 
+            foreach ($application->people as $person) {
+                $person->setRelation('application', $application);
+            }
+
             self::fileUploads($application, $data, $creator, $dependentUuids);
 
             return $application->fresh();
         });
+
+        if ($announcePostApproval) {
+            Notices::announce($application, Status::POST_APPROVAL, $creator);
+        }
+
+        return $application;
     }
 
     /**
@@ -725,7 +752,9 @@ class Intake
      */
     private static function fileDocuments(CipPerson $person, array $data, User $creator): void
     {
-        foreach (self::documentFields(ApplicantType::for($person))
+        $phase = $person->application?->phase ?? Phase::PRE_APPROVAL;
+
+        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application)
             ->mapWithKeys(fn ($doc) => [$doc['key'] => $data[$doc['field']] ?? []])
             ->all() as $type => $uploads) {
             $existing = CipDocument::query()

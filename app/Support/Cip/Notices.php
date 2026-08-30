@@ -274,6 +274,7 @@ class Notices
             Status::NON_COMPLIANT => 'cip-non-compliant',
             Status::DELAYED => 'cip-delayed',
             Status::GRANTED => 'cip-granted',
+            Status::POST_APPROVAL => 'cip-status-post-approval',
             Status::DENIED => 'cip-denied',
             Status::REVIEW_APPLICATION => 'cip-assigned',
             default => 'cip-status',
@@ -288,6 +289,7 @@ class Notices
             Status::NON_COMPLIANT => 'cip.non-compliant',
             Status::DELAYED => 'cip.delayed',
             Status::GRANTED => 'cip.granted',
+            Status::POST_APPROVAL => 'cip.post-approval',
             Status::DENIED => 'cip.denied',
             Status::REVIEW_APPLICATION => 'cip.assigned',
             default => 'cip.status',
@@ -305,6 +307,7 @@ class Notices
             Status::NON_COMPLIANT => 'The Unit has requested additional information.',
             Status::DELAYED => self::daysDelayed($application).' days have passed since acceptance with no decision.',
             Status::GRANTED => 'The Unit has granted this application.',
+            Status::POST_APPROVAL => 'Stage 1 (Certificate of Registration) documents are now required. Soft copies only.',
             Status::DENIED => 'The Unit has denied this application.',
             default => $facts['applicant'].' now stands at '.Status::label($to).'.',
         };

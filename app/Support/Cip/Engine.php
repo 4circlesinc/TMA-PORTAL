@@ -34,6 +34,7 @@ class Engine
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],
         Status::DELAYED => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
+        Status::GRANTED => [Status::POST_APPROVAL],
     ];
 
     /**
@@ -52,6 +53,7 @@ class Engine
         Status::BACKGROUND_CHECK => 'cip.compliance',
         Status::DELAYED => 'cip.compliance',
         Status::GRANTED => 'cip.decide',
+        Status::POST_APPROVAL => 'cip.review',
         Status::DENIED => 'cip.decide',
     ];
 
@@ -100,13 +102,13 @@ class Engine
      *
      * @return list<string>
      */
-    public static function availableTransitions(CipApplication $application, ?User $actor): array
+    public static function availableTransitions(CipApplication $application, ?User $actor, bool $forListing = false): array
     {
         return array_values(array_filter(
             Status::ALL,
             fn (string $to) => self::canTransition($application, $to)
                 && self::allows($actor, $application, $to)
-                && self::checklistAllows($application, $to),
+                && self::checklistAllows($application, $to, $forListing),
         ));
     }
 
@@ -118,30 +120,51 @@ class Engine
      *
      * @return list<string>
      */
-    public static function availableOverrides(CipApplication $application, ?User $actor): array
+    public static function availableOverrides(CipApplication $application, ?User $actor, bool $forListing = false): array
     {
         if (! CipAccess::canOverrideStatus($actor)) {
             return [];
         }
 
-        $next = self::availableTransitions($application, $actor);
+        $next = self::availableTransitions($application, $actor, $forListing);
 
         return array_values(array_filter(
             Status::listed(),
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
-                && self::checklistAllows($application, $to),
+                && self::checklistAllows($application, $to, $forListing),
         ));
     }
 
     /**
      * Ready to Submit is a claim about the documents, not a label somebody
      * may type while files are still in Application review or Update required.
+     *
+     * Listings that have not loaded checklists skip the document count — the
+     * write still enforces it. Asking here would be one COUNT per row of the
+     * applications table.
+     *
+     * An empty `people` relation still counts as "loaded" to Eloquent, and
+     * Collection::every() is true of an empty set, so a worklist row with no
+     * family yet must not be treated as a checklist we can judge in memory.
      */
-    private static function checklistAllows(CipApplication $application, string $to): bool
+    private static function checklistAllows(CipApplication $application, string $to, bool $forListing = false): bool
     {
-        return $to !== Status::READY_TO_SUBMIT
-            || Review::documentsAllowReadyToSubmit($application);
+        if ($to !== Status::READY_TO_SUBMIT) {
+            return true;
+        }
+
+        if ($forListing) {
+            $checklistsLoaded = $application->relationLoaded('people')
+                && $application->people->isNotEmpty()
+                && $application->people->every(fn ($person) => $person->relationLoaded('documents'));
+
+            if (! $checklistsLoaded) {
+                return true;
+            }
+        }
+
+        return Review::documentsAllowReadyToSubmit($application);
     }
 
     /**
@@ -213,7 +236,7 @@ class Engine
         $extra = [];
         $meta = array_merge($meta, ['override' => true]);
 
-        if (Status::isTerminal($from) && ! Status::isTerminal($to)) {
+        if (Status::isDecided($from) && ! Status::isDecided($to)) {
             $meta['clearedDecision'] = $application->decision;
             $meta['clearedDecidedAt'] = $application->decided_at?->toDateString();
             $extra['decision'] = null;
@@ -237,11 +260,23 @@ class Engine
     /** The row and the audit, once the move has already been allowed. */
     private static function write(CipApplication $application, string $to, ?User $actor, array $meta, array $extra = []): CipApplication
     {
+        if ($to === Status::POST_APPROVAL) {
+            $extra = array_merge([
+                'phase' => Phase::POST_APPROVAL,
+                'post_approval_at' => $application->post_approval_at ?? now(),
+            ], $extra);
+        }
+
         $from = $application->status;
         $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra) {
             $application->forceFill(array_merge(['status' => $to], $extra))->save();
 
             self::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $to);
+
+            if ($to === Status::POST_APPROVAL) {
+                self::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $actor, []);
+                PostApproval::prepare($application, $actor);
+            }
 
             ActivityLogger::log([
                 'actor' => $actor,

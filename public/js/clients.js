@@ -2732,6 +2732,7 @@
     { value: 'background_check', label: 'Background Check', tone: 'cyan' },
     { value: 'delayed', label: 'Delayed', tone: 'copper' },
     { value: 'granted', label: 'Approved', tone: 'success' },
+    { value: 'post_approval', label: 'Post-Approval', tone: 'action' },
     { value: 'denied', label: 'Denied', tone: 'danger' },
   ];
 
@@ -6602,7 +6603,11 @@
   }
 
   function canEnterPostApproval() {
-    return canRecordDecision();
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (me && me.isAdmin) return true;
+    var access = window.TMAPortalAccess;
+
+    return !!(access && access.can && access.can('cip.review'));
   }
 
   function renderPostApprovalAction(app) {

@@ -38,6 +38,24 @@ use Illuminate\Support\Facades\DB;
  */
 class Requirements
 {
+    /** @var Collection<int, CipDocumentRequirement>|null */
+    private static ?Collection $active = null;
+
+    /** Drop the in-process catalogue. Template edits and tests must see the new rows. */
+    public static function flush(): void
+    {
+        self::$active = null;
+    }
+
+    /**
+     * Active templates, loaded once per process until {@see flush()}.
+     *
+     * @return Collection<int, CipDocumentRequirement>
+     */
+    private static function activeTemplates(): Collection
+    {
+        return self::$active ??= CipDocumentRequirement::query()->active()->get();
+    }
     /**
      * The active templates for one applicant type, in the order they are
      * asked for, which is {@see CipDocumentRequirement::scopeActive()}'s
@@ -59,25 +77,25 @@ class Requirements
      *
      * @return Collection<int, CipDocumentRequirement>
      */
-    public static function forPhase(string $applicantType, string $phase): Collection
+    public static function forPhase(string $applicantType, string $phase, ?CipApplication $application = null): Collection
     {
-        $query = CipDocumentRequirement::query()
+        $templates = self::activeTemplates()
             ->where('applicant_type', $applicantType)
-            ->active();
+            ->filter(function (CipDocumentRequirement $row) use ($phase) {
+                if ($phase === Phase::POST_APPROVAL) {
+                    return $row->at_post_approval
+                        || ($row->at_pre_approval && $row->carry_forward);
+                }
 
-        if ($phase === Phase::POST_APPROVAL) {
-            $query->where(function ($inner) {
-                $inner->where('at_post_approval', true)
-                    ->orWhere(function ($carry) {
-                        $carry->where('at_pre_approval', true)
-                            ->where('carry_forward', true);
-                    });
-            });
-        } else {
-            $query->where('at_pre_approval', true);
+                return (bool) $row->at_pre_approval;
+            })
+            ->values();
+
+        if ($application && $application->investment_type !== InvestmentType::REAL_ESTATE) {
+            $templates = $templates->reject(fn (CipDocumentRequirement $row) => $row->real_estate_only);
         }
 
-        return $query->get();
+        return $templates->values();
     }
 
     /**
@@ -106,7 +124,7 @@ class Requirements
         }
 
         $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
-        $templates = self::forPhase(ApplicantType::for($person), $phase);
+        $templates = self::forPhase(ApplicantType::for($person), $phase, $person->application);
 
         // One transaction: a half-applied template change would leave a
         // checklist that is neither the old one nor the new one, and the next

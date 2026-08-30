@@ -32,7 +32,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'applicant_type', 'key', 'label', 'required', 'sort_order',
-    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'carry_forward',
+    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'carry_forward', 'real_estate_only',
 ])]
 class CipDocumentRequirement extends Model
 {
@@ -43,6 +43,9 @@ class CipDocumentRequirement extends Model
         static::creating(function (self $requirement) {
             $requirement->uuid ??= (string) Str::uuid();
         });
+
+        static::saved(fn () => \App\Support\Cip\Requirements::flush());
+        static::deleted(fn () => \App\Support\Cip\Requirements::flush());
     }
 
     protected function casts(): array
@@ -53,6 +56,7 @@ class CipDocumentRequirement extends Model
             'at_pre_approval' => 'boolean',
             'at_post_approval' => 'boolean',
             'carry_forward' => 'boolean',
+            'real_estate_only' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

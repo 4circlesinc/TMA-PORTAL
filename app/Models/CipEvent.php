@@ -78,6 +78,16 @@ class CipEvent extends Model
     public const ACTION_ACCEPTED_FOR_PROCESSING = 'accepted_for_processing';
 
     /**
+     * Staff moved an approved file into the post-approval lane (brief §1).
+     *
+     * Its own action rather than a detail of the status change: entering
+     * post-approval provisions the COR checklist and sends the COR notice,
+     * and which day that happened is an audit question the status event
+     * alone does not answer.
+     */
+    public const ACTION_POST_APPROVAL_ENTERED = 'post_approval_entered';
+
+    /**
      * A milestone date was corrected — the day only, not the step.
      *
      * Its own action rather than a status change, because no status changed:

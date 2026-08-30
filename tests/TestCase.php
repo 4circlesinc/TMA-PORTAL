@@ -35,6 +35,9 @@ abstract class TestCase extends BaseTestCase
          * with an empty cache; PHPUnit does not.
          */
         FileAccess::forgetFolders();
+        \App\Support\Cip\Requirements::flush();
+        \App\Support\Cip\Review::flushTally();
+        \App\Support\Cip\Package::forget();
     }
 
     /**

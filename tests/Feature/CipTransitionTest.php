@@ -70,6 +70,7 @@ class CipTransitionTest extends TestCase
         [Status::DELAYED, Status::NON_COMPLIANT],
         [Status::DELAYED, Status::GRANTED],
         [Status::DELAYED, Status::DENIED],
+        [Status::GRANTED, Status::POST_APPROVAL],
     ];
 
     protected function setUp(): void
@@ -361,10 +362,11 @@ class CipTransitionTest extends TestCase
         );
         $this->assertSame([], Engine::availableTransitions($ready, $employee));
 
-        // Officers cannot leave a decision; administrators may override back.
+        // A grant can still move into post-approval; that is the next lane,
+        // not an undo of the decision. Officers and administrators both drive it.
         $granted = $this->at($this->application($admin), Status::GRANTED);
-        $this->assertSame([], Engine::availableTransitions($granted, $admin));
-        $this->assertSame([], Engine::availableTransitions($granted, $officer));
+        $this->assertSame([Status::POST_APPROVAL], Engine::availableTransitions($granted, $admin));
+        $this->assertSame([Status::POST_APPROVAL], Engine::availableTransitions($granted, $officer));
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
         $this->assertSame([], Engine::availableOverrides($granted, $officer));
     }

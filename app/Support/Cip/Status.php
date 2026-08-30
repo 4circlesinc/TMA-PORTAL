@@ -36,6 +36,8 @@ class Status
 
     public const GRANTED = 'granted';
 
+    public const POST_APPROVAL = 'post_approval';
+
     public const DENIED = 'denied';
 
     public const ALL = [
@@ -50,11 +52,27 @@ class Status
         self::BACKGROUND_CHECK,
         self::DELAYED,
         self::GRANTED,
+        self::POST_APPROVAL,
         self::DENIED,
     ];
 
-    /** Nothing moves out of a decision. */
+    /**
+     * A decision that cannot be recorded again through the decision verb.
+     *
+     * GRANTED is still a decision, even though the file may then move into
+     * post-approval. DENIED is the other outcome. Post-approval is the next
+     * lane after a grant, not a second decision.
+     */
     public const TERMINAL = [self::GRANTED, self::DENIED];
+
+    /**
+     * Statuses that mean the Unit has already decided.
+     *
+     * Pulling one of these back into the pre-decision lifecycle clears the
+     * stored outcome. Moving GRANTED → POST APPROVAL does not: that is the
+     * next lane, not an undo.
+     */
+    public const DECIDED = [self::GRANTED, self::POST_APPROVAL, self::DENIED];
 
     private const LABELS = [
         // Leftover rows and old events wear the same words as NEW, so a chip
@@ -70,6 +88,7 @@ class Status
         self::BACKGROUND_CHECK => 'Background Check',
         self::DELAYED => 'Delayed',
         self::GRANTED => 'Approved',
+        self::POST_APPROVAL => 'Post-Approval',
         self::DENIED => 'Denied',
     ];
 
@@ -91,6 +110,7 @@ class Status
         self::BACKGROUND_CHECK => 'BACKGROUND CHECK',
         self::DELAYED => 'DELAYED',
         self::GRANTED => 'GRANTED',
+        self::POST_APPROVAL => 'POST APPROVAL',
         self::DENIED => 'DENIED',
     ];
 
@@ -116,6 +136,7 @@ class Status
         self::BACKGROUND_CHECK => 'cyan',
         self::DELAYED => 'copper',
         self::GRANTED => 'success',
+        self::POST_APPROVAL => 'action',
         self::DENIED => 'danger',
     ];
 
@@ -127,6 +148,11 @@ class Status
     public static function isTerminal(string $status): bool
     {
         return in_array($status, self::TERMINAL, true);
+    }
+
+    public static function isDecided(string $status): bool
+    {
+        return in_array($status, self::DECIDED, true);
     }
 
     /**

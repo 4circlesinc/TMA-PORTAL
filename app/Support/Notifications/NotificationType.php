@@ -120,6 +120,7 @@ final class NotificationType
         'cip.non-compliant' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open Additional Documents'],
         'cip.delayed' => ['module' => 'clients', 'level' => Notification::LEVEL_WARNING, 'icon' => 'ClockCountdown', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.granted' => ['module' => 'clients', 'level' => Notification::LEVEL_SUCCESS, 'icon' => 'CheckCircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
+        'cip.post-approval' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'AddressBook', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
         'cip.denied' => ['module' => 'clients', 'level' => Notification::LEVEL_WARNING, 'icon' => 'Xcircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
 
         // ── Account & Security ─────────────────────────────────

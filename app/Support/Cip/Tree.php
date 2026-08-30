@@ -233,6 +233,7 @@ class Tree
         ]);
 
         $application->forceFill(['client_id' => $client->id])->save();
+        $application->setRelation('client', $client);
 
         return $client;
     }

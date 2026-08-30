@@ -1448,6 +1448,13 @@
       'Carry forward, ' + r.label,
     );
 
+    var reOnly = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-re="' + ui().esc(r.id) + '"',
+      r.realEstateOnly,
+      'Real estate only, ' + r.label,
+    );
+
     var meta = [];
     if (r.help) meta.push(ui().esc(r.help));
     if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
@@ -1457,6 +1464,7 @@
       '<td class="tma-portal-table__check">' + pre + '</td>' +
       '<td class="tma-portal-table__check">' + post + '</td>' +
       '<td class="tma-portal-table__check">' + carry + '</td>' +
+      '<td class="tma-portal-table__check">' + reOnly + '</td>' +
       '<td>' + name +
       (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
       (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
@@ -1493,6 +1501,7 @@
                   { label: 'Pre', attrs: ' class="tma-portal-table__check" title="Asked in pre-approval"' },
                   { label: 'Post', attrs: ' class="tma-portal-table__check" title="Asked in post-approval"' },
                   { label: 'Carry', attrs: ' class="tma-portal-table__check" title="Reuse the pre-approval file in post-approval"' },
+                  { label: 'RE', attrs: ' class="tma-portal-table__check" title="Real Estate applicants only"' },
                   'Document',
                   '',
                 ], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
@@ -1589,6 +1598,13 @@
         box.addEventListener('change', function () {
           var id = box.getAttribute('data-cipdoc-carry');
           patchPhase(id, { carryForward: !!box.checked });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-re]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-re');
+          patchPhase(id, { realEstateOnly: !!box.checked });
         });
       });
 

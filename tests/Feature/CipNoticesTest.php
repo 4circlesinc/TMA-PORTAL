@@ -93,6 +93,10 @@ class CipNoticesTest extends TestCase
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::GRANTED, $kim),
         );
         $this->assertSame(
+            'KM - POST APPROVAL - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::POST_APPROVAL, $kim),
+        );
+        $this->assertSame(
             'KM - DENIED - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::DENIED, $kim),
         );

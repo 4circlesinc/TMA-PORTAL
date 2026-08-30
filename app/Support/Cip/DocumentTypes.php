@@ -26,11 +26,26 @@ class DocumentTypes
 
     public const BIRTH_CERTIFICATE = 'birth_certificate';
 
+    public const OATH_OF_ALLEGIANCE = 'oath_of_allegiance';
+
+    public const PROOF_OF_PAYMENT = 'proof_of_payment';
+
+    public const LETTER_OF_CONFIRMATION = 'letter_of_confirmation';
+
+    public const SALES_PURCHASE_AGREEMENT = 'sales_purchase_agreement';
+
+    public const ESCROW_AGREEMENT = 'escrow_agreement';
+
     /** @var array<string, string> */
     public const LABELS = [
         self::PASSPORT_PHOTO => 'Passport photo',
         self::PASSPORT_BIO_PAGE => 'Passport bio page',
         self::BIRTH_CERTIFICATE => 'Birth certificate',
+        self::OATH_OF_ALLEGIANCE => 'Oath of Allegiance',
+        self::PROOF_OF_PAYMENT => 'Proof of Payment of the Qualifying Investment',
+        self::LETTER_OF_CONFIRMATION => 'Letter of Confirmation',
+        self::SALES_PURCHASE_AGREEMENT => 'Sales and Purchase Agreement',
+        self::ESCROW_AGREEMENT => 'Escrow Agreement',
     ];
 
     /**

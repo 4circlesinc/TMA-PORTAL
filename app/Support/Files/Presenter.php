@@ -171,6 +171,9 @@ class Presenter
 
         if ($folderExtras) {
             $this->folderStats = FolderTree::directCounts($folders);
+            if ($folderIds) {
+                $this->commentFolder = CommentReads::unreadByFolder($this->viewer, $folderIds);
+            }
         }
 
         // Every row's permission block walks its folder chain through

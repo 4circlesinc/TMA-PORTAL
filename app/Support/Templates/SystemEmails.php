@@ -1139,6 +1139,20 @@ class SystemEmails
             'cip-status-assessment-feedback' => 'The reviewing officer is assessing each document on {{applicant}}’s file. You will be emailed separately if any document needs an update.',
             'cip-status-pending-review' => 'The original package has gone to the Unit. {{applicant}}’s file now waits for their review. You do not need to resubmit unless the Unit asks for more.',
             'cip-status-background-check' => 'The Unit has accepted {{applicant}}’s file for processing. A background check is underway. There is nothing to upload unless you are asked.',
+            'cip-status-post-approval' => 'We are ready for Stage 1 of the post-approval process: applying for the Certificate of Registration (COR). The Citizenship by Investment Unit requires **soft copies only**.
+
+Please upload:
+
+1. **Oath of Allegiance** (required, 16 years and over) — signed by the applicant and a Notary or Attorney-at-Law, whose name must be clearly legible, and stamped. The date on the Oath cannot be before the granted date.
+2. **Proof of Payment of the Qualifying Investment** (required) — as set out in the Notification Letter. Forward it to T.M. Antoine Partners Advisory.
+3. **One digital passport-sized photo** (required) — 2 inch × 2 inch.
+4. **Letter of Confirmation** (optional, Real Estate applicants only).
+5. **Sales and Purchase Agreement** (optional, Real Estate applicants only).
+6. **Escrow Agreement** (optional, Real Estate applicants only).
+
+Documents not written in English MUST be translated. The translation must be original, signed and stamped by a Notary or Attorney-at-Law. A certified true copy of the credentials of the translator, Notary and/or Attorney-at-Law who certified or translated any of those documents must also be provided.
+
+Open the application in the portal to upload the COR documents.',
         ];
         $statuses = [];
         foreach ([
@@ -1146,6 +1160,7 @@ class SystemEmails
             'cip-status-assessment-feedback' => ['Assessment Feedback', 'Assessment Feedback', 'Sent when a file moves to Assessment Feedback.'],
             'cip-status-pending-review' => ['Pending Review', 'Pending Review', 'Sent when a file moves to Pending Review.'],
             'cip-status-background-check' => ['Background Check', 'Background Check', 'Sent when a file moves to Background Check.'],
+            'cip-status-post-approval' => ['Post-Approval', 'Post-Approval', 'Sent when an approved file is moved to Post-Approval and Stage 1 COR documents are requested.'],
         ] as $key => [$name, $label, $moment]) {
             $statuses[$key] = [
                 'name' => $name,

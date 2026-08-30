@@ -4,7 +4,6 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Entering the post-approval lane: folder tree, checklist, and carried
@@ -45,6 +44,10 @@ class PostApproval
     /**
      * Move a granted pre-approval application into post-approval.
      *
+     * Status, phase, COR checklist, folders and the COR notice all travel
+     * through {@see Engine::apply} so the dedicated button and the status
+     * picker cannot disagree.
+     *
      * @throws \Symfony\Component\HttpKernel\Exception\HttpException
      */
     public static function enter(CipApplication $application, User $actor): CipApplication
@@ -62,15 +65,10 @@ class PostApproval
             'Only an approved application may enter post-approval.',
         );
 
-        return DB::transaction(function () use ($application, $actor) {
-            $application->forceFill([
-                'phase' => Phase::POST_APPROVAL,
-                'post_approval_at' => now(),
-            ])->save();
-
-            Engine::record($application, 'post_approval_entered', $actor, []);
-
-            return self::prepare($application->fresh(), $actor);
-        });
+        try {
+            return Engine::apply($application, Status::POST_APPROVAL, $actor);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
     }
 }

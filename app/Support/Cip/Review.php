@@ -33,6 +33,68 @@ use Illuminate\Validation\ValidationException;
  */
 class Review
 {
+    public static function flushTally(): void
+    {
+        self::forgetTally();
+    }
+
+    /** Drop a cached checklist count so the next read sees the slots as they are now. */
+    public static function forgetTally(?CipApplication $application = null): void
+    {
+        if (! app()->bound('request')) {
+            return;
+        }
+
+        if ($application === null) {
+            request()->attributes->remove('cip.tally');
+
+            return;
+        }
+
+        $store = request()->attributes->get('cip.tally', []);
+        unset($store[(int) $application->getKey()]);
+        request()->attributes->set('cip.tally', $store);
+    }
+
+    /**
+     * Count every application's checklist in one grouped query.
+     *
+     * {@see Engine::availableOverrides()} asks this for Ready to Submit when
+     * checklists are already loaded. Unprimed that is one COUNT per application.
+     *
+     * @param  iterable<int, CipApplication>  $applications
+     */
+    public static function primeTally(iterable $applications): void
+    {
+        $store = request()->attributes->get('cip.tally', []);
+        $missing = collect($applications)
+            ->filter()
+            ->reject(fn (CipApplication $application) => array_key_exists(
+                (int) $application->getKey(),
+                $store,
+            ));
+
+        if ($missing->isEmpty()) {
+            return;
+        }
+
+        $ids = $missing->map(fn (CipApplication $application) => $application->getKey())->all();
+        $grouped = CipDocument::query()
+            ->whereIn('application_id', $ids)
+            ->selectRaw('application_id, status, required, COUNT(*) as total')
+            ->groupBy('application_id', 'status', 'required')
+            ->get()
+            ->groupBy(fn ($row) => (int) $row->application_id);
+
+        foreach ($missing as $application) {
+            $store[(int) $application->getKey()] = self::shapeTally(
+                $grouped->get((int) $application->getKey(), collect()),
+            );
+        }
+
+        request()->attributes->set('cip.tally', $store);
+    }
+
     /**
      * Accept a document: mark it Ready for submission.
      *
@@ -43,6 +105,8 @@ class Review
      */
     public static function approve(CipDocument $document, User $actor): CipDocument
     {
+        Confirmation::guardDocument($document);
+
         return DB::transaction(function () use ($document, $actor) {
             /*
              * Approving what is already approved is not a second verdict.
@@ -76,6 +140,8 @@ class Review
      */
     public static function requestChanges(CipDocument $document, User $actor, string $comment): CipDocument
     {
+        Confirmation::guardDocument($document);
+
         $reason = trim($comment);
 
         if ($reason === '') {
@@ -165,6 +231,8 @@ class Review
      */
     public static function settle(CipApplication $application, ?User $actor = null): CipApplication
     {
+        self::forgetTally($application);
+
         /*
          * A plan rather than a single hop, because §14 and §15 are two
          * sentences of one moment. After every required document has been
@@ -371,10 +439,11 @@ class Review
      */
     private static function tally(CipApplication $application): array
     {
-        $tally = [];
+        $id = (int) $application->getKey();
+        $store = request()->attributes->get('cip.tally', []);
 
-        foreach (DocumentStatus::ALL as $status) {
-            $tally[$status] = ['total' => 0, 'required' => 0];
+        if (array_key_exists($id, $store)) {
+            return $store[$id];
         }
 
         $rows = CipDocument::query()
@@ -383,14 +452,27 @@ class Review
             ->groupBy('status', 'required')
             ->get();
 
+        $store[$id] = self::shapeTally($rows);
+        request()->attributes->set('cip.tally', $store);
+
+        return $store[$id];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, mixed>  $rows
+     * @return array<string, array{total: int, required: int}>
+     */
+    private static function shapeTally($rows): array
+    {
+        $tally = [];
+
+        foreach (DocumentStatus::ALL as $status) {
+            $tally[$status] = ['total' => 0, 'required' => 0];
+        }
+
         foreach ($rows as $row) {
             $total = (int) $row->total;
-
-            // A status outside the vocabulary is not silently dropped: losing
-            // a required slot from the count would read as "all assessed" and
-            // move the application on work nobody has done.
             $tally[$row->status] ??= ['total' => 0, 'required' => 0];
-
             $tally[$row->status]['total'] += $total;
 
             if ($row->required) {
