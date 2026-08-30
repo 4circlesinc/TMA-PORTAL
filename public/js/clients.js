@@ -5830,7 +5830,7 @@
     }
     var name = (person && person.name) || '?';
     var initial = name.charAt(0).toUpperCase();
-    return '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:32px;height:32px">' +
+    return '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue">' +
       esc(initial) + '</span>';
   }
 

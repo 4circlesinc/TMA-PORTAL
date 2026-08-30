@@ -18842,15 +18842,22 @@ button.tma-file-status-chip:focus-visible,
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-12);
-  background: var(--color-overlay-4);
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
   flex-shrink: 0;
 }
 
 .tma-dash__clients-assigned-icon img {
-  width: 20px;
-  height: 20px;
-  opacity: 0.7;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.tma-dash__clients-assigned-icon .tma-dash__clients-avatar {
+  width: 40px;
+  height: 40px;
 }
 
 .tma-dash__clients-assigned-main {
