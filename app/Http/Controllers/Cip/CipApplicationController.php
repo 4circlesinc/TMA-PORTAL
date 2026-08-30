@@ -1483,7 +1483,7 @@ class CipApplicationController extends Controller
                     $slot->id,
                 ])
                 ->values()
-                ->map(function ($slot) use ($slotComments, $phase) {
+                ->map(function ($slot) use ($slotComments, $phase, $presenter) {
                     DocumentSlots::reconcile($slot, null, false);
                     $slot->refresh();
                     $slot->loadMissing('file');

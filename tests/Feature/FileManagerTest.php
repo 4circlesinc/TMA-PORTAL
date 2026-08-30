@@ -7,6 +7,7 @@ use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -649,7 +650,7 @@ class FileManagerTest extends TestCase
         $user = $this->approvedUser(['account_type' => 'Administrator']);
         $root = Folder::create([
             'uuid' => (string) Str::uuid(),
-            'name' => 'Clients',
+            'name' => FolderProvisioner::ROOT_CLIENTS,
             'folder_type' => Folder::TYPE_ROOT,
             'owner_id' => $user->id,
             'created_by' => $user->id,
@@ -676,7 +677,7 @@ class FileManagerTest extends TestCase
             ->assertOk();
 
         $this->assertSame(0, $recursiveTotals, 'All Files must not recurse the library to draw its roots');
-        $clients = collect($browse->json('folders'))->firstWhere('name', 'Clients');
+        $clients = collect($browse->json('folders'))->firstWhere('name', FolderProvisioner::ROOT_CLIENTS);
         $this->assertNotNull($clients);
         $this->assertSame(40, $clients['folderCount']);
         $this->assertSame(0, $clients['fileCount']);
@@ -685,7 +686,7 @@ class FileManagerTest extends TestCase
             ->getJson('/portal/files/?section=all&folder='.$root->uuid)
             ->assertOk();
 
-        $this->assertSame(0, $recursiveTotals, 'Opening Clients must not walk every client tree');
+        $this->assertSame(0, $recursiveTotals, 'Opening the citizenship library must not walk every client tree');
         $this->assertSame(40, $inside->json('counts.folders'));
         $this->assertCount(40, $inside->json('folders'));
         $this->assertFalse($inside->json('hasMore'));

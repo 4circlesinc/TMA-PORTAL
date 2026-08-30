@@ -40,18 +40,18 @@ if (page.url().includes('/auth/stay-signed-in')) {
 console.log('\nClient deep links\n')
 
 // A link straight to a client, as a colleague would receive it.
-const r = await page.goto(`${BASE}/clients/deep-${stamp}`, { waitUntil: 'networkidle' })
-check(r.status() === 200, `a client URL is served (${r.status()})`)
+const r = await page.goto(`${BASE}/citizenship-applications/deep-${stamp}`, { waitUntil: 'networkidle' })
+check(r.status() === 200, `an application URL is served (${r.status()})`)
 await page.waitForTimeout(3000)
 
-check(page.url().includes(`/clients/deep-${stamp}`), 'the URL survives the load')
+check(page.url().includes(`/citizenship-applications/deep-${stamp}`), 'the URL survives the load')
 check(await page.evaluate((n) => document.body.innerText.includes(n), `Deep Client ${stamp}`),
-  'it opens on that client, not the directory')
+  'it opens on that application, not the directory')
 
 // And a reload from there stays put.
 await page.reload({ waitUntil: 'networkidle' })
 await page.waitForTimeout(3000)
-check(page.url().includes(`/clients/deep-${stamp}`), 'a reload keeps the client in the URL')
+check(page.url().includes(`/citizenship-applications/deep-${stamp}`), 'a reload keeps the application in the URL')
 check(await page.evaluate((n) => document.body.innerText.includes(n), `Deep Client ${stamp}`),
   'and still shows that client')
 

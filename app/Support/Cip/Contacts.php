@@ -276,8 +276,8 @@ class Contacts
         $application->loadMissing('client');
 
         return $application->client
-            ? '/clients/'.$application->client->uid.'?tab=folders'
-            : '/clients?q='.urlencode($application->displayNumber());
+            ? Pages::application($application->client->uid, 'tab=folders')
+            : Pages::home('q='.urlencode($application->displayNumber()));
     }
 
     public static function url(CipApplication $application): string

@@ -10,6 +10,7 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\Pages;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientCustomFields;
 use App\Support\Clients\ClientDirectory;
@@ -256,7 +257,7 @@ class ClientsController extends Controller
             'title' => $request->user()->name.' added a new client: '.$client->name,
             'subject' => $client,
             'client' => $client,
-            'action_url' => '/clients?client='.$client->uid,
+            'action_url' => Pages::application($client->uid),
         ]);
 
         ClientDirectory::flushFor($request->user());

@@ -180,7 +180,7 @@
         clientId: c.id,
         navId: 'clients',
         view: 'clients',
-        href: '/clients?client=' + encodeURIComponent(c.id),
+        href: '/citizenship-applications/' + encodeURIComponent(c.id),
         keywords: [name, company, 'client', 'clients'],
       };
     });

@@ -50,10 +50,10 @@
   var SECTIONS = {
     all: { title: 'All Files', desc: 'All files and folders you can access.', empty: 'No files yet' },
     clients: {
-      title: 'Clients',
-      desc: 'Client folders you can open.',
-      empty: 'No client folders yet',
-      emptyHint: 'Folders for the clients you work with will appear here.',
+      title: 'Citizenship By Investment Application',
+      desc: 'Citizenship by investment application folders you can open.',
+      empty: 'No application folders yet',
+      emptyHint: 'Folders for the applications you work with will appear here.',
     },
     my: { title: 'My Files', desc: 'Files and folders you own.', empty: 'You haven’t created any files yet' },
     shared: { title: 'Shared with me', desc: 'Items other people have shared with you.', empty: 'Nothing has been shared with you yet' },

@@ -24,6 +24,43 @@
   var VIEW_KEY = 'tma.clientsViewMode.v1';
 
   /*
+   * The CIP workspace in the address bar.
+   *
+   * The module used to live at /clients, the hub's old name, so a citizenship
+   * file opened as clients/chen-wei?tab=info. The page is the application; the
+   * path says so. /clients still opens the same screens.
+   */
+  var CIP_APPLICATIONS_PATH = '/citizenship-applications';
+
+  function cipPathPrefix(pathname) {
+    var p = String(pathname || '').replace(/\/+$/, '') || '/';
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
+    for (var i = 0; i < prefixes.length; i++) {
+      var pre = prefixes[i];
+      if (p === pre || p.indexOf(pre + '/') === 0) return pre;
+    }
+    return null;
+  }
+
+  function cipApplicationsRest(pathname) {
+    var p = String(pathname || '').replace(/\/+$/, '') || '/';
+    var pre = cipPathPrefix(p);
+    if (pre === null) return null;
+    return p === pre ? '' : p.slice(pre.length);
+  }
+
+  function isLegacyCipPath(pathname) {
+    var pre = cipPathPrefix(pathname);
+    return !!pre && pre !== CIP_APPLICATIONS_PATH;
+  }
+
+  function cipPagePath(rest) {
+    rest = rest || '';
+    if (rest && rest.charAt(0) !== '/') rest = '/' + rest;
+    return CIP_APPLICATIONS_PATH + rest;
+  }
+
+  /*
    * The CIP application a client's profile is showing, by client uid.
    *
    * A client is the hub's record of a person; the application is what the
@@ -36,6 +73,46 @@
   function applicationFor(id) {
     return Object.prototype.hasOwnProperty.call(APPLICATIONS, id) ? APPLICATIONS[id] : undefined;
   }
+
+  /*
+   * Client uids that belong to a CIP application, even while the file itself
+   * is being refetched.
+   *
+   * The profile's tabs are the application's sections. A missing payload used
+   * to mean "this is a hub contact", which is how an applicant landed on the
+   * old Client info record — after a live refresh, a failed read, or a cached
+   * null. Once we have seen the application, that reading is not allowed to
+   * forget.
+   */
+  var CIP_APPLICANTS = {};
+
+  function rememberCipApplicant(uid) {
+    if (uid) CIP_APPLICANTS[uid] = true;
+  }
+
+  function isCipApplicant(uid) {
+    if (!uid) return false;
+    if (CIP_APPLICANTS[uid]) return true;
+    var held = applicationFor(uid);
+    if (held && held.id) return true;
+
+    return !!applicationRowByClient(uid);
+  }
+
+  /*
+   * The detail payload, not a table row.
+   *
+   * The listing has an id and a name and nothing that can draw Overview; the
+   * profile endpoint answers `applicant` even when that person is missing.
+   */
+  function isApplicationProfile(app) {
+    return !!(app && Object.prototype.hasOwnProperty.call(app, 'applicant'));
+  }
+
+  function cipDefaultTab(state) {
+    return listTabOf(state) === 'post_approval' ? 'applicant' : 'overview';
+  }
+
   var LIST_TAB_KEY = 'tma.cipListTab.v1';
 
   /*
@@ -153,8 +230,8 @@
 
   function pathForNewApplication(phase) {
     return phase === 'post_approval'
-      ? '/clients/applications/new?phase=post_approval'
-      : '/clients/applications/new';
+      ? cipPagePath('/applications/new') + '?phase=post_approval'
+      : cipPagePath('/applications/new');
   }
 
   function tabPhaseCountKey(tab) {
@@ -1038,37 +1115,39 @@
 
   function parseClientsPath(pathname) {
     var p = String(pathname || '').replace(/\/+$/, '') || '/';
-    if (p === '/clients' || p === '/user-profile/clients') {
-      return { screen: 'list' };
-    }
-    if (p === '/clients/applications/new') {
-      return { screen: 'new-application', applicationPhase: parseNewApplicationPhase() };
-    }
-    var editApp = p.match(/^\/clients\/applications\/([^/]+)\/edit$/);
-    if (editApp) {
-      return { screen: 'edit-application', applicationId: decodeURIComponent(editApp[1]) };
-    }
-    if (p === '/clients/new') {
-      return { screen: 'add' };
-    }
-    if (p === '/clients/companies/new') {
-      return { screen: 'add-company' };
-    }
-    var companyEditMatch = p.match(/^\/clients\/companies\/([^/]+)\/edit$/);
-    if (companyEditMatch) {
-      return { screen: 'edit-company', companyId: decodeURIComponent(companyEditMatch[1]) };
-    }
-    var companyMatch = p.match(/^\/clients\/companies\/([^/]+)$/);
-    if (companyMatch) {
-      return { screen: 'company', companyId: decodeURIComponent(companyMatch[1]) };
-    }
-    var editMatch = p.match(/^\/clients\/([^/]+)\/edit$/);
-    if (editMatch) {
-      return { screen: 'edit', contactId: decodeURIComponent(editMatch[1]) };
-    }
-    var detailMatch = p.match(/^\/clients\/([^/]+)$/);
-    if (detailMatch) {
-      return { screen: 'detail', contactId: decodeURIComponent(detailMatch[1]) };
+    var rest = cipApplicationsRest(p);
+    if (rest !== null) {
+      var legacy = isLegacyCipPath(p);
+      if (rest === '') return { screen: 'list', legacyRedirect: legacy };
+      if (rest === '/applications/new') {
+        return { screen: 'new-application', applicationPhase: parseNewApplicationPhase(), legacyRedirect: legacy };
+      }
+      var editApp = rest.match(/^\/applications\/([^/]+)\/edit$/);
+      if (editApp) {
+        return { screen: 'edit-application', applicationId: decodeURIComponent(editApp[1]), legacyRedirect: legacy };
+      }
+      if (rest === '/new') {
+        return { screen: 'add', legacyRedirect: legacy };
+      }
+      if (rest === '/companies/new') {
+        return { screen: 'add-company', legacyRedirect: legacy };
+      }
+      var companyEditMatch = rest.match(/^\/companies\/([^/]+)\/edit$/);
+      if (companyEditMatch) {
+        return { screen: 'edit-company', companyId: decodeURIComponent(companyEditMatch[1]), legacyRedirect: legacy };
+      }
+      var companyMatch = rest.match(/^\/companies\/([^/]+)$/);
+      if (companyMatch) {
+        return { screen: 'company', companyId: decodeURIComponent(companyMatch[1]), legacyRedirect: legacy };
+      }
+      var editMatch = rest.match(/^\/([^/]+)\/edit$/);
+      if (editMatch) {
+        return { screen: 'edit', contactId: decodeURIComponent(editMatch[1]), legacyRedirect: legacy };
+      }
+      var detailMatch = rest.match(/^\/([^/]+)$/);
+      if (detailMatch) {
+        return { screen: 'detail', contactId: decodeURIComponent(detailMatch[1]), legacyRedirect: legacy };
+      }
     }
     if (p === '/contacts' || p === '/user-profile/contacts') {
       return { screen: 'list', legacyRedirect: true };
@@ -1092,21 +1171,21 @@
       return pathForNewApplication(applicationPhase || 'pre_approval');
     }
     if (screen === 'edit-application' && contactId) {
-      return '/clients/applications/' + encodeURIComponent(contactId) + '/edit';
+      return cipPagePath('/applications/' + encodeURIComponent(contactId) + '/edit');
     }
-    if (screen === 'add') return '/clients/new';
-    if (screen === 'add-company') return '/clients/companies/new';
+    if (screen === 'add') return cipPagePath('/new');
+    if (screen === 'add-company') return cipPagePath('/companies/new');
     if (screen === 'edit-company' && companyId) {
-      return '/clients/companies/' + encodeURIComponent(companyId) + '/edit';
+      return cipPagePath('/companies/' + encodeURIComponent(companyId) + '/edit');
     }
     if (screen === 'company' && companyId) {
-      return '/clients/companies/' + encodeURIComponent(companyId);
+      return cipPagePath('/companies/' + encodeURIComponent(companyId));
     }
     if (screen === 'edit' && contactId) {
-      return '/clients/' + encodeURIComponent(contactId) + '/edit';
+      return cipPagePath('/' + encodeURIComponent(contactId) + '/edit');
     }
     if (screen === 'detail' && contactId) {
-      return '/clients/' + encodeURIComponent(contactId);
+      return cipPagePath('/' + encodeURIComponent(contactId));
     }
 
     /*
@@ -1135,7 +1214,7 @@
       listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
 
-    return '/clients' + (listParams.length ? '?' + listParams.join('&') : '');
+    return CIP_APPLICATIONS_PATH + (listParams.length ? '?' + listParams.join('&') : '');
   }
 
   /*
@@ -1154,10 +1233,17 @@
     var base = pathForClientsScreen(state.screen, state.selectedId, state.companyId);
     var params = [];
     var tab = state.profileTab;
+    var cip = isCipApplicant(state.selectedId) || isApplicationProfile(applicationFor(state.selectedId));
+    var defaultTab = cip ? cipDefaultTab(state) : 'info';
+
+    // An application is never Client info. Old links still carry tab=info;
+    // writing that back is how the address kept saying the hub contact.
+    if (cip && (!tab || tab === 'info')) tab = defaultTab;
 
     // Guarded on the screen once, by the caller. Repeating it here only bought
     // a URL that carried the folder without the tab that shows it.
-    if (tab) params.push('tab=' + encodeURIComponent(tab));
+    // The application's own first tab is the page, so it does not need naming.
+    if (tab && tab !== defaultTab) params.push('tab=' + encodeURIComponent(tab));
 
     // Only the folder actually in view. The trail above it is rebuilt from the
     // server's own parent chain, so a link does not have to carry it.
@@ -2906,6 +2992,9 @@
         // overwrite the one they are looking at.
         if (APP_TABLE.loadingKey !== key) return;
         APP_TABLE.rows = (json && json.applications) || [];
+        APP_TABLE.rows.forEach(function (row) {
+          rememberCipApplicant(row && row.clientUid);
+        });
         APP_TABLE.page = (json && json.page) || 1;
         APP_TABLE.lastPage = (json && json.lastPage) || 1;
         APP_TABLE.total = (json && json.total) || 0;
@@ -3810,6 +3899,7 @@
         if (!memberUid) return;
         var memberController = clientsMountRoot && clientsMountRoot._clientsController;
         if (!memberController) return;
+        rememberCipApplicant(memberUid);
         if (clientsMountState) {
           clientsMountState.profileTab = memberRow.getAttribute('data-cip-profile-tab') || 'applicant';
         }
@@ -3828,10 +3918,9 @@
       if (!uid) return;
       var controller = clientsMountRoot && clientsMountRoot._clientsController;
       if (!controller) return;
+      rememberCipApplicant(uid);
       if (clientsMountState) {
-        clientsMountState.profileTab = (clientsMountState && listTabOf(clientsMountState) === 'post_approval')
-          ? 'applicant'
-          : 'overview';
+        clientsMountState.profileTab = cipDefaultTab(clientsMountState);
       }
       controller.navigate('detail', uid);
     });
@@ -5691,7 +5780,7 @@
    */
   function profileTabsFor(state) {
     var app = applicationFor(state.selectedId);
-    if (!app) return PROFILE_TABS;
+    if (!isApplicationProfile(app) && !isCipApplicant(state.selectedId)) return PROFILE_TABS;
 
     var tabs = [
       // The application's own facts, where it has got to, before the people
@@ -5701,8 +5790,8 @@
       { id: 'overview', label: 'Overview' },
       { id: 'applicant', label: 'Main applicant' },
     ];
-    if (app.sponsor) tabs.push({ id: 'sponsor', label: 'Sponsor' });
-    if ((app.dependents || []).length) tabs.push({ id: 'dependents', label: 'Dependents' });
+    if (app && app.sponsor) tabs.push({ id: 'sponsor', label: 'Sponsor' });
+    if (app && (app.dependents || []).length) tabs.push({ id: 'dependents', label: 'Dependents' });
 
     /*
      * Activity is offered only for an application.
@@ -5728,13 +5817,18 @@
     var tabs = profileTabsFor(state);
     var ids = tabs.map(function (t) { return t.id; });
 
-    if (BOOT_POSITION.tab && ids.indexOf(BOOT_POSITION.tab) !== -1) {
+    var asked = BOOT_POSITION.tab;
+    if (asked === 'info' && (isCipApplicant(state.selectedId) || isApplicationProfile(applicationFor(state.selectedId)))) {
+      takeBootPosition('tab');
+      asked = null;
+    }
+    if (asked && ids.indexOf(asked) !== -1) {
       state.profileTab = takeBootPosition('tab');
 
       return state.profileTab;
     }
 
-    return tabs.length ? tabs[0].id : 'info';
+    return tabs.length ? tabs[0].id : (isCipApplicant(state.selectedId) ? cipDefaultTab(state) : 'info');
   }
 
   /*
@@ -6403,7 +6497,7 @@
   }
 
   function refreshCipAfterFileChange(state, render) {
-    delete APPLICATIONS[state.selectedId];
+    rememberCipApplicant(state.selectedId);
     forgetApplication(state.selectedId);
     state.applicationFreshFor = null;
     ensureApplicationLoaded(state, render);
@@ -8129,8 +8223,12 @@
      * yet" would hold the skeleton for ever on any path that never asks.
      */
     var appPending = state.selectedId &&
-      applicationFor(state.selectedId) === undefined &&
-      state.applicationLoadingFor === state.selectedId;
+      !isApplicationProfile(applicationFor(state.selectedId)) &&
+      (
+        isCipApplicant(state.selectedId) ||
+        (applicationFor(state.selectedId) === undefined &&
+          state.applicationLoadingFor === state.selectedId)
+      );
 
     if (state.selectedId && (!profileLoaded(state.selectedId) || appPending)) {
       /*
@@ -8141,7 +8239,16 @@
        * made it vanish and come back on every single client you opened, taking
        * the panel below it up and down with it. A row of the right height,
        * greyed, holds its place until it can be filled in.
+       *
+       * A CIP applicant must not fall through to Client info while that wait
+       * is on: that tab is the hub contact, and putting the file there is how
+       * an application became the old record.
        */
+      var applicationFailed = isCipApplicant(state.selectedId) &&
+        !isApplicationProfile(applicationFor(state.selectedId)) &&
+        state.applicationFreshFor === state.selectedId &&
+        state.applicationLoadingFor !== state.selectedId;
+
       return (
         '<div class="tma-dash__clients-detail">' +
         (opts.elevateToolbar ? '' : renderContactProfileToolbar(contactFor(state.selectedId), state)) +
@@ -8150,13 +8257,16 @@
         (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
         (state.profileError
           ? renderProfileError(state.profileError, { retry: !state.profileErrorFinal })
-          : renderProfileSkeleton()) +
+          : applicationFailed
+            ? renderProfileError('Couldn’t load this application.', { retry: true })
+            : renderProfileSkeleton()) +
         '</div></div>'
       );
     }
 
     var c = contactFor(state.selectedId);
     var app = applicationFor(state.selectedId);
+    var cipProfile = isApplicationProfile(app);
     // The stored tab may not exist on this profile, an applicant has no
     // "Client info", and a client with no application has no "Main applicant".
     var tabIds = profileTabsFor(state).map(function (t) { return t.id; });
@@ -8201,17 +8311,17 @@
       // An application's panels are cards, so the panel behind them gets out
       // of the way, the same reason a company's and the intake form's do.
       '<div class="tma-dash__clients-profile' +
-      (app ? ' tma-dash__clients-profile--cards' : '') +
+      (cipProfile ? ' tma-dash__clients-profile--cards' : '') +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
-      (app
+      (cipProfile
         ? renderOverviewPanel(app, activeTab !== 'overview') +
           renderCipPersonPanel(state, app.applicant, 'applicant', activeTab !== 'applicant') +
           renderCipPersonPanel(state, app.sponsor, 'sponsor', activeTab !== 'sponsor') +
           ((app.dependents || []).length
             ? renderCipDependentsPanel(state, app, activeTab !== 'dependents')
             : '')
-        : renderContactInfoPanel(c, listItems, activeTab !== 'info')) +
-      (app ? renderActivityPanel(state, activeTab !== 'activity') : '') +
+        : (isCipApplicant(state.selectedId) ? '' : renderContactInfoPanel(c, listItems, activeTab !== 'info'))) +
+      (cipProfile ? renderActivityPanel(state, activeTab !== 'activity') : '') +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
       renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
       renderClientMessagesPanel(state, activeTab !== 'messages') +
@@ -8461,7 +8571,7 @@
         e.preventDefault();
         var id = row.getAttribute('data-clients-row');
         if (!id) return;
-        state.profileTab = 'info';
+        state.profileTab = isCipApplicant(id) ? cipDefaultTab(state) : 'info';
         navigate('detail', id);
       });
     });
@@ -9597,13 +9707,13 @@
 
     if (clientUid) {
       forgetApplication(clientUid);
-      delete APPLICATIONS[clientUid];
       delete TIMELINE[clientUid];
       if (state && state.applicationFreshFor === clientUid) state.applicationFreshFor = null;
+      rememberCipApplicant(clientUid);
     }
 
-    render({ forceFull: true });
     if (state) ensureApplicationLoaded(state, render);
+    render({ forceFull: true });
   }
 
   function changeCipStatus(to, extra, clientUid, label) {
@@ -10215,6 +10325,7 @@
           return navigate('edit-application', null, { applicationId: row.id });
         }
       }
+      rememberCipApplicant(id);
       kind = 'client';
     }
 
@@ -10246,7 +10357,7 @@
     }
 
     if (act === 'open') {
-      state.profileTab = 'info';
+      state.profileTab = isCipApplicant(id) ? cipDefaultTab(state) : 'info';
       return navigate('detail', id);
     }
     if (act === 'edit') return navigate('edit', id);
@@ -11814,7 +11925,24 @@
      * the request kept showing the original three documents.
      */
     var paint = function (json, meta) {
-      APPLICATIONS[id] = (json && json.application) || null;
+      var next = json && json.application;
+
+      /*
+       * A cached "no application" is how an applicant became Client info.
+       * IndexedDB remembers a miss from a visit before the file existed, or
+       * from a request that failed; that must not paint the hub contact over
+       * a file we are about to read for real.
+       */
+      if (meta && meta.stale && !next) return;
+
+      if (next) {
+        rememberApplication(id, next);
+      } else if (isCipApplicant(id) || isApplicationProfile(APPLICATIONS[id])) {
+        // Keep the file that is on screen. Absence is not "this is a client".
+      } else {
+        APPLICATIONS[id] = null;
+      }
+
       if (state.selectedId !== id) return;
       if (!meta || !meta.stale) state.applicationFreshFor = id;
       if (usesPagedClientsFlow(state)) render();
@@ -11826,9 +11954,12 @@
       : clientsFetch(url).then(paint);
 
     request
-      .catch(function () { paint(null); })
+      .catch(function () { /* Keep what is on screen. A miss is not a client. */ })
       .then(function () {
         if (state.applicationLoadingFor === id) state.applicationLoadingFor = null;
+        if (state.selectedId !== id) return;
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
       });
   }
 
@@ -11855,6 +11986,7 @@
   function rememberApplication(clientId, record) {
     if (!clientId || record === undefined) return;
     APPLICATIONS[clientId] = record;
+    if (record) rememberCipApplicant(clientId);
     if (window.TMAStore) {
       window.TMAStore.put(applicationCacheKey(clientId), { application: record });
     }
@@ -12269,7 +12401,14 @@
       if (companyId) state.companyId = companyId;
       if (contactId) state.selectedId = contactId;
       if (contactId && contactId !== previousId) {
-        state.profileTab = 'info';
+        // An application is Overview (or Main applicant after a decision),
+        // never Client info. Forcing `info` here is how a row clicked from
+        // the worklist opened as the old hub contact.
+        state.profileTab = isCipApplicant(contactId)
+          ? (state.profileTab && state.profileTab !== 'info'
+            ? state.profileTab
+            : cipDefaultTab(state))
+          : 'info';
         state.profileLoadingFor = null;
         state.profileError = null;
         state.assignmentsLoadedFor = null;
@@ -12354,7 +12493,10 @@
 
       state.draft = null;
       state.companyDraft = null;
-      if (screen === 'detail') state.profileTab = state.profileTab || 'info';
+      if (screen === 'detail') {
+        state.profileTab = state.profileTab
+          || (isCipApplicant(state.selectedId) ? cipDefaultTab(state) : 'info');
+      }
     }
 
     function renderDetailPanel() {
@@ -12563,7 +12705,7 @@
               contactId: state.selectedId,
             },
             '',
-            '/clients'
+            CIP_APPLICATIONS_PATH
           );
         }
         return;
@@ -12805,7 +12947,10 @@
         forgetApplication(open);
         settled.push(
           clientsFetch('/portal/cip/clients/' + encodeURIComponent(open) + '/application')
-            .then(function (json) { rememberApplication(open, (json && json.application) || null); })
+            .then(function (json) {
+              var next = json && json.application;
+              if (next) rememberApplication(open, next);
+            })
             // Keep what is on screen. A signal is not a reason to empty a file.
             .catch(function () {})
         );

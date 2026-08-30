@@ -8,6 +8,7 @@ use App\Models\CompanyMember;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\Pages;
 use App\Support\Invitations\Invitations;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
@@ -93,7 +94,7 @@ final class CompanyMembers
                 'title' => 'You were added to '.$company->name,
                 'message' => 'As '.$member->roleLabel().'.',
                 'subject' => $company,
-                'action_url' => '/clients',
+                'action_url' => Pages::HOME,
             ]);
             ClientConversations::attachLogin($member->user);
         }

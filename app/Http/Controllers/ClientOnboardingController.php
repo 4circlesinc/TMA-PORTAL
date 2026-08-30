@@ -9,6 +9,7 @@ use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Pages;
 use App\Support\Notifications\Notifier;
 use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\Onboarding\ClientFlow;
@@ -183,7 +184,7 @@ class ClientOnboardingController extends Controller
                 'message' => 'Their profile on '.$client->name.' is now up to date.',
                 'subject' => $client,
                 'client' => $client,
-                'action_url' => '/clients?client='.$client->uid,
+                'action_url' => Pages::application($client->uid),
             ]);
         }
     }

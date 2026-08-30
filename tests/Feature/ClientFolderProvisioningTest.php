@@ -53,7 +53,7 @@ class ClientFolderProvisioningTest extends TestCase
         $this->assertSame($client->id, $folder->client_id);
         $this->assertSame('Vernon Francis', $folder->name);
 
-        // Lives under the "Clients" root.
+        // Lives under the citizenship applications library.
         $this->assertSame(FolderProvisioner::ROOT_CLIENTS, $folder->parent->name);
 
         // No scaffold of empty folders: the firm turned that off, so a new

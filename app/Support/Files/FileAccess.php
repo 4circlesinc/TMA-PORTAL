@@ -433,7 +433,7 @@ class FileAccess
     {
         return $folder->folder_type === Folder::TYPE_ROOT
             && $folder->parent_id === null
-            && in_array($folder->name, [FolderProvisioner::ROOT_CLIENTS, FolderProvisioner::ROOT_CLIENTS_LEGACY], true);
+            && in_array($folder->name, FolderProvisioner::clientsRootNames(), true);
     }
 
     /**

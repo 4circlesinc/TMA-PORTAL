@@ -326,6 +326,7 @@ class Role
         'call-recordings' => 'callRecordings.view',
         'cbi' => 'cbi.view',
         'clients' => 'clients.view',
+        'citizenship-applications' => 'clients.view',
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
         // The File Library. Shared Folders stays staff-only. All Files is

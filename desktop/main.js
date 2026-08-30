@@ -998,7 +998,7 @@ const PLACES = [
   { label: 'Email', path: '/email' },
   { label: 'Files', path: '/folders/all' },
   { label: 'Calendar', path: '/calendar' },
-  { label: 'Clients', path: '/clients' },
+  { label: 'Citizenship Applications', path: '/citizenship-applications' },
   { label: 'People', path: '/people' },
   { label: 'Signatures', path: '/signatures' },
 ];

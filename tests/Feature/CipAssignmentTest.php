@@ -351,7 +351,7 @@ class CipAssignmentTest extends TestCase
                 && $details['Status'] === 'Review Applications'
                 && str_contains($mail->payload['lead'], 'Review Applications')
                 // The public address, whatever host fired the request.
-                && str_starts_with($mail->payload['button']['url'], rtrim(config('app.url'), '/').'/clients/');
+                && str_starts_with($mail->payload['button']['url'], rtrim(config('app.url'), '/').'/citizenship-applications/');
         });
 
         // Tracked on the file: the send is a row against this application, so

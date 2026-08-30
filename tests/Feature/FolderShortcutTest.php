@@ -6,6 +6,7 @@ use App\Models\Folder;
 use App\Models\FolderShortcut;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -64,11 +65,11 @@ class FolderShortcutTest extends TestCase
                 ->assertOk()->json('groups.libraries')
         )->pluck('name');
 
-        $this->assertTrue($libraries->contains('Clients'));
+        $this->assertTrue($libraries->contains(FolderProvisioner::ROOT_CLIENTS));
         $this->assertTrue($libraries->contains('Staff Files'));
     }
 
-    public function test_a_legacy_client_files_root_is_renamed_to_clients(): void
+    public function test_a_legacy_clients_root_is_renamed_to_the_citizenship_library(): void
     {
         $admin = $this->approvedUser(['account_type' => 'Administrator']);
         Folder::create([
@@ -85,9 +86,10 @@ class FolderShortcutTest extends TestCase
                 ->assertOk()->json('groups.libraries')
         )->pluck('name');
 
-        $this->assertTrue($libraries->contains('Clients'));
+        $this->assertTrue($libraries->contains(FolderProvisioner::ROOT_CLIENTS));
         $this->assertFalse($libraries->contains('Client Files'));
-        $this->assertSame(1, Folder::where('folder_type', Folder::TYPE_ROOT)->where('name', 'Clients')->count());
+        $this->assertFalse($libraries->contains('Clients'));
+        $this->assertSame(1, Folder::where('folder_type', Folder::TYPE_ROOT)->where('name', FolderProvisioner::ROOT_CLIENTS)->count());
     }
 
     public function test_staff_never_see_the_client_files_library_in_shortcuts(): void

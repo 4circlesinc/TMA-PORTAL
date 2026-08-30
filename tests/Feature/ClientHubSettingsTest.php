@@ -142,9 +142,11 @@ class ClientHubSettingsTest extends TestCase
 
         $this->assertFalse(Role::can($employee->fresh(), 'clients.view'));
         $this->actingAs($employee)->getJson('/portal/clients')->assertForbidden();
-        // The page gate 404s rather than 403s — a closed page should not
-        // confirm it exists (see LegacyPageController).
-        $this->actingAs($employee)->get('/clients')->assertNotFound();
+        // The hub API is closed. The CIP Applications page is a different
+        // door — officers still reach it through cip.view. /clients forwards
+        // to /citizenship-applications.
+        $this->actingAs($employee)->get('/clients')->assertRedirect('/citizenship-applications');
+        $this->actingAs($employee)->get('/citizenship-applications')->assertOk();
 
         // The browser is told the same thing, so the sidebar row goes too.
         $capabilities = $this->actingAs($employee)->getJson('/me')->assertOk()->json('capabilities');

@@ -322,7 +322,7 @@
         ? '<a class="tma-no-data__btn" href="' + esc(mediaUrl) + '?download=1">Download</a>'
         : '') +
       (r.clientUid
-        ? '<a class="tma-no-data__btn tma-portal-btn--ghost" href="' + esc(ROOT + '/clients/' + r.clientUid) + '">Open client</a>'
+        ? '<a class="tma-no-data__btn tma-portal-btn--ghost" href="' + esc(ROOT + '/citizenship-applications/' + r.clientUid) + '">Open application</a>'
         : '') +
       (r.conversationId
         ? '<a class="tma-no-data__btn tma-portal-btn--ghost" href="' + esc(ROOT + '/social/messages?conversation=' + r.conversationId) + '">Open conversation</a>'

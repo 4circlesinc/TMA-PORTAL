@@ -278,7 +278,7 @@
       if (act) { navigate(act.getAttribute('data-action-url')); return; }
 
       var client = e.target.closest('[data-client-id]');
-      if (client) { navigate('/clients?client=' + encodeURIComponent(client.getAttribute('data-client-id'))); return; }
+      if (client) { navigate('/citizenship-applications/' + encodeURIComponent(client.getAttribute('data-client-id'))); return; }
     });
 
     // Keyboard access for the role="button" rows.

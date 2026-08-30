@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\Pages;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
@@ -187,7 +188,7 @@ final class Assignments
             'message' => 'As '.$assignment->roleLabel().'.',
             'subject' => $client,
             'client' => $client,
-            'action_url' => '/clients?client='.$client->uid,
+            'action_url' => Pages::application($client->uid),
             // emailStaff() sends the assignment postcard separately.
             'email' => false,
         ]);
@@ -224,7 +225,7 @@ final class Assignments
                 'message' => 'You are now '.$assignment->roleLabel().'.',
                 'subject' => $client,
                 'client' => $client,
-                'action_url' => '/clients?client='.$client->uid,
+                'action_url' => Pages::application($client->uid),
             ]);
         }
     }
@@ -243,7 +244,7 @@ final class Assignments
                 $client->name,
                 $assignment->roleLabel(),
                 $by->name,
-                url('/clients?client='.$client->uid),
+                url(Pages::application($client->uid)),
                 $assignment->is_primary,
             ),
             $staff->email,

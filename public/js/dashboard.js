@@ -12,7 +12,19 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-25-no-templates-nav';
+  var NAV_SHELL_VERSION = '2026-08-29-citizenship-applications';
+  var CIP_APPLICATIONS_PATH = '/citizenship-applications';
+
+  function cipApplicationsRest(pathname) {
+    var p = String(pathname || '').replace(/\/+$/, '') || '/';
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
+    for (var i = 0; i < prefixes.length; i++) {
+      var pre = prefixes[i];
+      if (p === pre) return '';
+      if (p.indexOf(pre + '/') === 0) return p.slice(pre.length);
+    }
+    return null;
+  }
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -395,44 +407,44 @@
           crumb: 'Social / Feed',
         };
       }
-      if (p === '/clients/new') {
-        return {
-          navId: 'clients',
-          view: 'clients',
-          title: 'New client',
-          crumb: 'Clients / New',
-          clientsScreen: 'add',
-        };
-      }
-      var clientsEditMatch = p.match(/^\/clients\/([^/]+)\/edit$/);
-      if (clientsEditMatch) {
-        return {
-          navId: 'clients',
-          view: 'clients',
-          title: 'Client',
-          crumb: 'CIP Applications',
-          clientsScreen: 'edit',
-          contactId: decodeURIComponent(clientsEditMatch[1]),
-        };
-      }
-      var clientsDetailMatch = p.match(/^\/clients\/([^/]+)$/);
-      if (clientsDetailMatch) {
-        return {
-          navId: 'clients',
-          view: 'clients',
-          title: 'Client',
-          crumb: 'CIP Applications',
-          clientsScreen: 'detail',
-          contactId: decodeURIComponent(clientsDetailMatch[1]),
-        };
-      }
-      if (p === '/clients' || p === '/user-profile/clients') {
+      var cipRest = cipApplicationsRest(p);
+      if (cipRest !== null) {
+        if (cipRest === '/new') {
+          return {
+            navId: 'clients',
+            view: 'clients',
+            title: 'New application',
+            crumb: 'Citizenship Applications / New',
+            clientsScreen: 'add',
+          };
+        }
+        var clientsEditMatch = cipRest.match(/^\/([^/]+)\/edit$/);
+        if (clientsEditMatch && cipRest.indexOf('/applications/') !== 0 && cipRest.indexOf('/companies/') !== 0) {
+          return {
+            navId: 'clients',
+            view: 'clients',
+            title: 'Citizenship Application',
+            crumb: 'Citizenship Applications',
+            clientsScreen: 'edit',
+            contactId: decodeURIComponent(clientsEditMatch[1]),
+          };
+        }
+        var clientsDetailMatch = cipRest.match(/^\/([^/]+)$/);
+        if (clientsDetailMatch && cipRest !== '/applications' && cipRest.indexOf('/companies') !== 0) {
+          return {
+            navId: 'clients',
+            view: 'clients',
+            title: 'Citizenship Application',
+            crumb: 'Citizenship Applications',
+            clientsScreen: 'detail',
+            contactId: decodeURIComponent(clientsDetailMatch[1]),
+          };
+        }
         return {
           navId: 'clients',
           view: 'clients',
           title: 'CIP Applications',
           crumb: 'CIP Applications',
-          clientsScreen: 'list',
         };
       }
       if (p === '/contacts/new') {
@@ -523,14 +535,14 @@
     }
 
     function clientsPathFor(screen, contactId) {
-      if (screen === 'add') return '/clients/new';
+      if (screen === 'add') return CIP_APPLICATIONS_PATH + '/new';
       if (screen === 'edit' && contactId) {
-        return '/clients/' + encodeURIComponent(contactId) + '/edit';
+        return CIP_APPLICATIONS_PATH + '/' + encodeURIComponent(contactId) + '/edit';
       }
       if (screen === 'detail' && contactId) {
-        return '/clients/' + encodeURIComponent(contactId);
+        return CIP_APPLICATIONS_PATH + '/' + encodeURIComponent(contactId);
       }
-      return '/clients';
+      return CIP_APPLICATIONS_PATH;
     }
 
     function pathForRoute(navId, view, extra) {
@@ -1330,11 +1342,14 @@
         params[decodeURIComponent(p[0])] = decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
       });
 
-      if (base === '/clients' || base.indexOf('/clients/') === 0) {
+      if (cipApplicationsRest(base) !== null) {
         var contactId = params.client || null;
         if (!contactId) {
-          var mm = base.match(/^\/clients\/([^/]+)/);
-          if (mm) contactId = decodeURIComponent(mm[1]);
+          var rest = cipApplicationsRest(base);
+          var mm = rest && rest.match(/^\/([^/]+)/);
+          if (mm && mm[1] !== 'applications' && mm[1] !== 'companies' && mm[1] !== 'new') {
+            contactId = decodeURIComponent(mm[1]);
+          }
         }
         if (root.querySelector('.tma-dash__view[data-view="clients"]')) {
           activate('clients', {
@@ -2749,8 +2764,9 @@
 
     function navigateSearchResult(item, navOpts) {
       navOpts = navOpts || {};
-      if (item.clientId || (item.href && String(item.href).indexOf('/clients') === 0)) {
-        var clientUrl = item.href || ('/clients?client=' + encodeURIComponent(item.clientId));
+      if (item.clientId || (item.href && (String(item.href).indexOf('/clients') === 0
+        || String(item.href).indexOf(CIP_APPLICATIONS_PATH) === 0))) {
+        var clientUrl = item.href || (CIP_APPLICATIONS_PATH + '/' + encodeURIComponent(item.clientId));
         if (root._portalNavigate) root._portalNavigate(clientUrl);
         else window.location.assign((window.__TMA_SITE_ROOT || '') + clientUrl);
         return;
@@ -3268,7 +3284,22 @@
          * URL. Page-to-page navigation still drops it, which is right: leaving
          * the library should not carry `folder=` to the next screen.
          */
-        pathForRoute(bootRoute.navId, bootRoute.view, bootRoute) + window.location.search
+        (function () {
+          var bootPath = pathForRoute(bootRoute.navId, bootRoute.view, bootRoute);
+          var bootSearch = window.location.search || '';
+          if (bootRoute.view === 'clients') {
+            try {
+              var sp = new URLSearchParams(bootSearch);
+              // Client info is the old hub contact. An application URL should
+              // name the application, not that tab.
+              if (sp.get('tab') === 'info') {
+                sp.delete('tab');
+                bootSearch = sp.toString() ? '?' + sp.toString() : '';
+              }
+            } catch (e) { /* keep the query as typed */ }
+          }
+          return bootPath + bootSearch;
+        })()
       );
     } else {
       activate(savedNav, { keepDrawer: true, skipExpand: true, skipUrl: true });

@@ -9,9 +9,10 @@ use App\Models\User;
 use Illuminate\Support\Str;
 
 /**
- * Creates and maintains the system-managed folders: the "Clients" and
- * "Staff Files" roots, one main folder per client (linked by client_id, never
- * by name), each client's configured default subfolders, and per-staff folders.
+ * Creates and maintains the system-managed folders: the citizenship
+ * applications library and "Staff Files" roots, one main folder per
+ * application (linked by client_id, never by name), each application's
+ * configured default subfolders, and per-staff folders.
  *
  * Everything here is idempotent - safe to call again without creating
  * duplicates - because provisioning is triggered by events (a client is
@@ -19,10 +20,10 @@ use Illuminate\Support\Str;
  */
 class FolderProvisioner
 {
-    public const ROOT_CLIENTS = 'Clients';
+    public const ROOT_CLIENTS = 'Citizenship By Investment Application';
 
-    /** Older label. Looked up so an existing install is renamed, not duplicated. */
-    public const ROOT_CLIENTS_LEGACY = 'Client Files';
+    /** Older labels. Looked up so an existing install is renamed, not duplicated. */
+    public const ROOT_CLIENTS_ALIASES = ['Client', 'Clients', 'Client Files'];
 
     public const ROOT_STAFF = 'Staff Files';
 
@@ -64,7 +65,13 @@ class FolderProvisioner
 
     public static function clientsRoot(): Folder
     {
-        return self::ensureRoot(self::ROOT_CLIENTS, [self::ROOT_CLIENTS_LEGACY]);
+        return self::ensureRoot(self::ROOT_CLIENTS, self::ROOT_CLIENTS_ALIASES);
+    }
+
+    /** The current library name plus every label it has ever gone by. */
+    public static function clientsRootNames(): array
+    {
+        return array_values(array_unique(array_merge([self::ROOT_CLIENTS], self::ROOT_CLIENTS_ALIASES)));
     }
 
     public static function staffRoot(): Folder

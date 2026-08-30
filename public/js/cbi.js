@@ -850,8 +850,8 @@
       // The applicant's record in the Client hub. The case is the record of
       // truth for the file; the client is the record of truth for the person.
       fact('Client record', a.clientUid
-        ? '<a class="tma-dash__clients-list-link" href="' + esc((window.__TMA_SITE_ROOT || '') + '/clients/' + encodeURIComponent(a.clientUid)) +
-          '">' + esc(a.clientName || 'Open in Client hub') + '</a>'
+        ? '<a class="tma-dash__clients-list-link" href="' + esc((window.__TMA_SITE_ROOT || '') + '/citizenship-applications/' + encodeURIComponent(a.clientUid)) +
+          '">' + esc(a.clientName || 'Open application') + '</a>'
         : null, true);
     var stripHtml = strip
       ? '<section class="cbi-card cbi-card--strip"><div class="cbi-strip">' + strip + '</div></section>'

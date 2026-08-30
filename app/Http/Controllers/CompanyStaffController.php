@@ -11,6 +11,7 @@ use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\Pages;
 use App\Support\Companies\CompanyAccess;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
@@ -139,7 +140,7 @@ class CompanyStaffController extends Controller
                 'title' => $request->user()->name.' assigned you to '.$company->name,
                 'message' => $reach['label'] ?: null,
                 'subject' => $company,
-                'action_url' => '/clients',
+                'action_url' => Pages::HOME,
             ]);
         }
 

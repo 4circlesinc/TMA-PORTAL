@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Pages;
 use App\Support\PortalShell;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,6 +38,7 @@ class LegacyPageController extends Controller
         // Admin-only while in development (Role::PAGE_CAPABILITIES gates it,
         // and the whole module vanishes when FEATURE_CBI is off).
         'cbi',
+        'citizenship-applications',
         'clients',
         'email',
         'email/templates',
@@ -101,15 +103,23 @@ class LegacyPageController extends Controller
     }
 
     /**
-     * Any path under /clients, a client, a company, an edit screen.
+     * Any path under /clients or /citizenship-applications: a file, a company,
+     * an edit screen.
      *
-     * The shell is the same one /clients gets; clients.js reads the path and
-     * opens the right screen. Gated on the same capability as /clients itself,
+     * The shell is the same one the list page gets; clients.js reads the path
+     * and opens the right screen. Gated on the same capability as the list,
      * so a deep link is no way around the directory being closed to somebody.
+     *
+     * /clients still exists so old bookmarks open, then we send them to
+     * /citizenship-applications so the address names the application.
      */
     public function clients(Request $request): Response
     {
         abort_unless($this->canViewClientsPage($request), 404);
+
+        if ($redirect = $this->redirectLegacyClientsPath($request)) {
+            return $redirect;
+        }
 
         return PortalShell::respond(self::spaShellPath(), $request->user());
     }
@@ -122,8 +132,11 @@ class LegacyPageController extends Controller
             // A page the account may not use does not exist as far as it is
             // concerned. 404, not 403, so the portal never advertises the
             // staff tooling a client can't reach.
-            if ($page === 'clients') {
+            if ($page === 'clients' || $page === 'citizenship-applications') {
                 abort_unless($this->canViewClientsPage($request), 404);
+                if ($page === 'clients' && ($redirect = $this->redirectLegacyClientsPath($request))) {
+                    return $redirect;
+                }
             } elseif ($page === 'folders/all') {
                 abort_unless($this->canViewAllFilesPage($request), 404);
             } elseif ($page === 'workflows' || $page === 'workflows/feedback') {
@@ -160,7 +173,8 @@ class LegacyPageController extends Controller
     }
 
     /**
-     * /clients is both the staff client hub and the CIP workspace shell.
+     * /citizenship-applications is the CIP workspace shell. /clients is the
+     * same page under the hub's old name; it redirects so the address says so.
      *
      * Staff still need `clients.view`. External CIP users (service-provider
      * contacts and private clients) hold no matrix capabilities by design, so
@@ -171,6 +185,33 @@ class LegacyPageController extends Controller
         $user = $request->user();
 
         return Role::canViewPage($user, 'clients') || CipAccess::canReach($user);
+    }
+
+    /**
+     * Old /clients bookmarks, rewritten to /citizenship-applications.
+     *
+     * `tab=info` was the hub contact. An application has no such tab, so it
+     * is dropped rather than carried onto the new address.
+     */
+    private function redirectLegacyClientsPath(Request $request): ?Response
+    {
+        $path = $request->path();
+        if ($path !== 'clients' && ! str_starts_with($path, 'clients/')) {
+            return null;
+        }
+
+        $rest = $path === 'clients' ? '' : substr($path, strlen('clients'));
+        $query = $request->query();
+        if (($query['tab'] ?? null) === 'info') {
+            unset($query['tab']);
+        }
+
+        $target = Pages::HOME.$rest;
+        if ($query !== []) {
+            $target .= '?'.http_build_query($query);
+        }
+
+        return redirect($target);
     }
 
     /**

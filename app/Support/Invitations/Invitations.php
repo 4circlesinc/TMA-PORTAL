@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\Pages;
 use App\Support\Clients\ClientHubSettings;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FolderProvisioner;
@@ -380,7 +381,7 @@ final class Invitations
                 'message' => 'They now have access to '.$what.'.',
                 'subject' => $invitation,
                 'client' => $client,
-                'action_url' => $client ? '/clients?client='.$client->uid : '/users',
+                'action_url' => $client ? Pages::application($client->uid) : '/users',
             ]);
         }
     }

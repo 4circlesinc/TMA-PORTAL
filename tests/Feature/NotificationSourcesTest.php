@@ -71,7 +71,7 @@ class NotificationSourcesTest extends TestCase
         $this->assertSame(1, Notification::where('user_id', $employee->id)->where('type', 'client.assigned')->count());
         $n = Notification::where('user_id', $employee->id)->where('type', 'client.assigned')->first();
         $this->assertSame($admin->id, $n->actor_id);
-        $this->assertStringContainsString('/clients?client=', $n->action_url);
+        $this->assertStringContainsString('/citizenship-applications/', $n->action_url);
 
         // Re-assigning (updateOrCreate, not recently created) must not re-notify.
         $assign()->assertOk();

@@ -1218,6 +1218,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      * Declared before the catch-all: `{page}` would otherwise swallow
      * "clients" and 404 on the segment after it.
      */
+    Route::get('/citizenship-applications/{rest}', [LegacyPageController::class, 'clients'])
+        ->where('rest', '[A-Za-z0-9][A-Za-z0-9\-_/]*')
+        ->name('citizenship-applications.deep');
+
     Route::get('/clients/{rest}', [LegacyPageController::class, 'clients'])
         ->where('rest', '[A-Za-z0-9][A-Za-z0-9\-_/]*')
         ->name('clients.deep');

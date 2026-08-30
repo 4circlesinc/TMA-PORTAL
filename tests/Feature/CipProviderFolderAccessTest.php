@@ -252,7 +252,7 @@ class CipProviderFolderAccessTest extends TestCase
             $this->actingAs($gil)->getJson('/portal/files/?section=all')
                 ->assertOk()->json('folders')
         );
-        $this->assertSame(['Clients'], $listed->pluck('name')->all());
+        $this->assertSame([FolderProvisioner::ROOT_CLIENTS], $listed->pluck('name')->all());
 
         $clientsRoot = FolderProvisioner::clientsRoot();
         $this->assertTrue(FileAccess::can($gil, 'view', $clientsRoot));

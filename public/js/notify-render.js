@@ -245,10 +245,10 @@
   /* Activity rows link to their subject where the module has a landing page. */
   function actionUrlForActivity(item) {
     var m = item.module;
-    if (m === 'clients' && item.client) return '/clients?client=' + encodeURIComponent(item.client.id);
+    if (m === 'clients' && item.client) return '/citizenship-applications/' + encodeURIComponent(item.client.id);
     var MAP = {
       files: '/portal/files', calendar: '/calendar', email: '/email',
-      messages: '/social/messages', signatures: '/signatures', clients: '/clients',
+      messages: '/social/messages', signatures: '/signatures', clients: '/citizenship-applications',
       account: '/overview?tab=activity', security: '/account-settings?settings-page=security',
     };
     return MAP[m] || '';

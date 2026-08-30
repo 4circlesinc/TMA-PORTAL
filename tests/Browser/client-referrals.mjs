@@ -230,7 +230,7 @@ try {
   await page.waitForTimeout(900);
   // The company's name is drawn in the page head chrome, outside the detail
   // panel, so the URL is what says which record we landed on.
-  check(page.url().includes('/clients/companies/blue-media'),
+  check(page.url().includes('/citizenship-applications/companies/blue-media'),
     `the Referred by cell links through to the company (at ${page.url()})`);
   check(await page.locator('.tma-dash__clients-detail:has-text("Clients referred")').first().isVisible(),
     'the company profile reports how many clients it referred');

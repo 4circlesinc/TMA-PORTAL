@@ -370,8 +370,13 @@ class PortalAccessTest extends TestCase
     {
         $contact = $this->providerContact();
 
-        $this->actingAs($contact)->get('/clients')->assertOk();
-        $this->actingAs($contact)->get('/clients/applications')->assertOk();
+        $this->actingAs($contact)->get('/clients')->assertRedirect('/citizenship-applications');
+        $this->actingAs($contact)->get('/citizenship-applications')->assertOk();
+        $this->actingAs($contact)->get('/clients/applications')->assertRedirect('/citizenship-applications/applications');
+        $this->actingAs($contact)->get('/citizenship-applications/applications')->assertOk();
+        $this->actingAs($contact)
+            ->get('/clients/chen-wei-test?tab=info')
+            ->assertRedirect('/citizenship-applications/chen-wei-test');
     }
 
     /**
