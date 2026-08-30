@@ -5129,8 +5129,8 @@ label.tma-portal-check-row:hover {
   .tma-portal-home-defaults__grid { grid-template-columns: 1fr; }
 }
 
-/* One panel per default folder. Files are a scrollable list of twenty,
-   then a See more control that opens the folder. */
+/* One panel per default folder. Ten files sit on screen; the next ten
+   scroll. See more opens the folder when there are more than twenty. */
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
@@ -5179,8 +5179,14 @@ label.tma-portal-check-row:hover {
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  max-height: 800px;
+  max-height: calc(10 * 44px);
   overflow-y: auto;
+}
+
+.tma-portal-default-folder__body .tma-portal-file-row {
+  flex: 0 0 auto;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .tma-portal-default-folder__body .tma-portal-panel__note {

@@ -1,8 +1,9 @@
 /*
  * TMA - Dashboard home library strip
  * Default (organization) folders listed as panels, each with a scrollable
- * list of files and a See more control past the first twenty, plus a Recent
- * Files / Shared with me table that mirrors the Folders → All Files list.
+ * list of twenty files (ten on screen, the rest behind the scroll) and a
+ * See more control past that, plus a Recent Files / Shared with me table
+ * that mirrors the Folders → All Files list.
  * Global: window.TMAPortalHomeLibrary
  */
 (function () {
