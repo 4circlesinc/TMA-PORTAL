@@ -1862,7 +1862,7 @@
 .tma-portal-wf-strip__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-12);
   margin-bottom: var(--space-12);
   min-width: 0;

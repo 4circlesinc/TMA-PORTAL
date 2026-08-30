@@ -1664,7 +1664,6 @@
     return '<section class="tma-portal-wf-strip" data-key="wf-strip" data-home-wf-strip-root' +
       (ready ? '' : ' aria-busy="true"') + ' aria-label="Workflows">' +
       '<div class="tma-portal-wf-strip__head">' +
-      '<h2 class="tma-portal-home-defaults__title">Workflows</h2>' +
       '<div class="tma-portal-wf-strip__tools">' +
       '<button type="button" class="tma-portal-link" data-home-wf-all>See all</button>' +
       arrows +
