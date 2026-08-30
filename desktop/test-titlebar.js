@@ -60,7 +60,7 @@ function serve() {
         </head><body>
           <main class="tma-auth">
             <div class="tma-auth__body">
-              <section class="tma-auth__card tma-auth__card--tall"><h1 class="tma-auth__title">Sign in</h1></section>
+              <section class="tma-auth__card"><h1 class="tma-auth__title">Sign in</h1></section>
             </div>
             <p class="tma-auth__copyright">&copy; TM ANTOINE Advisory</p>
           </main>

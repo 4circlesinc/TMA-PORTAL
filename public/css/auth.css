@@ -10,9 +10,9 @@
    * whatever chrome the host draws over the viewport.
    *
    * --auth-bar is that host's share and is 0 in a browser. The desktop app
-   * draws its own 52px title bar and pads the body down by it, so there the
-   * card has 52px less to size itself against — without this every auth page
-   * stood exactly one bar taller than the window and scrolled by exactly 52px.
+   * draws its own title bar and pads the body down by it, so there the
+   * card has that much less to size itself against — without this every auth page
+   * stood exactly one bar taller than the window and scrolled by exactly the bar.
    * The app sets --auth-bar and nothing else; each tier below keeps its own
    * figure and simply adds it.
    */
@@ -1091,7 +1091,7 @@ body:has(.tma-auth__card--tall) {
  * The tighter vertical rhythm.
  *
  * Was 760px, which almost nothing real ever hit: a 1440x900 window is a 848px
- * viewport, and the desktop app spends 52 of those on its title bar. So the two
+ * viewport, and the desktop app spends its title-bar height of those. So the two
  * long screens — Set up your profile and Set up your account — were laid out at
  * full spacing in a space that could not hold them and scrolled: profile setup
  * by 26px in a browser and 78px in the app, getting started by 50px and 102px.

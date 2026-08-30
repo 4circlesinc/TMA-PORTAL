@@ -9405,7 +9405,7 @@
 }
 
 /* Browser email header — fixed height so row actions cannot stretch it.
-   Electron's .tma-dash--desktop-bar keeps its own 52px bar. */
+   Electron's .tma-dash--desktop-bar keeps its own title bar. */
 .tma-dash--email:not(.tma-dash--email-mobile):not(.tma-dash--desktop-bar) .tma-dash__header {
   height: 56px;
   min-height: 56px;

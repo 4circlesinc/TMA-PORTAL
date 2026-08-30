@@ -20,7 +20,7 @@
  * grey box on top of it.
  */
 
-const HEIGHT = 52;
+const HEIGHT = 64;
 
 // --color-primary from public/css/tokens.css. The one the design system calls
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
@@ -871,8 +871,9 @@ function windowOptions() {
       titleBarStyle: 'hidden',
       /*
        * Derived, not a constant. These were left at the offsets that centred
-       * them in a 38px bar, so raising the bar to 52 left them sitting high of
-       * everything else in the row. A traffic light is 12px.
+       * them in a 38px bar, so raising the bar left them sitting high of
+       * everything else in the row. A traffic light is 12px; the y offset
+       * keeps them vertically centred as HEIGHT changes.
        */
       trafficLightPosition: { x: 18, y: Math.round((HEIGHT - 12) / 2) },
     };

@@ -39,9 +39,9 @@
 
 .tma-user-info-overlay--desktop .tma-user-info-panel {
   /* The desktop app draws its blue titlebar over the page at z 200-201 —
-     52px that would otherwise cover the drawer's toolbar (the close X).
+     64px that would otherwise cover the drawer's toolbar (the close X).
      Start below it; the bar must stay on top, it is the window-drag strip. */
-  top: 68px !important;
+  top: 80px !important;
 }
 
 .tma-user-info-panel {
