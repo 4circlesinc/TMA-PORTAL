@@ -16,6 +16,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -217,6 +218,54 @@ class CipReviewTest extends TestCase
         $this->assertSame(2, $body['progress']['total']);
         $this->assertSame(1, $body['progress']['required']);
         $this->assertSame(1, $body['progress']['counts'][DocumentStatus::PENDING_UPLOAD]);
+    }
+
+    public function test_a_filed_document_in_application_review_blocks_ready_to_submit(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::REVIEW_APPLICATION);
+        $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $this->slot($application, 'translation', 'Certified translation', false, DocumentStatus::APPLICATION_REVIEW);
+
+        $this->actingAs($this->officer($application))
+            ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_TO_SUBMIT,
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => 'This application cannot be Ready to Submit while documents are still in Application review or Update required.']);
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+        $this->assertNotContains(
+            Status::READY_TO_SUBMIT,
+            Engine::availableTransitions($application->fresh(), $staff),
+        );
+        $this->assertNotContains(
+            Status::READY_TO_SUBMIT,
+            Engine::availableOverrides($application->fresh(), $staff),
+        );
+    }
+
+    public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $passport = $this->slot(
+            $application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION,
+        );
+
+        Review::settle($application->fresh());
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        $passport->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
+        Review::settle($application->fresh());
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
     }
 
     public function test_requesting_changes_sends_the_slot_back_and_writes_the_reason(): void

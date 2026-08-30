@@ -11,6 +11,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Review as CipReview;
 use App\Support\Cip\Status;
 use App\Support\Files\Comments;
@@ -67,12 +68,21 @@ class FileReviewController extends BaseFilesController
             $slot->refresh()->loadMissing(['application.client']);
             $application = $slot->application;
             if ($application) {
+                $option = fn (string $status) => [
+                    'value' => $status,
+                    'label' => Status::label($status),
+                    'tone' => Status::tone($status),
+                ];
                 $payload['application'] = [
                     'id' => $application->uuid,
                     'clientUid' => $application->client?->uid,
                     'status' => $application->status,
                     'statusLabel' => Status::label($application->status),
                     'statusTone' => Status::tone($application->status),
+                    'availableTransitions' => collect(Engine::availableTransitions($application, $user))
+                        ->map($option)->values()->all(),
+                    'availableOverrides' => collect(Engine::availableOverrides($application, $user))
+                        ->map($option)->values()->all(),
                 ];
             }
             if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {

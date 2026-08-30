@@ -220,6 +220,22 @@ class CipDocumentFileStatusTest extends TestCase
         $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
     }
 
+    public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void
+    {
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::READY_FOR_SUBMISSION);
+        $slot->loadMissing('application');
+        $slot->application->forceFill(['status' => Status::READY_TO_SUBMIT])->save();
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $slot->application->fresh()->status);
+    }
+
     public function test_staff_can_move_a_file_status_back_and_forth(): void
     {
         $staff = $this->user(Role::REVIEWING_OFFICER);

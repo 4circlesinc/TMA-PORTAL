@@ -103,7 +103,9 @@ class Engine
     {
         return array_values(array_filter(
             Status::ALL,
-            fn (string $to) => self::canTransition($application, $to) && self::allows($actor, $application, $to),
+            fn (string $to) => self::canTransition($application, $to)
+                && self::allows($actor, $application, $to)
+                && self::checklistAllows($application, $to),
         ));
     }
 
@@ -125,8 +127,20 @@ class Engine
 
         return array_values(array_filter(
             Status::listed(),
-            fn (string $to) => $to !== $application->status && ! in_array($to, $next, true),
+            fn (string $to) => $to !== $application->status
+                && ! in_array($to, $next, true)
+                && self::checklistAllows($application, $to),
         ));
+    }
+
+    /**
+     * Ready to Submit is a claim about the documents, not a label somebody
+     * may type while files are still in Application review or Update required.
+     */
+    private static function checklistAllows(CipApplication $application, string $to): bool
+    {
+        return $to !== Status::READY_TO_SUBMIT
+            || Review::documentsAllowReadyToSubmit($application);
     }
 
     /**
@@ -146,6 +160,12 @@ class Engine
 
         if (! self::allows($actor, $application, $to)) {
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
+        }
+
+        if (! self::checklistAllows($application, $to)) {
+            throw new \InvalidArgumentException(
+                'This application cannot be Ready to Submit while documents are still in Application review or Update required.',
+            );
         }
 
         return self::write($application, $to, $actor, $meta);
@@ -180,6 +200,12 @@ class Engine
 
         if ($actor !== null && ! self::allows($actor, $application, $to)) {
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
+        }
+
+        if (! self::checklistAllows($application, $to)) {
+            throw new \InvalidArgumentException(
+                'This application cannot be Ready to Submit while documents are still in Application review or Update required.',
+            );
         }
 
         $from = $application->status;

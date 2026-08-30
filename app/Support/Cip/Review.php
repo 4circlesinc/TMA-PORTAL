@@ -20,8 +20,9 @@ use Illuminate\Validation\ValidationException;
  * What is new here is the roll-up. An application's status is not typed in by
  * whoever is working the checklist, it is read OFF the checklist, every time
  * one of these verbs lands. One document sent back is Updates Required, the
- * provider side already has work. Every required document accepted means
- * there is nothing to send back, so it proceeds to Ready to submit (§15).
+ * provider side already has work. Ready to submit is only for a file whose
+ * documents are all judged: a slot still in Application review or Update
+ * required cannot sit under that label, and a picker cannot put it there.
  *
  * {@see settle()} is that inference, and it is deliberately an inference. It
  * drives {@see Engine} only along edges the lifecycle already allows and leaves
@@ -131,25 +132,49 @@ class Review
          * still had to type.
          *
          * Legality is asked of the engine, never assumed. An application
-         * whose next hop is not on the map is left where it is rather than
-         * forcing a transition the lifecycle does not have.
+         * whose next hop is not on the map is written as an inference when
+         * the checklist has left Ready to submit, rather than staying on a
+         * label the files no longer support.
          */
         foreach (self::plan($application) as $target) {
-            if (! Engine::canTransition($application, $target)) {
-                break;
+            $meta = ['reason' => 'checklist'];
+
+            if (Engine::canTransition($application, $target)) {
+                // The checklist moved. Whoever marked the document may not be
+                // allowed to type application status; the file still follows.
+                $who = $actor;
+                if ($who !== null && ! Engine::allows($who, $application, $target)) {
+                    $who = null;
+                }
+
+                $application = Engine::apply($application, $target, $who, $meta);
+
+                continue;
             }
 
-            // The checklist moved. Whoever marked the document may not be
-            // allowed to type application status; the file still follows.
-            $who = $actor;
-            if ($who !== null && ! Engine::allows($who, $application, $target)) {
-                $who = null;
-            }
-
-            $application = Engine::apply($application, $target, $who, ['reason' => 'checklist']);
+            // Ready to submit has no mapped reverse into Review Applications.
+            // The checklist still has to leave that label when a file goes
+            // back into review, so the system writes it as an inference.
+            $application = Engine::set($application, $target, null, $meta);
         }
 
         return $application;
+    }
+
+    /**
+     * Whether the checklist may wear Ready to Submit.
+     *
+     * A file still in Application review has not been judged, and a file in
+     * Update required is work the provider side still has. Either one is
+     * enough. Optional slots count: they are files on the checklist, not
+     * decoration beside it. Empty optional slots (Pending upload) do not.
+     */
+    public static function documentsAllowReadyToSubmit(CipApplication $application): bool
+    {
+        $tally = self::tally($application);
+
+        return $tally[DocumentStatus::UPDATE_REQUIRED]['total'] === 0
+            && $tally[DocumentStatus::APPLICATION_REVIEW]['total'] === 0;
     }
 
     /**
@@ -204,6 +229,7 @@ class Review
          */
         $from = $application->status;
         $needsUpdates = $tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
+        $inReview = $tally[DocumentStatus::APPLICATION_REVIEW]['total'] > 0;
 
         if ($needsUpdates) {
             return match ($from) {
@@ -219,6 +245,15 @@ class Review
         }
 
         /*
+         * A file put back into Application review cannot keep the application
+         * at Ready to submit. The officer is reading again; that is Review
+         * Applications, not a package waiting on Confirm submission.
+         */
+        if ($from === Status::READY_TO_SUBMIT && $inReview) {
+            return [Status::REVIEW_APPLICATION];
+        }
+
+        /*
          * §14: after review of ALL documents.
          *
          * "Every" over an empty checklist is vacuously true, which is why the
@@ -227,17 +262,16 @@ class Review
          * strength of an empty set would take it out of the officer's hands
          * before they had read a page of it.
          *
-         * Optional documents are counted in neither number. A translation the
-         * firm would like but does not demand cannot hold an assessment open,
-         * or "optional" would mean nothing at all.
-         *
-         * A required slot still in Pending upload or Application review has
-         * not been assessed, so Ready to submit waits.
+         * A required slot still in Pending upload has not been assessed, so
+         * Ready to submit waits. A filed slot still in Application review —
+         * required or optional — is the same: it is a file nobody has judged.
+         * An optional slot that was never uploaded does not hold the
+         * assessment open; that is still what "optional" means.
          */
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
             + $tally[DocumentStatus::APPLICATION_REVIEW]['required'];
 
-        if ($required === 0 || $unassessed > 0) {
+        if ($required === 0 || $unassessed > 0 || $inReview) {
             return [];
         }
 
