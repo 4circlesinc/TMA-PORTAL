@@ -19,7 +19,10 @@ use App\Support\Companies\ContactIdentity;
 use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\Presenter;
+use App\Support\Files\Thumbnail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -784,16 +787,29 @@ final class Hub
             return null;
         }
 
+        $ext = (string) $file->extension;
+
         return [
             'id' => $file->uuid,
             'name' => $file->name,
-            'extension' => $file->extension,
+            'extension' => $ext,
+            'mime' => $file->mime_type,
+            'category' => FileType::category($ext),
+            'size' => (int) $file->size,
             'folder' => $paths[$file->folder_id] ?? null,
             // What the File Library needs to open straight to it. Both halves
             // are required: the browser loads a folder, then looks for the file
             // inside the folder it just loaded.
             'folderId' => $paths['uuid:'.$file->folder_id] ?? null,
             'reviewStatus' => $file->review_status,
+            // Same preview URLs the File Library cards use, so a PDF or photo
+            // on this page can show a picture of itself instead of a chip.
+            'thumbUrl' => Thumbnail::supportsExt($ext)
+                ? Presenter::revisionedUrl('files.thumb', $file)
+                : null,
+            'previewUrl' => FileType::isPreviewable($ext)
+                ? Presenter::revisionedUrl('files.preview', $file)
+                : null,
         ];
     }
 

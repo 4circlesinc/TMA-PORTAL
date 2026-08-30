@@ -262,7 +262,7 @@ try {
   await beaPage.click('.tma-portal-page--workflows [data-tab-key="mine"]');
   await waitForBody(beaPage, new RegExp(QUESTION));
   await parkPointer(beaPage);
-  await beaPage.click(`.tma-portal-wf-card:has-text("${QUESTION}") [data-wfh-open]`);
+  await beaPage.click(`.tma-portal-wf-card:has-text("${QUESTION}") .tma-portal-wf-file`);
   await beaPage.waitForSelector('.tma-portal-viewer', { timeout: 20000 }).catch(() => {});
   check(/\/folders/.test(beaPage.url()), `it lands in the library (${beaPage.url()})`);
   check(!!(await beaPage.$('.tma-portal-viewer')), 'with the viewer open on the file');

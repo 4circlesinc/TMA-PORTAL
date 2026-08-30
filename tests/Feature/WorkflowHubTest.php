@@ -419,6 +419,9 @@ class WorkflowHubTest extends TestCase
             ->assertJsonPath('items.0.status', DocumentStatus::UPDATE_REQUIRED)
             ->assertJsonPath('counts.updates', 1);
 
+        $this->assertStringContainsString('/preview', (string) $res->json('items.0.file.previewUrl'));
+        $this->assertNull($res->json('items.0.file.thumbUrl'));
+
         $this->actingAs($ada)->get('/workflows/updates')->assertOk();
     }
 

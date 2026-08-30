@@ -74,6 +74,7 @@
     items: [], comments: [], counts: null, canSeeAll: false,
     cursor: null, loading: false, loadingMore: false, loaded: false,
     error: null, seq: 0, replyingTo: null, searchTimer: null,
+    expanded: {},
   };
 
   function mountWorkflows(el, opts) {
@@ -95,6 +96,7 @@
       wf.loaded = false;
       wf.error = null;
       wf.replyingTo = null;
+      wf.expanded = {};
     }
 
     renderWorkflows();
@@ -301,10 +303,8 @@
     var esc = ui().esc;
     var sub = [r.typeLabel];
 
-    if (r.sender) sub.push(r.sender.isSelf ? 'sent by you' : 'from ' + r.sender.name);
     if (r.isOpen && r.dueAt) sub.push((r.overdue ? 'overdue since ' : 'due ') + wfRelative(r.dueAt));
     else if (r.completedAt) sub.push(wfRelative(r.completedAt));
-    else if (r.sentAt) sub.push('sent ' + wfRelative(r.sentAt));
 
     /*
      * Per-person outcomes only where they add something.
@@ -351,15 +351,20 @@
     if (r.notYourTurn) footer.push('<span class="tma-portal-muted">It isn’t your turn yet, this request is answered one person at a time.</span>');
     if (r.canCancel) footer.push('<button type="button" class="tma-portal-link" data-wfh-cancel="' + esc(r.id) + '">Cancel request</button>');
 
+    var when = r.completedAt || r.sentAt;
+    var whenLabel = r.sender && r.sender.isSelf ? 'sent ' + wfRelative(when) : wfRelative(when);
+
     return '<article class="tma-portal-wf-card' + (r.onMe && r.isOpen ? ' is-mine' : '') + '">' +
       '<div class="tma-portal-wf-card__head">' +
+      wfPersonHead(r.sender, whenLabel) +
+      '<span class="tma-portal-wf-chips">' +
+      '<span class="tma-portal-status tma-portal-status--' + esc(r.tone) + '">' + esc(r.statusLabel) + '</span>' +
+      '</span></div>' +
+      wfPreview(r.file) +
       '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--' + esc(r.headline.tone) + '">' +
       esc(r.headline.text) + '</p>' +
-      '<span class="tma-portal-status tma-portal-status--' + esc(r.tone) + '">' + esc(r.statusLabel) + '</span>' +
-      '</div>' +
-      wfFileLine(r.file) +
       '<p class="tma-portal-wf-card__sub">' + esc(sub.join(' · ')) + '</p>' +
-      (r.message ? '<p class="tma-portal-wf-card__message">' + esc(r.message) + '</p>' : '') +
+      wfExpandable(r.message, 'r-' + r.id) +
       (r.supersededBy
         ? '<p class="tma-portal-wf-card__warn">Version ' + esc(r.supersededBy) +
           ' has been uploaded since. This request still refers to version ' + esc(r.version) + '.</p>'
@@ -367,6 +372,7 @@
       (r.total > 1 ? '<p class="tma-portal-wf-card__progress">' + r.answered + ' of ' + r.total + ' responded</p>' : '') +
       (people ? '<div class="tma-portal-wf-people">' + people + '</div>' : '') +
       respond +
+      wfFileLine(r.file) +
       (footer.length ? '<div class="tma-portal-wf-card__foot">' + footer.join('') + '</div>' : '') +
       '</article>';
   }
@@ -404,26 +410,20 @@
      * read it, it is no longer shouting at you.
      */
     var unread = c.unread !== false && !c.resolved;
+    var when = wfRelative(c.createdAt) + (c.isReply ? ' · reply' : '');
 
     return '<article class="tma-portal-wf-card' +
       (unread ? '' : ' is-read') +
       (c.mentionsMe && unread ? ' is-mine' : '') +
       '" data-wfh-card="' + esc(c.id) + '">' +
       '<div class="tma-portal-wf-card__head">' +
-      '<span class="tma-portal-wf-author">' +
-      wfAvatar(c.author) +
-      '<span class="tma-portal-wf-author__name">' +
-      esc(c.author ? c.author.name : 'Someone') +
-      (c.author && c.author.isSelf ? ' <span class="tma-portal-muted">(you)</span>' : '') +
-      '</span>' +
-      '<span class="tma-portal-wf-author__when">' + esc(wfRelative(c.createdAt)) +
-      (c.isReply ? ' · reply' : '') + '</span>' +
-      '</span>' +
+      wfPersonHead(c.author, when) +
       '<span class="tma-portal-wf-chips">' + chips + '</span>' +
       '</div>' +
+      wfPreview(c.file) +
       (c.deleted
         ? '<p class="tma-portal-wf-card__message tma-portal-muted">This comment was deleted.</p>'
-        : '<p class="tma-portal-wf-card__message">' + esc(c.body || '') + '</p>') +
+        : wfExpandable(c.body || '', c.id)) +
       wfFileLine(c.file) +
       (c.resolved && c.resolvedBy
         ? '<p class="tma-portal-wf-card__sub">Resolved by ' + esc(c.resolvedBy) + '</p>' : '') +
@@ -443,9 +443,9 @@
   function wfUpdateCard(u) {
     var esc = ui().esc;
     var app = u.application || {};
+    var who = u.person ? { name: u.person } : null;
     var context = [];
 
-    if (u.person) context.push(esc(u.person));
     if (app.number && app.clientUid) {
       context.push('<button type="button" class="tma-portal-link" data-wfh-open-app="' +
         esc(app.clientUid) + '">' + esc(app.number) + '</button>');
@@ -455,21 +455,84 @@
 
     return '<article class="tma-portal-wf-card" data-wfh-update="' + esc(u.id) + '">' +
       '<div class="tma-portal-wf-card__head">' +
-      '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--danger">' +
-      esc(u.label || 'Document') + '</p>' +
+      (who
+        ? wfPersonHead(who, wfRelative(u.updatedAt))
+        : '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--danger">' +
+          esc(u.label || 'Document') + '</p>') +
       '<span class="tma-portal-wf-chips">' +
       '<span class="tma-portal-status tma-portal-status--danger">' +
       esc(u.statusLabel || 'Update required') + '</span></span>' +
       '</div>' +
+      wfPreview(u.file) +
+      (who
+        ? '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--danger">' +
+          esc(u.label || 'Document') + '</p>'
+        : '') +
       (context.length ? '<p class="tma-portal-wf-card__sub">' + context.join(' · ') + '</p>' : '') +
-      (u.reason
-        ? '<p class="tma-portal-wf-card__message">' + esc(u.reason) + '</p>'
-        : '') +
+      wfExpandable(u.reason, 'u-' + u.id) +
       wfFileLine(u.file) +
-      (u.updatedAt
-        ? '<p class="tma-portal-wf-card__sub">' + esc(wfRelative(u.updatedAt)) + '</p>'
-        : '') +
       '</article>';
+  }
+
+  /* Name over the timestamp, the way a file card names who touched it. */
+  function wfPersonHead(person, when) {
+    var esc = ui().esc;
+    var name = (person && person.name) || 'Someone';
+    var you = person && person.isSelf ? ' <span class="tma-portal-muted">(you)</span>' : '';
+
+    return '<span class="tma-portal-wf-author">' +
+      wfAvatar(person) +
+      '<span class="tma-portal-wf-author__meta">' +
+      '<span class="tma-portal-wf-author__name">' + esc(name) + you + '</span>' +
+      (when ? '<span class="tma-portal-wf-author__when">' + esc(when) + '</span>' : '') +
+      '</span></span>';
+  }
+
+  /*
+   * Picture of the file, not a chip of its name.
+   *
+   * Images use the server thumbnail; PDFs paint page one through the same
+   * helper the File Library grid uses. Anything else keeps its type icon, the
+   * way a Word document does in that grid when there is no preview to show.
+   */
+  function wfPreview(file) {
+    if (!file) return '';
+
+    var esc = ui().esc;
+    var icon = window.TMAFileIcons
+      ? window.TMAFileIcons.fileIconSrc(null, file.name)
+      : 'images/icons/phosphor/File.svg';
+    var inner = window.TMAFileThumbs
+      ? window.TMAFileThumbs.imgHtml(file, {
+          size: null,
+          iconSize: 48,
+          cls: 'tma-portal-wf-card__thumb-img',
+          iconCls: 'tma-portal-wf-card__thumb-icon',
+          icon: icon,
+        })
+      : '<img class="tma-portal-wf-card__thumb-icon" src="' + esc(icon) + '" alt="" width="48" height="48">';
+
+    return '<button type="button" class="tma-portal-wf-card__preview" data-wfh-open="' + esc(file.id) + '"' +
+      (file.folderId ? ' data-wfh-folder="' + esc(file.folderId) + '"' : '') +
+      ' aria-label="' + esc(file.name) + '">' + inner + '</button>';
+  }
+
+  /* Long notes stay on the card; Show more opens the rest without leaving. */
+  function wfExpandable(text, id) {
+    if (!text) return '';
+
+    var esc = ui().esc;
+    var long = text.length > 280;
+    var open = !!(wf.expanded && wf.expanded[id]);
+
+    return '<div class="tma-portal-wf-card__copy' + (long && !open ? ' is-clamped' : '') +
+      (open ? ' is-open' : '') + '">' +
+      '<p class="tma-portal-wf-card__message">' + esc(text) + '</p>' +
+      (long
+        ? '<button type="button" class="tma-portal-link tma-portal-wf-card__more" data-wfh-expand="' +
+          esc(id) + '">' + (open ? 'Show less' : 'Show more') + '</button>'
+        : '') +
+      '</div>';
   }
 
   /** The file a row is about, and the way back to it. */
@@ -481,9 +544,10 @@
     return '<button type="button" class="tma-portal-wf-file" data-wfh-open="' + esc(file.id) + '"' +
       (file.folderId ? ' data-wfh-folder="' + esc(file.folderId) + '"' : '') + '>' +
       wfFileIcon(file) +
+      '<span class="tma-portal-wf-file__text">' +
       '<span class="tma-portal-wf-file__name">' + esc(file.name) + '</span>' +
       (file.folder ? '<span class="tma-portal-wf-file__path">' + esc(file.folder) + '</span>' : '') +
-      '</button>';
+      '</span></button>';
   }
 
   /*
@@ -503,7 +567,7 @@
       ? window.TMAFileIcons.fileIconSrc(null, file.name)
       : 'images/icons/phosphor/File.svg';
 
-    return '<img class="tma-portal-wf-file__icon" src="' + ui().esc(src) + '" alt="" width="18" height="18">';
+    return '<img class="tma-portal-wf-file__icon" src="' + ui().esc(src) + '" alt="" width="24" height="24">';
   }
 
   /* Real photo if there is one, otherwise the shared initials avatar, the
@@ -517,7 +581,7 @@
 
     if (!src) return '';
 
-    return '<img class="tma-portal-wf-avatar" src="' + ui().esc(src) + '" alt="" width="24" height="24">';
+    return '<img class="tma-portal-wf-avatar" src="' + ui().esc(src) + '" alt="" width="32" height="32">';
   }
 
   /* "in 2 days", "2 days ago", "today", a deadline is a question about how
@@ -866,6 +930,13 @@
 
     if ((hit = t.closest('[data-wfh-retry]'))) { loadWorkflows(); return; }
     if ((hit = t.closest('[data-wfh-more]'))) { loadWorkflows({ more: true }); return; }
+
+    if ((hit = t.closest('[data-wfh-expand]'))) {
+      var expandId = hit.getAttribute('data-wfh-expand');
+      wf.expanded[expandId] = !wf.expanded[expandId];
+      renderWorkflows();
+      return;
+    }
 
     if ((hit = t.closest('[data-wfh-open-app]'))) {
       wfOpenApplication(hit.getAttribute('data-wfh-open-app'));
