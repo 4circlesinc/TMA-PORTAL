@@ -1613,11 +1613,22 @@
     return new Array(4).fill('<div class="tma-portal-wf-strip__slide">' + card + '</div>').join('');
   }
 
+  function feedItemStillNew(entry) {
+    var item = (entry && entry.item) || {};
+    if ((entry && entry.kind) === 'comment') {
+      return item.unread !== false && !item.resolved;
+    }
+    if ((entry && entry.kind) === 'request') {
+      return !!item.onMe && item.isOpen !== false;
+    }
+    return true;
+  }
+
   function renderWfStrip() {
     if (!canReach('workflows.view') || !workflowStripVisible()) return '';
 
     var ready = workListReady('feed');
-    var items = (homeWork && homeWork.feed) || [];
+    var items = ((homeWork && homeWork.feed) || []).filter(feedItemStillNew);
     var cards = '';
     var work = window.TMAPortalWork;
 
@@ -1648,7 +1659,7 @@
       ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
       : (cards
         ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
-        : '<p class="tma-portal-panel__note">Nothing in workflows yet.</p>');
+        : '<p class="tma-portal-panel__note">Nothing unread right now.</p>');
 
     return '<section class="tma-portal-wf-strip" data-key="wf-strip" data-home-wf-strip-root' +
       (ready ? '' : ' aria-busy="true"') + ' aria-label="Workflows">' +

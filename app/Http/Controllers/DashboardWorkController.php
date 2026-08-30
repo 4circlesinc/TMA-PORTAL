@@ -49,15 +49,22 @@ class DashboardWorkController extends Controller
         $wantRequests = in_array('requests', $want, true);
         $wantComments = in_array('comments', $want, true);
 
+        // The strip only keeps unread / still-waiting rows, so it asks for a
+        // fuller page than a tile does — otherwise ten already-opened comments
+        // would leave it empty while newer unread ones sat just off the page.
+        $commentsLimit = $wantFeed ? 20 : self::LIMIT;
+
         $requests = ($wantRequests || $wantFeed)
             ? Hub::requests($user, ['scope' => Hub::SCOPE_INBOX, 'limit' => self::LIMIT])
             : null;
         $comments = ($wantComments || $wantFeed)
-            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT])
+            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => $commentsLimit])
             : null;
         $updates = $wantFeed
             ? Hub::updates($user, ['limit' => self::LIMIT])
             : null;
+
+        $commentItems = $comments['items'] ?? [];
 
         return response()->json([
             'enabled' => true,
@@ -65,10 +72,10 @@ class DashboardWorkController extends Controller
             // "this tile was switched on after the last request went out".
             'want' => $want,
             'requests' => $wantRequests ? ($requests['items'] ?? []) : [],
-            'comments' => $wantComments ? ($comments['items'] ?? []) : [],
+            'comments' => $wantComments ? array_values(array_slice($commentItems, 0, self::LIMIT)) : [],
             'feed' => $wantFeed ? self::feed(
                 $requests['items'] ?? [],
-                $comments['items'] ?? [],
+                $commentItems,
                 $updates['items'] ?? [],
             ) : [],
             // The same figures the sidebar badge carries, so the board can
@@ -81,7 +88,11 @@ class DashboardWorkController extends Controller
     }
 
     /**
-     * The three workflow streams, newest first, capped at the strip's length.
+     * Unread / still-waiting rows from the three streams, newest first.
+     *
+     * A comment the reader has already opened, or a request that is no longer
+     * on them, does not belong on the strip — that is what the tiles and the
+     * Workflows pages are for.
      *
      * @param  list<array<string, mixed>>  $requests
      * @param  list<array<string, mixed>>  $comments
@@ -93,9 +104,15 @@ class DashboardWorkController extends Controller
         $entries = [];
 
         foreach ($requests as $item) {
+            if (empty($item['onMe']) || empty($item['isOpen'])) {
+                continue;
+            }
             $entries[] = ['kind' => 'request', 'at' => (string) ($item['sentAt'] ?? ''), 'item' => $item];
         }
         foreach ($comments as $item) {
+            if (($item['unread'] ?? true) === false || ! empty($item['resolved'])) {
+                continue;
+            }
             $entries[] = ['kind' => 'comment', 'at' => (string) ($item['createdAt'] ?? ''), 'item' => $item];
         }
         foreach ($updates as $item) {

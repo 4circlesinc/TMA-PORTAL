@@ -300,6 +300,36 @@ class DashboardWorkTest extends TestCase
             ->assertJsonCount(0, 'feed');
     }
 
+    /** Opening a thread takes it off the strip; the Comments tile still lists it. */
+    public function test_the_feed_omits_comments_already_opened(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Please look at this',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed,comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'feed')
+            ->assertJsonPath('feed.0.item.body', 'Please look at this')
+            ->assertJsonPath('comments.0.unread', true);
+
+        $comment = FileComment::query()->whereNull('parent_id')->firstOrFail();
+        $this->actingAs($ben)
+            ->postJson("/portal/files/workflows/comments/{$comment->uuid}/read")
+            ->assertOk();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed,comments')
+            ->assertOk()
+            ->assertJsonCount(0, 'feed')
+            ->assertJsonCount(1, 'comments')
+            ->assertJsonPath('comments.0.unread', false);
+    }
+
     /**
      * The channels a piece of work signalled, so a test can ask "did this
      * reach that person" rather than only "did something fire".
