@@ -23,6 +23,7 @@ use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -116,7 +117,7 @@ class CipProviderFolderAccessTest extends TestCase
         $this->assertFalse(FileAccess::canUploadTo($gil, null));
 
         $ownFolder = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Scratch',
             'owner_id' => $gil->id,
             'created_by' => $gil->id,
@@ -277,8 +278,10 @@ class CipProviderFolderAccessTest extends TestCase
 
         $this->actingAs($gil)->get('/workflows')->assertOk();
         $this->actingAs($gil)->get('/workflows/feedback')->assertOk();
+        $this->actingAs($gil)->get('/workflows/updates')->assertOk();
         $this->actingAs($stranger)->get('/workflows')->assertNotFound();
         $this->actingAs($stranger)->get('/workflows/feedback')->assertNotFound();
+        $this->actingAs($stranger)->get('/workflows/updates')->assertNotFound();
 
         $this->actingAs($gil)->getJson('/portal/files/workflows?scope=inbox')
             ->assertOk()

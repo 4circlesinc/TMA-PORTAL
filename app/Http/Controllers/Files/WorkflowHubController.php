@@ -49,6 +49,18 @@ class WorkflowHubController extends BaseFilesController
         return response()->json(Hub::comments($user, $data));
     }
 
+    public function updates(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'cursor' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        return response()->json(Hub::updates($user, $data));
+    }
+
     /** Just the tab numbers, for a cheap refresh after acting on something. */
     public function counts(Request $request): JsonResponse
     {

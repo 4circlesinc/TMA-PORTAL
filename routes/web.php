@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountSetupController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
@@ -15,12 +16,12 @@ use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
-use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
+use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipTransitionController;
@@ -45,6 +46,7 @@ use App\Http\Controllers\DesktopAuthController;
 use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\DevDatabaseController;
+use App\Http\Controllers\EmailVerificationStatusController;
 use App\Http\Controllers\Feed\FeedAnalyticsController;
 use App\Http\Controllers\Feed\FeedAttachmentController;
 use App\Http\Controllers\Feed\FeedChannelController;
@@ -76,7 +78,6 @@ use App\Http\Controllers\Files\SyncStatusController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\Files\WorkflowHubController;
-use App\Http\Controllers\AccountSetupController;
 use App\Http\Controllers\GettingStartedController;
 use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\InvitationAcceptController;
@@ -95,8 +96,6 @@ use App\Http\Controllers\PortalPermissionsController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
-use App\Http\Controllers\EmailVerificationStatusController;
-use App\Http\Controllers\UnsignedVerifyEmailController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\ServiceTeamsController;
@@ -108,6 +107,8 @@ use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\StaySignedInController;
 use App\Http\Controllers\StorageUsageController;
+use App\Http\Controllers\UnsignedVerifyEmailController;
+use App\Support\Access\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -654,6 +655,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::get('/workflows', [WorkflowHubController::class, 'index'])->name('workflows.hub');
         Route::get('/workflows/comments', [WorkflowHubController::class, 'comments'])->name('workflows.hub.comments');
+        Route::get('/workflows/updates', [WorkflowHubController::class, 'updates'])->name('workflows.hub.updates');
         Route::get('/workflows/counts', [WorkflowHubController::class, 'counts'])->name('workflows.hub.counts');
         // Opening a comment from the Workflows page is the reading; the listing
         // itself is not, so it says so here.
@@ -1261,7 +1263,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return redirect('/auth/pending');
         }
 
-        if (! $user || $user->account_type !== \App\Support\Access\Role::EMPLOYEE) {
+        if (! $user || $user->account_type !== Role::EMPLOYEE) {
             return redirect('/');
         }
 

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-29-citizenship-applications';
+  var NAV_SHELL_VERSION = '2026-08-29-workflows-updates';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 
   function cipApplicationsRest(pathname) {
@@ -57,6 +57,7 @@
     'users',
     'reporting',
     'workflows-automated',
+    'workflows-updates',
     'call-recordings',
     'people-home',
     'account-settings',
@@ -2146,7 +2147,7 @@
      * Deliberately only this group. File Library and People count nothing, so
      * giving their toggles the same treatment would be inventing numbers.
      */
-    var workflowCounts = { waiting: 0, unread: 0 };
+    var workflowCounts = { waiting: 0, unread: 0, updates: 0 };
 
     function workflowsExpanded() {
       var toggle = root.querySelector('.tma-dash__nav-item[data-expand="workflows"]');
@@ -2155,15 +2156,16 @@
 
     function syncWorkflowBadges() {
       var open = workflowsExpanded();
-      var total = workflowCounts.waiting + workflowCounts.unread;
+      var total = workflowCounts.waiting + workflowCounts.unread + workflowCounts.updates;
 
       setNavCount(root.querySelector('.tma-dash__nav-item[data-expand="workflows"]'), open ? 0 : total);
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-automated"]'), open ? workflowCounts.waiting : 0);
       setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-feedback"]'), open ? workflowCounts.unread : 0);
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="workflows-updates"]'), open ? workflowCounts.updates : 0);
 
-      // The mobile menu has one Workflows row and no submenu under it, so it
-      // is the collapsed case: one door onto both screens, carrying the sum.
-      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), total);
+      // The mobile menu has no submenu, so each door carries its own figure.
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-automated"]'), workflowCounts.waiting + workflowCounts.unread);
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="workflows-updates"]'), workflowCounts.updates);
     }
 
     function syncWorkflowCounts() {
@@ -2180,7 +2182,11 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           var c = (j && j.counts) || {};
-          workflowCounts = { waiting: c.waiting || 0, unread: c.unread || 0 };
+          workflowCounts = {
+            waiting: c.waiting || 0,
+            unread: c.unread || 0,
+            updates: c.updates || 0,
+          };
           syncWorkflowBadges();
         })
         .catch(function () {});
@@ -2197,7 +2203,11 @@
     // so its figures are fresher than the one taken at boot.
     document.addEventListener('tma-workflow-counts', function (e) {
       var c = (e && e.detail) || {};
-      workflowCounts = { waiting: c.waiting || 0, unread: c.unread || 0 };
+      workflowCounts = {
+        waiting: c.waiting || 0,
+        unread: c.unread || 0,
+        updates: c.updates || 0,
+      };
       syncWorkflowBadges();
     });
 

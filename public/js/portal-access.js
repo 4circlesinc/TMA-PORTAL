@@ -33,6 +33,7 @@
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
     'workflows-feedback': 'workflows.view',
+    'workflows-updates': 'workflows.view',
     'call-recordings': 'callRecordings.view',
     'people-home': 'directory.view',
     'people-employees': 'directory.view',

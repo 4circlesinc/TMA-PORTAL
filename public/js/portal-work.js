@@ -29,6 +29,7 @@
   var WF_PAGES = {
     'workflows-automated': 'requests',
     'workflows-feedback': 'comments',
+    'workflows-updates': 'updates',
   };
 
   var WF_TABS = [
@@ -90,6 +91,7 @@
       wf.state = 'open';
       wf.items = [];
       wf.comments = [];
+      wf.cursor = null;
       wf.loaded = false;
       wf.error = null;
       wf.replyingTo = null;
@@ -145,18 +147,23 @@
     if (!wf.el) return;
 
     var isComments = wf.page === 'comments';
-    var body = isComments ? wfCommentsBody() : wfRequestsBody();
+    var isUpdates = wf.page === 'updates';
+    var body = isUpdates ? wfUpdatesBody() : isComments ? wfCommentsBody() : wfRequestsBody();
+    var searchLabel = isUpdates ? 'Search by document or person'
+      : isComments ? 'Search comments'
+        : 'Search by file name';
 
     var html =
       '<div class="tma-portal-page tma-portal-page--workflows">' +
-      '<div data-wfh-tabs>' + ui().tabs(wfTabs().map(function (t) {
-        return { key: t.key, label: wfTabLabel(t) };
-      }), wfActiveTab()) + '</div>' +
+      (isUpdates ? '' :
+        '<div data-wfh-tabs>' + ui().tabs(wfTabs().map(function (t) {
+          return { key: t.key, label: wfTabLabel(t) };
+        }), wfActiveTab()) + '</div>') +
       '<div class="tma-portal-toolbar">' +
       '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
-      ui().searchInput(isComments ? 'Search comments' : 'Search by file name', 'data-wfh-search', wf.search) +
+      ui().searchInput(searchLabel, 'data-wfh-search', wf.search) +
       '</div>' +
-      (isComments ? '' :
+      ((isComments || isUpdates) ? '' :
         '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
         '<div class="tma-portal-field">' +
         '<span class="tma-portal-field__label">Type</span>' +
@@ -199,6 +206,17 @@
     if (!wf.comments.length) return wfEmptyComments();
 
     return '<div class="tma-portal-wf-list">' + wf.comments.map(wfCommentCard).join('') + '</div>' + wfMoreButton();
+  }
+
+  function wfUpdatesBody() {
+    if (wf.loading && !wf.loaded) return ui().loading({ count: 4 });
+    if (wf.error) {
+      return ui().banner('warning', ui().esc(wf.error) +
+        ' <button type="button" class="tma-portal-link" data-wfh-retry>Try again</button>');
+    }
+    if (!wf.items.length) return wfEmptyUpdates();
+
+    return '<div class="tma-portal-wf-list">' + wf.items.map(wfUpdateCard).join('') + '</div>' + wfMoreButton();
   }
 
   function wfMoreButton() {
@@ -258,6 +276,22 @@
       illustration: 'Illustration06',
       title: wfActiveTab() === 'unresolved' ? 'No open threads' : 'No comments yet',
       subtitle: 'Comments on files you own, threads you’re in, and anywhere you’re mentioned.',
+    });
+  }
+
+  function wfEmptyUpdates() {
+    if (wf.search) {
+      return ui().emptyState({
+        illustration: 'Illustration06',
+        title: 'Nothing matches',
+        subtitle: 'Try a different document, person or application number.',
+      });
+    }
+
+    return ui().emptyState({
+      illustration: 'Illustration06',
+      title: 'No documents need an update',
+      subtitle: 'When a reviewer asks for a clearer scan, the reason lands here.',
     });
   }
 
@@ -404,6 +438,40 @@
       '</article>';
   }
 
+  /* ── update-required card ──────────────────────── */
+
+  function wfUpdateCard(u) {
+    var esc = ui().esc;
+    var app = u.application || {};
+    var context = [];
+
+    if (u.person) context.push(esc(u.person));
+    if (app.number && app.clientUid) {
+      context.push('<button type="button" class="tma-portal-link" data-wfh-open-app="' +
+        esc(app.clientUid) + '">' + esc(app.number) + '</button>');
+    } else if (app.number) {
+      context.push(esc(app.number));
+    }
+
+    return '<article class="tma-portal-wf-card" data-wfh-update="' + esc(u.id) + '">' +
+      '<div class="tma-portal-wf-card__head">' +
+      '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--danger">' +
+      esc(u.label || 'Document') + '</p>' +
+      '<span class="tma-portal-wf-chips">' +
+      '<span class="tma-portal-status tma-portal-status--danger">' +
+      esc(u.statusLabel || 'Update required') + '</span></span>' +
+      '</div>' +
+      (context.length ? '<p class="tma-portal-wf-card__sub">' + context.join(' · ') + '</p>' : '') +
+      (u.reason
+        ? '<p class="tma-portal-wf-card__message">' + esc(u.reason) + '</p>'
+        : '') +
+      wfFileLine(u.file) +
+      (u.updatedAt
+        ? '<p class="tma-portal-wf-card__sub">' + esc(wfRelative(u.updatedAt)) + '</p>'
+        : '') +
+      '</article>';
+  }
+
   /** The file a row is about, and the way back to it. */
   function wfFileLine(file) {
     if (!file) return '';
@@ -480,7 +548,7 @@
 
   function wfUrl(path, cursor) {
     var params = new URLSearchParams();
-    params.set('scope', wfActiveTab());
+    if (wf.page !== 'updates') params.set('scope', wfActiveTab());
     if (wf.search) params.set('q', wf.search);
     if (wf.page === 'requests') {
       if (wf.type) params.set('type', wf.type);
@@ -507,7 +575,9 @@
       renderWorkflows();
     }
 
-    var path = wf.page === 'comments' ? '/workflows/comments' : '/workflows';
+    var path = wf.page === 'comments' ? '/workflows/comments'
+      : wf.page === 'updates' ? '/workflows/updates'
+        : '/workflows';
 
     return net().fetchJSON(wfUrl(path, opts.more ? wf.cursor : null))
       .then(function (res) {
@@ -701,6 +771,25 @@
     window.location.assign(root + '/folders/all?' + params.toString());
   }
 
+  function wfOpenApplication(clientUid) {
+    if (!clientUid) return;
+
+    if (window.TMADashboard && window.TMADashboard.navigate) {
+      window.TMADashboard.navigate({
+        navId: 'clients',
+        view: 'clients',
+        title: 'Application',
+        crumb: 'Citizenship Applications',
+        contactId: clientUid,
+        clientsScreen: 'detail',
+      });
+      return;
+    }
+
+    var root = window.__TMA_SITE_ROOT || '';
+    window.location.assign(root + '/citizenship-applications/' + encodeURIComponent(clientUid));
+  }
+
   /* ── wiring ────────────────────────────────────── */
 
   function wireWorkflows() {
@@ -778,10 +867,17 @@
     if ((hit = t.closest('[data-wfh-retry]'))) { loadWorkflows(); return; }
     if ((hit = t.closest('[data-wfh-more]'))) { loadWorkflows({ more: true }); return; }
 
+    if ((hit = t.closest('[data-wfh-open-app]'))) {
+      wfOpenApplication(hit.getAttribute('data-wfh-open-app'));
+      return;
+    }
+
     if ((hit = t.closest('[data-wfh-open]'))) {
       // Opening the file from a comment card is reading that thread.
       var openCard = hit.closest('[data-wfh-card]');
-      if (openCard) wfMarkThreadRead(openCard.getAttribute('data-wfh-card'), true);
+      if (openCard && wf.page === 'comments') {
+        wfMarkThreadRead(openCard.getAttribute('data-wfh-card'), true);
+      }
       wfOpenFile(hit.getAttribute('data-wfh-open'), hit.getAttribute('data-wfh-folder'));
       return;
     }
@@ -2892,6 +2988,12 @@
         window.TMALive.RESOURCES.FILES,
         function () { return loadWorkflows({ silent: true }); },
         { active: function () { return !!wf.el && document.contains(wf.el); } }
+      );
+
+      window.TMALive.register(
+        window.TMALive.RESOURCES.CIP,
+        function () { return loadWorkflows({ silent: true }); },
+        { active: function () { return !!wf.el && document.contains(wf.el) && wf.page === 'updates'; } }
       );
     }
   }

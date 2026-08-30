@@ -5,15 +5,13 @@ namespace App\Http\Controllers\Files;
 use App\Models\CipDocument;
 use App\Models\FileItem;
 use App\Models\User;
-use App\Support\Activity\ActivityLogger;
 use App\Support\Access\Role;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
-use App\Support\Cip\CipAccess;
-use App\Support\Cip\Package;
 use App\Support\Cip\Review as CipReview;
-use App\Support\Cip\DocumentComments;
 use App\Support\Cip\Status;
 use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
@@ -29,10 +27,10 @@ use Illuminate\Validation\ValidationException;
 /**
  * Moving a client document through its review.
  *
- * Reviewing is a staff act on somebody else's document, so it takes the same
- * bar as uploading a version rather than merely being able to open the file —
- * a client with view access to their own folder must not be able to mark their
- * own passport approved.
+ * Reviewing is a staff act on somebody else's document. Opening the file is
+ * enough to set its working label; rewriting the bytes is not. A client with
+ * view access to their own folder must not be able to mark their own passport
+ * approved.
  *
  * CIP slots travel {@see DocumentEngine} rather than this
  * column: the checklist and the File Library are two doors onto the same
@@ -109,16 +107,19 @@ class FileReviewController extends BaseFilesController
     /**
      * Judging a document is not the same as rewriting the file.
      *
-     * Upload is the right bar for a loose client document: a viewer must not
-     * mark somebody's passport ready. A CIP slot in Review Applications is
-     * the officer's job, and assignment often grants only view on the folder
-     * so they cannot replace the scan. They still have to set its status.
+     * Preview is the bar: a viewer must not mark somebody's passport ready
+     * unless they are staff who can open it, and Confirm submission must not
+     * take the chip away. A CIP slot in Review Applications is the officer's
+     * job even when assignment only grants view on the folder.
      */
     private function authorizeReview(User $user, FileItem $file, ?CipDocument $slot): void
     {
         abort_unless(Role::isStaff($user), 403, 'Permission denied.');
 
-        if (FileAccess::can($user, 'upload', $file)) {
+        // Preview, not upload: a confirmed original package is view-only for
+        // the bytes, and judging the file is not rewriting it. Upload would
+        // refuse the chip after Confirm submission.
+        if (FileAccess::can($user, 'preview', $file) || FileAccess::can($user, 'upload', $file)) {
             return;
         }
 
@@ -142,26 +143,13 @@ class FileReviewController extends BaseFilesController
     {
         try {
             $meta = array_filter(['note' => $note !== '' ? $note : null]);
-            $officer = CipAccess::can($user, 'cip.review') || CipAccess::canOverrideStatus($user);
-            // Confirm submission freezes the original scans, not the review
-            // chip. Asking the provider for a replacement still has nowhere
-            // to land, so that verdict stays refused; the working label does not.
-            $frozen = Package::locksDocument($slot);
-            $wroteSlotReason = false;
+            DocumentEngine::set($slot, $to, $user, $meta);
 
-            if (! $frozen && $officer && $to === DocumentStatus::UPDATE_REQUIRED) {
-                CipReview::requestChanges($slot, $user, $note);
-                $wroteSlotReason = true;
-            } elseif (! $frozen && $officer && $to === DocumentStatus::READY_FOR_SUBMISSION
-                && DocumentEngine::canTransition($slot, $to)) {
-                CipReview::approve($slot, $user);
-            } else {
-                DocumentEngine::set($slot, $to, $user, $meta);
-            }
-
-            if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '' && ! $wroteSlotReason) {
+            if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {
                 DocumentComments::create($slot, $user, $note);
             }
+
+            CipReview::settle($slot->loadMissing('application')->application, $user);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         } catch (AuthorizationException $e) {

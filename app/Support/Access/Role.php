@@ -359,6 +359,7 @@ class Role
         // (inbox and sent, not the firm-wide All tab).
         'workflows' => 'workflows.view',
         'workflows/feedback' => 'workflows.view',
+        'workflows/updates' => 'workflows.view',
     ];
 
     /**
@@ -452,7 +453,6 @@ class Role
 
         return self::ACCOUNT_TYPE_ALIASES[$type] ?? $type;
     }
-
 
     public static function isAdmin(?User $user): bool
     {

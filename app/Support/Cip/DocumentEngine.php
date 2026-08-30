@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\DB;
  * writes cip_documents.status.
  *
  * The cycle is deliberately small. A slot is uploaded into review, comes back
- * for an update, and goes round again as many times as the reviewer needs;
- * approving it is not an exit, because §12 lets a document be re-opened until
- * the submission package freezes.
+ * for an update, and goes round again as many times as the reviewer needs.
+ * Approving it is not an exit: the file-status chip stays a working label
+ * after Confirm submission. The freeze is the original scans, not the chip.
  */
 class DocumentEngine
 {
@@ -132,8 +132,6 @@ class DocumentEngine
      */
     public static function apply(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
     {
-        Confirmation::guardDocument($document);
-
         if (! self::canTransition($document, $to)) {
             throw new \InvalidArgumentException(sprintf(
                 'A CIP document cannot move from %s to %s.',

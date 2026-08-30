@@ -6655,20 +6655,25 @@
     var acts = window.TMAFileActions;
     if (!fileId || !acts || !acts.reviewAt) return;
 
+    var status = chip.getAttribute('data-cip-file-status-value');
     var file = cipLibraryFile(state, fileId) || {
       id: fileId,
       type: 'file',
       status: {
-        status: chip.getAttribute('data-cip-file-status-value'),
+        status: status,
         label: chip.getAttribute('data-cip-file-status-label'),
         tone: chip.getAttribute('data-cip-file-status-tone'),
       },
-      review: {
-        status: chip.getAttribute('data-cip-file-status-value'),
-        canReview: true,
-        next: null,
-      },
+      review: { status: status },
     };
+    // The checklist chip is the picker. A Documents-tab row cached beside it
+    // may still carry a mapped-only next list from before the freeze was
+    // split off the label — that would grey out statuses the server allows.
+    file.review = Object.assign({}, file.review || {}, {
+      status: status || (file.review && file.review.status) || '',
+      canReview: true,
+      next: null,
+    });
     var box = chip.getBoundingClientRect();
     acts.reviewAt(box.left, box.bottom + 4, file, function () {
       refreshCipAfterFileChange(state, render);

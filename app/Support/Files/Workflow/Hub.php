@@ -2,6 +2,7 @@
 
 namespace App\Support\Files\Workflow;
 
+use App\Models\CipDocument;
 use App\Models\FileComment;
 use App\Models\FileCommentMention;
 use App\Models\FileItem;
@@ -9,8 +10,11 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowStep;
 use App\Models\Folder;
 use App\Models\User;
-use App\Support\Files\Comments;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\DocumentComments;
+use App\Support\Cip\DocumentStatus;
 use App\Support\Files\CommentReads;
+use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,10 +35,10 @@ use Illuminate\Support\Collection;
  *
  * Three rules hold it together:
  *
- *  - **Nothing here widens access.** Every row is re-checked against
- *    {@see FileAccess} before it is returned, after the query, so a workflow
- *    on a file you can no longer open simply does not appear. The database
- *    query narrows; it never authorizes.
+ *  - **Nothing here widens access.** Requests and comments are re-checked
+ *    against {@see FileAccess} before they are returned. CIP documents
+ *    waiting on an update use {@see ApplicationScope} instead, the same
+ *    door as the application itself.
  *  - **The page size is the unit of work.** Access is per-file and cannot be
  *    expressed in SQL, so it is applied to a page of rows and never to the
  *    whole table. A library of forty thousand files must not be walked to
@@ -225,6 +229,100 @@ final class Hub
     }
 
     /**
+     * CIP documents currently marked Update required, across applications
+     * this account may see.
+     *
+     * Feedback and Comments lists file comments, and that page defaults to
+     * threads that name you. An officer requesting a clearer scan is not in
+     * that set, so the reason never appeared there. This list is the
+     * checklist question instead: which slots on files you hold still need
+     * an update, and why. Access is {@see ApplicationScope}, the same door
+     * as the application itself, not {@see FileAccess} — a reviewer who can
+     * open the file in CIP can see the reason here even when the library
+     * folder is assigned to someone else.
+     *
+     * @param  array{q?:string,cursor?:int,limit?:int}  $filters
+     * @return array{items:array,nextCursor:?int,counts:array,canSeeAll:bool}
+     */
+    public static function updates(User $viewer, array $filters = []): array
+    {
+        $canSeeAll = FileAccess::isStaff($viewer);
+
+        $query = CipDocument::query()
+            ->where('cip_documents.status', DocumentStatus::UPDATE_REQUIRED)
+            ->whereIn('cip_documents.application_id', ApplicationScope::query($viewer)->select('id'))
+            ->with([
+                'file:id,uuid,name,extension,folder_id,owner_id,review_note,review_status,deleted_at',
+                'person:id,uuid,first_name,last_name,role,application_id',
+                'application:id,uuid,internal_number,cip_number,status,client_id,provider_id',
+                'application.client:id,uid,name',
+            ]);
+
+        if (! empty($filters['q'])) {
+            $like = '%'.str_replace(['%', '_'], ['\%', '\_'], trim($filters['q'])).'%';
+            $query->where(function (Builder $q) use ($like) {
+                $q->where('cip_documents.label', 'like', $like)
+                    ->orWhereHas('file', fn ($f) => $f->where('name', 'like', $like))
+                    ->orWhereHas('person', function ($p) use ($like) {
+                        $p->where('first_name', 'like', $like)
+                            ->orWhere('last_name', 'like', $like);
+                    })
+                    ->orWhereHas('application', function ($a) use ($like) {
+                        $a->where('internal_number', 'like', $like)
+                            ->orWhere('cip_number', 'like', $like)
+                            ->orWhereHas('client', fn ($c) => $c->where('name', 'like', $like));
+                    });
+            });
+        }
+
+        if (! empty($filters['cursor'])) {
+            $query->where('cip_documents.id', '<', (int) $filters['cursor']);
+        }
+
+        /** @var EloquentCollection<int, CipDocument> $rows */
+        $rows = $query->orderByDesc('cip_documents.id')->limit(self::OVERSCAN)->get();
+
+        $limit = self::pageSize($filters);
+        $page = $rows->take($limit);
+        $more = $rows->count() > $limit;
+
+        $reasons = DocumentComments::latestOpenBodies($page->pluck('id')->all());
+        $paths = self::folderPaths(
+            $page->map(fn (CipDocument $slot) => self::liveFile($slot))->all()
+        );
+
+        $items = $page->map(function (CipDocument $slot) use ($reasons, $paths) {
+            $file = self::liveFile($slot);
+            $reason = $reasons[$slot->id] ?? $file?->review_note;
+
+            return [
+                'id' => $slot->uuid,
+                'kind' => 'cip',
+                'label' => $slot->label,
+                'reason' => is_string($reason) && trim($reason) !== '' ? trim($reason) : null,
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'statusLabel' => DocumentStatus::label(DocumentStatus::UPDATE_REQUIRED),
+                'person' => $slot->person?->fullName() ?: null,
+                'required' => (bool) $slot->required,
+                'application' => $slot->application ? [
+                    'id' => $slot->application->uuid,
+                    'number' => $slot->application->displayNumber(),
+                    'clientUid' => $slot->application->client?->uid,
+                ] : null,
+                'file' => self::file($file, $paths),
+                'updatedAt' => optional($slot->status_changed_at ?? $slot->updated_at)->toIso8601String(),
+            ];
+        })->values()->all();
+
+        return [
+            'items' => $items,
+            'nextCursor' => $more ? (int) $page->last()->id : null,
+            'counts' => self::counts($viewer),
+            'canSeeAll' => $canSeeAll,
+        ];
+    }
+
+    /**
      * The numbers on the tabs.
      *
      * Deliberately unfiltered by access: they count rows that name this person
@@ -233,7 +331,7 @@ final class Hub
      * Running the per-file check over every one of them to render three
      * numbers would cost more than the page it labels.
      *
-     * @return array{waiting:int,sent:int,mentions:int,unread:int}
+     * @return array{waiting:int,sent:int,mentions:int,unread:int,updates:int}
      */
     public static function counts(User $viewer): array
     {
@@ -283,10 +381,31 @@ final class Hub
             'sent' => $sent,
             'mentions' => $mentions,
             'unread' => CommentReads::unreadCount($viewer),
+            'updates' => self::updateRequiredCount($viewer),
         ];
     }
 
     /* ── queries ──────────────────────────────────────────────── */
+
+    /** Slots on applications this account may open that still need an update. */
+    private static function updateRequiredCount(User $viewer): int
+    {
+        return CipDocument::query()
+            ->where('cip_documents.status', DocumentStatus::UPDATE_REQUIRED)
+            ->whereIn('cip_documents.application_id', ApplicationScope::query($viewer)->select('id'))
+            ->count();
+    }
+
+    private static function liveFile(CipDocument $slot): ?FileItem
+    {
+        $file = $slot->file;
+
+        if ($file === null || $file->deleted_at !== null) {
+            return null;
+        }
+
+        return $file;
+    }
 
     /**
      * How many rows the caller wants back, capped at the page size.
@@ -365,7 +484,7 @@ final class Hub
      * Public because it is the definition of "yours" for comments, and the
      * unread count has to use the same one — a badge that counted a wider set
      * than the page it opens would send people looking for work that is not
-     * listed anywhere. {@see \App\Support\Files\CommentReads}
+     * listed anywhere. {@see CommentReads}
      */
     public static function concernsMe(Builder $query, User $viewer): void
     {

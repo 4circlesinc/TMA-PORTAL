@@ -6605,7 +6605,8 @@
           item.status = previous.status;
           paintFileStatusEverywhere(item.id, item);
           emitFileReview({ file: item, rollback: true });
-          ui().toast((err && err.message) || 'Could not update the status.', false);
+          if (ui().toastError) ui().toastError((err && err.message) || 'Could not update the status.');
+          else ui().toast((err && err.message) || 'Could not update the status.');
         });
     };
 
@@ -6618,7 +6619,8 @@
       confirmLabel: 'Request update',
       onConfirm: function (note) {
         if (!String(note || '').trim()) {
-          ui().toast('Say what needs changing.', false);
+          if (ui().toastError) ui().toastError('Say what needs changing.');
+          else ui().toast('Say what needs changing.');
 
           return;
         }
@@ -6696,7 +6698,8 @@
       confirmLabel: 'Request update',
       onConfirm: function (note) {
         if (!String(note || '').trim()) {
-          ui().toast('Say what needs changing.', false);
+          if (ui().toastError) ui().toastError('Say what needs changing.');
+          else ui().toast('Say what needs changing.');
 
           return;
         }

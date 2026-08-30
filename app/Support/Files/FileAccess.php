@@ -619,7 +619,10 @@ class FileAccess
         $perms = self::listingPerms($user, $file, [
             'preview', 'download', 'upload', 'rename', 'move', 'copy', 'delete', 'share', 'assign',
         ]);
-        $perms['review'] = $perms['upload'];
+        // A review chip is a working label, not a rewrite of the file. §17
+        // freeze blocks upload/rename/delete so the original scans stay put;
+        // it must not take the status picker away.
+        $perms['review'] = Role::isStaff($user) && ($perms['preview'] ?? false);
         unset($perms['upload']);
 
         return $perms;
@@ -662,18 +665,22 @@ class FileAccess
         foreach ($abilities as $ability) {
             if (! in_array($ability, $caps, true)) {
                 $out[$ability] = false;
+
                 continue;
             }
             if (in_array($ability, self::PACKAGE_LOCKED, true) && $frozen) {
                 $out[$ability] = false;
+
                 continue;
             }
             if ($ability === 'share' && Role::isClient($user) && ! PortalPermissions::allowsClientSharing()) {
                 $out[$ability] = false;
+
                 continue;
             }
             if ($ability === 'assign' && $inClient) {
                 $out[$ability] = false;
+
                 continue;
             }
             $out[$ability] = true;
@@ -890,7 +897,7 @@ class FileAccess
     /** @var array<string, string|null> */
     private static array $shareRoles = [];
 
-    /** @var array<int, \Illuminate\Support\Collection> */
+    /** @var array<int, Collection> */
     private static array $companyMemberships = [];
 
     /**

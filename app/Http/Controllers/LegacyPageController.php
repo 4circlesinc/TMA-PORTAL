@@ -76,6 +76,7 @@ class LegacyPageController extends Controller
         'users/new',
         'workflows',
         'workflows/feedback',
+        'workflows/updates',
     ];
 
     /**
@@ -139,7 +140,7 @@ class LegacyPageController extends Controller
                 }
             } elseif ($page === 'folders/all') {
                 abort_unless($this->canViewAllFilesPage($request), 404);
-            } elseif ($page === 'workflows' || $page === 'workflows/feedback') {
+            } elseif ($page === 'workflows' || $page === 'workflows/feedback' || $page === 'workflows/updates') {
                 abort_unless($this->canViewWorkflowsPage($request), 404);
             } elseif ($page === 'overview') {
                 abort_unless($this->canViewOverviewPage($request), 404);

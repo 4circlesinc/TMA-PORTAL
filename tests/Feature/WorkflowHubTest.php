@@ -2,10 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
+use App\Models\CipDocument;
+use App\Models\CipPerson;
+use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Cip\Applications;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\DocumentComments;
+use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\DocumentTypes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -327,5 +339,185 @@ class WorkflowHubTest extends TestCase
         $client = $this->user('Client', 'cliff@example.com', 'Cliff Client');
 
         $this->actingAs($client)->get('/workflows')->assertNotFound();
+        $this->actingAs($client)->get('/workflows/feedback')->assertNotFound();
+        $this->actingAs($client)->get('/workflows/updates')->assertNotFound();
+    }
+
+    /* ── updates required ─────────────────────────────────────── */
+
+    /**
+     * @return array{0: CipDocument, 1: CipApplication, 2: FileItem}
+     */
+    private function cipUpdateRequired(User $staff, string $reason = 'Please rescan the stamp.'): array
+    {
+        config(['services.cip.enabled' => true]);
+
+        $provider = CipProvider::create([
+            'name' => 'Private clients',
+            'code' => 'PRI'.substr(uniqid(), -4),
+        ]);
+        $client = Client::create([
+            'uid' => 'asem-'.uniqid(),
+            'name' => 'Asem Habtoor',
+            'created_by' => $staff->id,
+            'data' => [],
+        ]);
+        $application = Applications::create($provider, $staff, ['client_id' => $client->id]);
+        $person = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Asem',
+            'last_name' => 'Habtoor',
+        ]);
+        $document = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $person->id,
+            'type' => DocumentTypes::BIRTH_CERTIFICATE,
+            'label' => DocumentTypes::label(DocumentTypes::BIRTH_CERTIFICATE),
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Birth certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/birth-'.uniqid().'.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+            'review_status' => DocumentStatus::UPDATE_REQUIRED,
+            'review_note' => $reason,
+        ]);
+        $document->forceFill([
+            'file_id' => $file->id,
+            'status' => DocumentStatus::UPDATE_REQUIRED,
+            'status_changed_at' => now(),
+        ])->save();
+        DocumentComments::create($document->fresh(), $staff, $reason);
+
+        return [$document->fresh(), $application->fresh(), $file->fresh()];
+    }
+
+    public function test_updates_required_lists_the_reason_on_cip_documents(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $this->cipUpdateRequired($ada, 'The stamp is not visible.');
+
+        $res = $this->actingAs($ada)->getJson('/portal/files/workflows/updates')->assertOk();
+
+        $res->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.label', 'Birth certificate')
+            ->assertJsonPath('items.0.reason', 'The stamp is not visible.')
+            ->assertJsonPath('items.0.person', 'Asem Habtoor')
+            ->assertJsonPath('items.0.file.name', 'Birth certificate.pdf')
+            ->assertJsonPath('items.0.status', DocumentStatus::UPDATE_REQUIRED)
+            ->assertJsonPath('counts.updates', 1);
+
+        $this->actingAs($ada)->get('/workflows/updates')->assertOk();
+    }
+
+    public function test_updates_required_is_scoped_to_applications_the_officer_holds(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
+        [, $application] = $this->cipUpdateRequired($ada);
+
+        CipApplicationAssignment::create([
+            'application_id' => $application->id,
+            'user_id' => $ben->id,
+            'role' => CipAccess::REVIEWING_OFFICER,
+            'status' => CipApplicationAssignment::STATUS_ACTIVE,
+            'assigned_by' => $ada->id,
+            'starts_at' => now(),
+        ]);
+
+        $this->actingAs($ben)->getJson('/portal/files/workflows/updates')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('counts.updates', 1);
+
+        $this->actingAs($cara)->getJson('/portal/files/workflows/updates')
+            ->assertOk()
+            ->assertJsonCount(0, 'items')
+            ->assertJsonPath('counts.updates', 0);
+    }
+
+    public function test_a_provider_contact_sees_updates_required_on_their_firm_files(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $company = Company::create(['uid' => 'gal-firm', 'name' => 'Galaxy Firm']);
+        $gil = $this->user('Client', 'gil@example.com', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create([
+            'name' => 'Galaxy Provider', 'code' => 'GAL', 'company_id' => $company->id,
+        ]);
+
+        $client = Client::create([
+            'uid' => 'chen-'.uniqid(), 'name' => 'Chen Wei',
+            'created_by' => $ada->id, 'data' => [],
+        ]);
+        $application = Applications::create($provider, $ada, ['client_id' => $client->id]);
+        $person = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        $document = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $person->id,
+            'type' => DocumentTypes::PASSPORT_BIO_PAGE,
+            'label' => DocumentTypes::label(DocumentTypes::PASSPORT_BIO_PAGE),
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passport.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 512,
+            'disk' => 'local',
+            'storage_path' => 'vault/passport-'.uniqid().'.pdf',
+            'owner_id' => $ada->id,
+            'uploaded_by' => $ada->id,
+            'review_status' => DocumentStatus::UPDATE_REQUIRED,
+            'review_note' => 'Crop the edges.',
+        ]);
+        $document->forceFill([
+            'file_id' => $file->id,
+            'status' => DocumentStatus::UPDATE_REQUIRED,
+            'status_changed_at' => now(),
+        ])->save();
+        DocumentComments::create($document->fresh(), $ada, 'Crop the edges.');
+
+        $this->actingAs($gil)->get('/workflows/updates')->assertOk();
+        $this->actingAs($gil)->getJson('/portal/files/workflows/updates')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.reason', 'Crop the edges.')
+            ->assertJsonPath('items.0.label', 'Passport bio page');
+    }
+
+    public function test_updates_required_can_be_searched_by_document_label(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $this->cipUpdateRequired($ada);
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/updates?q=Birth')
+            ->assertOk()
+            ->assertJsonCount(1, 'items');
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/updates?q=Invoice')
+            ->assertOk()
+            ->assertJsonCount(0, 'items');
     }
 }

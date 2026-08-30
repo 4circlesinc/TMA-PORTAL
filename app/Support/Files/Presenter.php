@@ -891,10 +891,11 @@ class Presenter
     /**
      * The picker the File Library and the viewer hang off this file.
      *
-     * CIP slots travel {@see DocumentEngine}'s edges and need `cip.review` to
-     * move; every other client document is the library's any-to-any set.
-     * Putting the slot's status in this block, not files.review_status, is
-     * what keeps the chip on the row and the chip in the panel the same fact.
+     * Staff who can see the file may set any of the three working labels.
+     * CIP slots and ordinary client documents share that picker; clients
+     * still cannot judge their own files. The slot's status lives in this
+     * block, not files.review_status, so the chip on the row and the chip
+     * in the panel stay the same fact.
      *
      * @param  array<string, bool>  $perms
      * @return array<string, mixed>

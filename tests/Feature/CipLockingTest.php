@@ -187,6 +187,32 @@ class CipLockingTest extends TestCase
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
     }
 
+    public function test_the_file_status_chip_stays_clickable_after_the_package_is_locked(): void
+    {
+        ['staff' => $staff, 'slot' => $slot, 'main' => $main] = $this->lockedPackage();
+        $file = $slot->fresh()->file;
+
+        $this->assertFalse(FileAccess::can($staff, 'upload', $file));
+        $this->assertTrue(FileAccess::can($staff, 'preview', $file));
+
+        $perms = FileAccess::fileListingPerms($staff, $file);
+        $this->assertTrue($perms['review']);
+        $this->assertTrue($perms['preview']);
+
+        $listing = $this->actingAs($staff)
+            ->getJson('/portal/files/?section=all&folder='.$main->uuid)
+            ->assertOk()
+            ->json('files');
+
+        $row = collect($listing)->firstWhere('id', $file->uuid);
+        $this->assertNotNull($row);
+        $this->assertTrue($row['review']['canReview']);
+        $this->assertSame(
+            [DocumentStatus::APPLICATION_REVIEW, DocumentStatus::UPDATE_REQUIRED],
+            $row['review']['next'],
+        );
+    }
+
     public function test_marking_update_required_after_lock_puts_the_application_in_updates_required(): void
     {
         ['staff' => $staff, 'slot' => $slot, 'application' => $application] = $this->lockedPackage();

@@ -41,14 +41,15 @@ class EmployeeReachTest extends TestCase
      * Every page slug the portal serves, sorted so the snapshot below reads as
      * a set rather than as the order of a constant. '/settings' is excluded:
      * it is a redirect to /account-settings, so it never answers 200 for
-     * anyone.
+     * anyone. '/clients' is the same kind of leftover: it redirects to
+     * /citizenship-applications.
      */
     private function pages(): array
     {
         $pages = array_values(array_diff(array_merge(
             LegacyPageController::SPA_PAGES,
             LegacyPageController::STANDALONE_PAGES,
-        ), ['settings']));
+        ), ['settings', 'clients']));
 
         sort($pages);
 
@@ -97,12 +98,12 @@ class EmployeeReachTest extends TestCase
             'account', 'account-info', 'account-settings', 'billing-details',
             'billing-details/card', 'calendar', 'call-recordings',
             'choose-account-type',
-            'classic', 'clients', 'email', 'email/templates', 'folders/all',
+            'citizenship-applications', 'classic', 'email', 'email/templates', 'folders/all',
             'folders/clients', 'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',
             'folders/shared-with-me', 'overview',
             'settings/change-email', 'signatures', 'social/feed',
-            'social/messages', 'workflows', 'workflows/feedback',
+            'social/messages', 'workflows', 'workflows/feedback', 'workflows/updates',
         ], $reach[Role::REVIEWING_OFFICER], 'the pages employee-like staff reach have changed');
 
         // A client keeps their own File Library screens; the two
