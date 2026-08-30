@@ -1,14 +1,14 @@
 /*
  * TMA - Dashboard home library strip
- * Default (organization) folders as a grid of folder cards, plus a Recent
- * Files / Shared with me table that mirrors the Folders → All Files list.
+ * Default (organization) folders in a 3-up card row, plus a Recent Files /
+ * Shared with me table that mirrors the Folders → All Files list design.
  * Global: window.TMAPortalHomeLibrary
  */
 (function () {
   'use strict';
 
-  var DEFAULT_VISIBLE = 6;
-  var PREVIEW_FILES = 1;
+  var DEFAULT_VISIBLE = 3;
+  var PREVIEW_FILES = 5;
 
   /*
    * The type pills, in the order they are offered.
@@ -101,16 +101,13 @@
   }
 
   function folderIconHtml(item, size) {
-    var px = size || 20;
+    var px = size || 28;
     return '<span class="tma-portal-default-folder__icon" style="width:' + px + 'px;height:' + px + 'px">' +
       folderGlyph(item, px) + '</span>';
   }
 
   function thumbOrIcon(item, size) {
-    if (item.type === 'folder') {
-      var px = size || 24;
-      return folderGlyph(item, px);
-    }
+    if (item.type === 'folder') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
     // The one place that decides preview-or-icon, shared with the File
     // Library: images use the server's thumbnail, PDFs get page one painted.
@@ -210,28 +207,60 @@
   /* ── default folders cards ─────────────────────────── */
 
   function renderDefaultFolderCard(folder) {
-    return '<button type="button" class="tma-portal-default-folder" data-key="default-folder-' + esc(folder.id) + '"' +
-      ' data-home-lib-open-folder="' + esc(folder.id) + '">' +
-      '<span class="tma-portal-default-folder__art" aria-hidden="true">' +
-      '<span class="tma-portal-default-folder__sheet"></span>' +
-      '<span class="tma-portal-default-folder__art-icon">' + folderGlyph(folder, 96) + '</span>' +
-      '</span>' +
-      '<span class="tma-portal-default-folder__foot">' +
-      folderIconHtml(folder, 20) +
-      '<span class="tma-portal-default-folder__head-text">' +
+    var files = folder.files || [];
+    var subfolders = folder.folders || [];
+
+    // Subfolders first, then files, the same order the library itself uses.
+    // Every row carries a data-key so a background poll re-render reuses the
+    // existing node instead of rebuilding it (and re-requesting its thumbnail).
+    var rows = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
+      return '<button type="button" class="tma-portal-file-row" data-key="home-lib-sub-' + esc(sub.id) + '"' +
+        ' data-home-lib-open-folder="' + esc(sub.id) + '">' +
+        folderIconHtml(sub, 24) +
+        '<span class="tma-portal-file-row__meta">' +
+        '<span class="tma-portal-file-row__name">' + esc(sub.name) + '</span>' +
+        '<span class="tma-portal-file-row__path">' + esc(folderMeta(sub)) + '</span>' +
+        '</span></button>';
+    }).join('');
+
+    rows += files.slice(0, Math.max(0, PREVIEW_FILES - subfolders.length)).map(function (f) {
+      return '<button type="button" class="tma-portal-file-row" data-key="home-lib-file-' + esc(f.id) + '"' +
+        ' data-home-lib-open-file="' + esc(f.id) + '"' +
+        ' data-home-lib-open-folder="' + esc((f.folder && f.folder.id) || folder.id) + '">' +
+        thumbOrIcon(f, 24) +
+        '<span class="tma-portal-file-row__meta">' +
+        '<span class="tma-portal-file-row__name">' + esc(f.name) + '</span>' +
+        (f.sizeLabel ? '<span class="tma-portal-file-row__path">' + esc(f.sizeLabel) + '</span>' : '') +
+        '</span></button>';
+    }).join('');
+
+    return '<section class="tma-portal-default-folder" data-key="default-folder-' + esc(folder.id) + '">' +
+      '<button type="button" class="tma-portal-default-folder__head" data-home-lib-open-folder="' + esc(folder.id) + '">' +
+      folderIconHtml(folder, 28) +
       '<span class="tma-portal-default-folder__name">' + esc(folder.name) + '</span>' +
-      '<span class="tma-portal-default-folder__count">' + esc(folderMeta(folder)) + '</span>' +
-      '</span></span></button>';
+      '</button>' +
+      '<div class="tma-portal-default-folder__body">' +
+      (rows || '<p class="tma-portal-panel__note" data-key="home-lib-empty-' + esc(folder.id) + '">Nothing in this folder yet.</p>') +
+      (extraCount(folder) ? '<p class="tma-portal-panel__note" data-key="home-lib-more-' + esc(folder.id) + '">' + extraCount(folder) + '</p>' : '') +
+      '</div></section>';
   }
 
   /** "3 files · 2 folders", or "Empty", the same shape the library uses. */
   function folderMeta(sub) {
-    if (sub.fileCount == null && sub.folderCount == null) return '';
     var parts = [];
     if (sub.fileCount) parts.push(sub.fileCount + (sub.fileCount === 1 ? ' file' : ' files'));
     if (sub.folderCount) parts.push(sub.folderCount + (sub.folderCount === 1 ? ' folder' : ' folders'));
 
     return parts.length ? parts.join(' · ') : 'Empty';
+  }
+
+  /** "+ 8 more" when the card shows only the first few. */
+  function extraCount(folder) {
+    var shown = Math.min((folder.folders || []).length, PREVIEW_FILES) +
+      Math.max(0, Math.min((folder.files || []).length, PREVIEW_FILES - (folder.folders || []).length));
+    var total = (folder.folderCount || 0) + (folder.fileCount || 0);
+
+    return total > shown ? '+ ' + (total - shown) + ' more' : '';
   }
 
   function renderDefaultFolders() {
@@ -245,7 +274,7 @@
         '<h2 class="tma-portal-home-defaults__title">Default Folders</h2>' +
         '</div>' +
         '<div class="tma-portal-home-defaults__grid" data-key="home-defaults-skeleton">' +
-        new Array(4).fill('<div class="tma-portal-default-folder tma-portal-default-folder--skeleton" aria-hidden="true"></div>').join('') +
+        new Array(3).fill('<div class="tma-portal-default-folder tma-portal-default-folder--skeleton" aria-hidden="true"></div>').join('') +
         '</div></section>';
     }
 
@@ -846,8 +875,10 @@
     return net().fetchJSON(net().url('/?folder=' + encodeURIComponent(folder.id) + '&perPage=' + PREVIEW_FILES + '&lean=1'))
       .then(function (j) {
         folder.files = (j && j.files) || [];
-        // Direct files alone under-count a library that files per-matter
-        // folders: the footer uses both counts so Empty is only empty.
+        // Subfolders matter as much as files. A synced library keeps its
+        // documents inside per-matter folders, so a card that only looked at
+        // direct files reported "No files in this folder yet" on a folder
+        // holding hundreds of them.
         folder.folders = (j && j.folders) || [];
         folder.fileCount = j && j.counts ? j.counts.files : folder.files.length;
         folder.folderCount = j && j.counts ? j.counts.folders : folder.folders.length;
@@ -868,8 +899,7 @@
         name: f.name,
         colour: f.colour,
         iconName: f.iconName,
-        fileCount: f.fileCount != null ? f.fileCount : null,
-        folderCount: f.folderCount != null ? f.folderCount : null,
+        fileCount: f.fileCount != null ? f.fileCount : 1,
         files: [],
         folders: [],
       });
@@ -926,6 +956,8 @@
         f.id, f.name || '', f.colour || '', f.iconName || '',
         f.fileCount == null ? '' : f.fileCount,
         f.folderCount == null ? '' : f.folderCount,
+        (f.folders || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
+        (f.files || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
       ].join('~');
     }).join('|');
   }
@@ -937,9 +969,11 @@
   /**
    * Merge a freshly fetched default-folder list onto what is already drawn.
    *
-   * Counts arrive on a second round of requests. A folder that survives the
-   * refresh keeps the counts it is already showing until its own listing
-   * comes back, so the footer does not flash Empty on every Dashboard visit.
+   * The previews are a second round of requests, so a folder that survives the
+   * refresh keeps the contents it is already showing until its own preview
+   * comes back. Replacing the list outright, which is what this used to do —
+   * left every card reading "Nothing in this folder yet" for as long as the
+   * preview requests took, on every single visit to the Dashboard.
    */
   function mergeDefaults(next) {
     var known = {};
@@ -1031,7 +1065,7 @@
       }
 
       // Paint the folder list as soon as we know it, then again once the
-      // counts land. Surviving cards keep their old counts in between.
+      // previews land, the cards keep their old contents in between.
       if (snapshot() !== before) {
         before = snapshot();
         if (done) done();
