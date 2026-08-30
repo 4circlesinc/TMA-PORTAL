@@ -2295,7 +2295,8 @@
           '<div class="tma-portal-viewer__body">' +
             leftRailHtml(f) +
             '<div class="tma-portal-viewer__main">' +
-              '<div class="tma-portal-viewer__stage" data-lb-stage>' + lightboxBody(f) + '</div>' +
+              '<div class="tma-portal-viewer__vbar" data-lb-vbar hidden role="status"></div>' +
+              '<div class="tma-portal-viewer__stage" data-lb-stage></div>' +
               '<div class="tma-portal-viewer__foot" data-lb-foot>' + footHtml(f) + '</div>' +
             '</div>' +
             '<aside class="tma-portal-viewer__comments" data-lb-comments-panel aria-label="Comments">' +
@@ -2311,20 +2312,11 @@
       // Once per viewer, not per file: the panel is rebuilt constantly and
       // binding on render would stack a listener every time.
       bindVersionDrop();
-
-      var stage = lb.querySelector('[data-lb-stage]');
-      if (stage) {
-        stage.classList.toggle(
-          'tma-portal-viewer__stage--pdf',
-          f.category === 'pdf' && f.previewUrl && perm(f, 'preview')
-        );
-        swapFullImage(stage);
-      }
+      fillStage(f);
 
       paintPanel();
       paintCommentsPanel();
       bindAnchorSelect();
-      mountPdf(f);
       subscribeToFile(f);
       startPresence(f);
       // Same reasoning as the approval badge below: the tab counts say what is
@@ -2333,7 +2325,6 @@
       // Fetch the badge up front: §20 puts the approval status in the centre
       // header, which must not wait for the reader to open a tab.
       if (!entry(f).approvals) loadApprovals(f);
-      if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
     }
 
     /**
@@ -2491,9 +2482,14 @@
     function headMetaHtml(f) {
       var bits = [];
       if (f.category) bits.push(esc(cap(f.category)));
-      // Only worth stating once there is history to state, "Version 1" on
-      // every file is noise.
-      if (f.versionNumber > 1) bits.push('Version ' + f.versionNumber);
+      var viewing = entry(f).viewingVersion;
+      if (viewing) {
+        bits.push('Viewing version ' + viewing.number);
+      } else if (f.versionNumber > 1) {
+        // Only worth stating once there is history to state, "Version 1" on
+        // every file is noise.
+        bits.push('Version ' + f.versionNumber);
+      }
       if (f.sizeLabel) bits.push(esc(f.sizeLabel));
       if (f.modifiedAt) bits.push('Modified ' + esc(fmtDate(f.modifiedAt)));
       if (f.folder) bits.push('in ' + esc(f.folder.name));
@@ -3818,22 +3814,29 @@
           '<input type="file" hidden data-lb-versionfile>'
         : '';
 
+      var viewing = entry(f).viewingVersion;
+
       return head + list.map(function (v) {
         var who = v.uploadedBy ? v.uploadedBy.name : 'Someone';
+        var onScreen = viewing ? viewing.id === v.id : false;
         var acts = '';
-        // The current version is downloaded through the file's own toolbar, so
-        // only older ones carry their own actions.
-        if (!v.isCurrent && v.can.preview) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vpreview="' + esc(v.id) + '">Preview</button>';
+        // The current version is already on the stage. Older ones open in
+        // that same stage rather than a new tab, so the document stays in
+        // the viewer the reader already has open.
+        if (!v.isCurrent && v.can.preview && !onScreen) {
+          acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vpreview="' + esc(v.id) + '">Preview</button>';
+        }
         if (!v.isCurrent && v.can.download) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vdownload="' + esc(v.id) + '">Download</button>';
         if (v.can.restore) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vrestore="' + esc(v.id) + '" data-num="' + v.number + '">Restore</button>';
 
-        return '<div class="tma-portal-viewer__version' + (v.isCurrent ? ' is-current' : '') + '">' +
+        return '<div class="tma-portal-viewer__version' + (v.isCurrent ? ' is-current' : '') + (onScreen ? ' is-viewing' : '') + '" data-lb-vshow="' + esc(v.id) + '">' +
           '<div class="tma-portal-viewer__version-mark">v' + v.number + '</div>' +
           '<div class="tma-portal-viewer__version-main">' +
             '<div class="tma-portal-viewer__comment-head">' +
               '<strong>' + esc(who) + '</strong>' +
               '<time datetime="' + esc(v.uploadedAt) + '">' + esc(fmtDateTime(v.uploadedAt)) + '</time>' +
               (v.isCurrent ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Current</span>' : '') +
+              (onScreen ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">On screen</span>' : '') +
               (v.restoredFrom ? '<span class="tma-portal-viewer__comment-flag">restored from v' + v.restoredFrom + '</span>' : '') +
               (v.approvalStatus ? '<span class="tma-portal-viewer__comment-flag">' + esc(statusLabel(v.approvalStatus)) + '</span>' : '') +
             '</div>' +
@@ -3951,6 +3954,7 @@
             .then(function (res) {
               ui().toast('Version ' + res.version + ' uploaded');
               e.versions = null;
+              e.viewingVersion = null;
               // The file's own row and the header both changed (size, modified,
               // version), so refresh what we hold rather than guessing.
               if (res.file) {
@@ -3960,6 +3964,7 @@
               var head = lb.querySelector('.tma-portal-viewer__head');
               if (head) head.outerHTML = viewerHead(f);
               bustPreview(f, res.version);
+              syncLeftRail(f);
               repaintStage(f);
               loadVersions(f);
             })
@@ -3985,6 +3990,7 @@
             .then(function (res) {
               ui().toast('Restored as version ' + res.version);
               e.versions = null;
+              e.viewingVersion = null;
               if (res.file) {
                 updateItem(f.id, res.file);
                 Object.assign(f, res.file);
@@ -3992,6 +3998,7 @@
               var head = lb.querySelector('.tma-portal-viewer__head');
               if (head) head.outerHTML = viewerHead(f);
               bustPreview(f, res.version);
+              syncLeftRail(f);
               repaintStage(f);
               loadVersions(f);
             })
@@ -4013,6 +4020,70 @@
     function versionUrl(versionId, action) {
       return net().url('/files/' + encodeURIComponent(current().id) +
         '/versions/' + encodeURIComponent(versionId) + '/' + action);
+    }
+
+    /* The bytes currently on the stage: the live file, or an older revision
+     * the reader asked to look at without leaving the viewer. */
+    function stageFile(f) {
+      var v = entry(f).viewingVersion;
+      if (!v) return f;
+      var previewable = !!(v.can && v.can.preview);
+
+      return Object.assign({}, f, {
+        previewUrl: previewable ? versionUrl(v.id, 'preview') : null,
+        thumbUrl: null,
+        downloadUrl: (v.can && v.can.download) ? versionUrl(v.id, 'download') : f.downloadUrl,
+        category: v.category || f.category,
+        extension: v.extension || f.extension,
+        previewable: previewable,
+        sizeLabel: v.sizeLabel || f.sizeLabel,
+      });
+    }
+
+    function paintVersionBar(f) {
+      var bar = lb.querySelector('[data-lb-vbar]');
+      if (!bar) return;
+      var v = entry(f).viewingVersion;
+      if (!v) {
+        bar.hidden = true;
+        bar.innerHTML = '';
+        return;
+      }
+      var currentN = (entry(f).versions && entry(f).versions.current) || f.versionNumber;
+      bar.hidden = false;
+      bar.innerHTML = '<span>Viewing version ' + v.number + ' of ' + currentN + '</span>' +
+        '<button type="button" class="tma-portal-viewer__vbar-back" data-lb-vcurrent>Show current</button>';
+    }
+
+    function showVersion(versionId) {
+      var f = current();
+      var e = entry(f);
+      var list = (e.versions && e.versions.versions) || [];
+      var v = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === versionId) { v = list[i]; break; }
+      }
+      if (!v || v.isCurrent) {
+        if (!e.viewingVersion) return;
+        e.viewingVersion = null;
+      } else if (e.viewingVersion && e.viewingVersion.id === v.id) {
+        return;
+      } else {
+        e.viewingVersion = v;
+      }
+      applyVersionView(f);
+    }
+
+    function applyVersionView(f) {
+      var shown = stageFile(f);
+      var head = lb.querySelector('.tma-portal-viewer__head');
+      if (head) head.outerHTML = viewerHead(f);
+      syncLeftRail(shown);
+      fillStage(f);
+      var foot = lb.querySelector('[data-lb-foot]');
+      if (foot) foot.innerHTML = footHtml(shown);
+      var slot = lb.querySelector('[data-lb-versions]');
+      if (slot && entry(f).versions) slot.innerHTML = versionsHtml(entry(f).versions, f);
     }
 
     /* Approvals ------------------------------------------------------- */
@@ -4783,8 +4854,10 @@
     }
 
     function showAt(next) {
+      if (gallery[idx]) entry(gallery[idx]).viewingVersion = null;
       idx = next;
       var f = current();
+      entry(f).viewingVersion = null;
 
       // Flipping through the rail is navigation too, reloading on the third
       // file should reopen the third file, not the one first clicked.
@@ -4809,23 +4882,28 @@
       subscribeToFile(f);
       // Stepping to the next file needs its counts, not the last file's.
       loadTabCounts(f);
-      if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
     }
 
     /* Repainting the stage is never just innerHTML: a text preview renders a
      * placeholder that only loadText() fills in, so replacing the markup
      * without re-running it leaves a permanent "Loading…". */
-    function repaintStage(f) {
+    function fillStage(f) {
+      var shown = stageFile(f);
       var stage = lb.querySelector('[data-lb-stage]');
       if (!stage) return;
       stage.classList.toggle(
         'tma-portal-viewer__stage--pdf',
-        f.category === 'pdf' && f.previewUrl && perm(f, 'preview')
+        shown.category === 'pdf' && shown.previewUrl && perm(shown, 'preview')
       );
-      stage.innerHTML = lightboxBody(f);
-      if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
-      mountPdf(f);
+      paintVersionBar(f);
+      stage.innerHTML = lightboxBody(shown);
+      if (shown.previewable && shown.category === 'text' && shown.previewUrl) loadText(shown);
+      mountPdf(shown);
       swapFullImage(stage);
+    }
+
+    function repaintStage(f) {
+      fillStage(f);
     }
 
     /* Put the real image in once it has decoded, so the picture never flashes
@@ -4922,13 +5000,14 @@
     function renderAllPdfPages(f) {
       var e = entry(f);
       var pdf = e.pdfDoc;
+      var expectedUrl = e.pdfUrl;
       var host = lb.querySelector('[data-lb-pdf]');
       var scroll = host && host.querySelector('[data-lb-pdf-scroll]');
       if (!pdf || !scroll) return;
 
       // Measure scale from page 1's viewport.
       pdf.getPage(1).then(function (firstPage) {
-        if (current().id !== f.id) return;
+        if (current().id !== f.id || e.pdfUrl !== expectedUrl) return;
         var vp1 = firstPage.getViewport({ scale: 1 });
         var scale = pdfEffectiveScale(e, scroll, vp1);
         var dpr = window.devicePixelRatio || 1;
@@ -4948,7 +5027,7 @@
             scroll.appendChild(canvas);
 
             pdf.getPage(pageNum).then(function (page) {
-              if (current().id !== f.id) return;
+              if (current().id !== f.id || e.pdfUrl !== expectedUrl) return;
               var viewport = page.getViewport({ scale: scale * dpr });
               canvas.width = Math.floor(viewport.width);
               canvas.height = Math.floor(viewport.height);
@@ -5027,7 +5106,7 @@
       var ready = (e.pdfDoc && e.pdfUrl === f.previewUrl)
         ? Promise.resolve(e.pdfDoc)
         : loadPdfDocument(f.previewUrl).then(function (pdf) {
-            if (current().id !== f.id) {
+            if (current().id !== f.id || stageFile(current()).previewUrl !== f.previewUrl) {
               if (pdf && pdf.destroy) { try { pdf.destroy(); } catch (err) { /* ignore */ } }
               return null;
             }
@@ -5044,19 +5123,21 @@
 
       ready
         .then(function (pdf) {
-          if (!pdf || current().id !== f.id) return;
+          if (!pdf || current().id !== f.id || stageFile(current()).previewUrl !== f.previewUrl) return;
           if (loading) loading.hidden = true;
           paintPdfThumbs(f, pdf);
           // Two-frame wait: first frame lets the scroll container get its height
           // from flexbox, second ensures the layout has settled.
           requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-              if (current().id === f.id && entry(f).pdfDoc) renderAllPdfPages(f);
+              if (current().id === f.id && entry(f).pdfDoc && stageFile(current()).previewUrl === f.previewUrl) {
+                renderAllPdfPages(f);
+              }
             });
           });
         })
         .catch(function (err) {
-          if (current().id !== f.id) return;
+          if (current().id !== f.id || stageFile(current()).previewUrl !== f.previewUrl) return;
           if (loading) {
             loading.hidden = false;
             loading.textContent = err && err.name === 'InvalidPDFException'
@@ -5139,10 +5220,17 @@
     function loadText(f) {
       var pre = lb.querySelector('[data-lb-text]');
       if (!pre) return;
-      fetch(f.previewUrl, { credentials: 'same-origin' })
+      var url = f.previewUrl;
+      fetch(url, { credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-        .then(function (t) { pre.textContent = t.length > 200000 ? t.slice(0, 200000) + '\n…' : t; })
-        .catch(function () { pre.textContent = 'Could not load this file.'; });
+        .then(function (t) {
+          if (!pre.isConnected || stageFile(current()).previewUrl !== url) return;
+          pre.textContent = t.length > 200000 ? t.slice(0, 200000) + '\n…' : t;
+        })
+        .catch(function () {
+          if (!pre.isConnected || stageFile(current()).previewUrl !== url) return;
+          pre.textContent = 'Could not load this file.';
+        });
     }
 
     /* ── interaction ─────────────────────────────────── */
@@ -5195,12 +5283,15 @@
         return;
       }
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
+      if (e.target.closest('[data-lb-vcurrent]')) { showVersion(null); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
-      if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }
+      if (vPrev) { showVersion(vPrev.getAttribute('data-lb-vpreview')); return; }
       var vDown = e.target.closest('[data-lb-vdownload]');
       if (vDown) { window.location.href = versionUrl(vDown.getAttribute('data-lb-vdownload'), 'download'); return; }
       var vRest = e.target.closest('[data-lb-vrestore]');
       if (vRest) { restoreVersion(vRest.getAttribute('data-lb-vrestore'), vRest.getAttribute('data-num')); return; }
+      var vShow = e.target.closest('[data-lb-vshow]');
+      if (vShow) { showVersion(vShow.getAttribute('data-lb-vshow')); return; }
 
       /* ── comments ─────────────────────────────────── */
       var en = entry(f);
@@ -5310,8 +5401,8 @@
       if (!act) return;
       switch (act.getAttribute('data-lb-act')) {
         case 'close': return closeLightbox();
-        case 'download': return downloadItem(f);
-        case 'print': return printFile(f);
+        case 'download': return downloadItem(stageFile(f));
+        case 'print': return printFile(stageFile(f));
         case 'share': return openShareModal(f);
         case 'delete': return deleteFromViewer(f);
         case 'favorite': return favoriteFromViewer(f);

@@ -121,6 +121,24 @@ try {
   check(restoreBtns.length === 1, `only the non-current version offers Restore (${restoreBtns.length})`);
   check((await page.$$('[data-lb-vdownload]')).length === 1, 'only the older version offers its own Download');
 
+  step(5.5, 'Preview of the older version stays in this viewer');
+  await page.click('[data-lb-vpreview]');
+  await page.waitForTimeout(1200);
+  const viewingBar = await page.$('[data-lb-vbar]:not([hidden])');
+  check(!!viewingBar, 'a bar on the stage says which version is open');
+  const barText = viewingBar ? await page.textContent('[data-lb-vbar]') : '';
+  check(/Viewing version 1/.test(barText), `the bar names version 1 (“${barText.trim()}”)`);
+  const stageAfterPreview = await page.textContent('.tma-portal-viewer__stage');
+  check(/version one contents/.test(stageAfterPreview),
+    `the stage shows v1 (“${(stageAfterPreview || '').trim().slice(0, 40)}”)`);
+  check((await page.$$('.tma-portal-viewer')).length === 1, 'no second viewer was opened');
+  await page.click('[data-lb-vcurrent]');
+  await page.waitForTimeout(800);
+  check(await page.$('[data-lb-vbar]:not([hidden])') === null, 'Show current puts the live file back');
+  const stageCurrent = await page.textContent('.tma-portal-viewer__stage');
+  check(/version two contents/.test(stageCurrent),
+    `the stage shows v2 again (“${(stageCurrent || '').trim().slice(0, 40)}”)`);
+
   step(6, 'An old version really serves its old bytes');
   const oldId = await page.$eval('[data-lb-vdownload]', (e) => e.getAttribute('data-lb-vdownload'));
   const oldBody = await page.evaluate(async ([base, id, vid]) => {

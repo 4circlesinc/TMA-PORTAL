@@ -1086,6 +1086,30 @@
   color: var(--color-text-primary); word-break: break-word;
 }
 .tma-portal-viewer__version-meta { margin: var(--space-2) 0 0; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-portal-viewer__version[data-lb-vshow] { cursor: pointer; border-radius: var(--radius-8); }
+.tma-portal-viewer__version[data-lb-vshow]:hover { background: var(--color-hover); }
+.tma-portal-viewer__version.is-viewing {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.tma-portal-viewer__version .tma-portal-viewer__comment-actions { cursor: default; }
+
+/* Which revision is on the stage, so an older file is never mistaken for current. */
+.tma-portal-viewer__vbar {
+  flex: 0 0 auto; align-self: center;
+  display: flex; align-items: center; gap: var(--space-12);
+  margin: var(--space-12) 0 0; max-width: calc(100% - 32px);
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px; background: rgba(23, 24, 26, 0.92); color: #fff;
+  font-size: var(--text-size-13); line-height: 1.3; white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.tma-portal-viewer__vbar[hidden] { display: none; }
+.tma-portal-viewer__vbar-back {
+  border: 0; border-radius: 999px; padding: 4px 12px;
+  background: #fff; color: #17181a; font: inherit; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.tma-portal-viewer__vbar-back:hover { background: #f3f3f3; }
 
 /* Note field inside a confirm dialog (version notes). */
 .tma-portal-modal__label {

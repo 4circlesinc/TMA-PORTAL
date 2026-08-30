@@ -96,6 +96,8 @@ class FileVersionTest extends TestCase
         $this->assertCount(1, $res->json('versions'));
         $res->assertJsonPath('versions.0.number', 1)
             ->assertJsonPath('versions.0.isCurrent', true)
+            ->assertJsonPath('versions.0.extension', 'txt')
+            ->assertJsonPath('versions.0.category', 'text')
             ->assertJsonPath('current', 1);
     }
 

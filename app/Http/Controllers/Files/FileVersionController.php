@@ -43,6 +43,8 @@ class FileVersionController extends BaseFilesController
                 'size' => (int) $v->size,
                 'sizeLabel' => Presenter::humanSize((int) $v->size),
                 'mime' => $v->mime_type,
+                'extension' => $v->extension,
+                'category' => FileType::category((string) $v->extension),
                 // Short hash: enough to tell two versions apart by eye, without
                 // implying it is something to copy around.
                 'checksum' => $v->checksum ? substr($v->checksum, 0, 12) : null,
