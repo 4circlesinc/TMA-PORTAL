@@ -1775,7 +1775,7 @@
     var counts = payload.counts || {};
 
     return [
-      counts.waiting || 0, counts.unread || 0,
+      counts.waiting || 0, counts.unread || 0, counts.updates || 0,
       (payload.requests || []).map(function (r) {
         return [r.id, r.status || '', r.answered, ((r.headline || {}).text || '')].join(':');
       }).join('|'),
@@ -3586,57 +3586,68 @@
   }
 
   /*
-   * A comment is written, or a request is answered → the two work tiles move,
-   * and nothing else on this board does.
+   * A comment is written, a request is answered, or a CIP document is marked
+   * Update required → the work tiles and the strip under the KPIs move.
    *
-   * Its own registration for the same reason CIP keeps one: somebody answering
-   * an approval does not touch Recent Files, and an upload does not move a
-   * conversation. One shared entry would make every write on either side
-   * refetch the other's.
+   * Workflows and CIP keep their own registrations for the same reason the
+   * CIP row does: an approval does not touch Recent Files, and an upload does
+   * not move a conversation. The strip reads both resources, so each signal
+   * refetches the same `/portal/dashboard/work` list.
    *
    * The 60-second poll below stays as the backstop. This is the path that
-   * makes the tiles live; the timer is what covers a portal that cannot reach
+   * makes the strip live; the timer is what covers a portal that cannot reach
    * Reverb at all, which is a configuration this app has shipped in more than
    * once.
    */
   var liveWorkBound = false;
+  function dashPortalMount() {
+    var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+    return el && el.isConnected ? el : null;
+  }
+
+  function dashboardViewOpen() {
+    var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
+    return !!view && !view.hidden;
+  }
+
+  function refreshHomeWorkLive() {
+    var el = dashPortalMount();
+    if (!el) return null;
+
+    // Force past the freshness window: this is a signal that something
+    // actually changed, not a speculative revalidation.
+    homeWorkAt = 0;
+
+    /*
+     * Off screen, zeroing that window IS the job — which is why this does
+     * the check itself rather than handing TMALive an `active` guard. The
+     * guard returns before any of this runs, so a comment written while the
+     * reader was in Email left the board thinking it was fresh, and walking
+     * back in under the minute showed them yesterday's strip. Refetching a
+     * board nobody is looking at is still pure cost; mount() asks on the way
+     * back instead.
+     */
+    if (!dashboardViewOpen()) return null;
+
+    return loadHomeWork(el, { skipTimer: true });
+  }
+
   function watchLiveWork() {
     if (liveWorkBound || !window.TMALive) return;
     liveWorkBound = true;
 
-    window.TMALive.register(window.TMALive.RESOURCES.WORKFLOWS, function () {
-      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-      if (!el || !el.isConnected) return null;
-
-      // Force past the freshness window: this is a signal that something
-      // actually changed, not a speculative revalidation.
-      homeWorkAt = 0;
-
-      /*
-       * Off screen, zeroing that window IS the job — which is why this does
-       * the check itself rather than handing TMALive an `active` guard. The
-       * guard returns before any of this runs, so a comment written while the
-       * reader was in Email left the board thinking it was fresh, and walking
-       * back in under the minute showed them yesterday's tile. Refetching a
-       * board nobody is looking at is still pure cost; mount() asks on the way
-       * back instead.
-       */
-      var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
-      if (!view || view.hidden) return null;
-
-      return loadHomeWork(el, { skipTimer: true });
-    });
+    window.TMALive.register(window.TMALive.RESOURCES.WORKFLOWS, refreshHomeWorkLive);
   }
 
   /*
-   * An application moves → the counts move, and nothing else on this board does.
+   * An application or CIP document moves → the KPI counts and the strip move.
    *
    * Its own registration rather than a second job on the files entry, for the
    * reason clients.js gives for keeping its CIP entry separate: a status change
    * does not touch Recent Files and an upload does not move a bucket, so one
    * shared entry would make every write on either side refetch the other's.
    * This is the same `cip` signal the applications table listens to, which is
-   * what keeps the card and the list it opens onto in step.
+   * what keeps the card, the strip, and the list they open onto in step.
    */
   var liveCipBound = false;
   function watchLiveCip() {
@@ -3644,20 +3655,23 @@
     liveCipBound = true;
 
     window.TMALive.register(window.TMALive.RESOURCES.CIP, function () {
-      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-      if (!el || !el.isConnected) return null;
+      var el = dashPortalMount();
+      if (!el) return null;
       // Force past the freshness window: this is a signal that a status
       // actually changed, not a speculative revalidation.
       homeCipAt = 0;
+
+      if (!dashboardViewOpen()) {
+        // Same bargain as the strip: remember it is stale, refetch on the
+        // way back. The `active` guard used to skip this entirely, so a
+        // document marked Update required while the reader was in Clients
+        // left the strip claiming nothing had happened.
+        homeWorkAt = 0;
+        return null;
+      }
+
       loadHomeCip(el);
-      return null;
-    }, {
-      // Registered for the life of the page, so skip the work whenever the
-      // Dashboard is not the view on screen.
-      active: function () {
-        var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
-        return !!view && !view.hidden;
-      },
+      return refreshHomeWorkLive();
     });
   }
 
