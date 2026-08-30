@@ -1910,6 +1910,7 @@
 
 .tma-portal-wf-strip__track {
   display: flex;
+  align-items: stretch;
   gap: var(--space-12);
   overflow-x: auto;
   overflow-y: hidden;
@@ -1921,13 +1922,23 @@
 }
 
 .tma-portal-wf-strip__slide {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 min(280px, 82vw);
   scroll-snap-align: start;
   min-width: 0;
 }
 
+/* Fill the row of the tallest card, and park the file line at the bottom
+   so a short note does not leave a ragged edge. */
 .tma-portal-wf-strip__slide .tma-portal-wf-card {
-  height: 100%;
+  flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tma-portal-wf-strip .tma-portal-wf-file {
+  margin-top: auto;
 }
 
 .tma-portal-wf-card--preview {
