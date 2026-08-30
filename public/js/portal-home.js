@@ -1614,14 +1614,15 @@
   }
 
   function feedItemStillNew(entry) {
+    var kind = entry && entry.kind;
     var item = (entry && entry.item) || {};
-    if ((entry && entry.kind) === 'comment') {
+    if (kind === 'comment') {
       return item.unread !== false && !item.resolved;
     }
-    if ((entry && entry.kind) === 'request') {
+    if (kind === 'request') {
       return !!item.onMe && item.isOpen !== false;
     }
-    return true;
+    return false;
   }
 
   function renderWfStrip() {

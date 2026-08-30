@@ -3,13 +3,19 @@
 namespace Tests\Feature;
 
 use App\Events\PortalDataChanged;
+use App\Models\CipDocument;
+use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -90,6 +96,57 @@ class DashboardWorkTest extends TestCase
         ])->assertCreated();
 
         return FileItem::latest('id')->first();
+    }
+
+    /**
+     * A CIP slot marked Update required, visible to anyone who can see the
+     * application. The strip must not treat this as unread work.
+     */
+    private function cipUpdateRequired(User $staff, ?CipProvider $provider = null): CipDocument
+    {
+        $provider ??= CipProvider::create([
+            'name' => 'Private clients',
+            'code' => 'PRI'.substr(uniqid(), -4),
+        ]);
+        $client = Client::create([
+            'uid' => 'asem-'.uniqid(),
+            'name' => 'Asem Habtoor',
+            'created_by' => $staff->id,
+            'data' => [],
+        ]);
+        $application = Applications::create($provider, $staff, ['client_id' => $client->id]);
+        $person = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Asem',
+            'last_name' => 'Habtoor',
+        ]);
+        $document = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $person->id,
+            'type' => DocumentTypes::BIRTH_CERTIFICATE,
+            'label' => DocumentTypes::label(DocumentTypes::BIRTH_CERTIFICATE),
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Birth certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/birth-'.uniqid().'.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+            'review_status' => DocumentStatus::UPDATE_REQUIRED,
+            'review_note' => 'Please rescan the stamp.',
+        ]);
+        $document->forceFill([
+            'file_id' => $file->id,
+            'status' => DocumentStatus::UPDATE_REQUIRED,
+            'status_changed_at' => now(),
+        ])->save();
+
+        return $document->fresh();
     }
 
     public function test_the_board_lists_what_is_waiting_on_you_and_who_is_talking_to_you(): void
@@ -232,8 +289,9 @@ class DashboardWorkTest extends TestCase
     }
 
     /**
-     * The strip under the KPIs is the three workflow streams as one list,
-     * newest first, and it stops at ten even when each stream could fill it.
+     * The strip under the KPIs is unread unresolved comments and requests
+     * still waiting on you, newest first, and it stops at ten even when each
+     * stream could fill it.
      */
     public function test_the_feed_combines_streams_newest_first_and_caps_at_ten(): void
     {
@@ -328,6 +386,77 @@ class DashboardWorkTest extends TestCase
             ->assertJsonCount(0, 'feed')
             ->assertJsonCount(1, 'comments')
             ->assertJsonPath('comments.0.unread', false);
+    }
+
+    /** Resolving a thread takes it off the strip even if it is still unread. */
+    public function test_the_feed_omits_resolved_comments(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $comment = $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Please look at this',
+            'mentions' => [$ben->id],
+        ])->assertCreated()->json();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(1, 'feed');
+
+        $this->actingAs($ada)
+            ->postJson("/portal/files/files/{$file->uuid}/comments/{$comment['id']}/resolve", [
+                'resolved' => true,
+            ])
+            ->assertOk();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(0, 'feed');
+    }
+
+    /**
+     * CIP documents marked Update required stay on that Workflows page.
+     * Every account that can see the application used to get them in the
+     * strip — that is open work, not something unread for this person.
+     */
+    public function test_the_feed_omits_cip_updates_required(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+        $this->cipUpdateRequired($ada);
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/updates')
+            ->assertOk()
+            ->assertJsonCount(1, 'items');
+
+        $this->actingAs($ada)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(0, 'feed');
+
+        $this->actingAs($ada)
+            ->postJson("/portal/files/files/{$file->uuid}/workflows", [
+                'type' => 'approval',
+                'recipients' => [['userId' => $ben->id]],
+            ])->assertCreated();
+
+        $this->travel(2)->seconds();
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Please look at this',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $feed = $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(2, 'feed')
+            ->json('feed');
+
+        $this->assertSame(['comment', 'request'], array_column($feed, 'kind'));
+        $this->assertSame('Please look at this', $feed[0]['item']['body']);
     }
 
     /**
@@ -503,7 +632,7 @@ class DashboardWorkTest extends TestCase
     {
         config(['services.cip.enabled' => true]);
 
-        $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
         $gil = $this->user('Client', 'gil@example.com', 'Gil Contact');
         $company = Company::create(['uid' => 'gal-dash', 'name' => 'Galaxy Firm']);
         CompanyMember::create([
@@ -514,12 +643,24 @@ class DashboardWorkTest extends TestCase
             'role' => 'member',
             'status' => CompanyMember::STATUS_ACTIVE,
         ]);
-        CipProvider::create([
+        $provider = CipProvider::create([
             'name' => 'Galaxy', 'code' => 'GLD', 'company_id' => $company->id,
         ]);
+        $this->cipUpdateRequired($ada, $provider);
 
         $this->actingAs($gil)->getJson('/portal/dashboard/work')
             ->assertOk()
             ->assertJsonPath('enabled', true);
+
+        $this->actingAs($gil)->getJson('/portal/files/workflows/updates')
+            ->assertOk()
+            ->assertJsonCount(1, 'items');
+
+        $feed = $this->actingAs($gil)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->json('feed');
+
+        $this->assertNotContains('update', array_column($feed, 'kind'));
+        $this->assertCount(0, $feed);
     }
 }

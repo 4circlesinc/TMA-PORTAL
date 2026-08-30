@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 /**
  * Work on the portal home: the Requests and Comments tiles, and the combined
- * latest-updates strip under the KPI row.
+ * unread strip under the KPI row.
  *
  * All three read through {@see Hub} so a tile, the strip, and the page they
  * open onto can never disagree about what "yours" means. Nothing is authorized
@@ -60,9 +60,6 @@ class DashboardWorkController extends Controller
         $comments = ($wantComments || $wantFeed)
             ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => $commentsLimit])
             : null;
-        $updates = $wantFeed
-            ? Hub::updates($user, ['limit' => self::LIMIT])
-            : null;
 
         $commentItems = $comments['items'] ?? [];
 
@@ -76,30 +73,28 @@ class DashboardWorkController extends Controller
             'feed' => $wantFeed ? self::feed(
                 $requests['items'] ?? [],
                 $commentItems,
-                $updates['items'] ?? [],
             ) : [],
             // The same figures the sidebar badge carries, so the board can
             // hand them across rather than the shell asking a second time.
             'counts' => $requests['counts']
                 ?? $comments['counts']
-                ?? $updates['counts']
                 ?? Hub::counts($user),
         ]);
     }
 
     /**
-     * Unread / still-waiting rows from the three streams, newest first.
+     * Unread unresolved comments and requests still waiting on you, newest first.
      *
-     * A comment the reader has already opened, or a request that is no longer
-     * on them, does not belong on the strip — that is what the tiles and the
-     * Workflows pages are for.
+     * CIP "Updates required" documents stay on that Workflows page — they are
+     * open work for anyone who can see the application, not something new for
+     * this account. A comment the reader has already opened, a resolved
+     * thread, or a request that is no longer on them, belong on the tiles.
      *
      * @param  list<array<string, mixed>>  $requests
      * @param  list<array<string, mixed>>  $comments
-     * @param  list<array<string, mixed>>  $updates
      * @return list<array{kind:string,at:string,item:array<string, mixed>}>
      */
-    private static function feed(array $requests, array $comments, array $updates): array
+    private static function feed(array $requests, array $comments): array
     {
         $entries = [];
 
@@ -114,9 +109,6 @@ class DashboardWorkController extends Controller
                 continue;
             }
             $entries[] = ['kind' => 'comment', 'at' => (string) ($item['createdAt'] ?? ''), 'item' => $item];
-        }
-        foreach ($updates as $item) {
-            $entries[] = ['kind' => 'update', 'at' => (string) ($item['updatedAt'] ?? ''), 'item' => $item];
         }
 
         usort($entries, function (array $a, array $b): int {
