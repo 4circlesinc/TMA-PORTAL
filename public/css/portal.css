@@ -5117,64 +5117,101 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-home-defaults__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-20);
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-12);
 }
 
-@media (max-width: 1100px) {
-  .tma-portal-home-defaults__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 700px) {
-  .tma-portal-home-defaults__grid { grid-template-columns: 1fr; }
-}
-
-/* These sit on the white page in the same near-white as every other panel, so
- * they read as background rather than as the shelf of folders they are. The
- * hairline and soft drop give them an edge; the min-height stops a folder
- * holding two files from collapsing to a strip half the size of its neighbour. */
+/* One card per default folder: large folder graphic on top, name + count
+   in the footer. The whole card opens the folder. */
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-12);
+  padding: 0;
+  overflow: hidden;
   border-radius: var(--radius-16);
-  background: var(--color-bg-card);
+  background: var(--color-white);
   border: 1px solid var(--color-border-soft);
-  box-shadow: var(--shadow-glass-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   min-width: 0;
-  min-height: 0;
+  width: 100%;
   box-sizing: border-box;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-portal-default-folder:hover {
+  border-color: var(--color-border-medium);
+}
+
+.tma-portal-default-folder:hover .tma-portal-default-folder__name {
+  text-decoration: underline;
+}
+
+.tma-portal-default-folder:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .tma-portal-default-folder--skeleton {
-  background: color-mix(in srgb, var(--color-bg-card) 70%, var(--color-hover));
-  min-height: 280px;
+  min-height: 184px;
+  cursor: default;
+  background: color-mix(in srgb, var(--color-white) 70%, var(--color-hover));
 }
 
-.tma-portal-default-folder__head {
+.tma-portal-default-folder__art {
+  position: relative;
+  height: 112px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 24px;
+  background: var(--color-white);
+}
+
+.tma-portal-default-folder__sheet {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  width: 44px;
+  height: 80px;
+  transform: translateX(-6px);
+  background: var(--color-border-soft);
+  border-radius: 8px 8px 2px 2px;
+  z-index: 0;
+}
+
+.tma-portal-default-folder__art-icon {
+  position: relative;
+  z-index: 1;
+  width: 96px;
+  height: 96px;
   display: flex;
   align-items: center;
-  gap: var(--space-10, 10px);
-  width: 100%;
-  padding: var(--space-4) var(--space-8);
-  border: 0;
-  border-radius: var(--radius-12);
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: var(--color-black);
+  justify-content: center;
+  flex: 0 0 96px;
+}
+
+.tma-portal-default-folder__art-icon .tma-folder-icon,
+.tma-portal-default-folder__art-icon .tma-folder-icon__base,
+.tma-portal-default-folder__art-icon img {
+  width: 96px !important;
+  height: 96px !important;
+  max-width: 96px;
+  max-height: 96px;
+  object-fit: contain;
+}
+
+.tma-portal-default-folder__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-14, 14px) var(--space-14, 14px);
   min-width: 0;
-  box-sizing: border-box;
-}
-
-.tma-portal-default-folder__head:hover {
-  background: var(--color-hover);
-}
-
-.tma-portal-default-folder__head:hover .tma-portal-default-folder__name {
-  text-decoration: underline;
 }
 
 .tma-portal-default-folder__head-text {
@@ -5184,11 +5221,11 @@ label.tma-portal-check-row:hover {
   min-width: 0;
 }
 
-/* Pin the folder glyph to 32px — do not let portal-files' 100% icon rule win. */
+/* Pin the footer glyph — do not let portal-files' 100% icon rule win. */
 .tma-portal-default-folder__icon {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5199,11 +5236,11 @@ label.tma-portal-check-row:hover {
 .tma-portal-default-folder__icon .tma-folder-icon,
 .tma-portal-default-folder__icon .tma-folder-icon__base,
 .tma-portal-default-folder__icon img {
-  width: 32px !important;
-  height: 32px !important;
-  max-width: 32px;
-  max-height: 32px;
-  flex: 0 0 32px;
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px;
+  max-height: 20px;
+  flex: 0 0 20px;
   object-fit: contain;
 }
 
@@ -5222,141 +5259,6 @@ label.tma-portal-check-row:hover {
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tma-portal-default-folder__body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-8);
-  min-width: 0;
-}
-
-.tma-portal-default-folder__body .tma-portal-panel__note {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-.tma-portal-default-folder__item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-12);
-  background: var(--color-white);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  min-width: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.tma-portal-default-folder__item:hover {
-  border-color: var(--color-border-medium);
-}
-
-.tma-portal-default-folder__item:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.tma-portal-default-folder__preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 88px;
-  border-radius: var(--radius-8);
-  background: var(--color-hover);
-  overflow: hidden;
-}
-
-.tma-portal-default-folder__thumb,
-.tma-portal-default-folder__preview .tma-file-thumb {
-  max-width: 100%;
-  max-height: 88px;
-  object-fit: contain;
-  border-radius: var(--radius-6);
-}
-
-.tma-portal-default-folder__preview .tma-file-thumb--doc {
-  object-fit: contain;
-  object-position: top center;
-  height: 88px;
-  width: auto;
-  background: #fff;
-}
-
-.tma-portal-default-folder__thumb-icon {
-  width: 40px;
-  height: 40px;
-}
-
-.tma-portal-default-folder__glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-}
-
-.tma-portal-default-folder__glyph .tma-folder-icon,
-.tma-portal-default-folder__glyph .tma-folder-icon__base,
-.tma-portal-default-folder__glyph img {
-  width: 40px !important;
-  height: 40px !important;
-  object-fit: contain;
-}
-
-.tma-portal-default-folder__item-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.tma-portal-default-folder__type {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.tma-portal-default-folder__type img,
-.tma-portal-default-folder__type .tma-folder-icon,
-.tma-portal-default-folder__type .tma-folder-icon__base {
-  width: 20px !important;
-  height: 20px !important;
-  object-fit: contain;
-}
-
-.tma-portal-default-folder__item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.tma-portal-default-folder__item-name {
-  font-size: var(--text-size-13);
-  line-height: var(--text-lh-14);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tma-portal-default-folder__item-meta {
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
