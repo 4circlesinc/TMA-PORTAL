@@ -1853,7 +1853,7 @@
   flex-shrink: 0;
 }
 
-/* Latest workflow cards above the KPI row: one line, as many as fit, the
+/* Latest workflow cards under the KPI row: one line, as many as fit, the
    rest behind scroll and the arrows. See all and the arrows sit on the
    cards, top right, and only come up when the row is hovered. */
 .tma-portal-wf-strip {

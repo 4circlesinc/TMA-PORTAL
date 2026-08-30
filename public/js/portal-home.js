@@ -3232,8 +3232,8 @@
           })
         : '') +
       '</div></div>' +
-      renderWfStrip() +
       renderKpis() +
+      renderWfStrip() +
       '<div class="tma-portal-home-grid">' +
       renderHomeGrid(s, show) +
       '</div>' +
@@ -3587,7 +3587,7 @@
 
   /*
    * A comment is written, a request is answered, or a CIP document is marked
-   * Update required → the work tiles and the strip above the KPIs move.
+   * Update required → the work tiles and the strip under the KPIs move.
    *
    * Workflows and CIP keep their own registrations for the same reason the
    * CIP row does: an approval does not touch Recent Files, and an upload does

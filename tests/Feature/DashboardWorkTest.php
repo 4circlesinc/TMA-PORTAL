@@ -289,7 +289,7 @@ class DashboardWorkTest extends TestCase
     }
 
     /**
-     * The strip above the KPIs is unread unresolved comments and requests
+     * The strip under the KPIs is unread unresolved comments and requests
      * still waiting on you, newest first, and it stops at ten even when each
      * stream could fill it.
      */
