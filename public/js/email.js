@@ -1935,6 +1935,38 @@
     return window.TMAEmailAPI;
   }
 
+  /* ── Firm compose templates ──────────────────────────────────────
+   * Written by administrators on Templates → Email templates; the mailbox
+   * only ever reads them. They fill the Templates folder and the "start
+   * from a template" pick in compose.
+   */
+  var FIRM_TEMPLATES = { loaded: false, loading: false, items: [] };
+
+  function loadFirmTemplates(render) {
+    if (FIRM_TEMPLATES.loading || !api().composeTemplates) return;
+    FIRM_TEMPLATES.loading = true;
+    api().composeTemplates()
+      .then(function (d) { FIRM_TEMPLATES.items = (d && d.templates) || []; })
+      .catch(function () { /* an empty list, not a broken mailbox */ })
+      .then(function () {
+        FIRM_TEMPLATES.loading = false;
+        FIRM_TEMPLATES.loaded = true;
+        if (render) render();
+      });
+  }
+
+  function firmTemplateById(id) {
+    var found = null;
+    FIRM_TEMPLATES.items.forEach(function (t) { if (t.id === id) found = t; });
+    return found;
+  }
+
+  /* The body a picked template seeds: its content, then the signature. */
+  function firmTemplateBodyHtml(template) {
+    return '<div class="tma-dash__email-compose-template-body">' + template.bodyHtml + '</div>' +
+      composeSignatureHtml();
+  }
+
   /* ── warm start ──────────────────────────────────────────────────
    * The mailbox is the slowest thing in the portal to fill: a connection
    * check, folder counts, labels and a page of mail, all behind the network.
@@ -4097,7 +4129,7 @@
     // Templates are a portal-local feature with no provider equivalent, so
     // they still count themselves.
     if (folder.countKey === 'templates') {
-      return window.TMAEmailTemplates ? window.TMAEmailTemplates.list().length : 0;
+      return FIRM_TEMPLATES.items.length || null;
     }
 
     var counts = state.folderCounts && state.folderCounts[folder.id];
@@ -4219,30 +4251,35 @@
   }
 
   function renderTemplateList(state) {
-    var templates = window.TMAEmailTemplates ? window.TMAEmailTemplates.list() : [];
+    var templates = FIRM_TEMPLATES.items;
+    var body;
+    if (!FIRM_TEMPLATES.loaded) {
+      body = '';
+    } else if (!templates.length) {
+      body = '<div class="tma-dash__email-detail--empty" style="padding:24px 16px;"><p>No templates yet.</p></div>';
+    } else {
+      body = templates
+        .map(function (template) {
+          var active = state.selectedTemplateId === template.id;
+          return (
+            '<button type="button" class="tma-dash__email-template-row' + (active ? ' tma-dash__email-template-row--active' : '') + '" data-email-template="' + esc(template.id) + '">' +
+            '<span class="tma-dash__email-template-thumb tma-dash__email-template-thumb--auth" aria-hidden="true"></span>' +
+            '<span class="tma-dash__email-row-text">' +
+            '<span class="tma-dash__email-row-sender">' + esc(template.name) + '</span>' +
+            '<span class="tma-dash__email-row-preview">' + esc(template.subject) + '</span>' +
+            '</span>' +
+            '</button>'
+          );
+        })
+        .join('');
+    }
     return (
       '<div class="tma-dash__email-list tma-dash__email-list--templates">' +
       '<div class="tma-dash__email-list-head tma-dash__email-list-head--templates">' +
       '<span class="tma-dash__email-template-list-title">Templates</span>' +
       renderListHeadActions(state, { templateCount: templates.length, showFilter: false }) +
       '</div>' +
-      '<div class="tma-dash__email-list-body">' +
-      templates
-        .map(function (template) {
-          var active = state.selectedTemplateId === template.id;
-          return (
-            '<button type="button" class="tma-dash__email-template-row' + (active ? ' tma-dash__email-template-row--active' : '') + '" data-email-template="' + esc(template.id) + '">' +
-            '<span class="tma-dash__email-template-thumb ' + templateThumbClass(template) + '" aria-hidden="true"></span>' +
-            '<span class="tma-dash__email-row-text">' +
-            '<span class="tma-dash__email-row-sender">' + esc(template.name) + '</span>' +
-            '<span class="tma-dash__email-row-preview">' + esc(template.preview) + '</span>' +
-            '</span>' +
-            '<span class="tma-dash__email-template-category">' + esc(template.category) + '</span>' +
-            '</button>'
-          );
-        })
-        .join('') +
-      '</div>' +
+      '<div class="tma-dash__email-list-body">' + body + '</div>' +
       '</div>'
     );
   }
@@ -5353,34 +5390,22 @@
   }
 
   function renderTemplateDetail(state) {
-    if (!window.TMAEmailTemplates) {
-      return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>No templates available</p></div>';
-    }
-    var template = window.TMAEmailTemplates.get(state.selectedTemplateId);
+    var template = firmTemplateById(state.selectedTemplateId);
     if (!template) {
       return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>Select a template</p></div>';
     }
-
-    var hasMobile = window.TMAEmailTemplates.hasMobile(template.id);
-    var viewport = state.templateViewport === 'mobile' && hasMobile ? 'mobile' : 'desktop';
-    var viewportToggle = hasMobile
-      ? '<div class="tma-dash__email-template-viewport" role="group" aria-label="Preview viewport">' +
-        '<button type="button" class="tma-dash__email-template-viewport-btn' + (viewport === 'desktop' ? ' tma-dash__email-template-viewport-btn--active' : '') + '" data-email-template-viewport="desktop">Desktop</button>' +
-        '<button type="button" class="tma-dash__email-template-viewport-btn' + (viewport === 'mobile' ? ' tma-dash__email-template-viewport-btn--active' : '') + '" data-email-template-viewport="mobile">Mobile</button>' +
-        '</div>'
-      : '';
 
     return (
       '<div class="tma-dash__email-detail tma-dash__email-detail--template">' +
       renderDetailBack(state) +
       '<div class="tma-dash__email-detail-subject">' + esc(template.subject) + '</div>' +
       '<div class="tma-dash__email-template-meta">' +
-      '<span class="tma-dash__email-template-meta-category">' + esc(template.category) + '</span>' +
-      '<div class="tma-dash__email-template-meta-actions">' + viewportToggle +
+      '<span class="tma-dash__email-template-meta-category">' + esc(template.name) + '</span>' +
+      '<div class="tma-dash__email-template-meta-actions">' +
       '<button type="button" class="tma-dash__email-template-use" data-email-use-template="' + esc(template.id) + '">Use template</button></div>' +
       '</div>' +
-      '<div class="tma-dash__email-detail-scroll tma-dash__email-template-preview' + (viewport === 'mobile' ? ' tma-dash__email-template-preview--mobile' : '') + '">' +
-      window.TMAEmailTemplates.renderBody(template.id, { viewport: viewport }) +
+      '<div class="tma-dash__email-detail-scroll tma-dash__email-template-preview">' +
+      '<div style="padding:8px 4px;font-size:15px;line-height:22px;">' + template.bodyHtml + '</div>' +
       '</div>' +
       '</div>'
     );
@@ -5432,10 +5457,6 @@
    * invoice subject used to be the fallback, so every blank message the user
    * started was pre-addressed about an invoice they had not mentioned. */
   function getComposeSubject(draft) {
-    if (draft.templateId && window.TMAEmailTemplates) {
-      var template = window.TMAEmailTemplates.get(draft.templateId);
-      if (template) return template.subject;
-    }
     return draft.subject || '';
   }
 
@@ -5443,7 +5464,6 @@
     opts = opts || {};
     return {
       id: 'compose-' + state.nextComposeId++,
-      templateId: opts.templateId || null,
       // Addresses are the "Name <a@b>, c@d" string the pill fields parse
       // and write back; what is still being typed rides in _typing so a
       // re-render never destroys a half-typed address.
@@ -6676,13 +6696,6 @@
    * new message, a blank compose window arrived carrying a full invoice for a
    * client nobody had selected, which the user then had to delete by hand. */
   function defaultComposeBody(draft) {
-    if (draft.templateId && window.TMAEmailTemplates) {
-      return (
-        '<div class="tma-dash__email-compose-template-body">' +
-        window.TMAEmailTemplates.renderBody(draft.templateId) +
-        '</div>'
-      );
-    }
     return composeSignatureHtml();
   }
 
@@ -6741,6 +6754,17 @@
       ' value="' + esc(getComposeSubject(draft)) + '"' +
       ' aria-label="Subject" placeholder="Subject">' +
       '</div>' +
+      (FIRM_TEMPLATES.items.length && draft.mode === 'new'
+        ? '<div class="tma-dash__email-compose-subject">' +
+          '<span class="tma-dash__email-compose-label">Template</span>' +
+          '<select class="tma-dash__email-compose-input" data-email-compose-template="' + esc(draft.id) + '" aria-label="Start from a template">' +
+          '<option value="">Start from a template\u2026</option>' +
+          FIRM_TEMPLATES.items.map(function (t) {
+            return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>';
+          }).join('') +
+          '</select>' +
+          '</div>'
+        : '') +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
       renderComposeToolbar({ image: true }) +
@@ -11101,10 +11125,23 @@
       });
     }
 
+    if (!FIRM_TEMPLATES.loaded && !FIRM_TEMPLATES.loading) loadFirmTemplates(render);
+
     MORPH.unwired(root, '[data-email-template]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.selectedTemplateId = btn.getAttribute('data-email-template');
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-compose-template]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var draft = findComposeDraft(state, sel.getAttribute('data-email-compose-template'));
+        var template = firmTemplateById(sel.value);
+        if (!draft || !template) return;
+        draft.subject = template.subject || draft.subject;
+        draft.bodyHtml = firmTemplateBodyHtml(template);
         render();
       });
     });
@@ -11214,7 +11251,9 @@
 
     MORPH.unwired(root, '[data-email-use-template]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        openCompose(state, { templateId: btn.getAttribute('data-email-use-template') });
+        var template = firmTemplateById(btn.getAttribute('data-email-use-template'));
+        if (!template) return;
+        openCompose(state, { subject: template.subject, bodyHtml: firmTemplateBodyHtml(template) });
         syncEmailUrl('inbox');
         render();
       });
@@ -11418,7 +11457,7 @@
       folder: initialFolder,
       // Nothing is selected until the first page of real mail arrives.
       selectedId: null,
-      selectedTemplateId: 'auth-sign-in',
+      selectedTemplateId: null,
       composeDrafts: [],
       nextComposeId: 1,
       focusedComposeId: null,

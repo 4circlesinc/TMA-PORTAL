@@ -358,6 +358,7 @@ class Role
         'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
         'templates' => 'templates.view',
+        'templates/email' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
         // Also served to CIP service-provider contacts, scoped by FileAccess

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-30-templates-admin';
+  var NAV_SHELL_VERSION = '2026-08-30-templates-subnav';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 
   function cipApplicationsRest(pathname) {
@@ -58,6 +58,7 @@
     'users',
     'reporting',
     'templates',
+    'templates-email',
     'workflows-automated',
     'workflows-updates',
     'call-recordings',

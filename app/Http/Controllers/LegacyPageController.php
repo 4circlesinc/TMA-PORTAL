@@ -73,6 +73,7 @@ class LegacyPageController extends Controller
         'social/feed',
         'social/messages',
         'templates',
+        'templates/email',
         'users',
         'users/new',
         'workflows',

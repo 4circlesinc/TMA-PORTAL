@@ -828,6 +828,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      */
     Route::prefix('portal/templates')->middleware('capability:templates.view')->name('templates.')->group(function () {
         Route::get('/system-emails', [TemplatesController::class, 'index'])->name('system.index');
+        Route::get('/email-templates', [TemplatesController::class, 'emailIndex'])->name('email.index');
+        Route::post('/email-templates', [TemplatesController::class, 'emailStore'])->name('email.store');
+        Route::post('/email-templates/preview', [TemplatesController::class, 'emailPreview'])->name('email.preview');
+        Route::patch('/email-templates/{uuid}', [TemplatesController::class, 'emailUpdate'])->name('email.update');
+        Route::delete('/email-templates/{uuid}', [TemplatesController::class, 'emailDestroy'])->name('email.destroy');
         Route::patch('/system-emails/{key}', [TemplatesController::class, 'update'])->name('system.update');
         Route::post('/system-emails/{key}/restore', [TemplatesController::class, 'restore'])->name('system.restore');
         Route::post('/system-emails/{key}/preview', [TemplatesController::class, 'preview'])->name('system.preview');
@@ -848,6 +853,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');
         Route::post('/settings/import-signature', [MailController::class, 'importSignature'])
             ->name('settings.import-signature');
+
+        // Firm compose templates, managed on the admin Templates page.
+        Route::get('/templates', [MailController::class, 'composeTemplates'])->name('templates');
 
         // Literal paths before /{uuid} so the wildcard doesn't swallow them.
         Route::get('/drafts', [MailController::class, 'drafts'])->name('drafts');

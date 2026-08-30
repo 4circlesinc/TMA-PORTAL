@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
-  <!-- tma-shell:2026-08-30-templates-admin -->
+  <!-- tma-shell:2026-08-30-templates-subnav -->
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
   <!-- Inter comes from a third-party origin, so the font file costs a DNS
@@ -48,7 +48,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=15"></script>
+  <script src="js/portal-access.js?v=16"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -146,11 +146,15 @@
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--chartbar" aria-hidden="true"></span>
           <span>Reporting</span>
         </a>
-        <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+        <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="templates" aria-expanded="false">
+          <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
           <span>Templates</span>
-        </a>
+        </button>
+        <div class="tma-dash__subnav" data-subnav="templates" hidden>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates" data-nav="templates-system" data-title="System emails" data-crumb="Templates / System emails" data-view="templates"><span>System emails</span></a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/email" data-nav="templates-email" data-title="Email templates" data-crumb="Templates / Email templates" data-view="templates"><span>Email templates</span></a>
+        </div>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="workflows" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -523,8 +527,11 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="reporting" data-title="Reporting" data-crumb="Reporting" data-view="reporting">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChartBar.svg" alt=""><span>Reporting</span>
         </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="System emails" data-crumb="Templates / System emails" data-view="templates">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Templates</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates-email" data-title="Email templates" data-crumb="Templates / Email templates" data-view="templates">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Email templates</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Requests" data-crumb="Workflows / Requests" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>
@@ -602,8 +609,7 @@
   <script src="js/tag.js" defer></script>
   <script src="js/badge-icons.js" defer></script>
   <script src="js/badge.js" defer></script>
-  <script src="js/email-templates.js" defer></script>
-  <script src="js/email-api.js?v=10" defer></script>
+  <script src="js/email-api.js?v=11" defer></script>
   <!-- The store parses before everything that reads it: email's warm seed,
        the home tiles' hydration and the replica walkers all run at parse or
        shortly after, and a store defined three hundred lines further down is
@@ -611,7 +617,7 @@
   <script src="js/portal-store.js?v=3" defer></script>
   <script src="js/portal-queue.js?v=1" defer></script>
   <script src="js/portal-sync-status.js?v=2" defer></script>
-  <script src="js/email.js?v=100" defer></script>
+  <script src="js/email.js?v=101" defer></script>
   <script src="js/portal-lightbox.js?v=8" defer></script>
   <script src="js/emoji-data.js" defer></script>
   <script src="js/messaging-recorder.js" defer></script>
@@ -654,7 +660,7 @@
   <script src="js/portal-data.js" defer></script>
   <script src="js/portal-views.js?v=5" defer></script>
   <script src="js/portal-folders.js?v=2" defer></script>
-  <script src="js/portal-work.js?v=10" defer></script>
+  <script src="js/portal-work.js?v=11" defer></script>
   <script src="js/portal-people.js?v=3" defer></script>
   <script src="js/portal-admin.js?v=11" defer></script>
   <script src="js/portal-upload-manager.js?v=10" defer></script>

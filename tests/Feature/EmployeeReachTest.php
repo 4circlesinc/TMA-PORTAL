@@ -142,15 +142,19 @@ class EmployeeReachTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $this->actingAs($admin)->get('/templates')->assertOk();
+        $this->actingAs($admin)->get('/templates/email')->assertOk();
 
         $html = $this->actingAs($admin)->get('/')->assertOk()->getContent();
-        $this->assertStringContainsString('data-nav="templates"', $html);
+        $this->assertStringContainsString('data-expand="templates"', $html);
         $this->assertStringContainsString('data-view="templates"', $html);
         $this->assertStringContainsString('href="/templates"', $html);
+        $this->assertStringContainsString('href="/templates/email"', $html);
 
         foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $accountType) {
-            $this->actingAs($this->user($accountType))->get('/templates')
-                ->assertNotFound('/templates should be closed to '.$accountType);
+            foreach (['/templates', '/templates/email'] as $page) {
+                $this->actingAs($this->user($accountType))->get($page)
+                    ->assertNotFound($page.' should be closed to '.$accountType);
+            }
         }
     }
 

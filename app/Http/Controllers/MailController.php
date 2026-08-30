@@ -1515,6 +1515,26 @@ class MailController extends Controller
         return response()->json(['sent' => true]);
     }
 
+    /**
+     * Firm compose templates: pick one to start a message from. Managed on
+     * the admin Templates page; readable by anyone with a mailbox, which is
+     * what capability:mail.use on this group enforces.
+     */
+    public function composeTemplates(): JsonResponse
+    {
+        return response()->json([
+            'templates' => \App\Models\Template::query()
+                ->where('kind', \App\Support\Templates\ComposeTemplates::KIND)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (\App\Models\Template $t) => \Illuminate\Support\Arr::only(
+                    \App\Support\Templates\ComposeTemplates::record($t),
+                    ['id', 'name', 'subject', 'bodyHtml'],
+                ))
+                ->values(),
+        ]);
+    }
+
     public function drafts(Request $request): JsonResponse
     {
         return response()->json([

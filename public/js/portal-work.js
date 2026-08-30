@@ -1040,10 +1040,19 @@
     });
   }
 
-  function mountTemplates(el) {
+  function mountTemplates(el, opts) {
     TPL.el = el;
+    // Two subpages share this view, the Workflows pattern: the nav id (or a
+    // hard-refreshed deep link) says which pane this mount is.
+    TPL.pane = (opts && opts.navId) === 'templates-email'
+      || (window.location.pathname || '').indexOf('/templates/email') === 0
+      ? 'email' : 'system';
     renderTemplates();
-    if (!TPL.loaded && !TPL.loading) loadTemplates();
+    if (TPL.pane === 'email') {
+      if (!ETPL.loaded && !ETPL.loading) loadEmailTemplates();
+    } else if (!TPL.loaded && !TPL.loading) {
+      loadTemplates();
+    }
   }
 
   function loadTemplates() {
@@ -1159,6 +1168,7 @@
   function renderTemplates() {
     var el = TPL.el;
     if (!el) return;
+    if (TPL.pane === 'email') { renderEmailTemplates(); return; }
 
     var active = document.activeElement;
     var restoreSearch = active && active.matches && active.matches('[data-tpl-search]');
@@ -1221,6 +1231,196 @@
         var t = tplTemplateFor(b.getAttribute('data-tpl-edit'));
         if (t) tplEditorModal(t);
       });
+    });
+  }
+
+  /* ── Email (compose) templates ──────────────────────────────────
+   * The named starting points a mailbox user picks in compose. Full CRUD:
+   * these are created here, not shipped, so the empty state is real.
+   */
+  var ETPL = { loaded: false, loading: false, error: null, items: [], search: '', previewSeq: 0 };
+
+  function loadEmailTemplates() {
+    ETPL.loading = true;
+    ETPL.error = null;
+    tplJson('GET', '/email-templates')
+      .then(function (d) { ETPL.items = d.templates || []; ETPL.loaded = true; })
+      .catch(function (e) { ETPL.error = e.message; })
+      .then(function () { ETPL.loading = false; renderTemplates(); });
+  }
+
+  function etplFiltered() {
+    var q = ETPL.search.toLowerCase();
+    if (!q) return ETPL.items;
+    return ETPL.items.filter(function (t) {
+      return (t.name + ' ' + t.subject).toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function etplBody() {
+    if (ETPL.error) {
+      return '<p class="tma-portal-note">Couldn\u2019t load the templates: ' + ui().esc(ETPL.error) + '</p>' +
+        ui().btn({ label: 'Try again', variant: 'ghost', attrs: ' data-etpl-retry' });
+    }
+    if (!ETPL.loaded) return ui().loading();
+
+    if (!ETPL.items.length) {
+      return '<div class="tma-portal-page">' + ui().emptyState({
+        illustration: 'Illustration05',
+        title: 'No email templates yet',
+        subtitle: 'Templates you create here appear in compose.',
+      }) + '</div>';
+    }
+
+    var rows = etplFiltered().map(function (t) {
+      return '<tr>' +
+        '<td>' + ui().esc(t.name) + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(t.subject) + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc((t.editor ? t.editor + ', ' : '') + tplWhen(t.updatedAt)) + '</td>' +
+        '<td><div class="tma-portal-row-actions">' +
+          '<button type="button" class="tma-portal-icon-btn" data-etpl-edit="' + ui().esc(t.id) + '" title="Edit template" aria-label="Edit template"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+        '</div></td></tr>';
+    }).join('');
+
+    if (!rows) rows = '<tr><td colspan="4" class="tma-portal-table__empty">Nothing matches.</td></tr>';
+
+    return ui().table(['Template', 'Subject', 'Last edited', ''], rows);
+  }
+
+  function renderEmailTemplates() {
+    var el = TPL.el;
+    if (!el) return;
+
+    var active = document.activeElement;
+    var restoreSearch = active && active.matches && active.matches('[data-etpl-search]');
+    var searchCaret = restoreSearch ? active.selectionStart : null;
+
+    el.innerHTML =
+      '<div class="tma-portal-page tma-portal-page--templates">' +
+      '<div class="tma-portal-toolbar">' +
+      '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
+      ui().searchInput('Search', 'data-etpl-search', ETPL.search, { focused: restoreSearch }) +
+      '</div>' +
+      '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
+      ui().btn({ label: 'New template', attrs: ' data-etpl-new' }) +
+      '</div></div>' +
+      etplBody() +
+      '</div>';
+
+    ui().wireToolbarSearch(el, '[data-etpl-search]', function (val) {
+      ETPL.search = val;
+      renderTemplates();
+    });
+
+    if (restoreSearch) {
+      var search = el.querySelector('[data-etpl-search]');
+      if (search) {
+        search.focus();
+        if (searchCaret != null) search.setSelectionRange(searchCaret, searchCaret);
+      }
+    }
+
+    var retry = el.querySelector('[data-etpl-retry]');
+    if (retry) retry.addEventListener('click', function () { loadEmailTemplates(); });
+
+    var create = el.querySelector('[data-etpl-new]');
+    if (create) create.addEventListener('click', function () { etplEditorModal(null); });
+
+    el.querySelectorAll('[data-etpl-edit]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = null;
+        ETPL.items.forEach(function (x) { if (x.id === b.getAttribute('data-etpl-edit')) t = x; });
+        if (t) etplEditorModal(t);
+      });
+    });
+  }
+
+  function etplEditorModal(t) {
+    var isNew = !t;
+    t = t || { name: '', subject: '', body: '' };
+
+    ui().openModal({
+      title: isNew ? 'New email template' : t.name,
+      cls: 'tma-portal-modal__card--wide',
+      body:
+        '<div class="tma-portal-tpl-edit">' +
+        '<div class="tma-portal-tpl-edit__form">' +
+        '<p class="tma-portal-note">Anyone with a mailbox can start a message from this. Leave blanks to fill in.</p>' +
+        ui().field('Name', ui().input({ value: t.name, attrs: 'data-etpl-field="name" maxlength="191"', ariaLabel: 'Template name' })) +
+        ui().field('Subject', ui().input({ value: t.subject, attrs: 'data-etpl-field="subject" maxlength="500"', ariaLabel: 'Subject' })) +
+        ui().field('Body', '<textarea class="tma-portal-textarea" data-etpl-field="body" rows="12" maxlength="20000">' + ui().esc(t.body) + '</textarea>') +
+        '<p class="tma-portal-table__muted">Blank line for a new paragraph, "- " for bullets, **bold**, [label](url) for links.</p>' +
+        '<div class="tma-portal-form-actions">' +
+        ui().btn({ label: isNew ? 'Create' : 'Save', attrs: ' data-etpl-save' }) +
+        (isNew ? '' : ui().btn({ label: 'Delete', variant: 'danger', attrs: ' data-etpl-delete' })) +
+        '</div>' +
+        '</div>' +
+        '<div class="tma-portal-tpl-edit__preview">' +
+        '<div class="tma-portal-tpl-edit__subject" data-etpl-preview-subject></div>' +
+        '<iframe class="tma-portal-tpl-edit__frame" title="Template preview" data-etpl-preview-frame sandbox=""></iframe>' +
+        '</div>' +
+        '</div>',
+      onMount: function (host) { wireEtplEditor(host, t, isNew); },
+    });
+  }
+
+  function wireEtplEditor(host, t, isNew) {
+    var timer = null;
+
+    function draft() {
+      var fields = {};
+      host.querySelectorAll('[data-etpl-field]').forEach(function (input) {
+        fields[input.getAttribute('data-etpl-field')] = input.value;
+      });
+      return fields;
+    }
+
+    function refreshPreview() {
+      var d = draft();
+      var seq = ++ETPL.previewSeq;
+      tplJson('POST', '/email-templates/preview', { subject: d.subject, body: d.body })
+        .then(function (r) {
+          if (seq !== ETPL.previewSeq) return;
+          var subject = host.querySelector('[data-etpl-preview-subject]');
+          var frame = host.querySelector('[data-etpl-preview-frame]');
+          if (subject) subject.textContent = r.subject;
+          if (frame) {
+            frame.srcdoc = '<body style="margin:0;padding:20px;font-family:Inter,system-ui,sans-serif;' +
+              'font-size:15px;line-height:22px;color:#000;background:#fff;">' + r.html + '</body>';
+          }
+        })
+        .catch(function () {});
+    }
+
+    host.querySelectorAll('[data-etpl-field]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(refreshPreview, 400);
+      });
+    });
+    refreshPreview();
+
+    function done(message) {
+      ui().closeModal();
+      ui().toast(message);
+      ETPL.loaded = false;
+      loadEmailTemplates();
+    }
+
+    host.querySelector('[data-etpl-save]').addEventListener('click', function () {
+      var d = draft();
+      var req = isNew
+        ? tplJson('POST', '/email-templates', d)
+        : tplJson('PATCH', '/email-templates/' + encodeURIComponent(t.id), d);
+      req.then(function () { done(isNew ? 'Template created' : 'Template saved'); })
+        .catch(function (e) { ui().toastError(e.message); });
+    });
+
+    var del = host.querySelector('[data-etpl-delete]');
+    if (del) del.addEventListener('click', function () {
+      tplJson('DELETE', '/email-templates/' + encodeURIComponent(t.id))
+        .then(function () { done('Template deleted'); })
+        .catch(function (e) { ui().toastError(e.message); });
     });
   }
 

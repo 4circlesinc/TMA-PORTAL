@@ -74,6 +74,11 @@
       return mailFetch(BASE + '/sync-status');
     },
 
+    /* Firm compose templates, managed on the admin Templates page. */
+    composeTemplates: function () {
+      return mailFetch(BASE + '/templates');
+    },
+
     listMessages: function (opts) {
       opts = opts || {};
       return mailFetch(BASE + '/messages' + query({

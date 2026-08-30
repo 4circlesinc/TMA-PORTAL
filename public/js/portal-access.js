@@ -30,6 +30,8 @@
     'users': 'users.view',
     'reporting': 'settings.reporting',
     'templates': 'templates.view',
+    'templates-system': 'templates.view',
+    'templates-email': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
