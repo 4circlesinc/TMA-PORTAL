@@ -146,6 +146,21 @@ class CipDocumentEngineTest extends TestCase
         $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $document->fresh()->status);
     }
 
+    public function test_setting_cannot_judge_an_empty_slot(): void
+    {
+        [$document] = $this->slot();
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $document->status);
+
+        try {
+            DocumentEngine::set($document, DocumentStatus::READY_FOR_SUBMISSION, $this->user(Role::REVIEWING_OFFICER));
+            $this->fail('An empty slot was judged.');
+        } catch (\InvalidArgumentException) {
+            // expected
+        }
+
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $document->fresh()->status);
+    }
+
     public function test_setting_a_slot_to_update_required_moves_the_application(): void
     {
         [$document] = $this->slot();

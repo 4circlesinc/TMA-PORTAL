@@ -77,8 +77,8 @@ const rows = await page.evaluate(() => Array.from(document.querySelectorAll('[da
 })))
 
 check(rows.length === 3, `three documents listed (got ${rows.length})`)
-check(rows.every((r) => r.badge === 'Pending review'),
-  `every uploaded client document starts Pending review (${rows.map((r) => r.badge).join(', ')})`)
+check(rows.every((r) => r.badge === 'Application review'),
+  `every uploaded client document starts Application review (${rows.map((r) => r.badge).join(', ')})`)
 
 /* ── a reviewer can move it on ── */
 
@@ -87,39 +87,22 @@ await page.locator('[data-files-row]')
   .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3000)
 
-// The picker, then the state — all four are listed whatever the current one.
-const picker = page.locator('[data-lb-review-open]')
-check(await picker.count() > 0, 'the viewer offers a status picker')
+await page.locator('[data-lb-act="approvals"]').click()
+await page.waitForTimeout(800)
+
+// Three in-panel statuses, then pick Ready for submission — not a dropdown.
+const picker = page.locator('[data-lb-review-set]')
+check(await picker.count() >= 3, 'the viewer offers the three file statuses')
 
 if (await picker.count()) {
-  await picker.first().click()
-  await page.waitForTimeout(800)
-
-  const options = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('.tma-portal-menu button, [class*="menu"] button'))
-      .map((b) => b.textContent.trim())
-      // Matched against the states themselves, not a guess at their wording —
-      // "Awaiting approval" contains neither "review" nor "approved", which is
-      // how an earlier version of this filter hid two of the six.
-      .filter((t) => /pending review|under review|awaiting approval|changes requested|approved|rejected/i.test(t)))
-
-  check(options.length >= 6, `every status listed (${options.join(' | ')})`)
-  check(options.some((t) => t.includes('✓')), 'the current status is marked')
-
-  // Inside the menu: "Under review" is also the badge just above it, and an
-  // unscoped locator picks the badge and then times out clicking through it.
-  await page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('.tma-portal-menu button, [class*="menu"] button'))
-      .find((b) => b.textContent.trim().startsWith('Under review'))
-    if (btn) btn.click()
-  })
+  await page.locator('[data-lb-review-set="ready_for_submission"]').click()
   await page.waitForTimeout(2500)
 }
 
 const after = await tinker(`
   echo App\\Models\\FileItem::where('name','Passport.pdf')->latest('id')->value('review_status');
 `)
-check(after.stdout.includes('under_review'), 'the status persisted to the database')
+check(after.stdout.includes('ready_for_submission'), 'the status persisted to the database')
 
 await page.keyboard.press('Escape')
 await page.waitForTimeout(1000)
@@ -185,7 +168,7 @@ check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer')),
 check(page.context().pages().length === tabsBefore, 'and does not open a browser tab')
 check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer__tabs')),
   'with the full panel — comments, versions, review')
-check(await page.evaluate(() => !!document.querySelector('[data-lb-review-open]')),
+check(await page.evaluate(() => document.querySelectorAll('[data-lb-review-set]').length >= 3),
   'and its review controls')
 
 await browser.close()

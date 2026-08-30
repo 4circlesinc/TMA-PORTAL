@@ -145,6 +145,27 @@ class CipReviewTest extends TestCase
         return $contact;
     }
 
+    public function test_approving_a_document_sent_back_marks_it_ready_for_submission(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::UPDATE_REQUIRED);
+        $passport = $this->slot(
+            $application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::UPDATE_REQUIRED,
+        );
+        $this->slot(
+            $application, 'birth_certificate', 'Birth certificate', true, DocumentStatus::UPDATE_REQUIRED,
+        );
+
+        $body = $this->actingAs($this->officer($application))
+            ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $passport->fresh()->status);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $body['document']['status']);
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+    }
+
     public function test_approving_a_document_moves_the_slot_and_leaves_the_application_alone(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

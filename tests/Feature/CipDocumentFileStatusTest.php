@@ -268,6 +268,15 @@ class CipDocumentFileStatusTest extends TestCase
             ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED);
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::READY_FOR_SUBMISSION,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
     }
 
     public function test_clearing_one_update_required_file_keeps_the_chip_when_another_still_needs_an_update(): void

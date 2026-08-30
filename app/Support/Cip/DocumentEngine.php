@@ -202,7 +202,14 @@ class DocumentEngine
             ));
         }
 
-        if (($document->status ?? DocumentStatus::PENDING_UPLOAD) === $to) {
+        $from = $document->status ?? DocumentStatus::PENDING_UPLOAD;
+        if ($from === DocumentStatus::PENDING_UPLOAD) {
+            throw new \InvalidArgumentException(
+                'A document cannot be judged before a file has been uploaded into it.',
+            );
+        }
+
+        if ($from === $to) {
             return $document;
         }
 

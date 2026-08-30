@@ -33,10 +33,12 @@ use Illuminate\Validation\ValidationException;
 class Review
 {
     /**
-     * Accept a document: good enough to go to the Unit.
+     * Accept a document: mark it Ready for submission.
      *
-     * Not an exit, see {@see DocumentStatus}, so an officer who notices
-     * something later may still send it back until the package freezes.
+     * That is the file verdict, not application Granted. Staff may reach it
+     * from Application review or Update required; an empty slot cannot be
+     * judged. Not an exit, see {@see DocumentStatus}, so an officer who
+     * notices something later may still send it back.
      */
     public static function approve(CipDocument $document, User $actor): CipDocument
     {
@@ -49,7 +51,7 @@ class Review
              * transition. Every other refusal still belongs to the engine.
              */
             if ($document->status !== DocumentStatus::READY_FOR_SUBMISSION) {
-                DocumentEngine::apply($document, DocumentStatus::READY_FOR_SUBMISSION, $actor, [
+                DocumentEngine::set($document, DocumentStatus::READY_FOR_SUBMISSION, $actor, [
                     'reason' => 'approved',
                 ]);
             }
