@@ -152,6 +152,16 @@ class CipLockingTest extends TestCase
             'folder' => $main->uuid,
         ])->assertForbidden();
 
+        $this->actingAs($staff)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->create($extra->name, 12, 'application/pdf'),
+            'folder' => $main->uuid,
+            'conflict' => 'replace',
+        ])->assertForbidden();
+
+        $this->actingAs($staff)->post('/portal/files/files/'.$extra->uuid.'/versions', [
+            'file' => UploadedFile::fake()->create($extra->name, 14, 'application/pdf'),
+        ])->assertForbidden();
+
         $this->actingAs($staff)->patchJson('/portal/files/files/'.$file->uuid, [
             'name' => 'rewritten.pdf',
         ])->assertForbidden();

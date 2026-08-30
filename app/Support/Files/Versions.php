@@ -2,6 +2,7 @@
 
 namespace App\Support\Files;
 
+use App\Jobs\GenerateFileThumbnail;
 use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\FileVersion;
@@ -140,7 +141,39 @@ class Versions
             Live::staff(Live::CIP);
         }
 
+        // Thumbnails are keyed by file uuid, not by storage_path. Without
+        // dropping the old JPEG, the listing and viewer keep painting v1
+        // after the pointer has already moved.
+        self::refreshPreview($file);
+
         return $version;
+    }
+
+    /**
+     * A same-name upload that should become the next version of the file
+     * already in the folder, not a second FileItem.
+     *
+     * The library's old "Replace existing" path recycled the row and created
+     * another. CIP slots, comments, shares and the version chain stayed on
+     * the trashed original, which is why a replacement kept showing as the
+     * old file.
+     */
+    public static function replaceWithUpload(
+        FileItem $file,
+        User $author,
+        array $stored,
+        array $meta,
+        ?string $note = null,
+    ): FileItem {
+        if (! self::canAddVersion($author, $file)) {
+            throw new FileValidationException(
+                self::lockReason($file) ?? 'You can’t add a version to this file.',
+            );
+        }
+
+        self::addStored($file, $author, $stored, $meta, $note);
+
+        return $file->fresh();
     }
 
     /**
@@ -231,6 +264,18 @@ class Versions
     public static function canRestore(User $user, FileItem $file): bool
     {
         return FileAccess::can($user, 'upload', $file);
+    }
+
+    /** Drop the cached picture of the previous bytes, then rebuild it. */
+    private static function refreshPreview(FileItem $file): void
+    {
+        Thumbnail::delete($file);
+
+        if (! Thumbnail::supportsExt($file->extension)) {
+            return;
+        }
+
+        GenerateFileThumbnail::dispatch($file->id);
     }
 
     private static function notify(FileItem $file, User $author, FileVersion $version, ?FileVersion $restoredFrom): void

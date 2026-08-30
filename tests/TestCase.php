@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Models\User;
+use App\Support\Files\FileAccess;
 use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Http\UploadedFile;
@@ -26,6 +27,14 @@ abstract class TestCase extends BaseTestCase
          * what ran before it.
          */
         Live::discard();
+
+        /*
+         * FileAccess memos roles by user id and file id. RefreshDatabase
+         * reuses those ids, so a grant from the previous test becomes a
+         * wrong answer about a different person 2. A real request starts
+         * with an empty cache; PHPUnit does not.
+         */
+        FileAccess::forgetFolders();
     }
 
     /**

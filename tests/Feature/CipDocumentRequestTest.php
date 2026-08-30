@@ -24,9 +24,7 @@ use Tests\TestCase;
  *
  * The tokenised flow already existed for folders. What is new is that a link
  * can be aimed at a REQUIREMENT, and that a second upload through it becomes
- * the next version of the same document rather than a second file beside it —
- * the trap that has bitten this codebase before, because the library's own
- * replace path soft-deletes and recreates, silently forking the chain.
+ * the next version of the same document rather than a second file beside it.
  */
 class CipDocumentRequestTest extends TestCase
 {

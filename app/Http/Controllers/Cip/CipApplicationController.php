@@ -1577,8 +1577,8 @@ class CipApplicationController extends Controller
         $ext = (string) $file->extension;
 
         return [
-            'thumbUrl' => Thumbnail::supportsExt($ext) ? route('files.thumb', $file->uuid) : null,
-            'previewUrl' => FileType::isPreviewable($ext) ? route('files.preview', $file->uuid) : null,
+            'thumbUrl' => Thumbnail::supportsExt($ext) ? Presenter::revisionedUrl('files.thumb', $file) : null,
+            'previewUrl' => FileType::isPreviewable($ext) ? Presenter::revisionedUrl('files.preview', $file) : null,
             'fileMime' => $file->mime_type,
             'fileCategory' => FileType::category($ext),
         ];

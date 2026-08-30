@@ -145,6 +145,34 @@ class CipProviderFolderAccessTest extends TestCase
         ])->assertCreated();
     }
 
+    public function test_a_provider_contact_can_replace_a_file_with_a_new_version(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        ['main' => $main] = $this->filing($galaxy, $staff);
+
+        $created = $this->actingAs($gil)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('notes.txt', 'version one'),
+            'folder' => $main->uuid,
+        ])->assertCreated();
+
+        $uuid = $created->json('id');
+
+        $this->actingAs($gil)->post('/portal/files/files/'.$uuid.'/versions', [
+            'file' => UploadedFile::fake()->createWithContent('notes.txt', 'version two'),
+        ])->assertCreated()->assertJsonPath('version', 2);
+
+        $this->actingAs($gil)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('notes.txt', 'version three'),
+            'folder' => $main->uuid,
+            'conflict' => 'replace',
+        ])->assertCreated()->assertJsonPath('id', $uuid)->assertJsonPath('versionNumber', 3);
+
+        $this->assertSame('version three',
+            $this->fileBody($this->actingAs($gil)->get('/portal/files/files/'.$uuid.'/download')));
+        $this->assertSame(1, \App\Models\FileItem::query()->where('folder_id', $main->id)->whereNull('deleted_at')->count());
+    }
+
     public function test_every_contact_at_the_filing_firm_can_open_the_client_tree(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

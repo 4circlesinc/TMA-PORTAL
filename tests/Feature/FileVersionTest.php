@@ -379,4 +379,92 @@ class FileVersionTest extends TestCase
         $res->assertJsonPath('versions.0.number', 1)
             ->assertJsonPath('versions.0.isCurrent', true);
     }
+
+    public function test_replace_existing_appends_a_version_instead_of_creating_a_new_file(): void
+    {
+        $user = $this->user();
+        $file = $this->uploadFile($user, 'version one');
+        $v1Path = $file->storage_path;
+
+        $res = $this->actingAs($user)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->createWithContent('Brief.txt', 'version two'),
+            'conflict' => 'replace',
+        ])->assertCreated();
+
+        $res->assertJsonPath('id', $file->uuid)
+            ->assertJsonPath('versionNumber', 2)
+            ->assertJsonPath('name', 'Brief.txt');
+
+        $this->assertStringContainsString('?v=2', $res->json('downloadUrl'));
+        $this->assertStringContainsString('?v=2', $res->json('previewUrl'));
+
+        $this->assertSame(1, FileItem::whereNull('deleted_at')->count());
+        $this->assertSame(0, FileItem::onlyTrashed()->count());
+        $this->assertSame(2, FileVersion::where('file_id', $file->id)->count());
+
+        $fresh = $file->fresh();
+        $this->assertSame(2, $fresh->version_number);
+        $this->assertNotSame($v1Path, $fresh->storage_path);
+        $this->assertFileExists($this->vaultRoot.'/'.$v1Path);
+        $this->assertSame('version one', file_get_contents($this->vaultRoot.'/'.$v1Path));
+
+        $this->assertSame('version two',
+            $this->fileBody($this->actingAs($user)->get('/portal/files/files/'.$file->uuid.'/download')));
+
+        $shown = $this->actingAs($user)->getJson('/portal/files/files/'.$file->uuid)->assertOk();
+        $shown->assertJsonPath('id', $file->uuid)->assertJsonPath('versionNumber', 2);
+        $this->assertStringContainsString('?v=2', $shown->json('downloadUrl'));
+    }
+
+    public function test_replace_existing_works_for_an_image_as_well_as_text(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->image('photo.jpg', 12, 12),
+        ])->assertCreated();
+
+        $file = FileItem::latest('id')->first();
+        $firstPath = $file->storage_path;
+
+        $this->actingAs($user)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->image('photo.jpg', 24, 24),
+            'conflict' => 'replace',
+        ])->assertCreated()->assertJsonPath('id', $file->uuid)->assertJsonPath('versionNumber', 2);
+
+        $fresh = $file->fresh();
+        $this->assertNotSame($firstPath, $fresh->storage_path);
+        $this->assertSame(1, FileItem::whereNull('deleted_at')->count());
+
+        $shown = $this->actingAs($user)->getJson('/portal/files/files/'.$file->uuid)->assertOk();
+        $this->assertSame(2, $shown->json('versionNumber'));
+        $this->assertStringContainsString('?v=2', $shown->json('thumbUrl'));
+        $this->assertStringContainsString('?v=2', $shown->json('downloadUrl'));
+    }
+
+    public function test_a_chunked_replace_existing_also_appends_a_version(): void
+    {
+        $user = $this->user();
+        $file = $this->uploadFile($user, 'version one');
+
+        $init = $this->actingAs($user)->postJson('/portal/files/uploads', [
+            'filename' => 'Brief.txt',
+            'size' => strlen('chunked version two'),
+        ])->assertCreated();
+
+        $session = $init->json('id');
+
+        $this->actingAs($user)->post('/portal/files/uploads/'.$session.'/chunk', [
+            'index' => 0,
+            'chunk' => UploadedFile::fake()->createWithContent('blob', 'chunked version two'),
+        ])->assertOk();
+
+        $this->actingAs($user)->postJson('/portal/files/uploads/'.$session.'/complete', [
+            'conflict' => 'replace',
+        ])->assertCreated()->assertJsonPath('id', $file->uuid)->assertJsonPath('versionNumber', 2);
+
+        $this->assertSame(1, FileItem::whereNull('deleted_at')->count());
+        $this->assertSame('chunked version two',
+            $this->fileBody($this->actingAs($user)->get('/portal/files/files/'.$file->uuid.'/download')));
+    }
 }

@@ -197,15 +197,22 @@ class ChunkedUpload
 
         $stored = Vault::store($assembled, $meta['extension']);
 
-        $file = DB::transaction(function () use ($session, $desiredName, $meta, $stored, $conflict) {
-            if ($conflict === 'replace') {
-                self::existingQuery($session, $desiredName)->each(function (FileItem $old) use ($session) {
-                    $old->update(['deleted_by' => $session->user_id]);
-                    $old->delete(); // soft delete → recycle bin, never a silent hard overwrite
-                    Activity::forFile($session->user_id, $old, 'delete', ['reason' => 'replaced']);
-                });
-            }
+        if ($conflict === 'replace') {
+            $existing = self::existingQuery($session, $desiredName)->first();
+            $user = User::find($session->user_id);
+            if ($existing && $user) {
+                $file = Versions::replaceWithUpload($existing, $user, $stored, $meta);
+                $session->update([
+                    'status' => UploadSession::STATUS_COMPLETED,
+                    'received_count' => $session->total_chunks,
+                ]);
+                self::removeDir($dir);
 
+                return $file;
+            }
+        }
+
+        $file = DB::transaction(function () use ($session, $desiredName, $meta, $stored) {
             return FileItem::create([
                 'uuid' => $stored['uuid'],
                 'folder_id' => $session->folder_id,
@@ -299,7 +306,7 @@ class ChunkedUpload
         $name = Naming::clean($session->filename);
 
         if ($conflict === 'replace') {
-            return $name; // existing rows are recycled inside the transaction
+            return $name;
         }
 
         // Default and 'keep-both': never overwrite silently.

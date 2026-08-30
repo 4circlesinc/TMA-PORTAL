@@ -7,6 +7,7 @@ use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -274,5 +275,45 @@ class CipDocumentUploadSyncTest extends TestCase
                 ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
                 ->value('file_id'),
         );
+    }
+
+    public function test_replacing_a_filed_document_in_the_library_keeps_the_same_file(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->first();
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+        $file = $slot->file;
+        $folder = Folder::findOrFail($file->folder_id);
+
+        $this->actingAs($staff)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->create($file->name, 48, 'application/pdf'),
+            'folder' => $folder->uuid,
+            'conflict' => 'replace',
+        ])->assertCreated()
+            ->assertJsonPath('id', $file->uuid)
+            ->assertJsonPath('versionNumber', 2);
+
+        $this->assertSame($file->id, $slot->fresh()->file_id);
+        $this->assertSame(1, FileItem::query()->where('folder_id', $file->folder_id)->whereNull('deleted_at')->count());
+        $this->assertSame(2, $file->fresh()->version_number);
+
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents');
+        $shown = collect($docs)->firstWhere('type', DocumentTypes::PASSPORT_BIO_PAGE);
+        $this->assertSame($file->uuid, $shown['fileId']);
+        $this->assertStringContainsString('?v=2', (string) $shown['previewUrl']);
     }
 }

@@ -25,9 +25,9 @@ use Illuminate\Support\Str;
  * So a request may now carry a document. When it does, this decides what
  * happens to the bytes, and the two rules that matter are:
  *
- *  - the upload becomes the slot's next VERSION, through {@see Versions}. The
- *    library's own name-conflict "replace" path soft-deletes and recreates,
- *    which silently forks the chain, it is not used here and must not be.
+ *  - the upload becomes the slot's next VERSION, through {@see Versions}.
+ *    The library's same-name "Replace existing" path now does the same,
+ *    so a replacement never forks onto a second FileItem.
  *  - the slot moves through {@see DocumentEngine} like every other transition,
  *    never by writing the column, so a link upload lands in the audit trail
  *    beside the ones a signed-in reviewer made.

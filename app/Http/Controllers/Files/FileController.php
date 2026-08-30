@@ -40,14 +40,16 @@ class FileController extends BaseFilesController
 
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
-        $file = DB::transaction(function () use ($request, $folder, $user, $desired, $meta, $stored) {
-            if ($request->input('conflict') === 'replace') {
-                $this->existingQuery($folder?->id, $user->id, $desired)->each(function (FileItem $old) use ($user) {
-                    $old->update(['deleted_by' => $user->id]);
-                    $old->delete();
-                });
-            }
+        if ($request->input('conflict') === 'replace') {
+            $existing = $this->existingQuery($folder?->id, $user->id, $desired)->first();
+            if ($existing) {
+                $file = Versions::replaceWithUpload($existing, $user, $stored, $meta);
 
+                return response()->json($this->presenter($request)->file($file), 201);
+            }
+        }
+
+        $file = DB::transaction(function () use ($folder, $user, $desired, $meta, $stored) {
             return FileItem::create([
                 'uuid' => $stored['uuid'],
                 'folder_id' => $folder?->id,

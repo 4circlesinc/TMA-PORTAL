@@ -240,11 +240,11 @@ class Presenter
             'status' => $this->fileBadge($file),
             'review' => $this->reviewPayload($file, $perms),
             'permissions' => $perms,
-            'downloadUrl' => route('files.download', $file->uuid),
+            'downloadUrl' => self::revisionedUrl('files.download', $file),
             'previewUrl' => FileType::isPreviewable($ext)
-                ? route('files.preview', $file->uuid)
-                : (strtolower($ext) === 'svg' ? route('files.thumb', $file->uuid) : null),
-            'thumbUrl' => Thumbnail::supportsExt($ext) ? route('files.thumb', $file->uuid) : null,
+                ? self::revisionedUrl('files.preview', $file)
+                : (strtolower($ext) === 'svg' ? self::revisionedUrl('files.thumb', $file) : null),
+            'thumbUrl' => Thumbnail::supportsExt($ext) ? self::revisionedUrl('files.thumb', $file) : null,
         ];
     }
 
@@ -994,6 +994,20 @@ class Presenter
         }
 
         return $out;
+    }
+
+    /**
+     * A media URL that moves when the current version does.
+     *
+     * Download, preview and thumbnail are all the same uuid for the life of
+     * the file. Browsers cache that URL; without a revision the listing keeps
+     * showing v1 after the pointer has already moved.
+     */
+    public static function revisionedUrl(string $route, FileItem $file): string
+    {
+        $rev = (int) ($file->version_number ?: 1);
+
+        return route($route, $file->uuid).'?v='.$rev;
     }
 
     public static function humanSize(int $bytes): string
