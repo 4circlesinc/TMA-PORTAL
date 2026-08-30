@@ -1794,58 +1794,6 @@
 .tma-portal-viewer__review-actions {
   display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-8);
 }
-.tma-portal-viewer__review-set {
-  padding: var(--space-6) var(--space-10);
-  border: 1px solid var(--color-border-soft);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: var(--text-size-12);
-  font-weight: 600;
-  cursor: pointer;
-}
-.tma-portal-viewer__review-set:hover { background: var(--color-hover); }
-.tma-portal-viewer__review-set.is-current,
-.tma-portal-viewer__review-set[disabled] {
-  background: var(--color-text-primary);
-  color: var(--color-surface);
-  border-color: var(--color-text-primary);
-  cursor: default;
-}
-
-.tma-file-status-picker {
-  position: fixed;
-  z-index: 800;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 220px;
-  padding: var(--space-8);
-  border-radius: var(--radius-12);
-  background: var(--color-white);
-  border: 0.5px solid var(--color-border-soft);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-}
-.tma-file-status-picker__btn {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: var(--space-8) var(--space-12);
-  border: 0;
-  border-radius: var(--radius-12);
-  background: transparent;
-  color: var(--color-text-primary);
-  font: 600 var(--text-size-13) / var(--text-lh-14) var(--font-family);
-  text-align: left;
-  cursor: pointer;
-}
-.tma-file-status-picker__btn:hover { background: var(--color-hover); }
-.tma-file-status-picker__btn.is-current,
-.tma-file-status-picker__btn[disabled] {
-  background: var(--color-text-primary);
-  color: var(--color-surface);
-  cursor: default;
-}
 
 /* The review status picker — a field, not a row of verbs. */
 .tma-portal-viewer__review-pick {

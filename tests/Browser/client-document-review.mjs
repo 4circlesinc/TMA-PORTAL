@@ -87,15 +87,26 @@ await page.locator('[data-files-row]')
   .first().locator('.tma-portal-cell--type').dblclick()
 await page.waitForTimeout(3000)
 
-await page.locator('[data-lb-act="approvals"]').click()
-await page.waitForTimeout(800)
-
-// Three in-panel statuses, then pick Ready for submission — not a dropdown.
-const picker = page.locator('[data-lb-review-set]')
-check(await picker.count() >= 3, 'the viewer offers the three file statuses')
+const picker = page.locator('[data-lb-review-open]')
+check(await picker.count() > 0, 'the viewer offers a status picker')
 
 if (await picker.count()) {
-  await page.locator('[data-lb-review-set="ready_for_submission"]').click()
+  await picker.first().click()
+  await page.waitForTimeout(800)
+
+  const options = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.tma-portal-context-menu button, .tma-portal-menu button, [class*="menu"] button'))
+      .map((b) => b.textContent.trim())
+      .filter((t) => /application review|update required|ready for submission/i.test(t)))
+
+  check(options.length >= 3, `every status listed (${options.join(' | ')})`)
+  check(options.some((t) => t.includes('✓')), 'the current status is marked')
+
+  await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('.tma-portal-context-menu button, .tma-portal-menu button, [class*="menu"] button'))
+      .find((b) => /ready for submission/i.test(b.textContent) && !b.disabled)
+    if (btn) btn.click()
+  })
   await page.waitForTimeout(2500)
 }
 
@@ -168,7 +179,7 @@ check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer')),
 check(page.context().pages().length === tabsBefore, 'and does not open a browser tab')
 check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer__tabs')),
   'with the full panel — comments, versions, review')
-check(await page.evaluate(() => document.querySelectorAll('[data-lb-review-set]').length >= 3),
+check(await page.evaluate(() => !!document.querySelector('[data-lb-review-open]')),
   'and its review controls')
 
 await browser.close()

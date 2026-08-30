@@ -2450,10 +2450,10 @@
         var chip = (r.canReview || staff)
           ? '<button type="button" class="tma-portal-status tma-portal-status--' + esc(reviewTone(r.status)) +
             ' tma-portal-status--inline tma-file-status-chip" data-lb-review-open data-files-status="' +
-            esc(f.id) + '" aria-label="Open file status, currently ' +
+            esc(f.id) + '" aria-haspopup="menu" aria-label="Change status, currently ' +
             esc(r.label) + '">' + esc(r.label) + '</button>'
-          : '<span class="tma-portal-status tma-portal-status--' + esc(reviewTone(r.status)) + '" data-files-status="' +
-            esc(f.id) + '">' + esc(r.label) + '</span>';
+          : '<span class="tma-portal-status tma-portal-status--' + esc(reviewTone(r.status)) + '">' +
+            esc(r.label) + '</span>';
         line = line ? (chip + ' &middot; ' + line) : chip;
       }
       var b = f.workflowBadge;
@@ -2833,40 +2833,35 @@
       var r = f.review;
       if (!r || !r.status) return '';
 
+      /*
+       * One picker rather than a row of verbs.
+       *
+       * Three buttons. Start review, Approve, Reject, read as three
+       * unrelated actions when they are one field with four possible values,
+       * and they could only ever offer the moves allowed from where the
+       * document already was. A picker shows the whole set, says which one is
+       * current, and grows a state without growing the panel.
+       */
       var me = window.TMACurrentUser && window.TMACurrentUser.get();
       var staff = !!(me && (me.isAdmin || me.isStaff));
       var can = !!(r.canReview || (staff && r.status && r.status !== 'pending_upload'));
-      var current = r.status;
-      var actions = '';
-
-      if (can) {
-        actions = '<div class="tma-portal-viewer__review-actions">' +
-          [
-            { id: 'application_review', label: 'Application review' },
-            { id: 'update_required', label: 'Update required' },
-            { id: 'ready_for_submission', label: 'Ready for submission' },
-          ].map(function (s) {
-            var on = s.id === current;
-            return '<button type="button" class="tma-portal-viewer__review-set' +
-              (on ? ' is-current' : '') + '" data-lb-review-set="' + s.id + '"' +
-              (on ? ' aria-current="true" disabled' : '') + '>' +
-              esc(s.label) + '</button>';
-          }).join('') +
-        '</div>';
-      }
+      var actions = can
+        ? '<button type="button" class="tma-portal-viewer__review-pick" data-lb-review-open>' +
+            '<span>Change status</span>' +
+            '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="12" height="12">' +
+          '</button>'
+        : '';
 
       return '<div class="tma-portal-viewer__review">' +
         '<div class="tma-portal-viewer__review-head">' +
-          '<span class="tma-portal-viewer__review-label">File status</span>' +
+          '<span class="tma-portal-viewer__review-label">Review</span>' +
           statusBadgeHtml(r.status, r.label || r.status, reviewTone(r.status)) +
         '</div>' +
-        (r.note && current === 'update_required'
-          ? '<p class="tma-portal-viewer__review-note">“' + esc(r.note) + '”</p>'
-          : '') +
+        (r.note ? '<p class="tma-portal-viewer__review-note">“' + esc(r.note) + '”</p>' : '') +
         (r.reviewedBy && r.reviewedAt
           ? '<p class="tma-portal-viewer__review-by">' + esc(r.reviewedBy.name) + ' · ' + esc(fmtDateTime(r.reviewedAt)) + '</p>'
           : '') +
-        actions +
+        (actions ? '<div class="tma-portal-viewer__review-actions">' + actions + '</div>' : '') +
       '</div>';
     }
 
@@ -5146,27 +5141,9 @@
       var wfCancel = e.target.closest('[data-lb-wf-cancel]');
       if (wfCancel) { cancelWorkflow(wfCancel.getAttribute('data-lb-wf-cancel')); return; }
 
-      /* ── file status ──────────────────────────────── */
-      var setStatus = e.target.closest('[data-lb-review-set]');
-      if (setStatus) {
-        e.preventDefault();
-        e.stopPropagation();
-        var to = setStatus.getAttribute('data-lb-review-set');
-        if (!to || setStatus.disabled) return;
-        setItemReviewStatus(current(), to, function () {
-          paintPanel();
-          var head = lb.querySelector('.tma-portal-viewer__head');
-          if (head) head.outerHTML = viewerHead(current());
-        });
-        return;
-      }
+      /* ── versions ─────────────────────────────────── */
       var pick = e.target.closest('[data-lb-review-open]');
-      if (pick) {
-        viewerPrefs.panel = true;
-        viewerPrefs.tab = 'approvals';
-        paintPanel();
-        return;
-      }
+      if (pick) { openReviewMenu(pick); return; }
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
       if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }
@@ -6029,8 +6006,8 @@
       },
     });
     // Opened from inside the viewer (z-index 600) it must sit in front of it,
-    // the same lift the details modal and status picker already take.
-    if (host) host.style.zIndex = '850';
+    // the same lift the details modal and context menu already take.
+    if (lb && host) host.style.zIndex = '800';
   }
 
   function toggleStar(id) {
@@ -6830,9 +6807,8 @@
     });
   }
 
-  /** The same picker where there is no menu to hang it off: checklist chips
-      and the Documents tab. Three buttons, not the file-row context menu —
-      that menu sits behind the viewer and was dismissed by panel scroll. */
+  /** The same picker where there is no menu to hang it off, the viewer's
+      panel button, which opens it as a menu of its own. */
   function openReviewStatusMenu(x, y, item, onDone) {
     if (item && documentReviewStatus(item)) {
       item.review = Object.assign({}, item.review || {}, {
@@ -6840,59 +6816,7 @@
         next: null,
       });
     }
-    openFileStatusPicker(x, y, item, onDone);
-  }
-
-  var statusPickerEl = null;
-
-  function closeFileStatusPicker() {
-    if (!statusPickerEl) return;
-    statusPickerEl.remove();
-    statusPickerEl = null;
-    document.removeEventListener('click', onStatusPickerDocClick);
-    document.removeEventListener('keydown', onStatusPickerKey);
-  }
-
-  function onStatusPickerDocClick(e) {
-    if (statusPickerEl && statusPickerEl.contains(e.target)) return;
-    closeFileStatusPicker();
-  }
-
-  function onStatusPickerKey(e) {
-    if (e.key === 'Escape') closeFileStatusPicker();
-  }
-
-  function openFileStatusPicker(x, y, item, onDone) {
-    closeContextMenu();
-    closeFileStatusPicker();
-    if (!item || item.type === 'folder') return;
-
-    var current = documentReviewStatus(item) || (item.review && item.review.status) || '';
-    statusPickerEl = document.createElement('div');
-    statusPickerEl.className = 'tma-file-status-picker';
-    statusPickerEl.setAttribute('role', 'menu');
-    statusPickerEl.innerHTML = REVIEW_STATES.map(function (s) {
-      var on = s.id === current;
-      return '<button type="button" class="tma-file-status-picker__btn' +
-        (on ? ' is-current' : '') + '" data-file-status-set="' + s.id + '"' +
-        (on ? ' disabled aria-current="true"' : '') + '>' + esc(s.label) + '</button>';
-    }).join('');
-    document.body.appendChild(statusPickerEl);
-    statusPickerEl.style.zIndex = '800';
-    placeMenu(statusPickerEl, x, y);
-    statusPickerEl.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-file-status-set]');
-      if (!btn || btn.disabled) return;
-      e.preventDefault();
-      e.stopPropagation();
-      var to = btn.getAttribute('data-file-status-set');
-      closeFileStatusPicker();
-      setItemReviewStatus(item, to, onDone);
-    });
-    setTimeout(function () {
-      document.addEventListener('click', onStatusPickerDocClick);
-      document.addEventListener('keydown', onStatusPickerKey);
-    }, 0);
+    openContextMenu(x, y, item, reviewSubmenu(item, onDone));
   }
 
   /* ── assigning from the row menu ────────────────────── */
@@ -7294,7 +7218,6 @@
    * column's control came to look broken.
    */
   function openContextMenu(x, y, item, list) {
-    closeFileStatusPicker();
     closeContextMenu();
     // Right-clicking an item selects just it, matching common file managers.
     if (item && item.id && !state.selected[item.id]) { /* keep multi-select if already selected */ }
@@ -7307,10 +7230,10 @@
     document.body.appendChild(ctxEl);
     placeMenu(ctxEl, x, y);
 
-    // The menu is z-index 500, the file viewer is 600, opened from inside the
+    // The menu is z-index 640, the file viewer is 600, opened from inside the
     // viewer it lands *behind* it: in the DOM, readable, and entirely
-    // invisible. Same lift the details modal already does from here.
-    if (lb) ctxEl.style.zIndex = '700';
+    // invisible. Always lift it above the viewer, including CIP overlays.
+    ctxEl.style.zIndex = '800';
 
     ctxEl.addEventListener('click', function (e) {
       var off = e.target.closest('[data-ctx-off]');
@@ -7804,12 +7727,7 @@
       if (!item || item.type === 'folder') return;
       externalItems = [item];
       externalOnChange = onChange || null;
-      openFileStatusPicker(x, y, item, onChange || function () {});
-    },
-
-    setReview: function (item, status, onChange) {
-      if (!item || item.type === 'folder' || !status) return;
-      setItemReviewStatus(item, status, onChange || function () {});
+      openReviewStatusMenu(x, y, item, onChange || function () {});
     },
 
     /**
