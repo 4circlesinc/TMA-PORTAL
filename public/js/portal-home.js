@@ -1603,6 +1603,17 @@
     return s.dashboardWorkflowStrip !== false;
   }
 
+  function wfStripItems() {
+    return ((homeWork && homeWork.feed) || []).filter(feedItemStillNew);
+  }
+
+  function wfStripToggleVisible() {
+    if (!canReach('workflows.view')) return false;
+    if (!workflowStripVisible()) return true;
+    if (!workListReady('feed')) return true;
+    return wfStripItems().length > 0;
+  }
+
   function wfStripSkeleton() {
     var card = '<article class="tma-portal-wf-card tma-portal-wf-card--preview tma-portal-wf-strip__skel" aria-hidden="true">' +
       '<span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span>' +
@@ -1629,21 +1640,20 @@
     if (!canReach('workflows.view') || !workflowStripVisible()) return '';
 
     var ready = workListReady('feed');
-    var items = ((homeWork && homeWork.feed) || []).filter(feedItemStillNew);
-    var cards = '';
+    var items = wfStripItems();
     var work = window.TMAPortalWork;
-
-    if (!ready) {
-      cards = wfStripSkeleton();
-    } else if (items.length && work && work.homeCard) {
-      cards = items.map(function (entry) {
-        var item = entry.item || {};
-        var key = (entry.kind || 'request') + '-' + (item.id || '');
-        return '<div class="tma-portal-wf-strip__slide" data-key="wf-strip-' + ui().esc(key) + '">' +
-          work.homeCard(entry, { preview: true, expanded: homeWfExpanded }) +
-          '</div>';
-      }).join('');
-    }
+    if (ready && (!items.length || !work || !work.homeCard)) return '';
+    var cards = !ready
+      ? wfStripSkeleton()
+      : (work && work.homeCard
+        ? items.map(function (entry) {
+            var item = entry.item || {};
+            var key = (entry.kind || 'request') + '-' + (item.id || '');
+            return '<div class="tma-portal-wf-strip__slide" data-key="wf-strip-' + ui().esc(key) + '">' +
+              work.homeCard(entry, { preview: true, expanded: homeWfExpanded }) +
+              '</div>';
+          }).join('')
+        : '');
 
     var arrows = ready && items.length
       ? '<div class="tma-portal-wf-strip__nav">' +
@@ -1656,12 +1666,6 @@
         '</div>'
       : '';
 
-    var body = !ready
-      ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
-      : (cards
-        ? '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>'
-        : '<p class="tma-portal-panel__note">Nothing unread right now.</p>');
-
     return '<section class="tma-portal-wf-strip" data-key="wf-strip" data-home-wf-strip-root' +
       (ready ? '' : ' aria-busy="true"') + ' aria-label="Workflows">' +
       '<div class="tma-portal-wf-strip__head">' +
@@ -1669,7 +1673,7 @@
       '<button type="button" class="tma-portal-link" data-home-wf-all>See all</button>' +
       arrows +
       '</div></div>' +
-      body +
+      '<div class="tma-portal-wf-strip__track" data-home-wf-track>' + cards + '</div>' +
       '</section>';
   }
 
@@ -3215,7 +3219,7 @@
       '</div></div>' +
       '<div class="tma-portal-hello__actions">' +
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
-      (canReach('workflows.view')
+      (wfStripToggleVisible()
         ? ui().btn({
             label: workflowStripVisible() ? 'Hide workflows' : 'Show workflows',
             icon: workflowStripVisible() ? 'EyeSlash' : 'Eye',
