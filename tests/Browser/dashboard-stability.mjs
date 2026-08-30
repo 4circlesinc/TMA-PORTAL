@@ -338,13 +338,12 @@ try {
     stamp('library', document.querySelector('[data-key="home-library"]'));
     return {
       marks: Object.keys(marks),
-      defaultCards: document.querySelectorAll('.tma-portal-default-folder').length,
-      defaultRows: document.querySelectorAll('.tma-portal-default-folder .tma-portal-file-row').length,
+      defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
       recentRows: document.querySelectorAll('[data-tile-id="recentFiles"] [data-home-file]').length,
     };
   });
-  log(`      marked ${stamped.marks.join(', ')}; ${stamped.defaultCards} default cards, ` +
-    `${stamped.defaultRows} rows inside them, ${stamped.recentRows} recent files`);
+  log(`      marked ${stamped.marks.join(', ')}; ${stamped.defaultCards} default folder cards, ` +
+    `${stamped.recentRows} recent files`);
   check(stamped.marks.includes('employees'), 'the Employees card is on the board to begin with');
 
   // Watch what the board asks the server for on the way back.
@@ -370,20 +369,17 @@ try {
   await page.waitForTimeout(400);
 
   const mid = await page.evaluate(() => ({
-    defaultCards: document.querySelectorAll('.tma-portal-default-folder').length,
-    defaultRows: document.querySelectorAll('.tma-portal-default-folder .tma-portal-file-row').length,
+    defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
     emptyNotes: Array.from(document.querySelectorAll('.tma-portal-default-folder .tma-portal-panel__note'))
       .filter((n) => /Nothing in this folder yet/.test(n.textContent || '')).length,
     recentRows: document.querySelectorAll('[data-tile-id="recentFiles"] [data-home-file]').length,
     skeletons: document.querySelectorAll('[data-tile-id] .tma-skeleton').length,
   }));
-  log(`      immediately after: ${mid.defaultCards} cards, ${mid.defaultRows} rows, ` +
+  log(`      immediately after: ${mid.defaultCards} cards, ` +
     `${mid.emptyNotes} "nothing here" notes, ${mid.recentRows} recent files, ${mid.skeletons} skeletons`);
 
   check(mid.defaultCards === stamped.defaultCards,
     `the Default Folders card keeps its folders (${stamped.defaultCards} → ${mid.defaultCards})`);
-  check(mid.defaultRows >= stamped.defaultRows,
-    `and their contents do not empty out (${stamped.defaultRows} → ${mid.defaultRows})`);
   check(mid.emptyNotes === 0, 'no card falls back to "Nothing in this folder yet"');
   check(mid.recentRows === stamped.recentRows,
     `Recent Files keeps its rows (${stamped.recentRows} → ${mid.recentRows})`);
@@ -398,7 +394,7 @@ try {
       employees: mark('[data-tile-id="employees"]'),
       defaults: mark('[data-key="home-defaults"]'),
       library: mark('[data-key="home-library"]'),
-      defaultCards: document.querySelectorAll('.tma-portal-default-folder').length,
+      defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
       recentRows: document.querySelectorAll('[data-tile-id="recentFiles"] [data-home-file]').length,
     };
   });
@@ -427,7 +423,7 @@ try {
 
   const stillThere = await page.evaluate(() => ({
     employees: document.querySelector('[data-tile-id="employees"]')?.__stableMark || null,
-    defaultCards: document.querySelectorAll('.tma-portal-default-folder').length,
+    defaultCards: document.querySelectorAll('.tma-portal-default-folder:not(.tma-portal-default-folder--skeleton)').length,
   }));
   check(stillThere.employees === 'employees', 'and the refresh patches in place rather than rebuilding');
   check(stillThere.defaultCards === stamped.defaultCards, 'with the Default Folders still on screen');

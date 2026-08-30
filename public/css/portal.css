@@ -5117,71 +5117,103 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-home-defaults__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-20);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-12);
+  align-items: start;
 }
 
-@media (max-width: 1100px) {
-  .tma-portal-home-defaults__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 700px) {
-  .tma-portal-home-defaults__grid { grid-template-columns: 1fr; }
-}
-
-/* These sit on the white page in the same near-white as every other panel, so
- * they read as background rather than as the shelf of folders they are. The
- * hairline and soft drop give them an edge; the min-height stops a folder
- * holding two files from collapsing to a strip half the size of its neighbour. */
+/* Same card as Workflow comments: preview on top, name + meta underneath.
+   Each card is one default folder. */
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-16);
-  border-radius: var(--radius-16);
-  background: var(--color-bg-card);
+  padding: var(--space-12);
   border: 1px solid var(--color-border-soft);
-  box-shadow: var(--shadow-glass-1);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
   min-width: 0;
-  min-height: 260px;
-  box-sizing: border-box;
-}
-
-.tma-portal-default-folder--skeleton {
-  background: color-mix(in srgb, var(--color-bg-card) 70%, var(--color-hover));
-  min-height: 260px;
-}
-
-.tma-portal-default-folder__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10, 10px);
   width: 100%;
-  padding: var(--space-4) var(--space-8);
-  border: 0;
-  border-radius: var(--radius-12);
-  background: none;
+  box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   font: inherit;
   text-align: left;
+  color: inherit;
   cursor: pointer;
-  color: var(--color-black);
-  min-width: 0;
-  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.tma-portal-default-folder__head:hover {
-  background: var(--color-hover);
+.tma-portal-default-folder:hover {
+  filter: brightness(0.99);
 }
 
-.tma-portal-default-folder__head:hover .tma-portal-default-folder__name {
+.tma-portal-default-folder:hover .tma-portal-default-folder__name {
   text-decoration: underline;
 }
 
-/* Pin the folder glyph to 28px — do not let portal-files' 100% icon rule win. */
+.tma-portal-default-folder:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tma-portal-default-folder--skeleton {
+  min-height: 188px;
+  cursor: default;
+  filter: none;
+  background: color-mix(in srgb, var(--color-white) 70%, var(--color-hover));
+}
+
+.tma-portal-default-folder__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 128px;
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  overflow: hidden;
+}
+
+.tma-portal-default-folder__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+}
+
+.tma-portal-default-folder__glyph .tma-folder-icon,
+.tma-portal-default-folder__glyph .tma-folder-icon__base,
+.tma-portal-default-folder__glyph img {
+  width: 48px !important;
+  height: 48px !important;
+  max-width: 48px;
+  max-height: 48px;
+  object-fit: contain;
+}
+
+.tma-portal-default-folder__file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.tma-portal-default-folder__file-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .tma-portal-default-folder__icon {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5192,29 +5224,30 @@ label.tma-portal-check-row:hover {
 .tma-portal-default-folder__icon .tma-folder-icon,
 .tma-portal-default-folder__icon .tma-folder-icon__base,
 .tma-portal-default-folder__icon img {
-  width: 28px !important;
-  height: 28px !important;
-  max-width: 28px;
-  max-height: 28px;
-  flex: 0 0 28px;
+  width: 24px !important;
+  height: 24px !important;
+  max-width: 24px;
+  max-height: 24px;
+  flex: 0 0 24px;
   object-fit: contain;
 }
 
 .tma-portal-default-folder__name {
-  flex: 1 1 auto;
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
+  font-size: var(--text-size-13);
   font-weight: 600;
-  min-width: 0;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
-.tma-portal-default-folder__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+.tma-portal-default-folder__path {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
 }
 
