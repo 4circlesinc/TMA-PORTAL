@@ -19,11 +19,9 @@ use Illuminate\Validation\ValidationException;
  *
  * What is new here is the roll-up. An application's status is not typed in by
  * whoever is working the checklist, it is read OFF the checklist, every time
- * one of these verbs lands. After every required document has been assessed
- * the file reads Assessment feedback (§14). One document sent back then means
- * the provider side has work to do, so it moves to Update required and they
- * are told; every required document accepted means there is nothing to send
- * back, so it proceeds to Ready to submit (§15).
+ * one of these verbs lands. One document sent back is Updates Required, the
+ * provider side already has work. Every required document accepted means
+ * there is nothing to send back, so it proceeds to Ready to submit (§15).
  *
  * {@see settle()} is that inference, and it is deliberately an inference. It
  * drives {@see Engine} only along edges the lifecycle already allows and leaves
@@ -140,7 +138,14 @@ class Review
                 break;
             }
 
-            $application = Engine::apply($application, $target, $actor, ['reason' => 'checklist']);
+            // The checklist moved. Whoever marked the document may not be
+            // allowed to type application status; the file still follows.
+            $who = $actor;
+            if ($who !== null && ! Engine::allows($who, $application, $target)) {
+                $who = null;
+            }
+
+            $application = Engine::apply($application, $target, $who, ['reason' => 'checklist']);
         }
 
         return $application;
@@ -188,6 +193,31 @@ class Review
         $required = array_sum(array_column($tally, 'required'));
 
         /*
+         * Any file sent back is enough. The application is Updates Required
+         * the moment one document is, whether or not the rest of the
+         * checklist has been read: the provider side already has work, and
+         * waiting for the officer to finish the pile would hide that.
+         *
+         * Optional documents count. "Any file" is the rule, not only the
+         * required ones.
+         */
+        $from = $application->status;
+        $needsUpdates = $tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
+
+        if ($needsUpdates) {
+            return match ($from) {
+                Status::NEW => [
+                    Status::REVIEW_APPLICATION,
+                    Status::ASSESSMENT_FEEDBACK,
+                    Status::UPDATE_REQUIRED,
+                ],
+                Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK, Status::UPDATE_REQUIRED],
+                Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT => [Status::UPDATE_REQUIRED],
+                default => [],
+            };
+        }
+
+        /*
          * §14: after review of ALL documents.
          *
          * "Every" over an empty checklist is vacuously true, which is why the
@@ -201,8 +231,7 @@ class Review
          * or "optional" would mean nothing at all.
          *
          * A required slot still in Pending upload or Application review has
-         * not been assessed, so the file waits, even if another slot has
-         * already been sent back.
+         * not been assessed, so Ready to submit waits.
          */
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
             + $tally[DocumentStatus::APPLICATION_REVIEW]['required'];
@@ -211,17 +240,7 @@ class Review
             return [];
         }
 
-        $from = $application->status;
-        $needsUpdates = $tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
         $allReady = $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
-
-        if ($needsUpdates) {
-            return match ($from) {
-                Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK, Status::UPDATE_REQUIRED],
-                Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT => [Status::UPDATE_REQUIRED],
-                default => [],
-            };
-        }
 
         if ($allReady) {
             return match ($from) {

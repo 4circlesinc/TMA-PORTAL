@@ -14,6 +14,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Status;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -143,6 +144,19 @@ class CipDocumentEngineTest extends TestCase
         $this->at($document, DocumentStatus::APPLICATION_REVIEW);
         DocumentEngine::apply($document, DocumentStatus::READY_FOR_SUBMISSION, $officer);
         $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $document->fresh()->status);
+    }
+
+    public function test_setting_a_slot_to_update_required_moves_the_application(): void
+    {
+        [$document] = $this->slot();
+        $this->at($document, DocumentStatus::APPLICATION_REVIEW);
+        $document->loadMissing('application');
+        $document->application->forceFill(['status' => Status::REVIEW_APPLICATION])->save();
+
+        DocumentEngine::set($document, DocumentStatus::UPDATE_REQUIRED, $this->user(Role::EMPLOYEE));
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $document->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $document->application->fresh()->status);
     }
 
     public function test_re_uploading_returns_the_slot_to_review(): void

@@ -180,6 +180,24 @@ class CipDocumentFileStatusTest extends TestCase
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
         $this->assertTrue($slot->comments()->exists(), 'The reason lands on the slot, where the checklist reads it.');
+        $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
+    }
+
+    public function test_marking_update_required_on_the_library_chip_moves_the_application(): void
+    {
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::APPLICATION_REVIEW);
+        $slot->loadMissing('application');
+        $slot->application->forceFill(['status' => Status::REVIEW_APPLICATION])->save();
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'note' => 'The bio page is cropped. Please rescan.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
     }
 
     public function test_staff_can_move_a_file_status_back_and_forth(): void

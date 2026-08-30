@@ -243,6 +243,10 @@ class DocumentEngine
 
             Live::staff(Live::CIP);
 
+            if ($to === DocumentStatus::UPDATE_REQUIRED) {
+                Review::settle($application, $actor);
+            }
+
             return $document;
         });
     }

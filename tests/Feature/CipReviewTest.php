@@ -30,9 +30,9 @@ use Tests\TestCase;
  * The two halves of that sentence are what these tests hold apart. A verdict
  * is on ONE document, and the application's status is never typed in beside
  * it: it is read off the checklist afterwards, and only ever along an edge the
- * lifecycle already allows. So a document moving is not an application moving,
- * an optional document cannot hold an assessment open, and a reason is not
- * something a reviewer may leave out.
+ * lifecycle already allows. One file in Update required is the application
+ * in Updates Required. An optional document cannot hold Ready to submit
+ * open, and a reason is not something a reviewer may leave out.
  */
 class CipReviewTest extends TestCase
 {
@@ -246,7 +246,7 @@ class CipReviewTest extends TestCase
         );
     }
 
-    public function test_a_document_sent_back_before_the_rest_are_read_leaves_the_application_where_it_is(): void
+    public function test_a_document_sent_back_before_the_rest_are_read_puts_the_application_in_updates_required(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
@@ -260,12 +260,25 @@ class CipReviewTest extends TestCase
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $passport->fresh()->status);
 
-        /*
-         * §14 waits until every required document has been assessed. One
-         * slot sent back while another is still unread is not an assessment
-         * finished, so the application stays in the officer's first read.
-         */
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+        // One file in Update required is the application in Updates Required,
+        // even while another required slot is still unread.
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+    }
+
+    public function test_an_optional_file_sent_back_still_puts_the_application_in_updates_required(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::REVIEW_APPLICATION);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $translation = $this->slot($application, 'translation', 'Certified translation', false);
+
+        $this->actingAs($this->officer($application))
+            ->postJson('/portal/cip/documents/'.$translation->uuid.'/request-changes', [
+                'comment' => 'The stamp is not visible.',
+            ])->assertOk();
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $translation->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
     }
 
     public function test_a_request_with_no_reason_is_refused_and_nothing_moves(): void

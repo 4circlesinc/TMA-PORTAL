@@ -113,7 +113,9 @@ class FileReviewController extends BaseFilesController
      * A CIP slot: any file-review status, both directions, for staff.
      *
      * Officers still settle the application checklist after a verdict.
-     * Employees change only the document; they cannot drive application status.
+     * Any file marked Update required still puts the application in
+     * Updates Required — the checklist moved, even when the actor cannot
+     * type application status themselves.
      */
     private function judgeCip(CipDocument $slot, User $user, string $to, string $note): void
     {

@@ -187,6 +187,24 @@ class CipLockingTest extends TestCase
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
     }
 
+    public function test_marking_update_required_after_lock_puts_the_application_in_updates_required(): void
+    {
+        ['staff' => $staff, 'slot' => $slot, 'application' => $application] = $this->lockedPackage();
+        $file = $slot->fresh()->file;
+
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->status);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'note' => 'The bio page is cropped.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+    }
+
     public function test_additional_documents_stays_writable_with_versioning(): void
     {
         ['staff' => $staff, 'additional' => $additional] = $this->lockedPackage();
