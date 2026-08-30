@@ -1010,7 +1010,7 @@
    */
   var TPL = {
     el: null, loaded: false, loading: false, error: null, data: null,
-    search: '', category: 'all', previewSeq: 0,
+    search: '', category: 'all', sort: null, dir: 'asc', previewSeq: 0,
   };
 
   function tplJson(method, path, body) {
@@ -1073,11 +1073,47 @@
 
   function tplFiltered() {
     var q = TPL.search.toLowerCase();
-    return ((TPL.data && TPL.data.templates) || []).filter(function (t) {
+    var list = ((TPL.data && TPL.data.templates) || []).filter(function (t) {
       if (TPL.category !== 'all' && t.category !== TPL.category) return false;
       if (!q) return true;
       return (t.name + ' ' + t.when + ' ' + t.category + ' ' + (t.fields.subject || '')).toLowerCase().indexOf(q) !== -1;
     });
+    if (!TPL.sort) return list; // no column picked: keep catalog order
+
+    function keyOf(t) {
+      if (TPL.sort === 'edited') return t.updatedAt || ''; // defaults sort together, before any edit
+      if (TPL.sort === 'when') return t.when.toLowerCase();
+      if (TPL.sort === 'category') return t.category.toLowerCase();
+      return t.name.toLowerCase();
+    }
+
+    return list.slice().sort(function (a, b) {
+      var x = keyOf(a);
+      var y = keyOf(b);
+      var cmp = x < y ? -1 : (x > y ? 1 : 0);
+      return TPL.dir === 'desc' ? -cmp : cmp;
+    });
+  }
+
+  /*
+   * One sortable header, the CIP applications table's pattern: the button
+   * fills the cell so a click on the padding still sorts, and aria-sort
+   * lives on the th.
+   */
+  function tplSortHeader(key, label) {
+    var active = TPL.sort === key;
+    var dir = active && TPL.dir === 'desc' ? 'desc' : 'asc';
+    var aria = !active ? 'none' : (dir === 'desc' ? 'descending' : 'ascending');
+    var arrow = active
+      ? '<span class="tma-portal-table__sort-arrow" aria-hidden="true">' +
+        (dir === 'desc' ? '\u2193' : '\u2191') + '</span>'
+      : '';
+
+    return {
+      html: '<button type="button" class="tma-portal-table__sort' + (active ? ' is-sorted' : '') +
+        '" data-tpl-sort="' + key + '">' + ui().esc(label) + arrow + '</button>',
+      attrs: ' class="tma-portal-table__th-sort" aria-sort="' + aria + '"',
+    };
   }
 
   function tplWhen(iso) {
@@ -1111,7 +1147,13 @@
       rows = '<tr><td colspan="5" class="tma-portal-table__empty">Nothing matches.</td></tr>';
     }
 
-    return ui().table(['Email', 'Sent when', 'Category', 'Last edited', ''], rows);
+    return ui().table([
+      tplSortHeader('name', 'Email'),
+      tplSortHeader('when', 'Sent when'),
+      tplSortHeader('category', 'Category'),
+      tplSortHeader('edited', 'Last edited'),
+      '',
+    ], rows);
   }
 
   function renderTemplates() {
@@ -1160,6 +1202,19 @@
 
     var retry = el.querySelector('[data-tpl-retry]');
     if (retry) retry.addEventListener('click', function () { loadTemplates(); });
+
+    el.querySelectorAll('[data-tpl-sort]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var key = b.getAttribute('data-tpl-sort');
+        if (TPL.sort === key) {
+          TPL.dir = TPL.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          TPL.sort = key;
+          TPL.dir = 'asc';
+        }
+        renderTemplates();
+      });
+    });
 
     el.querySelectorAll('[data-tpl-edit]').forEach(function (b) {
       b.addEventListener('click', function () {

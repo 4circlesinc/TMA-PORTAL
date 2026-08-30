@@ -6013,3 +6013,51 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   .tma-portal-tpl-edit { grid-template-columns: 1fr; }
   .tma-portal-tpl-edit__preview { position: static; }
 }
+
+/* Click-to-sort headers on the Templates listing — the CIP applications
+   table's pattern on the portal table: the button fills the cell so a click
+   on the padding still counts, aria-sort lives on the th. */
+.tma-portal-table th.tma-portal-table__th-sort {
+  padding: 0;
+  vertical-align: middle;
+}
+
+.tma-portal-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tma-portal-table__sort:hover,
+.tma-portal-table__sort.is-sorted {
+  color: var(--color-text-primary);
+}
+
+.tma-portal-table__sort.is-sorted {
+  font-weight: var(--font-weight-semibold);
+}
+
+.tma-portal-table__sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-4);
+}
+
+.tma-portal-table__sort-arrow {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.7;
+}
