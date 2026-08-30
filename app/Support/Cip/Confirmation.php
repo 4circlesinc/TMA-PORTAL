@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\FileItem;
 use App\Models\User;
@@ -128,13 +129,34 @@ class Confirmation
     }
 
     /**
-     * Refuse a write into a frozen package.
+     * Refuse a write into a frozen original package.
+     *
+     * Confirm submission stamps `locked_at`. That freeze is the scans the
+     * Unit is about to be handed, not every later write on the application:
+     * file status is a review label, and post-approval paper lives in its
+     * own drawer. Call {@see guardDocument()} when the write is about one
+     * slot, and this when it is about the application itself (intake, a new
+     * original-package upload).
      *
      * @throws \InvalidArgumentException
      */
     public static function guard(?CipApplication $application): void
     {
         if ($application?->isLocked()) {
+            throw new \InvalidArgumentException(
+                'This application’s original submission package is locked and cannot be modified.',
+            );
+        }
+    }
+
+    /**
+     * Refuse a write that would change a frozen original-package slot.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public static function guardDocument(CipDocument $document): void
+    {
+        if (Package::locksDocument($document)) {
             throw new \InvalidArgumentException(
                 'This application’s original submission package is locked and cannot be modified.',
             );

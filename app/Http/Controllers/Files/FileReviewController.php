@@ -11,6 +11,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Package;
 use App\Support\Cip\Review as CipReview;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Presenter;
@@ -119,10 +120,14 @@ class FileReviewController extends BaseFilesController
         try {
             $meta = array_filter(['note' => $note !== '' ? $note : null]);
             $officer = CipAccess::can($user, 'cip.review') || CipAccess::canOverrideStatus($user);
+            // Confirm submission freezes the original scans, not the review
+            // chip. Asking the provider for a replacement still has nowhere
+            // to land, so that verdict stays refused; the working label does not.
+            $frozen = Package::locksDocument($slot);
 
-            if ($officer && $to === DocumentStatus::UPDATE_REQUIRED) {
+            if (! $frozen && $officer && $to === DocumentStatus::UPDATE_REQUIRED) {
                 CipReview::requestChanges($slot, $user, $note);
-            } elseif ($officer && $to === DocumentStatus::READY_FOR_SUBMISSION
+            } elseif (! $frozen && $officer && $to === DocumentStatus::READY_FOR_SUBMISSION
                 && DocumentEngine::canTransition($slot, $to)) {
                 CipReview::approve($slot, $user);
             } else {

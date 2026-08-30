@@ -56,17 +56,32 @@ class Package
             return false;
         }
 
-        $slot->loadMissing('application');
+        $slot->loadMissing(['application', 'requirement']);
 
-        return $slot->application?->isLocked() === true;
+        if ($slot->application?->isLocked() !== true) {
+            return false;
+        }
+
+        // A pre-approval slot that left its person folder is still the original
+        // package. Post-approval-only paper is not, even on a locked file.
+        $requirement = $slot->requirement;
+        if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
+            return false;
+        }
+        if ($requirement && $requirement->at_pre_approval) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
      * Is this folder (or anything inside it) part of a confirmed original
      * package?
      *
-     * Additional Documents and its descendants answer no, even on a locked
-     * application. That is the whole of §17's exception.
+     * Additional Documents and Post-Approval Documents, and everything
+     * inside them, answer no, even on a locked application. Those drawers
+     * are where later paper lands; they are not the original package.
      */
     public static function locksFolder(Folder $folder): bool
     {
@@ -103,6 +118,33 @@ class Package
         $folder = Folder::withTrashed()->find($request->folder_id);
 
         return $folder !== null && self::locksFolder($folder);
+    }
+
+    /**
+     * Is this checklist slot part of a confirmed original package?
+     *
+     * A filled slot follows its file. An empty pre-approval slot on a locked
+     * file is frozen too, so a later upload cannot quietly refill it.
+     * Post-approval-only requirements are never the original package.
+     */
+    public static function locksDocument(CipDocument $document): bool
+    {
+        $document->loadMissing(['file', 'application', 'requirement']);
+
+        if ($document->file) {
+            return self::locksFile($document->file);
+        }
+
+        if ($document->application?->isLocked() !== true) {
+            return false;
+        }
+
+        $requirement = $document->requirement;
+        if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -192,7 +234,7 @@ class Package
 
         $additional = Folder::query()
             ->whereIn('parent_id', $apps->pluck('folder_id')->filter()->all())
-            ->where('name', Tree::ADDITIONAL)
+            ->whereIn('name', [Tree::ADDITIONAL, Tree::POST_APPROVAL])
             ->pluck('id')
             ->all();
 

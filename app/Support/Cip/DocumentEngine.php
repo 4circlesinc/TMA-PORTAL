@@ -132,7 +132,7 @@ class DocumentEngine
      */
     public static function apply(CipDocument $document, string $to, ?User $actor, array $meta = []): CipDocument
     {
-        Confirmation::guard($document->loadMissing('application')->application);
+        Confirmation::guardDocument($document);
 
         if (! self::canTransition($document, $to)) {
             throw new \InvalidArgumentException(sprintf(
@@ -211,8 +211,6 @@ class DocumentEngine
         if ($actor !== null && ! Role::isStaff($actor)) {
             throw new AuthorizationException('You cannot change this document’s status.');
         }
-
-        Confirmation::guard($document->loadMissing('application')->application);
 
         return DB::transaction(function () use ($document, $to, $actor, $meta) {
             $from = $document->status;

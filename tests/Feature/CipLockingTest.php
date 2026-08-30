@@ -171,6 +171,22 @@ class CipLockingTest extends TestCase
         $this->assertNull($file->fresh()->deleted_at);
     }
 
+    public function test_staff_can_still_move_file_status_after_the_package_is_locked(): void
+    {
+        ['staff' => $staff, 'slot' => $slot] = $this->lockedPackage();
+        $file = $slot->fresh()->file;
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::APPLICATION_REVIEW);
+
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->fresh()->status);
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
+    }
+
     public function test_additional_documents_stays_writable_with_versioning(): void
     {
         ['staff' => $staff, 'additional' => $additional] = $this->lockedPackage();
