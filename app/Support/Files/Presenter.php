@@ -14,6 +14,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Package;
 use App\Support\Files\Workflow\Status;
 
 /**
@@ -289,6 +290,7 @@ class Presenter
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFolder[$folder->id]),
             'permissions' => $this->folderPerms($folder),
+            'packageLocked' => Package::locksFolder($folder),
         ];
     }
 

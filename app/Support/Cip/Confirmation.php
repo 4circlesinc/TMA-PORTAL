@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\DB;
  * and must press Confirm submission. That press freezes the original package:
  * person folders become view-only (§17), submitted person and application
  * fields cannot be changed, outstanding upload links into them are withdrawn,
- * and Additional Documents stays writable. The status stays
+ * and Additional Documents stays writable. The application folder itself also
+ * freezes, so later paper cannot land beside the original tree. The status stays
  * Ready to submit until staff record the CIP number (§16).
  */
 class Confirmation

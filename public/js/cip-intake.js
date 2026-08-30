@@ -761,7 +761,7 @@
       esc(state.phase || 'pre_approval') + '"' +
       (packageLocked() ? ' data-cip-locked="1"' : '') + '>' +
       (packageLocked()
-        ? '<p class="tma-portal-note">The original submission is locked. Submitted details and primary documents can be viewed but not changed.</p>'
+        ? '<p class="tma-portal-note">The original submission is locked. Submitted details and primary documents can be viewed but not changed. New files go in Additional Documents.</p>'
         : '') +
       // One summary at the top: a reader who pressed Add and nothing
       // happened deserves to be told why without hunting the page.

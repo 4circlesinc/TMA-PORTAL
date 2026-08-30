@@ -22,17 +22,19 @@ use App\Support\Files\FolderTree;
  * land there, and versioning stays on.
  *
  * Identification is by id, not by the folder's current name. Person folders
- * are `cip_people.folder_id`. Additional Documents is the child of the
- * application's client folder named {@see Tree::ADDITIONAL}. A file that is
- * a checklist slot is frozen even if it has wandered out of a person folder;
- * a loose file in Additional Documents is never frozen.
+ * are `cip_people.folder_id`. The application folder itself also freezes, so
+ * later paper cannot land beside the original tree. Additional Documents and
+ * Post-Approval Documents are the children of that folder named
+ * {@see Tree::ADDITIONAL} and {@see Tree::POST_APPROVAL}; they stay writable.
+ * A file that is a checklist slot is frozen even if it has wandered out of a
+ * person folder; a loose file in Additional Documents is never frozen.
  */
 class Package
 {
     /** @var array<int, bool> folder id => frozen */
     private static array $folderLock = [];
 
-    /** @var array{people: array<int, true>, additional: array<int, true>}|null */
+    /** @var array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>}|null */
     private static ?array $maps = null;
 
     /** Is this library file part of a confirmed original package? */
@@ -188,7 +190,7 @@ class Package
     {
         $maps = self::maps();
 
-        if ($maps['people'] === [] && $maps['additional'] === []) {
+        if ($maps['people'] === [] && $maps['roots'] === [] && $maps['additional'] === []) {
             return false;
         }
 
@@ -201,7 +203,7 @@ class Package
         }
 
         foreach ($chain as $id) {
-            if (isset($maps['people'][$id])) {
+            if (isset($maps['people'][$id]) || isset($maps['roots'][$id])) {
                 return true;
             }
         }
@@ -210,7 +212,7 @@ class Package
     }
 
     /**
-     * @return array{people: array<int, true>, additional: array<int, true>}
+     * @return array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>}
      */
     private static function maps(): array
     {
@@ -223,7 +225,7 @@ class Package
             ->get(['id', 'folder_id']);
 
         if ($apps->isEmpty()) {
-            return self::$maps = ['people' => [], 'additional' => []];
+            return self::$maps = ['people' => [], 'roots' => [], 'additional' => []];
         }
 
         $people = CipPerson::query()
@@ -232,14 +234,17 @@ class Package
             ->pluck('folder_id')
             ->all();
 
+        $rootIds = $apps->pluck('folder_id')->filter()->map(fn ($id) => (int) $id)->all();
+
         $additional = Folder::query()
-            ->whereIn('parent_id', $apps->pluck('folder_id')->filter()->all())
+            ->whereIn('parent_id', $rootIds)
             ->whereIn('name', [Tree::ADDITIONAL, Tree::POST_APPROVAL])
             ->pluck('id')
             ->all();
 
         return self::$maps = [
             'people' => array_fill_keys(array_map('intval', $people), true),
+            'roots' => array_fill_keys($rootIds, true),
             'additional' => array_fill_keys(array_map('intval', $additional), true),
         ];
     }
@@ -247,23 +252,44 @@ class Package
     /** @return list<int> */
     private static function originalFolderIds(CipApplication $application): array
     {
-        $application->loadMissing('people');
+        $root = $application->folder_id ? Folder::find($application->folder_id) : null;
 
-        $ids = [];
-
-        foreach ($application->people as $person) {
-            if (! $person->folder_id) {
-                continue;
+        if (! $root) {
+            $application->loadMissing('people');
+            $ids = [];
+            foreach ($application->people as $person) {
+                if (! $person->folder_id) {
+                    continue;
+                }
+                $ids[] = (int) $person->folder_id;
+                $folder = Folder::find($person->folder_id);
+                if ($folder) {
+                    $ids = array_merge($ids, FolderTree::descendantIds($folder));
+                }
             }
 
-            $ids[] = (int) $person->folder_id;
-            $folder = Folder::find($person->folder_id);
-            if ($folder) {
-                $ids = array_merge($ids, FolderTree::descendantIds($folder));
-            }
+            return array_values(array_unique($ids));
         }
 
-        return array_values(array_unique($ids));
+        $ids = array_merge([(int) $root->id], FolderTree::descendantIds($root));
+        $skip = [];
+
+        foreach (
+            Folder::query()
+                ->where('parent_id', $root->id)
+                ->whereIn('name', [Tree::ADDITIONAL, Tree::POST_APPROVAL])
+                ->get() as $open
+        ) {
+            $skip[] = (int) $open->id;
+            $skip = array_merge($skip, FolderTree::descendantIds($open));
+        }
+
+        $skip = array_fill_keys($skip, true);
+
+        return array_values(array_filter(
+            $ids,
+            fn ($id) => ! isset($skip[(int) $id]),
+        ));
     }
 
     /**

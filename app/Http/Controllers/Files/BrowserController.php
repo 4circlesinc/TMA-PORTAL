@@ -8,6 +8,7 @@ use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Package;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\SyncScope;
@@ -156,7 +157,12 @@ class BrowserController extends BaseFilesController
 
         return response()->json([
             'section' => $section,
-            'folder' => $current ? ['id' => $current->uuid, 'name' => FolderProvisioner::displayName($current)] : null,
+            'folder' => $current ? [
+                'id' => $current->uuid,
+                'name' => FolderProvisioner::displayName($current),
+                'permissions' => FileAccess::folderListingPerms($user, $current),
+                'packageLocked' => Package::locksFolder($current),
+            ] : null,
             'breadcrumb' => $current ? $this->breadcrumb($current) : [],
             'folders' => $folders->map(fn (Folder $f) => $presenter->folder($f, $withStats))->values(),
             'files' => $files->map(fn (FileItem $f) => $presenter->file($f))->values(),

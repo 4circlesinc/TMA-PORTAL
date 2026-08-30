@@ -18561,6 +18561,10 @@ button.tma-file-status-chip:focus-visible,
   cursor: pointer;
 }
 
+.tma-dash__clients-folders-add[hidden] {
+  display: none;
+}
+
 .tma-dash__clients-folders-add:hover {
   background: var(--color-hover);
   color: var(--color-text-primary);
@@ -18570,6 +18574,14 @@ button.tma-file-status-chip:focus-visible,
   width: 14px;
   height: 14px;
   opacity: 0.6;
+}
+
+.tma-dash__clients-folders-lock {
+  margin: 0;
+}
+
+.tma-dash__clients-folders-lock[hidden] {
+  display: none;
 }
 
 .tma-dash__clients-folders-actions {

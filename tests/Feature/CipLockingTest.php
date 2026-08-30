@@ -20,6 +20,7 @@ use App\Support\Cip\DocumentRequests;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Package;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
@@ -35,8 +36,8 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §17 — after confirm, original person folders are view-only; Additional
- * Documents stays writable, with versioning still on.
+ * §17 — after confirm, original person folders and the application root are
+ * view-only; Additional Documents stays writable, with versioning still on.
  */
 class CipLockingTest extends TestCase
 {
@@ -390,7 +391,8 @@ class CipLockingTest extends TestCase
 
         $this->actingAs($staff)->getJson('/portal/files/folders/'.$additional->uuid)
             ->assertOk()
-            ->assertJsonPath('permissions.upload', true);
+            ->assertJsonPath('permissions.upload', true)
+            ->assertJsonPath('packageLocked', false);
 
         $this->actingAs($staff)->postJson('/portal/files/folders', [
             'name' => 'Queries',
@@ -410,6 +412,69 @@ class CipLockingTest extends TestCase
         ])->assertCreated();
 
         $this->assertSame(2, FileVersion::where('file_id', $file->id)->count());
+    }
+
+    public function test_the_application_root_is_frozen_after_lock(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
+        $root = Folder::findOrFail($application->folder_id);
+
+        $this->assertTrue(Package::locksFolder($root));
+        $this->assertFalse(FileAccess::can($staff, 'upload', $root));
+        $this->assertFalse(FileAccess::can($staff, 'rename', $root));
+        $this->assertTrue(FileAccess::can($staff, 'view', $root));
+
+        $this->actingAs($staff)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->create('beside.pdf', 12, 'application/pdf'),
+            'folder' => $root->uuid,
+        ])->assertForbidden();
+
+        $this->actingAs($staff)->postJson('/portal/files/folders', [
+            'name' => 'Extra drawer',
+            'parent' => $root->uuid,
+        ])->assertForbidden();
+    }
+
+    public function test_listing_a_locked_person_folder_is_view_only(): void
+    {
+        ['staff' => $staff, 'main' => $main] = $this->lockedPackage();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/?section=all&folder='.$main->uuid)
+            ->assertOk()
+            ->assertJsonPath('folder.packageLocked', true)
+            ->assertJsonPath('folder.permissions.upload', false);
+    }
+
+    public function test_listing_additional_documents_stays_writable_after_lock(): void
+    {
+        ['staff' => $staff, 'application' => $application, 'additional' => $additional, 'main' => $main] = $this->lockedPackage();
+        $root = Folder::findOrFail($application->folder_id);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/?section=all&folder='.$additional->uuid)
+            ->assertOk()
+            ->assertJsonPath('folder.packageLocked', false)
+            ->assertJsonPath('folder.permissions.upload', true);
+
+        $listing = $this->actingAs($staff)
+            ->getJson('/portal/files/?section=all&folder='.$root->uuid)
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($listing['folder']['packageLocked']);
+        $this->assertFalse($listing['folder']['permissions']['upload']);
+
+        $additionalRow = collect($listing['folders'])->firstWhere('id', $additional->uuid);
+        $mainRow = collect($listing['folders'])->firstWhere('id', $main->uuid);
+
+        $this->assertNotNull($additionalRow);
+        $this->assertFalse($additionalRow['packageLocked']);
+        $this->assertTrue($additionalRow['permissions']['upload']);
+
+        $this->assertNotNull($mainRow);
+        $this->assertTrue($mainRow['packageLocked']);
+        $this->assertFalse($mainRow['permissions']['upload']);
     }
 
     public function test_a_pre_lock_slot_link_cannot_write_after_confirm(): void

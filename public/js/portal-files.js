@@ -99,6 +99,8 @@
     section: 'all',
     folder: null,        // current folder uuid (browsing) or null = section root
     folderName: '',
+    folderPermissions: null,
+    packageLocked: false,
     breadcrumb: [],
     view: 'table',       // 'table' | 'grid'
     sort: 'name',
@@ -326,6 +328,7 @@
 
   function canCreateHere() {
     if (isRecycle() || state.section === 'recent' || state.section === 'shared') return false;
+    if (state.folderPermissions && state.folderPermissions.upload === false) return false;
     var staffLibrary = window.TMAPortalAccess && window.TMAPortalAccess.can('files.viewOrg');
     if (state.section === 'all' && !staffLibrary) {
       if (!state.folder) return false;
@@ -465,6 +468,8 @@
       state.owners = res.owners || [];
       state.breadcrumb = res.breadcrumb || [];
       if (res.folder) state.folderName = res.folder.name;
+      state.folderPermissions = (res.folder && res.folder.permissions) || null;
+      state.packageLocked = !!(res.folder && res.folder.packageLocked);
       pruneSelection();
       render();
     };
@@ -742,6 +747,10 @@
   // "New folder" creates an auto-named "Untitled folder" immediately, pops it
   // in, and drops straight into inline rename (text pre-selected).
   function createUntitledFolder() {
+    if (!canCreateHere()) {
+      ui().toast('The original submission is locked. New files go in Additional Documents.');
+      return;
+    }
     net().fetchJSON(net().url('/folders'), { method: 'POST', json: { name: 'Untitled folder', parent: state.folder, auto: true } })
       .then(function (folder) { insertItem(folder); startRename(folder.id); })
       .catch(function (err) { ui().toast(err.message || 'Could not create folder'); });
@@ -815,6 +824,10 @@
     var html = '<div class="tma-portal-page tma-portal-page--files">';
     html += renderBreadcrumb();
     html += '<div data-sync-host>' + syncStatusHtml() + '</div>';
+    if (state.packageLocked) {
+      html += ui().banner('info',
+        'The original submission is locked. New files go in <strong>Additional Documents</strong>.');
+    }
     html += renderToolbar();
 
     html += '<div class="tma-portal-files__body" data-files-body>';
@@ -862,11 +875,14 @@
       ? ui().btn({ label: 'Upload files', icon: 'ArrowLineUp', attrs: ' data-files-action="upload"' })
       : '';
     if (isRecycle()) btn = '';
+    var subtitle = canCreateHere()
+      ? 'Create a folder or upload files to get started.'
+      : (state.packageLocked
+        ? 'The original submission is locked. Open Additional Documents to upload new files.'
+        : (meta.emptyHint || ''));
     return ui().emptyState({
-      title: meta.empty,
-      subtitle: canCreateHere()
-        ? 'Create a folder or upload files to get started.'
-        : (meta.emptyHint || ''),
+      title: state.packageLocked ? 'Original submission is locked' : meta.empty,
+      subtitle: subtitle,
       button: btn,
     });
   }
@@ -1207,7 +1223,8 @@
         // title: the full name is still reachable when the cell clips it.
         '<button type="button" class="tma-portal-file-link" data-files-name="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         commentChip(it) + statusChip(it) + busySpin + '</span></td>' +
-        '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--type">' +
+          esc(typeLabel) + (it.type === 'folder' && it.packageLocked ? ' · View only' : '') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '-') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
@@ -1244,7 +1261,8 @@
               ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
             : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">'));
       var sub = it.type === 'folder'
-        ? (((it.fileCount || 0) + (it.folderCount || 0)) + ' items')
+        ? (((it.fileCount || 0) + (it.folderCount || 0)) + ' items' +
+          (it.packageLocked ? ' · View only' : ''))
         : (it.sizeLabel || '');
       var busySpin = busy ? '<img class="tma-portal-row-spinner tma-portal-row-spinner--card" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
       return '<div class="tma-portal-file-card' + cls + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0"' +
@@ -1579,6 +1597,21 @@
     });
 
     el.addEventListener('dragover', function (e) {
+      if (hasFiles(e) && !canCreateHere() && !isRecycle()) {
+        var into = folderRowUploadTarget(e);
+        if (into) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!into.el.classList.contains('is-drop-into')) {
+            clearMoveHighlight();
+            into.el.classList.add('is-drop-into');
+          }
+          return;
+        }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
       var t = moveTarget(e);
       if (!t) return;
       e.preventDefault();
@@ -1592,6 +1625,17 @@
     });
 
     el.addEventListener('drop', function (e) {
+      if (hasFiles(e) && !canCreateHere() && !isRecycle()) {
+        var into = folderRowUploadTarget(e);
+        clearMoveHighlight();
+        e.preventDefault();
+        if (into && e.dataTransfer.files && e.dataTransfer.files.length) {
+          window.TMAUpload.add(e.dataTransfer.files, { folderId: into.id });
+        } else {
+          ui().toast('The original submission is locked. New files go in Additional Documents.');
+        }
+        return;
+      }
       var t = moveTarget(e);
       clearMoveHighlight();
       if (!t) return;
@@ -1607,6 +1651,15 @@
       if (d) d.classList.remove('is-dragging');
       draggingItems = null;
     });
+  }
+
+  // A writable folder row while the current folder is frozen (Additional Documents).
+  function folderRowUploadTarget(e) {
+    var row = e.target.closest('[data-files-row]');
+    if (!row || row.getAttribute('data-type') !== 'folder') return null;
+    var it = findItem(row.getAttribute('data-id'));
+    if (!it || !perm(it, 'upload')) return null;
+    return { el: row, id: it.id };
   }
 
   // A valid drop target: a folder row/card, or a breadcrumb crumb (null = root).
@@ -2013,7 +2066,10 @@
   }
 
   function openFolder(uuid) {
+    var it = findItem(uuid);
     state.folder = uuid;
+    state.folderPermissions = (it && it.permissions) || null;
+    state.packageLocked = !!(it && it.packageLocked);
     state.selected = {};
     state.page = 1;
     syncUrl();
@@ -5619,6 +5675,10 @@
    */
   function requestFilesHere(item) {
     if (!window.TMAFileRequests) { ui().toast('Request Files isn’t available right now.'); return; }
+    if (item ? !perm(item, 'upload') : !canCreateHere()) {
+      ui().toast('The original submission is locked. New files go in Additional Documents.');
+      return;
+    }
 
     var folderId = item ? item.id : state.folder;
     var crumb = state.breadcrumb.length ? state.breadcrumb[state.breadcrumb.length - 1] : null;
@@ -5656,6 +5716,10 @@
   }
 
   function triggerUpload(folder) {
+    if (!canCreateHere()) {
+      ui().toast('The original submission is locked. New files go in Additional Documents.');
+      return;
+    }
     ensureInputs();
     (folder ? folderInput : fileInput).click();
   }

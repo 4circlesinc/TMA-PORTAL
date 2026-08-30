@@ -7141,6 +7141,10 @@
           '</div>'
         : '') +
       '</div>' +
+      '<div class="tma-portal-banner tma-portal-banner--info tma-dash__clients-folders-lock" data-clients-folder-lock-note hidden>' +
+        '<img class="tma-portal-banner__icon" src="images/icons/phosphor/Info.svg" alt="" width="16" height="16">' +
+        '<span class="tma-portal-banner__text">The original submission is locked. New files go in <strong>Additional Documents</strong>.</span>' +
+      '</div>' +
       (uuid
         ? '<div class="tma-dash__clients-folders" data-clients-folder-drop data-folder-uuid="' + esc(uuid) + '" data-root-uuid="' + esc(uuid) + '">' +
           '<div data-clients-folder-canvas data-morph-skip>' +
@@ -7347,18 +7351,22 @@
       if (!present[id]) delete clientFolderSelected[id];
     });
     if (!folders.length && !files.length) {
-      // Same illustrated empty state as File Library folders, plain grey copy
-      // read as a broken list rather than an intentional empty folder.
+      var locked = !!(res && res.folder && res.folder.packageLocked);
       var ui = window.TMAPortalUI;
       canvas.innerHTML = '<div data-clients-folder-list>' +
         (ui && ui.emptyState
           ? ui.emptyState({
               illustration: 'Illustration03',
-              title: 'No files yet',
-              subtitle: 'Use “Upload”, “New folder”, or drag files here.',
+              title: locked ? 'Original submission is locked' : 'No files yet',
+              subtitle: locked
+                ? 'New files go in Additional Documents.'
+                : 'Use “Upload”, “New folder”, or drag files here.',
             })
           : '<div class="tma-dash__clients-assigned-empty">' +
-            'No files yet. Use “Upload”, “New folder”, or drag files here.</div>') +
+            (locked
+              ? 'Original submission is locked. New files go in Additional Documents.'
+              : 'No files yet. Use “Upload”, “New folder”, or drag files here.') +
+            '</div>') +
         '</div>';
       return;
     }
@@ -7375,7 +7383,8 @@
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
           clientCommentChip(f) + '</span>' +
-        '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
+        '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) +
+          (f.packageLocked ? ' · View only' : '') + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
         '</button>';
     });
@@ -7435,6 +7444,36 @@
         '</span></button>';
     });
     canvas.innerHTML = html;
+  }
+
+  function applyClientFolderWriteAccess(root, res) {
+    var folder = res && res.folder;
+    var canUpload = !(folder && folder.permissions && folder.permissions.upload === false);
+    var locked = !!(folder && folder.packageLocked);
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (wrap) {
+      if (canUpload) wrap.removeAttribute('data-folder-readonly');
+      else wrap.setAttribute('data-folder-readonly', '1');
+    }
+    var note = root.querySelector('[data-clients-folder-lock-note]');
+    if (note) note.hidden = !locked;
+    [
+      '[data-clients-folder-new]',
+      '[data-clients-folder-upload]',
+      '[data-clients-folder-request]',
+    ].forEach(function (sel) {
+      var btn = root.querySelector(sel);
+      if (btn) btn.hidden = !canUpload;
+    });
+  }
+
+  function clientFolderAllowsUpload(root, destId) {
+    if (destId && destId !== clientFolderCurrentUuid(root)) {
+      var row = clientFolderRow(destId);
+      if (row && row.permissions) return row.permissions.upload !== false;
+    }
+    var wrap = root && root.querySelector('[data-clients-folder-drop]');
+    return !(wrap && wrap.hasAttribute('data-folder-readonly'));
   }
 
   /* One tab's count chip, patched in place.
@@ -7727,6 +7766,7 @@
       // listing must not redraw the folder they have already left.
       if (wrap.getAttribute('data-folder-uuid') !== uuid) return;
       adoptFolderTrail(root, res);
+      applyClientFolderWriteAccess(root, res);
       renderClientFolderList(root, res);
       bindClientFolderRows(root);
       captureClientDocCount(root, res);
@@ -7772,6 +7812,10 @@
 
   function uploadToClientFolder(files, uuid) {
     if (!files || !files.length || !window.TMAUpload) return;
+    if (!clientFolderAllowsUpload(clientsMountRoot || document, uuid)) {
+      clientsToast('The original submission is locked. New files go in Additional Documents.', 'warning');
+      return;
+    }
     window.TMAUpload.add(files, { folderId: uuid });
     clientsToast(files.length > 1 ? files.length + ' files uploading…' : 'Uploading…', 'neutral');
   }
@@ -7789,6 +7833,10 @@
   function createClientUntitledFolder(root) {
     var uuid = clientFolderCurrentUuid(root);
     if (!uuid || !filesNet()) return;
+    if (!clientFolderAllowsUpload(root, uuid)) {
+      clientsToast('The original submission is locked. New files go in Additional Documents.', 'warning');
+      return;
+    }
     filesNet().fetchJSON(filesNet().url('/folders'), {
       method: 'POST',
       json: { name: 'Untitled folder', parent: uuid, auto: true },
@@ -7979,6 +8027,10 @@
         var here = clientFolderNav
           ? clientFolderNav.path[clientFolderNav.path.length - 1]
           : { uuid: rootUuid, name: 'Client documents' };
+        if (!clientFolderAllowsUpload(root, here.uuid)) {
+          clientsToast('The original submission is locked. New files go in Additional Documents.', 'warning');
+          return;
+        }
         var panel = requestBtn.closest('[data-clients-panel-client]');
         var clientId = panel ? panel.getAttribute('data-clients-panel-client') : null;
         var contact = clientId ? contactFor(clientId) : null;
@@ -8054,6 +8106,15 @@
     wrap.addEventListener('dragover', function (e) {
       var folderRow = e.target.closest('[data-clients-subfolder]');
       if (hasOsFiles(e)) {
+        var dest = folderRow && wrap.contains(folderRow)
+          ? folderRow.getAttribute('data-clients-subfolder')
+          : current();
+        if (!clientFolderAllowsUpload(root, dest)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'none';
+          clearDropHighlight();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
@@ -8083,6 +8144,11 @@
       if (hasOsFiles(e) && e.dataTransfer.files && e.dataTransfer.files.length) {
         e.preventDefault();
         e.stopPropagation();
+        if (!clientFolderAllowsUpload(root, dest)) {
+          clientsToast('The original submission is locked. New files go in Additional Documents.', 'warning');
+          draggingItems = null;
+          return;
+        }
         uploadToClientFolder(e.dataTransfer.files, dest);
         draggingItems = null;
         return;
