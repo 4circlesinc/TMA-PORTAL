@@ -1854,17 +1854,21 @@
 }
 
 /* Latest workflow cards under the KPI row: one line, as many as fit, the
-   rest behind scroll and the arrows. */
+   rest behind scroll and the arrows. See all and the arrows sit on the
+   cards, top right, and only come up when the row is hovered. */
 .tma-portal-wf-strip {
+  position: relative;
   min-width: 0;
 }
 
 .tma-portal-wf-strip__head {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-12);
-  margin-bottom: var(--space-12);
   min-width: 0;
 }
 
@@ -1873,6 +1877,25 @@
   align-items: center;
   gap: var(--space-12);
   flex-shrink: 0;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: var(--color-white);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+@media (hover: hover) {
+  .tma-portal-wf-strip__head {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .tma-portal-wf-strip:hover .tma-portal-wf-strip__head,
+  .tma-portal-wf-strip:focus-within .tma-portal-wf-strip__head {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .tma-portal-wf-strip__nav {
