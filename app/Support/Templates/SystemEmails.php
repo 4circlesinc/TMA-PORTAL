@@ -53,6 +53,8 @@ class SystemEmails
 
     private const CIP_HI = '{{#recipient}}Hi {{recipient}},{{/recipient}}{{^recipient}}Hello,{{/recipient}}';
 
+    private const CIP_FOOT = 'This is an automated notice from {{site}}. If this does not look right, reply to this email or contact us at support@tmantoine.com.';
+
     private const IGNORE_NOTE = "If you weren't expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.";
 
     /** @return list<string> */
@@ -1128,7 +1130,15 @@ class SystemEmails
             'greeting' => self::CIP_HI,
             'title' => '{{number}}: {{status}}',
             'lead' => '{{applicant}}’s application now stands at {{status}}.',
+            'body' => '{{applicant}}’s Citizenship by Investment application with {{provider}} is now at **{{status}}**. Open the application in the portal for the current checklist, comments and next step.',
             'button' => 'Open the application',
+            'footNote' => self::CIP_FOOT,
+        ];
+        $statusBodies = [
+            'cip-status-new' => 'This file has been registered. A reviewing officer will be assigned next. You do not need to send anything further unless you are asked.',
+            'cip-status-assessment-feedback' => 'The reviewing officer is assessing each document on {{applicant}}’s file. You will be emailed separately if any document needs an update.',
+            'cip-status-pending-review' => 'The original package has gone to the Unit. {{applicant}}’s file now waits for their review. You do not need to resubmit unless the Unit asks for more.',
+            'cip-status-background-check' => 'The Unit has accepted {{applicant}}’s file for processing. A background check is underway. There is nothing to upload unless you are asked.',
         ];
         $statuses = [];
         foreach ([
@@ -1144,7 +1154,7 @@ class SystemEmails
                 'variables' => $vars + ['status' => 'The new status'],
                 'sample' => $sample + ['status' => $label],
                 'sampleExtras' => $details,
-                'copy' => $statusCopy,
+                'copy' => array_merge($statusCopy, ['body' => $statusBodies[$key]]),
             ];
         }
 
@@ -1162,7 +1172,9 @@ class SystemEmails
                     'greeting' => self::CIP_HI,
                     'title' => '{{number}} is in review',
                     'lead' => '{{number}} stands at {{status}}.',
+                    'body' => 'This Citizenship by Investment file has been assigned for review. Open the application to begin the document assessment for {{applicant}} ({{provider}}).',
                     'button' => 'Open the application',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
             'cip-updates-required' => [
@@ -1186,8 +1198,9 @@ class SystemEmails
                     'greeting' => self::CIP_HI,
                     'title' => 'Updates required on {{number}}',
                     'lead' => 'The reviewing officer has assessed {{applicant}}’s documents and sent {{sent}} with notes.',
-                    'body' => '{{documents}}',
+                    'body' => "Please replace or re-upload each item below. The reviewing officer's reason is next to the document name.\n\n{{documents}}",
                     'button' => 'Open the documents',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
             'cip-ready-to-submit' => [
@@ -1203,7 +1216,9 @@ class SystemEmails
                     'greeting' => self::CIP_HI,
                     'title' => '{{number}} is ready to submit',
                     'lead' => 'Assessment feedback is complete, {{applicant}}’s file is ready to submit. Confirm submission to lock the original package.',
+                    'body' => 'Every required document on {{applicant}}’s file ({{provider}}) has been accepted. Confirm submission to lock the original package. After that, the originals cannot be replaced; further Unit requests go through Additional Documents.',
                     'button' => 'Confirm submission',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
             'cip-non-compliant' => [
@@ -1219,7 +1234,9 @@ class SystemEmails
                     'greeting' => self::CIP_HI,
                     'title' => '{{number}} is non-compliant',
                     'lead' => 'The Unit has requested additional information on {{applicant}}’s file. Upload the required documents through Additional Documents.',
+                    'body' => 'Use Additional Documents on {{applicant}}’s application ({{provider}}). Do not replace files in the original submission package.',
                     'button' => 'Open Additional Documents',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
             'cip-delayed' => [
@@ -1235,7 +1252,9 @@ class SystemEmails
                     'greeting' => self::CIP_HI,
                     'title' => '{{number}} is delayed',
                     'lead' => '{{days}} days have passed since {{applicant}}’s file was accepted for processing, and no decision has been recorded.',
+                    'body' => 'Please review {{applicant}}’s file with {{provider}} and follow up with the Unit. The application stays open until a decision is recorded.',
                     'button' => 'Open the application',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
             'cip-decision' => [
@@ -1267,6 +1286,7 @@ class SystemEmails
                     'lead' => '{{letterLead}}',
                     'body' => '{{letterBody}}',
                     'button' => 'Open the application',
+                    'footNote' => self::CIP_FOOT,
                 ],
             ],
         ] + $statuses + [

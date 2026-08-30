@@ -203,6 +203,51 @@ class SystemEmailTemplatesTest extends TestCase
         $this->assertSame('GAL26-00004: Assessment Feedback', $feedback->payload['title']);
     }
 
+    public function test_cip_notices_are_complete_notices_not_a_greeting_and_a_status(): void
+    {
+        $facts = [
+            'number' => 'GAL26-00004',
+            'applicant' => 'Testing Francis',
+            'provider' => 'Galaxy Partners',
+            'familySize' => 1,
+            'statusLabel' => 'Review Application',
+            'roleLabel' => 'Reviewing Officer',
+        ];
+
+        $mails = [
+            Postcards::cipStatus($facts, Status::NEW, 'https://x.test', 'Priya'),
+            Postcards::cipStatus($facts, Status::ASSESSMENT_FEEDBACK, 'https://x.test', 'Priya'),
+            Postcards::cipStatus($facts, Status::PENDING_REVIEW, 'https://x.test', 'Priya'),
+            Postcards::cipStatus($facts, Status::BACKGROUND_CHECK, 'https://x.test', 'Priya'),
+            Postcards::cipAssigned($facts, null, 'https://x.test', 'SUBJ', 'Priya'),
+            Postcards::cipUpdatesRequired(
+                $facts,
+                [['label' => 'Passport bio page', 'reason' => 'the copy is not certified']],
+                null,
+                'https://x.test',
+                'Priya',
+                'SUBJ',
+            ),
+            Postcards::cipReadyToSubmit($facts, 'https://x.test', 'Priya', 'SUBJ'),
+            Postcards::cipNonCompliant($facts, 'https://x.test', null, 'Priya'),
+            Postcards::cipDelayed($facts, 'https://x.test', null, 180, 'Priya'),
+        ];
+
+        foreach ($mails as $mail) {
+            $this->assertNotEmpty($mail->payload['greeting'] ?? null, $mail->payload['title'].' has no greeting');
+            $this->assertNotEmpty($mail->payload['title'] ?? null);
+            $this->assertNotEmpty($mail->payload['lead'] ?? null, $mail->payload['title'].' has no lead');
+            $this->assertNotEmpty($mail->payload['bodyHtml'] ?? null, $mail->payload['title'].' has no body');
+            $this->assertNotEmpty($mail->payload['details'] ?? [], $mail->payload['title'].' has no application details');
+            $this->assertNotEmpty($mail->payload['button']['url'] ?? null, $mail->payload['title'].' has no button');
+            $this->assertNotEmpty($mail->payload['footNote'] ?? null, $mail->payload['title'].' has no closing');
+            $this->assertStringContainsString('Galaxy Partners', implode("\n", [
+                $mail->payload['bodyHtml'] ?? '',
+                collect($mail->payload['details'] ?? [])->map(fn ($row) => implode(' ', $row))->implode("\n"),
+            ]));
+        }
+    }
+
     public function test_the_markup_escapes_what_people_typed(): void
     {
         $html = Markup::html(
