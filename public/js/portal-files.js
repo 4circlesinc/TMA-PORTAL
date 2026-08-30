@@ -2818,17 +2818,6 @@
      * (review.next), rather than a fixed row: the allowed moves are a rule
      * about the workflow, and duplicating it here would let the two disagree.
      */
-    /* Mirrors ReviewStatus::tone so a review badge and an approval badge are
-       the same four colours meaning the same four things. */
-    function reviewTone(status) {
-      if (status === 'ready_for_submission' || status === 'approved') return 'success';
-      if (status === 'update_required' || status === 'rejected' || status === 'changes_requested') return 'danger';
-      if (status === 'application_review' || status === 'pending_review' || status === 'under_review' || status === 'awaiting_approval') return 'pending';
-      if (status === 'pending_upload') return 'neutral';
-
-      return 'neutral';
-    }
-
     function reviewHtml(f) {
       var r = f.review;
       if (!r || !r.status) return '';
@@ -6517,6 +6506,20 @@
     { id: 'ready_for_submission', label: 'Ready for submission', icon: 'CheckCircle' },
   ];
 
+  /* Mirrors ReviewStatus::tone so a review badge and an approval badge are
+     the same four colours meaning the same four things. Module scope, not
+     the viewer's: reviewStateMeta paints a pick from the list and the
+     Documents tab too, and a viewer-only copy threw ReferenceError before
+     the PATCH ever left. */
+  function reviewTone(status) {
+    if (status === 'ready_for_submission' || status === 'approved') return 'success';
+    if (status === 'update_required' || status === 'rejected' || status === 'changes_requested') return 'danger';
+    if (status === 'application_review' || status === 'pending_review' || status === 'under_review' || status === 'awaiting_approval') return 'pending';
+    if (status === 'pending_upload') return 'neutral';
+
+    return 'neutral';
+  }
+
   function documentReviewStatus(item) {
     if (!item || item.type === 'folder') return null;
     var id = (item.review && item.review.status) || (item.status && item.status.status) || null;
@@ -7208,18 +7211,16 @@
    * column's control came to look broken.
    */
   /**
-   * Apply a menu pick on pointerdown, not click.
+   * Apply a menu pick.
    *
-   * Closing the menu on click lets the same gesture land on whatever was
-   * under it — the file viewer, the Approvals panel — so the status never
-   * ran. Pointerdown on the row itself is the choice; the later click is
-   * swallowed.
+   * On click, so Enter or Space on a focused row counts as well as a mouse.
+   * Propagation stops here: with the viewer open the menu hangs inside it,
+   * and the viewer's own click router must never be handed a menu row.
    */
   function bindMenuPicks(el, list) {
     if (!el || el._picksBound) return;
     el._picksBound = true;
-    el.addEventListener('pointerdown', function (e) {
-      if (e.button !== 0) return;
+    el.addEventListener('click', function (e) {
       var off = e.target.closest('[data-ctx-off]');
       if (off) {
         e.preventDefault();
@@ -7230,7 +7231,7 @@
         return;
       }
       var b = e.target.closest('[data-ctx]');
-      if (!b) return;
+      if (!b || b.disabled) return;
       e.preventDefault();
       e.stopPropagation();
       var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
@@ -7238,7 +7239,7 @@
       var fn = picked && picked.fn;
       closeContextMenu();
       if (fn) fn();
-    }, true);
+    });
   }
 
   function openContextMenu(x, y, item, list) {
