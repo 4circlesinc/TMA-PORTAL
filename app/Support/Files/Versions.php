@@ -75,9 +75,7 @@ class Versions
         ?FileVersion $restoredFrom = null,
     ): FileVersion {
         if (Confirmation::locksFile($file)) {
-            throw new \InvalidArgumentException(
-                'This application’s original submission package is locked and cannot be modified.',
-            );
+            throw new \InvalidArgumentException(Confirmation::LOCKED_MESSAGE);
         }
 
         // A file created before versioning existed has no history yet; give it

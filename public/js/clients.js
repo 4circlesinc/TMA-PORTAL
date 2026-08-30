@@ -74,6 +74,23 @@
     return Object.prototype.hasOwnProperty.call(APPLICATIONS, id) ? APPLICATIONS[id] : undefined;
   }
 
+  function isApplicationLocked(applicationId) {
+    if (!applicationId) return false;
+    var rows = APP_TABLE.rows || [];
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].id === applicationId && rows[i].locked) return true;
+    }
+    var uid;
+    for (uid in APPLICATIONS) {
+      if (!Object.prototype.hasOwnProperty.call(APPLICATIONS, uid)) continue;
+      if (APPLICATIONS[uid] && APPLICATIONS[uid].id === applicationId && APPLICATIONS[uid].locked) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /*
    * Client uids that belong to a CIP application, even while the file itself
    * is being refetched.
@@ -4890,6 +4907,7 @@
       // asked for in the form a few inches below.
       var editingApp = state.screen === 'edit-application';
       var newPhase = state.applicationPhase || 'pre_approval';
+      var packageLocked = editingApp && !!state.applicationLocked;
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
         renderClientsBackArrow(state) +
@@ -4898,8 +4916,10 @@
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
-        '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>' +
-        (editingApp ? 'Save' : 'Add') + '</button>' +
+        (packageLocked
+          ? ''
+          : '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>' +
+            (editingApp ? 'Save' : 'Add') + '</button>') +
         '</div></div>';
     } else if (state.screen === 'add' || state.screen === 'edit') {
       toolbar = renderContactFormToolbar(state);
@@ -11340,6 +11360,11 @@
       window.TMACipIntake.open(intakeMount, {
         applicationId: editing ? state.applicationId : null,
         phase: editing ? null : (state.applicationPhase || 'pre_approval'),
+        onReady: function (application) {
+          state.applicationLocked = !!(application && application.locked);
+          var btn = document.querySelector('[data-cip-save]');
+          if (state.applicationLocked && btn) btn.remove();
+        },
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
           if (!btn) return;
@@ -12707,6 +12732,7 @@
       // Which application the form is editing. Cleared on the way out, or a
       // later New application would open with the last one's answers in it.
       state.applicationId = screen === 'edit-application' ? (applicationId || state.applicationId) : null;
+      state.applicationLocked = screen === 'edit-application' && isApplicationLocked(state.applicationId);
       if (screen === 'new-application') {
         state.applicationPhase = state.applicationPhase || 'pre_approval';
       } else if (screen !== 'edit-application') {

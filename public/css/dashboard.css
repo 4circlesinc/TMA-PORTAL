@@ -19271,6 +19271,17 @@ button.tma-file-status-chip:focus-visible,
  * The remove badge moves inside the corner and grows with it — at this size
  * a badge hanging off the edge would sit over whatever the card is next to.
  */
+.tma-dash__clients-photo.is-locked .tma-dash__clients-photo-btn {
+  cursor: default;
+  pointer-events: none;
+  border-style: solid;
+}
+
+.tma-dash__clients-photo.is-locked .tma-dash__clients-photo-btn:hover {
+  border-color: var(--color-border-medium);
+  background: var(--color-bg-input);
+}
+
 .tma-dash__clients-photo--passport .tma-dash__clients-photo-wrap {
   width: min(216px, 100%);
 }

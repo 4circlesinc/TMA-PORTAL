@@ -303,7 +303,12 @@
    * filing; everyone else's required flags show on the form but the checklist
    * holds the door until those uploads arrive.
    */
+  function packageLocked() {
+    return !!(state.record && state.record.locked);
+  }
+
   function isRequired(path) {
+    if (packageLocked()) return false;
     if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
 
     return requiredPaths().indexOf(path) !== -1
@@ -325,8 +330,25 @@
     return isRequired(path) ? ' aria-required="true"' : '';
   }
 
+  function lockedField(path, shown, opts) {
+    opts = opts || {};
+    return '<div class="tma-portal-field tma-portal-field--locked">' +
+      '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
+      '<p class="tma-portal-field__static">' + esc(shown || '—') + '</p>' +
+      '</div>';
+  }
+
+  function selectShown(path, options) {
+    var value = String(state.draft[path] || '');
+    for (var i = 0; i < options.length; i++) {
+      if (String(options[i].value) === value) return options[i].label;
+    }
+    return value;
+  }
+
   function textField(path, opts) {
     opts = opts || {};
+    if (packageLocked()) return lockedField(path, state.draft[path] || '', opts);
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
       '<input class="tma-portal-input" type="' + (opts.type || 'text') + '"' +
@@ -342,6 +364,7 @@
 
   function selectField(path, options, placeholder, opts) {
     opts = opts || {};
+    if (packageLocked()) return lockedField(path, selectShown(path, options), opts);
     var list = [{ value: '', label: placeholder }].concat(options);
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
@@ -363,6 +386,17 @@
      to judge the scan on, not an avatar disc. */
   function photoField(path) {
     var preview = state.previews[path];
+    if (packageLocked()) {
+      return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport is-locked">' +
+        fieldLabel(path, labelFor(path)) +
+        '<div class="tma-dash__clients-photo-wrap">' +
+        '<div class="tma-dash__clients-photo-btn"' +
+        (preview ? ' data-has-image="true"' : '') + '>' +
+        '<img src="' + ICON + 'User.svg" alt="" class="tma-dash__clients-photo-placeholder" width="120" height="120">' +
+        '<img alt="" class="tma-dash__clients-photo-preview" width="360" height="360"' +
+        (preview ? ' src="' + esc(preview) + '"' : '') + '>' +
+        '</div></div></div>';
+    }
     return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport' +
       (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, labelFor(path)) +
@@ -403,27 +437,34 @@
   function documentField(path) {
     var files = state.documents[path] || [];
     var meta = state.filedMeta[path];
-    var locked = meta && meta.uploaded && meta.status !== 'update_required';
+    var packageFrozen = packageLocked();
+    var locked = packageFrozen || (meta && meta.uploaded && meta.status !== 'update_required');
     var updateReason = meta && meta.status === 'update_required' && meta.updateReason
       ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' +
         esc(meta.updateReason) + '</p>'
       : '';
 
     if (locked) {
-      var lockedFile = meta.fileId
+      var lockedFile = meta && meta.fileId
         ? '<button type="button" class="tma-portal-drop__file tma-portal-drop__file--locked" data-cip-open-file="' + esc(meta.fileId) + '">' +
           '<img class="tma-portal-drop__file-icon" src="' + esc(fileIcon(meta.fileName || '')) + '" alt="" width="20" height="20">' +
           '<span class="tma-portal-drop__file-name">' + esc(meta.fileName || 'Filed document') + '</span>' +
           (meta.fileSize ? '<span class="tma-portal-drop__file-size">' + esc(fileSize(meta.fileSize)) + '</span>' : '') +
           '</button>'
         : '';
-      return '<div class="tma-portal-drop is-filled is-locked' +
+      return '<div class="tma-portal-drop' + (meta && meta.uploaded ? ' is-filled' : '') + ' is-locked' +
         (state.errors[path] ? ' is-invalid' : '') + '">' +
         fieldLabel(path, labelFor(path)) +
         lockedFile +
-        '<p class="tma-portal-drop__locked-note">Filed and in ' +
-        esc(meta.statusLabel || 'application review') +
-        '. Use <strong>Upload new version</strong> in the file viewer to replace.</p>' +
+        '<p class="tma-portal-drop__locked-note">' +
+        (packageFrozen
+          ? (meta && meta.uploaded
+            ? 'This document is part of the confirmed original package and cannot be replaced.'
+            : 'No file was filed in this slot.')
+          : 'Filed and in ' +
+            esc((meta && meta.statusLabel) || 'application review') +
+            '. Use <strong>Upload new version</strong> in the file viewer to replace.') +
+        '</p>' +
         fieldError(path) +
         '</div>';
     }
@@ -627,7 +668,7 @@
       rows += dependentRow(i, numbers[i]);
     }
 
-    var add = state.dependents < MAX_DEPENDENTS
+    var add = !packageLocked() && state.dependents < MAX_DEPENDENTS
       ? '<div class="tma-dash__clients-intake-add"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>' +
         'Add dependent</button></div>'
       : '';
@@ -635,9 +676,11 @@
     if (!state.dependents) {
       return titledCard('Dependents',
         '<p class="tma-portal-note tma-portal-note--empty">No dependents on this application.</p>' +
-        '<div class="tma-portal-form-actions">' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>Add dependent</button>' +
-        '</div>');
+        (packageLocked()
+          ? ''
+          : '<div class="tma-portal-form-actions">' +
+            '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>Add dependent</button>' +
+            '</div>'));
     }
 
     return rows + add;
@@ -654,11 +697,13 @@
       '<h3 class="tma-portal-section__title tma-portal-repeat__title">' + esc(title) + '</h3>' +
       '<div class="tma-portal-section__card">' +
       '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
-      '<div class="tma-portal-repeat__head">' +
-      '<button type="button" class="tma-portal-repeat__remove" data-cip-dependent-remove="' + i + '"' +
-      ' aria-label="Remove ' + esc(title) + '">' +
-      '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
-      '</div>' +
+      (packageLocked()
+        ? ''
+        : '<div class="tma-portal-repeat__head">' +
+          '<button type="button" class="tma-portal-repeat__remove" data-cip-dependent-remove="' + i + '"' +
+          ' aria-label="Remove ' + esc(title) + '">' +
+          '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
+          '</div>') +
       photoField(prefix + 'passportPhoto') +
       '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
@@ -713,7 +758,11 @@
 
     MORPH.patch(root,
       '<div class="tma-dash__clients-form" data-cip-form data-cip-intake-phase="' +
-      esc(state.phase || 'pre_approval') + '">' +
+      esc(state.phase || 'pre_approval') + '"' +
+      (packageLocked() ? ' data-cip-locked="1"' : '') + '>' +
+      (packageLocked()
+        ? '<p class="tma-portal-note">The original submission is locked. Submitted details and primary documents can be viewed but not changed.</p>'
+        : '') +
       // One summary at the top: a reader who pressed Add and nothing
       // happened deserves to be told why without hunting the page.
       (count
@@ -893,6 +942,10 @@
    * fire the second time.
    */
   function takeDocuments(root, path, chosen, input) {
+    if (packageLocked()) {
+      if (input) input.value = '';
+      return;
+    }
     var meta = state.filedMeta[path];
     if (meta && meta.uploaded && meta.status !== 'update_required') {
       if (input) input.value = '';
@@ -1144,6 +1197,10 @@
   function submit() {
     var root = state.root;
     if (!root || state.saving) return;
+    if (packageLocked()) {
+      ui().toastError('This application’s original submission package is locked and cannot be modified.');
+      return;
+    }
 
     var found = missing();
     if (Object.keys(found).length) {
@@ -1414,6 +1471,7 @@
     state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
+    state.onReady = opts.onReady || null;
     state.loading = true;
     render(root);
 
@@ -1443,6 +1501,7 @@
       if (answers[1]) prefill(answers[1]);
       state.loading = false;
       render(root);
+      if (state.onReady) state.onReady(state.record);
     }).catch(function () {
       state.loading = false;
       state.error = state.applicationId

@@ -175,6 +175,67 @@ class CipLockingTest extends TestCase
         $this->assertNull($file->fresh()->deleted_at);
     }
 
+    public function test_staff_cannot_change_submitted_person_fields_after_the_package_is_locked(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
+        $person = $application->people()->first();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid, [
+                'firstName' => 'Hacked',
+                'lastName' => 'Changed',
+                'gender' => 'Male',
+                'dateOfBirth' => '1990-01-01',
+                'countryOfBirth' => 'France',
+                'countryOfResidence' => 'France',
+                'occupation' => 'Spy',
+                'passportNumber' => 'ZZ999999',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+
+        $fresh = $person->fresh();
+        $this->assertSame('Chen', $fresh->first_name);
+        $this->assertSame('Wei', $fresh->last_name);
+        $this->assertNull($fresh->occupation);
+        $this->assertNull($fresh->passport_number);
+        $this->assertNull($fresh->date_of_birth);
+    }
+
+    public function test_the_service_provider_cannot_change_submitted_person_fields_after_the_package_is_locked(): void
+    {
+        ['contact' => $contact, 'application' => $application] = $this->lockedPackage();
+        $person = $application->people()->first();
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid, [
+                'firstName' => 'Hacked',
+                'lastName' => 'Changed',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+
+        $this->assertSame('Chen', $person->fresh()->first_name);
+        $this->assertSame('Wei', $person->fresh()->last_name);
+    }
+
+    public function test_submitted_person_fields_are_still_readable_after_the_package_is_locked(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->assertJsonPath('application.locked', true)
+            ->assertJsonPath('application.applicant.firstName', 'Chen')
+            ->assertJsonPath('application.applicant.lastName', 'Wei');
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonPath('applications.0.locked', true);
+    }
+
     public function test_staff_can_still_move_file_status_after_the_package_is_locked(): void
     {
         ['staff' => $staff, 'slot' => $slot] = $this->lockedPackage();
@@ -271,6 +332,15 @@ class CipLockingTest extends TestCase
 
         $this->assertSame(Phase::PRE_APPROVAL, $application->fresh()->phase);
         $this->assertNotNull($application->fresh()->locked_at);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid, [
+                'firstName' => 'Hacked',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+
+        $this->assertSame('Chen', $person->fresh()->first_name);
 
         $this->actingAs($staff)
             ->patchJson('/portal/files/files/'.$file->uuid.'/review', [

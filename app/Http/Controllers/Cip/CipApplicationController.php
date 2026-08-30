@@ -724,6 +724,7 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            'locked' => $application->isLocked(),
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer),
@@ -1051,16 +1052,16 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
         abort_unless(CipAccess::canCreate($user), 404);
-        abort_if(
-            $application->isLocked(),
-            422,
-            'This application’s original submission package is locked and cannot be modified.',
-        );
+        abort_if($application->isLocked(), 422, Confirmation::LOCKED_MESSAGE);
 
         Intake::normaliseDocuments($request);
         $data = $request->validate(Intake::rules(editing: true), Intake::messages());
 
-        $application = Intake::update($application, $user, $data);
+        try {
+            $application = Intake::update($application, $user, $data);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
 
         Live::staff(Live::CIP);
 

@@ -20,12 +20,15 @@ use Illuminate\Support\Facades\DB;
  * auto-flips here (see {@see Review::settle()}). The submitting party, the
  * service provider contact, or the private client on a PRI file, is told,
  * and must press Confirm submission. That press freezes the original package:
- * person folders become view-only (§17), outstanding upload links into them
- * are withdrawn, and Additional Documents stays writable. The status stays
+ * person folders become view-only (§17), submitted person and application
+ * fields cannot be changed, outstanding upload links into them are withdrawn,
+ * and Additional Documents stays writable. The status stays
  * Ready to submit until staff record the CIP number (§16).
  */
 class Confirmation
 {
+    public const LOCKED_MESSAGE = 'This application’s original submission package is locked and cannot be modified.';
+
     /**
      * What a screen needs to offer (or hide) the confirm verb.
      *
@@ -143,9 +146,7 @@ class Confirmation
     public static function guard(?CipApplication $application): void
     {
         if ($application?->isLocked()) {
-            throw new \InvalidArgumentException(
-                'This application’s original submission package is locked and cannot be modified.',
-            );
+            throw new \InvalidArgumentException(self::LOCKED_MESSAGE);
         }
     }
 
@@ -157,9 +158,7 @@ class Confirmation
     public static function guardDocument(CipDocument $document): void
     {
         if (Package::locksDocument($document)) {
-            throw new \InvalidArgumentException(
-                'This application’s original submission package is locked and cannot be modified.',
-            );
+            throw new \InvalidArgumentException(self::LOCKED_MESSAGE);
         }
     }
 
