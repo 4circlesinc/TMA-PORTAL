@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\CipDocument;
+use App\Models\CompanyMember;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\FileWorkflow;
@@ -216,7 +217,8 @@ class Presenter
             'updatedAt' => optional($file->updated_at)->toIso8601String(),
             'deletedAt' => optional($file->deleted_at)->toIso8601String(),
             'owner' => $this->person($file->owner),
-            'uploadedBy' => $this->person($file->uploader),
+            'uploadedBy' => $this->person($file->uploader)
+                ?? $this->memberPerson($file->uploadedByMember),
             // Everyone on the file, owner first, what the Owner column draws
             // as faces. `assignedTo` stays the bare names it has always been.
             'people' => $this->peopleOn($file->owner, $sharedWith, $fileAudience),
@@ -571,6 +573,20 @@ class Presenter
             'name' => $user->name,
             'email' => $user->email,
             'avatar' => $user->avatar_url,
+        ];
+    }
+
+    private function memberPerson(?CompanyMember $member): ?array
+    {
+        if (! $member) {
+            return null;
+        }
+
+        return [
+            'userId' => $member->user_id,
+            'name' => $member->displayName(),
+            'email' => $member->displayEmail(),
+            'avatar' => $member->user?->photoUrl(),
         ];
     }
 

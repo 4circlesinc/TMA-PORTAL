@@ -26,8 +26,9 @@ use Illuminate\Support\Str;
  * at all.
  */
 #[Fillable([
-    'uuid', 'document_id', 'author_id', 'parent_id', 'root_id', 'body',
-    'edited_at', 'resolved_at', 'resolved_by', 'deleted_by',
+    'uuid', 'document_id', 'author_id', 'company_member_id', 'author_name',
+    'parent_id', 'root_id', 'body', 'edited_at', 'resolved_at', 'resolved_by',
+    'deleted_by',
 ])]
 class CipDocumentComment extends Model
 {
@@ -57,12 +58,17 @@ class CipDocumentComment extends Model
 
     public function author(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'author_id');
+        return $this->belongsTo(User::class, 'author_id')->withTrashed();
+    }
+
+    public function companyMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'company_member_id');
     }
 
     public function resolver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'resolved_by');
+        return $this->belongsTo(User::class, 'resolved_by')->withTrashed();
     }
 
     public function parent(): BelongsTo

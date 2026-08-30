@@ -9,8 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
-    'uuid', 'file_id', 'author_id', 'parent_id', 'root_id', 'body', 'anchor',
-    'edited_at', 'resolved_at', 'resolved_by', 'deleted_by',
+    'uuid', 'file_id', 'author_id', 'company_member_id', 'author_name',
+    'parent_id', 'root_id', 'body', 'anchor', 'edited_at', 'resolved_at',
+    'resolved_by', 'deleted_by',
 ])]
 class FileComment extends Model
 {
@@ -34,12 +35,17 @@ class FileComment extends Model
 
     public function author(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'author_id');
+        return $this->belongsTo(User::class, 'author_id')->withTrashed();
+    }
+
+    public function companyMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'company_member_id');
     }
 
     public function resolver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'resolved_by');
+        return $this->belongsTo(User::class, 'resolved_by')->withTrashed();
     }
 
     public function parent(): BelongsTo

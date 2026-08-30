@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
@@ -276,9 +277,13 @@ class Engine
         ?string $from = null,
         ?string $to = null,
     ): CipEvent {
+        $stamp = ContactIdentity::stamp($actor, ContactIdentity::companyIdForApplication($application));
+
         return CipEvent::create([
             'application_id' => $application->id,
             'actor_id' => $actor?->id,
+            'company_member_id' => $stamp['company_member_id'],
+            'actor_name' => $stamp['actor_name'],
             'action' => $action,
             'from_status' => $from,
             'to_status' => $to,

@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'uuid', 'workflow_id', 'user_id', 'email', 'name', 'role', 'position', 'status',
+    'uuid', 'workflow_id', 'user_id', 'company_member_id', 'email', 'name', 'role',
+    'position', 'status',
     'invited_at', 'responded_at', 'comment', 'delegated_to_id', 'delegated_from_id',
     'last_reminded_at', 'reminder_count',
 ])]
@@ -31,7 +32,12 @@ class FileWorkflowStep extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id')->withTrashed();
+    }
+
+    public function companyMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'company_member_id');
     }
 
     public function delegatedTo(): BelongsTo

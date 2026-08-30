@@ -61,7 +61,7 @@ class FileViewerController extends BaseFilesController
         $file = $this->findFile($uuid, withTrashed: true);
         FileAccess::authorize($user, 'view', $file);
 
-        $file->loadMissing(['folder.parent', 'owner', 'uploader']);
+        $file->loadMissing(['folder.parent', 'owner', 'uploader', 'uploadedByMember']);
 
         return response()->json(FileDetails::for($file, $user));
     }

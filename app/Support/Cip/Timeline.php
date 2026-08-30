@@ -7,6 +7,7 @@ use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\User;
 use App\Support\Calendar\CalendarAudit;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -65,8 +66,11 @@ class Timeline
              * the person who made the decision, and without this their name
              * falls back to the system, a machine credited with somebody's
              * judgement, in the one record kept for compliance.
+             *
+             * companyMember is the other half: a purged login leaves actor_id
+             * null, and the membership is what still names the contact.
              */
-            ->with(['actor' => fn ($q) => $q->withTrashed()])
+            ->with(['actor', 'companyMember'])
             // The id breaks the tie, and has to: an assignment and the status
             // change it causes are written in one transaction and share a
             // timestamp to the second.
@@ -95,20 +99,26 @@ class Timeline
     /**
      * Who acted, as the tab draws them.
      *
-     * A null actor_id is the system, a scheduled job, or a link upload nobody
-     * was signed in for. An actor_id with no user behind it is different and is
-     * said differently: that is a person whose account has been purged, and
-     * calling them the system would put a machine's name on their decision.
+     * A null actor_id with no membership and no stored name is the system, a
+     * scheduled job, or a link upload nobody was signed in for. A contact
+     * whose login has been purged is named from the membership, then from
+     * the name written on the row when it happened — never as the system.
      *
      * @return array{name:string, avatar:string|null}
      */
     private static function who(CipEvent $event): array
     {
         $actor = $event->actor;
+        $member = $event->companyMember;
+        $drawn = ContactIdentity::present($actor, $member, $event->actor_name);
+
+        $system = $event->actor_id === null
+            && $event->company_member_id === null
+            && ($event->actor_name === null || $event->actor_name === '');
 
         return [
-            'name' => $actor?->name ?? ($event->actor_id === null ? 'the system' : 'a deleted account'),
-            'avatar' => $actor?->photoUrl(),
+            'name' => $system ? 'the system' : $drawn['name'],
+            'avatar' => $drawn['avatar'],
         ];
     }
 

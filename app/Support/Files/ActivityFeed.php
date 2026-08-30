@@ -5,6 +5,7 @@ namespace App\Support\Files;
 use App\Models\FileActivity;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Support\Carbon;
 
 /**
@@ -78,7 +79,7 @@ class ActivityFeed
             ->when($before !== null, fn ($q) => $q->where('id', '<', $before))
             // photoUrl() reads both columns, selecting only one silently
             // drops every provider photo back to initials.
-            ->with('user:id,name,email,avatar_url,provider_avatar_url')
+            ->with(['user', 'companyMember'])
             ->orderByDesc('id')
             // One extra row tells us whether another page exists without a
             // second count query.
@@ -99,7 +100,11 @@ class ActivityFeed
     private static function entry(FileActivity $activity, User $viewer): array
     {
         $at = $activity->created_at ?: now();
-        $actor = $activity->user;
+        $drawn = ContactIdentity::present($activity->user, $activity->companyMember, $activity->actor_name);
+        $hasActor = $activity->user !== null
+            || $activity->companyMember !== null
+            || $activity->actor_name
+            || $activity->user_id;
 
         return [
             'id' => $activity->id,
@@ -108,11 +113,15 @@ class ActivityFeed
             // `name` stays the real name even for the viewer's own actions:
             // the client renders the word "You" from `isSelf`, but the avatar
             // has to fall back to *their* initials, not to "Y" for "You".
-            'actor' => $actor ? [
-                'name' => $actor->name,
-                'isSelf' => $actor->id === $viewer->id,
-                'email' => $actor->email,
-                'avatar' => $actor->photoUrl(),
+            'actor' => $hasActor ? [
+                'name' => $drawn['name'],
+                'isSelf' => ContactIdentity::isSelf(
+                    $viewer,
+                    $activity->user_id,
+                    $activity->company_member_id,
+                ),
+                'email' => $drawn['email'],
+                'avatar' => $drawn['avatar'],
             ] : null,
             'icon' => self::icon($activity->action),
             'meta' => $activity->meta ?: null,

@@ -7,6 +7,8 @@ use App\Models\FileComment;
 use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
+use App\Support\Files\Workflow\Hub;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Collection;
@@ -56,10 +58,14 @@ class Comments
         $body = trim($body);
 
         $comment = DB::transaction(function () use ($file, $author, $body, $parent, $mentionIds, $anchor) {
+            $stamp = ContactIdentity::stamp($author, ContactIdentity::companyIdForFile($file));
+
             $comment = FileComment::create([
                 'uuid' => (string) Str::uuid(),
                 'file_id' => $file->id,
                 'author_id' => $author->id,
+                'company_member_id' => $stamp['company_member_id'],
+                'author_name' => $stamp['actor_name'],
                 'parent_id' => $parent?->id,
                 // Threading is one level deep: replying to a reply attaches to
                 // the same root, so a thread never becomes an endless indent.
@@ -341,7 +347,7 @@ class Comments
      * Everyone whose lists change when this comment does: the thread's other
      * authors, the file's owner, and anybody named in it.
      *
-     * That is {@see \App\Support\Files\Workflow\Hub::concernsMe} said in ids
+     * That is {@see Hub::concernsMe} said in ids
      * rather than in SQL, and it is deliberately NOT access-checked the way
      * notify()'s recipients are. The signal carries no rows, so the worst an
      * over-wide reach can do is make somebody refetch a list that comes back
@@ -383,18 +389,20 @@ class Comments
     /** Only the author edits their own words. Not even an administrator. */
     public static function canEdit(User $user, FileComment $comment): bool
     {
-        return $comment->author_id === $user->id;
+        return ContactIdentity::isSelf($user, $comment->author_id, $comment->company_member_id);
     }
 
     /** The author, or anyone who could delete the file itself (moderation). */
     public static function canDelete(User $user, FileComment $comment, FileItem $file): bool
     {
-        return $comment->author_id === $user->id || FileAccess::can($user, 'delete', $file);
+        return ContactIdentity::isSelf($user, $comment->author_id, $comment->company_member_id)
+            || FileAccess::can($user, 'delete', $file);
     }
 
     /** The thread's author, or anyone with full control of the file. */
     public static function canResolve(User $user, FileComment $comment, FileItem $file): bool
     {
-        return $comment->author_id === $user->id || FileAccess::can($user, 'share', $file);
+        return ContactIdentity::isSelf($user, $comment->author_id, $comment->company_member_id)
+            || FileAccess::can($user, 'share', $file);
     }
 }

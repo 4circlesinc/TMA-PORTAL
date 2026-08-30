@@ -13,8 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * never deleted. actor_id null means the system acted (a scheduled job).
  */
 #[Fillable([
-    'application_id', 'actor_id', 'action', 'from_status', 'to_status',
-    'detail', 'meta', 'ip_address',
+    'application_id', 'actor_id', 'company_member_id', 'actor_name',
+    'action', 'from_status', 'to_status', 'detail', 'meta', 'ip_address',
 ])]
 class CipEvent extends Model
 {
@@ -113,6 +113,13 @@ class CipEvent extends Model
 
     public function actor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'actor_id');
+        // Recycle Bin accounts still belong to the person who acted; without
+        // this their name falls off the Activity tab the moment they are parked.
+        return $this->belongsTo(User::class, 'actor_id')->withTrashed();
+    }
+
+    public function companyMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'company_member_id');
     }
 }

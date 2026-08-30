@@ -119,7 +119,7 @@ class BrowserController extends BaseFilesController
             if ($fileQuery && $taken < $perPage) {
                 $fileOffset = max(0, $offset - $folderTotal);
                 $this->orderFiles($fileQuery, $sort, $dir);
-                $files = $fileQuery->with(['owner', 'uploader', 'folder'])
+                $files = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])
                     ->offset($fileOffset)->limit($perPage - $taken)->get();
             }
 
@@ -138,7 +138,7 @@ class BrowserController extends BaseFilesController
                 $this->orderFiles($fileQuery, $sort, $dir);
                 $need = $perPage - $folders->count();
                 $fileOffset = $offset > 0 && $folders->isEmpty() ? $offset : 0;
-                $fileRows = $fileQuery->with(['owner', 'uploader', 'folder'])
+                $fileRows = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])
                     ->offset($fileOffset)->limit($need + 1)->get();
                 $hasMore = $hasMore || $fileRows->count() > $need;
                 $files = $fileRows->take($need);
@@ -591,7 +591,7 @@ class BrowserController extends BaseFilesController
         $this->orderFiles($fileQuery, $sort, $dir);
 
         $folders = $folderQuery->with(['owner', 'creator', 'parent'])->limit($reach)->get();
-        $files = $fileQuery->with(['owner', 'uploader', 'folder'])->limit($reach)->get();
+        $files = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])->limit($reach)->get();
 
         // Microseconds, not seconds: a bulk import writes hundreds of rows
         // inside one second, and a whole-second key would order them by which

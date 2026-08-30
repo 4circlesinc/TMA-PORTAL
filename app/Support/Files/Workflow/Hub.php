@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Companies\ContactIdentity;
 use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
@@ -149,7 +150,8 @@ final class Hub
 
         $query = FileComment::query()
             ->with([
-                'author:id,name,email,avatar_url,provider_avatar_url',
+                'author',
+                'companyMember',
                 'resolver:id,name',
                 // Not withTrashed: a comment on a binned file loads a null
                 // file and drops out below. The bin is where that history
@@ -336,13 +338,25 @@ final class Hub
     public static function counts(User $viewer): array
     {
         $waiting = FileWorkflowStep::query()
-            ->where('user_id', $viewer->id)
+            ->where(function ($q) use ($viewer) {
+                $q->where('user_id', $viewer->id);
+                $memberIds = ContactIdentity::idsFor($viewer);
+                if ($memberIds !== []) {
+                    $q->orWhereIn('company_member_id', $memberIds);
+                }
+            })
             ->whereIn('status', ['pending', 'invited'])
             ->whereHas('workflow', fn ($q) => $q->whereNotIn('status', Status::TERMINAL))
             ->count();
 
         $sent = FileWorkflow::query()
-            ->where('created_by', $viewer->id)
+            ->where(function ($q) use ($viewer) {
+                $q->where('created_by', $viewer->id);
+                $memberIds = ContactIdentity::idsFor($viewer);
+                if ($memberIds !== []) {
+                    $q->orWhereIn('created_by_member_id', $memberIds);
+                }
+            })
             ->whereNotIn('status', Status::TERMINAL)
             ->count();
 
@@ -427,18 +441,35 @@ final class Hub
     {
         $query = FileWorkflow::query()
             ->with([
-                'sender:id,name,email,avatar_url,provider_avatar_url',
+                'sender',
+                'senderMember',
                 'version:id,version_number',
                 'supersededByVersion:id,version_number',
-                'steps.user:id,name,email,avatar_url,provider_avatar_url',
+                'steps.user',
+                'steps.companyMember',
                 'file:id,uuid,name,extension,folder_id,owner_id,review_status',
             ]);
 
+        $memberIds = ContactIdentity::idsFor($viewer);
+
         match ($scope) {
-            self::SCOPE_SENT => $query->where('file_workflows.created_by', $viewer->id),
+            self::SCOPE_SENT => $query->where(function ($q) use ($viewer, $memberIds) {
+                $q->where('file_workflows.created_by', $viewer->id);
+                if ($memberIds !== []) {
+                    $q->orWhereIn('file_workflows.created_by_member_id', $memberIds);
+                }
+            }),
             self::SCOPE_INBOX => $query->whereHas(
                 'steps',
-                fn ($q) => $q->where('user_id', $viewer->id)->whereIn('status', ['pending', 'invited'])
+                function ($q) use ($viewer, $memberIds) {
+                    $q->whereIn('status', ['pending', 'invited'])
+                        ->where(function ($s) use ($viewer, $memberIds) {
+                            $s->where('user_id', $viewer->id);
+                            if ($memberIds !== []) {
+                                $s->orWhereIn('company_member_id', $memberIds);
+                            }
+                        });
+                }
             )->whereNotIn('file_workflows.status', Status::TERMINAL),
             default => null,
         };
@@ -494,8 +525,11 @@ final class Hub
          * name there is ambiguous — the kind of break that only appears once
          * somebody joins the query, which is exactly what happened.
          */
+        $memberIds = ContactIdentity::idsFor($viewer);
+
         $query
             ->where('file_comments.author_id', $viewer->id)
+            ->when($memberIds !== [], fn (Builder $q) => $q->orWhereIn('file_comments.company_member_id', $memberIds))
             ->orWhereHas('mentions', fn ($m) => $m->where('file_comment_mentions.user_id', $viewer->id))
             ->orWhereHas('file', fn ($f) => $f->where('owner_id', $viewer->id))
             /*
@@ -504,16 +538,26 @@ final class Hub
              * should keep the follow-up in front of me, and so should somebody
              * answering mine.
              */
-            ->orWhereIn('file_comments.root_id', function ($sub) use ($viewer) {
+            ->orWhereIn('file_comments.root_id', function ($sub) use ($viewer, $memberIds) {
                 $sub->select('root_id')
                     ->from('file_comments as mine')
-                    ->where('mine.author_id', $viewer->id)
+                    ->where(function ($q) use ($viewer, $memberIds) {
+                        $q->where('mine.author_id', $viewer->id);
+                        if ($memberIds !== []) {
+                            $q->orWhereIn('mine.company_member_id', $memberIds);
+                        }
+                    })
                     ->whereNotNull('mine.root_id');
             })
-            ->orWhereIn('file_comments.id', function ($sub) use ($viewer) {
+            ->orWhereIn('file_comments.id', function ($sub) use ($viewer, $memberIds) {
                 $sub->select('root_id')
                     ->from('file_comments as mine')
-                    ->where('mine.author_id', $viewer->id)
+                    ->where(function ($q) use ($viewer, $memberIds) {
+                        $q->where('mine.author_id', $viewer->id);
+                        if ($memberIds !== []) {
+                            $q->orWhereIn('mine.company_member_id', $memberIds);
+                        }
+                    })
                     ->whereNotNull('mine.root_id');
             });
     }
@@ -561,9 +605,21 @@ final class Hub
     private static function request(FileWorkflow $workflow, User $viewer, array $paths): array
     {
         $mine = Engine::stepFor($workflow, $viewer);
-        $myStep = $workflow->steps->firstWhere('user_id', $viewer->id);
+        $memberIds = ContactIdentity::idsFor($viewer);
+        $myStep = $workflow->steps->first(fn (FileWorkflowStep $s) => ContactIdentity::isSelf(
+            $viewer, $s->user_id, $s->company_member_id, $memberIds,
+        ));
         $waiting = $workflow->steps->filter(fn (FileWorkflowStep $s) => $s->isOpen());
         $isOpen = ! Status::isTerminal($workflow->status);
+        $senderDrawn = ContactIdentity::present(
+            $workflow->sender,
+            $workflow->senderMember,
+            $workflow->sender?->name,
+        );
+        $hasSender = $workflow->sender !== null
+            || $workflow->senderMember !== null
+            || $workflow->created_by
+            || $workflow->created_by_member_id;
 
         return [
             'id' => $workflow->uuid,
@@ -575,19 +631,21 @@ final class Hub
             'headline' => self::headline($workflow, $viewer, $mine !== null, $waiting),
             'message' => $workflow->message,
             'file' => self::file($workflow->file, $paths),
-            'sender' => $workflow->sender ? [
-                'name' => $workflow->sender->name,
-                'avatar' => $workflow->sender->photoUrl(),
-                'isSelf' => $workflow->sender->id === $viewer->id,
+            'sender' => $hasSender ? [
+                'name' => $senderDrawn['name'],
+                'avatar' => $senderDrawn['avatar'],
+                'isSelf' => ContactIdentity::isSelf(
+                    $viewer, $workflow->created_by, $workflow->created_by_member_id, $memberIds,
+                ),
             ] : null,
             'people' => $workflow->steps->map(fn (FileWorkflowStep $s) => [
-                'name' => $s->user?->name ?? $s->name ?? $s->email,
+                'name' => $s->user?->name ?? $s->companyMember?->displayName() ?? $s->name ?? $s->email,
                 'avatar' => $s->user?->photoUrl(),
                 'status' => $s->status,
                 'statusLabel' => WorkflowPresenter::stepLabel($s->status),
                 'comment' => $s->comment,
                 'answered' => ! $s->isOpen(),
-                'isSelf' => $s->user_id === $viewer->id,
+                'isSelf' => ContactIdentity::isSelf($viewer, $s->user_id, $s->company_member_id, $memberIds),
             ])->values()->all(),
             'answered' => $workflow->steps->count() - $waiting->count(),
             'total' => $workflow->steps->count(),
@@ -623,9 +681,9 @@ final class Hub
 
         if ($waiting->count() === 1) {
             $one = $waiting->first();
-            $name = $one->user_id === $viewer->id
+            $name = ContactIdentity::isSelf($viewer, $one->user_id, $one->company_member_id)
                 ? 'you, once it reaches your turn'
-                : ($one->user?->name ?? $one->name ?? $one->email ?? 'someone');
+                : ($one->user?->name ?? $one->companyMember?->displayName() ?? $one->name ?? $one->email ?? 'someone');
 
             return ['text' => 'Waiting on '.$name, 'tone' => Status::tone($workflow->status)];
         }
@@ -644,16 +702,21 @@ final class Hub
     {
         $file = $comment->file;
         $named = in_array($viewer->id, $mentions[$comment->id]['ids'] ?? [], true);
+        $author = ContactIdentity::present(
+            $comment->author,
+            $comment->companyMember,
+            $comment->author_name,
+        );
 
         return [
             'id' => $comment->uuid,
             'body' => $comment->trashed() ? null : $comment->body,
             'deleted' => $comment->trashed(),
-            'author' => $comment->author ? [
-                'name' => $comment->author->name,
-                'avatar' => $comment->author->photoUrl(),
-                'isSelf' => $comment->author->id === $viewer->id,
-            ] : null,
+            'author' => [
+                'name' => $author['name'],
+                'avatar' => $author['avatar'],
+                'isSelf' => ContactIdentity::isSelf($viewer, $comment->author_id, $comment->company_member_id),
+            ],
             'mentions' => $mentions[$comment->id]['names'] ?? [],
             'mentionsMe' => $named,
             'file' => self::file($file, $paths),

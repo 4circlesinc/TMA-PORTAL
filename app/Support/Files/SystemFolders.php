@@ -67,7 +67,8 @@ final class SystemFolders
 
         FileItem::withTrashed()->whereIn('folder_id', $ids)
             ->whereIn('owner_id', $userIds)->update(['owner_id' => $heir]);
-        FileItem::withTrashed()->whereIn('folder_id', $ids)
-            ->whereIn('uploaded_by', $userIds)->update(['uploaded_by' => $heir]);
+        // uploaded_by is nullOnDelete and named from company_member_id /
+        // actor_name. Re-homing it to a surviving admin used to make every
+        // document the contact uploaded look like the administrator's.
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Files\FileCommentController;
 use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Support\Cip\DocumentComments;
@@ -13,7 +14,7 @@ use Illuminate\Http\Request;
 /**
  * The conversation on a checklist document (§13).
  *
- * Sibling to {@see \App\Http\Controllers\Files\FileCommentController}, and
+ * Sibling to {@see FileCommentController}, and
  * deliberately the same shape, the difference is the subject, not the idea.
  *
  * 404 rather than 403 for a document the reader may not see, the portal's
@@ -56,7 +57,7 @@ class CipDocumentCommentController extends Controller
         }
 
         return response()->json(
-            DocumentComments::present($comment->fresh()->load('author'), $user) + ['replies' => []],
+            DocumentComments::present($comment->fresh()->load(['author', 'companyMember']), $user) + ['replies' => []],
             201,
         );
     }
@@ -79,7 +80,7 @@ class CipDocumentCommentController extends Controller
         // would let it be rewritten after the fact.
         $comment->forceFill(['body' => trim($data['body']), 'edited_at' => now()])->save();
 
-        return response()->json(DocumentComments::present($comment->load('author'), $user));
+        return response()->json(DocumentComments::present($comment->load(['author', 'companyMember']), $user));
     }
 
     /**
@@ -116,7 +117,7 @@ class CipDocumentCommentController extends Controller
             'resolved_by' => $resolved ? $user->id : null,
         ])->save();
 
-        return response()->json(DocumentComments::present($comment->load(['author', 'resolver']), $user));
+        return response()->json(DocumentComments::present($comment->load(['author', 'companyMember', 'resolver']), $user));
     }
 
     /**

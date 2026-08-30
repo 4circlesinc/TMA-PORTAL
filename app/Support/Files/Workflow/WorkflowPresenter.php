@@ -7,6 +7,7 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowEvent;
 use App\Models\FileWorkflowStep;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use App\Support\Files\Versions;
 
 class WorkflowPresenter
@@ -16,10 +17,12 @@ class WorkflowPresenter
     {
         $workflows = FileWorkflow::where('file_id', $file->id)
             ->with([
-                'sender:id,name,email,avatar_url,provider_avatar_url',
+                'sender',
+                'senderMember',
                 'version:id,version_number',
                 'supersededByVersion:id,version_number',
-                'steps.user:id,name,email,avatar_url,provider_avatar_url',
+                'steps.user',
+                'steps.companyMember',
             ])
             ->orderByDesc('id')
             ->limit(20)
@@ -32,7 +35,7 @@ class WorkflowPresenter
                 SignatureBridge::refresh($w);
             }
         }
-        $workflows = $workflows->fresh(['sender', 'version', 'supersededByVersion', 'steps.user']);
+        $workflows = $workflows->fresh(['sender', 'senderMember', 'version', 'supersededByVersion', 'steps.user', 'steps.companyMember']);
 
         return [
             'canSend' => Engine::canSend($viewer, $file),
@@ -55,7 +58,13 @@ class WorkflowPresenter
             // "you have something to do".
             'mineCount' => FileWorkflowStep::query()
                 ->whereIn('workflow_id', FileWorkflow::where('file_id', $file->id)->select('id'))
-                ->where('user_id', $viewer->id)
+                ->where(function ($q) use ($viewer) {
+                    $q->where('user_id', $viewer->id);
+                    $memberIds = ContactIdentity::idsFor($viewer);
+                    if ($memberIds !== []) {
+                        $q->orWhereIn('company_member_id', $memberIds);
+                    }
+                })
                 ->where('status', 'invited')
                 ->count(),
         ];
@@ -85,6 +94,7 @@ class WorkflowPresenter
     public static function workflow(FileWorkflow $workflow, User $viewer): array
     {
         $mine = Engine::stepFor($workflow, $viewer);
+        $sender = ContactIdentity::present($workflow->sender, $workflow->senderMember);
 
         return [
             'id' => $workflow->uuid,
@@ -106,9 +116,9 @@ class WorkflowPresenter
             'supersededBy' => $workflow->supersededByVersion?->version_number,
             'sentAt' => optional($workflow->created_at)->toIso8601String(),
             'completedAt' => optional($workflow->completed_at)->toIso8601String(),
-            'sender' => $workflow->sender ? [
-                'name' => $workflow->sender->name,
-                'avatar' => $workflow->sender->photoUrl(),
+            'sender' => ($workflow->sender || $workflow->senderMember || $workflow->created_by) ? [
+                'name' => $sender['name'],
+                'avatar' => $sender['avatar'],
             ] : null,
             'steps' => $workflow->steps->map(fn (FileWorkflowStep $s) => self::step($s))->values(),
             // Where to find the signed output, once there is one.
@@ -127,8 +137,8 @@ class WorkflowPresenter
     {
         return [
             'id' => $step->uuid,
-            'name' => $step->user?->name ?? $step->name ?? $step->email,
-            'email' => $step->user?->email ?? $step->email,
+            'name' => $step->user?->name ?? $step->companyMember?->displayName() ?? $step->name ?? $step->email,
+            'email' => $step->user?->email ?? $step->companyMember?->email ?? $step->email,
             'avatar' => $step->user?->photoUrl(),
             'role' => $step->role,
             'position' => $step->position,
@@ -167,16 +177,23 @@ class WorkflowPresenter
     public static function history(FileWorkflow $workflow): array
     {
         return FileWorkflowEvent::where('workflow_id', $workflow->id)
-            ->with('actor:id,name,avatar_url,provider_avatar_url')
+            ->with(['actor', 'companyMember'])
             ->orderBy('id')
             ->get()
-            ->map(fn (FileWorkflowEvent $e) => [
-                'action' => $e->action,
-                'detail' => $e->detail,
-                'meta' => $e->meta,
-                'at' => optional($e->created_at)->toIso8601String(),
-                'actor' => $e->actor ? ['name' => $e->actor->name, 'avatar' => $e->actor->photoUrl()] : null,
-            ])
+            ->map(function (FileWorkflowEvent $e) {
+                $actor = ContactIdentity::present($e->actor, $e->companyMember, $e->actor_name);
+
+                return [
+                    'action' => $e->action,
+                    'detail' => $e->detail,
+                    'meta' => $e->meta,
+                    'at' => optional($e->created_at)->toIso8601String(),
+                    'actor' => ($e->actor || $e->companyMember || $e->actor_name) ? [
+                        'name' => $actor['name'],
+                        'avatar' => $actor['avatar'],
+                    ] : null,
+                ];
+            })
             ->values()
             ->all();
     }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'uuid', 'folder_id', 'name', 'extension', 'mime_type', 'size', 'disk',
     'storage_path', 'checksum', 'content_state', 'version_number', 'origin', 'owner_id', 'uploaded_by',
+    'uploaded_by_member_id',
     'source_modified_at', 'deleted_by',
     'review_status', 'review_note', 'reviewed_by', 'reviewed_at',
 ])]
@@ -27,6 +29,20 @@ class FileItem extends Model
     use SoftDeletes;
 
     protected $table = 'files';
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $file) {
+            if ($file->uploaded_by_member_id || ! $file->uploaded_by) {
+                return;
+            }
+
+            $file->uploaded_by_member_id = ContactIdentity::forUserId(
+                $file->uploaded_by,
+                ContactIdentity::companyIdForFolder($file->folder_id),
+            )?->id;
+        });
+    }
 
     protected function casts(): array
     {
@@ -55,7 +71,12 @@ class FileItem extends Model
 
     public function uploader(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'uploaded_by');
+        return $this->belongsTo(User::class, 'uploaded_by')->withTrashed();
+    }
+
+    public function uploadedByMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'uploaded_by_member_id');
     }
 
     public function deletedBy(): BelongsTo

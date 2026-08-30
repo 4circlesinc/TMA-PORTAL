@@ -8,6 +8,7 @@ use App\Models\CipPerson;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Vault;
@@ -89,7 +90,14 @@ class DocumentSlots
         return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor) {
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
-                $slot->forceFill(['uploaded_by' => $actor->id, 'uploaded_at' => now()])->save();
+                $slot->forceFill([
+                    'uploaded_by' => $actor->id,
+                    'company_member_id' => ContactIdentity::stamp(
+                        $actor,
+                        ContactIdentity::companyIdForApplication($person->application),
+                    )['company_member_id'],
+                    'uploaded_at' => now(),
+                ])->save();
                 self::advanceAfterUpload($slot, $actor);
 
                 return $slot;
@@ -100,6 +108,10 @@ class DocumentSlots
             $slot->forceFill([
                 'file_id' => $file->id,
                 'uploaded_by' => $actor->id,
+                'company_member_id' => ContactIdentity::stamp(
+                    $actor,
+                    ContactIdentity::companyIdForApplication($person->application),
+                )['company_member_id'],
                 'uploaded_at' => now(),
             ])->save();
             self::advanceAfterUpload($slot, $actor);
@@ -140,6 +152,10 @@ class DocumentSlots
             $slot->forceFill([
                 'file_id' => $file->id,
                 'uploaded_by' => $actor?->id,
+                'company_member_id' => ContactIdentity::stamp(
+                    $actor,
+                    ContactIdentity::companyIdForFile($file),
+                )['company_member_id'],
                 'uploaded_at' => now(),
             ])->save();
 

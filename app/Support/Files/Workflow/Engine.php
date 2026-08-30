@@ -8,6 +8,7 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowEvent;
 use App\Models\FileWorkflowStep;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use App\Support\Files\AccessGrants;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
@@ -58,6 +59,9 @@ class Engine
         $version = Versions::current($file);
 
         $workflow = DB::transaction(function () use ($file, $sender, $type, $recipients, $options, $version) {
+            $companyId = ContactIdentity::companyIdForFile($file);
+            $senderStamp = ContactIdentity::stamp($sender, $companyId);
+
             $workflow = FileWorkflow::create([
                 'uuid' => (string) Str::uuid(),
                 'file_id' => $file->id,
@@ -65,6 +69,7 @@ class Engine
                 'type' => $type,
                 'status' => Status::openStatusFor($type),
                 'created_by' => $sender->id,
+                'created_by_member_id' => $senderStamp['company_member_id'],
                 'message' => $options['message'] ?? null,
                 'due_at' => $options['due_at'] ?? null,
                 'require_all' => $options['require_all'] ?? true,
@@ -77,12 +82,16 @@ class Engine
             $role = Status::roleFor($type);
 
             foreach (array_values($recipients) as $i => $r) {
+                $recipientUserId = $r['user_id'] ?? null;
+                $recipientMember = ContactIdentity::forUserId($recipientUserId, $companyId);
+
                 FileWorkflowStep::create([
                     'uuid' => (string) Str::uuid(),
                     'workflow_id' => $workflow->id,
-                    'user_id' => $r['user_id'] ?? null,
-                    'email' => $r['email'] ?? null,
-                    'name' => $r['name'] ?? null,
+                    'user_id' => $recipientUserId,
+                    'company_member_id' => $recipientMember?->id,
+                    'email' => $r['email'] ?? $recipientMember?->displayEmail(),
+                    'name' => $r['name'] ?? $recipientMember?->displayName(),
                     'role' => $role,
                     // Parallel flows put everyone at position 1 so they are all
                     // invited at once; ordered flows step through 1, 2, 3…
@@ -373,9 +382,16 @@ class Engine
      */
     public static function stepFor(FileWorkflow $workflow, User $user): ?FileWorkflowStep
     {
+        $memberIds = ContactIdentity::idsFor($user);
+
         return $workflow->steps()
-            ->where('user_id', $user->id)
             ->where('status', 'invited')
+            ->where(function ($q) use ($user, $memberIds) {
+                $q->where('user_id', $user->id);
+                if ($memberIds !== []) {
+                    $q->orWhereIn('company_member_id', $memberIds);
+                }
+            })
             ->first();
     }
 
@@ -405,10 +421,14 @@ class Engine
 
     public static function log(FileWorkflow $workflow, ?User $actor, string $action, ?string $detail = null, array $meta = []): void
     {
+        $stamp = ContactIdentity::stamp($actor, ContactIdentity::companyIdForFile($workflow->file));
+
         FileWorkflowEvent::create([
             'workflow_id' => $workflow->id,
             'step_id' => null,
             'actor_id' => $actor?->id,
+            'company_member_id' => $stamp['company_member_id'],
+            'actor_name' => $stamp['actor_name'],
             'action' => $action,
             'detail' => $detail,
             'meta' => $meta ?: null,
@@ -440,6 +460,10 @@ class Engine
 
     private static function notifySender(FileWorkflow $workflow, string $status): void
     {
+        if (! $workflow->created_by) {
+            return;
+        }
+
         try {
             Notifier::send([
                 'user' => $workflow->created_by,

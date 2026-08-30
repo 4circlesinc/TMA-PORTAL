@@ -5,6 +5,8 @@ namespace App\Support\Files;
 use App\Models\FileActivity;
 use App\Models\FileItem;
 use App\Models\Folder;
+use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Support\Facades\Request;
 
 /**
@@ -13,10 +15,21 @@ use Illuminate\Support\Facades\Request;
  */
 class Activity
 {
-    public static function log(?int $userId, string $itemType, int $itemId, string $action, array $meta = []): void
+    public static function log(?int $userId, string $itemType, int $itemId, string $action, array $meta = [], ?int $companyMemberId = null, ?string $actorName = null): void
     {
+        if ($userId && $companyMemberId === null && $actorName === null) {
+            $stamp = ContactIdentity::stamp(
+                User::withTrashed()->find($userId),
+                $itemType === 'file' ? ContactIdentity::companyIdForFile(FileItem::find($itemId)) : null,
+            );
+            $companyMemberId = $stamp['company_member_id'];
+            $actorName = $stamp['actor_name'];
+        }
+
         FileActivity::create([
             'user_id' => $userId,
+            'company_member_id' => $companyMemberId,
+            'actor_name' => $actorName,
             'item_type' => $itemType,
             'item_id' => $itemId,
             'action' => $action,

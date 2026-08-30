@@ -6,6 +6,7 @@ use App\Models\FileComment;
 use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Support\Collection;
 
 /**
@@ -32,7 +33,7 @@ class CommentPresenter
             ->where('file_id', $file->id)
             ->whereColumn('id', 'root_id')
             ->when($before !== null, fn ($q) => $q->where('id', '<', $before))
-            ->with(['author:id,name,email,avatar_url,provider_avatar_url', 'resolver:id,name'])
+            ->with(['author', 'resolver:id,name', 'companyMember'])
             ->orderByDesc('id')
             ->limit(Comments::PER_PAGE + 1)
             ->get();
@@ -46,7 +47,7 @@ class CommentPresenter
         $replies = $roots->isEmpty() ? collect() : FileComment::query()
             ->whereIn('root_id', $roots->pluck('id'))
             ->whereNotNull('parent_id')
-            ->with(['author:id,name,email,avatar_url,provider_avatar_url'])
+            ->with(['author', 'companyMember'])
             ->orderBy('id')
             ->get()
             ->groupBy('root_id');
@@ -76,6 +77,11 @@ class CommentPresenter
     public static function comment(FileComment $comment, User $viewer, FileItem $file, array $mentions = []): array
     {
         $deleted = $comment->trashed();
+        $author = ContactIdentity::present(
+            $comment->author,
+            $comment->companyMember,
+            $comment->author_name,
+        );
 
         return [
             'id' => $comment->uuid,
@@ -84,13 +90,13 @@ class CommentPresenter
             // draws it back onto the page on hover.
             'anchor' => $comment->anchor,
             'deleted' => $deleted,
-            'author' => $comment->author ? [
-                'id' => $comment->author->id,
-                'name' => $comment->author->name,
-                'isSelf' => $comment->author->id === $viewer->id,
-                'email' => $comment->author->email,
-                'avatar' => $comment->author->photoUrl(),
-            ] : null,
+            'author' => [
+                'id' => $author['userId'],
+                'name' => $author['name'],
+                'isSelf' => ContactIdentity::isSelf($viewer, $comment->author_id, $comment->company_member_id),
+                'email' => $author['email'],
+                'avatar' => $author['avatar'],
+            ],
             'mentions' => $mentions[$comment->id] ?? [],
             'createdAt' => optional($comment->created_at)->toIso8601String(),
             'editedAt' => optional($comment->edited_at)->toIso8601String(),

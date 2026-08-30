@@ -6,13 +6,15 @@ use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Companies\ContactIdentity;
+use App\Support\Files\Comments;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
  * The conversation on one checklist document (§13).
  *
- * A separate thread from {@see \App\Support\Files\Comments}, which talks about
+ * A separate thread from {@see Comments}, which talks about
  * a file. This talks about a *requirement*: the slot outlives the file in it,
  * so "we need a clearer scan of this" has to survive the clearer scan
  * arriving. Hanging the conversation off the file would lose it at the moment
@@ -51,7 +53,8 @@ class DocumentComments
     /** The author, or an administrator clearing up after somebody. */
     public static function canEdit(User $user, CipDocumentComment $comment): bool
     {
-        return $comment->author_id === $user->id || Role::isAdmin($user);
+        return ContactIdentity::isSelf($user, $comment->author_id, $comment->company_member_id)
+            || Role::isAdmin($user);
     }
 
     /**
@@ -79,10 +82,18 @@ class DocumentComments
              */
             $rootId = $parent ? ($parent->root_id ?: $parent->id) : null;
 
+            $document->loadMissing('application.provider');
+            $stamp = ContactIdentity::stamp(
+                $author,
+                ContactIdentity::companyIdForApplication($document->application),
+            );
+
             $comment = CipDocumentComment::create([
                 'uuid' => (string) Str::uuid(),
                 'document_id' => $document->id,
                 'author_id' => $author->id,
+                'company_member_id' => $stamp['company_member_id'],
+                'author_name' => $stamp['actor_name'],
                 'parent_id' => $parent?->id,
                 'root_id' => $rootId,
                 'body' => trim($body),
@@ -105,36 +116,48 @@ class DocumentComments
     public static function thread(CipDocument $document, User $viewer): array
     {
         $all = $document->comments()
-            ->with('author:id,name,email,avatar_url')
+            ->with(['author', 'companyMember'])
             ->orderBy('id')
             ->get();
+        $viewerMemberIds = ContactIdentity::idsFor($viewer);
 
         $repliesByRoot = $all->filter(fn (CipDocumentComment $c) => $c->parent_id !== null)
             ->groupBy('root_id');
 
         return $all
             ->filter(fn (CipDocumentComment $c) => $c->parent_id === null)
-            ->map(fn (CipDocumentComment $root) => self::present($root, $viewer) + [
+            ->map(fn (CipDocumentComment $root) => self::present($root, $viewer, $viewerMemberIds) + [
                 'replies' => ($repliesByRoot[$root->id] ?? collect())
-                    ->map(fn (CipDocumentComment $r) => self::present($r, $viewer))
+                    ->map(fn (CipDocumentComment $r) => self::present($r, $viewer, $viewerMemberIds))
                     ->values()->all(),
             ])
             ->values()
             ->all();
     }
 
-    /** @return array<string, mixed> */
-    public static function present(CipDocumentComment $comment, User $viewer): array
+    /** @param  list<int>  $viewerMemberIds */
+    public static function present(CipDocumentComment $comment, User $viewer, ?array $viewerMemberIds = null): array
     {
+        $author = ContactIdentity::present(
+            $comment->author,
+            $comment->companyMember,
+            $comment->author_name,
+        );
+
         return [
             'id' => $comment->uuid,
             'body' => $comment->body,
             'author' => [
-                'name' => $comment->author?->name,
-                'email' => $comment->author?->email,
-                'avatar' => $comment->author?->photoUrl(),
+                'name' => $author['name'],
+                'email' => $author['email'],
+                'avatar' => $author['avatar'],
             ],
-            'mine' => $comment->author_id === $viewer->id,
+            'mine' => ContactIdentity::isSelf(
+                $viewer,
+                $comment->author_id,
+                $comment->company_member_id,
+                $viewerMemberIds,
+            ),
             'canEdit' => self::canEdit($viewer, $comment),
             'edited' => $comment->edited_at !== null,
             'resolved' => $comment->isResolved(),
@@ -152,7 +175,7 @@ class DocumentComments
      * answered and resolved does not.
      *
      * @param  array<int, int>  $documentIds
-     * @return array<int, int>  document id => open comment count
+     * @return array<int, int> document id => open comment count
      */
     public static function openCounts(array $documentIds): array
     {
@@ -177,7 +200,7 @@ class DocumentComments
      * owes a dozen documents, and the reason has to ride with the chip.
      *
      * @param  array<int, int>  $documentIds
-     * @return array<int, string>  document id => body
+     * @return array<int, string> document id => body
      */
     public static function latestOpenBodies(array $documentIds): array
     {

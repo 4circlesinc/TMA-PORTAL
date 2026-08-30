@@ -76,6 +76,10 @@ final class CompanyMembers
             self::makePrimary($company, $member);
         }
 
+        if ($userId && ($linked = User::find($userId))) {
+            ContactIdentity::relink($member, $linked);
+        }
+
         ActivityLogger::log([
             'actor' => $by,
             'type' => 'company.member_added',
@@ -192,6 +196,8 @@ final class CompanyMembers
             'status' => CompanyMember::STATUS_ACTIVE,
             'name' => $user->name ?: $member->name,
         ])->save();
+
+        ContactIdentity::relink($member, $user);
 
         ClientConversations::attachLogin($user);
     }

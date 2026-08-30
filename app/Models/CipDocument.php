@@ -24,7 +24,7 @@ use Illuminate\Support\Str;
 // would let an upload declare itself ready for submission.
 #[Fillable([
     'uuid', 'application_id', 'person_id', 'requirement_id', 'type', 'label',
-    'required', 'file_id', 'uploaded_by', 'uploaded_at',
+    'required', 'file_id', 'uploaded_by', 'company_member_id', 'uploaded_at',
 ])]
 class CipDocument extends Model
 {
@@ -77,6 +77,16 @@ class CipDocument extends Model
     public function file(): BelongsTo
     {
         return $this->belongsTo(FileItem::class, 'file_id')->withTrashed();
+    }
+
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by')->withTrashed();
+    }
+
+    public function uploadedByMember(): BelongsTo
+    {
+        return $this->belongsTo(CompanyMember::class, 'company_member_id');
     }
 
     /**
