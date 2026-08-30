@@ -137,6 +137,17 @@ class Review
          * label the files no longer support.
          */
         foreach (self::plan($application) as $target) {
+            /*
+             * File status is a working label. Ready to Submit is not. If a
+             * hop still names it while a slot sits in Application review or
+             * Update required, skip it — do not throw. Throwing here used to
+             * 422 the document PATCH after the slot had already been written,
+             * which rolled the chip back on screen.
+             */
+            if ($target === Status::READY_TO_SUBMIT && ! self::documentsAllowReadyToSubmit($application)) {
+                continue;
+            }
+
             $meta = ['reason' => 'checklist'];
 
             if (Engine::canTransition($application, $target)) {

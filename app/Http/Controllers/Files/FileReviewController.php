@@ -158,14 +158,20 @@ class FileReviewController extends BaseFilesController
             if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {
                 DocumentComments::create($slot, $user, $note);
             }
-
-            CipReview::settle($slot->loadMissing('application')->application, $user);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         } catch (AuthorizationException $e) {
             abort(403, $e->getMessage());
         } catch (ValidationException $e) {
             throw $e;
+        }
+
+        try {
+            CipReview::settle($slot->loadMissing('application')->application, $user);
+        } catch (\InvalidArgumentException|\AuthorizationException|\ValidationException $e) {
+            // The file chip already committed. Rolling it back because the
+            // application could not follow is how Update required stuck.
+            report($e);
         }
 
         $file = $slot->file;

@@ -270,6 +270,45 @@ class CipDocumentFileStatusTest extends TestCase
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
     }
 
+    public function test_clearing_one_update_required_file_keeps_the_chip_when_another_still_needs_an_update(): void
+    {
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::UPDATE_REQUIRED);
+        $slot->loadMissing(['application', 'person']);
+        $slot->application->forceFill(['status' => Status::UPDATE_REQUIRED])->save();
+
+        $otherFile = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $file->folder_id,
+            'name' => 'Chen Wei — Passport bio page.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/bio.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+        $other = CipDocument::create([
+            'application_id' => $slot->application_id,
+            'person_id' => $slot->person_id,
+            'type' => DocumentTypes::PASSPORT_BIO_PAGE,
+            'label' => 'Passport bio page',
+            'file_id' => $otherFile->id,
+        ]);
+        $other->forceFill(['status' => DocumentStatus::UPDATE_REQUIRED])->save();
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::READY_FOR_SUBMISSION,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $other->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
+    }
+
     public function test_an_assigned_officer_can_review_without_folder_upload(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);

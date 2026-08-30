@@ -242,7 +242,13 @@ class DocumentEngine
             Live::staff(Live::CIP);
 
             if ($to === DocumentStatus::UPDATE_REQUIRED) {
-                Review::settle($application, $actor);
+                try {
+                    Review::settle($application, $actor);
+                } catch (\InvalidArgumentException|\AuthorizationException $e) {
+                    // The slot already moved. Application inference must not
+                    // undo a file-status write the reviewer just made.
+                    report($e);
+                }
             }
 
             return $document;

@@ -4511,6 +4511,75 @@
     return null;
   }
 
+  function cipDocumentFileId(doc) {
+    return (doc && (doc.fileId || (doc.file && doc.file.id))) || null;
+  }
+
+  function cipPendingFileStatuses(app) {
+    return (app && app._pendingFileStatuses) || null;
+  }
+
+  function cipIncomingHonoursPendingFileStatuses(held, incoming) {
+    var pending = cipPendingFileStatuses(held);
+    var next;
+    var id;
+    if (!pending) return true;
+    next = {};
+    cipFamily(incoming).forEach(function (person) {
+      (person.documents || []).forEach(function (doc) {
+        var fileId = cipDocumentFileId(doc);
+        if (fileId) next[fileId] = doc.status;
+      });
+    });
+    for (id in pending) {
+      if (!Object.prototype.hasOwnProperty.call(pending, id)) continue;
+      if (next[id] !== pending[id]) return false;
+    }
+    return true;
+  }
+
+  /*
+   * A slower GET of the application (cache revalidation, a live ping, a
+   * refetch that started before the PATCH returned) must not paint the
+   * previous chips over a status the reviewer just set. Keep the pending
+   * labels until the payload actually has them.
+   */
+  function cipOverlayPendingFileStatuses(held, incoming) {
+    var pending = cipPendingFileStatuses(held);
+    if (!pending || !incoming) return incoming;
+    if (cipIncomingHonoursPendingFileStatuses(held, incoming)) {
+      delete incoming._pendingFileStatuses;
+      delete incoming._statusPending;
+      return incoming;
+    }
+    cipFamily(incoming).forEach(function (person) {
+      (person.documents || []).forEach(function (doc) {
+        var fileId = cipDocumentFileId(doc);
+        var src;
+        if (!fileId || pending[fileId] === undefined || doc.status === pending[fileId]) return;
+        src = cipDocForFile(held, fileId);
+        if (!src) {
+          doc.status = pending[fileId];
+          return;
+        }
+        doc.status = src.status;
+        doc.statusLabel = src.statusLabel;
+        doc.statusTone = src.statusTone;
+        doc.updateReason = src.updateReason;
+      });
+    });
+    incoming._pendingFileStatuses = pending;
+    incoming._statusPending = true;
+    if (held.status) {
+      incoming.status = held.status;
+      incoming.statusLabel = held.statusLabel;
+      incoming.statusTone = held.statusTone;
+      if (held.availableTransitions !== undefined) incoming.availableTransitions = held.availableTransitions;
+      if (held.availableOverrides !== undefined) incoming.availableOverrides = held.availableOverrides;
+    }
+    return incoming;
+  }
+
   function applyCipFileReviewLocally(detail) {
     var file = detail && detail.file;
     var fileId = file && file.id;
@@ -4530,6 +4599,10 @@
 
     if (detail.rollback) {
       app._statusPending = false;
+      if (app._pendingFileStatuses) delete app._pendingFileStatuses[fileId];
+      if (app._pendingFileStatuses && !Object.keys(app._pendingFileStatuses).length) {
+        delete app._pendingFileStatuses;
+      }
       forgetApplication(clientUid);
       if (clientsMountState && clientsMountState.selectedId === clientUid) {
         clientsMountState.applicationFreshFor = null;
@@ -4545,6 +4618,8 @@
       doc.statusLabel = (file.status && file.status.label) || meta.label;
       doc.statusTone = (file.status && file.status.tone) || meta.tone;
       doc.updateReason = status === 'update_required' ? (note || doc.updateReason || null) : null;
+      app._pendingFileStatuses = app._pendingFileStatuses || {};
+      app._pendingFileStatuses[fileId] = status;
     }
 
     if (cipAnyDocStatus(app, 'update_required') && cipCanRollToUpdatesRequired(app.status)) {
@@ -7476,6 +7551,12 @@
     var row = clientFolderRow(id);
     var acts = window.TMAFileActions;
     if (!row || !acts || !acts.reviewAt) return;
+    // Same as the person-tab chip: a listing `next` of [] would grey out
+    // every other status even though staff may set any of the three.
+    row.review = Object.assign({}, row.review || {}, {
+      canReview: true,
+      next: null,
+    });
     var box = chip.getBoundingClientRect();
     acts.reviewAt(box.left, box.bottom + 4, row, function () {
       loadClientFolder(root, { changed: true });
@@ -12122,7 +12203,10 @@
   function ensureApplicationLoaded(state, render) {
     var id = state.selectedId;
     if (!id) return;
-    if (state.applicationLoadingFor === id) return;
+    if (state.applicationLoadingFor === id) {
+      state.applicationNeedsReload = true;
+      return;
+    }
     if (state.applicationFreshFor === id) return;
 
     state.applicationLoadingFor = id;
@@ -12141,6 +12225,7 @@
      */
     var paint = function (json, meta) {
       var next = json && json.application;
+      var held = APPLICATIONS[id];
 
       /*
        * A cached "no application" is how an applicant became Client info.
@@ -12149,10 +12234,10 @@
        * a file we are about to read for real.
        */
       if (meta && meta.stale && !next) return;
-      if (meta && meta.stale && APPLICATIONS[id] && APPLICATIONS[id]._statusPending) return;
+      if (meta && meta.stale && held && held._statusPending) return;
 
       if (next) {
-        if (next._statusPending) delete next._statusPending;
+        next = cipOverlayPendingFileStatuses(held, next);
         rememberApplication(id, next);
       } else if (isCipApplicant(id) || isApplicationProfile(APPLICATIONS[id])) {
         // Keep the file that is on screen. Absence is not "this is a client".
@@ -12175,6 +12260,12 @@
       .then(function () {
         if (state.applicationLoadingFor === id) state.applicationLoadingFor = null;
         if (state.selectedId !== id) return;
+        if (state.applicationNeedsReload) {
+          state.applicationNeedsReload = false;
+          state.applicationFreshFor = null;
+          ensureApplicationLoaded(state, render);
+          return;
+        }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
@@ -12205,7 +12296,13 @@
     APPLICATIONS[clientId] = record;
     if (record) rememberCipApplicant(clientId);
     if (window.TMAStore) {
-      window.TMAStore.put(applicationCacheKey(clientId), { application: record });
+      var stored = record;
+      if (record && (record._statusPending || record._pendingFileStatuses)) {
+        stored = Object.assign({}, record);
+        delete stored._statusPending;
+        delete stored._pendingFileStatuses;
+      }
+      window.TMAStore.put(applicationCacheKey(clientId), { application: stored });
     }
   }
 
@@ -13166,7 +13263,8 @@
           clientsFetch('/portal/cip/clients/' + encodeURIComponent(open) + '/application')
             .then(function (json) {
               var next = json && json.application;
-              if (next) rememberApplication(open, next);
+              if (!next) return;
+              rememberApplication(open, cipOverlayPendingFileStatuses(APPLICATIONS[open], next));
             })
             // Keep what is on screen. A signal is not a reason to empty a file.
             .catch(function () {})
