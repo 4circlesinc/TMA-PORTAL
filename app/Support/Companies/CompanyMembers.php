@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\Pages;
 use App\Support\Invitations\Invitations;
+use App\Support\Mail\Deliveries;
+use App\Support\Mail\Postcards;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Str;
@@ -90,16 +92,9 @@ final class CompanyMembers
             'metadata' => ['companyUid' => $company->uid, 'role' => $member->role],
         ]);
 
+        $member->unsetRelation('user');
         if ($member->user) {
-            Notifier::send([
-                'user' => $member->user,
-                'actor' => $by,
-                'type' => 'company.member_added',
-                'title' => 'You were added to '.$company->name,
-                'message' => 'As '.$member->roleLabel().'.',
-                'subject' => $company,
-                'action_url' => Pages::HOME,
-            ]);
+            self::mailAdded($company, $member, $by);
             ClientConversations::attachLogin($member->user);
         }
 
@@ -257,13 +252,7 @@ final class CompanyMembers
         ]);
 
         if ($member->user) {
-            Notifier::send([
-                'user' => $member->user,
-                'actor' => $by,
-                'type' => 'company.member_removed',
-                'title' => 'Your access to '.$company->name.' was removed',
-                'subject' => $company,
-            ]);
+            self::mailRemoved($company, $member, $by);
         }
 
         return $member->fresh();
@@ -334,5 +323,99 @@ final class CompanyMembers
         }
 
         return User::whereKey($member->user_id)->exists() ? $member->user_id : null;
+    }
+
+    /**
+     * Bell + postcard when an existing account is added. The dedicated
+     * postcard is the email: access changes must arrive even if the person is
+     * online, and the generic notification twin was only a greeting and a
+     * one-line stub.
+     */
+    private static function mailAdded(Company $company, CompanyMember $member, User $by): void
+    {
+        $user = $member->user;
+        $provider = self::isProvider($company);
+        $role = $member->roleLabel();
+
+        Notifier::send([
+            'user' => $user,
+            'actor' => $by,
+            'type' => 'company.member_added',
+            'title' => 'You were added to '.$company->name,
+            'message' => $provider
+                ? 'You now have access to '.$company->name.'’s applications as '.$role.'.'
+                : 'You now have access to '.$company->name.' as '.$role.'.',
+            'subject' => $company,
+            'action_url' => $provider ? Pages::HOME : '/',
+            'email' => false,
+        ]);
+
+        if (! $user->email) {
+            return;
+        }
+
+        Deliveries::send(
+            Postcards::companyMemberAdded(
+                $user->name ?: $member->displayName(),
+                $company->name,
+                self::portalUrl($company),
+                $role,
+                $by->name,
+                $provider,
+            ),
+            $user->email,
+            $company,
+            'companyMemberAdded',
+            immediate: true,
+        );
+    }
+
+    /** Bell + postcard when company access is taken away. */
+    private static function mailRemoved(Company $company, CompanyMember $member, User $by): void
+    {
+        $user = $member->user;
+        $provider = self::isProvider($company);
+
+        Notifier::send([
+            'user' => $user,
+            'actor' => $by,
+            'type' => 'company.member_removed',
+            'title' => 'Your access to '.$company->name.' was removed',
+            'message' => $provider
+                ? 'You no longer have access to '.$company->name.'’s applications through the portal.'
+                : 'You no longer have access to '.$company->name.' through the portal.',
+            'subject' => $company,
+            'email' => false,
+        ]);
+
+        if (! $user->email) {
+            return;
+        }
+
+        Deliveries::send(
+            Postcards::companyMemberRemoved(
+                $user->name ?: $member->displayName(),
+                $company->name,
+                url('/'),
+                $by->name,
+                $provider,
+            ),
+            $user->email,
+            $company,
+            'companyMemberRemoved',
+            immediate: true,
+        );
+    }
+
+    private static function isProvider(Company $company): bool
+    {
+        $company->loadMissing('cipProvider');
+
+        return $company->cipProvider !== null;
+    }
+
+    private static function portalUrl(Company $company): string
+    {
+        return url(self::isProvider($company) ? Pages::HOME : '/');
     }
 }

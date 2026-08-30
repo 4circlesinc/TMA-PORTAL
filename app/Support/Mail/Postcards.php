@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Mail\Postcard;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
@@ -418,7 +419,23 @@ class Postcards
         ]);
     }
 
-    /** The invitation someone receives when added to a company account. */
+    /**
+     * What joining a company actually gives someone. CIP providers are the
+     * usual case; other companies still get a truthful, shorter description.
+     */
+    private static function companyAccessExplainer(string $companyName, bool $isProvider): string
+    {
+        $name = e($companyName);
+
+        if ($isProvider) {
+            return '<p>On the portal you can view and work on Citizenship by Investment applications filed by '
+                .$name.', including documents, comments and status updates, according to the permissions for your role.</p>';
+        }
+
+        return '<p>On the portal you can reach '.$name.'\'s files, documents and updates, according to the permissions for your role.</p>';
+    }
+
+    /** The invitation someone receives when asked to join a company account. */
     public static function companyMemberInvite(
         ?string $name,
         string $companyName,
@@ -427,24 +444,96 @@ class Postcards
         ?string $inviter = null,
         ?\DateTimeInterface $expiresAt = null,
         bool $hasAccount = false,
+        bool $isProvider = false,
     ): Postcard {
-        return new Postcard('You have been added to '.$companyName.' on '.self::SITE, [
-            'preheader' => 'Your company access is ready.',
-            'eyebrow' => 'Company access',
+        $next = $hasAccount
+            ? '<p>You already have an account with this email address. Sign in to accept the invitation — '
+                .e($companyName).' will be added to your existing access.</p>'
+            : '<p>Use the button below to create your account and choose a password. Once you have, you can sign in and start work.</p>';
+
+        return new Postcard('You\'re invited to join '.$companyName.' on '.self::SITE, [
+            'preheader' => $hasAccount
+                ? 'Sign in to accept your invitation to '.$companyName.'.'
+                : 'Create your account to join '.$companyName.' on the portal.',
+            'eyebrow' => $isProvider ? 'Service provider access' : 'Company access',
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
+            'title' => 'You\'re invited to join '.$companyName,
+            'lead' => ($inviter ? $inviter.' has invited you' : 'You have been invited')
+                .' to join '.$companyName.' as '.$companyRole.'.',
+            'bodyHtml' => self::companyAccessExplainer($companyName, $isProvider).$next,
+            'details' => array_values(array_filter(array_merge(
+                [
+                    ['Company', e($companyName)],
+                    ['Your role', e($companyRole)],
+                    $inviter ? ['Invited by', e($inviter)] : null,
+                ],
+                self::expiryDetails($expiresAt),
+            ))),
+            'button' => [
+                'label' => $hasAccount ? 'Sign in and accept' : 'Create your account',
+                'url' => $url,
+            ],
+            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
+        ]);
+    }
+
+    /** Told to someone whose existing account was added to a company. */
+    public static function companyMemberAdded(
+        ?string $name,
+        string $companyName,
+        string $url,
+        string $companyRole,
+        ?string $addedBy = null,
+        bool $isProvider = false,
+    ): Postcard {
+        return new Postcard('You now have access to '.$companyName.' on '.self::SITE, [
+            'preheader' => ($addedBy ? $addedBy.' added you to ' : 'You have been added to ').$companyName.'.',
+            'eyebrow' => $isProvider ? 'Service provider access' : 'Company access',
             'greeting' => $name ? "Hello {$name}," : 'Hello,',
             'title' => 'You have been added to '.$companyName,
-            'lead' => ($inviter ? e($inviter).' has added you' : 'You have been added')
-                .' as a member of '.e($companyName).' on the '.self::SITE.' portal.',
-            'bodyHtml' => '<p>Your access may include company bookings, events, files, contracts, invoices and updates, based on the permissions set for your role.</p>'
-                .($hasAccount
-                    ? '<p>You already have an account with this email address, so just sign in and this company will be added to it.</p>'
-                    : '<p>Use the button below to create your account and get started.</p>'),
-            'details' => array_merge(
-                [['Company', e($companyName)], ['Your role', e($companyRole)]],
-                self::expiryDetails($expiresAt),
-            ),
-            'button' => ['label' => 'Access company portal', 'url' => $url],
-            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
+            'lead' => ($addedBy ? $addedBy.' has added you' : 'You have been added')
+                .' to '.$companyName.' as '.$companyRole.'.',
+            'bodyHtml' => '<p>Your access is already active — you do not need to accept an invitation.</p>'
+                .self::companyAccessExplainer($companyName, $isProvider)
+                .'<p>Sign in to the portal to see what you now have access to.</p>',
+            'details' => array_values(array_filter([
+                ['Company', e($companyName)],
+                ['Your role', e($companyRole)],
+                $addedBy ? ['Added by', e($addedBy)] : null,
+            ])),
+            'button' => ['label' => 'Open the portal', 'url' => $url],
+            'footNote' => 'If you weren\'t expecting this change, contact us at support@tmantoine.com.',
+        ]);
+    }
+
+    /** Told to someone whose company access has just been taken away. */
+    public static function companyMemberRemoved(
+        ?string $name,
+        string $companyName,
+        string $url,
+        ?string $removedBy = null,
+        bool $isProvider = false,
+    ): Postcard {
+        $lost = $isProvider
+            ? e($companyName).'\'s applications, files and updates'
+            : e($companyName).'\'s files, documents and updates';
+
+        return new Postcard('Your access to '.$companyName.' has been removed', [
+            'preheader' => 'You no longer have access to '.$companyName.' on the '.self::SITE.' portal.',
+            'eyebrow' => 'Access update',
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
+            'title' => 'Your access to '.$companyName.' has been removed',
+            'lead' => ($removedBy ? $removedBy.' has removed you' : 'You have been removed')
+                .' from '.$companyName.' on the '.self::SITE.' portal.',
+            'bodyHtml' => '<p>You received this email because your access to '.$lost.' through the portal has ended.</p>'
+                .'<p>Your personal account is unchanged. You can still sign in if you have other access. If this was a mistake, ask the person who manages '
+                .e($companyName).' to restore it, or contact us at support@tmantoine.com.</p>',
+            'details' => array_values(array_filter([
+                ['Company', e($companyName)],
+                $removedBy ? ['Removed by', e($removedBy)] : null,
+            ])),
+            'button' => ['label' => 'Sign in to the portal', 'url' => $url],
+            'footNote' => 'This is an automated notice from '.self::SITE.'.',
         ]);
     }
 
@@ -902,7 +991,7 @@ class Postcards
         ?User $actor = null,
         ?string $subject = null,
         ?array $copy = null,
-        ?\App\Models\FileItem $attachment = null,
+        ?FileItem $attachment = null,
     ): Postcard {
         $subject ??= Notices::line($facts, $decision, $actor);
         $granted = $decision === Status::GRANTED;

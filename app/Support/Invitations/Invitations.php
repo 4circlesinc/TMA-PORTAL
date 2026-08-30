@@ -193,6 +193,7 @@ final class Invitations
                 $inviter,
                 $expires,
                 $hasAccount,
+                $invitation->company?->cipProvider !== null,
             ),
             default => Postcards::clientInvite($invitation->name, $url, $inviter, $expires, $hasAccount),
         };

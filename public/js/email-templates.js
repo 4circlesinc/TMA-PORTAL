@@ -452,6 +452,61 @@
       },
     }),
     makeStandardTemplate({
+      id: 'company-member-invite', name: 'Invited to a company', category: 'Company',
+      subject: 'You’re invited to join Galaxy Consultancy on ' + SITE_NAME,
+      preview: 'Create your account to join Galaxy Consultancy on the portal.',
+      spec: {
+        title: 'You’re invited to join Galaxy Consultancy',
+        lead: 'Tanya Antoine has invited you to join Galaxy Consultancy as Primary contact.',
+        body: '<p>Hello Dana Reed,</p>' +
+          '<p>On the portal you can view and work on Citizenship by Investment applications filed by Galaxy Consultancy, including documents, comments and status updates, according to the permissions for your role.</p>' +
+          renderDetailLines([
+            ['Company', 'Galaxy Consultancy'],
+            ['Your role', 'Primary contact'],
+            ['Invited by', 'Tanya Antoine'],
+            ['Expires', '13 Sep 2026, 9:00 AM'],
+          ]) +
+          '<p>Use the button below to create your account and choose a password. Once you have, you can sign in and start work.</p>',
+        button: 'Create your account',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'company-member-added', name: 'Added to a company', category: 'Company',
+      subject: 'You now have access to Galaxy Consultancy on ' + SITE_NAME,
+      preview: 'Tanya Antoine added you to Galaxy Consultancy.',
+      spec: {
+        title: 'You have been added to Galaxy Consultancy',
+        lead: 'Tanya Antoine has added you to Galaxy Consultancy as Primary contact.',
+        body: '<p>Hello Dana Reed,</p>' +
+          '<p>Your access is already active — you do not need to accept an invitation.</p>' +
+          '<p>On the portal you can view and work on Citizenship by Investment applications filed by Galaxy Consultancy, including documents, comments and status updates, according to the permissions for your role.</p>' +
+          renderDetailLines([
+            ['Company', 'Galaxy Consultancy'],
+            ['Your role', 'Primary contact'],
+            ['Added by', 'Tanya Antoine'],
+          ]) +
+          '<p>Sign in to the portal to see what you now have access to.</p>',
+        button: 'Open the portal',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'company-member-removed', name: 'Removed from a company', category: 'Company',
+      subject: 'Your access to Galaxy Consultancy has been removed',
+      preview: 'You no longer have access to Galaxy Consultancy on the ' + SITE_NAME + ' portal.',
+      spec: {
+        title: 'Your access to Galaxy Consultancy has been removed',
+        lead: 'Tanya Antoine has removed you from Galaxy Consultancy on the ' + SITE_NAME + ' portal.',
+        body: '<p>Hello Dana Reed,</p>' +
+          '<p>You received this email because your access to Galaxy Consultancy’s applications, files and updates through the portal has ended.</p>' +
+          renderDetailLines([
+            ['Company', 'Galaxy Consultancy'],
+            ['Removed by', 'Tanya Antoine'],
+          ]) +
+          '<p>Your personal account is unchanged. You can still sign in if you have other access. If this was a mistake, ask the person who manages Galaxy Consultancy to restore it, or contact us at <a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>.</p>',
+        button: 'Sign in to the portal',
+      },
+    }),
+    makeStandardTemplate({
       id: 'file-shared', name: 'A file was shared', category: 'Files',
       subject: 'A file has been shared with you', preview: 'A new document is waiting for you in the portal.',
       spec: {
