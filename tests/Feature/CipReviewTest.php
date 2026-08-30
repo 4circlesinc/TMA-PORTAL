@@ -464,10 +464,10 @@ class CipReviewTest extends TestCase
 
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $passport->fresh()->status);
 
-        // A better scan arriving is not a verdict on it, so the file stays
-        // where the last verdict left it until somebody reads the new one.
-        Review::settle($application->fresh());
-        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+        // The refusal has been answered and nothing else is refused, so the
+        // application is the officer's to read again: back to Review
+        // Applications on its own, not parked at Updates Required.
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
 
         $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/documents/'.$passport->uuid.'/approve')
@@ -475,6 +475,28 @@ class CipReviewTest extends TestCase
             ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
 
         $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+    }
+
+    public function test_resolving_the_last_refused_document_returns_the_application_to_review(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::UPDATE_REQUIRED);
+        $this->slot($application, 'birth_certificate', 'Birth certificate', true, DocumentStatus::READY_FOR_SUBMISSION);
+        $passport = $this->slot(
+            $application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::UPDATE_REQUIRED,
+        );
+        $photo = $this->slot($application, 'photo', 'Photo', false, DocumentStatus::UPDATE_REQUIRED);
+
+        // One refused slot cleared while another stands: still Updates Required.
+        $passport->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
+        Review::settle($application->fresh());
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+
+        // The last one cleared, an optional slot included, and the checklist
+        // is not yet accepted in full: the officer is reading again.
+        $photo->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
+        Review::settle($application->fresh());
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
     }
 
     public function test_progress_counts_every_status_whether_or_not_anything_sits_in_it(): void

@@ -165,9 +165,10 @@ class Review
                 continue;
             }
 
-            // Ready to submit has no mapped reverse into Review Applications.
-            // The checklist still has to leave that label when a file goes
-            // back into review, so the system writes it as an inference.
+            // Neither Ready to submit nor Updates required has a mapped
+            // reverse into Review Applications. The checklist still has to
+            // leave those labels when a file goes back into review, so the
+            // system writes it as an inference.
             $application = Engine::set($application, $target, null, $meta);
         }
 
@@ -284,24 +285,36 @@ class Review
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
             + $tally[DocumentStatus::APPLICATION_REVIEW]['required'];
 
-        if ($required === 0 || $unassessed > 0 || $inReview) {
+        $allReady = $required > 0
+            && $unassessed === 0
+            && ! $inReview
+            && $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
+
+        /*
+         * The last file sent back has been resolved, re-uploaded or moved by
+         * hand, and nothing else is refused. Updates Required was the
+         * checklist's word for "the provider side has work"; with none left
+         * the officer is reading again, so the application goes back to
+         * Review Applications on its own rather than waiting for somebody to
+         * type it. Only a checklist already accepted in full skips that and
+         * walks on to Ready to submit below.
+         */
+        if ($from === Status::UPDATE_REQUIRED && ! $allReady) {
+            return [Status::REVIEW_APPLICATION];
+        }
+
+        if (! $allReady) {
             return [];
         }
 
-        $allReady = $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
-
-        if ($allReady) {
-            return match ($from) {
-                Status::REVIEW_APPLICATION, Status::UPDATE_REQUIRED => [
-                    Status::ASSESSMENT_FEEDBACK,
-                    Status::READY_TO_SUBMIT,
-                ],
-                Status::ASSESSMENT_FEEDBACK => [Status::READY_TO_SUBMIT],
-                default => [],
-            };
-        }
-
-        return [];
+        return match ($from) {
+            Status::REVIEW_APPLICATION, Status::UPDATE_REQUIRED => [
+                Status::ASSESSMENT_FEEDBACK,
+                Status::READY_TO_SUBMIT,
+            ],
+            Status::ASSESSMENT_FEEDBACK => [Status::READY_TO_SUBMIT],
+            default => [],
+        };
     }
 
     /**

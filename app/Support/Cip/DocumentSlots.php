@@ -12,6 +12,7 @@ use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -243,7 +244,9 @@ class DocumentSlots
      *
      * A slot already in review, or already ready, is left alone: uploading a
      * better scan of an approved document does not un-approve it, and nothing
-     * here should quietly undo a reviewer's decision.
+     * here should quietly undo a reviewer's decision. Answering a refusal is
+     * different: that re-upload also settles the application, so the file
+     * leaves Updates Required when its last refused slot does.
      */
     public static function advanceAfterUpload(CipDocument $slot, ?User $actor): void
     {
@@ -256,6 +259,22 @@ class DocumentSlots
         DocumentEngine::apply($slot, DocumentStatus::APPLICATION_REVIEW, $actor, [
             'reason' => 'upload',
         ]);
+
+        /*
+         * A re-upload against a refused slot is the provider side answering
+         * Updates Required. Once nothing on the checklist is still refused,
+         * the application is the officer's to read again, and it goes back to
+         * Review Applications without anybody typing it, see Review::settle.
+         */
+        if ($from === DocumentStatus::UPDATE_REQUIRED) {
+            try {
+                Review::settle($slot->loadMissing('application')->application, $actor);
+            } catch (\InvalidArgumentException|AuthorizationException $e) {
+                // The slot already moved. Application inference must not
+                // undo the upload that just landed.
+                report($e);
+            }
+        }
     }
 
     /**

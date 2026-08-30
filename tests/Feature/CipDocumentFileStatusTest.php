@@ -279,6 +279,23 @@ class CipDocumentFileStatusTest extends TestCase
         $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
     }
 
+    public function test_resolving_the_last_update_required_from_the_library_returns_the_application_to_review(): void
+    {
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::UPDATE_REQUIRED);
+        $slot->loadMissing('application');
+        $slot->application->forceFill(['status' => Status::UPDATE_REQUIRED])->save();
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::APPLICATION_REVIEW)
+            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $slot->application->fresh()->status);
+    }
+
     public function test_clearing_one_update_required_file_keeps_the_chip_when_another_still_needs_an_update(): void
     {
         [$slot, $file, , $staff] = $this->filed(DocumentStatus::UPDATE_REQUIRED);
