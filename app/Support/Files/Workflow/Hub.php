@@ -116,6 +116,10 @@ final class Hub
             ->limit(self::OVERSCAN)
             ->get();
 
+        // Every chain the access walk is about to climb, fetched a level at
+        // a time for the whole page rather than a folder at a time per file.
+        FileAccess::warmChains($rows->map(fn (FileWorkflow $w) => $w->file?->folder_id)->all());
+
         $visible = self::filterByAccess($viewer, $rows, fn (FileWorkflow $w) => $w->file);
 
         $limit = self::pageSize($filters);
@@ -193,6 +197,8 @@ final class Hub
         // A comment whose file has been deleted is history, not an open thread.
         $rows = $rows->filter(fn (FileComment $c) => $c->file !== null)->values();
 
+        FileAccess::warmChains($rows->map(fn (FileComment $c) => $c->file->folder_id)->all());
+
         $visible = self::filterByAccess($viewer, $rows, fn (FileComment $c) => $c->file);
 
         $limit = self::pageSize($filters);
@@ -201,6 +207,12 @@ final class Hub
 
         $paths = self::folderPaths($page->map(fn (FileComment $c) => $c->file)->all());
         $mentions = self::mentionNames($page->pluck('id'));
+        // The thread each reply belongs to, one query for the page rather than
+        // one per reply.
+        $threadUuids = FileComment::withTrashed()
+            ->whereIn('id', $page->filter(fn (FileComment $c) => $c->isReply())->pluck('root_id')->filter()->unique()->all())
+            ->pluck('uuid', 'id')
+            ->all();
 
         /*
          * Read state per row — and asking for it does not spend it.
@@ -217,8 +229,8 @@ final class Hub
             $page->map(fn (FileComment $c) => $c->root_id ?? $c->id)
         );
 
-        $items = $page->map(function (FileComment $c) use ($viewer, $paths, $mentions, $unread) {
-            $row = self::comment($c, $viewer, $paths, $mentions);
+        $items = $page->map(function (FileComment $c) use ($viewer, $paths, $mentions, $unread, $threadUuids) {
+            $row = self::comment($c, $viewer, $paths, $mentions, $threadUuids);
             $row['unread'] = isset($unread[$c->root_id ?? $c->id]);
 
             return $row;
@@ -720,7 +732,8 @@ final class Hub
         return ['text' => Status::label($workflow->status), 'tone' => Status::tone($workflow->status)];
     }
 
-    private static function comment(FileComment $comment, User $viewer, array $paths, array $mentions): array
+    /** @param  array<int, string>  $threadUuids  root comment id => uuid */
+    private static function comment(FileComment $comment, User $viewer, array $paths, array $mentions, array $threadUuids): array
     {
         $file = $comment->file;
         $named = in_array($viewer->id, $mentions[$comment->id]['ids'] ?? [], true);
@@ -759,7 +772,7 @@ final class Hub
             // The thread this belongs to, so a reply from the list lands in the
             // right place rather than starting a new one.
             'threadId' => $comment->isReply()
-                ? FileComment::withTrashed()->whereKey($comment->root_id)->value('uuid')
+                ? ($threadUuids[$comment->root_id] ?? null)
                 : $comment->uuid,
         ];
     }

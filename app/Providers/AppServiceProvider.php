@@ -45,6 +45,36 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\SharePointConnection::saved(fn () => \App\Support\Files\FileAccess::forgetPersonalDrives());
         \App\Models\SharePointConnection::deleted(fn () => \App\Support\Files\FileAccess::forgetPersonalDrives());
 
+        /*
+         * The other access memos. Shares and company memberships feed
+         * FileAccess::shareRole; memberships, providers, clients and
+         * applications feed FolderAccess::clientIdsFor and
+         * ContactIdentity::idsFor. Each is asked many times in one request
+         * and answered from memory, so the write that changes the answer is
+         * what drops it — a share granted mid-request must open the file in
+         * that same request. Clients, applications and providers are written
+         * constantly for reasons that move no grant (an import, a sync, a
+         * status), so those only count when the column that feeds the memo
+         * changed.
+         */
+        $forget = fn () => \App\Support\Files\FileAccess::forgetGrants();
+        $whenChanged = fn (array $columns) => function ($model) use ($columns, $forget) {
+            if ($model->wasRecentlyCreated || $model->wasChanged($columns)) {
+                $forget();
+            }
+        };
+
+        \App\Models\Share::saved($forget);
+        \App\Models\Share::deleted($forget);
+        \App\Models\CompanyMember::saved($forget);
+        \App\Models\CompanyMember::deleted($forget);
+        \App\Models\CipProvider::saved($whenChanged(['company_id']));
+        \App\Models\CipProvider::deleted($forget);
+        \App\Models\CipApplication::saved($whenChanged(['provider_id', 'client_id']));
+        \App\Models\CipApplication::deleted($forget);
+        \App\Models\Client::saved($whenChanged(['referred_by_company_id', 'user_id']));
+        \App\Models\Client::deleted($forget);
+
         // A file landing in a client folder enters that client's review queue,
         // whichever of the seven upload paths put it there.
         \App\Models\FileItem::observe(\App\Observers\ClientDocumentObserver::class);

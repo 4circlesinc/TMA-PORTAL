@@ -345,6 +345,10 @@ class CipProviderFolderAccessTest extends TestCase
             ->where('user_id', $gil->id)
             ->update(['status' => CompanyMember::STATUS_REMOVED, 'removed_at' => now()]);
 
+        // A mass update fires no model event, so the per-request access memos
+        // do not hear about it the way CompanyMembers::remove() makes them.
+        FileAccess::forgetGrants();
+
         $this->assertFalse(FileAccess::can($gil->fresh(), 'view', $root));
         $this->assertNotContains($root->id, FileAccess::systemVisibleFolderIds($gil->fresh()));
     }

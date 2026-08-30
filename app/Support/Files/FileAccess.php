@@ -18,6 +18,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Package;
 use App\Support\Companies\CompanyAccess;
+use App\Support\Companies\ContactIdentity;
 use Illuminate\Support\Collection;
 
 /**
@@ -247,6 +248,28 @@ class FileAccess
         }
 
         return self::$personalDrives[$folder->id];
+    }
+
+    /**
+     * Drop every memo that answers "what may this person reach": shares,
+     * memberships, the provider-firm client list, contact identities and the
+     * roles resolved from them. Folder rows stay, a share does not move a
+     * folder. Called whenever a share, membership, provider, client or
+     * application is written, see AppServiceProvider, and by
+     * {@see self::forgetFolders()}.
+     */
+    public static function forgetGrants(): void
+    {
+        self::$shareRoles = [];
+        self::$userShares = [];
+        self::$companyShares = [];
+        self::$companyMemberships = [];
+        self::$resolvedRoles = [];
+        self::$liveAssignments = [];
+        self::$companyStaffRoles = [];
+
+        FolderAccess::forget();
+        ContactIdentity::forget();
     }
 
     /** Called whenever a SharePoint connection changes, see AppServiceProvider. */
@@ -779,18 +802,65 @@ class FileAccess
             return self::$shareRoles[$key];
         }
 
-        $share = Share::where('kind', 'user')
-            ->where('target_user_id', $user->id)
-            ->where('item_type', $type)
-            ->where('item_id', $id)
-            ->whereNull('revoked_at')
-            ->get()
-            ->first(fn (Share $s) => $s->isActive());
+        $share = self::userShares($user, $type)[$id] ?? null;
 
         return self::$shareRoles[$key] = self::highest(array_filter([
             $share?->role,
             self::companyShareRole($user, $type, $id),
         ]));
+    }
+
+    /**
+     * Every active share of one type held by this person, by item id.
+     *
+     * The old shape asked the shares table once per file and once per folder
+     * in every chain it climbed — 28 round trips for a page of twenty
+     * comments, each paid in full over a remote database. A person's own
+     * shares are a short list; fetching them once and answering from memory
+     * is what the per-key cache above was already pretending to do.
+     *
+     * @return array<int, Share>
+     */
+    private static function userShares(User $user, string $type): array
+    {
+        $key = $user->id.'|'.$type;
+
+        if (! array_key_exists($key, self::$userShares)) {
+            $byItem = [];
+            foreach (self::activeUserShares($user, $type) as $share) {
+                // First active share per item, the row the per-item query
+                // used to return.
+                $byItem[(int) $share->item_id] ??= $share;
+            }
+            self::$userShares[$key] = $byItem;
+        }
+
+        return self::$userShares[$key];
+    }
+
+    /**
+     * Every active company share of one type reaching this person's firms,
+     * grouped by item id. Same reasoning as {@see self::userShares()}.
+     *
+     * @param  Collection<int, CompanyMember>  $memberships
+     * @return array<int, Collection<int, Share>>
+     */
+    private static function companyShares(User $user, string $type, Collection $memberships): array
+    {
+        $key = $user->id.'|'.$type;
+
+        if (! array_key_exists($key, self::$companyShares)) {
+            self::$companyShares[$key] = Share::where('kind', 'company')
+                ->whereIn('target_company_id', $memberships->pluck('company_id'))
+                ->where('item_type', $type)
+                ->whereNull('revoked_at')
+                ->get()
+                ->filter(fn (Share $s) => $s->isActive())
+                ->groupBy(fn (Share $s) => (int) $s->item_id)
+                ->all();
+        }
+
+        return self::$companyShares[$key];
     }
 
     /**
@@ -814,13 +884,7 @@ class FileAccess
             return null;
         }
 
-        $shares = Share::where('kind', 'company')
-            ->whereIn('target_company_id', $memberships->pluck('company_id'))
-            ->where('item_type', $type)
-            ->where('item_id', $id)
-            ->whereNull('revoked_at')
-            ->get()
-            ->filter(fn (Share $s) => $s->isActive());
+        $shares = self::companyShares($user, $type, $memberships)[$id] ?? collect();
 
         $roles = [];
 
@@ -896,6 +960,12 @@ class FileAccess
 
     /** @var array<string, string|null> */
     private static array $shareRoles = [];
+
+    /** @var array<string, array<int, Share>> keyed "user|type" */
+    private static array $userShares = [];
+
+    /** @var array<string, array<int, Collection>> keyed "user|type" */
+    private static array $companyShares = [];
 
     /** @var array<int, Collection> */
     private static array $companyMemberships = [];
@@ -1005,13 +1075,9 @@ class FileAccess
     {
         Package::forget();
         SyncScope::forget();
+        self::forgetGrants();
 
         self::$folders = [];
-        self::$shareRoles = [];
-        self::$companyMemberships = [];
-        self::$resolvedRoles = [];
-        self::$liveAssignments = [];
-        self::$companyStaffRoles = [];
 
         /*
          * The personal-drive answers go with them. Both caches are keyed by

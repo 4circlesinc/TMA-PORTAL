@@ -11,6 +11,7 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowStep;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FileAccess;
 
 /**
  * The persistent person behind a login, when there is one.
@@ -32,10 +33,31 @@ final class ContactIdentity
      */
     public static function idsFor(User $user): array
     {
-        return CompanyMember::query()
-            ->where('user_id', $user->id)
-            ->pluck('id')
-            ->all();
+        $uid = (int) $user->id;
+        if (! array_key_exists($uid, self::$memberIds)) {
+            self::$memberIds[$uid] = CompanyMember::query()
+                ->where('user_id', $uid)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return self::$memberIds[$uid];
+    }
+
+    /**
+     * Per-request memo, by user id. One page asks this from the listing, the
+     * counts and every presented row; the answer only changes when a
+     * membership is written, which drops it, see
+     * {@see FileAccess::forgetGrants()}.
+     *
+     * @var array<int, list<int>>
+     */
+    private static array $memberIds = [];
+
+    public static function forget(): void
+    {
+        self::$memberIds = [];
     }
 
     public static function forUser(?User $user, ?int $companyId = null): ?CompanyMember

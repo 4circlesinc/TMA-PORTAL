@@ -10,6 +10,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Clients\Assignments;
+use App\Support\Files\FileAccess;
 
 /**
  * Which client folders a service-provider contact may open.
@@ -36,6 +37,36 @@ final class FolderAccess
      * @return list<int>
      */
     public static function clientIdsFor(User $user): array
+    {
+        $uid = (int) $user->id;
+        if (array_key_exists($uid, self::$clientIds)) {
+            return self::$clientIds[$uid];
+        }
+
+        return self::$clientIds[$uid] = self::computeClientIds($user);
+    }
+
+    /**
+     * Per-request memo, by user id.
+     *
+     * Four queries answer this, and one Feedback page asked nine times: once
+     * to build the listing, once per folder in every chain the access walk
+     * climbed, twice more for the badge counts. Over a remote database that
+     * alone was a third of a 30-second request. Dropped whenever a
+     * membership, provider, client or application is written, see
+     * {@see FileAccess::forgetGrants()}.
+     *
+     * @var array<int, list<int>>
+     */
+    private static array $clientIds = [];
+
+    public static function forget(): void
+    {
+        self::$clientIds = [];
+    }
+
+    /** @return list<int> */
+    private static function computeClientIds(User $user): array
     {
         if (Role::isStaff($user) || ! CipAccess::enabled()) {
             return [];

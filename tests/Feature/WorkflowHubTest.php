@@ -24,6 +24,7 @@ use App\Support\Cip\Tree;
 use App\Support\Files\FileAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -605,6 +606,99 @@ class WorkflowHubTest extends TestCase
         $this->actingAs($stranger)->getJson('/portal/dashboard/work')
             ->assertOk()
             ->assertJsonPath('enabled', false);
+    }
+
+    /**
+     * The provider contact's Feedback list costs the same whether their firm
+     * has one filing or four.
+     *
+     * The first version cost 104 queries for twenty rows: the firm's client
+     * list was recomputed for every folder the access walk climbed, shares
+     * were asked one item at a time, and every reply looked up its thread.
+     * Over a remote database that was a 30-second request, which the browser
+     * showed as an empty page. A fixed cost is the guard against it coming
+     * back; the number itself is free to change.
+     */
+    public function test_a_provider_contacts_feedback_list_does_not_scale_with_their_filings(): void
+    {
+        config(['services.cip.enabled' => true]);
+        Storage::fake(config('filesystems.files_disk', 'local'));
+
+        $ada = $this->user('Administrator', 'ada-qc@example.com', 'Ada Admin');
+        $gil = $this->user('Client', 'gil-qc@example.com', 'Gil Contact');
+        $company = Company::create(['uid' => 'gal-qc-firm', 'name' => 'Galaxy Firm', 'created_by' => $ada->id]);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GQC', 'company_id' => $company->id]);
+
+        $file = function (string $first) use ($provider, $ada, $gil): FileItem {
+            $application = Applications::create($provider, $ada);
+            CipPerson::create([
+                'application_id' => $application->id,
+                'role' => CipPerson::ROLE_MAIN_APPLICANT,
+                'first_name' => $first,
+                'last_name' => 'Wei',
+            ]);
+            Tree::provision($application->fresh(), $ada);
+
+            $slot = DocumentSlots::fill(
+                $application->people()->first(),
+                'passport_bio_page',
+                UploadedFile::fake()->create('passport.pdf', 40, 'application/pdf'),
+                $gil,
+            );
+
+            return $slot->fresh()->file;
+        };
+
+        $comment = fn (FileItem $file, string $body) => $this->actingAs($ada)
+            ->postJson('/portal/files/files/'.$file->uuid.'/comments', ['body' => $body])
+            ->assertCreated();
+
+        $count = function (int $expectRows) use ($gil): int {
+            FileAccess::forgetFolders();
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $this->actingAs($gil)->getJson('/portal/files/workflows/comments?scope=mine')
+                ->assertOk()
+                ->assertJsonCount($expectRows, 'items');
+
+            $n = count(DB::getQueryLog());
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+
+            return $n;
+        };
+
+        $first = $file('Chen');
+        $comment($first, 'The scan is cut off at the bottom.');
+        $root = $this->actingAs($gil)->getJson('/portal/files/files/'.$first->uuid.'/comments')->json('items.0.id');
+        $this->actingAs($ada)->postJson('/portal/files/files/'.$first->uuid.'/comments', [
+            'body' => 'Still cut off.', 'parent' => $root,
+        ])->assertCreated();
+
+        $small = $count(2);
+
+        foreach (['Dana', 'Eli', 'Fay'] as $name) {
+            $other = $file($name);
+            $comment($other, "Please rescan for $name.");
+            $comment($other, "And the second page for $name.");
+        }
+
+        $large = $count(8);
+
+        $this->assertLessThanOrEqual(
+            $small,
+            $large,
+            "listing 8 comments across 4 filings cost $large queries against $small for 2 on one",
+        );
     }
 
     public function test_updates_required_can_be_searched_by_document_label(): void
