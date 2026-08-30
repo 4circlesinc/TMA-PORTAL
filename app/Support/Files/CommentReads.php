@@ -101,6 +101,25 @@ final class CommentReads
     }
 
     /**
+     * The newest unseen comment in each unread thread, newest activity first.
+     *
+     * The dashboard strip asks for this rather than the latest comments that
+     * merely concern you: a page of already-opened threads would hide an older
+     * mention that is still unread, which is exactly the number on the badge.
+     *
+     * @return Collection<int, int> comment ids
+     */
+    public static function latestUnreadCommentIds(User $user, int $limit): Collection
+    {
+        return self::unreadQuery($user)
+            ->selectRaw('MAX(file_comments.id) as newest_id')
+            ->groupBy('file_comments.root_id')
+            ->orderByDesc('newest_id')
+            ->limit(max(1, $limit))
+            ->pluck('newest_id');
+    }
+
+    /**
      * Everything a row indicator needs about a set of files, in three queries
      * for the whole page.
      *
@@ -329,6 +348,14 @@ final class CommentReads
                 ->from('file_comments')
                 ->whereNull('resolved_at')
                 ->whereNull('deleted_at'))
+            // A thread on a binned file is not something you can open, so it
+            // must not sit on the badge either.
+            ->whereExists(function ($q) {
+                $q->selectRaw('1')
+                    ->from('files')
+                    ->whereColumn('files.id', 'file_comments.file_id')
+                    ->whereNull('files.deleted_at');
+            })
             /*
              * Asked of the THREAD, not of each comment.
              *

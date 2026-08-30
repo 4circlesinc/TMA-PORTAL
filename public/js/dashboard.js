@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-29-workflows-updates';
+  var NAV_SHELL_VERSION = '2026-08-30-templates-admin';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 
   function cipApplicationsRest(pathname) {
@@ -45,6 +45,7 @@
   var APPROVED_PAGES_NAV = [
     'users',
     'reporting',
+    'templates',
     'workflows',
     'call-recordings',
     'people',
@@ -56,6 +57,7 @@
   var APPROVED_MOBILE_PAGES = [
     'users',
     'reporting',
+    'templates',
     'workflows-automated',
     'workflows-updates',
     'call-recordings',
@@ -138,7 +140,7 @@
     var pagesCard = null;
     cards.forEach(function (card) {
       if (card.querySelector('[data-nav="dash-dashboard"]')) dashCard = card;
-      else if (card.querySelector('[data-nav="account-settings"]') && card.querySelector('[data-nav="users"], [data-nav="workflows-automated"]')) pagesCard = card;
+      else if (card.querySelector('[data-nav="account-settings"]') && card.querySelector('[data-nav="users"], [data-nav="templates"], [data-nav="workflows-automated"]')) pagesCard = card;
     });
     if (!pagesCard) {
       cards.forEach(function (card) {
@@ -875,7 +877,7 @@
         window.TMAPortalHome.restoreTodayToShell();
         todayWrap = root.querySelector('[data-today-dropdown]');
       }
-      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'workflows', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
+      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';

@@ -154,7 +154,7 @@ try {
   await cli.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await cli.waitForTimeout(900);
 
-  for (const nav of ['clients', 'email', 'users', 'so-feed', 'dash-project-overview']) {
+  for (const nav of ['clients', 'email', 'users', 'so-feed', 'dash-project-overview', 'templates']) {
     check(await cli.locator(`.tma-dash__sidebar [data-nav="${nav}"]`).count() === 0, `client does not see [data-nav="${nav}"]`);
   }
   for (const nav of ['dash-dashboard', 'so-messages', 'calendar', 'signatures', 'account-settings']) {

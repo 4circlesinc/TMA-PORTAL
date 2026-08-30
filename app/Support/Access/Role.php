@@ -255,6 +255,10 @@ class Role
         // Create and send signature requests. Everyone can *sign* one
         // addressed to them; this is the authoring side.
         'signatures.create' => [self::EMPLOYEE],
+        // The Templates page. Administrators only: it came back in Aug 2026
+        // as a place to keep document templates, and nothing on it is for
+        // an officer to use yet.
+        'templates.view' => [],
         // The Workflows section: requests waiting on you or sent by you, and
         // the comment threads you are part of, across every file.
         // Service-provider contacts reach the same pages without holding
@@ -353,6 +357,7 @@ class Role
         'people/distribution-groups' => ['directory.view', 'groups.view'],
         'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
+        'templates' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
         // Also served to CIP service-provider contacts, scoped by FileAccess

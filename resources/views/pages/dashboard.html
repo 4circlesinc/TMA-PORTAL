@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
-  <!-- tma-shell:2026-08-25-no-templates -->
+  <!-- tma-shell:2026-08-30-templates-admin -->
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
   <!-- Inter comes from a third-party origin, so the font file costs a DNS
@@ -48,7 +48,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=14"></script>
+  <script src="js/portal-access.js?v=15"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -145,6 +145,11 @@
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--chartbar" aria-hidden="true"></span>
           <span>Reporting</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
+          <span>Templates</span>
         </a>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="workflows" aria-expanded="false">
@@ -348,6 +353,10 @@
         <div data-portal-mount></div>
       </div>
 
+      <div class="tma-dash__view" data-view="templates" hidden>
+        <div data-portal-mount></div>
+      </div>
+
       <div class="tma-dash__view" data-view="signatures" hidden>
         <div data-portal-mount></div>
       </div>
@@ -514,6 +523,9 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="reporting" data-title="Reporting" data-crumb="Reporting" data-view="reporting">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChartBar.svg" alt=""><span>Reporting</span>
         </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Templates</span>
+        </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Requests" data-crumb="Workflows / Requests" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>
         </button>
@@ -660,7 +672,7 @@
   <script src="js/call-recordings.js?v=4" defer></script>
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=27" defer></script>
-  <script src="js/portal-home.js?v=50" defer></script>
+  <script src="js/portal-home.js?v=51" defer></script>
   <script src="js/dashboard.js?v=44" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>

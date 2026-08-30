@@ -1001,6 +1001,18 @@
     }
   }
 
+  /* ── Templates (administrators only, see Role::MATRIX) ── */
+  function mountTemplates(el) {
+    el.innerHTML =
+      '<div class="tma-portal-page">' +
+      ui().emptyState({
+        illustration: 'Illustration05',
+        title: 'No templates yet',
+        subtitle: 'Document templates will appear here.',
+      }) +
+      '</div>';
+  }
+
   /* ── Signatures ──────────────────────────────────── */
   var sig = {
     el: null, search: '', status: 'all', adminView: false,
@@ -3073,6 +3085,7 @@
 
   if (window.TMAPortalViews) {
     window.TMAPortalViews.register('workflows', mountWorkflows);
+    window.TMAPortalViews.register('templates', mountTemplates);
     window.TMAPortalViews.register('signatures', mountSignatures);
 
     /*

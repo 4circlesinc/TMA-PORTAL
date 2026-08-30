@@ -60,7 +60,7 @@ class EmployeeReachTest extends TestCase
     {
         $officer = $this->user(Role::REVIEWING_OFFICER);
 
-        foreach (['users', 'users/new', 'reporting', 'people',
+        foreach (['users', 'users/new', 'reporting', 'templates', 'people',
             'people/employees', 'people/clients', 'people/prospects',
             'people/shared-address-book', 'people/personal-address-book',
             'people/distribution-groups', 'people/resend-welcome-emails'] as $page) {
@@ -133,17 +133,25 @@ class EmployeeReachTest extends TestCase
         $this->assertStringNotContainsString('data-view="projects-hub"', $html);
     }
 
-    public function test_the_templates_page_is_gone_for_everyone(): void
+    public function test_the_templates_page_is_administrators_only(): void
     {
+        // Taken off the menu for everyone on 25 Aug 2026, back on 30 Aug for
+        // administrators alone. The shell is static HTML, so the row is in
+        // the markup for every account and portal-access.js removes it for
+        // anyone without templates.view; the server is what refuses the page.
         $admin = $this->user(Role::ADMINISTRATOR);
 
-        $this->actingAs($admin)->get('/templates')
-            ->assertNotFound('/templates should no longer be served');
+        $this->actingAs($admin)->get('/templates')->assertOk();
 
         $html = $this->actingAs($admin)->get('/')->assertOk()->getContent();
-        $this->assertStringNotContainsString('data-nav="templates"', $html);
-        $this->assertStringNotContainsString('data-view="templates"', $html);
-        $this->assertStringNotContainsString('href="/templates"', $html);
+        $this->assertStringContainsString('data-nav="templates"', $html);
+        $this->assertStringContainsString('data-view="templates"', $html);
+        $this->assertStringContainsString('href="/templates"', $html);
+
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $accountType) {
+            $this->actingAs($this->user($accountType))->get('/templates')
+                ->assertNotFound('/templates should be closed to '.$accountType);
+        }
     }
 
     public function test_an_approved_employee_is_held_on_the_role_pending_screen(): void

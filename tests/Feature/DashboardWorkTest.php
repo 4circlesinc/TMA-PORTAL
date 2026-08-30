@@ -416,11 +416,77 @@ class DashboardWorkTest extends TestCase
     }
 
     /**
-     * CIP documents marked Update required stay on that Workflows page.
-     * Every account that can see the application used to get them in the
-     * strip — that is open work, not something unread for this person.
+     * Opening newer threads must not hide an older unread one. The strip used
+     * to walk the latest comments that concern you and drop anything already
+     * opened, so a mention sitting under that page never appeared even though
+     * the badge still counted it.
      */
-    public function test_the_feed_omits_cip_updates_required(): void
+    public function test_the_feed_still_lists_an_unread_comment_under_newer_opened_ones(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Please look at this',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $later = [];
+        for ($i = 0; $i < 12; $i++) {
+            $this->travel(1)->seconds();
+            $later[] = $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => "Later {$i}",
+                'mentions' => [$ben->id],
+            ])->assertCreated()->json('id');
+        }
+
+        foreach ($later as $id) {
+            $this->actingAs($ben)
+                ->postJson("/portal/files/workflows/comments/{$id}/read")
+                ->assertOk();
+        }
+
+        $feed = $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(1, 'feed')
+            ->json('feed');
+
+        $this->assertSame('comment', $feed[0]['kind']);
+        $this->assertSame('Please look at this', $feed[0]['item']['body']);
+    }
+
+    /** A comment on a file in the bin cannot be opened, so it is not unread. */
+    public function test_a_comment_on_a_binned_file_does_not_count_as_unread(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ada);
+
+        $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Please look at this',
+            'mentions' => [$ben->id],
+        ])->assertCreated();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(1, 'feed')
+            ->assertJsonPath('counts.unread', 1);
+
+        $file->delete();
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
+            ->assertOk()
+            ->assertJsonCount(0, 'feed')
+            ->assertJsonPath('counts.unread', 0);
+    }
+
+    /**
+     * CIP documents marked Update required belong on a staff dashboard.
+     * Provider contacts share a firm-wide list of them, which is why they
+     * used to flood every contact's strip — theirs stay on that Workflows page.
+     */
+    public function test_staff_see_cip_updates_required_on_the_feed_provider_contacts_do_not(): void
     {
         config(['services.cip.enabled' => true]);
 
@@ -433,9 +499,13 @@ class DashboardWorkTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'items');
 
-        $this->actingAs($ada)->getJson('/portal/dashboard/work?want=feed')
+        $feed = $this->actingAs($ada)->getJson('/portal/dashboard/work?want=feed')
             ->assertOk()
-            ->assertJsonCount(0, 'feed');
+            ->assertJsonCount(1, 'feed')
+            ->json('feed');
+
+        $this->assertSame('update', $feed[0]['kind']);
+        $this->assertSame('Birth certificate', $feed[0]['item']['label']);
 
         $this->actingAs($ada)
             ->postJson("/portal/files/files/{$file->uuid}/workflows", [
@@ -457,6 +527,7 @@ class DashboardWorkTest extends TestCase
 
         $this->assertSame(['comment', 'request'], array_column($feed, 'kind'));
         $this->assertSame('Please look at this', $feed[0]['item']['body']);
+        $this->assertNotContains('update', array_column($feed, 'kind'));
     }
 
     /**

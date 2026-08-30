@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Cip\CipAccess;
+use App\Support\Files\FileAccess;
 use App\Support\Files\Workflow\Hub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,26 +43,34 @@ class DashboardWorkController extends Controller
         // A tile the reader turned off must not cost a query. Each list is a
         // page of rows plus a per-file access walk over it, so asking for both
         // when the board shows one is half the request wasted, every minute it
-        // stays open. The strip reuses those same lists rather than walking
-        // them a second time.
+        // stays open. The strip asks for unread threads on their own — a page
+        // of already-opened comments would otherwise hide the ones the badge
+        // is counting.
         $want = self::wanted($request);
         $wantFeed = in_array('feed', $want, true);
         $wantRequests = in_array('requests', $want, true);
         $wantComments = in_array('comments', $want, true);
 
-        // The strip only keeps unread / still-waiting rows, so it asks for a
-        // fuller page than a tile does — otherwise ten already-opened comments
-        // would leave it empty while newer unread ones sat just off the page.
-        $commentsLimit = $wantFeed ? 20 : self::LIMIT;
-
         $requests = ($wantRequests || $wantFeed)
             ? Hub::requests($user, ['scope' => Hub::SCOPE_INBOX, 'limit' => self::LIMIT])
             : null;
-        $comments = ($wantComments || $wantFeed)
-            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => $commentsLimit])
+        $comments = $wantComments
+            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT])
             : null;
-
-        $commentItems = $comments['items'] ?? [];
+        $feedComments = $wantFeed
+            ? Hub::comments($user, [
+                'scope' => Hub::COMMENTS_MINE,
+                'unread' => true,
+                'limit' => self::LIMIT,
+            ])
+            : null;
+        // Staff see CIP documents waiting on an update — that is the number
+        // on their Workflows badge. Provider contacts share a firm-wide list
+        // of those documents, which is why they were flooding every contact
+        // dashboard; theirs stay on the Updates required page.
+        $updates = ($wantFeed && FileAccess::isStaff($user))
+            ? Hub::updates($user, ['limit' => self::LIMIT])
+            : null;
 
         return response()->json([
             'enabled' => true,
@@ -69,32 +78,35 @@ class DashboardWorkController extends Controller
             // "this tile was switched on after the last request went out".
             'want' => $want,
             'requests' => $wantRequests ? ($requests['items'] ?? []) : [],
-            'comments' => $wantComments ? array_values(array_slice($commentItems, 0, self::LIMIT)) : [],
+            'comments' => $wantComments ? ($comments['items'] ?? []) : [],
             'feed' => $wantFeed ? self::feed(
                 $requests['items'] ?? [],
-                $commentItems,
+                $feedComments['items'] ?? [],
+                $updates['items'] ?? [],
             ) : [],
             // The same figures the sidebar badge carries, so the board can
             // hand them across rather than the shell asking a second time.
             'counts' => $requests['counts']
                 ?? $comments['counts']
+                ?? $feedComments['counts']
+                ?? $updates['counts']
                 ?? Hub::counts($user),
         ]);
     }
 
     /**
-     * Unread unresolved comments and requests still waiting on you, newest first.
+     * Unread unresolved comments, requests still waiting on you, and — for
+     * staff — CIP documents marked Update required, newest first.
      *
-     * CIP "Updates required" documents stay on that Workflows page — they are
-     * open work for anyone who can see the application, not something new for
-     * this account. A comment the reader has already opened, a resolved
-     * thread, or a request that is no longer on them, belong on the tiles.
+     * A comment the reader has already opened, a resolved thread, or a
+     * request that is no longer on them, belong on the tiles.
      *
      * @param  list<array<string, mixed>>  $requests
      * @param  list<array<string, mixed>>  $comments
+     * @param  list<array<string, mixed>>  $updates
      * @return list<array{kind:string,at:string,item:array<string, mixed>}>
      */
-    private static function feed(array $requests, array $comments): array
+    private static function feed(array $requests, array $comments, array $updates): array
     {
         $entries = [];
 
@@ -109,6 +121,9 @@ class DashboardWorkController extends Controller
                 continue;
             }
             $entries[] = ['kind' => 'comment', 'at' => (string) ($item['createdAt'] ?? ''), 'item' => $item];
+        }
+        foreach ($updates as $item) {
+            $entries[] = ['kind' => 'update', 'at' => (string) ($item['updatedAt'] ?? ''), 'item' => $item];
         }
 
         usort($entries, function (array $a, array $b): int {

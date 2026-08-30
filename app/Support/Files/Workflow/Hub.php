@@ -142,7 +142,7 @@ final class Hub
     }
 
     /**
-     * @param  array{scope?:string,q?:string,cursor?:int,limit?:int}  $filters
+     * @param  array{scope?:string,q?:string,cursor?:int,limit?:int,unread?:bool}  $filters
      * @return array{items:array,nextCursor:?int,counts:array,canSeeAll:bool}
      */
     public static function comments(User $viewer, array $filters = []): array
@@ -155,6 +155,21 @@ final class Hub
 
         if ($scope === self::COMMENTS_ALL && ! $canSeeAll) {
             $scope = self::COMMENTS_MINE;
+        }
+
+        $unreadOrder = [];
+
+        if (! empty($filters['unread'])) {
+            $unreadIds = CommentReads::latestUnreadCommentIds($viewer, self::OVERSCAN);
+            if ($unreadIds->isEmpty()) {
+                return [
+                    'items' => [],
+                    'nextCursor' => null,
+                    'counts' => self::counts($viewer),
+                    'canSeeAll' => $canSeeAll,
+                ];
+            }
+            $unreadOrder = array_flip($unreadIds->map(fn ($id) => (int) $id)->all());
         }
 
         $query = FileComment::query()
@@ -170,6 +185,10 @@ final class Hub
 
         if ($scope !== self::COMMENTS_ALL) {
             $query->where(fn (Builder $q) => self::concernsMe($q, $viewer));
+        }
+
+        if ($unreadOrder !== []) {
+            $query->whereIn('file_comments.id', array_keys($unreadOrder));
         }
 
         if ($scope === self::COMMENTS_UNRESOLVED) {
@@ -203,6 +222,10 @@ final class Hub
         FileAccess::warmChains($rows->map(fn (FileComment $c) => $c->file->folder_id)->all());
 
         $visible = self::filterByAccess($viewer, $rows, fn (FileComment $c) => $c->file);
+
+        if ($unreadOrder !== []) {
+            $visible = $visible->sortBy(fn (FileComment $c) => $unreadOrder[$c->id] ?? PHP_INT_MAX)->values();
+        }
 
         $limit = self::pageSize($filters);
         $page = $visible->take($limit);

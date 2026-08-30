@@ -29,6 +29,7 @@
     'so-feed': 'feed.view',
     'users': 'users.view',
     'reporting': 'settings.reporting',
+    'templates': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',

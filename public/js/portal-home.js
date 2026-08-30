@@ -1633,6 +1633,9 @@
     if (kind === 'request') {
       return !!item.onMe && item.isOpen !== false;
     }
+    if (kind === 'update') {
+      return true;
+    }
     return false;
   }
 
