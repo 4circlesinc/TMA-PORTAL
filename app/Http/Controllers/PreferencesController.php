@@ -62,7 +62,7 @@ class PreferencesController extends Controller
          * error both still show, because those are worth interrupting for.
          */
         'fileSyncNoticeDismissed' => false,
-        // Dashboard workflow strip under the KPI row. On until they hide it.
+        // Dashboard workflow strip above the KPI row. On until they hide it.
         'dashboardWorkflowStrip' => true,
     ];
 

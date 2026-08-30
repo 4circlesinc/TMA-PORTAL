@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 
 /**
  * Work on the portal home: the Requests and Comments tiles, and the combined
- * unread strip under the KPI row.
+ * unread strip above the KPI row.
  *
  * All three read through {@see Hub} so a tile, the strip, and the page they
  * open onto can never disagree about what "yours" means. Nothing is authorized

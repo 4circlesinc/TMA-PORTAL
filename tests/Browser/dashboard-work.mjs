@@ -104,7 +104,7 @@ const fail = [];
 if (!requests.length) fail.push('no request rows');
 if (!comments.length) fail.push('no comment rows');
 const stripCards = await page.$$eval('[data-home-wf-strip-root] .tma-portal-wf-card', (ns) => ns.length);
-if (!stripCards) fail.push('no workflow strip cards under the KPIs');
+if (!stripCards) fail.push('no workflow strip cards above the KPIs');
 if (stripCards > 10) fail.push(`workflow strip shows ${stripCards} cards, cap is 10`);
 for (const r of requests) {
   if (!r.file) fail.push('request row with no file');
