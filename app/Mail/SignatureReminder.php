@@ -22,24 +22,30 @@ class SignatureReminder extends Mailable implements ShouldQueue
         public string $signingUrl,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::signatureReminder(
+            title: $this->signatureRequest->title,
+            sender: $this->signatureRequest->creator?->name,
+            url: $this->signingUrl,
+            name: $this->recipient->name,
+            expiresAt: $this->signatureRequest->expires_at,
+        );
+    }
+
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'Reminder: '.$this->signatureRequest->title.' still needs your signature',
-        );
+        return new Envelope(subject: (string) ($this->copy()['subject'] ?? ''));
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::signatureReminder(
-                title: $this->signatureRequest->title,
-                sender: $this->signatureRequest->creator?->name,
-                url: $this->signingUrl,
-                name: $this->recipient->name,
-                expiresAt: $this->signatureRequest->expires_at,
-            ),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 }

@@ -25,23 +25,29 @@ class SignatureChangesRequested extends Mailable implements ShouldQueue
         public ?string $by = null,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::signatureChangesRequested(
+            title: $this->signatureRequest->title,
+            comment: $this->comment,
+            by: $this->by,
+            url: url('/signatures'),
+        );
+    }
+
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'Changes requested on '.$this->signatureRequest->title,
-        );
+        return new Envelope(subject: (string) ($this->copy()['subject'] ?? ''));
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::signatureChangesRequested(
-                title: $this->signatureRequest->title,
-                comment: $this->comment,
-                by: $this->by,
-                url: url('/signatures'),
-            ),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 }

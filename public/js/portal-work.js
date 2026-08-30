@@ -1001,16 +1001,266 @@
     }
   }
 
-  /* ── Templates (administrators only, see Role::MATRIX) ── */
+  /* ── Templates (administrators only, see Role::MATRIX) ──
+   *
+   * System emails: every transactional email the portal sends, its copy
+   * editable field by field with a live preview of the real postcard.
+   * Server: TemplatesController under /portal/templates. Built to grow
+   * sideways — another kind of template is another listing, same page.
+   */
+  var TPL = {
+    el: null, loaded: false, loading: false, error: null, data: null,
+    search: '', category: 'all', previewSeq: 0,
+  };
+
+  function tplJson(method, path, body) {
+    var root = net() ? net().base.replace(/\/portal\/files$/, '') : '';
+    return fetch(root + '/portal/templates' + path, {
+      method: method,
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': net() && net().csrf ? net().csrf() : '',
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) {
+          var msg = d.message || 'Something went wrong.';
+          if (d.errors) {
+            var first = Object.keys(d.errors)[0];
+            if (first && d.errors[first] && d.errors[first][0]) msg = d.errors[first][0];
+          }
+          throw new Error(msg);
+        }
+        return d;
+      });
+    });
+  }
+
   function mountTemplates(el) {
+    TPL.el = el;
+    renderTemplates();
+    if (!TPL.loaded && !TPL.loading) loadTemplates();
+  }
+
+  function loadTemplates() {
+    TPL.loading = true;
+    TPL.error = null;
+    tplJson('GET', '/system-emails')
+      .then(function (d) { TPL.data = d; TPL.loaded = true; })
+      .catch(function (e) { TPL.error = e.message; })
+      .then(function () { TPL.loading = false; renderTemplates(); });
+  }
+
+  function tplTemplateFor(key) {
+    var found = null;
+    ((TPL.data && TPL.data.templates) || []).forEach(function (t) {
+      if (t.key === key) found = t;
+    });
+    return found;
+  }
+
+  function tplCategories() {
+    var seen = [];
+    ((TPL.data && TPL.data.templates) || []).forEach(function (t) {
+      if (seen.indexOf(t.category) === -1) seen.push(t.category);
+    });
+    return seen;
+  }
+
+  function tplFiltered() {
+    var q = TPL.search.toLowerCase();
+    return ((TPL.data && TPL.data.templates) || []).filter(function (t) {
+      if (TPL.category !== 'all' && t.category !== TPL.category) return false;
+      if (!q) return true;
+      return (t.name + ' ' + t.when + ' ' + t.category + ' ' + (t.fields.subject || '')).toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function tplWhen(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) { return ''; }
+  }
+
+  function tplBody() {
+    if (TPL.error) {
+      return '<p class="tma-portal-note">Couldn\u2019t load the templates: ' + ui().esc(TPL.error) + '</p>' +
+        ui().btn({ label: 'Try again', variant: 'ghost', attrs: ' data-tpl-retry' });
+    }
+    if (!TPL.loaded) return ui().loading();
+
+    var rows = tplFiltered().map(function (t) {
+      return '<tr>' +
+        '<td>' + ui().esc(t.name) +
+          (t.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(t.when) + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(t.category) + '</td>' +
+        '<td class="tma-portal-table__muted">' +
+          (t.customized ? ui().esc((t.editor ? t.editor + ', ' : '') + tplWhen(t.updatedAt)) : 'Default') + '</td>' +
+        '<td><div class="tma-portal-row-actions">' +
+          '<button type="button" class="tma-portal-icon-btn" data-tpl-edit="' + ui().esc(t.key) + '" title="Edit template" aria-label="Edit template"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+        '</div></td></tr>';
+    }).join('');
+
+    if (!rows) {
+      rows = '<tr><td colspan="5" class="tma-portal-table__empty">Nothing matches.</td></tr>';
+    }
+
+    return ui().table(['Email', 'Sent when', 'Category', 'Last edited', ''], rows);
+  }
+
+  function renderTemplates() {
+    var el = TPL.el;
+    if (!el) return;
+
+    var active = document.activeElement;
+    var restoreSearch = active && active.matches && active.matches('[data-tpl-search]');
+    var searchCaret = restoreSearch ? active.selectionStart : null;
+
     el.innerHTML =
-      '<div class="tma-portal-page">' +
-      ui().emptyState({
-        illustration: 'Illustration05',
-        title: 'No templates yet',
-        subtitle: 'Document templates will appear here.',
-      }) +
+      '<div class="tma-portal-page tma-portal-page--templates">' +
+      '<div class="tma-portal-toolbar">' +
+      '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
+      ui().searchInput('Search', 'data-tpl-search', TPL.search, { focused: restoreSearch }) +
+      '</div>' +
+      '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
+      ui().field('Category', ui().select(
+        [{ value: 'all', label: 'All categories' }].concat(tplCategories().map(function (c) { return { value: c, label: c }; })),
+        TPL.category,
+        'data-tpl-category',
+        'Category'
+      )) +
+      '</div></div>' +
+      tplBody() +
       '</div>';
+
+    ui().wireToolbarSearch(el, '[data-tpl-search]', function (val) {
+      TPL.search = val;
+      renderTemplates();
+    });
+
+    if (restoreSearch) {
+      var search = el.querySelector('[data-tpl-search]');
+      if (search) {
+        search.focus();
+        if (searchCaret != null) search.setSelectionRange(searchCaret, searchCaret);
+      }
+    }
+
+    var category = el.querySelector('[data-tpl-category]');
+    if (category) category.addEventListener('change', function () {
+      TPL.category = category.value;
+      renderTemplates();
+    });
+
+    var retry = el.querySelector('[data-tpl-retry]');
+    if (retry) retry.addEventListener('click', function () { loadTemplates(); });
+
+    el.querySelectorAll('[data-tpl-edit]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = tplTemplateFor(b.getAttribute('data-tpl-edit'));
+        if (t) tplEditorModal(t);
+      });
+    });
+  }
+
+  function tplEditorModal(t) {
+    var labels = (TPL.data && TPL.data.fieldLabels) || {};
+    var textareas = { body: 10, footNote: 2, lead: 2, quote: 2 };
+
+    var fieldsHtml = t.editable.map(function (f) {
+      var val = t.fields[f] || '';
+      var control = textareas[f]
+        ? '<textarea class="tma-portal-textarea" data-tpl-field="' + f + '" rows="' + textareas[f] + '" maxlength="20000">' + ui().esc(val) + '</textarea>'
+        : ui().input({ value: val, attrs: 'data-tpl-field="' + f + '" maxlength="2000"', ariaLabel: labels[f] || f });
+      return ui().field(labels[f] || f, control);
+    }).join('');
+
+    var tokens = (t.variables || []).map(function (v) {
+      return '<code>{{' + ui().esc(v.token) + '}}</code> ' + ui().esc(v.meaning);
+    }).join('<br>');
+
+    ui().openModal({
+      title: t.name,
+      cls: 'tma-portal-modal__card--wide',
+      body:
+        '<div class="tma-portal-tpl-edit">' +
+        '<div class="tma-portal-tpl-edit__form">' +
+        '<p class="tma-portal-note">' + ui().esc(t.when) + '</p>' +
+        fieldsHtml +
+        '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+        '<div class="tma-portal-form-actions">' +
+        ui().btn({ label: 'Save', attrs: ' data-tpl-save' }) +
+        (t.customized ? ui().btn({ label: 'Restore default', variant: 'ghost', attrs: ' data-tpl-restore' }) : '') +
+        '</div>' +
+        '</div>' +
+        '<div class="tma-portal-tpl-edit__preview">' +
+        '<div class="tma-portal-tpl-edit__subject" data-tpl-preview-subject></div>' +
+        '<iframe class="tma-portal-tpl-edit__frame" title="Email preview" data-tpl-preview-frame sandbox=""></iframe>' +
+        '</div>' +
+        '</div>',
+      onMount: function (host) { wireTplEditor(host, t); },
+    });
+  }
+
+  function wireTplEditor(host, t) {
+    var timer = null;
+
+    function draft() {
+      var fields = {};
+      host.querySelectorAll('[data-tpl-field]').forEach(function (input) {
+        fields[input.getAttribute('data-tpl-field')] = input.value;
+      });
+      return fields;
+    }
+
+    function refreshPreview() {
+      var seq = ++TPL.previewSeq;
+      tplJson('POST', '/system-emails/' + encodeURIComponent(t.key) + '/preview', { fields: draft() })
+        .then(function (d) {
+          if (seq !== TPL.previewSeq) return;
+          var subject = host.querySelector('[data-tpl-preview-subject]');
+          var frame = host.querySelector('[data-tpl-preview-frame]');
+          if (subject) subject.textContent = d.subject;
+          if (frame) frame.srcdoc = d.html;
+        })
+        .catch(function () {});
+    }
+
+    host.querySelectorAll('[data-tpl-field]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(refreshPreview, 400);
+      });
+    });
+    refreshPreview();
+
+    function apply(d) {
+      t.customized = d.customized;
+      t.updatedAt = d.updatedAt;
+      t.editor = d.editor;
+      t.fields = Object.assign({}, t.fields, d.fields || {});
+      ui().closeModal();
+      renderTemplates();
+    }
+
+    host.querySelector('[data-tpl-save]').addEventListener('click', function () {
+      tplJson('PATCH', '/system-emails/' + encodeURIComponent(t.key), { fields: draft() })
+        .then(function (d) { apply(d); ui().toast('Template saved'); })
+        .catch(function (e) { ui().toastError(e.message); });
+    });
+
+    var restore = host.querySelector('[data-tpl-restore]');
+    if (restore) restore.addEventListener('click', function () {
+      tplJson('POST', '/system-emails/' + encodeURIComponent(t.key) + '/restore')
+        .then(function (d) { apply(d); ui().toast('Restored to the default'); })
+        .catch(function (e) { ui().toastError(e.message); });
+    });
   }
 
   /* ── Signatures ──────────────────────────────────── */

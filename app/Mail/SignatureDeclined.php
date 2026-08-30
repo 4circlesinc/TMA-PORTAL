@@ -27,23 +27,29 @@ class SignatureDeclined extends Mailable implements ShouldQueue
         public ?string $by = null,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::signatureDeclined(
+            title: $this->signatureRequest->title,
+            reason: $this->reason,
+            by: $this->by,
+            url: url('/signatures'),
+        );
+    }
+
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: $this->signatureRequest->title.' was declined',
-        );
+        return new Envelope(subject: (string) ($this->copy()['subject'] ?? ''));
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::signatureDeclined(
-                title: $this->signatureRequest->title,
-                reason: $this->reason,
-                by: $this->by,
-                url: url('/signatures'),
-            ),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 }

@@ -7,12 +7,16 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
+use App\Support\Templates\SystemEmails;
+use Illuminate\Support\HtmlString;
 
 /**
- * The copy for every transactional email, one factory method each. Each returns
- * a ready-to-send App\Mail\Postcard; dynamic values (links, names, codes) are
- * arguments. Keeping the wording here, rather than scattered across triggers —
- * keeps the sent emails matching the approved /design/mail gallery.
+ * Every transactional email, one factory method each. The wording lives in
+ * App\Support\Templates\SystemEmails — the shipped copy plus whatever an
+ * administrator has reworded on the Templates page — and each factory here
+ * supplies the dynamic values (links, names, dates) and the structural rows
+ * (details, files, a quoted note) the copy is filled with. Method signatures
+ * are unchanged from the hard-coded era, so triggers never notice.
  */
 class Postcards
 {
@@ -31,32 +35,41 @@ class Postcards
         return self::SITE;
     }
 
+    /** Fill one template and wrap it as a ready-to-send Postcard. */
+    private static function postcard(string $key, array $vars, array $extras = []): Postcard
+    {
+        $built = SystemEmails::payload($key, $vars, $extras);
+
+        return new Postcard($built['subject'], $built['payload'], attachment: $extras['attachment'] ?? null);
+    }
+
+    /**
+     * Fill one template as a payload array for mailables that keep their own
+     * envelope; the template's subject rides along under 'subject' and the
+     * mailable strips it before the view.
+     */
+    private static function payloadFor(string $key, array $vars, array $extras = []): array
+    {
+        $built = SystemEmails::payload($key, $vars, $extras);
+
+        return $built['payload'] + ['subject' => $built['subject']];
+    }
+
+    private static function firstName(?string $name): ?string
+    {
+        return $name ? (strtok($name, ' ') ?: $name) : null;
+    }
+
     // ---------------------------------------------------------- account / auth
 
     public static function verifyEmail(string $url, ?string $name = null): Postcard
     {
-        return new Postcard('Confirm your email address', [
-            'preheader' => 'One tap confirms your email and finishes setting up your account.',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => 'Confirm your email address',
-            'lead' => 'Thanks for creating an account with '.self::SITE.'.',
-            'bodyHtml' => '<p>Confirm this is your email address and we\'ll finish setting things up.</p>',
-            'button' => ['label' => 'Confirm email address', 'url' => $url],
-        ]);
+        return self::postcard('verify-email', ['name' => $name, 'url' => $url], ['url' => $url]);
     }
 
     public static function resetPassword(string $url, ?string $name = null): Postcard
     {
-        return new Postcard('Reset your password', [
-            'preheader' => 'Use the button below to choose a new password.',
-            'eyebrow' => 'Security',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => 'Reset your password',
-            'lead' => 'We received a request to reset your password.',
-            'bodyHtml' => '<p>Choose a new password using the button below. This link expires in 60 minutes and can only be used once.</p>'
-                .'<p>If you didn\'t ask to reset your password, you can safely ignore this email, your current password still works.</p>',
-            'button' => ['label' => 'Choose a new password', 'url' => $url],
-        ]);
+        return self::postcard('reset-password', ['name' => $name, 'url' => $url], ['url' => $url]);
     }
 
     /** Build the "password changed" email for a user from the current request. */
@@ -99,26 +112,15 @@ class Postcards
     /** @param array<int,array{0:string,1:string}> $details When/Device rows. */
     public static function passwordChanged(array $details, string $secureUrl): Postcard
     {
-        return new Postcard('Your password was changed', [
-            'preheader' => 'Confirming your account password was just changed.',
-            'eyebrow' => 'Security',
-            'title' => 'Your password was changed',
-            'lead' => 'This confirms the password on your account was just changed.',
+        return self::postcard('password-changed', ['url' => $secureUrl], [
             'details' => $details,
-            'quote' => 'Didn\'t make this change? Reset your password immediately and contact us, someone else may have access to your account.',
-            'button' => ['label' => 'Secure my account', 'url' => $secureUrl],
+            'url' => $secureUrl,
         ]);
     }
 
     public static function changeEmail(string $url, string $newEmail): Postcard
     {
-        return new Postcard('Confirm your new email address', [
-            'preheader' => 'Confirm the new email address for your account.',
-            'title' => 'Confirm your new email address',
-            'lead' => 'You asked to change the email on your account.',
-            'bodyHtml' => '<p>Confirm <strong>'.e($newEmail).'</strong> to start using it. This link expires in 60 minutes; until you confirm, your account keeps using its current email.</p>',
-            'button' => ['label' => 'Confirm new email', 'url' => $url],
-        ]);
+        return self::postcard('change-email', ['url' => $url, 'newEmail' => $newEmail], ['url' => $url]);
     }
 
     /**
@@ -127,17 +129,11 @@ class Postcards
      */
     public static function welcome(string $email, string $portalUrl, ?string $name = null, ?string $note = null): Postcard
     {
-        return new Postcard('Your account is ready', array_filter([
-            'preheader' => 'Your account has been approved, here\'s how to get started.',
-            'eyebrow' => 'Welcome',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
-            'title' => 'Your account is approved and ready',
-            'bodyHtml' => '<p>An administrator has approved your account. You now have access to your files, messages, calendar and everything the firm shares with you.</p>'
-                .'<p>Here\'s your sign-in address in case you forget: <a href="'.e($portalUrl).'" style="color:#03a5e9;text-decoration:none;">'.e($email).'</a></p>'
-                .'<p>If you need any help getting started, reach out at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
-            'quote' => $note,
-            'button' => ['label' => 'Open the portal', 'url' => $portalUrl],
-        ]));
+        return self::postcard('welcome', [
+            'name' => $name,
+            'email' => $email,
+            'url' => $portalUrl,
+        ], ['url' => $portalUrl, 'quote' => $note ?: null]);
     }
 
     /**
@@ -147,15 +143,7 @@ class Postcards
      */
     public static function accountPending(string $email, ?string $name = null): Postcard
     {
-        return new Postcard('We\'ve received your request for access', [
-            'preheader' => 'Your account request is with our team for review.',
-            'eyebrow' => 'Account request',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
-            'title' => 'We\'ve received your request',
-            'lead' => 'Thanks for signing up to '.self::SITE.'.',
-            'bodyHtml' => '<p>Your account for <strong>'.e($email).'</strong> has been created and is now waiting for an administrator to review it. You won\'t be able to sign in until it\'s approved.</p>'
-                .'<p>We\'ll email you as soon as a decision has been made, there\'s nothing else you need to do.</p>',
-        ]);
+        return self::postcard('account-pending', ['name' => $name, 'email' => $email]);
     }
 
     /**
@@ -164,15 +152,7 @@ class Postcards
      */
     public static function accountDenied(?string $name = null, ?string $reason = null): Postcard
     {
-        return new Postcard('An update on your access request', array_filter([
-            'preheader' => 'A decision has been made on your account request.',
-            'eyebrow' => 'Account request',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
-            'title' => 'We couldn\'t approve your request',
-            'bodyHtml' => '<p>Your request for access to the '.self::SITE.' portal has been reviewed and we\'re not able to approve it at this time.</p>'
-                .'<p>If you think this is a mistake, or you\'d like to know more, reply to this email or contact us at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
-            'quote' => $reason,
-        ]));
+        return self::postcard('account-denied', ['name' => $name], ['quote' => $reason ?: null]);
     }
 
     /**
@@ -180,32 +160,18 @@ class Postcards
      *
      * A closed account cannot sign in, so the bell notification raised at the
      * same time is one they will never see; this is the only way the decision
-     * reaches the person it is about. Nothing here mentions the Recycle Bin —
-     * that the row is recoverable is the firm's business, not a promise to
-     * make to somebody who has just lost their access.
+     * reaches the person it is about.
      */
     public static function accountDeleted(string $email, ?string $name = null): Postcard
     {
-        return new Postcard('Your account has been closed', [
-            'preheader' => 'Your access to the portal has been closed.',
-            'eyebrow' => 'Account',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
-            'title' => 'Your account has been closed',
-            'bodyHtml' => '<p>An administrator has closed the '.self::SITE.' account for <strong>'.e($email).'</strong>. You will no longer be able to sign in, and the files, messages and calendars shared with you are no longer available.</p>'
-                .'<p>If this is unexpected, or you need anything you had stored there, reply to this email or contact us at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
-        ]);
+        return self::postcard('account-deleted', ['name' => $name, 'email' => $email]);
     }
 
     public static function newLogin(array $details, string $reviewUrl): Postcard
     {
-        return new Postcard('New sign-in to your account', [
-            'preheader' => 'A new device just signed in to your account.',
-            'eyebrow' => 'Security',
-            'title' => 'New sign-in to your account',
-            'lead' => 'We noticed a sign-in from a device we don\'t recognise.',
+        return self::postcard('new-login', ['url' => $reviewUrl], [
             'details' => $details,
-            'quote' => 'Don\'t recognise this? Secure your account now, we recommend changing your password and reviewing your active sessions.',
-            'button' => ['label' => 'Review activity', 'url' => $reviewUrl],
+            'url' => $reviewUrl,
         ]);
     }
 
@@ -220,15 +186,11 @@ class Postcards
             $details[] = ['Device', $device];
         }
 
-        return new Postcard($title, [
-            'preheader' => 'A two-factor authentication setting on your account just changed.',
-            'eyebrow' => 'Security',
+        return self::postcard('two-factor-changed', [
             'title' => $title,
-            'lead' => 'Someone '.$action.' two-factor authentication on your account.',
-            'details' => $details,
-            'quote' => 'Didn\'t make this change? Change your password immediately and review your active sessions, someone else may have access to your account.',
-            'button' => ['label' => 'Review security settings', 'url' => $reviewUrl],
-        ]);
+            'action' => $action,
+            'url' => $reviewUrl,
+        ], ['details' => $details, 'url' => $reviewUrl]);
     }
 
     /**
@@ -238,96 +200,68 @@ class Postcards
      */
     public static function securitySummary(string $period, array $details, string $reviewUrl, ?string $name = null): Postcard
     {
-        return new Postcard('Your security summary for '.$period, [
-            'preheader' => 'A short recap of account activity in '.$period.'.',
-            'eyebrow' => 'Security',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => 'Your security summary',
-            'lead' => 'Here\'s what happened on your account in '.$period.'.',
-            'details' => $details,
-            'bodyHtml' => '<p>Nothing here needs your attention unless something looks unfamiliar. You can turn this summary off under Account settings → Security.</p>',
-            'button' => ['label' => 'Review security settings', 'url' => $reviewUrl],
-        ]);
+        return self::postcard('security-summary', [
+            'name' => $name,
+            'period' => $period,
+            'url' => $reviewUrl,
+        ], ['details' => $details, 'url' => $reviewUrl]);
     }
 
     // ---------------------------------------------------------------- signatures
-    // These return payload arrays (the mailables keep their own subject lines).
+    // These return payload arrays; the mailables read 'subject' for their
+    // envelope (the sender's own wording wins on the invitation).
 
     public static function signatureInvitation(string $title, ?string $sender, ?string $note, string $url, ?string $name, $expiresAt, string $action): array
     {
-        $body = '<p>You can '.$action.' <strong>'.e($title).'</strong> online, no account needed.</p>';
-        if ($expiresAt) {
-            $body .= '<p>This link is personal to you and expires on '.e($expiresAt->format('j M Y')).'.</p>';
-        }
-
-        return [
-            'preheader' => $sender ? $sender.' asked you to '.$action.' a document.' : 'A document needs your signature.',
-            'eyebrow' => 'Signature',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => $sender ? "{$sender} asked you to {$action} a document" : 'A document needs your signature',
-            'bodyHtml' => $body,
-            'quote' => $note ?: null,
-            'button' => ['label' => 'Review & '.$action, 'url' => $url],
-        ];
+        return self::payloadFor('signature-invitation', [
+            'title' => $title,
+            'sender' => $sender,
+            'name' => $name,
+            'action' => $action,
+            'expires' => $expiresAt?->format('j M Y'),
+            'url' => $url,
+        ], ['url' => $url, 'quote' => $note ?: null]);
     }
 
     public static function signatureReminder(string $title, ?string $sender, string $url, ?string $name, $expiresAt): array
     {
-        $body = $expiresAt ? '<p>This link expires on '.e($expiresAt->format('j M Y')).'.</p>' : null;
-
-        return [
-            'preheader' => 'A document is still waiting for your signature.',
-            'eyebrow' => 'Reminder',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => 'A quick reminder',
-            'lead' => $title.' is still waiting for your signature'.($sender ? ', sent by '.$sender : '').'.',
-            'bodyHtml' => $body,
-            'button' => ['label' => 'Review & sign', 'url' => $url],
-        ];
+        return self::payloadFor('signature-reminder', [
+            'title' => $title,
+            'sender' => $sender,
+            'name' => $name,
+            'expires' => $expiresAt?->format('j M Y'),
+            'url' => $url,
+        ], ['url' => $url]);
     }
 
     /** @param array<int,string> $signers */
     public static function signatureCompleted(string $title, ?string $name, array $signers, bool $attached, string $url): array
     {
-        $body = $signers ? '<p>Signed by: '.e(implode(', ', $signers)).'.</p>' : '';
-        $body .= $attached
-            ? '<p>The signed copy is attached to this email for your records.</p>'
-            : '<p>We\'re still preparing the signed copy, it\'ll follow shortly.</p>';
-
-        return [
-            'preheader' => 'Everyone has now signed the document.',
-            'eyebrow' => 'Signed',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => 'Your document is signed',
-            'lead' => 'Everyone has now signed '.$title.'.',
-            'bodyHtml' => $body,
-            'button' => ['label' => 'View in Signatures', 'url' => $url],
-        ];
+        return self::payloadFor('signature-completed', [
+            'title' => $title,
+            'name' => $name,
+            'signers' => $signers ? implode(', ', $signers) : null,
+            'attached' => $attached,
+            'url' => $url,
+        ], ['url' => $url]);
     }
 
     public static function signatureDeclined(string $title, ?string $reason, ?string $by, string $url): array
     {
-        return [
-            'preheader' => 'A signature request was declined.',
-            'eyebrow' => 'Signature',
-            'title' => 'A signature was declined',
-            'lead' => $title.' was declined'.($by ? ' by '.$by : '').'. Nobody else can sign it now.',
-            'quote' => $reason ?: null,
-            'button' => ['label' => 'Open Signatures', 'url' => $url],
-        ];
+        return self::payloadFor('signature-declined', [
+            'title' => $title,
+            'by' => $by,
+            'url' => $url,
+        ], ['url' => $url, 'quote' => $reason ?: null]);
     }
 
     public static function signatureChangesRequested(string $title, ?string $comment, ?string $by, string $url): array
     {
-        return [
-            'preheader' => 'A reviewer asked for changes before approving.',
-            'eyebrow' => 'Signature',
-            'title' => 'Changes were requested',
-            'lead' => $title.' was reviewed'.($by ? ' by '.$by : '').', who asked for changes before approving.',
-            'quote' => $comment ?: null,
-            'bodyHtml' => '<p>The request is on hold until you revise and resend it.</p>',
-            'button' => ['label' => 'Open Signatures', 'url' => $url],
-        ];
+        return self::payloadFor('signature-changes-requested', [
+            'title' => $title,
+            'by' => $by,
+            'url' => $url,
+        ], ['url' => $url, 'quote' => $comment ?: null]);
     }
 
     // ------------------------------------------------------------- client invite
@@ -345,26 +279,11 @@ class Postcards
         ?\DateTimeInterface $expiresAt = null,
         bool $hasAccount = false,
     ): Postcard {
-        return new Postcard('You have been invited to the '.self::SITE.' portal', [
-            'preheader' => $hasAccount
-                ? 'Sign in to accept your invitation to the portal.'
-                : 'Create your account to see the files we\'re working on together.',
-            'eyebrow' => 'You\'re invited',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => $hasAccount ? 'Accept your invitation' : 'Connect to your files',
-            'lead' => ($inviter ? e($inviter).' has added you' : 'You have been added')
-                .' to the '.self::SITE.' portal.',
-            'bodyHtml' => '<p>Through the portal you can reach your bookings, events, files, documents, contracts, invoices and updates, all in one place.</p>'
-                .($hasAccount
-                    ? '<p>You already have an account with this email address, so just sign in and the invitation will be added to it.</p>'
-                    : '<p>Creating your account links it to your existing records with us automatically.</p>'),
-            'details' => self::expiryDetails($expiresAt),
-            'button' => [
-                'label' => $hasAccount ? 'Sign in and accept' : 'Create your account',
-                'url' => $url,
-            ],
-            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
-        ]);
+        return self::postcard($hasAccount ? 'client-invite-existing' : 'client-invite', [
+            'name' => $name,
+            'inviter' => $inviter,
+            'url' => $url,
+        ], ['url' => $url, 'details' => self::expiryDetails($expiresAt)]);
     }
 
     public static function clientInviteReminder(
@@ -372,15 +291,10 @@ class Postcards
         string $url,
         ?\DateTimeInterface $expiresAt = null,
     ): Postcard {
-        return new Postcard('Reminder: your '.self::SITE.' invitation is waiting', [
-            'preheader' => 'Your invitation is still waiting, it takes about a minute.',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => 'Your invitation is still waiting',
-            'lead' => 'Setting up your account takes about a minute.',
-            'bodyHtml' => '<p>A little while ago we invited you to connect to your files with '.self::SITE.'. Your secure space is ready whenever you are.</p>',
-            'details' => self::expiryDetails($expiresAt),
-            'button' => ['label' => 'Finish setting up', 'url' => $url],
-        ]);
+        return self::postcard('client-invite-reminder', [
+            'name' => $name,
+            'url' => $url,
+        ], ['url' => $url, 'details' => self::expiryDetails($expiresAt)]);
     }
 
     /** The invitation a new staff member receives. */
@@ -399,40 +313,11 @@ class Postcards
         }
         $details = array_merge($details, self::expiryDetails($expiresAt));
 
-        return new Postcard('You have been invited to join '.self::SITE, [
-            'preheader' => 'Set up your account to get started.',
-            'eyebrow' => 'You\'re invited',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => 'Join the '.self::SITE.' team',
-            'lead' => ($inviter ? e($inviter).' has invited you' : 'You have been invited')
-                .' to join '.self::SITE.' on the portal.',
-            'bodyHtml' => '<p>The portal is where the team works with clients, files, documents, signatures, calendars, messages and email in one place.</p>'
-                .($hasAccount
-                    ? '<p>You already have an account with this email address, so just sign in and your new access will be added to it.</p>'
-                    : '<p>Use the button below to set up your account and choose a password.</p>'),
-            'details' => $details,
-            'button' => [
-                'label' => $hasAccount ? 'Sign in and accept' : 'Set up your account',
-                'url' => $url,
-            ],
-            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
-        ]);
-    }
-
-    /**
-     * What joining a company actually gives someone. CIP providers are the
-     * usual case; other companies still get a truthful, shorter description.
-     */
-    private static function companyAccessExplainer(string $companyName, bool $isProvider): string
-    {
-        $name = e($companyName);
-
-        if ($isProvider) {
-            return '<p>On the portal you can view and work on Citizenship by Investment applications filed by '
-                .$name.', including documents, comments and status updates, according to the permissions for your role.</p>';
-        }
-
-        return '<p>On the portal you can reach '.$name.'\'s files, documents and updates, according to the permissions for your role.</p>';
+        return self::postcard($hasAccount ? 'staff-invite-existing' : 'staff-invite', [
+            'name' => $name,
+            'inviter' => $inviter,
+            'url' => $url,
+        ], ['url' => $url, 'details' => $details]);
     }
 
     /** The invitation someone receives when asked to join a company account. */
@@ -446,21 +331,15 @@ class Postcards
         bool $hasAccount = false,
         bool $isProvider = false,
     ): Postcard {
-        $next = $hasAccount
-            ? '<p>You already have an account with this email address. Sign in to accept the invitation — '
-                .e($companyName).' will be added to your existing access.</p>'
-            : '<p>Use the button below to create your account and choose a password. Once you have, you can sign in and start work.</p>';
-
-        return new Postcard('You\'re invited to join '.$companyName.' on '.self::SITE, [
-            'preheader' => $hasAccount
-                ? 'Sign in to accept your invitation to '.$companyName.'.'
-                : 'Create your account to join '.$companyName.' on the portal.',
-            'eyebrow' => $isProvider ? 'Service provider access' : 'Company access',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => 'You\'re invited to join '.$companyName,
-            'lead' => ($inviter ? $inviter.' has invited you' : 'You have been invited')
-                .' to join '.$companyName.' as '.$companyRole.'.',
-            'bodyHtml' => self::companyAccessExplainer($companyName, $isProvider).$next,
+        return self::postcard($hasAccount ? 'company-member-invite-existing' : 'company-member-invite', [
+            'name' => $name,
+            'company' => $companyName,
+            'role' => $companyRole,
+            'inviter' => $inviter,
+            'isProvider' => $isProvider,
+            'url' => $url,
+        ], [
+            'url' => $url,
             'details' => array_values(array_filter(array_merge(
                 [
                     ['Company', e($companyName)],
@@ -469,11 +348,6 @@ class Postcards
                 ],
                 self::expiryDetails($expiresAt),
             ))),
-            'button' => [
-                'label' => $hasAccount ? 'Sign in and accept' : 'Create your account',
-                'url' => $url,
-            ],
-            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
         ]);
     }
 
@@ -486,23 +360,20 @@ class Postcards
         ?string $addedBy = null,
         bool $isProvider = false,
     ): Postcard {
-        return new Postcard('You now have access to '.$companyName.' on '.self::SITE, [
-            'preheader' => ($addedBy ? $addedBy.' added you to ' : 'You have been added to ').$companyName.'.',
-            'eyebrow' => $isProvider ? 'Service provider access' : 'Company access',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => 'You have been added to '.$companyName,
-            'lead' => ($addedBy ? $addedBy.' has added you' : 'You have been added')
-                .' to '.$companyName.' as '.$companyRole.'.',
-            'bodyHtml' => '<p>Your access is already active — you do not need to accept an invitation.</p>'
-                .self::companyAccessExplainer($companyName, $isProvider)
-                .'<p>Sign in to the portal to see what you now have access to.</p>',
+        return self::postcard('company-member-added', [
+            'name' => $name,
+            'company' => $companyName,
+            'role' => $companyRole,
+            'addedBy' => $addedBy,
+            'isProvider' => $isProvider,
+            'url' => $url,
+        ], [
+            'url' => $url,
             'details' => array_values(array_filter([
                 ['Company', e($companyName)],
                 ['Your role', e($companyRole)],
                 $addedBy ? ['Added by', e($addedBy)] : null,
             ])),
-            'button' => ['label' => 'Open the portal', 'url' => $url],
-            'footNote' => 'If you weren\'t expecting this change, contact us at support@tmantoine.com.',
         ]);
     }
 
@@ -514,26 +385,18 @@ class Postcards
         ?string $removedBy = null,
         bool $isProvider = false,
     ): Postcard {
-        $lost = $isProvider
-            ? e($companyName).'\'s applications, files and updates'
-            : e($companyName).'\'s files, documents and updates';
-
-        return new Postcard('Your access to '.$companyName.' has been removed', [
-            'preheader' => 'You no longer have access to '.$companyName.' on the '.self::SITE.' portal.',
-            'eyebrow' => 'Access update',
-            'greeting' => $name ? "Hello {$name}," : 'Hello,',
-            'title' => 'Your access to '.$companyName.' has been removed',
-            'lead' => ($removedBy ? $removedBy.' has removed you' : 'You have been removed')
-                .' from '.$companyName.' on the '.self::SITE.' portal.',
-            'bodyHtml' => '<p>You received this email because your access to '.$lost.' through the portal has ended.</p>'
-                .'<p>Your personal account is unchanged. You can still sign in if you have other access. If this was a mistake, ask the person who manages '
-                .e($companyName).' to restore it, or contact us at support@tmantoine.com.</p>',
+        return self::postcard('company-member-removed', [
+            'name' => $name,
+            'company' => $companyName,
+            'removedBy' => $removedBy,
+            'isProvider' => $isProvider,
+            'url' => $url,
+        ], [
+            'url' => $url,
             'details' => array_values(array_filter([
                 ['Company', e($companyName)],
                 $removedBy ? ['Removed by', e($removedBy)] : null,
             ])),
-            'button' => ['label' => 'Sign in to the portal', 'url' => $url],
-            'footNote' => 'This is an automated notice from '.self::SITE.'.',
         ]);
     }
 
@@ -546,19 +409,18 @@ class Postcards
         string $url,
         bool $isPrimary = false,
     ): Postcard {
-        return new Postcard('You have been assigned to '.$clientName, [
-            'preheader' => 'A client has been assigned to you.',
-            'eyebrow' => 'Client assignment',
-            'greeting' => "Hello {$staffName},",
-            'title' => 'You are now working with '.$clientName,
-            'lead' => ($assigner ? e($assigner).' assigned you' : 'You have been assigned')
-                .' to '.e($clientName).'.',
-            'details' => array_filter([
+        return self::postcard('staff-assigned-to-client', [
+            'name' => $staffName,
+            'client' => $clientName,
+            'assigner' => $assigner,
+            'url' => $url,
+        ], [
+            'url' => $url,
+            'details' => array_values(array_filter([
                 ['Client', e($clientName)],
                 ['Your role', e($roleLabel)],
                 $isPrimary ? ['Primary contact', 'Yes'] : null,
-            ]),
-            'button' => ['label' => 'Open the client', 'url' => $url],
+            ])),
         ]);
     }
 
@@ -569,18 +431,16 @@ class Postcards
         ?string $staffTitle,
         string $url,
     ): Postcard {
-        return new Postcard($staffName.' is now your contact at '.self::SITE, [
-            'preheader' => 'Say hello to your point of contact.',
-            'eyebrow' => 'Your team',
-            'greeting' => $clientName ? "Hello {$clientName}," : 'Hello,',
-            'title' => 'Meet your point of contact',
-            'lead' => e($staffName).' will be looking after your work with '.self::SITE.'.',
-            'bodyHtml' => '<p>You can reach them through the portal at any time, messages, files and updates all stay in one place.</p>',
-            'details' => array_filter([
+        return self::postcard('client-staff-assigned', [
+            'name' => $clientName,
+            'staff' => $staffName,
+            'url' => $url,
+        ], [
+            'url' => $url,
+            'details' => array_values(array_filter([
                 ['Contact', e($staffName)],
                 $staffTitle ? ['Role', e($staffTitle)] : null,
-            ]),
-            'button' => ['label' => 'Open the portal', 'url' => $url],
+            ])),
         ]);
     }
 
@@ -591,14 +451,12 @@ class Postcards
         string $whatFor,
         string $url,
     ): Postcard {
-        return new Postcard($whoAccepted.' has joined the portal', [
-            'preheader' => 'Your invitation was accepted.',
-            'eyebrow' => 'Invitation accepted',
-            'greeting' => "Hello {$recipientName},",
-            'title' => $whoAccepted.' has joined',
-            'lead' => e($whoAccepted).' accepted their invitation and now has access to '.e($whatFor).'.',
-            'button' => ['label' => 'Open the portal', 'url' => $url],
-        ]);
+        return self::postcard('invitation-accepted', [
+            'name' => $recipientName,
+            'who' => $whoAccepted,
+            'whatFor' => $whatFor,
+            'url' => $url,
+        ], ['url' => $url]);
     }
 
     /** The "expires on" row shared by every invitation email. */
@@ -613,22 +471,21 @@ class Postcards
 
     public static function fileShared(string $sharer, string $itemName, bool $isFolder, string $url, ?string $note = null): Postcard
     {
-        return new Postcard($sharer.' shared '.($isFolder ? 'a folder' : 'a file').' with you', [
-            'preheader' => 'A new '.($isFolder ? 'folder' : 'document').' is waiting for you in the portal.',
-            'title' => $sharer.' shared '.($isFolder ? 'a folder' : 'a file').' with you',
-            'lead' => 'It\'s ready for you in your space.',
+        return self::postcard('file-shared', [
+            'sharer' => $sharer,
+            'item' => $itemName,
+            'what' => $isFolder ? 'a folder' : 'a file',
+            'kind' => $isFolder ? 'folder' : 'document',
+            'url' => $url,
+        ], [
+            'url' => $url,
             'files' => [[$itemName, $isFolder ? 'Folder' : 'File']],
             'quote' => $note ?: null,
-            'button' => ['label' => 'View in the portal', 'url' => $url],
         ]);
     }
 
     /**
      * "Please upload these documents", the invitation to a secure upload link.
-     *
-     * The recipient has no account and may never have used the portal, so the
-     * copy says what will happen to the files rather than assuming they know:
-     * the link only accepts uploads, and it goes to one place.
      *
      * @param  array<int, array{0: string, 1: string}>  $details  label/value rows
      */
@@ -640,19 +497,12 @@ class Postcards
         ?string $name = null,
         array $details = [],
     ): Postcard {
-        return new Postcard($requester.' asked you for documents', [
-            'preheader' => $title.', upload securely, no account needed.',
-            'eyebrow' => 'Document request',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => $requester.' asked you for documents',
-            'lead' => $title,
-            'bodyHtml' => '<p>Use the button below to upload your files securely. '
-                .'You don\'t need an account, and the link only lets you add files, '
-                .'nothing else in the workspace is visible.</p>',
-            'quote' => $message ?: null,
-            'details' => $details,
-            'button' => ['label' => 'Upload your files', 'url' => $url],
-        ]);
+        return self::postcard('file-request', [
+            'title' => $title,
+            'requester' => $requester,
+            'name' => $name,
+            'url' => $url,
+        ], ['url' => $url, 'quote' => $message ?: null, 'details' => $details]);
     }
 
     /** The requester's copy: something arrived through one of their links. */
@@ -663,17 +513,14 @@ class Postcards
         string $url,
         ?string $name = null,
     ): Postcard {
-        $what = $count === 1 ? 'A file' : $count.' files';
-
-        return new Postcard($what.' arrived for “'.$title.'”', [
-            'preheader' => $what.' just came in through your document request.',
-            'eyebrow' => 'Document request',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'title' => $what.' arrived',
-            'lead' => ($from ? $from.' uploaded ' : 'Someone uploaded ')
-                .($count === 1 ? 'a file' : $count.' files').' to “'.$title.'”.',
-            'button' => ['label' => 'Open the folder', 'url' => $url],
-        ]);
+        return self::postcard('file-request-received', [
+            'title' => $title,
+            'what' => $count === 1 ? 'A file' : $count.' files',
+            'whatLower' => $count === 1 ? 'a file' : $count.' files',
+            'from' => $from,
+            'name' => $name,
+            'url' => $url,
+        ], ['url' => $url]);
     }
 
     // ----------------------------------------------------------- message reminders
@@ -681,48 +528,27 @@ class Postcards
     /** $tier: 1 (~1h), 2 (~20h), 3 (~24h, final). */
     public static function messageReminder(int $tier, string $from, ?string $preview, string $url): Postcard
     {
-        $payload = match ($tier) {
-            2 => [
-                'subject' => 'Still waiting to hear from you',
-                'eyebrow' => 'Reminder',
-                'title' => 'Still waiting to hear from you',
-                'lead' => 'We reached out and haven\'t heard back. Your message is still waiting in the portal.',
-                'button' => ['label' => 'Read and reply', 'url' => $url],
-            ],
-            3 => [
-                'subject' => 'A message from us is still waiting for you',
-                'eyebrow' => 'Final reminder',
-                'title' => 'A message from us is still waiting for you',
-                'lead' => 'It\'s been a full day and we still haven\'t heard back, here\'s one last reminder.',
-                'bodyHtml' => '<p>If now isn\'t a good time, no problem, the message will be waiting whenever you\'re ready.</p>',
-                'button' => ['label' => 'Open the conversation', 'url' => $url],
-            ],
-            default => [
-                'subject' => 'You have a new message from '.$from,
-                'title' => 'You have a new message',
-                'lead' => $from.' sent you a message about an hour ago and it\'s still unread.',
-                'button' => ['label' => 'Read the message', 'url' => $url],
-            ],
+        $key = match ($tier) {
+            2 => 'message-reminder-2',
+            3 => 'message-reminder-3',
+            default => 'message-reminder-1',
         };
 
-        return new Postcard($payload['subject'], array_merge([
-            'preheader' => 'Your message from '.$from.' is still unread.',
-            'quote' => $preview,
-        ], $payload));
+        return self::postcard($key, ['from' => $from, 'url' => $url], [
+            'url' => $url,
+            'quote' => $preview ?: null,
+        ]);
     }
 
     // --------------------------------------------------------------------- teams
 
     public static function teamAdded(string $addedBy, string $groupName, string $url): Postcard
     {
-        return new Postcard('You were added to '.$groupName, [
-            'preheader' => $addedBy.' added you to a team in the portal.',
-            'eyebrow' => 'Teams',
-            'title' => 'You were added to '.$groupName,
-            'lead' => $addedBy.' added you to a team in the portal.',
-            'bodyHtml' => '<p>You can now see the team\'s shared files, calendar and conversations, and reach everyone on it in one place.</p>',
-            'button' => ['label' => 'Open the team', 'url' => $url],
-        ]);
+        return self::postcard('team-added', [
+            'addedBy' => $addedBy,
+            'team' => $groupName,
+            'url' => $url,
+        ], ['url' => $url]);
     }
 
     // ------------------------------------------------------------------ calendar
@@ -730,11 +556,6 @@ class Postcards
     /** @param array<string,mixed> $p the EventNotifier payload. */
     public static function calendar(string $kind, array $p): array
     {
-        $title = $p['title'] ?? 'Event';
-        $name = $p['name'] ?? null;
-        $organizer = $p['organizer'] ?? null;
-        $url = $p['url'] ?? null;
-
         $details = [];
         if (! empty($p['whenLabel'])) {
             $details[] = ['When', e($p['whenLabel'])];
@@ -742,83 +563,65 @@ class Postcards
         if (! empty($p['location'])) {
             $details[] = ['Where', e($p['location'])];
         }
-        if ($organizer) {
-            $details[] = ['Organizer', e($organizer)];
+        if (! empty($p['organizer'])) {
+            $details[] = ['Organizer', e($p['organizer'])];
         }
 
-        $payload = [
-            'eyebrow' => 'Calendar',
-            'greeting' => $name ? "Hi {$name}," : null,
-            'details' => $details ?: null,
-            // Raw: the postcard template escapes `quote` itself now, so
-            // escaping here as well would show visitors "&amp;" and "&lt;".
-            'quote' => ! empty($p['description']) ? $p['description'] : null,
-        ];
-
-        [$payload['title'], $payload['lead'], $label] = match ($kind) {
-            'updated' => [
-                $title.' has changed',
-                $organizer ? $organizer.' updated this event.' : 'This event was updated.',
-                'Open in the portal',
-            ],
-            'cancelled' => [
-                $title.' was cancelled',
-                ($organizer ? $organizer.' cancelled this event.' : 'This event was cancelled.').' It has been taken off your calendar.',
-                'Open your calendar',
-            ],
-            'response' => [
-                ($p['attendee'] ?? 'Someone').' '.($p['responseLabel'] ?? 'responded'),
-                ($p['attendee'] ?? 'Someone').' '.($p['responseLabel'] ?? 'responded').' your invitation to '.$title.'.',
-                'See all responses',
-            ],
-            default => [
-                $organizer ? $organizer.' invited you to '.$title : 'You have been invited to '.$title,
-                'Here are the details.',
-                'Open in the portal',
-            ],
+        $key = match ($kind) {
+            'updated' => 'calendar-updated',
+            'cancelled' => 'calendar-cancelled',
+            'response' => 'calendar-response',
+            default => 'calendar-invitation',
         };
 
-        if ($kind === 'updated' && ! empty($p['changes'])) {
-            $payload['bodyHtml'] = '<p><strong>What changed:</strong> '.e(implode(', ', $p['changes'])).'</p>';
-        }
-
-        if ($url) {
-            $payload['button'] = ['label' => $label, 'url' => $url];
-        }
-
-        return $payload;
+        return self::payloadFor($key, [
+            'title' => $p['title'] ?? 'Event',
+            'name' => $p['name'] ?? null,
+            'organizer' => $p['organizer'] ?? null,
+            'attendee' => $p['attendee'] ?? 'Someone',
+            'response' => $p['responseLabel'] ?? 'responded',
+            'changes' => ! empty($p['changes']) ? implode(', ', $p['changes']) : null,
+            'url' => $p['url'] ?? null,
+        ], [
+            'details' => $details,
+            // Raw: the postcard template escapes `quote` itself.
+            'quote' => ! empty($p['description']) ? $p['description'] : null,
+            'url' => $p['url'] ?? '',
+        ]);
     }
 
     // ------------------------------------------------------------------- cip
 
+    /** The CIP greeting variable: the addressee's first name. */
+    private static function cipVars(array $facts, ?string $recipientName): array
+    {
+        return [
+            'number' => $facts['number'],
+            'applicant' => $facts['applicant'],
+            'provider' => $facts['provider'],
+            'recipient' => self::firstName($recipientName),
+        ];
+    }
+
     /**
      * §10's assignment notice: the file has been handed to this officer.
      *
-     * The subject is §22's compliance format, not prose —
-     *
-     *   RO - REVIEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 17.08.2026
-     *
-     * because these emails are filed, and a mailbox full of them is sorted and
-     * searched by exactly those fields. The body carries what §10 names: the
-     * application number, the applicant, the provider firm, and a direct link.
-     *
-     * The number is displayNumber(), so a file the Unit has already numbered
-     * announces itself by the CIP number. §7's switching rule reaches email
-     * subjects through the same accessor as every screen.
+     * The subject is §22's compliance format, not prose, because these emails
+     * are filed, and a mailbox full of them is sorted and searched by exactly
+     * those fields. It stays with the caller and is not editable copy.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int, statusLabel:string, roleLabel:string}  $facts
      */
     public static function cipAssigned(array $facts, ?User $officer, string $url, ?string $subject = null, ?string $recipientName = null): Postcard
     {
         $subject ??= Notices::line($facts, Status::REVIEW_APPLICATION, $officer);
-        $hello = $recipientName ?: $officer?->name;
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].': '.$facts['applicant'].' is now at '.$facts['statusLabel'].'.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $hello ? 'Hi '.(strtok($hello, ' ') ?: $hello).',' : 'Hello,',
-            'title' => $facts['number'].' is in review',
-            'lead' => $facts['number'].' stands at '.$facts['statusLabel'].'.',
+        return self::postcard('cip-assigned', self::cipVars($facts, $recipientName ?: $officer?->name) + [
+            'status' => $facts['statusLabel'],
+            'url' => $url,
+        ], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
@@ -826,19 +629,11 @@ class Postcards
                 ['Status', $facts['statusLabel']],
                 ['Family size', 'F'.$facts['familySize']],
             ],
-            'button' => ['label' => 'Open the application', 'url' => $url],
         ]);
     }
 
     /**
      * §14's notice to the provider side: documents have been sent back.
-     *
-     * Fired when the APPLICATION reaches Updates required, not per document —
-     * an officer working through a checklist in one sitting must not put five
-     * emails in the firm's inbox saying pieces of one fact. The body lists
-     * every document sent back so far, each with the reviewer's reason,
-     * because §12 promises the provider is told what needs work without
-     * clicking through documents to find it.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      * @param  list<array{label:string, reason:?string}>  $sentBack
@@ -853,29 +648,24 @@ class Postcards
 
         $count = count($sentBack);
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].': '.$count.' document'.($count === 1 ? '' : 's').' need'.($count === 1 ? 's' : '').' an update.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => 'Updates required on '.$facts['number'],
-            'lead' => 'The reviewing officer has assessed '.$facts['applicant'].'’s documents and sent '
-                .($count === 1 ? 'one back' : $count.' back').' with notes.',
+        return self::postcard('cip-updates-required', self::cipVars($facts, $recipientName) + [
+            'docsNeed' => $count.' document'.($count === 1 ? '' : 's').' need'.($count === 1 ? 's' : ''),
+            'sent' => $count === 1 ? 'one back' : $count.' back',
+            'documents' => new HtmlString('<ul>'.$list.'</ul>'),
+            'url' => $url,
+        ], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
                 ['Service provider', $facts['provider']],
             ],
-            'bodyHtml' => '<ul>'.$list.'</ul>',
-            'button' => ['label' => 'Open the documents', 'url' => $url],
         ]);
     }
 
     /**
      * §15's notice to the provider side: the file is ready, confirm it.
-     *
-     * Fired when the APPLICATION reaches Ready to submit, every required
-     * document accepted, nothing sent back. The body is the ask: press Confirm
-     * submission, after which the original package cannot be modified.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -883,27 +673,19 @@ class Postcards
     {
         $subject ??= Notices::line($facts, Status::READY_TO_SUBMIT);
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].' is ready to submit, confirm to lock the original package.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => $facts['number'].' is ready to submit',
-            'lead' => 'Assessment feedback is complete, '.$facts['applicant'].'’s file is ready to submit. Confirm submission to lock the original package.',
+        return self::postcard('cip-ready-to-submit', self::cipVars($facts, $recipientName) + ['url' => $url], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
                 ['Service provider', $facts['provider']],
             ],
-            'button' => ['label' => 'Confirm submission', 'url' => $url],
         ]);
     }
 
     /**
      * §18's notice to the provider side: the Unit has asked for more.
-     *
-     * Fired when staff record the Query received date and the file moves to
-     * Non-compliant. The body names Additional Documents, because that is the
-     * only drawer still writable after confirm submission.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -926,22 +708,15 @@ class Postcards
             $details[] = ['Query received', $queryReceivedAt];
         }
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].' is non-compliant, the Unit has requested additional information.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => $facts['number'].' is non-compliant',
-            'lead' => 'The Unit has requested additional information on '.$facts['applicant'].'’s file. Upload the required documents through Additional Documents.',
+        return self::postcard('cip-non-compliant', self::cipVars($facts, $recipientName) + ['url' => $url], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => $details,
-            'button' => ['label' => 'Open Additional Documents', 'url' => $url],
         ]);
     }
 
     /**
      * §20's notice: 180 days after acceptance, still no decision.
-     *
-     * Fired by the daily job, not by a person. Initials are the assigned
-     * reviewing officer's when there is one.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -964,14 +739,13 @@ class Postcards
             $details[] = ['Accepted for processing', $acceptedAt];
         }
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].' is delayed, '.$days.' days with no decision.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => $facts['number'].' is delayed',
-            'lead' => $days.' days have passed since '.$facts['applicant'].'’s file was accepted for processing, and no decision has been recorded.',
+        return self::postcard('cip-delayed', self::cipVars($facts, $recipientName) + [
+            'days' => (string) $days,
+            'url' => $url,
+        ], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => $details,
-            'button' => ['label' => 'Open the application', 'url' => $url],
         ]);
     }
 
@@ -995,36 +769,36 @@ class Postcards
     ): Postcard {
         $subject ??= Notices::line($facts, $decision, $actor);
         $granted = $decision === Status::GRANTED;
+        $label = Status::label($decision);
 
         $details = [
             ['Application', $facts['number']],
             ['Applicant', $facts['applicant']],
             ['Service provider', $facts['provider']],
-            ['Decision', Status::label($decision)],
+            ['Decision', $label],
         ];
         if ($decidedAt) {
             $details[] = ['Decision date', $decidedAt];
         }
 
-        $title = $copy['title'] ?? ($facts['number'].' was '.strtolower(Status::label($decision)));
-        $lead = $copy['lead'] ?? ($granted
-            ? 'The Unit has granted '.$facts['applicant'].'’s application.'
-            : 'The Unit has denied '.$facts['applicant'].'’s application.');
-
-        $payload = [
-            'preheader' => $facts['number'].' was '.strtolower(Status::label($decision)).'.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Dear '.$recipientName.',' : 'Dear Sir/Madam,',
-            'title' => $title,
-            'lead' => $lead,
+        // array_merge, not +: cipVars already carries a 'recipient' and the
+        // union would keep its null over the full name the letter addresses.
+        return self::postcard('cip-decision', array_merge(self::cipVars($facts, null), [
+            'recipient' => $recipientName,
+            'decision' => $label,
+            'decisionLower' => strtolower($label),
+            'letterTitle' => $copy['title'] ?? ($facts['number'].' was '.strtolower($label)),
+            'letterLead' => $copy['lead'] ?? ($granted
+                ? 'The Unit has granted '.$facts['applicant'].'’s application.'
+                : 'The Unit has denied '.$facts['applicant'].'’s application.'),
+            'letterBody' => ! empty($copy['bodyHtml']) ? new HtmlString($copy['bodyHtml']) : null,
+            'url' => $url,
+        ]), [
+            'subject' => $subject,
+            'url' => $url,
             'details' => $details,
-            'button' => ['label' => 'Open the application', 'url' => $url],
-        ];
-        if (! empty($copy['bodyHtml'])) {
-            $payload['bodyHtml'] = $copy['bodyHtml'];
-        }
-
-        return new Postcard($subject, $payload, attachment: $attachment);
+            'attachment' => $attachment,
+        ]);
     }
 
     /**
@@ -1038,12 +812,12 @@ class Postcards
         $subject ??= Notices::line($facts, $status);
         $label = Status::label($status);
 
-        return new Postcard($subject, [
-            'preheader' => $facts['number'].' now stands at '.$label.'.',
-            'eyebrow' => 'CIP Applications',
-            'greeting' => $recipientName ? 'Hi '.(strtok($recipientName, ' ') ?: $recipientName).',' : 'Hello,',
-            'title' => $facts['number'].': '.$label,
-            'lead' => $facts['applicant'].'’s application now stands at '.$label.'.',
+        return self::postcard('cip-status', self::cipVars($facts, $recipientName) + [
+            'status' => $label,
+            'url' => $url,
+        ], [
+            'subject' => $subject,
+            'url' => $url,
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
@@ -1051,7 +825,6 @@ class Postcards
                 ['Status', $label],
                 ['Family size', 'F'.$facts['familySize']],
             ],
-            'button' => ['label' => 'Open the application', 'url' => $url],
         ]);
     }
 
@@ -1067,13 +840,12 @@ class Postcards
             ? (str_starts_with($actionUrl, 'http') ? $actionUrl : rtrim(config('app.url'), '/').$actionUrl)
             : null;
 
-        return new Postcard($title, array_filter([
-            'preheader' => $message ?: $title,
-            'eyebrow' => ucfirst($module ?: 'notification'),
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+        return self::postcard('notification', [
             'title' => $title,
-            'bodyHtml' => $message ? '<p>'.e($message).'</p>' : null,
-            'button' => $url ? ['label' => $actionLabel ?: 'Open the portal', 'url' => $url] : null,
-        ]));
+            'message' => $message,
+            'name' => $name,
+            'module' => ucfirst($module ?: 'notification'),
+            'actionLabel' => $actionLabel ?: 'Open the portal',
+        ], ['url' => $url ?: '']);
     }
 }

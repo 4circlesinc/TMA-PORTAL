@@ -279,7 +279,7 @@
     modalHost.className = 'tma-portal-modal';
     modalHost.innerHTML =
       '<div class="tma-portal-modal__backdrop" data-portal-modal-close></div>' +
-      '<div class="tma-dash__settings-change-card tma-portal-modal__card" role="dialog" aria-modal="true" aria-label="' + esc(o.title || 'Dialog') + '">' +
+      '<div class="tma-dash__settings-change-card tma-portal-modal__card' + (o.cls ? ' ' + esc(o.cls) : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(o.title || 'Dialog') + '">' +
       '<div class="tma-portal-modal__head">' +
       (o.title ? '<h2 class="tma-portal-modal__title">' + esc(o.title) + '</h2>' : '<span class="tma-portal-modal__title" aria-hidden="true"></span>') +
       '<button type="button" class="tma-dash__settings-change-close" data-portal-modal-close aria-label="Close">' +

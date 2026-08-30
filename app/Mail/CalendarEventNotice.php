@@ -43,30 +43,26 @@ class CalendarEventNotice extends Mailable implements ShouldQueue
         public array $payload,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::calendar($this->kind, $this->payload);
+    }
+
     public function envelope(): Envelope
     {
-        $title = $this->payload['title'] ?? 'Event';
-
-        $subject = match ($this->kind) {
-            self::KIND_UPDATED => 'Updated: '.$title,
-            self::KIND_CANCELLED => 'Cancelled: '.$title,
-            self::KIND_RESPONSE => sprintf(
-                '%s %s: %s',
-                $this->payload['attendee'] ?? 'Someone',
-                $this->payload['responseLabel'] ?? 'responded',
-                $title,
-            ),
-            default => 'Invitation: '.$title,
-        };
-
-        return new Envelope(subject: $subject);
+        return new Envelope(
+            subject: (string) ($this->copy()['subject'] ?? ($this->payload['title'] ?? 'Event')),
+        );
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::calendar($this->kind, $this->payload),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 }

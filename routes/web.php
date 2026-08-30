@@ -21,6 +21,7 @@ use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
+use App\Http\Controllers\TemplatesController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
@@ -821,6 +822,17 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      * stopping a client who connected Gmail from running a full mailbox
      * inside the portal.
      */
+        /*
+     * The Templates page (administrators only). System emails: every
+     * transactional email's copy, editable, with restore and live preview.
+     */
+    Route::prefix('portal/templates')->middleware('capability:templates.view')->name('templates.')->group(function () {
+        Route::get('/system-emails', [TemplatesController::class, 'index'])->name('system.index');
+        Route::patch('/system-emails/{key}', [TemplatesController::class, 'update'])->name('system.update');
+        Route::post('/system-emails/{key}/restore', [TemplatesController::class, 'restore'])->name('system.restore');
+        Route::post('/system-emails/{key}/preview', [TemplatesController::class, 'preview'])->name('system.preview');
+    });
+
     Route::prefix('portal/mail')->middleware('capability:mail.use')->name('mail.')->group(function () {
         Route::get('/', [MailController::class, 'index'])->name('index');
         Route::post('/sync', [MailController::class, 'sync'])->name('sync');

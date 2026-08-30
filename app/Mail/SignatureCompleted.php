@@ -29,28 +29,34 @@ class SignatureCompleted extends Mailable implements ShouldQueue
         public ?string $recipientName = null,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::signatureCompleted(
+            title: $this->signatureRequest->title,
+            name: $this->recipientName,
+            signers: $this->signatureRequest->recipients
+                ->where('role', '!=', 'cc')
+                ->map(fn ($r) => $r->name ?: $r->email)
+                ->values()
+                ->all(),
+            attached: $this->signedFile !== null,
+            url: url('/signatures'),
+        );
+    }
+
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'Signed: '.$this->signatureRequest->title,
-        );
+        return new Envelope(subject: (string) ($this->copy()['subject'] ?? ''));
     }
 
     public function content(): Content
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::signatureCompleted(
-                title: $this->signatureRequest->title,
-                name: $this->recipientName,
-                signers: $this->signatureRequest->recipients
-                    ->where('role', '!=', 'cc')
-                    ->map(fn ($r) => $r->name ?: $r->email)
-                    ->values()
-                    ->all(),
-                attached: $this->signedFile !== null,
-                url: url('/signatures'),
-            ),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 

@@ -22,11 +22,27 @@ class SignatureInvitation extends Mailable implements ShouldQueue
         public string $signingUrl,
     ) {}
 
+    /** The template copy, built once for both the envelope and the body. */
+    private ?array $postcardCopy = null;
+
+    private function copy(): array
+    {
+        return $this->postcardCopy ??= \App\Support\Mail\Postcards::signatureInvitation(
+            title: $this->signatureRequest->title,
+            sender: $this->signatureRequest->creator?->name,
+            note: $this->signatureRequest->message,
+            url: $this->signingUrl,
+            name: $this->recipient->name,
+            expiresAt: $this->signatureRequest->expires_at,
+            action: $this->recipient->role === 'approver' ? 'approve' : 'sign',
+        );
+    }
+
     public function envelope(): Envelope
     {
+        // The sender's own wording wins; the editable template is the default.
         return new Envelope(
-            subject: $this->signatureRequest->subject
-                ?: 'Please sign: '.$this->signatureRequest->title,
+            subject: $this->signatureRequest->subject ?: (string) ($this->copy()['subject'] ?? ''),
         );
     }
 
@@ -34,15 +50,7 @@ class SignatureInvitation extends Mailable implements ShouldQueue
     {
         return new Content(
             view: 'emails.postcard',
-            with: \App\Support\Mail\Postcards::signatureInvitation(
-                title: $this->signatureRequest->title,
-                sender: $this->signatureRequest->creator?->name,
-                note: $this->signatureRequest->message,
-                url: $this->signingUrl,
-                name: $this->recipient->name,
-                expiresAt: $this->signatureRequest->expires_at,
-                action: $this->recipient->role === 'approver' ? 'approve' : 'sign',
-            ),
+            with: \Illuminate\Support\Arr::except($this->copy(), ['subject']),
         );
     }
 }
