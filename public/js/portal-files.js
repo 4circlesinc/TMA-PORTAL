@@ -6445,7 +6445,7 @@
     document.removeEventListener('click', onCtxDocClick);
     document.removeEventListener('contextmenu', onDocCtx, true);
     document.removeEventListener('keydown', onCtxKey);
-    document.removeEventListener('scroll', closeContextMenu, true);
+    document.removeEventListener('scroll', onCtxScroll, true);
   }
   function onCtxKey(e) { if (e.key === 'Escape') closeContextMenu(); }
   function onDocCtx(e) { if (ctxEl && !ctxEl.contains(e.target)) closeContextMenu(); }
@@ -6453,6 +6453,13 @@
      would kill the flyout before its handler ran. */
   function onCtxDocClick(e) {
     if (e.target.closest('.tma-portal-context-menu')) return;
+    closeContextMenu();
+  }
+  function onCtxScroll(e) {
+    // Capture-phase scroll used to dismiss Change status inside the file
+    // viewer: the Approvals panel moves when the menu is placed, and that
+    // was read as "the page scrolled, close". File status never landed.
+    if (lb && (lb.contains(e.target) || (ctxEl && ctxEl.contains(e.target)))) return;
     closeContextMenu();
   }
 
@@ -6796,6 +6803,12 @@
   /** The same picker where there is no menu to hang it off, the viewer's
       panel button, which opens it as a menu of its own. */
   function openReviewStatusMenu(x, y, item, onDone) {
+    if (item && documentReviewStatus(item)) {
+      item.review = Object.assign({}, item.review || {}, {
+        canReview: true,
+        next: null,
+      });
+    }
     openContextMenu(x, y, item, reviewSubmenu(item, onDone));
   }
 
@@ -7246,7 +7259,7 @@
       document.addEventListener('click', onCtxDocClick);
       document.addEventListener('contextmenu', onDocCtx, true);
       document.addEventListener('keydown', onCtxKey);
-      document.addEventListener('scroll', closeContextMenu, true);
+      document.addEventListener('scroll', onCtxScroll, true);
     }, 0);
   }
 

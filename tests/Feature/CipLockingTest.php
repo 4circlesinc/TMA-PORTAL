@@ -19,6 +19,10 @@ use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentRequests;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Engine;
+use App\Support\Cip\PersonStatus;
+use App\Support\Cip\Phase;
+use App\Support\Cip\PostApproval;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use App\Support\Files\FileAccess;
@@ -239,6 +243,54 @@ class CipLockingTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED);
+    }
+
+    public function test_file_status_still_moves_after_post_approval_is_pulled_back_to_pre_approval(): void
+    {
+        ['staff' => $staff, 'slot' => $slot, 'application' => $application] = $this->lockedPackage();
+        $file = $slot->fresh()->file;
+        $person = $slot->person;
+
+        $application->forceFill([
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+        ])->save();
+
+        PostApproval::enter($application->fresh(), $staff);
+        $person->forceFill(['post_approval_status' => PersonStatus::UPDATE_REQUIRED])->save();
+        $slot->forceFill(['status' => DocumentStatus::UPDATE_REQUIRED])->save();
+        $file->forceFill(['review_status' => DocumentStatus::UPDATE_REQUIRED])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->fresh()->uuid.'/status', [
+                'status' => Status::ASSESSMENT_FEEDBACK,
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.phase', Phase::PRE_APPROVAL);
+
+        $this->assertSame(Phase::PRE_APPROVAL, $application->fresh()->phase);
+        $this->assertNotNull($application->fresh()->locked_at);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::APPLICATION_REVIEW)
+            ->assertJsonPath('file.review.canReview', true);
+
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->fresh()->status);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::READY_FOR_SUBMISSION,
+            ])
+            ->assertOk()
+            ->assertJsonPath('file.review.status', DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
+        $this->assertSame(PersonStatus::UPDATE_REQUIRED, $person->fresh()->post_approval_status);
     }
 
     public function test_marking_update_required_after_lock_puts_the_application_in_updates_required(): void

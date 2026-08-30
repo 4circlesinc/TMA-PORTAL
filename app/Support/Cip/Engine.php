@@ -224,7 +224,13 @@ class Engine
             }
         }
 
-        return self::write($application, $to, $actor, $meta, $extra);
+        $application = self::write($application, $to, $actor, $meta, $extra);
+
+        if (($meta['revertedPhase'] ?? null) === Phase::POST_APPROVAL) {
+            Requirements::materialiseApplication($application->fresh());
+        }
+
+        return $application;
     }
 
     /** The row and the audit, once the move has already been allowed. */
