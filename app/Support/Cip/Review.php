@@ -84,6 +84,8 @@ class Review
         }
 
         return DB::transaction(function () use ($document, $actor, $reason) {
+            $before = $document->loadMissing('application')->application->status;
+
             /*
              * Written first so its uuid can ride in the transition's audit
              * meta: the event says a document was sent back, and the meta says
@@ -105,9 +107,31 @@ class Review
             }
 
             self::settle($document->loadMissing('application')->application, $actor);
+            self::announceSentBack($document, $actor, $reason, $before);
 
             return $document;
         });
+    }
+
+    /**
+     * Tell everyone on the application that this document was sent back,
+     * unless the application's own Updates Required notice just did.
+     *
+     * The status notice fires from {@see settle()} when the application
+     * ENTERS Updates Required, and names every refused slot, this one
+     * included. A refusal that finds the file already there, or somewhere
+     * the checklist cannot move it from, changes no status and used to tell
+     * nobody. `$before` is the application's status before the verdict.
+     */
+    public static function announceSentBack(CipDocument $document, ?User $actor, string $reason, string $before): void
+    {
+        $after = (string) ($document->application()->value('status') ?? $before);
+
+        if ($before !== Status::UPDATE_REQUIRED && $after === Status::UPDATE_REQUIRED) {
+            return;
+        }
+
+        Notices::documentSentBack($document, $actor, $reason);
     }
 
     /**

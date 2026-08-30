@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Support\Cip\DocumentComments;
+use App\Support\Cip\Notices;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -45,6 +46,14 @@ class CipDocumentCommentController extends Controller
         $parent = empty($data['parent']) ? null : $this->comment($document, $data['parent']);
 
         $comment = DocumentComments::create($document, $user, $data['body'], $parent);
+
+        try {
+            Notices::documentComment($document, $user, $comment->body);
+        } catch (\Throwable $e) {
+            // The comment is saved. A notice that could not go out is a
+            // smaller problem than a comment refused because of it.
+            report($e);
+        }
 
         return response()->json(
             DocumentComments::present($comment->fresh()->load('author'), $user) + ['replies' => []],

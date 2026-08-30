@@ -10,6 +10,7 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use App\Support\Signatures\Presenter as SignaturePresenter;
+use Illuminate\Support\Str;
 
 /**
  * §22, one subject format, one recipient list, every status change.
@@ -56,19 +57,113 @@ class Notices
         }
 
         $facts = Contacts::facts($application);
-        $path = Contacts::path($application);
         $url = Contacts::url($application);
         $initials = self::initials($actor, $application);
-        $template = self::template($to);
-        $type = self::bellType($to);
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name),
+            self::template($to),
+            self::bellType($to),
+            $actor,
+            $facts['number'].': '.Status::label($to),
+            self::bellMessage($application, $to, $facts),
+        );
+    }
+
+    /**
+     * One document sent back, named on its own.
+     *
+     * {@see announce()} fires when the APPLICATION enters Updates Required
+     * and lists every refused slot. A second refusal a day later moves no
+     * status, so nothing fired, and the firm learned of it only by opening
+     * the checklist. Every refusal is work the provider side has to do, so
+     * every one is a notice: same recipients, same filing subject, this one
+     * naming only the document that moved. Callers skip it when the
+     * application's own notice went out a moment ago and already named it.
+     */
+    public static function documentSentBack(CipDocument $document, ?User $actor, string $reason): void
+    {
+        $application = $document->loadMissing('application')->application;
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $initials = self::initials($actor, $application);
+        $subject = self::line($facts, Status::UPDATE_REQUIRED, $actor, $initials);
+        $reason = trim($reason);
+        $sentBack = [['label' => $document->label, 'reason' => $reason !== '' ? $reason : null]];
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => Postcards::cipUpdatesRequired($facts, $sentBack, $actor, $url, $name, $subject),
+            self::template(Status::UPDATE_REQUIRED),
+            self::bellType(Status::UPDATE_REQUIRED),
+            $actor,
+            $facts['number'].': '.Status::label(Status::UPDATE_REQUIRED),
+            $document->label.' was sent back'.($reason !== '' ? ': '.Str::limit($reason, 140) : '.'),
+        );
+    }
+
+    /**
+     * A comment on a checklist document, to everyone on the application.
+     *
+     * §13's thread exists so the provider side can be told what is wrong
+     * and answer; a reply nobody is told about is a note left in a drawer.
+     * Everyone but the author: the same §22 list a status change writes to.
+     */
+    public static function documentComment(CipDocument $document, User $author, string $body): void
+    {
+        $application = $document->loadMissing('application')->application;
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $title = $author->name.' commented on '.$document->label.' ('.$facts['number'].')';
+        $message = Str::limit(trim($body), 140);
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => Postcards::notification(
+                $title, $message, $url, 'Open the documents',
+                $name ? (strtok($name, ' ') ?: $name) : null, 'CIP Applications',
+            ),
+            'cip-comment',
+            'cip.comment',
+            $author,
+            $title,
+            $message,
+            $author->email,
+        );
+    }
+
+    /**
+     * The one delivery loop every CIP notice walks.
+     *
+     * A postcard to every §22 mailbox, built per recipient so the greeting
+     * carries their name, and a bell for the ones with a portal account. The
+     * bell goes with the email channel off, so the Notifier cannot send a
+     * second, differently-worded copy of the same fact.
+     *
+     * @param  callable(?string): Postcard  $card
+     */
+    private static function fanOut(
+        CipApplication $application,
+        callable $card,
+        string $template,
+        string $type,
+        ?User $actor,
+        string $title,
+        string $message,
+        ?string $skipMailbox = null,
+    ): void {
+        $path = Contacts::path($application);
 
         foreach (Contacts::notices($application) as $recipient) {
-            $card = self::postcard($application, $facts, $to, $url, $actor, $initials, $recipient['name']);
+            if ($skipMailbox !== null && mb_strtolower($recipient['email']) === mb_strtolower($skipMailbox)) {
+                continue;
+            }
 
             // Queue: a status click must not wait on the mailbox. Walking
             // Assessment feedback then Updates Required would otherwise send
             // eight letters before the chip could move.
-            Deliveries::send($card, $recipient['email'], $application, $template);
+            Deliveries::send($card($recipient['name']), $recipient['email'], $application, $template);
 
             if ($recipient['userId'] === null) {
                 continue;
@@ -78,8 +173,8 @@ class Notices
                 'user' => User::find($recipient['userId']),
                 'actor' => $actor,
                 'type' => $type,
-                'title' => $facts['number'].': '.Status::label($to),
-                'message' => self::bellMessage($application, $to, $facts),
+                'title' => $title,
+                'message' => $message,
                 'subject' => $application,
                 'action_url' => $path,
                 'email' => false,

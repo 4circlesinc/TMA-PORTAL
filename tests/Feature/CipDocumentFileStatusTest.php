@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
@@ -18,6 +19,7 @@ use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Status;
 use App\Support\Files\ReviewStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -218,6 +220,30 @@ class CipDocumentFileStatusTest extends TestCase
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
         $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
+    }
+
+    public function test_a_further_update_required_from_the_library_is_announced_to_everyone(): void
+    {
+        Mail::fake();
+
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::APPLICATION_REVIEW);
+        $slot->loadMissing('application');
+        // The file already stands at Updates Required for another document,
+        // so this verdict moves no status and the status notice cannot fire.
+        $slot->application->forceFill(['status' => Status::UPDATE_REQUIRED])->save();
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
+                'status' => DocumentStatus::UPDATE_REQUIRED,
+                'note' => 'The bio page is cropped. Please rescan.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo($staff->email)
+            && str_contains($mail->subjectLine, 'UPDATE REQUIRED')
+            && str_contains($mail->payload['bodyHtml'], 'Birth certificate')
+            && str_contains($mail->payload['bodyHtml'], 'The bio page is cropped. Please rescan.'));
     }
 
     public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void

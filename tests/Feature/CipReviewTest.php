@@ -519,7 +519,7 @@ class CipReviewTest extends TestCase
         $this->assertSame(0, $progress['counts'][DocumentStatus::READY_FOR_SUBMISSION]);
     }
 
-    public function test_updates_required_notifies_the_provider_side_once_per_episode(): void
+    public function test_every_document_sent_back_tells_the_provider_side_even_inside_an_open_episode(): void
     {
         Mail::fake();
 
@@ -588,16 +588,28 @@ class CipReviewTest extends TestCase
 
         /*
          * A second document sent back while the file already stands at
-         * Updates required joins the same open episode: the checklist names
-         * it, and the notice already said there is work. Two emails saying
-         * pieces of one fact would teach the firm to skim them.
+         * Updates required moves no status, so the status notice cannot
+         * fire. It is still work the provider side has to do, so it is
+         * still a notice to the same four classes, naming only the document
+         * that moved this time rather than repeating the first.
          */
         $this->actingAs($officer)
             ->postJson('/portal/cip/documents/'.$birth->uuid.'/request-changes', [
                 'comment' => 'The certificate is the short form.',
             ])->assertOk();
 
-        Mail::assertQueuedCount(8);
+        Mail::assertQueuedCount(12);
+
+        foreach (['gil@galaxy.example', 'notices@galaxy.example', 'ada@example.com', 'rita@example.com'] as $mailbox) {
+            Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $expected
+                && $mail->hasTo($mailbox)
+                && str_contains($mail->payload['bodyHtml'], 'Birth certificate')
+                && str_contains($mail->payload['bodyHtml'], 'The certificate is the short form.')
+                && ! str_contains($mail->payload['bodyHtml'], 'Passport bio page'));
+        }
+
+        $this->assertSame(2, \Illuminate\Support\Facades\DB::table('portal_notifications')
+            ->where('user_id', $contact->id)->where('type', 'cip.updates-required')->count());
     }
 
     public function test_reaching_ready_to_submit_notifies_the_provider_side(): void

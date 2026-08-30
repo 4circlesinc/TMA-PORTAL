@@ -151,6 +151,8 @@ class FileReviewController extends BaseFilesController
      */
     private function judgeCip(CipDocument $slot, User $user, string $to, string $note): void
     {
+        $before = (string) $slot->loadMissing('application')->application->status;
+
         try {
             $meta = array_filter(['note' => $note !== '' ? $note : null]);
             DocumentEngine::set($slot, $to, $user, $meta);
@@ -172,6 +174,10 @@ class FileReviewController extends BaseFilesController
             // The file chip already committed. Rolling it back because the
             // application could not follow is how Update required stuck.
             report($e);
+        }
+
+        if ($to === DocumentStatus::UPDATE_REQUIRED) {
+            CipReview::announceSentBack($slot, $user, $note, $before);
         }
 
         $file = $slot->file;

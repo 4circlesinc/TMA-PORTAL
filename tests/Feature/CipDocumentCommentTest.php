@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Models\CipPerson;
@@ -10,8 +12,10 @@ use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Cip\Applications;
+use App\Support\Access\Role;
 use App\Support\Cip\Assignments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -135,6 +139,51 @@ class CipDocumentCommentTest extends TestCase
             ->getJson('/portal/cip/documents/'.$slot->uuid.'/comments')
             ->assertOk()
             ->assertJsonPath('comments.0.body', 'The original is in the post.');
+    }
+
+    public function test_a_comment_tells_everyone_on_the_application_but_its_author(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = null;
+        $slot = $this->slot($staff, $company);
+        $application = $slot->application;
+        $application->provider->forceFill([
+            'contact_email' => 'notices@galaxy.example', 'contact_name' => 'Galaxy Notices',
+        ])->save();
+
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        CipApplicationAssignment::create([
+            'application_id' => $application->id, 'user_id' => $officer->id,
+            'role' => 'reviewing_officer', 'status' => CipApplicationAssignment::STATUS_ACTIVE,
+            'assigned_by' => $staff->id, 'starts_at' => now(),
+        ]);
+
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'general', 'status' => 'active', 'invited_by' => $staff->id,
+        ]);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+                'body' => 'The original is in the post.',
+            ])->assertCreated();
+
+        // §22's classes, each once, the author excepted.
+        foreach (['ada@example.com', 'rita@example.com', 'notices@galaxy.example'] as $mailbox) {
+            Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo($mailbox)
+                && str_contains($mail->subjectLine, 'Gil Contact commented on Police certificate')
+                && str_contains($mail->payload['bodyHtml'], 'The original is in the post.'));
+        }
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
+        Mail::assertQueuedCount(3);
+
+        $this->assertDatabaseHas('portal_notifications', ['user_id' => $staff->id, 'type' => 'cip.comment']);
+        $this->assertDatabaseHas('portal_notifications', ['user_id' => $officer->id, 'type' => 'cip.comment']);
+        $this->assertDatabaseMissing('portal_notifications', ['user_id' => $contact->id, 'type' => 'cip.comment']);
     }
 
     public function test_a_stranger_is_not_told_the_document_exists(): void
