@@ -87,6 +87,48 @@ class CipEngineTest extends TestCase
         $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
     }
 
+    public function test_post_approval_updates_required_keeps_the_grant(): void
+    {
+        $creator = $this->user(Role::EMPLOYEE);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $creator);
+        $application->forceFill([
+            'status' => Status::POST_APPROVAL,
+            'phase' => Phase::POST_APPROVAL,
+            'decision' => 'granted',
+            'decided_at' => now(),
+        ])->save();
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        Engine::apply($application, Status::UPDATE_REQUIRED, $admin);
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::UPDATE_REQUIRED, $fresh->status);
+        $this->assertSame(Phase::POST_APPROVAL, $fresh->phase);
+        $this->assertSame('granted', $fresh->decision);
+    }
+
+    public function test_pending_cor_keeps_the_grant(): void
+    {
+        $creator = $this->user(Role::EMPLOYEE);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $creator);
+        $application->forceFill([
+            'status' => Status::APPLY_FOR_COR,
+            'phase' => Phase::POST_APPROVAL,
+            'decision' => 'granted',
+            'decided_at' => now(),
+        ])->save();
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        Engine::apply($application, Status::PENDING_COR, $admin);
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::PENDING_COR, $fresh->status);
+        $this->assertSame(Phase::POST_APPROVAL, $fresh->phase);
+        $this->assertSame('granted', $fresh->decision);
+    }
+
     public function test_granted_cannot_move_to_an_unmapped_status(): void
     {
         $creator = $this->user(Role::EMPLOYEE);

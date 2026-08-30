@@ -376,7 +376,7 @@ class Intake
     }
 
     /** The 2×2 rule, as a validator closure over {@see PassportPhoto}. */
-    private static function photoRule(): \Closure
+    public static function photoRule(): \Closure
     {
         return function ($attribute, $value, $fail) {
             if (! $value instanceof UploadedFile) {
@@ -390,7 +390,7 @@ class Intake
         };
     }
 
-    private static function documentRule(): array
+    public static function documentRule(): array
     {
         return [
             'required', 'file',
@@ -783,7 +783,7 @@ class Intake
         }
     }
 
-    private static function filePhoto(CipPerson $person, mixed $upload, User $creator): void
+    public static function filePhoto(CipPerson $person, mixed $upload, User $creator): void
     {
         if (! $upload instanceof UploadedFile) {
             return;

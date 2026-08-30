@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\User;
 use App\Support\Files\Comments;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -78,13 +79,40 @@ class Review
             return;
         }
 
-        $ids = $missing->map(fn (CipApplication $application) => $application->getKey())->all();
-        $grouped = CipDocument::query()
-            ->whereIn('application_id', $ids)
-            ->selectRaw('application_id, status, required, COUNT(*) as total')
-            ->groupBy('application_id', 'status', 'required')
-            ->get()
-            ->groupBy(fn ($row) => (int) $row->application_id);
+        $preIds = $missing
+            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL)
+            ->map(fn (CipApplication $application) => $application->getKey())
+            ->all();
+        $postIds = $missing
+            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL)
+            ->map(fn (CipApplication $application) => $application->getKey())
+            ->all();
+
+        $grouped = collect();
+
+        if ($preIds !== []) {
+            $grouped = $grouped->merge(
+                CipDocument::query()
+                    ->whereIn('application_id', $preIds)
+                    ->selectRaw('application_id, status, required, COUNT(*) as total')
+                    ->groupBy('application_id', 'status', 'required')
+                    ->get()
+            );
+        }
+
+        if ($postIds !== []) {
+            $grouped = $grouped->merge(
+                self::constrainToCurrentChecklist(
+                    CipDocument::query()->whereIn('application_id', $postIds),
+                    Phase::POST_APPROVAL,
+                )
+                    ->selectRaw('application_id, status, required, COUNT(*) as total')
+                    ->groupBy('application_id', 'status', 'required')
+                    ->get()
+            );
+        }
+
+        $grouped = $grouped->groupBy(fn ($row) => (int) $row->application_id);
 
         foreach ($missing as $application) {
             $store[(int) $application->getKey()] = self::shapeTally(
@@ -256,7 +284,8 @@ class Review
              * 422 the document PATCH after the slot had already been written,
              * which rolled the chip back on screen.
              */
-            if ($target === Status::READY_TO_SUBMIT && ! self::documentsAllowReadyToSubmit($application)) {
+            if (in_array($target, [Status::READY_TO_SUBMIT, Status::APPLY_FOR_COR], true)
+                && ! self::documentsAllowReadyToSubmit($application)) {
                 continue;
             }
 
@@ -355,6 +384,10 @@ class Review
         $needsUpdates = $tally[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
         $inReview = $tally[DocumentStatus::APPLICATION_REVIEW]['total'] > 0;
 
+        if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            return self::planPostApproval($from, $needsUpdates, $inReview, $required, $tally);
+        }
+
         if ($needsUpdates) {
             return match ($from) {
                 Status::NEW => [
@@ -428,6 +461,53 @@ class Review
     }
 
     /**
+     * Post-approval has no Assessment Feedback hop. A refused COR document is
+     * Updates Required; a complete COR checklist is Apply for COR.
+     *
+     * @param  array<string, array{total: int, required: int}>  $tally
+     * @return list<string>
+     */
+    private static function planPostApproval(
+        string $from,
+        bool $needsUpdates,
+        bool $inReview,
+        int $required,
+        array $tally,
+    ): array {
+        if ($needsUpdates) {
+            return match ($from) {
+                Status::POST_APPROVAL, Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED],
+                default => [],
+            };
+        }
+
+        if ($from === Status::APPLY_FOR_COR && $inReview) {
+            return [Status::POST_APPROVAL];
+        }
+
+        $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
+            + $tally[DocumentStatus::APPLICATION_REVIEW]['required'];
+
+        $allReady = $required > 0
+            && $unassessed === 0
+            && ! $inReview
+            && $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
+
+        if ($from === Status::UPDATE_REQUIRED && ! $allReady) {
+            return [Status::POST_APPROVAL];
+        }
+
+        if (! $allReady) {
+            return [];
+        }
+
+        return match ($from) {
+            Status::POST_APPROVAL, Status::UPDATE_REQUIRED => [Status::APPLY_FOR_COR],
+            default => [],
+        };
+    }
+
+    /**
      * The whole application's checklist counted in one query: how many slots
      * sit at each status, and how many of those were required.
      *
@@ -446,8 +526,11 @@ class Review
             return $store[$id];
         }
 
-        $rows = CipDocument::query()
-            ->where('application_id', $application->getKey())
+        $rows = self::constrainToCurrentChecklist(
+            CipDocument::query()->where('application_id', $application->getKey()),
+            $application->phase ?? Phase::PRE_APPROVAL,
+            $application,
+        )
             ->selectRaw('status, required, COUNT(*) as total')
             ->groupBy('status', 'required')
             ->get();
@@ -481,5 +564,47 @@ class Review
         }
 
         return $tally;
+    }
+
+    /**
+     * Restrict a document query to the checklist the current phase is judging.
+     *
+     * Post-approval must not count leftover pre-approval slots or Real Estate
+     * paper on a donation file; either would poison Updates Required and
+     * Apply for COR.
+     *
+     * @param  Builder<\App\Models\CipDocument>  $query
+     * @return Builder<\App\Models\CipDocument>
+     */
+    public static function constrainToCurrentChecklist(
+        Builder $query,
+        string $phase,
+        ?CipApplication $application = null,
+    ): Builder {
+        if ($phase !== Phase::POST_APPROVAL) {
+            return $query;
+        }
+
+        $realEstate = $application === null
+            || $application->investment_type === InvestmentType::REAL_ESTATE;
+
+        return $query->where(function ($outer) use ($realEstate) {
+            $outer->whereHas('requirement', function ($requirement) use ($realEstate) {
+                $requirement->where(function ($phase) {
+                    $phase->where('at_post_approval', true)
+                        ->orWhere(function ($carried) {
+                            $carried->where('at_pre_approval', true)->where('carry_forward', true);
+                        });
+                });
+
+                if (! $realEstate) {
+                    $requirement->where(function ($flag) {
+                        $flag->where('real_estate_only', false)->orWhereNull('real_estate_only');
+                    });
+                }
+            })->orWhere(function ($loose) {
+                $loose->whereNull('requirement_id')->whereIn('type', CorRequirements::keys());
+            });
+        });
     }
 }

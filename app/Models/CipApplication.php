@@ -50,6 +50,14 @@ class CipApplication extends Model
             'accepted_at' => 'date',
             'decided_at' => 'date',
             'locked_at' => 'datetime',
+            'cor_locked_at' => 'datetime',
+            'cor_submitted_at' => 'date',
+            'cor_received_at' => 'date',
+            'nic_submitted_at' => 'date',
+            'nic_received_at' => 'date',
+            'passport_submitted_at' => 'date',
+            'passport_received_at' => 'date',
+            'passport_delivered_at' => 'date',
             'post_approval_at' => 'datetime',
             'sponsored' => 'boolean',
         ];
@@ -71,6 +79,11 @@ class CipApplication extends Model
     public function isLocked(): bool
     {
         return $this->locked_at !== null;
+    }
+
+    public function isCorLocked(): bool
+    {
+        return $this->cor_locked_at !== null;
     }
 
     public function isPostApproval(): bool

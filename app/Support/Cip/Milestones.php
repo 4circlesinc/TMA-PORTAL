@@ -43,6 +43,20 @@ class Milestones
 
     public const DECISION = 'decision';
 
+    public const COR_SUBMITTED = 'cor_submitted';
+
+    public const COR_RECEIVED = 'cor_received';
+
+    public const NIC_SUBMITTED = 'nic_submitted';
+
+    public const NIC_RECEIVED = 'nic_received';
+
+    public const PASSPORT_SUBMITTED = 'passport_submitted';
+
+    public const PASSPORT_RECEIVED = 'passport_received';
+
+    public const PASSPORT_DELIVERED = 'passport_delivered';
+
     /**
      * key => [the column it reads, what it is called, who may correct it].
      *
@@ -71,6 +85,23 @@ class Milestones
     ];
 
     /**
+     * Dates after a grant. Shown once the file is in post-approval (or a
+     * date has already been recorded), so a pre-approval Overview is not
+     * seven empty rows of work that has not started.
+     *
+     * @var array<string, array{0: string, 1: string, 2: string}>
+     */
+    private const POST_STEPS = [
+        self::COR_SUBMITTED => ['cor_submitted_at', 'COR submitted', 'cip.compliance'],
+        self::COR_RECEIVED => ['cor_received_at', 'COR received', 'cip.compliance'],
+        self::NIC_SUBMITTED => ['nic_submitted_at', 'NIC submitted', 'cip.compliance'],
+        self::NIC_RECEIVED => ['nic_received_at', 'NIC received', 'cip.compliance'],
+        self::PASSPORT_SUBMITTED => ['passport_submitted_at', 'Passport applied', 'cip.compliance'],
+        self::PASSPORT_RECEIVED => ['passport_received_at', 'Passport received', 'cip.compliance'],
+        self::PASSPORT_DELIVERED => ['passport_delivered_at', 'Passport delivered', 'cip.compliance'],
+    ];
+
+    /**
      * The whole timeline: every step in its order, reached or still to come.
      *
      * Two answers per step, and they are never both true. `canEdit` is a day
@@ -90,8 +121,9 @@ class Milestones
     public static function for(CipApplication $application, ?User $actor = null): array
     {
         $milestones = [];
+        $steps = self::STEPS + (self::showsPost($application) ? self::POST_STEPS : []);
 
-        foreach (self::STEPS as $key => [$column, $label, $capability]) {
+        foreach ($steps as $key => [$column, $label, $capability]) {
             $date = $application->{$column};
 
             $milestones[] = [
@@ -120,6 +152,13 @@ class Milestones
         self::QUERY_RECEIVED => Status::NON_COMPLIANT,
         self::ACCEPTED => Status::BACKGROUND_CHECK,
         self::DECISION => Status::GRANTED,
+        self::COR_SUBMITTED => Status::PENDING_COR,
+        self::COR_RECEIVED => Status::APPLY_FOR_NIC,
+        self::NIC_SUBMITTED => Status::PENDING_NIC,
+        self::NIC_RECEIVED => Status::APPLY_FOR_PASSPORT,
+        self::PASSPORT_SUBMITTED => Status::PENDING_PASSPORT,
+        self::PASSPORT_RECEIVED => Status::READY_FOR_DELIVERY,
+        self::PASSPORT_DELIVERED => Status::CLOSED,
     ];
 
     /**
@@ -145,6 +184,10 @@ class Milestones
 
         if ($key === self::LOCKED) {
             return Confirmation::allows($actor, $application);
+        }
+
+        if ($key === self::COR_SUBMITTED && ! $application->isCorLocked()) {
+            return false;
         }
 
         $to = self::RECORDS[$key] ?? null;
@@ -186,7 +229,7 @@ class Milestones
         string $key,
         Carbon $date,
     ): CipApplication {
-        [$column, $label, $capability] = self::STEPS[$key]
+        [$column, $label, $capability] = (self::STEPS + self::POST_STEPS)[$key]
             ?? throw new \InvalidArgumentException('That is not a step on this application’s timeline.');
 
         abort_unless(
@@ -259,5 +302,27 @@ class Milestones
         return $decision !== null && Status::isTerminal($decision)
             ? Status::label($decision)
             : 'Decision';
+    }
+
+    /**
+     * Post-approval dates belong on the card once that lane has started.
+     *
+     * A date already stored still shows after an override pulls the file
+     * back: hiding a recorded day would be the card disagreeing with the
+     * columns that hold it.
+     */
+    private static function showsPost(CipApplication $application): bool
+    {
+        if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            return true;
+        }
+
+        foreach (self::POST_STEPS as [$column]) {
+            if ($application->{$column} !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

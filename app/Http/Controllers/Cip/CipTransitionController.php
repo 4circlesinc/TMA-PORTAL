@@ -15,6 +15,7 @@ use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\NonCompliance;
 use App\Support\Cip\Phase;
+use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Realtime\Live;
@@ -116,6 +117,9 @@ class CipTransitionController extends Controller
      *  - BACKGROUND CHECK is {@see BackgroundCheck::record()}, which writes
      *    the Accepted for processing date. Driven bare, the delay clock (§20)
      *    has nothing to measure from.
+     *  - PENDING COR through CLOSED are {@see Stages::record()}, which write
+     *    the post-approval date that hop is named for. Driven bare, the day
+     *    the package was sent or the document arrived is never stored.
      */
     private function refuseIfItHasItsOwnVerb(CipApplication $application, string $status): void
     {
@@ -137,6 +141,10 @@ class CipTransitionController extends Controller
 
         if ($status === Status::GRANTED || $status === Status::DENIED) {
             abort(422, 'Record the decision instead, so the outcome and its date are stored.');
+        }
+
+        if (Stages::owns($status)) {
+            abort(422, Stages::refusal($status));
         }
     }
 
@@ -184,12 +192,13 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Confirm submission: freeze the original package (§15).
+     * Confirm submission: freeze the original package (§15) or the
+     * Certificate of Registration package (Apply for COR).
      *
-     * Its own verb because it is not a status change. Ready to submit is
-     * reached automatically once every document is accepted; this is the
-     * service provider (or private client) locking that package so it cannot
-     * be modified. Staff record the CIP number afterwards, through
+     * Its own verb because it is not a status change. Ready to submit and
+     * Apply for COR are reached automatically once every document is accepted;
+     * this is the service provider (or private client) locking that package so
+     * it cannot be modified. Staff record the CIP number afterwards, through
      * {@see Submission::record()}.
      */
     public function confirm(Request $request, string $uuid): JsonResponse
@@ -342,6 +351,42 @@ class CipTransitionController extends Controller
         return response()->json(['application' => $this->record($application, $user)]);
     }
 
+    /**
+     * Record a post-approval date and move the file (brief §6–§12).
+     *
+     * Its own endpoint because each hop carries the day the Unit or the firm
+     * recorded. The generic status route refuses those targets so a bare
+     * move cannot leave the date empty. Permission is still `cip.compliance`,
+     * through {@see Engine}.
+     */
+    public function stage(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'stage' => ['required', 'string', Rule::in(Stages::keys())],
+            'date' => ['required', 'date'],
+        ], [
+            'date.required' => 'Enter the date for this step.',
+        ]);
+
+        try {
+            $application = Stages::record(
+                $application,
+                $user,
+                $data['stage'],
+                Carbon::parse($data['date']),
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
     /* ── internals ─────────────────────────────────── */
 
     /**
@@ -443,6 +488,7 @@ class CipTransitionController extends Controller
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'postApprovalAt' => $application->post_approval_at?->toIso8601String(),
+            ...Stages::into($application, $actor),
             'availableTransitions' => collect(Engine::availableTransitions($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,

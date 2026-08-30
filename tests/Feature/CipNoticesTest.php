@@ -97,6 +97,38 @@ class CipNoticesTest extends TestCase
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::POST_APPROVAL, $kim),
         );
         $this->assertSame(
+            'KM - APPLY FOR COR - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::APPLY_FOR_COR, $kim),
+        );
+        $this->assertSame(
+            'KM - PENDING COR - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::PENDING_COR, $kim),
+        );
+        $this->assertSame(
+            'KM - APPLY FOR NIC - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::APPLY_FOR_NIC, $kim),
+        );
+        $this->assertSame(
+            'KM - PENDING NIC - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::PENDING_NIC, $kim),
+        );
+        $this->assertSame(
+            'KM - APPLY FOR PASSPORT - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::APPLY_FOR_PASSPORT, $kim),
+        );
+        $this->assertSame(
+            'KM - PENDING PASSPORT - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::PENDING_PASSPORT, $kim),
+        );
+        $this->assertSame(
+            'KM - READY FOR DELIVERY - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::READY_FOR_DELIVERY, $kim),
+        );
+        $this->assertSame(
+            'KM - FILE CLOSED - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::CLOSED, $kim),
+        );
+        $this->assertSame(
             'KM - DENIED - 10T1G12661P - ASEM HABTOOR (F6) - 18.08.2026',
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'Asem Habtoor', 'familySize' => 6], Status::DENIED, $kim),
         );

@@ -34,6 +34,7 @@ use App\Support\Cip\PersonStatus;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Review;
+use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
@@ -727,6 +728,8 @@ class CipApplicationController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             'locked' => $application->isLocked(),
+            'corLocked' => $application->isCorLocked(),
+            ...Stages::into($application, $viewer),
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
@@ -1294,6 +1297,7 @@ class CipApplicationController extends Controller
                 ? PersonStatus::listed()
                 : [],
             ...Confirmation::payload($application, $viewer),
+            ...Stages::into($application, $viewer),
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
             'provider' => $application->provider?->name,
@@ -1514,6 +1518,7 @@ class CipApplicationController extends Controller
                         'type' => $slot->type,
                         'label' => $slot->label,
                         'required' => (bool) $slot->required,
+                        'help' => $slot->requirement?->help,
                         'carriedForward' => $phase === Phase::POST_APPROVAL
                             && $slot->requirement
                             && $slot->requirement->at_pre_approval
@@ -1531,6 +1536,7 @@ class CipApplicationController extends Controller
                         'statusTone' => DocumentStatus::tone($status),
                         'updateReason' => $reason ? (string) $reason : null,
                         'canReview' => Role::isStaff($presenter->viewer()),
+                        'canUpload' => CipDocumentUploadController::canUpload($slot, $presenter->viewer()),
                         'fileId' => $slot->isFilled() ? $slot->file?->uuid : null,
                         // The same chip the File Library and the Documents tab
                         // draw, from the same source, so a checklist line and

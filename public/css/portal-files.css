@@ -1233,6 +1233,14 @@
   --tma-status-rose: #e11d48;
   --tma-status-cyan: #0891b2;
   --tma-status-copper: #9a3412;
+  --tma-status-emerald: #059669;
+  --tma-status-slate: #475569;
+  --tma-status-lime: #65a30d;
+  --tma-status-navy: #1d4ed8;
+  --tma-status-gold: #b45309;
+  --tma-status-plum: #6b21a8;
+  --tma-status-mint: #0f766e;
+  --tma-status-stone: #57534e;
 }
 .tma-portal-status--sky    { background: var(--tma-status-sky); }
 .tma-portal-status--indigo { background: var(--tma-status-indigo); }
@@ -1243,6 +1251,14 @@
 .tma-portal-status--rose   { background: var(--tma-status-rose); }
 .tma-portal-status--cyan   { background: var(--tma-status-cyan); }
 .tma-portal-status--copper { background: var(--tma-status-copper); }
+.tma-portal-status--emerald { background: var(--tma-status-emerald); }
+.tma-portal-status--slate  { background: var(--tma-status-slate); }
+.tma-portal-status--lime   { background: var(--tma-status-lime); }
+.tma-portal-status--navy   { background: var(--tma-status-navy); }
+.tma-portal-status--gold   { background: var(--tma-status-gold); }
+.tma-portal-status--plum   { background: var(--tma-status-plum); }
+.tma-portal-status--mint   { background: var(--tma-status-mint); }
+.tma-portal-status--stone  { background: var(--tma-status-stone); }
 
 /* Send-for-review dialog */
 .tma-portal-wf-form { display: block; }

@@ -478,7 +478,8 @@ class CipBucketTest extends TestCase
          */
         $vocabulary = [
             'success', 'danger', 'pending', 'action', 'neutral',
-            'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper',
+            'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper', 'emerald',
+            'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'stone',
         ];
 
         foreach ([$admin, $rita, $contact] as $reader) {

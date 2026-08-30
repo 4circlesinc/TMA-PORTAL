@@ -142,6 +142,14 @@ class Timeline
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
             CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
             CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
+            CipEvent::ACTION_COR_PACKAGE_CONFIRMED => "{$who} confirmed the Certificate of Registration package",
+            CipEvent::ACTION_COR_SUBMITTED => self::stageSentence($meta, $who, 'recorded the COR submission'),
+            CipEvent::ACTION_COR_RECEIVED => self::stageSentence($meta, $who, 'recorded the COR received'),
+            CipEvent::ACTION_NIC_SUBMITTED => self::stageSentence($meta, $who, 'recorded the NIC submission'),
+            CipEvent::ACTION_NIC_RECEIVED => self::stageSentence($meta, $who, 'recorded the NIC received'),
+            CipEvent::ACTION_PASSPORT_SUBMITTED => self::stageSentence($meta, $who, 'recorded the passport application'),
+            CipEvent::ACTION_PASSPORT_RECEIVED => self::stageSentence($meta, $who, 'recorded the passport received'),
+            CipEvent::ACTION_PASSPORT_DELIVERED => self::stageSentence($meta, $who, 'recorded the passport delivered'),
             CipEvent::ACTION_QUERY_RECEIVED => self::querySentence($meta, $who),
             CipEvent::ACTION_ACCEPTED_FOR_PROCESSING => self::acceptedSentence($meta, $who),
             CipEvent::ACTION_MILESTONE_CORRECTED => self::milestoneSentence($meta, $who),
@@ -252,6 +260,20 @@ class Timeline
         return $previous !== null
             ? "{$who} corrected the {$step} from {$previous} to {$date}"
             : "{$who} corrected the {$step} to {$date}";
+    }
+
+    /**
+     * A post-approval date the Unit or the firm recorded.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function stageSentence(array $meta, string $who, string $verb): string
+    {
+        $date = $meta['date'] ?? null;
+
+        return $date
+            ? "{$who} {$verb} on {$date}"
+            : "{$who} {$verb}";
     }
 
     /**

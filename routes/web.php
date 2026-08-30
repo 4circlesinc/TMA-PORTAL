@@ -19,6 +19,7 @@ use App\Http\Controllers\Cip\CipApplicationController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
+use App\Http\Controllers\Cip\CipDocumentUploadController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
 use App\Http\Controllers\TemplatesController;
@@ -436,6 +437,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::post('/applications/{uuid}/acceptance', [CipTransitionController::class, 'accept'])
             ->name('applications.acceptance');
+        /*
+         * Brief §6–§12: a post-approval date, then the status that date
+         * moves the file to. The generic status route refuses those targets
+         * so a bare move cannot leave the day empty.
+         */
+        Route::post('/applications/{uuid}/stage', [CipTransitionController::class, 'stage'])
+            ->name('applications.stage');
 
         /*
          * §10: who is working on this application.
@@ -472,6 +480,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('documents.approve');
         Route::post('/documents/{uuid}/request-changes', [CipReviewController::class, 'requestChanges'])
             ->name('documents.request-changes');
+        /*
+         * Filing one checklist slot from the application page. Post-approval
+         * files cannot use Edit application once the original package is
+         * locked, so this is the door the person Documents list uses.
+         */
+        Route::post('/documents/{uuid}/file', [CipDocumentUploadController::class, 'store'])
+            ->name('documents.file');
 
         /*
          * §11: the document requirements the checklists are built from.

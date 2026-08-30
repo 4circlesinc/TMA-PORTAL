@@ -36646,6 +36646,14 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--rose,   .tma-portal-cip__tone--rose   { --tma-cip-tone: var(--tma-status-rose, #e11d48); }
 .tma-portal-cip__dot--cyan,   .tma-portal-cip__tone--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
 .tma-portal-cip__dot--copper, .tma-portal-cip__tone--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
+.tma-portal-cip__dot--emerald, .tma-portal-cip__tone--emerald { --tma-cip-tone: var(--tma-status-emerald, #059669); }
+.tma-portal-cip__dot--slate, .tma-portal-cip__tone--slate { --tma-cip-tone: var(--tma-status-slate, #475569); }
+.tma-portal-cip__dot--lime, .tma-portal-cip__tone--lime { --tma-cip-tone: var(--tma-status-lime, #65a30d); }
+.tma-portal-cip__dot--navy, .tma-portal-cip__tone--navy { --tma-cip-tone: var(--tma-status-navy, #1d4ed8); }
+.tma-portal-cip__dot--gold, .tma-portal-cip__tone--gold { --tma-cip-tone: var(--tma-status-gold, #b45309); }
+.tma-portal-cip__dot--plum, .tma-portal-cip__tone--plum { --tma-cip-tone: var(--tma-status-plum, #6b21a8); }
+.tma-portal-cip__dot--mint, .tma-portal-cip__tone--mint { --tma-cip-tone: var(--tma-status-mint, #0f766e); }
+.tma-portal-cip__dot--stone, .tma-portal-cip__tone--stone { --tma-cip-tone: var(--tma-status-stone, #57534e); }
 
 /* The short name, and one line of it. A legend column is half a third-width
    card, so a name that wrapped would push its neighbour's row out of line and

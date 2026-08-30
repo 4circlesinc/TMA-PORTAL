@@ -38,6 +38,22 @@ class Status
 
     public const POST_APPROVAL = 'post_approval';
 
+    public const APPLY_FOR_COR = 'apply_for_cor';
+
+    public const PENDING_COR = 'pending_cor';
+
+    public const APPLY_FOR_NIC = 'apply_for_nic';
+
+    public const PENDING_NIC = 'pending_nic';
+
+    public const APPLY_FOR_PASSPORT = 'apply_for_passport';
+
+    public const PENDING_PASSPORT = 'pending_passport';
+
+    public const READY_FOR_DELIVERY = 'ready_for_delivery';
+
+    public const CLOSED = 'closed';
+
     public const DENIED = 'denied';
 
     public const ALL = [
@@ -53,7 +69,32 @@ class Status
         self::DELAYED,
         self::GRANTED,
         self::POST_APPROVAL,
+        self::APPLY_FOR_COR,
+        self::PENDING_COR,
+        self::APPLY_FOR_NIC,
+        self::PENDING_NIC,
+        self::APPLY_FOR_PASSPORT,
+        self::PENDING_PASSPORT,
+        self::READY_FOR_DELIVERY,
+        self::CLOSED,
         self::DENIED,
+    ];
+
+    /**
+     * Statuses that belong to the post-approval lane after a grant.
+     *
+     * @return list<string>
+     */
+    public const LANE = [
+        self::POST_APPROVAL,
+        self::APPLY_FOR_COR,
+        self::PENDING_COR,
+        self::APPLY_FOR_NIC,
+        self::PENDING_NIC,
+        self::APPLY_FOR_PASSPORT,
+        self::PENDING_PASSPORT,
+        self::READY_FOR_DELIVERY,
+        self::CLOSED,
     ];
 
     /**
@@ -72,7 +113,19 @@ class Status
      * stored outcome. Moving GRANTED → POST APPROVAL does not: that is the
      * next lane, not an undo.
      */
-    public const DECIDED = [self::GRANTED, self::POST_APPROVAL, self::DENIED];
+    public const DECIDED = [
+        self::GRANTED,
+        self::POST_APPROVAL,
+        self::APPLY_FOR_COR,
+        self::PENDING_COR,
+        self::APPLY_FOR_NIC,
+        self::PENDING_NIC,
+        self::APPLY_FOR_PASSPORT,
+        self::PENDING_PASSPORT,
+        self::READY_FOR_DELIVERY,
+        self::CLOSED,
+        self::DENIED,
+    ];
 
     private const LABELS = [
         // Leftover rows and old events wear the same words as NEW, so a chip
@@ -89,6 +142,14 @@ class Status
         self::DELAYED => 'Delayed',
         self::GRANTED => 'Approved',
         self::POST_APPROVAL => 'Post-Approval',
+        self::APPLY_FOR_COR => 'Apply for COR',
+        self::PENDING_COR => 'Pending COR',
+        self::APPLY_FOR_NIC => 'Apply for NIC',
+        self::PENDING_NIC => 'Pending NIC',
+        self::APPLY_FOR_PASSPORT => 'Apply for Passport',
+        self::PENDING_PASSPORT => 'Pending Passport',
+        self::READY_FOR_DELIVERY => 'Ready for Delivery',
+        self::CLOSED => 'Closed',
         self::DENIED => 'Denied',
     ];
 
@@ -111,6 +172,14 @@ class Status
         self::DELAYED => 'DELAYED',
         self::GRANTED => 'GRANTED',
         self::POST_APPROVAL => 'POST APPROVAL',
+        self::APPLY_FOR_COR => 'APPLY FOR COR',
+        self::PENDING_COR => 'PENDING COR',
+        self::APPLY_FOR_NIC => 'APPLY FOR NIC',
+        self::PENDING_NIC => 'PENDING NIC',
+        self::APPLY_FOR_PASSPORT => 'APPLY FOR PASSPORT',
+        self::PENDING_PASSPORT => 'PENDING PASSPORT',
+        self::READY_FOR_DELIVERY => 'READY FOR DELIVERY',
+        self::CLOSED => 'FILE CLOSED',
         self::DENIED => 'DENIED',
     ];
 
@@ -137,6 +206,14 @@ class Status
         self::DELAYED => 'copper',
         self::GRANTED => 'success',
         self::POST_APPROVAL => 'action',
+        self::APPLY_FOR_COR => 'emerald',
+        self::PENDING_COR => 'slate',
+        self::APPLY_FOR_NIC => 'lime',
+        self::PENDING_NIC => 'navy',
+        self::APPLY_FOR_PASSPORT => 'gold',
+        self::PENDING_PASSPORT => 'plum',
+        self::READY_FOR_DELIVERY => 'mint',
+        self::CLOSED => 'stone',
         self::DENIED => 'danger',
     ];
 
@@ -153,6 +230,11 @@ class Status
     public static function isDecided(string $status): bool
     {
         return in_array($status, self::DECIDED, true);
+    }
+
+    public static function inLane(string $status): bool
+    {
+        return in_array($status, self::LANE, true);
     }
 
     /**

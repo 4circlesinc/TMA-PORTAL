@@ -216,6 +216,7 @@ class Notices
                 $facts, self::sentBack($application), $actor, $url, $recipientName, $subject,
             ),
             Status::READY_TO_SUBMIT => Postcards::cipReadyToSubmit($facts, $url, $recipientName, $subject),
+            Status::APPLY_FOR_COR => Postcards::cipApplyForCor($facts, $url, $recipientName, $subject),
             Status::NON_COMPLIANT => Postcards::cipNonCompliant(
                 $facts, $url, $application->query_received_at?->toDateString(), $recipientName, $actor, $subject,
             ),
@@ -253,8 +254,11 @@ class Notices
      */
     private static function sentBack(CipApplication $application): array
     {
-        return CipDocument::query()
-            ->where('application_id', $application->id)
+        return Review::constrainToCurrentChecklist(
+            CipDocument::query()->where('application_id', $application->id),
+            $application->phase ?? Phase::PRE_APPROVAL,
+            $application,
+        )
             ->where('status', DocumentStatus::UPDATE_REQUIRED)
             ->with(['comments' => fn ($q) => $q->latest('id')->limit(1)])
             ->orderBy('id')
@@ -271,6 +275,7 @@ class Notices
         return match ($status) {
             Status::UPDATE_REQUIRED => 'cip-updates-required',
             Status::READY_TO_SUBMIT => 'cip-ready-to-submit',
+            Status::APPLY_FOR_COR => 'cip-apply-for-cor',
             Status::NON_COMPLIANT => 'cip-non-compliant',
             Status::DELAYED => 'cip-delayed',
             Status::GRANTED => 'cip-granted',
@@ -286,6 +291,7 @@ class Notices
         return match ($status) {
             Status::UPDATE_REQUIRED => 'cip.updates-required',
             Status::READY_TO_SUBMIT => 'cip.ready-to-submit',
+            Status::APPLY_FOR_COR => 'cip.apply-for-cor',
             Status::NON_COMPLIANT => 'cip.non-compliant',
             Status::DELAYED => 'cip.delayed',
             Status::GRANTED => 'cip.granted',
@@ -304,6 +310,7 @@ class Notices
         return match ($to) {
             Status::UPDATE_REQUIRED => 'Documents were sent back with notes.',
             Status::READY_TO_SUBMIT => 'Confirm submission to lock the original package.',
+            Status::APPLY_FOR_COR => 'Confirm submission to lock the Certificate of Registration package.',
             Status::NON_COMPLIANT => 'The Unit has requested additional information.',
             Status::DELAYED => self::daysDelayed($application).' days have passed since acceptance with no decision.',
             Status::GRANTED => 'The Unit has granted this application.',

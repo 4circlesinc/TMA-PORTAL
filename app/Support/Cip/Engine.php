@@ -28,13 +28,21 @@ class Engine
         Status::NEW => [Status::REVIEW_APPLICATION],
         Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK],
         Status::ASSESSMENT_FEEDBACK => [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
-        Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK],
+        Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK, Status::POST_APPROVAL, Status::APPLY_FOR_COR],
         Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
         Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK],
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],
         Status::DELAYED => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
         Status::GRANTED => [Status::POST_APPROVAL],
+        Status::POST_APPROVAL => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
+        Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVAL, Status::PENDING_COR],
+        Status::PENDING_COR => [Status::APPLY_FOR_NIC],
+        Status::APPLY_FOR_NIC => [Status::PENDING_NIC],
+        Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
+        Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT],
+        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
+        Status::READY_FOR_DELIVERY => [Status::CLOSED],
     ];
 
     /**
@@ -48,6 +56,14 @@ class Engine
         Status::ASSESSMENT_FEEDBACK => 'cip.review',
         Status::UPDATE_REQUIRED => 'cip.review',
         Status::READY_TO_SUBMIT => 'cip.review',
+        Status::APPLY_FOR_COR => 'cip.review',
+        Status::PENDING_COR => 'cip.compliance',
+        Status::APPLY_FOR_NIC => 'cip.compliance',
+        Status::PENDING_NIC => 'cip.compliance',
+        Status::APPLY_FOR_PASSPORT => 'cip.compliance',
+        Status::PENDING_PASSPORT => 'cip.compliance',
+        Status::READY_FOR_DELIVERY => 'cip.compliance',
+        Status::CLOSED => 'cip.compliance',
         Status::PENDING_REVIEW => 'cip.compliance',
         Status::NON_COMPLIANT => 'cip.compliance',
         Status::BACKGROUND_CHECK => 'cip.compliance',
@@ -61,7 +77,8 @@ class Engine
     public static function canTransition(CipApplication $application, string $to): bool
     {
         return Status::isValid($to)
-            && in_array($to, self::TRANSITIONS[$application->status] ?? [], true);
+            && in_array($to, self::TRANSITIONS[$application->status] ?? [], true)
+            && self::phaseAllows($application, $to);
     }
 
     /**
@@ -108,7 +125,8 @@ class Engine
             Status::ALL,
             fn (string $to) => self::canTransition($application, $to)
                 && self::allows($actor, $application, $to)
-                && self::checklistAllows($application, $to, $forListing),
+                && self::checklistAllows($application, $to, $forListing)
+                && ! Stages::owns($to),
         ));
     }
 
@@ -132,7 +150,9 @@ class Engine
             Status::listed(),
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
-                && self::checklistAllows($application, $to, $forListing),
+                && self::checklistAllows($application, $to, $forListing)
+                && self::overrideFits($application, $to)
+                && ! Stages::owns($to),
         ));
     }
 
@@ -150,7 +170,7 @@ class Engine
      */
     private static function checklistAllows(CipApplication $application, string $to, bool $forListing = false): bool
     {
-        if ($to !== Status::READY_TO_SUBMIT) {
+        if (! in_array($to, [Status::READY_TO_SUBMIT, Status::APPLY_FOR_COR], true)) {
             return true;
         }
 
@@ -165,6 +185,69 @@ class Engine
         }
 
         return Review::documentsAllowReadyToSubmit($application);
+    }
+
+    /**
+     * Apply for COR is a post-approval working label. Post-Approval is the
+     * next lane after a grant, or a return from Apply for COR / Updates
+     * Required once the file is already in that lane — never a hop off
+     * pre-approval Updates Required.
+     */
+    private static function phaseAllows(CipApplication $application, string $to): bool
+    {
+        $post = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+
+        if ($to === Status::POST_APPROVAL) {
+            return $application->status === Status::GRANTED || $post;
+        }
+
+        if (Status::inLane($to)) {
+            return $post;
+        }
+
+        $preApprovalLane = [
+            Status::NEW,
+            Status::REVIEW_APPLICATION,
+            Status::ASSESSMENT_FEEDBACK,
+            Status::READY_TO_SUBMIT,
+            Status::PENDING_REVIEW,
+            Status::NON_COMPLIANT,
+            Status::BACKGROUND_CHECK,
+            Status::DELAYED,
+            Status::GRANTED,
+            Status::DENIED,
+        ];
+
+        if ($post && in_array($to, $preApprovalLane, true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Administrators may still pull a post-approval file back into the
+     * pre-decision lifecycle. Apply for COR and Ready to Submit are working
+     * labels for one lane each, so the override picker does not offer the
+     * other lane's destination.
+     */
+    private static function overrideFits(CipApplication $application, string $to): bool
+    {
+        $post = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+
+        if ($to === Status::READY_TO_SUBMIT) {
+            return ! $post;
+        }
+
+        if ($to === Status::POST_APPROVAL) {
+            return true;
+        }
+
+        if (Status::inLane($to)) {
+            return $post;
+        }
+
+        return true;
     }
 
     /**
@@ -187,9 +270,7 @@ class Engine
         }
 
         if (! self::checklistAllows($application, $to)) {
-            throw new \InvalidArgumentException(
-                'This application cannot be Ready to Submit while documents are still in Application review or Update required.',
-            );
+            throw new \InvalidArgumentException(self::checklistRefusal($to));
         }
 
         return self::write($application, $to, $actor, $meta);
@@ -227,16 +308,14 @@ class Engine
         }
 
         if (! self::checklistAllows($application, $to)) {
-            throw new \InvalidArgumentException(
-                'This application cannot be Ready to Submit while documents are still in Application review or Update required.',
-            );
+            throw new \InvalidArgumentException(self::checklistRefusal($to));
         }
 
         $from = $application->status;
         $extra = [];
         $meta = array_merge($meta, ['override' => true]);
 
-        if (Status::isDecided($from) && ! Status::isDecided($to)) {
+        if (Status::isDecided($from) && ! Status::isDecided($to) && ! self::staysInPostApproval($application, $to)) {
             $meta['clearedDecision'] = $application->decision;
             $meta['clearedDecidedAt'] = $application->decided_at?->toDateString();
             $extra['decision'] = null;
@@ -260,7 +339,10 @@ class Engine
     /** The row and the audit, once the move has already been allowed. */
     private static function write(CipApplication $application, string $to, ?User $actor, array $meta, array $extra = []): CipApplication
     {
-        if ($to === Status::POST_APPROVAL) {
+        $enteringPost = $to === Status::POST_APPROVAL
+            && ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL;
+
+        if ($enteringPost) {
             $extra = array_merge([
                 'phase' => Phase::POST_APPROVAL,
                 'post_approval_at' => $application->post_approval_at ?? now(),
@@ -268,12 +350,12 @@ class Engine
         }
 
         $from = $application->status;
-        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra) {
+        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra, $enteringPost) {
             $application->forceFill(array_merge(['status' => $to], $extra))->save();
 
             self::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $to);
 
-            if ($to === Status::POST_APPROVAL) {
+            if ($enteringPost) {
                 self::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $actor, []);
                 PostApproval::prepare($application, $actor);
             }
@@ -297,10 +379,33 @@ class Engine
          * §22: every status change is a notice, in the filing subject format,
          * to the four named classes. Sent after the row and the event have
          * both landed, so nothing is announced that did not occur.
+         *
+         * Returning to Post-Approval from Apply for COR or Updates Required
+         * is the reviewer still working the same COR checklist, not a second
+         * request for Stage 1 documents.
          */
-        Notices::announce($application, $to, $actor);
+        if ($enteringPost || $to !== Status::POST_APPROVAL) {
+            Notices::announce($application, $to, $actor);
+        }
 
         return $application;
+    }
+
+    private static function checklistRefusal(string $to): string
+    {
+        $label = $to === Status::APPLY_FOR_COR ? 'Apply for COR' : 'Ready to Submit';
+
+        return 'This application cannot be '.$label.' while documents are still in Application review or Update required.';
+    }
+
+    /**
+     * Updates Required in post-approval is still a granted file. Clearing the
+     * decision would drop the grant the COR checklist is being collected for.
+     */
+    private static function staysInPostApproval(CipApplication $application, string $to): bool
+    {
+        return ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && ($to === Status::UPDATE_REQUIRED || Status::inLane($to));
     }
 
     /** Append one audit row. The only writer of cip_events. */

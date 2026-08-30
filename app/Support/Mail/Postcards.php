@@ -685,6 +685,26 @@ class Postcards
     }
 
     /**
+     * Apply for COR: the COR checklist is ready, confirm it.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipApplyForCor(array $facts, string $url, ?string $recipientName = null, ?string $subject = null): Postcard
+    {
+        $subject ??= Notices::line($facts, Status::APPLY_FOR_COR);
+
+        return self::postcard('cip-apply-for-cor', self::cipVars($facts, $recipientName) + ['url' => $url], [
+            'subject' => $subject,
+            'url' => $url,
+            'details' => [
+                ['Application', $facts['number']],
+                ['Applicant', $facts['applicant']],
+                ['Service provider', $facts['provider']],
+            ],
+        ]);
+    }
+
+    /**
      * §18's notice to the provider side: the Unit has asked for more.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts

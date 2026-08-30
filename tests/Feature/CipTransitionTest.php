@@ -16,6 +16,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -48,7 +49,11 @@ class CipTransitionTest extends TestCase
      * acceptance stores the date the Unit took the file, recording a decision
      * stores the outcome and its date.
      */
-    private const OWNED_ELSEWHERE = ['new', 'pending_review', 'non_compliant', 'background_check', 'granted', 'denied'];
+    private const OWNED_ELSEWHERE = [
+        'new', 'pending_review', 'non_compliant', 'background_check', 'granted', 'denied',
+        'pending_cor', 'apply_for_nic', 'pending_nic', 'apply_for_passport',
+        'pending_passport', 'ready_for_delivery', 'closed',
+    ];
 
     private const EDGES = [
         [Status::DRAFT, Status::NEW],
@@ -71,6 +76,13 @@ class CipTransitionTest extends TestCase
         [Status::DELAYED, Status::GRANTED],
         [Status::DELAYED, Status::DENIED],
         [Status::GRANTED, Status::POST_APPROVAL],
+        [Status::APPLY_FOR_COR, Status::PENDING_COR],
+        [Status::PENDING_COR, Status::APPLY_FOR_NIC],
+        [Status::APPLY_FOR_NIC, Status::PENDING_NIC],
+        [Status::PENDING_NIC, Status::APPLY_FOR_PASSPORT],
+        [Status::APPLY_FOR_PASSPORT, Status::PENDING_PASSPORT],
+        [Status::PENDING_PASSPORT, Status::READY_FOR_DELIVERY],
+        [Status::READY_FOR_DELIVERY, Status::CLOSED],
     ];
 
     protected function setUp(): void
@@ -369,6 +381,25 @@ class CipTransitionTest extends TestCase
         $this->assertSame([Status::POST_APPROVAL], Engine::availableTransitions($granted, $officer));
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
         $this->assertSame([], Engine::availableOverrides($granted, $officer));
+
+        $post = $this->at($this->application($admin), Status::POST_APPROVAL);
+        $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $this->assertSame(
+            [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
+            Engine::availableTransitions($post, $officer),
+        );
+        $this->assertNotContains(Status::ASSESSMENT_FEEDBACK, Engine::availableTransitions($post, $officer));
+        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($post, $admin));
+
+        $apply = $this->at($this->application($admin), Status::APPLY_FOR_COR);
+        $apply->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $this->assertSame(
+            [Status::UPDATE_REQUIRED, Status::POST_APPROVAL],
+            Engine::availableTransitions($apply, $officer),
+        );
+        $this->assertNotContains(Status::PENDING_COR, Engine::availableTransitions($apply, $admin));
+        $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($apply, $admin));
+        $this->assertNotContains(Status::CLOSED, Engine::availableOverrides($apply, $admin));
     }
 
     public function test_the_payload_says_what_this_reader_may_do_next(): void

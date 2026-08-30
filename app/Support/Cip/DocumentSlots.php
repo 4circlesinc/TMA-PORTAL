@@ -67,12 +67,12 @@ class DocumentSlots
     public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor): CipDocument
     {
         $person->loadMissing('application');
-        Confirmation::guard($person->application);
 
         // Resolved once, for the slot AND the destination, the same single
         // query slotFor always ran, not a second one beside it.
         $template = self::template($person, $type);
         $slot = self::slotFor($person, $type, $template);
+        Confirmation::guardDocument($slot);
 
         if ($slot->file_id && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
             throw new \InvalidArgumentException(
@@ -114,6 +114,7 @@ class DocumentSlots
                 )['company_member_id'],
                 'uploaded_at' => now(),
             ])->save();
+            $slot->setRelation('file', $file);
             self::advanceAfterUpload($slot, $actor);
 
             return $slot;
@@ -306,12 +307,12 @@ class DocumentSlots
     public static function attach(CipPerson $person, string $type, UploadedFile $upload, User $actor, int $number): FileItem
     {
         $person->loadMissing('application');
-        Confirmation::guard($person->application);
 
         // The same drawer the slot's first file went into: a bio page's back
         // sheet filed outside its requirement's folder would split one answer
         // across two places.
         $template = self::template($person, $type);
+        Confirmation::guardDocument(self::slotFor($person, $type, $template));
 
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);

@@ -373,20 +373,23 @@ class Requirements
     /**
      * A checklist changes only while its application can.
      *
-     * Once a file has gone to the Unit, adding a question to it or taking one
-     * away would rewrite a record somebody else is holding a copy of, so the
-     * submission lock closes the checklist along with everything else. A
-     * decided application is the same argument after the fact: what it asked
-     * for is part of the history of how it was decided.
+     * Confirm submission freezes the original package, not the questions the
+     * post-approval lane still has to ask. A locked file that has moved into
+     * Post-Approval still opens COR slots; a locked pre-approval file does not
+     * grow or shrink its original checklist.
      */
     private static function isOpen(?CipApplication $application): bool
     {
-        if ($application === null || $application->isLocked()) {
+        if ($application === null) {
             return false;
         }
 
         if ($application->phase === Phase::POST_APPROVAL) {
-            return true;
+            return ! $application->isCorLocked();
+        }
+
+        if ($application->isLocked()) {
+            return false;
         }
 
         return ! Status::isTerminal($application->status);

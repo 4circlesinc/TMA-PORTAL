@@ -28,6 +28,7 @@ class PostApproval
 
         Tree::provision($application, $actor);
         Tree::provisionPostApproval($application, $actor);
+        Package::forget();
         Requirements::materialiseApplication($application);
 
         foreach ($application->people as $person) {

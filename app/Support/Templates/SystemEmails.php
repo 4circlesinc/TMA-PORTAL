@@ -1153,6 +1153,13 @@ Please upload:
 Documents not written in English MUST be translated. The translation must be original, signed and stamped by a Notary or Attorney-at-Law. A certified true copy of the credentials of the translator, Notary and/or Attorney-at-Law who certified or translated any of those documents must also be provided.
 
 Open the application in the portal to upload the COR documents.',
+            'cip-status-pending-cor' => 'The Certificate of Registration package for {{applicant}} has been submitted. The file now waits for the COR. You do not need to send anything further unless you are asked.',
+            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Open the application when the NIC documents are requested.',
+            'cip-status-pending-nic' => 'The NIC application for {{applicant}} has been submitted. The file now waits for the National Insurance Card. You do not need to send anything further unless you are asked.',
+            'cip-status-apply-for-passport' => 'The National Insurance Card has been received. Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**, sent to T.M. Antoine Partners by courier.',
+            'cip-status-pending-passport' => 'The passport application for {{applicant}} has been submitted. The file now waits for the passport. You do not need to send anything further unless you are asked.',
+            'cip-status-ready-for-delivery' => 'The passport for {{applicant}} has been received and the file is ready for delivery.',
+            'cip-status-closed' => 'The passport has been delivered. {{applicant}}’s file is closed.',
         ];
         $statuses = [];
         foreach ([
@@ -1161,6 +1168,13 @@ Open the application in the portal to upload the COR documents.',
             'cip-status-pending-review' => ['Pending Review', 'Pending Review', 'Sent when a file moves to Pending Review.'],
             'cip-status-background-check' => ['Background Check', 'Background Check', 'Sent when a file moves to Background Check.'],
             'cip-status-post-approval' => ['Post-Approval', 'Post-Approval', 'Sent when an approved file is moved to Post-Approval and Stage 1 COR documents are requested.'],
+            'cip-status-pending-cor' => ['Pending COR', 'Pending COR', 'Sent when the COR package is submitted and the file waits for the Certificate of Registration.'],
+            'cip-status-apply-for-nic' => ['Apply for NIC', 'Apply for NIC', 'Sent when the COR has been received and Stage 2 (NIC) begins.'],
+            'cip-status-pending-nic' => ['Pending NIC', 'Pending NIC', 'Sent when the NIC application is submitted and the file waits for the card.'],
+            'cip-status-apply-for-passport' => ['Apply for Passport', 'Apply for Passport', 'Sent when the NIC has been received and Stage 3 (passport) begins.'],
+            'cip-status-pending-passport' => ['Pending Passport', 'Pending Passport', 'Sent when the passport application is submitted and the file waits for the passport.'],
+            'cip-status-ready-for-delivery' => ['Ready for Delivery', 'Ready for Delivery', 'Sent when the passport has been received and is ready to deliver.'],
+            'cip-status-closed' => ['File Closed', 'Closed', 'Sent when the passport has been delivered and the file is closed.'],
         ] as $key => [$name, $label, $moment]) {
             $statuses[$key] = [
                 'name' => $name,
@@ -1232,6 +1246,24 @@ Open the application in the portal to upload the COR documents.',
                     'title' => '{{number}} is ready to submit',
                     'lead' => 'Assessment feedback is complete, {{applicant}}’s file is ready to submit. Confirm submission to lock the original package.',
                     'body' => 'Every required document on {{applicant}}’s file ({{provider}}) has been accepted. Confirm submission to lock the original package. After that, the originals cannot be replaced; further Unit requests go through Additional Documents.',
+                    'button' => 'Confirm submission',
+                    'footNote' => self::CIP_FOOT,
+                ],
+            ],
+            'cip-apply-for-cor' => [
+                'name' => 'Apply for COR',
+                'category' => 'CIP Applications',
+                'when' => 'Sent to the provider side when every Stage 1 Certificate of Registration document is accepted. '.$when,
+                'variables' => $vars,
+                'sample' => $sample,
+                'sampleExtras' => $details,
+                'copy' => [
+                    'preheader' => '{{number}} is ready to apply for the COR, confirm to lock the Certificate of Registration package.',
+                    'eyebrow' => 'CIP Applications',
+                    'greeting' => self::CIP_HI,
+                    'title' => '{{number}} is ready to apply for the COR',
+                    'lead' => 'Every required Certificate of Registration document on {{applicant}}’s file is ready. Confirm submission to lock the COR package.',
+                    'body' => 'Every required COR document on {{applicant}}’s file ({{provider}}) has been accepted. Confirm submission to lock the Certificate of Registration package. After that, those documents cannot be replaced. Additional Documents stays open for anything the Unit asks later.',
                     'button' => 'Confirm submission',
                     'footNote' => self::CIP_FOOT,
                 ],

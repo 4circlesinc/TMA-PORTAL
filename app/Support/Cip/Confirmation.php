@@ -14,32 +14,34 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §15. Ready to submit, confirm, lock.
+ * Ready to submit / Apply for COR, confirm, lock.
  *
  * When every required document is Ready for submission the application
  * auto-flips here (see {@see Review::settle()}). The submitting party, the
  * service provider contact, or the private client on a PRI file, is told,
- * and must press Confirm submission. That press freezes the original package:
- * person folders become view-only (§17), submitted person and application
- * fields cannot be changed, outstanding upload links into them are withdrawn,
- * and Additional Documents stays writable. The application folder itself also
- * freezes, so later paper cannot land beside the original tree. The status stays
- * Ready to submit until staff record the CIP number (§16).
+ * and must press Confirm submission. That press freezes the package for the
+ * current lane: person folders on Ready to submit (§17), the Certificate of
+ * Registration tree on Apply for COR. Additional Documents stays writable.
+ * Status stays on the ready label until staff take the next recorded step.
  */
 class Confirmation
 {
     public const LOCKED_MESSAGE = 'This application’s original submission package is locked and cannot be modified.';
 
+    public const COR_LOCKED_MESSAGE = 'This application’s Certificate of Registration package is locked and cannot be modified.';
+
     /**
      * What a screen needs to offer (or hide) the confirm verb.
      *
-     * @return array{locked:bool, lockedAt:?string, canConfirm:bool}
+     * @return array{locked:bool, lockedAt:?string, corLocked:bool, corLockedAt:?string, canConfirm:bool}
      */
     public static function payload(CipApplication $application, ?User $actor): array
     {
         return [
             'locked' => $application->isLocked(),
             'lockedAt' => $application->locked_at?->toIso8601String(),
+            'corLocked' => $application->isCorLocked(),
+            'corLockedAt' => $application->cor_locked_at?->toIso8601String(),
             'canConfirm' => $actor !== null && self::allows($actor, $application),
         ];
     }
@@ -47,19 +49,25 @@ class Confirmation
     /**
      * May this actor press Confirm submission right now?
      *
-     * Staff record the CIP number; they do not confirm. The button is the
-     * provider side's, and only while the file stands at Ready to submit and
-     * the package is still open.
+     * Staff record the CIP number / COR submission date; they do not confirm.
+     * The button is the provider side's, while the file stands at Ready to
+     * submit or Apply for COR and that lane's package is still open.
      */
     public static function allows(User $actor, CipApplication $application): bool
     {
-        return $application->status === Status::READY_TO_SUBMIT
-            && ! $application->isLocked()
-            && self::isSubmittingParty($actor, $application);
+        if (! self::isSubmittingParty($actor, $application)) {
+            return false;
+        }
+
+        if ($application->status === Status::READY_TO_SUBMIT && ! $application->isLocked()) {
+            return true;
+        }
+
+        return $application->status === Status::APPLY_FOR_COR && ! $application->isCorLocked();
     }
 
     /**
-     * Freeze the original package, on the day it was confirmed.
+     * Freeze the current lane's package, on the day it was confirmed.
      *
      * The day is asked for rather than assumed, the way §16's submission and
      * §21's decision are: "when did this stop being changeable" is the first
@@ -83,6 +91,10 @@ class Confirmation
         User $actor,
         ?Carbon $lockedAt = null,
     ): CipApplication {
+        if ($application->status === Status::APPLY_FOR_COR) {
+            return self::confirmCor($application, $actor, $lockedAt);
+        }
+
         if ($application->isLocked()) {
             if (! self::isSubmittingParty($actor, $application)) {
                 throw new AuthorizationException('Only the service provider can confirm this submission.');
@@ -133,6 +145,58 @@ class Confirmation
     }
 
     /**
+     * Freeze the Certificate of Registration package. The original
+     * pre-approval lock is a different column and is left alone.
+     */
+    private static function confirmCor(
+        CipApplication $application,
+        User $actor,
+        ?Carbon $lockedAt,
+    ): CipApplication {
+        if ($application->isCorLocked()) {
+            if (! self::isSubmittingParty($actor, $application)) {
+                throw new AuthorizationException('Only the service provider can confirm this submission.');
+            }
+
+            return $application;
+        }
+
+        if (! self::allows($actor, $application)) {
+            throw new AuthorizationException('Only the service provider can confirm this submission.');
+        }
+
+        if (! Review::progress($application)['complete']) {
+            throw new \InvalidArgumentException(
+                'Every required document must be ready for submission before the package can be confirmed.',
+            );
+        }
+
+        $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
+
+        return DB::transaction(function () use ($application, $actor, $lockedAt) {
+            $application->forceFill(['cor_locked_at' => $lockedAt])->save();
+
+            Package::forget();
+            Package::revokeCorLinks($application);
+
+            Engine::record($application, CipEvent::ACTION_COR_PACKAGE_CONFIRMED, $actor, [
+                'reason' => 'confirm_submission',
+                'lockedAt' => $lockedAt->toDateString(),
+            ]);
+
+            ActivityLogger::log([
+                'actor' => $actor,
+                'type' => 'cip.cor_package_confirmed',
+                'module' => 'cip',
+                'description' => $application->displayNumber().' COR package confirmed on '.$lockedAt->toDateString(),
+                'subject' => $application,
+            ]);
+
+            return $application->refresh();
+        });
+    }
+
+    /**
      * Refuse a write into a frozen original package.
      *
      * Confirm submission stamps `locked_at`. That freeze is the scans the
@@ -152,15 +216,25 @@ class Confirmation
     }
 
     /**
-     * Refuse a write that would change a frozen original-package slot.
+     * Refuse a write that would change a frozen original-package or COR slot.
      *
      * @throws \InvalidArgumentException
      */
     public static function guardDocument(CipDocument $document): void
     {
-        if (Package::locksDocument($document)) {
-            throw new \InvalidArgumentException(self::LOCKED_MESSAGE);
+        if (! Package::locksDocument($document)) {
+            return;
         }
+
+        $document->loadMissing(['requirement', 'application']);
+        $requirement = $document->requirement;
+        $corSlot = $requirement
+            && $requirement->at_post_approval
+            && ! $requirement->at_pre_approval;
+
+        throw new \InvalidArgumentException(
+            $corSlot ? self::COR_LOCKED_MESSAGE : self::LOCKED_MESSAGE
+        );
     }
 
     /** Is this library file part of a confirmed original package? */

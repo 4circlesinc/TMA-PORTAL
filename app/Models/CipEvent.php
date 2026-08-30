@@ -60,6 +60,31 @@ class CipEvent extends Model
     public const ACTION_PACKAGE_CONFIRMED = 'package_confirmed';
 
     /**
+     * The service provider confirmed the Certificate of Registration package.
+     *
+     * Its own action rather than a detail of Apply for COR: the status
+     * arrives when every COR document is accepted, and the lock arrives when
+     * the firm presses Confirm submission. Those are different moments, and
+     * which day the COR package froze is an audit question the status event
+     * alone does not answer.
+     */
+    public const ACTION_COR_PACKAGE_CONFIRMED = 'cor_package_confirmed';
+
+    public const ACTION_COR_SUBMITTED = 'cor_submitted';
+
+    public const ACTION_COR_RECEIVED = 'cor_received';
+
+    public const ACTION_NIC_SUBMITTED = 'nic_submitted';
+
+    public const ACTION_NIC_RECEIVED = 'nic_received';
+
+    public const ACTION_PASSPORT_SUBMITTED = 'passport_submitted';
+
+    public const ACTION_PASSPORT_RECEIVED = 'passport_received';
+
+    public const ACTION_PASSPORT_DELIVERED = 'passport_delivered';
+
+    /**
      * The Unit asked for more information (§18).
      *
      * Its own action rather than a detail of the status change: the query

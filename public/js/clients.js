@@ -2733,6 +2733,14 @@
     { value: 'delayed', label: 'Delayed', tone: 'copper' },
     { value: 'granted', label: 'Approved', tone: 'success' },
     { value: 'post_approval', label: 'Post-Approval', tone: 'action' },
+    { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald' },
+    { value: 'pending_cor', label: 'Pending COR', tone: 'slate' },
+    { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime' },
+    { value: 'pending_nic', label: 'Pending NIC', tone: 'navy' },
+    { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold' },
+    { value: 'pending_passport', label: 'Pending Passport', tone: 'plum' },
+    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint' },
+    { value: 'closed', label: 'Closed', tone: 'stone' },
     { value: 'denied', label: 'Denied', tone: 'danger' },
   ];
 
@@ -4476,7 +4484,7 @@
     record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
     record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
     if (extra) {
-      ['availableTransitions', 'availableOverrides', 'locked', 'canConfirm', 'submittedAt', 'phase', 'phaseLabel']
+      ['availableTransitions', 'availableOverrides', 'locked', 'corLocked', 'canConfirm', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
         .forEach(function (k) {
           if (extra[k] !== undefined) record[k] = extra[k];
         });
@@ -6211,6 +6219,7 @@
     if (key === 'query_received') { openQueryDialog(id, uid); return; }
     if (key === 'accepted') { openAcceptanceDialog(id, uid); return; }
     if (key === 'decision') { openDecisionDialog(id, uid); return; }
+    if (CIP_STAGES[key]) { openStageDialog(id, uid, key); return; }
     if (!state) return;
     // Both of these are written against the open profile rather than a row,
     // so they need the screen's own state, and the application with it.
@@ -6505,6 +6514,8 @@
     if (decision) parts.push(decision);
     var postApproval = renderPostApprovalAction(app);
     if (postApproval) parts.push(postApproval);
+    var stage = renderStageAction(app);
+    if (stage) parts.push(stage);
     if (!parts.length) return '';
 
     return '<div class="tma-dash__clients-appbar">' + parts.join('') + '</div>';
@@ -6520,6 +6531,15 @@
    * profile head, it does not move the status and does not belong here.
    */
   function renderSubmissionAction(state, app) {
+    if (app.status === 'apply_for_cor' && app.canConfirm && !app.corLocked) {
+      return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-confirm>' +
+        'Confirm submission</button>';
+    }
+
+    if (app.status === 'apply_for_cor' && !app.corLocked && !app.canConfirm) {
+      return '<p class="tma-dash__clients-appbar-note">Waiting for the service provider to confirm submission.</p>';
+    }
+
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
       return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-confirm>' +
         'Confirm submission</button>';
@@ -6617,6 +6637,23 @@
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-post-approval>' +
       'Move to post-approval</button>';
+  }
+
+  var CIP_STAGES = {
+    cor_submitted: { label: 'Record COR submission', dateLabel: 'COR submission date', note: 'The application will move to Pending COR.' },
+    cor_received: { label: 'Record COR received', dateLabel: 'COR received date', note: 'The application will move to Apply for NIC.' },
+    nic_submitted: { label: 'Record NIC submission', dateLabel: 'NIC submission date', note: 'The application will move to Pending NIC.' },
+    nic_received: { label: 'Record NIC received', dateLabel: 'NIC received date', note: 'The application will move to Apply for Passport.' },
+    passport_submitted: { label: 'Record passport application', dateLabel: 'Passport application date', note: 'The application will move to Pending Passport.' },
+    passport_received: { label: 'Record passport received', dateLabel: 'Passport received date', note: 'The application will move to Ready for Delivery.' },
+    passport_delivered: { label: 'Record passport delivered', dateLabel: 'Passport delivered date', note: 'The application will move to Closed.' },
+  };
+
+  function renderStageAction(app) {
+    if (!app || !app.stageAction || !canRecordSubmission()) return '';
+
+    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-stage="' +
+      esc(app.stageAction.key) + '">' + esc(app.stageAction.label) + '</button>';
   }
 
   function renderCipPersonProfileColumns(person) {
@@ -6817,6 +6854,79 @@
     ensureApplicationLoaded(state, render);
   }
 
+  var CIP_SLOT_MAX_MB = 10;
+
+  function wireCipSlotUploads(root, state, render) {
+    MORPH.unwired(root, '[data-cip-slot-file-btn]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var id = btn.getAttribute('data-cip-slot-file-btn');
+        var input = root.querySelector('[data-cip-slot-file="' + id + '"]');
+        if (input) input.click();
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-slot-file]').forEach(function (input) {
+      MORPH.on(input, 'change', function () {
+        var file = input.files && input.files[0];
+        var id = input.getAttribute('data-cip-slot-file');
+        input.value = '';
+        if (file) uploadCipSlot(state, render, id, file, input.closest('[data-cip-slot-drop]'));
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-slot-drop]').forEach(function (zone) {
+      MORPH.on(zone, 'dragover', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragging');
+      });
+      MORPH.on(zone, 'dragleave', function (e) {
+        if (zone.contains(e.relatedTarget)) return;
+        zone.classList.remove('is-dragging');
+      });
+      MORPH.on(zone, 'drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragging');
+        var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        var id = zone.getAttribute('data-cip-slot-drop');
+        if (file && id) uploadCipSlot(state, render, id, file, zone);
+      });
+    });
+  }
+
+  function uploadCipSlot(state, render, slotId, file, zone) {
+    if (!slotId || !file) return;
+    if (file.size > CIP_SLOT_MAX_MB * 1024 * 1024) {
+      clientsToast('That file is too large. Keep it under ' + CIP_SLOT_MAX_MB + 'MB.', 'negative');
+      return;
+    }
+
+    if (zone) zone.classList.add('is-filled');
+    var hint = zone && zone.querySelector('.tma-portal-drop__hint');
+    var previous = hint ? hint.textContent : '';
+    if (hint) hint.textContent = 'Uploading…';
+
+    var form = new FormData();
+    form.append('file', file);
+
+    clientsFetch('/portal/cip/documents/' + encodeURIComponent(slotId) + '/file', {
+      method: 'POST',
+      body: form,
+    })
+      .then(function (json) {
+        clientsToast('Document uploaded.', 'positive');
+        if (json && json.application && state.selectedId) {
+          paintCipApplicationStatus(state.selectedId, json.application.status, json.application);
+        }
+        refreshCipAfterFileChange(state, render);
+      })
+      .catch(function (err) {
+        if (hint) hint.textContent = previous || 'Drop a file here, or choose one';
+        clientsToast((err && err.message) || 'Could not upload this document.', 'negative');
+      });
+  }
+
   function openCipFileStatusMenu(state, chip, render) {
     var fileId = chip.getAttribute('data-cip-file-status');
     var acts = window.TMAFileActions;
@@ -6902,25 +7012,132 @@
     }
 
     /*
-     * Never a card, wherever it sits.
-     *
-     * A dependant is already drawn as one, so a card here put a card inside a
-     * card, two rounded edges a few pixels apart. Giving the applicant's
-     * version a card and the dependant's a plain block then meant the same
-     * list wearing two different shapes on one page. It is a ruled section
-     * everywhere instead, and the rule is what separates the documents from
-     * the answers above them.
+     * Post-approval uses the same drop zones as the intake form. The original
+     * package is already locked, so Edit application cannot take these files;
+     * the person tab is the form.
      */
+    var body = postApproval
+      ? (cipChecklistNote(app) +
+        '<div class="tma-portal-drops">' +
+        docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
+        '</div>')
+      : ('<ul class="tma-dash__clients-checklist">' +
+        docs.map(renderChecklistRow).join('') +
+        '</ul>');
+
     return (
       '<div class="tma-dash__clients-checklist-block">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
       tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
       '</header>' +
-      '<ul class="tma-dash__clients-checklist">' +
-      docs.map(renderChecklistRow).join('') +
-      '</ul></div>'
+      body +
+      '</div>'
     );
+  }
+
+  function cipChecklistNote(app) {
+    if (!app || app.phase !== 'post_approval') return '';
+    if (app.corLocked) {
+      return '<p class="tma-dash__clients-checklist-empty">The Certificate of Registration package is locked. New files go in Additional Documents.</p>';
+    }
+
+    return '<p class="tma-portal-drop__meta">The Citizenship by Investment Unit requires soft copies only. These slots come from Document Requirements.</p>';
+  }
+
+  function cipDocFileIcon(name) {
+    if (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc) {
+      return window.TMAFileIcons.fileIconSrc('', name || '');
+    }
+
+    return ICON + 'File.svg';
+  }
+
+  function cipDocFileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function renderCipRequirementDrop(d) {
+    var filed = !!d.uploaded;
+    var photo = d.type === 'passport_photo';
+    var accept = photo ? 'image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic' : '.pdf,image/*';
+    var status = filed ? (d.statusLabel || 'Filed') : 'Pending upload';
+    var tone = filed ? (d.statusTone || 'success') : 'neutral';
+    var label =
+      '<span class="tma-portal-field__label">' + esc(d.label) +
+      (d.required === false
+        ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
+        : (d.canUpload ? '<span class="tma-portal-field__required" aria-hidden="true">*</span>' : '')) +
+      '</span>';
+    var help = d.help ? '<p class="tma-portal-drop__meta">' + esc(d.help) + '</p>' : '';
+    var reason = (d.status === 'update_required' && d.updateReason)
+      ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' + esc(d.updateReason) + '</p>'
+      : '';
+    var chip = '';
+    if (filed && d.fileId && d.canReview) {
+      chip =
+        clientCommentChip(d) +
+        '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+        ' tma-portal-status--inline tma-file-status-chip" data-cip-file-status="' +
+        esc(d.fileId) + '" data-cip-file-status-value="' + esc(d.status || '') +
+        '" data-cip-file-status-label="' + esc(status) +
+        '" data-cip-file-status-tone="' + esc(tone) +
+        '" role="button" tabindex="0" aria-haspopup="menu" aria-label="Change status, currently ' +
+        esc(status) + '">' + esc(status) + '</span>';
+    } else if (filed) {
+      chip = clientCommentChip(d) +
+        '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+        ' tma-portal-status--inline">' + esc(status) + '</span>';
+    }
+
+    if (d.canUpload) {
+      return '<div class="tma-portal-drop' + (filed ? ' is-filled' : '') + '" data-cip-slot-drop="' + esc(d.id) + '">' +
+        label + help + reason +
+        '<input type="file" accept="' + accept + '" class="tma-dash__clients-photo-input"' +
+        ' data-cip-slot-file="' + esc(d.id) + '" aria-hidden="true">' +
+        '<button type="button" class="tma-portal-drop__zone" data-cip-slot-file-btn="' + esc(d.id) + '">' +
+        '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
+        '<span class="tma-portal-drop__hint">' +
+        (filed ? 'Drop a replacement here, or choose one' : 'Drop a file here, or choose one') +
+        '</span>' +
+        '<span class="tma-portal-drop__meta">' +
+        (photo ? 'Square photo, 2 × 2 inch, up to 8MB' : 'PDF or image, up to 10MB') +
+        '</span>' +
+        '</button>' +
+        (filed && d.fileId
+          ? '<button type="button" class="tma-portal-drop__file" data-cip-file="' + esc(d.fileId) + '">' +
+            '<img class="tma-portal-drop__file-icon" src="' + esc(cipDocFileIcon(d.fileName || '')) + '" alt="" width="20" height="20">' +
+            '<span class="tma-portal-drop__file-name">' + esc(d.fileName || 'Filed document') + '</span>' +
+            (d.fileSize ? '<span class="tma-portal-drop__file-size">' + esc(cipDocFileSize(d.fileSize)) + '</span>' : '') +
+            '</button>'
+          : '') +
+        chip +
+        '</div>';
+    }
+
+    if (filed && d.fileId) {
+      return '<div class="tma-portal-drop is-filled is-locked">' +
+        label + help +
+        '<button type="button" class="tma-portal-drop__file tma-portal-drop__file--locked" data-cip-file="' + esc(d.fileId) + '">' +
+        '<img class="tma-portal-drop__file-icon" src="' + esc(cipDocFileIcon(d.fileName || '')) + '" alt="" width="20" height="20">' +
+        '<span class="tma-portal-drop__file-name">' + esc(d.fileName || 'Filed document') + '</span>' +
+        (d.fileSize ? '<span class="tma-portal-drop__file-size">' + esc(cipDocFileSize(d.fileSize)) + '</span>' : '') +
+        '</button>' +
+        chip +
+        '<p class="tma-portal-drop__locked-note">' +
+        (d.status === 'application_review' || d.status === 'ready_for_submission'
+          ? 'Filed and in ' + esc(status) + '. Use <strong>Upload new version</strong> in the file viewer to replace.'
+          : 'This document cannot be replaced from here.') +
+        '</p></div>';
+    }
+
+    return '<div class="tma-portal-drop is-locked">' +
+      label + help +
+      '<p class="tma-portal-drop__locked-note">Pending upload.</p></div>';
   }
 
   /*
@@ -9437,6 +9654,7 @@
     if (!app || !ui || !ui.openModal) return;
 
     var today = new Date().toISOString().slice(0, 10);
+    var cor = app.status === 'apply_for_cor';
 
     ui.openModal({
       title: 'Confirm submission',
@@ -9447,7 +9665,10 @@
         ' data-cip-locked value="' + esc(today) + '">' +
         '</div>' +
         '<p class="tma-portal-modal__text">' +
-        'Confirming locks the original submission package. Documents cannot be changed after this.</p>' +
+        (cor
+          ? 'Confirming locks the Certificate of Registration package. Those documents cannot be changed after this.'
+          : 'Confirming locks the original submission package. Documents cannot be changed after this.') +
+        '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-confirm>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-confirm>Confirm submission</button>' +
@@ -9481,7 +9702,9 @@
               if (uid) forgetApplication(uid);
               forgetApplicationTable();
               forgetBuckets();
-              clientsToast('Submission confirmed, the original package is locked.', 'positive');
+              clientsToast(cor
+                ? 'Submission confirmed, the Certificate of Registration package is locked.'
+                : 'Submission confirmed, the original package is locked.', 'positive');
               if (typeof render === 'function') {
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
@@ -10180,6 +10403,21 @@
       return;
     }
 
+    var stageByStatus = {
+      pending_cor: 'cor_submitted',
+      apply_for_nic: 'cor_received',
+      pending_nic: 'nic_submitted',
+      apply_for_passport: 'nic_received',
+      pending_passport: 'passport_submitted',
+      ready_for_delivery: 'passport_received',
+      closed: 'passport_delivered',
+    };
+    if (stageByStatus[to]) {
+      openStageDialog(applicationId, clientUid, stageByStatus[to]);
+
+      return;
+    }
+
     var leftoverDraft = to === 'new' && source && source.status === 'draft';
     var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
       (leftoverDraft ? '/submit' : '/status');
@@ -10269,6 +10507,77 @@
               save.disabled = false;
               save.textContent = 'Record query';
               clientsToast((err && err.message) || 'Could not record this query.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * Brief §6–§12: a post-approval date, which is what moves the file to the
+   * next status. Asked for rather than assumed, staff record it after the
+   * fact as often as on the day.
+   */
+  function openStageDialog(applicationId, clientUid, key) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var app = clientUid ? applicationFor(clientUid) : null;
+    var meta = (app && app.stageAction && app.stageAction.key === key)
+      ? app.stageAction
+      : (CIP_STAGES[key] || null);
+    if (!meta) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+    var saveLabel = meta.label || 'Record date';
+
+    ui.openModal({
+      title: saveLabel,
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-stage-date">' + esc(meta.dateLabel) + '</label>' +
+        '<input type="date" id="cip-stage-date" class="tma-dash__clients-field-input"' +
+        ' data-cip-stage-date value="' + esc(today) + '">' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' + esc(meta.note || '') + '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-stage>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-stage>' + esc(saveLabel) + '</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-stage]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-stage]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-stage-date]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the ' + (meta.dateLabel || 'date').toLowerCase() + '.', 'negative');
+            return;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Recording…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage', {
+            method: 'POST',
+            json: { stage: key, date: date },
+          })
+            .then(function (json) {
+              ui.closeModal();
+              clientsToast(saveLabel + ' recorded.', 'positive');
+              if (clientUid && json && json.application) {
+                paintCipApplicationStatus(clientUid, json.application.status, json.application);
+              }
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = saveLabel;
+              clientsToast((err && err.message) || 'Could not record this date.', 'negative');
             });
         });
       },
@@ -12226,6 +12535,14 @@
       });
     });
 
+    MORPH.unwired(root, '[data-cip-stage]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openStageDialog(app.id, app.clientUid, btn.getAttribute('data-cip-stage'));
+      });
+    });
+
     var fixNumberBtn = unwiredClientsChrome(root, '[data-cip-fix-number]');
     if (fixNumberBtn) {
       MORPH.on(fixNumberBtn, 'click', function () { openSubmissionDialog(state, render, true); });
@@ -12249,6 +12566,8 @@
         openCipFileMenu(state, e, btn.getAttribute('data-cip-file'), render);
       });
     });
+
+    wireCipSlotUploads(root, state, render);
 
     MORPH.unwired(root, '[data-cip-file-status]').forEach(function (chip) {
       MORPH.on(chip, 'click', function (e) {
