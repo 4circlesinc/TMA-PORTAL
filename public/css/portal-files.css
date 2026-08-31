@@ -1955,3 +1955,18 @@
 
 /* The icon and the chip keep their size; only the name gives way. */
 .tma-portal-files-table .tma-portal-avatar-cell > :not(.tma-portal-file-link) { flex-shrink: 0; }
+
+/* ── icon-only type pills ─────────────────────────────── */
+.tma-portal-type-pill--icon { padding: 6px 10px; }
+.tma-portal-type-pill--icon .tma-portal-type-pill__icon { margin: 0; }
+
+/* ── infinite scroll sentinel ─────────────────────────── */
+.tma-portal-files__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-16) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+}

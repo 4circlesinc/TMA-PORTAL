@@ -35,11 +35,16 @@ class BrowserController extends BaseFilesController
             $section = 'all';
         }
 
-        // Rewrite a leftover "Clients" root the first time anyone lists files,
-        // not only when they open the citizenship library. Recent Files and
-        // All Files both print that folder's name, and waiting on the nested
-        // sidebar item left the old label on the dashboard until someone did.
-        FolderProvisioner::clientsRoot();
+        // A leftover standalone "Clients" root still gets its rename the
+        // first time anyone lists files — but the retired library is never
+        // created anew: client folders live under their provider's folder in
+        // the synced library (2026-08-31).
+        if (Folder::whereNull('parent_id')
+            ->where('folder_type', Folder::TYPE_ROOT)
+            ->whereIn('name', FolderProvisioner::clientsRootNames())
+            ->exists()) {
+            FolderProvisioner::clientsRoot();
+        }
 
         // A page of the folder, not the whole of it. perPage=0 used to mean
         // "everything" (capped at 100,000), which is how Clients answered with
@@ -327,10 +332,12 @@ class BrowserController extends BaseFilesController
     private function allSectionQueries(User $user): array
     {
         if (! Role::can($user, 'files.viewOrg')) {
-            $root = $this->clientsRootFor($user);
-
+            // No org tree for an external CIP account: their All Files is
+            // the client folders they may open, wherever those live now that
+            // the standalone root is retired.
             return [
-                Folder::query()->where('id', $root?->id ?: 0),
+                $this->visibleFolders($user, withDescendants: false)
+                    ->where('folder_type', Folder::TYPE_CLIENT),
                 null,
             ];
         }
@@ -339,17 +346,6 @@ class BrowserController extends BaseFilesController
             $this->visibleFolders($user, withDescendants: false)->whereNull('parent_id'),
             $this->visibleFiles($user, withDescendants: false)->whereNull('folder_id'),
         ];
-    }
-
-    private function clientsRootFor(User $user): ?Folder
-    {
-        if (! CipAccess::canReach($user)) {
-            return null;
-        }
-
-        $root = FolderProvisioner::clientsRoot();
-
-        return FileAccess::can($user, 'view', $root) ? $root : null;
     }
 
     /**

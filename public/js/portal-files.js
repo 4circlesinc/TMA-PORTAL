@@ -77,7 +77,7 @@
   var SECTIONS = {
     all: { title: 'All Files', desc: 'All files and folders you can access.', empty: 'No files yet' },
     clients: {
-      title: 'Citizenship Applications Portal',
+      title: 'Client Folders',
       desc: 'Citizenship by investment application folders you can open.',
       empty: 'No application folders yet',
       emptyHint: 'Folders for the applications you work with will appear here.',
@@ -476,6 +476,7 @@
       state.total = typeof res.total === 'number'
         ? res.total
         : (res.folders || []).length + (res.files || []).length;
+      state.hasMore = !!res.hasMore;
       // The server has the last word on the window it served; believing our
       // own request instead is how a clamped perPage desynchronised the pager.
       if (typeof res.perPage === 'number' && res.perPage > 0) state.pageSize = res.perPage;
@@ -883,7 +884,7 @@
     else if (!items().length) html += renderEmpty(meta);
     else html += (state.view === 'grid' ? renderGrid() : renderTable());
     html += '</div>';
-    html += renderPagination();
+    html += renderMoreSentinel();
     html += '</div>';
 
     /*
@@ -977,9 +978,12 @@
     { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
     { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
     { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
+    { key: 'video', label: 'Video', icon: 'images/icons/phosphor/FileVideo.svg', mono: true },
+    { key: 'audio', label: 'Audio', icon: 'images/icons/phosphor/FileAudio.svg', mono: true },
     // Line art rather than a brand mark, so it is flipped to white when the
     // pill is pressed.
     { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg', mono: true },
+    { key: 'text', label: 'Text', icon: 'images/icons/tma/TxtIcon.svg' },
   ];
 
   var TYPE_EXTRA = {
@@ -1003,10 +1007,14 @@
       offered.map(function (t) {
         var on = t.key === current;
         var iconCls = 'tma-portal-type-pill__icon' + (t.mono ? ' tma-portal-type-pill__icon--mono' : '');
-        return '<button type="button" class="tma-portal-type-pill' + (on ? ' is-active' : '') + '"' +
-          ' data-files-type-pill="' + esc(t.key) + '" aria-pressed="' + on + '">' +
-          (t.icon ? '<img class="' + iconCls + '" src="' + esc(t.icon) + '" alt="">' : '') +
-          '<span class="tma-portal-type-pill__label">' + esc(t.label) + '</span>' +
+        // Icon-only: the mark is the label, so the name rides as tooltip
+        // and accessible name instead of text.
+        return '<button type="button" class="tma-portal-type-pill tma-portal-type-pill--icon' + (on ? ' is-active' : '') + '"' +
+          ' data-files-type-pill="' + esc(t.key) + '" aria-pressed="' + on + '"' +
+          ' aria-label="' + esc(t.label) + '" title="' + esc(t.label) + '">' +
+          (t.icon
+            ? '<img class="' + iconCls + '" src="' + esc(t.icon) + '" alt="">'
+            : '<span class="tma-portal-type-pill__label">' + esc(t.label) + '</span>') +
           '</button>';
       }).join('') +
       '</div>';
@@ -1157,6 +1165,67 @@
    * Hidden entirely when a folder fits on one page, so the ordinary small
    * folder looks exactly as it did.
    */
+  /*
+   * Infinite scrolling instead of a footer pager: the next page fetches
+   * itself as the reader nears the bottom and its rows append. The server
+   * still pages underneath — nothing ever ships eleven thousand rows in one
+   * answer, which is what stopped the folder opening the last time.
+   */
+  var loadingMore = false;
+
+  function renderMoreSentinel() {
+    if (!state.hasMore) return '';
+    return '<div class="tma-portal-files__more" data-files-more-sentinel>' +
+      '<img src="images/icons/tma/Loading-16.svg" alt="" width="16" height="16"><span>Loading more…</span></div>';
+  }
+
+  function loadMore() {
+    if (loadingMore || state.loading || !state.hasMore) return;
+    loadingMore = true;
+    state.page += 1;
+    var expected = listingParams().toString();
+    net().fetchJSON(net().url('/?' + expected))
+      .then(function (res) {
+        if (listingParams().toString() !== expected) return;
+        state.data.folders = state.data.folders.concat(res.folders || []);
+        state.data.files = state.data.files.concat(res.files || []);
+        state.hasMore = !!res.hasMore;
+        if (typeof res.total === 'number') state.total = res.total;
+        render();
+      })
+      .catch(function () { state.page = Math.max(1, state.page - 1); })
+      .then(function () { loadingMore = false; });
+  }
+
+  function wireInfiniteScroll(el) {
+    if (el._filesMoreObserver) el._filesMoreObserver.disconnect();
+    var sentinel = el.querySelector('[data-files-more-sentinel]');
+    if (!sentinel || !window.IntersectionObserver) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) { if (entry.isIntersecting) loadMore(); });
+    }, { rootMargin: '600px 0px' });
+    io.observe(sentinel);
+    el._filesMoreObserver = io;
+  }
+
+  /* One delegated listener outlives every re-render, the safe shape here. */
+  function wireSortHeaders(el) {
+    if (el._filesSortHeadersBound) return;
+    el._filesSortHeadersBound = true;
+    el.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-files-sort-col]');
+      if (!btn) return;
+      var key = btn.getAttribute('data-files-sort-col');
+      if (state.sort === key) {
+        state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort = key;
+        state.dir = (key === 'name' || key === 'type') ? 'asc' : 'desc';
+      }
+      reload();
+    });
+  }
+
   function renderPagination() {
     var pages = totalPages();
     if (state.loading || state.error || (pages <= 1 && state.total <= state.pageSize)) return '';
@@ -1236,12 +1305,29 @@
      * The row-menu column had no header cell at all, which a fixed layout has
      * no width to take; it gets one now, empty like the star's.
      */
+    // Clickable headers, the documented sortable-table pattern: click sorts,
+    // a second click flips the direction, the arrow says which way.
+    function sortableHead(key, label, cls) {
+      var active = state.sort === key;
+      var aria = !active ? 'none' : (state.dir === 'desc' ? 'descending' : 'ascending');
+      var arrow = active
+        ? '<span class="tma-portal-table__sort-arrow" aria-hidden="true">' + (state.dir === 'desc' ? '\u2193' : '\u2191') + '</span>'
+        : '';
+      return {
+        html: '<button type="button" class="tma-portal-table__sort' + (active ? ' is-sorted' : '') + '"' +
+          ' data-files-sort-col="' + key + '">' + label + arrow + '</button>',
+        attrs: ' class="' + cls + ' tma-portal-table__th-sort" aria-sort="' + aria + '"',
+      };
+    }
+
     headers.push(
-      { html: 'Name', attrs: ' class="tma-portal-cell--name"' },
-      { html: 'Type', attrs: ' class="tma-portal-cell--type"' },
-      { html: 'Size', attrs: ' class="tma-portal-cell--size"' },
+      sortableHead('name', 'Name', 'tma-portal-cell--name'),
+      sortableHead('type', 'Type', 'tma-portal-cell--type'),
+      sortableHead('size', 'Size', 'tma-portal-cell--size'),
       { html: 'Shared with', attrs: ' class="tma-portal-cell--owner"' },
-      { html: isRecycle() ? 'Deleted' : 'Modified', attrs: ' class="tma-portal-cell--when"' },
+      isRecycle()
+        ? { html: 'Deleted', attrs: ' class="tma-portal-cell--when"' }
+        : sortableHead('modified', 'Modified', 'tma-portal-cell--when'),
       { html: '', attrs: ' class="tma-portal-cell--menu"' }
     );
 
@@ -1365,7 +1451,16 @@
     viewBtns.forEach(function (b) {
       b.addEventListener('click', function () { state.view = b.getAttribute('data-files-view'); render(); });
     });
-    ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; reload(); });
+    ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) {
+      if (sel.action === state.sort) {
+        state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort = sel.action;
+        state.dir = (sel.action === 'name' || sel.action === 'type') ? 'asc' : 'desc';
+      }
+      reload();
+    });
+    wireSortHeaders(el);
     ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; reload(); });
     /*
      * Pressing the pill that is already on clears it, so the filter can always
@@ -1389,7 +1484,7 @@
     });
     ui().wireHeadDropdownAll(el, '[data-files-owner-menu]', function (sel) { state.filterOwner = sel.action; reload(); });
 
-    wirePagination(el);
+    wireInfiniteScroll(el);
 
     // toolbar + selection-bar + generic actions (delegated)
     el.addEventListener('click', onClick);

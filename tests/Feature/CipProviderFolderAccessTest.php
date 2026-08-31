@@ -277,11 +277,13 @@ class CipProviderFolderAccessTest extends TestCase
         $this->actingAs($gil)->get('/folders/all')->assertOk();
         $this->actingAs($stranger)->get('/folders/all')->assertNotFound();
 
+        // The standalone root is retired: an external contact's All Files is
+        // the client folders their firm may open, listed directly.
         $listed = collect(
             $this->actingAs($gil)->getJson('/portal/files/?section=all')
                 ->assertOk()->json('folders')
         );
-        $this->assertSame([FolderProvisioner::ROOT_CLIENTS], $listed->pluck('name')->all());
+        $this->assertSame(['Chen Wei'], $listed->pluck('name')->all());
 
         $clientsRoot = FolderProvisioner::clientsRoot();
         $this->assertTrue(FileAccess::can($gil, 'view', $clientsRoot));
