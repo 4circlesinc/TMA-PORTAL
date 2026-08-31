@@ -55,6 +55,22 @@ app.whenReady().then(() => {
   check('desktop PKCE start is never re-handed-off',
     signInProviderFor(google, `${ORIGIN}/auth/desktop/start`, ORIGIN), null);
 
+  const msConnect = `${ORIGIN}/auth/social/microsoft/redirect?sync_all=1&return=getting-started`;
+  const googleConnect = `${ORIGIN}/auth/social/google/redirect?sync_all=1&return=getting-started`;
+
+  check('getting-started microsoft connect stays in-app',
+    signInProviderFor(msConnect, `${ORIGIN}/auth/getting-started`, ORIGIN), null);
+  check('getting-started google connect stays in-app',
+    signInProviderFor(googleConnect, `${ORIGIN}/auth/getting-started`, ORIGIN), null);
+  check('account-setup email connect stays in-app',
+    signInProviderFor(
+      `${ORIGIN}/auth/social/microsoft/redirect?sync_all=1&return=account-setup-email`,
+      `${ORIGIN}/auth/setup/email`,
+      ORIGIN,
+    ), null);
+  check('a connect URL is not a sign-in even from /auth/login',
+    signInProviderFor(msConnect, `${ORIGIN}/auth/login`, ORIGIN), null);
+
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });
