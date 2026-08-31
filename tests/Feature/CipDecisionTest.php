@@ -30,8 +30,8 @@ use Tests\TestCase;
  * §21 — the Unit decided: record the date and Granted or Denied.
  *
  * The dedicated verb exists so `decision` and `decided_at` cannot be left
- * empty by a bare status change. The file becomes terminal, and the three
- * named classes are told.
+ * empty by a bare status change. The file becomes terminal, and §22's four
+ * classes are told.
  */
 class CipDecisionTest extends TestCase
 {
@@ -378,6 +378,7 @@ class CipDecisionTest extends TestCase
             'contact_email' => 'notices@galaxy.example',
             'contact_name' => 'Galaxy Notices',
         ])->save();
+        Tree::provision($application->fresh(), $staff);
 
         Mail::fake();
 
@@ -387,16 +388,24 @@ class CipDecisionTest extends TestCase
         ])->assertOk();
 
         $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
+        $path = '/citizenship-applications/'.$application->fresh()->client->uid.'?tab=folders';
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
+            $details = collect($mail->payload['details'] ?? []);
+
             return $mail->subjectLine === $expected
                 && $mail->hasTo('ada@example.com')
-                && str_contains($mail->payload['lead'], 'granted')
+                && str_contains((string) ($mail->payload['lead'] ?? ''), 'granted')
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Decision date' && ($row[1] ?? null) === '2026-08-18')
                 && $mail->attachment instanceof FileItem;
         });
         Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
         Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
         Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($path) {
+            return str_contains((string) data_get($mail->payload, 'button.url'), $path);
+        });
 
         // The actor is not bell'd about their own recording; the postcard is
         // how they see it on the audit trail. The other two classes get both.
@@ -408,9 +417,58 @@ class CipDecisionTest extends TestCase
                 'user_id' => $user->id, 'type' => 'cip.granted',
             ]);
         }
+        $this->assertSame($path, Notification::query()
+            ->where('user_id', $contact->id)
+            ->where('type', 'cip.granted')
+            ->value('action_url'));
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => 'ada@example.com', 'template' => 'cip-granted',
         ]);
         $this->assertSame(2, Notification::where('type', 'cip.granted')->count());
+    }
+
+    public function test_a_denial_uses_the_denied_notice(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $company = null;
+        $application = $this->inBackgroundCheck($staff, $company);
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $staff->id,
+        ]);
+        Tree::provision($application->fresh(), $staff);
+
+        Mail::fake();
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-18',
+        ])->assertOk();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            $details = collect($mail->payload['details'] ?? []);
+
+            return $mail->hasTo('gil@galaxy.example')
+                && str_contains($mail->subjectLine, 'DENIED')
+                && str_contains((string) ($mail->payload['lead'] ?? ''), 'denied')
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Decision date' && ($row[1] ?? null) === '2026-08-18');
+        });
+
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'gil@galaxy.example', 'template' => 'cip-denied',
+        ]);
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id, 'type' => 'cip.denied',
+        ]);
+        $this->assertSame(
+            'The Unit has denied this application.',
+            Notification::query()
+                ->where('user_id', $contact->id)
+                ->where('type', 'cip.denied')
+                ->value('message'),
+        );
     }
 }

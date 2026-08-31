@@ -6657,7 +6657,7 @@
     if (['background_check', 'delayed'].indexOf(app.status) === -1) return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-decide>' +
-      'Record decision</button>';
+      'Decision received</button>';
   }
 
   function canEnterPostApproval() {

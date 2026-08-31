@@ -232,6 +232,20 @@ class SystemEmailTemplatesTest extends TestCase
             Postcards::cipReadyToSubmit($facts, 'https://x.test', 'Priya', 'SUBJ'),
             Postcards::cipNonCompliant($facts, 'https://x.test', null, 'Priya'),
             Postcards::cipDelayed($facts, 'https://x.test', null, 180, 'Priya'),
+            Postcards::cipDecision(
+                $facts,
+                'https://x.test',
+                Status::GRANTED,
+                '2026-08-18',
+                'Priya',
+                null,
+                'SUBJ',
+                [
+                    'title' => 'GAL26-00004 was granted',
+                    'lead' => 'The Unit has granted Testing Francis’s application.',
+                    'bodyHtml' => '<p>Galaxy Partners filed this application.</p>',
+                ],
+            ),
         ];
 
         foreach ($mails as $mail) {
