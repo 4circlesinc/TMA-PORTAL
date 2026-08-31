@@ -1,1 +1,1 @@
-- The window title bar is taller, so navigation, search and header actions have more space around them
+- Connecting your Google or Microsoft account from settings now opens the account-consent screen instead of restarting sign-in
