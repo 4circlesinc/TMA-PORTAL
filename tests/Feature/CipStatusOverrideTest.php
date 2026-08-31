@@ -32,6 +32,7 @@ class CipStatusOverrideTest extends TestCase
     private function user(string $accountType): User
     {
         $user = User::factory()->create([
+            'name' => 'Ada Admin',
             'status' => 'approved',
             'account_type' => $accountType,
         ]);
@@ -72,6 +73,7 @@ class CipStatusOverrideTest extends TestCase
         $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,
+                'note' => 'The Unit asked for another scan.',
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK)
@@ -86,6 +88,31 @@ class CipStatusOverrideTest extends TestCase
         $this->assertTrue($event->meta['override'] ?? false);
         $this->assertSame(Status::GRANTED, $event->from_status);
         $this->assertSame(Status::ASSESSMENT_FEEDBACK, $event->to_status);
+        $this->assertSame('The Unit asked for another scan.', $event->meta['note']);
+
+        $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/events')
+            ->assertOk()
+            ->assertJsonPath(
+                'events.0.what',
+                'Ada Admin overrode the status from Approved to Assessment Feedback: The Unit asked for another scan.',
+            );
+    }
+
+    public function test_an_override_without_a_reason_is_refused(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->application($admin);
+        $application->forceFill(['status' => Status::GRANTED])->save();
+
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::ASSESSMENT_FEEDBACK,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Give a reason for changing the status.');
+
+        $this->assertSame(Status::GRANTED, $application->fresh()->status);
     }
 
     public function test_an_officer_cannot_pull_a_status_backwards(): void

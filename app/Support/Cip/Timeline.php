@@ -184,9 +184,22 @@ class Timeline
             return "{$who} changed the status";
         }
 
-        return $event->from_status === null
+        $meta = is_array($event->meta) ? $event->meta : [];
+        $reason = trim((string) ($meta['note'] ?? ''));
+        $move = $event->from_status === null
             ? "{$who} moved it to ".Status::label($to)
             : "{$who} moved it from ".Status::label($event->from_status).' to '.Status::label($to);
+
+        if (! empty($meta['override'])) {
+            $from = $event->from_status !== null
+                ? Status::label($event->from_status)
+                : 'the previous status';
+            $line = "{$who} overrode the status from {$from} to ".Status::label($to);
+
+            return $reason !== '' ? $line.': '.$reason : $line;
+        }
+
+        return $reason !== '' ? $move.': '.$reason : $move;
     }
 
     /**

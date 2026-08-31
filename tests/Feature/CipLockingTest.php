@@ -19,7 +19,6 @@ use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentRequests;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
-use App\Support\Cip\Engine;
 use App\Support\Cip\Package;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
@@ -337,6 +336,7 @@ class CipLockingTest extends TestCase
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->fresh()->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,
+                'note' => 'The Unit asked for another scan.',
             ])
             ->assertOk()
             ->assertJsonPath('application.phase', Phase::PRE_APPROVAL);

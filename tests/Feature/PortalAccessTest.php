@@ -164,7 +164,8 @@ class PortalAccessTest extends TestCase
         $administration = [
             'background-ops', 'notification-history',
             'branding', 'clienthub-access',
-            'service-teams', 'custom-fields', 'cip-documents', 'cip-letters',
+            'service-teams', 'custom-fields', 'cip-admin', 'cip-documents', 'cip-letters',
+            'cip-distribution',
             'security-policy', 'signin-policy',
             'alert-settings', 'storage-usage',
             'permissions', 'default-folders', 'folder-templates',
@@ -415,7 +416,7 @@ class PortalAccessTest extends TestCase
 
         // 'users' is deliberately absent — that is the account-management
         // table, not staff tooling. See the Users page tests above.
-        foreach (['clients', 'email', 'social/feed'] as $page) {
+        foreach (['citizenship-applications', 'email', 'social/feed'] as $page) {
             $this->actingAs($employee)->get('/'.$page)->assertOk();
         }
     }

@@ -10310,7 +10310,6 @@
       : CIP_STATUSES;
     var nextValues = statusValues(source && source.availableTransitions);
     var overrideValues = statusValues(source && source.availableOverrides);
-    var me = window.TMACurrentUser && window.TMACurrentUser.get();
 
     var next = all.filter(function (status) {
       return nextValues.indexOf(status.value) !== -1;
@@ -10318,12 +10317,6 @@
     var overrides = all.filter(function (status) {
       return overrideValues.indexOf(status.value) !== -1;
     });
-
-    if (me && me.isAdmin && source && !overrides.length) {
-      overrides = all.filter(function (status) {
-        return status.value !== source.status && nextValues.indexOf(status.value) === -1;
-      });
-    }
 
     if (cipDocumentsBlockReadyToSubmit(source) || cipDocumentsBlockReadyToSubmit(applicationFor(clientUid))) {
       next = next.filter(function (status) { return status.value !== 'ready_to_submit'; });
@@ -10460,7 +10453,6 @@
     var all = cipPersonStatusList(app);
     var nextValues = statusValues(person && person.availableStatuses);
     var overrideValues = statusValues(person && person.availableStatusOverrides);
-    var me = window.TMACurrentUser && window.TMACurrentUser.get();
 
     var next = all.filter(function (status) {
       return nextValues.indexOf(status.value) !== -1;
@@ -10468,16 +10460,6 @@
     var overrides = all.filter(function (status) {
       return overrideValues.indexOf(status.value) !== -1;
     });
-
-    if (me && me.isAdmin && person && !overrides.length) {
-      overrides = all.filter(function (status) {
-        return status.value !== person.status && nextValues.indexOf(status.value) === -1;
-      });
-    } else if (!next.length && !overrides.length) {
-      next = all.filter(function (status) {
-        return nextValues.indexOf(status.value) !== -1;
-      });
-    }
 
     return { next: next, overrides: overrides, current: person && person.status };
   }
@@ -10576,7 +10558,45 @@
     render({ forceFull: true });
   }
 
-  function changeCipStatus(to, extra, clientUid, label) {
+  function openCipOverrideDialog(to, extra, clientUid, label) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    ui.openModal({
+      title: 'Override status',
+      body:
+        '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. The Activity tab keeps the reason.</p>' +
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
+        '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
+        '</div>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-override>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-override>Change status</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-override]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-override]');
+        var field = el.querySelector('[data-cip-override-note]');
+        if (field) field.focus();
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var reason = field && field.value ? field.value.trim() : '';
+          if (!reason) {
+            clientsToast('Give a reason for changing the status.', 'negative');
+            return;
+          }
+          ui.closeModal();
+          changeCipStatus(to, extra, clientUid, label, reason);
+        });
+      },
+    });
+  }
+
+  function changeCipStatus(to, extra, clientUid, label, note) {
     var source = cipSourceFor(extra, clientUid);
     var applicationId = (extra && extra.applicationId) || (source && source.id);
     if (!applicationId) {
@@ -10659,6 +10679,13 @@
     }
 
     var leftoverDraft = to === 'new' && source && source.status === 'draft';
+    var overrideValues = statusValues(source && source.availableOverrides);
+    if (!leftoverDraft && overrideValues.indexOf(to) !== -1 && !(note && String(note).trim())) {
+      openCipOverrideDialog(to, extra, clientUid, label);
+
+      return;
+    }
+
     var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
       (leftoverDraft ? '/submit' : '/status');
     var previous = source ? {
@@ -10670,7 +10697,10 @@
     if (clientUid) paintCipApplicationStatus(clientUid, to, { statusLabel: label });
     if (state && render) render({ forceFull: true });
 
-    clientsFetch(url, leftoverDraft ? { method: 'POST' } : { method: 'POST', json: { status: to } })
+    var body = leftoverDraft ? { method: 'POST' } : { method: 'POST', json: { status: to } };
+    if (!leftoverDraft && note && String(note).trim()) body.json.note = String(note).trim();
+
+    clientsFetch(url, body)
       .then(function (json) {
         clientsToast('Moved to ' + (label || 'the next status'), 'positive');
         if (clientUid && json && json.application) {
@@ -11858,6 +11888,7 @@
   var clientsHeadActionsWired = false;
 
   var CLIENTS_ADMIN_PAGES = {
+    'cip-admin': { title: 'Administrator' },
     'clienthub-access': { title: 'Access' },
     'service-teams': { title: 'Service teams' },
     'custom-fields': { title: 'Custom fields' },

@@ -334,6 +334,14 @@ class Engine
             throw new \InvalidArgumentException(self::checklistRefusal($to));
         }
 
+        // §26: an administrator may type any listed status, but the audit
+        // row has to say why. System writes (a null actor) skip this — the
+        // checklist inferring Ready to submit is not a person changing a
+        // label by hand.
+        if ($actor !== null && trim((string) ($meta['note'] ?? '')) === '') {
+            throw new \InvalidArgumentException('Give a reason for changing the status.');
+        }
+
         $from = $application->status;
         $extra = [];
         $meta = array_merge($meta, ['override' => true]);

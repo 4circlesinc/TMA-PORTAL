@@ -206,7 +206,9 @@ class CipEngineTest extends TestCase
         $this->assertSame(Status::NEW, $application->status);
         $this->assertFalse(Engine::canTransition($application, Status::BACKGROUND_CHECK));
 
-        Engine::set($application, Status::BACKGROUND_CHECK, $admin);
+        Engine::set($application, Status::BACKGROUND_CHECK, $admin, [
+            'note' => 'The Unit asked for another scan.',
+        ]);
 
         $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
         $this->assertDatabaseHas('cip_events', [
@@ -215,5 +217,16 @@ class CipEngineTest extends TestCase
             'from_status' => Status::NEW,
             'to_status' => Status::BACKGROUND_CHECK,
         ]);
+    }
+
+    public function test_set_refuses_an_administrator_who_gives_no_reason(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $admin);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Give a reason for changing the status.');
+        Engine::set($application, Status::BACKGROUND_CHECK, $admin);
     }
 }

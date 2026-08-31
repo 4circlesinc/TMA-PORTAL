@@ -31,6 +31,7 @@
     { id: 'background-ops', label: 'Background Operations', group: 'Settings' },
     { id: 'notification-history', label: 'Notification History', group: 'Account and Reporting' },
     { id: 'branding', label: 'Edit Company Branding', group: 'Account and Reporting' },
+    { id: 'cip-admin', label: 'Administrator', group: 'CIP Console' },
     { id: 'clienthub-access', label: 'Access', group: 'CIP Console' },
     { id: 'service-teams', label: 'Service teams', group: 'CIP Console' },
     { id: 'custom-fields', label: 'Custom fields', group: 'CIP Console' },

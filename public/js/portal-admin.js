@@ -53,6 +53,7 @@
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
     { group: 'clienthub-group', label: 'CIP Console', icon: 'UsersThree', items: [
+      { id: 'cip-admin', label: 'Administrator' },
       { id: 'clienthub-access', label: 'Access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
@@ -954,6 +955,95 @@
   function hubCapRow(cap, canEdit) {
     return capRow(cap, canEdit, 'data-hub-cap');
   }
+
+  function adminVerbRow(row) {
+    return '<div class="tma-dash__settings-cookie-row">' +
+      '<span class="tma-dash__settings-cookie-copy">' +
+      '<span class="tma-dash__settings-cookie-label">' + ui().esc(row.label) + '</span>' +
+      '<span class="tma-dash__settings-cookie-desc">' + ui().esc(row.help) + '</span>' +
+      '</span>' +
+      ui().btn({ label: 'Open', variant: 'ghost', small: true, attrs: row.attrs }) +
+      '</div>';
+  }
+
+  function goDash(opts) {
+    if (window.TMADashboard && window.TMADashboard.navigate) {
+      window.TMADashboard.navigate(opts);
+    }
+  }
+
+  /* §26 — one place for every administrator verb. The engines already live
+     on Applications, Users, Reporting and the screens below; this page is
+     the directory, not a second copy of any of them. */
+  PAGES['cip-admin'] = {
+    render: function () {
+      return '<p class="tma-portal-subtitle">An administrator holds every CIP verb. These are the screens that exercise them.</p>' +
+        ui().section('Caseload',
+          adminVerbRow({
+            label: 'CIP Applications',
+            help: 'Every file. Assign or reassign on the row, override a status with a reason, and read Activity.',
+            attrs: 'data-cip-admin-go="clients"',
+          }) +
+          adminVerbRow({
+            label: 'Overview',
+            help: 'The role dashboards: the day-opening queues for administrators and officers.',
+            attrs: 'data-cip-admin-go="overview"',
+          }) +
+          adminVerbRow({
+            label: 'Users',
+            help: 'Type staff as Administrator or CRO / Reviewing officer.',
+            attrs: 'data-cip-admin-go="users"',
+          }) +
+          adminVerbRow({
+            label: 'Reporting',
+            help: 'CIP reports by status, provider, officer, applicant and date.',
+            attrs: 'data-cip-admin-go="reporting"',
+          })) +
+        ui().section('Configuration',
+          adminVerbRow({
+            label: 'Access',
+            help: 'Who may work in CIP Applications, and how clients get their account.',
+            attrs: 'data-cip-admin-page="clienthub-access"',
+          }) +
+          adminVerbRow({
+            label: 'Document requirements',
+            help: 'The checklist templates every new application is built from.',
+            attrs: 'data-cip-admin-page="cip-documents"',
+          }) +
+          adminVerbRow({
+            label: 'Granted and Denied letters',
+            help: 'One pair of decision letters per investment type.',
+            attrs: 'data-cip-admin-page="cip-letters"',
+          }) +
+          adminVerbRow({
+            label: 'Distribution group',
+            help: 'Who receives every CIP status email, including extra mailboxes.',
+            attrs: 'data-cip-admin-page="cip-distribution"',
+          }) +
+          adminVerbRow({
+            label: 'Permissions',
+            help: 'Directory visibility and whether clients may share files onward.',
+            attrs: 'data-cip-admin-page="permissions"',
+          }));
+    },
+    wire: function (el) {
+      var dash = {
+        clients: { navId: 'clients', view: 'clients', title: 'CIP Applications', crumb: 'CIP Applications' },
+        overview: { navId: 'dash-project-overview', view: 'overview', title: 'Overview', crumb: 'Overview' },
+        users: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' },
+        reporting: { navId: 'reporting', view: 'reporting', title: 'Reporting', crumb: 'Reporting' },
+      };
+      el.querySelectorAll('[data-cip-admin-go]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var dest = dash[b.getAttribute('data-cip-admin-go')];
+          if (dest) goDash(dest);
+        });
+      });
+      el.querySelectorAll('[data-cip-admin-page]').forEach(function (b) {
+        b.addEventListener('click', function () { setPage(b.getAttribute('data-cip-admin-page')); });
+      });
+    },
+  };
 
   PAGES['clienthub-access'] = {
     render: function () {
