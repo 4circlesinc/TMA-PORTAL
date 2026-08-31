@@ -35,7 +35,7 @@ class ImportCbiDocuments implements ShouldQueue
         public ?int $actorId = null,
         public int $limit = self::BATCH,
     ) {
-        $this->onQueue('cbi');
+        // Rides the default queue; see SyncCbiHub for why 'cbi' retired.
     }
 
     public function middleware(): array

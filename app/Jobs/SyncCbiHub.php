@@ -33,8 +33,13 @@ class SyncCbiHub implements ShouldQueue
     public function __construct(
         public ?int $actorId = null,
     ) {
-        // Keep clear of the crowded default queue (mail photos, mailbox sync).
-        $this->onQueue('cbi');
+        /*
+         * Used to ride a separate 'cbi' queue to keep clear of the crowded
+         * default — but the production worker only ever serves the connection
+         * default, so 'cbi' starved for hours (2026-08-31). With five worker
+         * processes and chunked jobs, one shared queue is the arrangement
+         * that actually runs.
+         */
     }
 
     public function middleware(): array

@@ -40,12 +40,14 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             /*
-             * The worker pops this whole comma list when started without
-             * --queue, so every named queue must appear here: 'cbi' jobs
-             * starved for hours while the production worker served only
-             * 'default'.
+             * One queue for everything, on purpose. This default is used for
+             * BOTH pushing and popping: a comma list here made the worker pop
+             * 'default' and 'cbi' while dispatches landed on a queue literally
+             * named "default,cbi" that nothing served. Named queues only work
+             * here if the worker command also names them — the production
+             * worker's cannot — so jobs must not set onQueue() at all.
              */
-            'queue' => env('DB_QUEUE', 'default,cbi'),
+            'queue' => env('DB_QUEUE', 'default'),
             /*
              * Longer than the longest job timeout (SyncSharePointLibrary,
              * 1800s). At the stock 90s, a mid-import reservation expired and
