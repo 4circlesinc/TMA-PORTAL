@@ -6459,7 +6459,7 @@
 
   window.TMAComposeEditor = {
     toolbarHtml: function (opts) {
-      return renderComposeToolbar(opts || { expand: false, image: false });
+      return renderComposeToolbar(opts || { expand: false, image: false, full: true });
     },
     wire: wireRichEditorHost,
   };
@@ -6724,11 +6724,15 @@
 
   /* opts.expand: compose windows get the expand control; the signature editor
    * and inline reply/forward do not, there is nowhere for them to expand into.
-   * opts.image: show Insert image (compose, reply/forward, and signatures). */
+   * opts.image: show Insert image (compose, reply/forward, and signatures).
+   * opts.full: every tool on the toolbar itself, no More menu — for wide
+   * hosts (the template and letter editors); a compose window is too narrow
+   * and keeps the three-dots menu. */
   function renderComposeToolbar(opts) {
     opts = opts || {};
     var showExpand = opts.expand !== false;
     var showImage = !!opts.image;
+    var full = !!opts.full;
 
     var groups = [
       [
@@ -6745,14 +6749,22 @@
         { icon: 'TextUnderline', label: 'Underline', cmd: 'underline', state: 'underline' },
         { icon: 'TextStrikethrough', label: 'Strikethrough', cmd: 'strikeThrough', state: 'strikeThrough' },
         { icon: 'ListBullets', label: 'Bulleted list', cmd: 'insertUnorderedList', state: 'insertUnorderedList' },
-      ],
+      ].concat(full
+        ? [{ icon: 'ListNumbers', label: 'Numbered list', cmd: 'insertOrderedList', state: 'insertOrderedList' }]
+        : []),
       [
         { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
       ].concat(
         showImage ? [{ icon: 'Image', label: 'Insert image', image: true }] : [],
-        [{ icon: 'DotsThree', label: 'More', menu: 'more' }]
+        full ? [] : [{ icon: 'DotsThree', label: 'More', menu: 'more' }]
       ),
     ];
+
+    if (full) {
+      groups.push(COMPOSE_MORE_TOOLS
+        .filter(function (t) { return t.cmd !== 'insertOrderedList'; })
+        .map(function (t) { return { icon: t.icon, label: t.label, cmd: t.cmd }; }));
+    }
 
     return (
       '<div class="tma-dash__email-compose-toolbar">' +

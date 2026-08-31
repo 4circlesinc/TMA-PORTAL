@@ -4669,6 +4669,14 @@ label.tma-portal-check-row:hover {
   padding: var(--space-4) var(--space-8);
 }
 
+/* The full toolbar carries every tool; in a narrower host it wraps to a
+   second row instead of clipping. */
+.tma-portal-rich .tma-dash__email-compose-toolbar,
+.tma-portal-rich .tma-dash__email-compose-toolbar-left {
+  flex-wrap: wrap;
+  row-gap: var(--space-4);
+}
+
 .tma-portal-rich__editor {
   min-height: 140px;
   max-height: 340px;
