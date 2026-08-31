@@ -387,7 +387,7 @@
 .tma-portal-viewer {
   position: fixed; inset: 0; z-index: 600; display: flex;
   --viewer-pages-width: 140px;
-  --viewer-comments-width: clamp(380px, 34vw, 560px);
+  --viewer-comments-width: clamp(240px, 22vw, 320px);
   --viewer-side-width: min(320px, 34vw);
 }
 .tma-portal-viewer__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); border: 0; cursor: zoom-out; }
@@ -808,6 +808,7 @@
 .tma-portal-viewer__comments {
   position: absolute; top: 0; right: 0; bottom: 0; z-index: 2;
   width: var(--viewer-comments-width); max-width: var(--viewer-comments-width);
+  box-sizing: border-box;
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
   overflow: hidden;
   padding: var(--space-12);
@@ -838,7 +839,7 @@
   pointer-events: auto;
 }
 .tma-portal-viewer__comments-feed {
-  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-12);
+  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-12);
   padding-right: var(--space-4);
 }
 .tma-portal-viewer__comments .tma-portal-viewer__empty {
@@ -849,7 +850,8 @@
 
 /* Comments ----------------------------------------------------------- */
 .tma-portal-viewer__thread {
-  width: 100%; box-sizing: border-box;
+  /* Hug the words. width: 100% made a one-word note as wide as the gutter. */
+  width: max-content; max-width: 100%; min-width: 0; box-sizing: border-box;
   padding: var(--space-8) var(--space-10); border: 0; border-radius: 10px;
   background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
   font-size: var(--text-size-13);
@@ -867,20 +869,21 @@
 .tma-portal-viewer__comment { display: block; position: relative; padding: var(--space-4) 0; }
 .tma-portal-viewer__comment-top {
   display: flex; align-items: flex-start; gap: var(--space-8);
-  /* Room for the hover verbs so they never sit on the name. */
-  padding-right: 48px;
+  /* Hover verbs are absolutely positioned; keep a single-icon gap so a
+     long name is not squeezed onto two lines by a 48px empty strip. */
+  padding-right: 28px;
 }
 .tma-portal-viewer__comment-head {
   display: flex; flex-direction: column; align-items: flex-start; gap: 0;
-  flex: 1; min-width: 0;
+  flex: 0 1 auto; min-width: 0;
 }
 .tma-portal-viewer__comment-name {
-  display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--space-6);
-  max-width: 100%;
+  display: inline-flex; align-items: center; flex-wrap: nowrap; gap: var(--space-6);
+  max-width: 100%; white-space: nowrap;
 }
-.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.3; color: var(--color-text-primary); }
+.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); line-height: 1.3; color: var(--color-text-primary); white-space: nowrap; }
 .tma-portal-viewer__comment-head time {
-  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3;
+  font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3; white-space: nowrap;
 }
 .tma-portal-viewer__comment-resolved {
   font-size: var(--text-size-11, 11px); color: var(--color-text-secondary); line-height: 1.3;
@@ -927,7 +930,7 @@
 .tma-portal-viewer__comment-flag--ok { background: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary-dark); }
 .tma-portal-viewer__comment-body {
   font-size: var(--text-size-13); line-height: 1.5;
-  color: var(--color-text-primary); word-break: break-word; white-space: pre-wrap;
+  color: var(--color-text-primary); word-break: break-word; overflow-wrap: break-word; white-space: pre-wrap;
   padding: var(--space-10) 0; margin: 0;
 }
 .tma-portal-viewer__mention { color: var(--color-primary-dark); font-weight: 600; }
@@ -1328,7 +1331,7 @@
 
 /* Responsive: the panel becomes a drawer, the rail goes away ---------- */
 @media (max-width: 1100px) {
-  .tma-portal-viewer { --viewer-side-width: min(320px, 88vw); --viewer-comments-width: clamp(300px, 36vw, 440px); }
+  .tma-portal-viewer { --viewer-side-width: min(320px, 88vw); --viewer-comments-width: clamp(240px, 32vw, 300px); }
   .tma-portal-viewer__panel {
     position: absolute; top: 0; right: 0; bottom: 0; z-index: 4;
     flex-basis: 340px; max-width: 88vw; box-shadow: -8px 0 30px rgba(0, 0, 0, 0.35);
@@ -1337,7 +1340,7 @@
 @media (max-width: 760px) {
   .tma-portal-viewer__rail,
   .tma-portal-viewer__pages { display: none; }
-  .tma-portal-viewer { --viewer-comments-width: clamp(240px, 42vw, 360px); }
+  .tma-portal-viewer { --viewer-comments-width: clamp(220px, 72vw, 280px); }
   .tma-portal-viewer__panel { flex-basis: 100%; max-width: 100%; }
   .tma-portal-viewer__sub { display: none; }
 }
