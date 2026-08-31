@@ -4975,11 +4975,23 @@
     var PDF_ZOOM_MIN = 0.25;
     var PDF_ZOOM_MAX = 4;
 
+    /* Comments sit on the stage without taking flex width. Fit the page as
+     * if there were a matching gutter on the left, so it stays in the true
+     * centre and the bubbles occupy the right margin instead of the ink. */
+    function pdfCommentsGutter() {
+      var panel = lb.querySelector('[data-lb-comments-panel]');
+      if (!panel || panel.hidden) return 0;
+      return panel.getBoundingClientRect().width || 0;
+    }
+
     /* Scale for a given mode relative to the scroll container width/height. */
     function pdfEffectiveScale(e, scrollEl, vp1) {
-      var pad = 32;
-      var w = Math.max(120, scrollEl.clientWidth - pad);
-      var h = Math.max(120, scrollEl.clientHeight - pad);
+      var style = window.getComputedStyle(scrollEl);
+      var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      var padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      var gutter = pdfCommentsGutter();
+      var w = Math.max(120, scrollEl.clientWidth - padX - gutter * 2);
+      var h = Math.max(120, scrollEl.clientHeight - padY);
       var fitWidth = w / vp1.width;
       var fitPage  = Math.min(fitWidth, h / vp1.height);
       if (e.pdfZoomMode === 'page')   return fitPage;

@@ -379,9 +379,9 @@
 
 /* ── collaboration viewer (full-screen file preview) ─
  *
- * Three columns: page thumbnails, the document, comments. Comments are a
- * real column, never a layer on the page — a bubble sitting on the PDF is
- * covering the thing the viewer is for. The details panel still becomes a
+ * The page sits in the centre of the stage. Comments are bubbles in the
+ * right gutter, not a flex column — a sibling column shoved the PDF off
+ * centre. They do not take layout width. The details panel still becomes a
  * drawer below 1100px so a laptop is not left with a sliver of preview.
  */
 .tma-portal-viewer {
@@ -798,22 +798,22 @@
 }
 .tma-portal-viewer__member-role { font-size: var(--text-size-12); color: var(--color-text-secondary); flex: 0 0 auto; }
 
-/* Comments: a column of their own, to the right of the document -------- */
+/* Comments: bubbles in the right gutter, off the document's layout ---- */
 /*
- * The page is the middle column and stays there. Comments used to float on
- * top of it so opening the thread would not squeeze the preview off-centre;
- * that put the bubbles on the document. They are a flex sibling now, so the
- * stage shrinks around them and the page centres in what is left.
+ * Out of flow on purpose. In the document flow they steal width from the
+ * stage and the PDF is no longer in the middle of the viewer. Empty chrome
+ * does not capture clicks — only the bubbles and composer do — so the dim
+ * stage behind them still closes the viewer.
  */
 .tma-portal-viewer__comments {
-  position: relative; z-index: 1;
-  flex: 0 0 var(--viewer-comments-width); width: var(--viewer-comments-width);
-  max-width: var(--viewer-comments-width);
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 2;
+  width: var(--viewer-comments-width); max-width: var(--viewer-comments-width);
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
   overflow: hidden;
   padding: var(--space-12);
   background: transparent;
   border: 0;
+  pointer-events: none;
   /* Light cards on the dark viewer — do not inherit the details-panel tokens. */
   --color-white: #ffffff;
   --color-bg-card: #ffffff;
@@ -828,6 +828,13 @@
 .tma-portal-viewer__comments[hidden] { display: none; }
 .tma-portal-viewer__comments-body {
   flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-12);
+  pointer-events: none;
+}
+.tma-portal-viewer__thread,
+.tma-portal-viewer__composer,
+.tma-portal-viewer__comments-add,
+.tma-portal-viewer__comments .tma-portal-viewer__empty {
+  pointer-events: auto;
 }
 .tma-portal-viewer__comments-feed {
   flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-12);
