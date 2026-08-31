@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\SharePointConnection;
 use App\Support\Imports\ImportPause;
+use App\Support\Realtime\Live;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
@@ -82,6 +83,21 @@ class SyncSharePointLibrary implements ShouldBeUniqueUntilProcessing, ShouldQueu
          */
         if (isset($result['complete']) && $result['complete'] === false) {
             self::dispatch($this->connectionId)->delay(now()->addSeconds(self::CHAIN_DELAY));
+        }
+
+        /*
+         * Tell open dashboards the library moved. A firm library's imports
+         * concern every staff member's Recent Files, not just whoever owns
+         * the connection; a personal OneDrive concerns its person alone.
+         */
+        $changed = ($result['created'] ?? 0) + ($result['updated'] ?? 0)
+            + ($result['deleted'] ?? 0) + ($result['restored'] ?? 0);
+        if ($changed > 0) {
+            if ($connection->drive_kind === 'onedrive') {
+                Live::user(Live::FILES, $connection->created_by);
+            } else {
+                Live::staff(Live::FILES);
+            }
         }
     }
 
