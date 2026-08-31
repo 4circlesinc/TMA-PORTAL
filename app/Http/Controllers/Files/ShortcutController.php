@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Files;
 
 use App\Models\ClientAssignment;
+use App\Models\FileLibrarySetting;
 use App\Models\Folder;
 use App\Models\FolderShortcut;
 use App\Models\User;
@@ -95,7 +96,15 @@ class ShortcutController extends BaseFilesController
         // the first client or staff folder is provisioned.
         if (FileAccess::isAdmin($user)) {
             FolderProvisioner::clientsRoot();
-            FolderProvisioner::staffRoot();
+
+            // The staff container only earns its row while staff folders are
+            // in use. With auto-creation off and none provisioned, ensuring
+            // it here just resurrected an empty "Staff Files" for every
+            // administrator (2026-08-31).
+            if (FileLibrarySetting::autoCreateStaffFolder()
+                || Folder::where('folder_type', Folder::TYPE_STAFF)->exists()) {
+                FolderProvisioner::staffRoot();
+            }
         }
 
         $libraries = Folder::where('folder_type', Folder::TYPE_ROOT)
