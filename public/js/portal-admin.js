@@ -2476,7 +2476,10 @@
           '</span>' +
           (d.google && d.google.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="google"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect' + (d.syncAvailable && d.syncAvailable.google ? '?sync_all=1' : '') + '"><span>Connect</span></a>') +
+            // sync_all is always present (0 = plain connect): the desktop
+            // shell reads a bare social redirect as a sign-in and hands it
+            // to the system browser instead of connecting.
+            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect?sync_all=' + (d.syncAvailable && d.syncAvailable.google ? '1' : '0') + '"><span>Connect</span></a>') +
           '</div>' +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>' +
@@ -2487,7 +2490,7 @@
           '</span>' +
           (d.microsoft && d.microsoft.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="microsoft"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect' + (d.syncAvailable && d.syncAvailable.microsoft ? '?sync_all=1' : '') + '"><span>Connect</span></a>') +
+            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect?sync_all=' + (d.syncAvailable && d.syncAvailable.microsoft ? '1' : '0') + '"><span>Connect</span></a>') +
           '</div></section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
