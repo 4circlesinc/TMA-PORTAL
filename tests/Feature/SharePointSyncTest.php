@@ -164,6 +164,16 @@ class SharePointSyncTest extends TestCase
                     '@odata.deltaLink' => 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?token=NEXT',
                 ]);
             }
+            // Folder creation posts to /children; the branch below lists them.
+            if (str_contains($url, '/children') && $request->method() === 'POST') {
+                $name = (string) ($request->data()['name'] ?? 'folder');
+
+                return Http::response([
+                    'id' => 'made-'.substr(md5($url.$name), 0, 8),
+                    'name' => $name,
+                    'eTag' => 'e-1',
+                ]);
+            }
             if (str_contains($url, '/children')) {
                 if ($this->childPages === null) {
                     return Http::response(['value' => $this->children]);
@@ -719,6 +729,29 @@ class SharePointSyncTest extends TestCase
         $this->assertSame(42, $stats['retryAfter']);
         $this->assertSame($cursor, $this->connection->fresh()->delta_link, 'the cursor must not move');
         $this->assertSame(SharePointConnection::STATUS_IDLE, $this->connection->fresh()->status);
+    }
+
+    /** A provisioned folder appears in SharePoint before any file lands in it. */
+    public function test_an_empty_new_folder_is_pushed_without_waiting_for_a_file(): void
+    {
+        $provider = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'ARTON CAPITAL',
+            'parent_id' => $this->connection->folder_id,
+            'owner_id' => $this->owner->id, 'created_by' => $this->owner->id,
+        ]);
+        $client = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Test Applicant',
+            'parent_id' => $provider->id,
+            'owner_id' => $this->owner->id, 'created_by' => $this->owner->id,
+        ]);
+
+        $result = Pusher::pushFolder($client->fresh());
+
+        $this->assertSame('ok', $result['status']);
+        // The whole chain materialised: the provider folder and the client's.
+        $this->assertNotNull(SharePointItem::where('folder_id', $provider->id)->first());
+        $this->assertNotNull(SharePointItem::where('folder_id', $client->id)->first());
+        $this->assertSame('folder', SharePointItem::where('folder_id', $client->id)->value('item_type'));
     }
 
     /** Inbound writes must not bounce straight back out. */

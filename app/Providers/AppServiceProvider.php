@@ -45,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
+        \App\Models\Folder::observe(\App\Observers\FolderSharePointObserver::class);
 
         /*
          * FileAccess caches which folders are personal OneDrives — the single

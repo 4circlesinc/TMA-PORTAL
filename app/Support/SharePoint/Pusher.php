@@ -159,6 +159,31 @@ class Pusher
     }
 
     /**
+     * Materialise a portal folder in SharePoint without waiting for its
+     * first file. Client folders are provisioned empty, and someone working
+     * from SharePoint or OneDrive should see the folder the moment the
+     * portal makes it — not whenever a first document happens to land.
+     * Idempotent: a folder already mapped is simply confirmed.
+     *
+     * @return array{status:string}
+     */
+    public static function pushFolder(Folder $folder): array
+    {
+        if (self::$suspended) {
+            return ['status' => 'skipped'];
+        }
+
+        $connection = self::connectionFor($folder);
+        if (! $connection) {
+            return ['status' => 'not-linked'];
+        }
+
+        return self::graphParentFor($connection, $folder)
+            ? ['status' => 'ok']
+            : ['status' => 'no-parent'];
+    }
+
+    /**
      * Upload a portal file, or push a new version of one already there.
      *
      * @return array{status:string, reason?:string}
