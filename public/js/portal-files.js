@@ -5278,6 +5278,30 @@
         });
     }
 
+    /*
+     * Clicking the dim chrome around the file closes the viewer, the same
+     * as the backdrop. The page, comments, thumbs, toolbar and header stay
+     * clickable; only the empty dark is a way out.
+     */
+    function viewerEmptyClick(el) {
+      if (!el) return false;
+      if (el.closest('button, a, input, textarea, select, video, audio')) return false;
+      if (el.closest(
+        '[data-lb-pdf-canvas], [data-lb-anchor-box], .tma-portal-viewer__anchor-box,' +
+        '.tma-portal-viewer__img, .tma-portal-viewer__media, .tma-portal-viewer__audio,' +
+        '.tma-portal-viewer__text, .tma-portal-viewer__nopreview, .tma-portal-viewer__pdf-toolbar,' +
+        '.tma-portal-viewer__head, .tma-portal-viewer__panel, .tma-portal-viewer__page,' +
+        '.tma-portal-viewer__rail-item, .tma-portal-viewer__thread, [data-lb-composer],' +
+        '.tma-portal-viewer__comments-add'
+      )) return false;
+
+      return !!el.closest(
+        '[data-lb-stage], [data-lb-pdf-scroll], [data-lb-pdf], .tma-portal-viewer__main,' +
+        '.tma-portal-viewer__pages, .tma-portal-viewer__rail, .tma-portal-viewer__comments,' +
+        '.tma-portal-viewer__foot, .tma-portal-viewer__body, .tma-portal-viewer__frame'
+      );
+    }
+
     /* ── interaction ─────────────────────────────────── */
 
     lb.addEventListener('click', function (e) {
@@ -5441,6 +5465,7 @@
       if (e.target.closest('[data-lb-shared-open]')) { openSharedList(); return; }
       if (e.target.closest('[data-lb-presence-open]')) { openPresenceList(); return; }
       if (e.target.closest('[data-lb-close]')) { closeLightbox(); return; }
+      if (viewerEmptyClick(e.target)) { closeLightbox(); return; }
 
       var act = e.target.closest('[data-lb-act]');
       if (!act) return;
