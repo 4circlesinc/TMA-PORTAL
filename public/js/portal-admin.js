@@ -198,15 +198,16 @@
           var icon = IMPORT_ICONS[t.kind] || IMPORT_ICONS.library;
           // The Smartsheet mark sits on a solid tile; round it like an app icon.
           var rounded = t.kind === 'smartsheet' ? ' style="border-radius:6px"' : '';
+          // One switch is the whole story: on = syncing (turning it on also
+          // catches the source up immediately), off = paused.
           return '<div class="tma-portal-connector">' +
             '<span class="tma-portal-connector__logo"><img src="' + icon + '" alt=""' + rounded + '></span>' +
             '<div class="tma-portal-connector__body">' +
             '<span class="tma-portal-connector__name">' + esc(t.name) +
             (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') + '</span>' +
             '<span class="tma-portal-connector__desc">' + esc(t.detail || '') + '</span></div>' +
-            '<div class="tma-portal-connector__actions" style="display:flex;align-items:center;gap:8px">' +
-            (t.paused ? '' : ui().btn({ label: 'Sync now', variant: 'ghost', small: true, attrs: 'data-ops-import-run="' + esc(t.id) + '"' })) +
-            ui().toggle(!!t.paused, 'data-ops-import-pause="' + esc(t.id) + '"', 'Pause ' + t.name) +
+            '<div class="tma-portal-connector__actions" style="display:flex;align-items:center">' +
+            ui().toggle(!t.paused, 'data-ops-import-switch="' + esc(t.id) + '"', 'Sync ' + t.name) +
             '</div></div>';
         }).join('') + '</div>' + connectLibraryRow();
       }
@@ -221,7 +222,6 @@
               esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>' +
               ui().section('Imports', pauseBlock);
             wirePause();
-            wireRun();
             wireConnectLibrary();
             return;
           }
@@ -278,7 +278,6 @@
                 : ''));
 
           wirePause();
-          wireRun();
           wireConnectLibrary();
 
           root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {
@@ -310,24 +309,26 @@
       }
 
       function wirePause() {
-        root.querySelectorAll('[data-ops-import-pause]').forEach(function (sw) {
+        root.querySelectorAll('[data-ops-import-switch]').forEach(function (sw) {
           sw.addEventListener('change', function () {
-            var target = sw.getAttribute('data-ops-import-pause');
-            var next = !!sw.checked;
+            var target = sw.getAttribute('data-ops-import-switch');
+            var active = !!sw.checked;
             sw.disabled = true;
-            secApi('PUT', '/admin/background-ops/imports-pause', { target: target, paused: next })
+            secApi('PUT', '/admin/background-ops/imports-pause', { target: target, paused: !active })
               .then(function (res) {
                 if (!res.ok) {
-                  sw.checked = !next;
+                  sw.checked = !active;
                   ui().toast('Could not update that import');
                   sw.disabled = false;
                   return;
                 }
-                ui().toast(next ? 'Import paused' : 'Import resumed');
+                // Switching a source on also catches it up right away.
+                if (active) secApi('POST', '/admin/background-ops/imports-run', { target: target });
+                ui().toast(active ? 'Syncing' : 'Sync paused');
                 load();
               })
               .catch(function () {
-                sw.checked = !next;
+                sw.checked = !active;
                 ui().toast('Could not update that import');
                 sw.disabled = false;
               });
@@ -362,66 +363,6 @@
             });
         });
       }
-
-      function wireRun() {
-        root.querySelectorAll('[data-ops-import-run]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            b.disabled = true;
-            secApi('POST', '/admin/background-ops/imports-run', { target: b.getAttribute('data-ops-import-run') })
-              .then(function (res) {
-                ui().toast(res.ok ? 'Sync queued' : 'Could not start that sync');
-                if (res.ok) load(); else b.disabled = false;
-              })
-              .catch(function () {
-                ui().toast('Could not start that sync');
-                b.disabled = false;
-              });
-          });
-        });
-      }
-
-      load();
-    },
-  };
-
-  /* ── Account and Reporting ──────────────────────────────────────────
-     All three pages below used to read and write window.TMAPortalData, the
-     localStorage store, so a "report" held a name and a date and no numbers,
-     the notification history listed whatever the mock had pushed into it, and
-     branding applied to the one browser that typed it. They are server-backed
-     now: ReportsController (numbers computed from the portal's own tables),
-     NotificationHistoryController (the real email_deliveries log) and
-     BrandingController (portal_settings, shared by the whole firm). */
-
-  /* Delivery and report states, in the documented status-chip colours. */
-  function statusChip(status) {
-    var tone = {
-      ready: 'success', sent: 'success', delivered: 'success', opened: 'success', clicked: 'success',
-      failed: 'danger', bounced: 'danger',
-      pending: 'pending', queued: 'pending',
-    }[status] || 'neutral';
-    var label = String(status || '').replace(/^./, function (c) { return c.toUpperCase(); });
-    return '<span class="tma-portal-status tma-portal-status--' + tone + '">' + ui().esc(label) + '</span>';
-  }
-
-  function whenDate(iso) {
-    if (!iso) return '';
-    var d = new Date(iso);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
-  }
-
-  PAGES['reporting'] = {
-    tab: 'recent',
-    open: null,        // uid of the report being read, or null for the list
-    render: function () {
-      return '<div data-rep-root>' + ui().loading() + '</div>';
-    },
-    wire: function (el) {
-      var self = PAGES['reporting'];
-      var root = el.querySelector('[data-rep-root]');
-      if (!root) return;
-      var esc = ui().esc;
-      var payload = null;
 
       function fail(message) {
         root.innerHTML = '<p class="tma-portal-note">' + esc(message) + '</p>';
