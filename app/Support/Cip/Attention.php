@@ -23,12 +23,14 @@ use Illuminate\Support\Facades\DB;
  *   comments — a thread on a document in that client's tree with something in
  *              it this reader has not seen. Unread, not merely unresolved: a
  *              dot you cannot clear by reading is a dot people stop looking at.
- *              {@see \App\Support\Files\CommentReads} owns the definition, so
+ *              {@see CommentReads} owns the definition, so
  *              a client marked here has a file marked when you open it.
- *   messages — unread direct correspondence with the person the firm deals
- *              with on that client. Not "the client is talking to anybody",
- *              which would light the dot for conversations this reader is not
- *              part of and cannot open.
+ *   messages — unread correspondence about this file: the application thread
+ *              (§24) plus a direct DM with the person the firm deals with on
+ *              that client. Not "the client is talking to anybody", which
+ *              would light the dot for conversations this reader is not
+ *              part of and cannot open. Internal notes never count for an
+ *              account that cannot see them.
  *
  * A count of zero is dropped rather than returned, so callers can treat the
  * absence of a key as "nothing to say" and never draw an empty indicator.
@@ -49,13 +51,14 @@ final class Attention
 
         $comments = CommentReads::unreadByClient($viewer, $clientIds);
         $mentions = self::threadsNaming($viewer, $clientIds);
-        $messages = self::unreadMessages($viewer, $clientIds);
+        $direct = self::unreadMessages($viewer, $clientIds);
+        $thread = Threads::unreadByClient($viewer, $clientIds);
 
         $out = [];
 
         foreach ($clientIds as $id) {
             $open = (int) ($comments[$id] ?? 0);
-            $unread = (int) ($messages[$id] ?? 0);
+            $unread = (int) ($direct[$id] ?? 0) + (int) ($thread[$id] ?? 0);
             $named = isset($mentions[$id]);
 
             if ($open === 0 && $unread === 0) {

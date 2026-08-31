@@ -455,6 +455,8 @@
   function clientsFetch(url, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    var sid = window.TMAMessagingRealtime && window.TMAMessagingRealtime.socketId;
+    if (sid) headers['X-Socket-ID'] = sid;
     if (opts.method && opts.method !== 'GET') headers['X-XSRF-TOKEN'] = clientsCsrf();
     if (opts.json !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -6056,8 +6058,9 @@
     }
     if (tabId === 'folders') return documentCountFor(clientFolderUuid(state.selectedId));
     if (tabId === 'messages') {
-      if (state.conversationsLoading && !state.conversations) return null;
-      return ((state.conversations || []).length) + ((state.recordings || []).length);
+      if (state.conversationsLoading && !state.conversations && !state.cipThread) return null;
+      return ((state.conversations || []).length) + ((state.recordings || []).length) +
+        ((state.cipThread && state.cipThread.messages) ? state.cipThread.messages.length : 0);
     }
     // How many people are on the application, so the tab says how big the
     // family is before it is opened.
@@ -6155,18 +6158,25 @@
    * on Overview would be true and useless, since it would never say where to go.
    */
   function profileTabDot(state, tabId) {
-    if (tabId !== 'folders') return '';
-
     var app = applicationFor(state.selectedId);
     var at = app && app.attention;
-    if (!at || !at.comments) return '';
-
-    var label = at.comments === 1
-      ? '1 unread comment'
-      : at.comments + ' unread comments';
-
-    return '<span class="tma-tab__dot" role="img" aria-label="' + esc(label) +
-      '" title="' + esc(label) + '"></span>';
+    if (tabId === 'folders') {
+      if (!at || !at.comments) return '';
+      var commentsLabel = at.comments === 1
+        ? '1 unread comment'
+        : at.comments + ' unread comments';
+      return '<span class="tma-tab__dot" role="img" aria-label="' + esc(commentsLabel) +
+        '" title="' + esc(commentsLabel) + '"></span>';
+    }
+    if (tabId === 'messages') {
+      if (!at || !at.messages) return '';
+      var messagesLabel = at.messages === 1
+        ? '1 unread message'
+        : at.messages + ' unread messages';
+      return '<span class="tma-tab__dot" role="img" aria-label="' + esc(messagesLabel) +
+        '" title="' + esc(messagesLabel) + '"></span>';
+    }
+    return '';
   }
 
   function renderProfileTabs(state, activeTab) {
@@ -8845,7 +8855,134 @@
     });
   }
 
+  function subscribeCipThread(appId, state, render) {
+    var rt = window.TMAMessagingRealtime;
+    if (!rt || !appId) return;
+    var name = 'private-cip.application.' + appId;
+    if (subscribeCipThread._name === name) return;
+    if (subscribeCipThread._name) rt.leave(subscribeCipThread._name);
+    subscribeCipThread._name = name;
+    rt.listen(name, 'cip.thread.changed', function (payload) {
+      if (!payload || payload.applicationId !== appId) return;
+      var held = applicationFor(state.selectedId);
+      if (!held || held.id !== appId) return;
+      var input = document.querySelector('[data-cip-thread-body]');
+      if (input) state.cipThreadDraft = input.value;
+      // Opening the tab is what marks the thread read. A signal on Overview
+      // must not fetch (and clear) mail the reader has not seen.
+      if (state.profileTab === 'messages') {
+        ensureCipThreadLoaded(state, render, { quiet: true, force: true });
+        return;
+      }
+      state.applicationFreshFor = null;
+      ensureApplicationLoaded(state, render);
+    });
+  }
+
+  function watchCipThread(state, render) {
+    var rt = window.TMAMessagingRealtime;
+    var app = applicationFor(state.selectedId);
+    if (!app || !isApplicationProfile(app) || !app.id) {
+      if (rt && subscribeCipThread._name) {
+        rt.leave(subscribeCipThread._name);
+        subscribeCipThread._name = null;
+      }
+      return;
+    }
+    subscribeCipThread(app.id, state, render);
+    if (state.profileTab === 'messages') {
+      ensureCipThreadLoaded(state, render, { quiet: true });
+    }
+  }
+
+  function ensureCipThreadLoaded(state, render, opts) {
+    var app = applicationFor(state.selectedId);
+    if (!app || !isApplicationProfile(app) || !app.id) return;
+    subscribeCipThread(app.id, state, render);
+    if (state.cipThreadLoadedFor === app.id && !(opts && opts.force)) return;
+    if (state.cipThreadLoadedFor !== app.id) state.cipThread = null;
+    state.cipThreadLoading = !state.cipThread;
+    state.cipThreadLoadedFor = app.id;
+    if (!(opts && opts.quiet)) {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    }
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/messages')
+      .then(function (data) {
+        if (state.cipThreadLoadedFor !== app.id) return;
+        state.cipThread = data;
+        state.cipThreadLoading = false;
+        subscribeCipThread(app.id, state, render);
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      })
+      .catch(function (err) {
+        if (state.cipThreadLoadedFor !== app.id) return;
+        state.cipThread = { error: (err && err.message) || 'Couldn’t load messages.' };
+        state.cipThreadLoading = false;
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+  }
+
+  function renderCipThread(state, app) {
+    var data = state.cipThread;
+    if (data && state.cipThreadLoadedFor !== app.id) data = null;
+    var loading = !!state.cipThreadLoading && !data;
+    if (loading) {
+      return '<div class="tma-dash__clients-assigned-empty">Loading messages…</div>';
+    }
+    if (data && data.error) {
+      return '<div class="tma-dash__clients-assigned-empty">' + esc(data.error) + '</div>';
+    }
+    var messages = (data && data.messages) || [];
+    var canInternal = !!(data && data.canPostInternal);
+    var lane = state.cipThreadLane || (canInternal ? 'internal' : 'provider');
+    var draft = state.cipThreadDraft || '';
+    var rows = messages.length
+      ? '<ol class="tma-cip-thread">' + messages.map(function (m) {
+        return '<li class="tma-cip-thread__item' + (m.mine ? ' is-mine' : '') + '">' +
+          '<div class="tma-cip-thread__meta">' +
+          '<span class="tma-cip-thread__who">' + esc((m.author && m.author.name) || 'Someone') + '</span>' +
+          (m.lane === 'internal' ? '<span class="tma-portal-tag">Internal</span>' : '') +
+          '<span class="tma-cip-thread__when">' + esc(recordingWhenLabel(m.createdAt)) + '</span></div>' +
+          '<p class="tma-cip-thread__body">' + esc(m.body) + '</p></li>';
+      }).join('') + '</ol>'
+      : '<div class="tma-dash__clients-assigned-empty">' +
+        (canInternal
+          ? 'No messages on this file yet. Internal notes stay with staff. Service provider messages go to the provider.'
+          : 'No messages on this file yet.') +
+        '</div>';
+
+    var laneField = canInternal
+      ? '<div class="tma-portal-radio-row tma-cip-thread__lanes">' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="internal" data-cip-thread-lane' +
+        (lane === 'internal' ? ' checked' : '') + '>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Internal</label>' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="provider" data-cip-thread-lane' +
+        (lane === 'provider' ? ' checked' : '') + '>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Service provider</label></div>'
+      : '';
+
+    return rows +
+      '<form class="tma-cip-thread__composer" data-cip-thread-form>' +
+      laneField +
+      '<textarea class="tma-portal-textarea" data-cip-thread-body rows="3" maxlength="4000" placeholder="' +
+      (canInternal ? 'Write a note or a message to the provider' : 'Write a message') +
+      '">' + esc(draft) + '</textarea>' +
+      '<div class="tma-portal-form-actions">' +
+      '<button type="submit" class="tma-no-data__btn">Send</button></div></form>';
+  }
+
   function renderClientMessagesPanel(state, hidden) {
+    var app = applicationFor(state.selectedId);
+    var cipThread = (app && isApplicationProfile(app))
+      ? '<div class="tma-dash__clients-access-block">' +
+        '<div class="tma-dash__clients-assigned-head">' +
+        '<span class="tma-dash__clients-assigned-count">On this file</span></div>' +
+        renderCipThread(state, app) + '</div>'
+      : '';
+
     var loading = !!state.conversationsLoading && !state.conversations;
     var threads = state.conversations || [];
     var recordings = state.recordings || [];
@@ -8899,6 +9036,7 @@
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="messages" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
+      cipThread +
       '<div class="tma-dash__clients-access-block">' +
       '<div class="tma-dash__clients-assigned-head">' +
       '<span class="tma-dash__clients-assigned-count">Conversations</span></div>' +
@@ -12569,11 +12707,56 @@
         }
         if (state.profileTab === 'messages' && state.selectedId) {
           ensureConversationsLoaded(state, render);
+          ensureCipThreadLoaded(state, render);
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
     });
+
+    var threadForm = MORPH.unwiredOne(root, '[data-cip-thread-form]');
+    if (threadForm) {
+      threadForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var held = applicationFor(state.selectedId);
+        if (!held || !held.id) return;
+        var bodyEl = threadForm.querySelector('[data-cip-thread-body]');
+        var body = ((bodyEl && bodyEl.value) || '').trim();
+        if (!body) {
+          clientsToast('Write a message first.', 'negative');
+          return;
+        }
+        var laneEl = threadForm.querySelector('[data-cip-thread-lane]:checked');
+        var canInternal = !!(state.cipThread && state.cipThread.canPostInternal);
+        var lane = laneEl ? laneEl.value : (canInternal ? 'internal' : 'provider');
+        var save = threadForm.querySelector('button[type="submit"]');
+        if (save) { save.disabled = true; save.textContent = 'Sending…'; }
+        clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages', {
+          method: 'POST',
+          json: { body: body, lane: lane },
+        }).then(function (row) {
+          state.cipThreadDraft = '';
+          state.cipThreadLane = lane;
+          if (!state.cipThread) state.cipThread = { messages: [], canPostInternal: canInternal };
+          state.cipThread.messages = (state.cipThread.messages || []).concat([row]);
+          if (usesPagedClientsFlow(state)) render();
+          else render({ detailOnly: true });
+        }).catch(function (err) {
+          if (save) { save.disabled = false; save.textContent = 'Send'; }
+          clientsToast((err && err.message) || 'Could not send the message.', 'negative');
+        });
+      });
+      threadForm.addEventListener('change', function (e) {
+        if (e.target && e.target.getAttribute('data-cip-thread-lane')) {
+          state.cipThreadLane = e.target.value;
+        }
+      });
+      threadForm.addEventListener('input', function (e) {
+        if (e.target && e.target.getAttribute('data-cip-thread-body') !== null) {
+          state.cipThreadDraft = e.target.value;
+        }
+      });
+    }
 
     MORPH.unwired(root, '[data-clients-open-thread]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
@@ -12814,6 +12997,7 @@
 
       if (state.selectedId !== id) return;
       if (!meta || !meta.stale) state.applicationFreshFor = id;
+      watchCipThread(state, render);
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
@@ -13362,6 +13546,7 @@
           ensureAssignmentsLoaded(state, render, { quiet: true });
           ensureConversationsLoaded(state, render, { quiet: true });
         }
+        watchCipThread(state, render);
       }
 
       if (state.screen === 'company' && state.companyId) {

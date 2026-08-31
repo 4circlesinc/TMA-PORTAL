@@ -1,10 +1,12 @@
 <?php
 
+use App\Events\PortalDataChanged;
 use App\Models\Conversation;
 use App\Models\FeedChannel;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Feed\FeedAccess;
 use App\Support\Files\FileAccess;
 use Illuminate\Support\Facades\Broadcast;
@@ -17,7 +19,7 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
  * The staff-wide "refetch this" channel — the Users, Clients, People, calendar
  * and admin tables.
  *
- * Staff only, and it is the reason {@see App\Events\PortalDataChanged} carries
+ * Staff only, and it is the reason {@see PortalDataChanged} carries
  * a resource name and nothing else. Every subscriber here has a different
  * reach (an employee is not assigned to every client), so the event cannot
  * describe *what* changed without describing it to people who may not see it.
@@ -72,6 +74,17 @@ Broadcast::channel('file.{uuid}', function (User $user, string $uuid) {
     $file = FileItem::query()->withTrashed()->where('uuid', $uuid)->first();
 
     return $file !== null && FileAccess::can($user, 'view', $file);
+});
+
+/**
+ * Live updates for one CIP application's messaging centre.
+ *
+ * Signal only: staff and the provider side share the channel but not the
+ * same messages, so the event must never carry a body. Auth is the same
+ * row-level gate as the HTTP endpoints.
+ */
+Broadcast::channel('cip.application.{uuid}', function (User $user, string $uuid) {
+    return ApplicationScope::query($user)->where('uuid', $uuid)->exists();
 });
 
 Broadcast::channel('feed.channel.{uuid}', function (User $user, string $uuid) {

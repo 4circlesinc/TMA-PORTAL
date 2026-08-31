@@ -26,6 +26,7 @@ use App\Http\Controllers\Cip\CipLetterController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
+use App\Http\Controllers\Cip\CipThreadController;
 use App\Http\Controllers\Cip\CipTransitionController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientConversationController;
@@ -372,6 +373,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
+        Route::get('/applications/{uuid}/messages', [CipThreadController::class, 'index'])
+            ->name('applications.messages.index');
+        Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])
+            ->name('applications.messages.store');
         // Multipart carries the files, and PHP only parses a body for POST —
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.

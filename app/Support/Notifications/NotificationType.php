@@ -116,6 +116,7 @@ final class NotificationType
         'cip.assigned' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'UserGear', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.updates-required' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
         'cip.comment' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatCircle', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the documents'],
+        'cip.message' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatTeardropDots', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open Messages'],
         'cip.ready-to-submit' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
         'cip.apply-for-cor' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
         'cip.non-compliant' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open Additional Documents'],

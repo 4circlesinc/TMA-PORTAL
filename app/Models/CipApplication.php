@@ -146,6 +146,11 @@ class CipApplication extends Model
         return $this->hasMany(CipEvent::class, 'application_id');
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(CipApplicationMessage::class, 'application_id');
+    }
+
     /**
      * Main applicant + sponsor (if any) + dependents, shown as "F4". Family
      * size appears in the main table and in every email subject, so both read
