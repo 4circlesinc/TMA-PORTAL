@@ -60,16 +60,24 @@ final class ClientDirectory
 
     /**
      * A short named slice for surfaces that only show a handful of rows
-     * (right sidebar). Never loads or caches the full directory.
+     * (right sidebar, empty global search). Never loads or caches the full
+     * directory.
      *
+     * @param  'name'|'latest'  $sort
      * @return list<array<string, mixed>>
      */
-    public static function preview(User $user, int $limit = 10): array
+    public static function preview(User $user, int $limit = 10, string $sort = 'name'): array
     {
         $limit = max(1, min(20, $limit));
+        $query = self::baseQuery($user);
 
-        return self::baseQuery($user)
-            ->orderBy('name')
+        if ($sort === 'latest') {
+            $query->orderByDesc('id');
+        } else {
+            $query->orderBy('name');
+        }
+
+        return $query
             ->limit($limit)
             ->get()
             ->map->toDirectoryRecord()

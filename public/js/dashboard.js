@@ -744,6 +744,7 @@
       var sidebarSearch = window.TMAGlobalSearch.mountSidebarSearch(mount, {
         index: searchIndex,
         fetchContacts: opts.fetchContacts,
+        fetchFiles: opts.fetchFiles,
         fetchLiveResults: opts.fetchLiveResults,
         onNavigate: opts.onNavigate || function (item) {
           if (item.navId) {
@@ -2752,9 +2753,16 @@
           };
         });
 
-    function fetchSearchContacts() {
-      if (searchIndexBuilder && typeof searchIndexBuilder.fetchContacts === 'function') {
-        return searchIndexBuilder.fetchContacts();
+    function fetchSearchLatestClients() {
+      if (searchIndexBuilder && typeof searchIndexBuilder.fetchLatestClients === 'function') {
+        return searchIndexBuilder.fetchLatestClients(5);
+      }
+      return Promise.resolve([]);
+    }
+
+    function fetchSearchLatestFiles() {
+      if (searchIndexBuilder && typeof searchIndexBuilder.fetchLatestFiles === 'function') {
+        return searchIndexBuilder.fetchLatestFiles(5);
       }
       return Promise.resolve([]);
     }
@@ -2872,7 +2880,8 @@
     var searchPalette = window.TMAGlobalSearch && window.TMAGlobalSearch.mountDashboardSearch
       ? window.TMAGlobalSearch.mountDashboardSearch(root, {
           index: searchIndex,
-          fetchContacts: fetchSearchContacts,
+          fetchContacts: fetchSearchLatestClients,
+          fetchFiles: fetchSearchLatestFiles,
           fetchLiveResults: fetchSearchLiveResults,
           onNavigate: function (item) {
             navigateSearchResult(item, { keepDrawer: true });
@@ -2886,7 +2895,8 @@
       : null;
 
     wireMobileSidebarSearch(searchIndex, {
-      fetchContacts: fetchSearchContacts,
+      fetchContacts: fetchSearchLatestClients,
+      fetchFiles: fetchSearchLatestFiles,
       fetchLiveResults: fetchSearchLiveResults,
       onNavigate: function (item) {
         navigateSearchResult(item, {});

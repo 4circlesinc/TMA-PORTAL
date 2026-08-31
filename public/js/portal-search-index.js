@@ -3,6 +3,7 @@
  * Static: nav pages + every Settings / Account Settings screen.
  * Live (as you type): files, folders, clients, users, signatures, mail,
  * messages, CIP document requirements, CIP applications.
+ * Empty palette: latest clients + recently changed files.
  *
  * Global: window.TMAPortalSearchIndex
  */
@@ -199,25 +200,58 @@
   var usersPromise = null;
   var usersCacheUrl = null;
 
-  function mapClients(data) {
-    return ((data && data.clients) || []).slice(0, 40).map(function (c) {
+  function clientAvatarUrl(c, name) {
+    var photo = c.photo || (c.profile && c.profile.photo) || '';
+    if (photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo)) return photo;
+    var render = window.TMANotifyRender;
+    if (render && typeof render.initialsUri === 'function') {
+      return render.initialsUri(name || 'Client');
+    }
+    return '';
+  }
+
+  function mapClients(data, opts) {
+    opts = opts || {};
+    var cap = opts.limit || 40;
+    return ((data && data.clients) || []).slice(0, cap).map(function (c) {
       var name = c.name || 'Client';
-      var company = (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
-      var photo = c.profile && c.profile.photo;
-      var hasPhoto = photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo);
-      return {
+      var company = c.companyName || (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
+      var row = {
         type: 'user',
         label: name,
         title: name,
-        subtitle: company ? ('Client · ' + company) : 'Client',
-        avatarUrl: hasPhoto ? photo : '',
+        avatarUrl: clientAvatarUrl(c, name),
         clientId: c.id,
         navId: 'clients',
         view: 'clients',
         href: '/citizenship-applications/' + encodeURIComponent(c.id),
         keywords: [name, company, 'client', 'clients'],
       };
+      if (!opts.compact) {
+        row.subtitle = company ? ('Client · ' + company) : 'Client';
+      }
+      return row;
     });
+  }
+
+  function mapFileRow(f, opts) {
+    opts = opts || {};
+    var folderName = (f.folder && f.folder.name) || 'Files';
+    var row = {
+      type: 'file',
+      label: f.name,
+      title: f.name,
+      fileId: f.id,
+      folderId: f.folder && f.folder.id ? f.folder.id : null,
+      navId: 'folders-all',
+      view: 'folders',
+      href: '/folders/all',
+      keywords: [f.name, f.extension || '', folderName, 'file', 'files'],
+    };
+    if (!opts.compact) {
+      row.subtitle = folderName;
+    }
+    return row;
   }
 
   function fetchContacts(q) {
@@ -233,6 +267,23 @@
     return a.api(root() + '/portal/clients/search?q=' + encodeURIComponent(term) + '&limit=12')
       .then(function (data) {
         return mapClients(data);
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function fetchLatestClients(limit) {
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.holds === 'function' && !access.holds('clients.view')) {
+      return Promise.resolve([]);
+    }
+    var n = Math.max(1, Math.min(20, Number(limit) || 5));
+    return a.api(root() + '/portal/clients/preview?limit=' + encodeURIComponent(n) + '&sort=latest')
+      .then(function (data) {
+        return mapClients(data, { compact: true, limit: n });
       })
       .catch(function () {
         return [];
@@ -258,21 +309,24 @@
         };
       });
       var files = (res.files || []).slice(0, 12).map(function (f) {
-        var folderName = (f.folder && f.folder.name) || 'Files';
-        return {
-          type: 'file',
-          label: f.name,
-          title: f.name,
-          subtitle: folderName,
-          fileId: f.id,
-          folderId: f.folder && f.folder.id ? f.folder.id : null,
-          navId: 'folders-all',
-          view: 'folders',
-          href: '/folders/all',
-          keywords: [f.name, f.extension || '', folderName, 'file', 'files'],
-        };
+        return mapFileRow(f);
       });
       return folders.concat(files);
+    });
+  }
+
+  function fetchLatestFiles(limit) {
+    var net = window.TMAFilesNet;
+    if (!net || typeof net.fetchJSON !== 'function') return Promise.resolve([]);
+    var n = Math.max(1, Math.min(20, Number(limit) || 5));
+    // Recent mixes folders and files in one window. Pull a wider page so
+    // folders do not crowd the five files the empty search popup wants.
+    return net.fetchJSON(net.url('/?section=recent&perPage=40&lean=1')).then(function (res) {
+      return (res.files || []).slice(0, n).map(function (f) {
+        return mapFileRow(f, { compact: true });
+      });
+    }).catch(function () {
+      return [];
     });
   }
 
@@ -585,6 +639,8 @@
     buildStaticIndex: buildStaticIndex,
     settingsIndex: settingsIndex,
     fetchContacts: fetchContacts,
+    fetchLatestClients: fetchLatestClients,
+    fetchLatestFiles: fetchLatestFiles,
     fetchLiveResults: fetchLiveResults,
     resultKey: resultKey,
     forgetCipRequirements: function () {

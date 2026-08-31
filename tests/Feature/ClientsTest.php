@@ -305,7 +305,22 @@ class ClientsTest extends TestCase
         $this->actingAs($staff)->getJson('/portal/clients/preview?limit=2')
             ->assertOk()
             ->assertJsonCount(2, 'clients')
+            ->assertJsonPath('clients.0.id', 'a-one')
             ->assertJsonMissingPath('clients.0.profile');
+    }
+
+    public function test_preview_sort_latest_returns_newest_clients_first(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'a-one', 'name' => 'Alice']))->assertOk();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'b-two', 'name' => 'Bob']))->assertOk();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'c-three', 'name' => 'Carol']))->assertOk();
+
+        $this->actingAs($staff)->getJson('/portal/clients/preview?limit=2&sort=latest')
+            ->assertOk()
+            ->assertJsonCount(2, 'clients')
+            ->assertJsonPath('clients.0.id', 'c-three')
+            ->assertJsonPath('clients.1.id', 'b-two');
     }
 
     public function test_search_with_limit_returns_lean_records_not_the_full_id_list(): void

@@ -407,13 +407,15 @@
       navId: item.navId || '',
       href: item.href || '',
       clientId: item.clientId || '',
+      fileId: item.fileId || '',
+      folderId: item.folderId || '',
       avatar: item.avatar || '',
       avatarUrl: item.avatarUrl || '',
     };
-    const key = entry.clientId || entry.navId || entry.label;
+    const key = entry.clientId || entry.fileId || entry.folderId || entry.navId || entry.label;
     const next = [entry]
       .concat(readJsonStore(RECENT_VISIT_KEY, []).filter((row) => {
-        const rowKey = (row && (row.clientId || row.navId || row.label)) || '';
+        const rowKey = (row && (row.clientId || row.fileId || row.folderId || row.navId || row.label)) || '';
         return rowKey !== key;
       }))
       .slice(0, 6);
@@ -437,10 +439,14 @@
       { title: 'Recent search', items: items.slice(0, 2) },
       { title: 'Recently visited', items: items.slice(2, 3) },
       { title: 'Clients', items: items.slice(3) },
+      { title: 'Files', items: [
+        { type: 'file', label: 'Application form.pdf' },
+        { type: 'file', label: 'Passport scan.jpg' },
+      ] },
     ];
   }
 
-  function portalInitialGroups(index, contacts) {
+  function portalInitialGroups(index, contacts, files) {
     const recent = readJsonStore(RECENT_SEARCH_KEY, []).slice(0, 2);
     let visited = readJsonStore(RECENT_VISIT_KEY, []).slice(0, 2);
     if (!visited.length && Array.isArray(index)) {
@@ -455,15 +461,14 @@
           icon: 'search',
         }));
     }
-    const clientItems = (Array.isArray(contacts) && contacts.length
-      ? contacts
-      : (index || []).filter((item) => item && item.type === 'user')
-    ).slice(0, 3);
+    const clientItems = (Array.isArray(contacts) ? contacts : []).slice(0, 5);
+    const fileItems = (Array.isArray(files) ? files : []).slice(0, 5);
 
     const groups = [
       { title: 'Recent search', items: recent },
       { title: 'Recently visited', items: visited },
       { title: 'Clients', items: clientItems },
+      { title: 'Files', items: fileItems },
     ];
 
     const first = groups.find((g) => g.items.length);
@@ -942,7 +947,9 @@
       loading: false,
       results: [],
       contacts: Array.isArray(options.contacts) ? options.contacts.slice() : [],
+      files: Array.isArray(options.files) ? options.files.slice() : [],
       initialItems: [],
+      prefetchDone: false,
     };
 
     function popupEl() {
@@ -991,14 +998,36 @@
       }
     }
 
-    function ensureContacts() {
-      if (state.contacts.length || typeof options.fetchContacts !== 'function') {
-        return Promise.resolve(state.contacts);
+    function ensurePrefetch() {
+      if (state.prefetchDone) {
+        return Promise.resolve();
       }
-      return Promise.resolve(options.fetchContacts()).then((list) => {
-        state.contacts = Array.isArray(list) ? list : [];
-        return state.contacts;
-      }).catch(() => state.contacts);
+      if (state.prefetchPromise) {
+        return state.prefetchPromise;
+      }
+      const jobs = [];
+      if (typeof options.fetchContacts === 'function') {
+        jobs.push(Promise.resolve(options.fetchContacts()).then((list) => {
+          state.contacts = Array.isArray(list) ? list : [];
+        }).catch(() => {}));
+      }
+      if (typeof options.fetchFiles === 'function') {
+        jobs.push(Promise.resolve(options.fetchFiles()).then((list) => {
+          state.files = Array.isArray(list) ? list : [];
+        }).catch(() => {}));
+      }
+      if (!jobs.length) {
+        state.prefetchDone = true;
+        return Promise.resolve();
+      }
+      state.prefetchPromise = Promise.all(jobs).then(() => {
+        state.prefetchDone = true;
+        state.prefetchPromise = null;
+      }).catch(() => {
+        state.prefetchDone = true;
+        state.prefetchPromise = null;
+      });
+      return state.prefetchPromise;
     }
 
     function resultKey(item) {
@@ -1026,7 +1055,7 @@
     }
 
     function portalGroups() {
-      return portalInitialGroups(sourceIndex(), state.contacts);
+      return portalInitialGroups(sourceIndex(), state.contacts, state.files);
     }
 
     function bindPopupEvents(popup) {
@@ -1191,7 +1220,7 @@
       state.open = true;
       if (overlay) overlay.hidden = false;
       if (openOpts.query != null && String(openOpts.query).length) {
-        ensureContacts().then(() => runSearch(String(openOpts.query), openOpts));
+        ensurePrefetch().then(() => runSearch(String(openOpts.query), openOpts));
         return;
       }
       state.query = '';
@@ -1199,7 +1228,7 @@
       state.loading = false;
       state.results = [];
       renderLivePopup(openOpts);
-      ensureContacts().then(() => {
+      ensurePrefetch().then(() => {
         if (state.open && !state.query.trim()) renderLivePopup(openOpts);
       });
     }

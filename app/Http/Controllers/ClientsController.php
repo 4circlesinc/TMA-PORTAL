@@ -137,9 +137,10 @@ class ClientsController extends Controller
         $this->authorizeStaff($request);
 
         $limit = (int) $request->query('limit', 10);
+        $sort = $request->query('sort') === 'latest' ? 'latest' : 'name';
 
         return response()->json([
-            'clients' => ClientDirectory::preview($request->user(), $limit),
+            'clients' => ClientDirectory::preview($request->user(), $limit, $sort),
         ]);
     }
 
