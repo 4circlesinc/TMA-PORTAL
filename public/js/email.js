@@ -3657,7 +3657,12 @@
    */
   var syncPanel = null;
   var syncTimer = null;
-  var syncDismissed = false;
+  /* Dismissed from birth (2026-08-31): the floating card is retired. The
+     backfill runs silently — the card covered the composer, and an ordinary
+     queue wait read as "ask an administrator". Sync state lives on
+     Settings → Background Operations; the panel machinery stays intact
+     behind this flag for a deliberate future surface. */
+  var syncDismissed = true;
   var syncCollapsed = false;
   var syncLastData = null;
 
