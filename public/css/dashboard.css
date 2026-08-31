@@ -29574,6 +29574,40 @@ button.tma-dash__header-popup-item:focus-visible {
   align-items: flex-start;
 }
 
+.tma-dash__email-settings-empty--hero {
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  padding: var(--space-32) var(--space-16);
+}
+
+.tma-dash__email-settings-empty-art { width: 140px; height: 140px; }
+
+.tma-dash__email-settings-empty-title {
+  margin: var(--space-8) 0 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-settings-empty-sub {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-settings-empty-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.tma-dash__email-settings-btn--brand { gap: var(--space-6); }
+
 .tma-dash__email-settings-btn {
   display: inline-flex;
   align-items: center;

@@ -6887,12 +6887,18 @@
 
     if (!accounts.length) {
       return (
-        '<div class="tma-dash__email-settings-empty">' +
-        '<p>No mailbox is connected.</p>' +
-        '<a class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary"' +
-        ' href="' + esc(api().connectUrl('google')) + '">Connect Google</a>' +
-        '<a class="tma-dash__email-settings-btn"' +
-        ' href="' + esc(api().connectUrl('microsoft')) + '">Connect Microsoft</a>' +
+        '<div class="tma-dash__email-settings-empty tma-dash__email-settings-empty--hero">' +
+        '<img class="tma-dash__email-settings-empty-art" src="images/illustrations/Illustration15.svg" alt="" width="140" height="140" decoding="async">' +
+        '<p class="tma-dash__email-settings-empty-title">No mailbox connected</p>' +
+        '<p class="tma-dash__email-settings-empty-sub">Connect your work email to read and send it here.</p>' +
+        '<div class="tma-dash__email-settings-empty-cta">' +
+        '<a class="tma-dash__email-settings-btn tma-dash__email-settings-btn--brand"' +
+        ' href="' + esc(api().connectUrl('google')) + '">' +
+        '<img src="images/icons/brands/Google16.svg" alt="" width="16" height="16"><span>Connect Google</span></a>' +
+        '<a class="tma-dash__email-settings-btn tma-dash__email-settings-btn--brand"' +
+        ' href="' + esc(api().connectUrl('microsoft')) + '">' +
+        '<img src="images/icons/brands/Microsoft16.svg" alt="" width="16" height="16"><span>Connect Microsoft</span></a>' +
+        '</div>' +
         '</div>'
       );
     }
