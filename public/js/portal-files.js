@@ -2712,7 +2712,7 @@
       return paintAccess(host);
     }
 
-    /* Floating comments column (not a panel tab) ------------------------ */
+    /* Comments column (not a panel tab) --------------------------------- */
 
     function paintCommentsPanel() {
       var panel = lb.querySelector('[data-lb-comments-panel]');
@@ -2723,18 +2723,21 @@
         if (openInput) entry(current()).draft = openInput.value;
       }
       /*
-       * The details panel and the bubbles share the same edge of the screen,
-       * so they take turns: any details tab open puts the comments away, and
-       * closing it brings them straight back. One flag stays the reader's
-       * (comments), the other is the panel's own state, visibility is
-       * derived, never juggled.
+       * Details and comments take turns on the right: opening a details tab
+       * hides the comments column, closing it brings the column back. The
+       * page then has to be measured again, or it stays the width it had
+       * under the other column.
        */
       panel.hidden = !viewerPrefs.comments || viewerPrefs.panel;
       var head = lb.querySelector('.tma-portal-viewer__head');
       if (head) head.outerHTML = viewerHead(current());
-      if (!viewerPrefs.comments) return;
+      if (!viewerPrefs.comments) {
+        if (typeof onPdfResize === 'function') onPdfResize();
+        return;
+      }
       var host = panel.querySelector('[data-lb-comments-body]');
       if (host) paintComments(host);
+      if (typeof onPdfResize === 'function') onPdfResize();
     }
 
     /* Details -------------------------------------------------------- */
@@ -5204,7 +5207,7 @@
       }
       rail.innerHTML = html;
 
-      var thumbWidth = Math.max(120, rail.clientWidth - 32);
+      var thumbWidth = Math.max(72, rail.clientWidth - 24);
 
       for (var p = 1; p <= pdf.numPages; p++) {
         (function (pageNum) {

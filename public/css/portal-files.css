@@ -379,12 +379,15 @@
 
 /* ── collaboration viewer (full-screen file preview) ─
  *
- * Three regions: a thumbnail rail, the preview stage, and the details panel.
- * The panel is a real column on desktop and an overlay drawer below 1100px, so
- * the preview is never squeezed to nothing on a laptop or phone.
+ * Three columns: page thumbnails, the document, comments. Comments are a
+ * real column, never a layer on the page — a bubble sitting on the PDF is
+ * covering the thing the viewer is for. The details panel still becomes a
+ * drawer below 1100px so a laptop is not left with a sliver of preview.
  */
 .tma-portal-viewer {
   position: fixed; inset: 0; z-index: 600; display: flex;
+  --viewer-pages-width: 140px;
+  --viewer-comments-width: 280px;
   --viewer-side-width: min(320px, 34vw);
 }
 .tma-portal-viewer__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); border: 0; cursor: zoom-out; }
@@ -430,7 +433,10 @@
 
 /* Body: rail | stage | panel ----------------------------------------- */
 .tma-portal-viewer__body { display: flex; flex: 1; min-height: 0; min-width: 0; position: relative; }
-.tma-portal-viewer__main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.tma-portal-viewer__main {
+  display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;
+  position: relative; z-index: 0;
+}
 
 .tma-portal-viewer__rail {
   flex: 0 0 132px; overflow-y: auto; overflow-x: hidden;
@@ -453,14 +459,15 @@
 
 /* PDF page thumbnails (left of the document) --------------------------- */
 .tma-portal-viewer__pages {
-  flex: 0 0 auto; width: var(--viewer-side-width);
+  flex: 0 0 var(--viewer-pages-width); width: var(--viewer-pages-width);
   overflow-y: auto; overflow-x: hidden;
-  padding: var(--space-12); display: flex; flex-direction: column; gap: var(--space-8);
+  padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-8);
   border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 .tma-portal-viewer__page {
+  appearance: none; -webkit-appearance: none;
   display: flex; flex-direction: column; align-items: center; gap: var(--space-4);
-  width: 100%;
+  width: 100%; margin: 0;
   padding: var(--space-4); border: 2px solid transparent; border-radius: var(--radius-8);
   background: transparent; cursor: pointer; color: rgba(255, 255, 255, 0.7);
 }
@@ -787,22 +794,22 @@
 }
 .tma-portal-viewer__member-role { font-size: var(--text-size-12); color: var(--color-text-secondary); flex: 0 0 auto; }
 
-/* Floating comments (Drive-style cards beside the document) ----------- */
+/* Comments: a column of their own, to the right of the document -------- */
 /*
- * Floating bubbles, never a sibling and never a wall.
- *
- * As a flex column beside the stage, opening the comments squeezed the media
- * left of centre — and the document is what the viewer is FOR, so it stays
- * centred and the discussion floats over the right edge. The column itself
- * has no surface: each bubble is its own white card on the viewer's dark, so
- * the conversation reads as notes pinned over the document rather than a
- * panel bolted to it.
+ * The page is the middle column and stays there. Comments used to float on
+ * top of it so opening the thread would not squeeze the preview off-centre;
+ * that put the bubbles on the document. They are a flex sibling now, so the
+ * stage shrinks around them and the page centres in what is left.
  */
 .tma-portal-viewer__comments {
-  position: absolute; top: 0; right: 0; bottom: 0; z-index: 4;
-  width: var(--viewer-side-width);
-  display: flex; flex-direction: column; min-height: 0;
-  padding: var(--space-12); background: transparent;
+  position: relative; z-index: 1;
+  flex: 0 0 var(--viewer-comments-width); width: var(--viewer-comments-width);
+  max-width: var(--viewer-comments-width);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  overflow: hidden;
+  padding: var(--space-12);
+  background: rgba(0, 0, 0, 0.22);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
   /* Light cards on the dark viewer — do not inherit the details-panel tokens. */
   --color-white: #ffffff;
   --color-bg-card: #ffffff;
@@ -1308,18 +1315,17 @@
 
 /* Responsive: the panel becomes a drawer, the rail goes away ---------- */
 @media (max-width: 1100px) {
-  .tma-portal-viewer { --viewer-side-width: min(320px, 88vw); }
+  .tma-portal-viewer { --viewer-side-width: min(320px, 88vw); --viewer-comments-width: min(260px, 30vw); }
   .tma-portal-viewer__panel {
     position: absolute; top: 0; right: 0; bottom: 0; z-index: 4;
     flex-basis: 340px; max-width: 88vw; box-shadow: -8px 0 30px rgba(0, 0, 0, 0.35);
   }
-  .tma-portal-viewer__comments { width: var(--viewer-side-width); }
 }
 @media (max-width: 760px) {
   .tma-portal-viewer__rail,
   .tma-portal-viewer__pages { display: none; }
+  .tma-portal-viewer { --viewer-comments-width: min(220px, 40vw); }
   .tma-portal-viewer__panel { flex-basis: 100%; max-width: 100%; }
-  .tma-portal-viewer__comments { width: auto; left: 0; }
   .tma-portal-viewer__sub { display: none; }
 }
 
