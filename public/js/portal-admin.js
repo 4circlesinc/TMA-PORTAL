@@ -183,8 +183,10 @@
             '<strong>' + esc(t.name) + '</strong>' +
             (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') +
             '<br><span class="tma-portal-note">' + esc(t.detail || '') + '</span></span>' +
+            '<span style="display:flex;align-items:center;gap:6px">' +
+            (t.paused ? '' : ui().btn({ label: 'Sync now', variant: 'ghost', small: true, attrs: 'data-ops-import-run="' + esc(t.id) + '"' })) +
             ui().toggle(!!t.paused, 'data-ops-import-pause="' + esc(t.id) + '"', 'Pause ' + t.name) +
-            '</div>';
+            '</span></div>';
         }).join('') +
           '<p class="tma-portal-note" style="margin:var(--space-8) 0 0">Pause one source at a time. Mailbox and calendar sync stay on each person\'s Connectors settings.</p>';
       }
@@ -199,6 +201,7 @@
               esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>' +
               ui().section('Imports', pauseBlock);
             wirePause();
+            wireRun();
             return;
           }
 
@@ -254,6 +257,7 @@
                 : ''));
 
           wirePause();
+          wireRun();
 
           root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -304,6 +308,23 @@
                 sw.checked = !next;
                 ui().toast('Could not update that import');
                 sw.disabled = false;
+              });
+          });
+        });
+      }
+
+      function wireRun() {
+        root.querySelectorAll('[data-ops-import-run]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            b.disabled = true;
+            secApi('POST', '/admin/background-ops/imports-run', { target: b.getAttribute('data-ops-import-run') })
+              .then(function (res) {
+                ui().toast(res.ok ? 'Sync queued' : 'Could not start that sync');
+                if (res.ok) load(); else b.disabled = false;
+              })
+              .catch(function () {
+                ui().toast('Could not start that sync');
+                b.disabled = false;
               });
           });
         });

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SyncSharePointLibrary;
+use App\Models\SharePointConnection;
 use App\Support\Access\Role;
 use App\Support\Imports\ImportPause;
 use Illuminate\Http\JsonResponse;
@@ -139,6 +141,67 @@ class BackgroundOperationsController extends Controller
                 'targets' => ImportPause::catalogue(),
             ],
         ]);
+    }
+
+    /**
+     * Start one import source now instead of waiting for the scheduler.
+     * Same targets as the pause switches; a paused source must be resumed
+     * first so the button can never contradict the switch beside it.
+     */
+    public function runImport(Request $request): JsonResponse
+    {
+        abort_unless(Role::isAdmin($request->user()), 403);
+
+        $libraryIds = collect(ImportPause::catalogue())
+            ->where('kind', 'library')
+            ->pluck('id')
+            ->all();
+
+        $data = $request->validate([
+            'target' => [
+                'required',
+                'string',
+                'max:80',
+                Rule::in(array_merge(
+                    [ImportPause::TARGET_SMARTSHEET, ImportPause::TARGET_ONEDRIVE],
+                    $libraryIds,
+                )),
+            ],
+        ]);
+
+        $target = $data['target'];
+
+        if ($target === ImportPause::TARGET_SMARTSHEET) {
+            abort_if(ImportPause::smartsheet(), 422, 'Resume this import first.');
+            // The command re-checks the feature flag, pause and token itself,
+            // so queueing it dark is safe.
+            Artisan::queue('smartsheet:sync', ['--queue' => true]);
+
+            return response()->json(['status' => 'ok', 'queued' => 1]);
+        }
+
+        if ($target === ImportPause::TARGET_ONEDRIVE) {
+            abort_if(ImportPause::onedrive(), 422, 'Resume this import first.');
+
+            $ids = SharePointConnection::query()
+                ->where('drive_kind', 'onedrive')
+                ->where('sync_enabled', true)
+                ->pluck('id');
+            $ids->each(fn (int $id) => SyncSharePointLibrary::dispatch($id));
+
+            return response()->json(['status' => 'ok', 'queued' => $ids->count()]);
+        }
+
+        $uuid = substr($target, strlen('library:'));
+        abort_if(ImportPause::library($uuid), 422, 'Resume this import first.');
+
+        $connection = SharePointConnection::query()
+            ->where('uuid', $uuid)
+            ->where('sync_enabled', true)
+            ->firstOrFail();
+        SyncSharePointLibrary::dispatch($connection->id);
+
+        return response()->json(['status' => 'ok', 'queued' => 1]);
     }
 
     /** Put a failed job back on the queue, or throw it away. */

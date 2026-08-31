@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncSharePointLibrary;
+use App\Models\SharePointConnection;
 use App\Models\User;
+use App\Support\Imports\ImportPause;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -63,6 +67,61 @@ class BackgroundOperationsTest extends TestCase
         ]);
 
         return $uuid;
+    }
+
+    private function library(User $admin, string $name = 'Company Documents'): SharePointConnection
+    {
+        return SharePointConnection::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'site-'.Str::random(8),
+            'drive_kind' => 'site',
+            'drive_id' => 'drive-'.Str::random(8),
+            'drive_name' => 'Documents',
+            'site_name' => $name,
+            'status' => SharePointConnection::STATUS_IDLE,
+            'sync_enabled' => true,
+            'created_by' => $admin->id,
+        ]);
+    }
+
+    public function test_an_admin_can_start_a_library_sync_now(): void
+    {
+        Queue::fake();
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/imports-run', ['target' => 'library:'.$lib->uuid])
+            ->assertOk()
+            ->assertJsonPath('queued', 1);
+
+        Queue::assertPushed(SyncSharePointLibrary::class, fn ($job) => $job->connectionId === $lib->id);
+    }
+
+    public function test_a_paused_library_cannot_be_started(): void
+    {
+        Queue::fake();
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+        ImportPause::putTarget('library:'.$lib->uuid, true, $admin->id);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/imports-run', ['target' => 'library:'.$lib->uuid])
+            ->assertStatus(422);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_a_non_admin_cannot_start_a_sync(): void
+    {
+        Queue::fake();
+        $lib = $this->library($this->user('Administrator'));
+
+        $this->actingAs($this->user('Reviewing Officer'))
+            ->postJson('/admin/background-ops/imports-run', ['target' => 'library:'.$lib->uuid])
+            ->assertForbidden();
+
+        Queue::assertNothingPushed();
     }
 
     public function test_a_non_admin_staff_member_cannot_see_the_queue(): void
