@@ -1,7 +1,8 @@
 /**
  * Site-wide portal search index builders + live fetchers.
  * Static: nav pages + every Settings / Account Settings screen.
- * Live (as you type): files, folders, clients, users, signatures, mail, messages.
+ * Live (as you type): files, folders, clients, users, signatures, mail,
+ * messages, CIP document requirements, CIP applications.
  *
  * Global: window.TMAPortalSearchIndex
  */
@@ -68,8 +69,39 @@
     if (!item) return '';
     return item.fileId || item.folderId || item.clientId || item.userId
       || item.signatureId || item.emailMessageId || item.conversationId
+      || item.cipRequirementId || item.cipApplicationId
       || item.adminPage || item.settingsNav
       || ((item.navId || '') + ':' + (item.label || item.title || ''));
+  }
+
+  /* Phrase first, then every word: "oath allegiance" still finds
+     "Oath of Allegiance". */
+  function matchesQuery(hay, query) {
+    var q = String(query || '').trim().toLowerCase();
+    if (!q) return false;
+    hay = String(hay || '').toLowerCase();
+    if (hay.indexOf(q) !== -1) return true;
+    var words = q.split(/\s+/);
+    var i;
+    for (i = 0; i < words.length; i++) {
+      if (words[i] && hay.indexOf(words[i]) === -1) return false;
+    }
+    return words.length > 0;
+  }
+
+  function haystack(item) {
+    return [item.label, item.title, item.subtitle].concat(item.keywords || []).filter(Boolean).join(' ');
+  }
+
+  function canReachCip() {
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.cipReach === 'function') return access.cipReach();
+    return window.TMABootCipReach === true || window.TMABootCipReach === 'true';
+  }
+
+  function canOpenCipDocuments() {
+    var access = window.TMAPortalAccess;
+    return !access || !access.canSettingsPage || access.canSettingsPage('cip-documents');
   }
 
   function navLeavesFrom(rootEl) {
@@ -303,11 +335,9 @@
   }
 
   function fetchUsers(q) {
-    var needle = String(q || '').toLowerCase();
     return loadUsers().then(function (items) {
       return items.filter(function (item) {
-        var hay = [item.label, item.subtitle].concat(item.keywords || []).join(' ').toLowerCase();
-        return hay.indexOf(needle) !== -1;
+        return matchesQuery(haystack(item), q);
       }).slice(0, 10);
     });
   }
@@ -411,6 +441,118 @@
     });
   }
 
+  var cipReqCache = null;
+  var cipReqPromise = null;
+
+  function flattenRequirements(types) {
+    var byKey = Object.create(null);
+    (types || []).forEach(function (t) {
+      (t.requirements || []).forEach(function (r) {
+        if (!r || !r.label) return;
+        var slot = byKey[r.key];
+        if (!slot) {
+          slot = byKey[r.key] = {
+            type: 'page',
+            label: r.label,
+            title: r.label,
+            cipRequirementId: r.key,
+            keywords: [r.label, r.help, r.folder, r.key, 'document', 'requirement', 'cip'],
+            types: [],
+            retired: true,
+          };
+        }
+        if (!r.retired) slot.retired = false;
+        if (t.label && slot.types.indexOf(t.label) === -1) slot.types.push(t.label);
+        [r.help, r.folder, r.label].forEach(function (word) {
+          if (word && slot.keywords.indexOf(word) === -1) slot.keywords.push(word);
+        });
+      });
+    });
+    return Object.keys(byKey).map(function (key) {
+      var item = byKey[key];
+      var who = item.types.join(', ');
+      item.subtitle = (item.retired ? 'Retired document requirement' : 'Document requirement')
+        + (who ? ' · ' + who : '');
+      item.keywords = item.keywords.concat(item.types).filter(Boolean);
+      delete item.types;
+      delete item.retired;
+      return item;
+    });
+  }
+
+  function loadCipRequirements() {
+    if (cipReqCache) return Promise.resolve(cipReqCache);
+    if (cipReqPromise) return cipReqPromise;
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    cipReqPromise = a.api(root() + '/portal/cip/requirements').then(function (data) {
+      cipReqCache = flattenRequirements(data && data.types);
+      cipReqPromise = null;
+      return cipReqCache;
+    }).catch(function () {
+      cipReqPromise = null;
+      return [];
+    });
+    return cipReqPromise;
+  }
+
+  function fetchCipDocuments(q) {
+    if (!canReachCip()) return Promise.resolve([]);
+    return loadCipRequirements().then(function (items) {
+      var openDocs = canOpenCipDocuments();
+      return items.filter(function (item) {
+        return matchesQuery(haystack(item), q);
+      }).slice(0, 12).map(function (item) {
+        return {
+          type: item.type,
+          label: item.label,
+          title: item.title,
+          subtitle: item.subtitle,
+          cipRequirementId: item.cipRequirementId,
+          keywords: item.keywords,
+          adminPage: openDocs ? 'cip-documents' : undefined,
+          navId: openDocs ? 'account-settings' : 'clients',
+          view: openDocs ? 'admin' : 'clients',
+          href: openDocs
+            ? '/account-settings?settings-page=cip-documents'
+            : '/citizenship-applications',
+        };
+      });
+    });
+  }
+
+  function fetchCipApplications(q) {
+    if (!canReachCip()) return Promise.resolve([]);
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    var term = String(q || '').trim();
+    if (term.length < 2) return Promise.resolve([]);
+    return a.api(root() + '/portal/cip/applications?q=' + encodeURIComponent(term) + '&perPage=8')
+      .then(function (data) {
+        return ((data && data.applications) || []).slice(0, 8).map(function (app) {
+          var name = app.applicantName || app.contactPerson || 'Application';
+          var number = app.number || app.internalNumber || '';
+          var uid = app.clientUid;
+          return {
+            type: 'user',
+            label: name,
+            title: name,
+            subtitle: number ? ('CIP · ' + number) : 'CIP application',
+            avatarUrl: app.photo || '',
+            cipApplicationId: app.id,
+            clientId: uid,
+            navId: 'clients',
+            view: 'clients',
+            href: uid
+              ? '/citizenship-applications/' + encodeURIComponent(uid)
+              : '/citizenship-applications',
+            keywords: [name, number, app.internalNumber, app.cipNumber, app.provider,
+              app.contactPerson, 'cip', 'application'].filter(Boolean),
+          };
+        });
+      });
+  }
+
   function fetchLiveResults(query) {
     var q = String(query || '').trim();
     if (q.length < 2) return Promise.resolve([]);
@@ -422,6 +564,8 @@
       settle(fetchSignatures(q)),
       settle(fetchMail(q)),
       settle(fetchMessaging(q)),
+      settle(fetchCipDocuments(q)),
+      settle(fetchCipApplications(q)),
     ]).then(function (chunks) {
       var merged = [];
       var seen = Object.create(null);
@@ -443,5 +587,9 @@
     fetchContacts: fetchContacts,
     fetchLiveResults: fetchLiveResults,
     resultKey: resultKey,
+    forgetCipRequirements: function () {
+      cipReqCache = null;
+      cipReqPromise = null;
+    },
   };
 })();

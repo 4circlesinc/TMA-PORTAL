@@ -1512,6 +1512,9 @@
               ui().toast(folder ? 'Now filing into “' + folder + '”' : 'Back to the person’s own folder');
               CIPDOCS.loaded = false;
               if (window.TMAStore) window.TMAStore.invalidate('cip:application:');
+              if (window.TMAPortalSearchIndex && window.TMAPortalSearchIndex.forgetCipRequirements) {
+                window.TMAPortalSearchIndex.forgetCipRequirements();
+              }
               loadCipDocs();
             })
             .catch(function (e) { ui().toastError(e.message); });
@@ -1728,6 +1731,9 @@
       function saved() {
         CIPDOCS.loaded = false;
         if (window.TMAStore) window.TMAStore.invalidate('cip:application:');
+        if (window.TMAPortalSearchIndex && window.TMAPortalSearchIndex.forgetCipRequirements) {
+          window.TMAPortalSearchIndex.forgetCipRequirements();
+        }
         loadCipDocs();
       }
       function failed(e) { ui().toastError(e.message); }

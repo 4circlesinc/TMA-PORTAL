@@ -631,8 +631,16 @@
     </div>`;
   }
 
+  function matchesQuery(hay, query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return false;
+    hay = String(hay || '').toLowerCase();
+    if (hay.includes(q)) return true;
+    return q.split(/\s+/).filter(Boolean).every((word) => hay.includes(word));
+  }
+
   function filterIndex(index, query) {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return [];
     return index.filter(item => {
       const hay = [
@@ -640,8 +648,8 @@
         item.title,
         item.subtitle,
         ...(item.keywords || []),
-      ].filter(Boolean).join(' ').toLowerCase();
-      return hay.includes(q);
+      ].filter(Boolean).join(' ');
+      return matchesQuery(hay, q);
     });
   }
 
