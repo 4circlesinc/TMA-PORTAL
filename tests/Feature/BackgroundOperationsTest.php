@@ -124,6 +124,81 @@ class BackgroundOperationsTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    private function fakeGraphSite(): void
+    {
+        config([
+            'services.microsoft.client_id' => 'client',
+            'services.microsoft.client_secret' => 'secret',
+            'services.microsoft.graph_tenant_id' => 'tenant',
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'login.microsoftonline.com/*' => \Illuminate\Support\Facades\Http::response(['access_token' => 'tok', 'expires_in' => 3599]),
+            'graph.microsoft.com/v1.0/sites/site-1/drives*' => \Illuminate\Support\Facades\Http::response(['value' => [
+                ['id' => 'drive-1', 'name' => 'Documents'],
+                ['id' => 'drive-2', 'name' => 'Archive'],
+            ]]),
+            'graph.microsoft.com/v1.0/sites/*' => \Illuminate\Support\Facades\Http::response([
+                'id' => 'site-1',
+                'displayName' => 'Firm Site',
+                'webUrl' => 'https://tmant.sharepoint.com/sites/Firm',
+            ]),
+            'graph.microsoft.com/*' => \Illuminate\Support\Facades\Http::response([]),
+        ]);
+    }
+
+    public function test_an_admin_can_connect_a_library_from_settings(): void
+    {
+        Queue::fake();
+        $this->fakeGraphSite();
+        $admin = $this->user('Administrator');
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/libraries', [
+                // A pasted browser URL, not the host:/path form Graph wants.
+                'site' => 'https://tmant.sharepoint.com/sites/Firm/',
+                'library' => 'Archive',
+            ])
+            ->assertOk()
+            ->assertJsonPath('connected', 'Archive');
+
+        $connection = SharePointConnection::query()->firstOrFail();
+        $this->assertSame('drive-2', $connection->drive_id);
+        $this->assertSame('site-1', $connection->site_id);
+
+        $folder = $connection->folder;
+        $this->assertSame('Archive', $folder->name);
+        $this->assertSame('all_staff', $folder->audience);
+
+        Queue::assertPushed(SyncSharePointLibrary::class, fn ($job) => $job->connectionId === $connection->id);
+    }
+
+    public function test_connecting_the_same_library_twice_is_refused(): void
+    {
+        Queue::fake();
+        $this->fakeGraphSite();
+        $admin = $this->user('Administrator');
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/libraries', ['site' => 'tmant.sharepoint.com:/sites/Firm'])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/libraries', ['site' => 'tmant.sharepoint.com:/sites/Firm'])
+            ->assertStatus(422);
+
+        $this->assertSame(1, SharePointConnection::count());
+    }
+
+    public function test_a_non_admin_cannot_connect_a_library(): void
+    {
+        $this->fakeGraphSite();
+
+        $this->actingAs($this->user('Reviewing Officer'))
+            ->postJson('/admin/background-ops/libraries', ['site' => 'tmant.sharepoint.com'])
+            ->assertForbidden();
+    }
+
     public function test_a_non_admin_staff_member_cannot_see_the_queue(): void
     {
         $this->actingAs($this->user('Reviewing Officer'))

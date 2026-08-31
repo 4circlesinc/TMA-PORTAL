@@ -4656,6 +4656,18 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+.tma-portal-connect-library {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.tma-portal-connect-library .tma-portal-input { flex: 1 1 220px; }
+
+.tma-portal-connect-library .tma-portal-input[data-ops-lib-name] { flex: 0 1 180px; }
+
 /* ── account settings (admin) shell ───────────────── */
 .tma-portal-admin {
   display: flex;

@@ -179,10 +179,20 @@
         library: 'images/icons/brands/SharePoint40.svg',
       };
 
+      // Site URL + optional library name; the server accepts a pasted
+      // browser URL and links the named (or first) document library.
+      function connectLibraryRow() {
+        return '<div class="tma-portal-connect-library">' +
+          '<input class="tma-portal-input" type="text" data-ops-lib-site placeholder="SharePoint site URL">' +
+          '<input class="tma-portal-input" type="text" data-ops-lib-name placeholder="Library (optional)">' +
+          ui().btn({ label: 'Connect library', small: true, attrs: 'data-ops-lib-connect' }) +
+          '</div>';
+      }
+
       function importsSection(d) {
         var targets = (d.imports && d.imports.targets) || [];
         if (!targets.length) {
-          return empty('No import sources are connected yet.');
+          return empty('No import sources are connected yet.') + connectLibraryRow();
         }
         return '<div class="tma-portal-connector-list">' + targets.map(function (t) {
           var icon = IMPORT_ICONS[t.kind] || IMPORT_ICONS.library;
@@ -198,7 +208,7 @@
             (t.paused ? '' : ui().btn({ label: 'Sync now', variant: 'ghost', small: true, attrs: 'data-ops-import-run="' + esc(t.id) + '"' })) +
             ui().toggle(!!t.paused, 'data-ops-import-pause="' + esc(t.id) + '"', 'Pause ' + t.name) +
             '</div></div>';
-        }).join('') + '</div>';
+        }).join('') + '</div>' + connectLibraryRow();
       }
 
       function load() {
@@ -212,6 +222,7 @@
               ui().section('Imports', pauseBlock);
             wirePause();
             wireRun();
+            wireConnectLibrary();
             return;
           }
 
@@ -268,6 +279,7 @@
 
           wirePause();
           wireRun();
+          wireConnectLibrary();
 
           root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -320,6 +332,34 @@
                 sw.disabled = false;
               });
           });
+        });
+      }
+
+      function wireConnectLibrary() {
+        var btn = root.querySelector('[data-ops-lib-connect]');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var site = (root.querySelector('[data-ops-lib-site]') || {}).value || '';
+          var name = (root.querySelector('[data-ops-lib-name]') || {}).value || '';
+          if (!site.trim()) { ui().toast('Enter the SharePoint site URL'); return; }
+          btn.disabled = true;
+          secApi('POST', '/admin/background-ops/libraries', { site: site.trim(), library: name.trim() || null })
+            .then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (j) { return { ok: res.ok, j: j }; });
+            })
+            .then(function (r) {
+              if (!r.ok) {
+                ui().toast((r.j && r.j.message) || 'Could not connect that library');
+                btn.disabled = false;
+                return;
+              }
+              ui().toast('Connected ' + (r.j.connected || 'the library') + ' — first sync queued');
+              load();
+            })
+            .catch(function () {
+              ui().toast('Could not connect that library');
+              btn.disabled = false;
+            });
         });
       }
 

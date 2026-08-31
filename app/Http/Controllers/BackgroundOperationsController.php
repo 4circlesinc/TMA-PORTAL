@@ -6,6 +6,8 @@ use App\Jobs\SyncSharePointLibrary;
 use App\Models\SharePointConnection;
 use App\Support\Access\Role;
 use App\Support\Imports\ImportPause;
+use App\Support\SharePoint\GraphException;
+use App\Support\SharePoint\LibraryConnector;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -202,6 +204,43 @@ class BackgroundOperationsController extends Controller
         SyncSharePointLibrary::dispatch($connection->id);
 
         return response()->json(['status' => 'ok', 'queued' => 1]);
+    }
+
+    /**
+     * Connect a business SharePoint library from Settings — the same door as
+     * `sharepoint:connect`, owned by the administrator who clicked. The first
+     * sync is queued immediately so the new folder starts filling without
+     * waiting for the scheduler.
+     */
+    public function connectLibrary(Request $request): JsonResponse
+    {
+        abort_unless(Role::isAdmin($request->user()), 403);
+
+        $data = $request->validate([
+            'site' => ['required', 'string', 'max:500'],
+            'library' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        try {
+            $result = LibraryConnector::connect($data['site'], $data['library'] ?? null, $request->user());
+        } catch (GraphException) {
+            return response()->json(['status' => 'error', 'message' => 'Could not reach that site.'], 422);
+        }
+
+        if (isset($result['error'])) {
+            return response()->json(['status' => 'error', 'message' => $result['error']], 422);
+        }
+
+        SyncSharePointLibrary::dispatch($result['connection']->id);
+
+        return response()->json([
+            'status' => 'ok',
+            'connected' => $result['connection']->drive_name,
+            'imports' => [
+                'anyPaused' => ImportPause::any(),
+                'targets' => ImportPause::catalogue(),
+            ],
+        ]);
     }
 
     /** Put a failed job back on the queue, or throw it away. */

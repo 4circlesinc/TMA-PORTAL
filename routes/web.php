@@ -332,6 +332,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/admin/background-ops/flush', [BackgroundOperationsController::class, 'flush'])->name('admin.background-ops.flush');
     Route::put('/admin/background-ops/imports-pause', [BackgroundOperationsController::class, 'pauseImports'])->name('admin.background-ops.imports-pause');
     Route::post('/admin/background-ops/imports-run', [BackgroundOperationsController::class, 'runImport'])->name('admin.background-ops.imports-run');
+    Route::post('/admin/background-ops/libraries', [BackgroundOperationsController::class, 'connectLibrary'])->name('admin.background-ops.libraries');
 
     // Settings → Client hub management → Client hub access: the firm-wide
     // shape of the hub. Reading needs `settings.clientHub`; writing needs an
