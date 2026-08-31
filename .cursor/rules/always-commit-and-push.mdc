@@ -1,0 +1,15 @@
+---
+description: After finishing work, always commit and push. Do not wait to be asked.
+alwaysApply: true
+---
+
+# Always commit and push
+
+When the work in this conversation is done (a feature, fix, or requested change):
+
+1. Create a git commit for the relevant files. Do not wait for the user to ask.
+2. Push the branch to the remote (`git push` or `git push -u origin HEAD` if it has no upstream). Do not wait for the user to ask.
+
+Do not commit secrets, vault PDFs, or `storage/framework/testing/disks/**`.
+Do not amend unless the user asked, or a hook rewrote the commit you just made and it has not been pushed.
+Do not force-push to main/master.
