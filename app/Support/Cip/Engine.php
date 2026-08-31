@@ -28,7 +28,7 @@ class Engine
         Status::NEW => [Status::REVIEW_APPLICATION],
         Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK],
         Status::ASSESSMENT_FEEDBACK => [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
-        Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK, Status::POST_APPROVAL, Status::APPLY_FOR_COR],
+        Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK, Status::POST_APPROVAL, Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT],
         Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
         Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK],
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
@@ -38,9 +38,9 @@ class Engine
         Status::POST_APPROVAL => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
         Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVAL, Status::PENDING_COR],
         Status::PENDING_COR => [Status::APPLY_FOR_NIC],
-        Status::APPLY_FOR_NIC => [Status::PENDING_NIC],
+        Status::APPLY_FOR_NIC => [Status::PENDING_NIC, Status::UPDATE_REQUIRED],
         Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
-        Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT],
+        Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
         Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
         Status::READY_FOR_DELIVERY => [Status::CLOSED],
     ];
@@ -201,6 +201,27 @@ class Engine
             return $application->status === Status::GRANTED || $post;
         }
 
+        if ($to === Status::APPLY_FOR_COR && $post && Pack::hasReachedNic($application)) {
+            return false;
+        }
+
+        if ($to === Status::POST_APPROVAL && $post && Pack::hasReachedNic($application)
+            && $application->status === Status::UPDATE_REQUIRED) {
+            return false;
+        }
+
+        if ($to === Status::APPLY_FOR_NIC && $application->status === Status::UPDATE_REQUIRED) {
+            return $post && Pack::hasReachedNic($application) && ! Pack::hasReachedPassport($application);
+        }
+
+        if ($to === Status::APPLY_FOR_PASSPORT && $application->status === Status::UPDATE_REQUIRED) {
+            return $post && Pack::hasReachedPassport($application);
+        }
+
+        if ($to === Status::APPLY_FOR_NIC && $post && Pack::hasReachedPassport($application)) {
+            return false;
+        }
+
         if (Status::inLane($to)) {
             return $post;
         }
@@ -358,6 +379,14 @@ class Engine
             if ($enteringPost) {
                 self::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $actor, []);
                 PostApproval::prepare($application, $actor);
+            }
+
+            if (in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)) {
+                Requirements::materialiseApplication($application);
+            }
+
+            if ($to === Status::CLOSED) {
+                Package::forget();
             }
 
             ActivityLogger::log([

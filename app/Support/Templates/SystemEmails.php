@@ -1154,12 +1154,24 @@ Documents not written in English MUST be translated. The translation must be ori
 
 Open the application in the portal to upload the COR documents.',
             'cip-status-pending-cor' => 'The Certificate of Registration package for {{applicant}} has been submitted. The file now waits for the COR. You do not need to send anything further unless you are asked.',
-            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Open the application when the NIC documents are requested.',
+            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Send one PDF for each family member aged 16 and over, documents in the listed order. Open the application to upload them on each person’s Documents tab.',
             'cip-status-pending-nic' => 'The NIC application for {{applicant}} has been submitted. The file now waits for the National Insurance Card. You do not need to send anything further unless you are asked.',
-            'cip-status-apply-for-passport' => 'The National Insurance Card has been received. Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**, sent to T.M. Antoine Partners by courier.',
+            'cip-status-apply-for-passport' => 'The National Insurance Card has been received. Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**. Track scans on each person’s Documents tab, then send the physical copies to T.M. Antoine Partners by courier: TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia.
+
+Please send:
+
+1. **Completed ePP Form** (required) — the applicant signs the SIGNATURE BOX and Section 12. Section 13 is signed and stamped by a Notary or Attorney-at-Law.
+2. **Original Birth Certificate** (required) — the original, or a certified copy from the issuing authority.
+3. **Certified copy of passport bio data page** (required).
+4. **Original Marriage Certificate** (married women).
+5. **Original Divorce Certificate** (divorced women).
+6. **Original translations** of documents not originally in English — the Passport Office will not accept copies previously provided.
+7. **Four physical passport-sized photos** (required) — 2 inch × 2 inch, one certified on the back.
+
+Children receive a passport and owe the same originals except marriage and divorce certificates. There is no sponsor checklist at this stage.',
             'cip-status-pending-passport' => 'The passport application for {{applicant}} has been submitted. The file now waits for the passport. You do not need to send anything further unless you are asked.',
-            'cip-status-ready-for-delivery' => 'The passport for {{applicant}} has been received and the file is ready for delivery.',
-            'cip-status-closed' => 'The passport has been delivered. {{applicant}}’s file is closed.',
+            'cip-status-ready-for-delivery' => 'The passport for {{applicant}} has been received and the file is ready for delivery. Arrange collection or courier with T.M. Antoine Partners.',
+            'cip-status-closed' => 'The passport has been delivered. {{applicant}}’s file is closed. No further documents can be uploaded on this application.',
         ];
         $statuses = [];
         foreach ([

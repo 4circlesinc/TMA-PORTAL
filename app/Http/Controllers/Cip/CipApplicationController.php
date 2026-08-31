@@ -795,7 +795,7 @@ class CipApplicationController extends Controller
     /** @return \Illuminate\Support\Collection<int, \App\Models\CipDocument> */
     private function documentsForPhase(CipPerson $person, string $phase)
     {
-        $allowed = Requirements::forPhase(ApplicantType::for($person), $phase, $person->application)
+        $allowed = Requirements::forPhase(ApplicantType::for($person), $phase, $person->application, $person)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
@@ -1443,6 +1443,7 @@ class CipApplicationController extends Controller
             ApplicantType::for($person),
             $phase,
             $person->application,
+            $person,
         )->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         // One lookup for this person's whole checklist rather than one per

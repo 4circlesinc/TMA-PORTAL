@@ -7,6 +7,7 @@ use App\Support\Files\FileAccess;
 use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -38,6 +39,11 @@ abstract class TestCase extends BaseTestCase
         \App\Support\Cip\Requirements::flush();
         \App\Support\Cip\Review::flushTally();
         \App\Support\Cip\Package::forget();
+
+        // Vault writes go to files_disk, which in this project is often
+        // object storage. Feature tests must not depend on the bucket being
+        // reachable, so every test gets a fresh in-process disk.
+        Storage::fake(config('filesystems.files_disk', 'local'));
     }
 
     /**

@@ -67,6 +67,7 @@ class CipRequirementController extends Controller
             'atPostApproval' => ['nullable', 'boolean'],
             'carryForward' => ['nullable', 'boolean'],
             'realEstateOnly' => ['nullable', 'boolean'],
+            'femaleOnly' => ['nullable', 'boolean'],
         ]);
 
         abort_unless(ApplicantType::isValid($data['applicantType']), 422, 'That is not an applicant type.');
@@ -96,7 +97,7 @@ class CipRequirementController extends Controller
                 $changes['folder'] = $this->folder($data);
             }
 
-            foreach (['atPreApproval' => 'at_pre_approval', 'atPostApproval' => 'at_post_approval', 'carryForward' => 'carry_forward', 'realEstateOnly' => 'real_estate_only'] as $from => $to) {
+            foreach (['atPreApproval' => 'at_pre_approval', 'atPostApproval' => 'at_post_approval', 'carryForward' => 'carry_forward', 'realEstateOnly' => 'real_estate_only', 'femaleOnly' => 'female_only'] as $from => $to) {
                 if (array_key_exists($from, $data)) {
                     $changes[$to] = $data[$from];
                 }
@@ -115,6 +116,7 @@ class CipRequirementController extends Controller
                 'at_post_approval' => $data['atPostApproval'] ?? false,
                 'carry_forward' => $data['carryForward'] ?? false,
                 'real_estate_only' => $data['realEstateOnly'] ?? false,
+                'female_only' => $data['femaleOnly'] ?? false,
                 'sort_order' => $this->nextOrder($data['applicantType']),
             ]);
         }
@@ -138,6 +140,7 @@ class CipRequirementController extends Controller
             'atPostApproval' => ['sometimes', 'boolean'],
             'carryForward' => ['sometimes', 'boolean'],
             'realEstateOnly' => ['sometimes', 'boolean'],
+            'femaleOnly' => ['sometimes', 'boolean'],
         ]);
 
         /*
@@ -319,6 +322,11 @@ class CipRequirementController extends Controller
             unset($data['realEstateOnly']);
         }
 
+        if (array_key_exists('femaleOnly', $data)) {
+            $data['female_only'] = $data['femaleOnly'];
+            unset($data['femaleOnly']);
+        }
+
         return $data;
     }
 
@@ -337,6 +345,7 @@ class CipRequirementController extends Controller
             'atPostApproval' => (bool) $requirement->at_post_approval,
             'carryForward' => (bool) $requirement->carry_forward,
             'realEstateOnly' => (bool) $requirement->real_estate_only,
+            'femaleOnly' => (bool) $requirement->female_only,
             'sortOrder' => (int) $requirement->sort_order,
             'retired' => $requirement->trashed() || ! $requirement->active,
         ];

@@ -1455,6 +1455,13 @@
       'Real estate only, ' + r.label,
     );
 
+    var femaleOnly = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-female="' + ui().esc(r.id) + '"',
+      r.femaleOnly,
+      'Female applicants only, ' + r.label,
+    );
+
     var meta = [];
     if (r.help) meta.push(ui().esc(r.help));
     if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
@@ -1465,6 +1472,7 @@
       '<td class="tma-portal-table__check">' + post + '</td>' +
       '<td class="tma-portal-table__check">' + carry + '</td>' +
       '<td class="tma-portal-table__check">' + reOnly + '</td>' +
+      '<td class="tma-portal-table__check">' + femaleOnly + '</td>' +
       '<td>' + name +
       (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
       (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
@@ -1502,6 +1510,7 @@
                   { label: 'Post', attrs: ' class="tma-portal-table__check" title="Asked in post-approval"' },
                   { label: 'Carry', attrs: ' class="tma-portal-table__check" title="Reuse the pre-approval file in post-approval"' },
                   { label: 'RE', attrs: ' class="tma-portal-table__check" title="Real Estate applicants only"' },
+                  { label: 'F', attrs: ' class="tma-portal-table__check" title="Female applicants only"' },
                   'Document',
                   '',
                 ], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
@@ -1605,6 +1614,13 @@
         box.addEventListener('change', function () {
           var id = box.getAttribute('data-cipdoc-re');
           patchPhase(id, { realEstateOnly: !!box.checked });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-female]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-female');
+          patchPhase(id, { femaleOnly: !!box.checked });
         });
       });
 

@@ -32,7 +32,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'applicant_type', 'key', 'label', 'required', 'sort_order',
-    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'carry_forward', 'real_estate_only',
+    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'carry_forward', 'real_estate_only', 'female_only',
 ])]
 class CipDocumentRequirement extends Model
 {
@@ -57,6 +57,7 @@ class CipDocumentRequirement extends Model
             'at_post_approval' => 'boolean',
             'carry_forward' => 'boolean',
             'real_estate_only' => 'boolean',
+            'female_only' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

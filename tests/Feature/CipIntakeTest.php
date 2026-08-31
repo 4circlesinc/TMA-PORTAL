@@ -21,6 +21,8 @@ use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\NicRequirements;
+use App\Support\Cip\PassportRequirements;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
@@ -357,12 +359,29 @@ class CipIntakeTest extends TestCase
             $main->documents()->where('type', CorRequirements::LETTER_OF_CONFIRMATION)->exists(),
             'Real Estate COR documents belong on the post-approval checklist even when filed at intake.',
         );
+        $this->assertFalse(
+            $main->documents()->where('type', NicRequirements::R3_FORM)->exists(),
+            'Stage 2 NIC documents wait until the COR has been received.',
+        );
+        $this->assertFalse(
+            $main->documents()->where('type', PassportRequirements::EPP_FORM)->exists(),
+            'Stage 3 passport documents wait until the NIC has been received.',
+        );
     }
 
     public function test_post_approval_intake_demands_required_cor_documents(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
+
+        $form = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/form?phase=post_approval')
+            ->assertOk()
+            ->json('requirements.principal');
+        $keys = collect($form)->pluck('key')->all();
+        $this->assertContains(CorRequirements::OATH_OF_ALLEGIANCE, $keys);
+        $this->assertNotContains(NicRequirements::R3_FORM, $keys);
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $keys);
 
         $this->file($staff, $this->payload($provider, ['phase' => Phase::POST_APPROVAL]))
             ->assertStatus(422)

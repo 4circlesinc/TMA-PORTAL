@@ -315,6 +315,11 @@ class Notices
             Status::DELAYED => self::daysDelayed($application).' days have passed since acceptance with no decision.',
             Status::GRANTED => 'The Unit has granted this application.',
             Status::POST_APPROVAL => 'Stage 1 (Certificate of Registration) documents are now required. Soft copies only.',
+            Status::APPLY_FOR_NIC => 'Stage 2 (National Insurance Card) documents are now required. Soft copies only, one PDF per person aged 16 and over.',
+            Status::APPLY_FOR_PASSPORT => 'Stage 3 (passport) documents are now required. Hard copy originals only, sent to T.M. Antoine Partners by courier.',
+            Status::PENDING_PASSPORT => 'The passport application has been submitted. The file now waits for the passport.',
+            Status::READY_FOR_DELIVERY => 'The passport has been received and is ready for delivery.',
+            Status::CLOSED => 'The passport has been delivered. This file is closed.',
             Status::DENIED => 'The Unit has denied this application.',
             default => $facts['applicant'].' now stands at '.Status::label($to).'.',
         };

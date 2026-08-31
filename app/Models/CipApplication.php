@@ -86,6 +86,11 @@ class CipApplication extends Model
         return $this->cor_locked_at !== null;
     }
 
+    public function isClosed(): bool
+    {
+        return $this->status === Status::CLOSED;
+    }
+
     public function isPostApproval(): bool
     {
         return $this->phase === Phase::POST_APPROVAL;

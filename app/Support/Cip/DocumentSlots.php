@@ -440,6 +440,17 @@ class DocumentSlots
             return $parent->id;
         }
 
+        // COR / NIC / Passport pack templates belong under the post-approval
+        // person folder. A carried birth certificate still names folder NIC so
+        // the checklist can stage it, but an intake upload must not grow that
+        // drawer inside the original package tree. A pre-approval template that
+        // happens to use the same folder word (an administrator writing
+        // "Passport" on the bio page) is a named drawer, not a pack.
+        $pack = $template ? Pack::of($template) : null;
+        if ($pack !== null && ($template === null || ! self::filesInPostApprovalFolder($template))) {
+            return $parent->id;
+        }
+
         return Tree::subfolder($parent, $name, $actor)->id;
     }
 

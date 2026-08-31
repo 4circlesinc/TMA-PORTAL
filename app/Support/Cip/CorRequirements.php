@@ -45,6 +45,11 @@ class CorRequirements
         ];
     }
 
+    public static function owns(string $key): bool
+    {
+        return in_array($key, self::keys(), true);
+    }
+
     /**
      * Default COR rows, grouped by applicant type.
      *
@@ -57,7 +62,8 @@ class CorRequirements
      *     at_pre_approval: bool,
      *     at_post_approval: bool,
      *     carry_forward: bool,
-     *     real_estate_only: bool
+     *     real_estate_only: bool,
+     *     female_only: bool
      * }>>
      */
     public static function defaults(): array
@@ -136,7 +142,8 @@ class CorRequirements
      *     at_pre_approval: bool,
      *     at_post_approval: bool,
      *     carry_forward: bool,
-     *     real_estate_only: bool
+     *     real_estate_only: bool,
+     *     female_only: bool
      * }
      */
     private static function row(
@@ -159,6 +166,7 @@ class CorRequirements
             'at_post_approval' => true,
             'carry_forward' => $carryForward,
             'real_estate_only' => $realEstateOnly,
+            'female_only' => false,
         ];
     }
 }

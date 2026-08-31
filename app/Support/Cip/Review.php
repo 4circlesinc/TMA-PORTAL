@@ -83,8 +83,19 @@ class Review
             ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL)
             ->map(fn (CipApplication $application) => $application->getKey())
             ->all();
-        $postIds = $missing
-            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL)
+        $corIds = $missing
+            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+                && Pack::current($application) === Pack::COR)
+            ->map(fn (CipApplication $application) => $application->getKey())
+            ->all();
+        $nicIds = $missing
+            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+                && Pack::current($application) === Pack::NIC)
+            ->map(fn (CipApplication $application) => $application->getKey())
+            ->all();
+        $passportIds = $missing
+            ->filter(fn (CipApplication $application) => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+                && Pack::current($application) === Pack::PASSPORT)
             ->map(fn (CipApplication $application) => $application->getKey())
             ->all();
 
@@ -100,11 +111,35 @@ class Review
             );
         }
 
-        if ($postIds !== []) {
+        if ($corIds !== []) {
             $grouped = $grouped->merge(
-                self::constrainToCurrentChecklist(
-                    CipDocument::query()->whereIn('application_id', $postIds),
-                    Phase::POST_APPROVAL,
+                self::constrainToPack(
+                    CipDocument::query()->whereIn('application_id', $corIds),
+                    Pack::COR,
+                )
+                    ->selectRaw('application_id, status, required, COUNT(*) as total')
+                    ->groupBy('application_id', 'status', 'required')
+                    ->get()
+            );
+        }
+
+        if ($nicIds !== []) {
+            $grouped = $grouped->merge(
+                self::constrainToPack(
+                    CipDocument::query()->whereIn('application_id', $nicIds),
+                    Pack::NIC,
+                )
+                    ->selectRaw('application_id, status, required, COUNT(*) as total')
+                    ->groupBy('application_id', 'status', 'required')
+                    ->get()
+            );
+        }
+
+        if ($passportIds !== []) {
+            $grouped = $grouped->merge(
+                self::constrainToPack(
+                    CipDocument::query()->whereIn('application_id', $passportIds),
+                    Pack::PASSPORT,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
                     ->groupBy('application_id', 'status', 'required')
@@ -385,7 +420,7 @@ class Review
         $inReview = $tally[DocumentStatus::APPLICATION_REVIEW]['total'] > 0;
 
         if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
-            return self::planPostApproval($from, $needsUpdates, $inReview, $required, $tally);
+            return self::planPostApproval($application, $from, $needsUpdates, $inReview, $required, $tally);
         }
 
         if ($needsUpdates) {
@@ -461,28 +496,37 @@ class Review
     }
 
     /**
-     * Post-approval has no Assessment Feedback hop. A refused COR document is
-     * Updates Required; a complete COR checklist is Apply for COR.
+     * Post-approval has no Assessment Feedback hop. A refused document in the
+     * current pack is Updates Required; a complete COR checklist is Apply for
+     * COR; a complete NIC or passport checklist stays on Apply for NIC /
+     * Apply for Passport until the submission date is recorded.
      *
      * @param  array<string, array{total: int, required: int}>  $tally
      * @return list<string>
      */
     private static function planPostApproval(
+        CipApplication $application,
         string $from,
         bool $needsUpdates,
         bool $inReview,
         int $required,
         array $tally,
     ): array {
+        [$collecting, $ready] = match (Pack::current($application)) {
+            Pack::PASSPORT => [Status::APPLY_FOR_PASSPORT, Status::APPLY_FOR_PASSPORT],
+            Pack::NIC => [Status::APPLY_FOR_NIC, Status::APPLY_FOR_NIC],
+            default => [Status::POST_APPROVAL, Status::APPLY_FOR_COR],
+        };
+
         if ($needsUpdates) {
             return match ($from) {
-                Status::POST_APPROVAL, Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED],
+                $collecting, $ready => [Status::UPDATE_REQUIRED],
                 default => [],
             };
         }
 
-        if ($from === Status::APPLY_FOR_COR && $inReview) {
-            return [Status::POST_APPROVAL];
+        if ($from === $ready && $inReview && $collecting !== $ready) {
+            return [$collecting];
         }
 
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
@@ -494,15 +538,19 @@ class Review
             && $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
 
         if ($from === Status::UPDATE_REQUIRED && ! $allReady) {
-            return [Status::POST_APPROVAL];
+            return [$collecting];
         }
 
         if (! $allReady) {
             return [];
         }
 
+        if ($from === $ready) {
+            return [];
+        }
+
         return match ($from) {
-            Status::POST_APPROVAL, Status::UPDATE_REQUIRED => [Status::APPLY_FOR_COR],
+            $collecting, Status::UPDATE_REQUIRED => [$ready],
             default => [],
         };
     }
@@ -569,8 +617,9 @@ class Review
     /**
      * Restrict a document query to the checklist the current phase is judging.
      *
-     * Post-approval must not count leftover pre-approval slots or Real Estate
-     * paper on a donation file; either would poison Updates Required and
+     * Post-approval must not count leftover pre-approval slots, Real Estate
+     * paper on a donation file, or a later pack's blanks (NIC while the file
+     * is still collecting COR). Either would poison Updates Required and
      * Apply for COR.
      *
      * @param  Builder<\App\Models\CipDocument>  $query
@@ -585,15 +634,50 @@ class Review
             return $query;
         }
 
+        return self::constrainToPack(
+            $query,
+            Pack::current($application) ?? Pack::COR,
+            $application,
+        );
+    }
+
+    /**
+     * @param  Builder<\App\Models\CipDocument>  $query
+     * @return Builder<\App\Models\CipDocument>
+     */
+    public static function constrainToPack(
+        Builder $query,
+        string $pack,
+        ?CipApplication $application = null,
+    ): Builder {
         $realEstate = $application === null
             || $application->investment_type === InvestmentType::REAL_ESTATE;
+        $folder = Pack::folder($pack);
+        $keys = Pack::keys($pack);
+        $untaggedAsCor = $pack === Pack::COR;
+        $laterKeys = array_values(array_unique(array_merge(
+            NicRequirements::keys(),
+            PassportRequirements::keys(),
+        )));
 
-        return $query->where(function ($outer) use ($realEstate) {
-            $outer->whereHas('requirement', function ($requirement) use ($realEstate) {
+        return $query->where(function ($outer) use ($realEstate, $folder, $keys, $untaggedAsCor, $laterKeys) {
+            $outer->whereHas('requirement', function ($requirement) use ($realEstate, $folder, $keys, $untaggedAsCor, $laterKeys) {
                 $requirement->where(function ($phase) {
                     $phase->where('at_post_approval', true)
                         ->orWhere(function ($carried) {
                             $carried->where('at_pre_approval', true)->where('carry_forward', true);
+                        });
+                })->where(function ($owned) use ($folder, $keys, $untaggedAsCor, $laterKeys) {
+                    $owned->where('folder', $folder)
+                        ->orWhere(function ($legacy) use ($keys, $untaggedAsCor, $laterKeys) {
+                            $legacy->where(function ($blank) {
+                                $blank->whereNull('folder')->orWhere('folder', '');
+                            })->where(function ($untagged) use ($keys, $untaggedAsCor, $laterKeys) {
+                                $untagged->whereIn('key', $keys);
+                                if ($untaggedAsCor) {
+                                    $untagged->orWhereNotIn('key', $laterKeys);
+                                }
+                            });
                         });
                 });
 
@@ -602,8 +686,8 @@ class Review
                         $flag->where('real_estate_only', false)->orWhereNull('real_estate_only');
                     });
                 }
-            })->orWhere(function ($loose) {
-                $loose->whereNull('requirement_id')->whereIn('type', CorRequirements::keys());
+            })->orWhere(function ($loose) use ($keys) {
+                $loose->whereNull('requirement_id')->whereIn('type', $keys);
             });
         });
     }

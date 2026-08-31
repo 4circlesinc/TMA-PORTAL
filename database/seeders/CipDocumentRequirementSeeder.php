@@ -5,6 +5,8 @@ namespace Database\Seeders;
 use App\Models\CipDocumentRequirement;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\NicRequirements;
+use App\Support\Cip\PassportRequirements;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -74,67 +76,103 @@ class CipDocumentRequirementSeeder extends Seeder
     }
 
     /**
-     * Stage 1 COR defaults, and the phase flags the post-approval checklist
-     * actually reads.
+     * Stage 1 COR, Stage 2 NIC and Stage 3 passport defaults, and the
+     * phase flags the post-approval checklist actually reads.
      *
-     * Safe to run more than once: new COR rows are firstOrCreate, existing
-     * COR rows keep an administrator's wording, and only the workflow flags
-     * (phase, carry-forward, real-estate-only, folder) are brought into line
-     * with the brief. Pre-approval documents that were mirrored into
-     * post-approval by an earlier migration lose that Post tick unless they
-     * are a COR document.
+     * Safe to run more than once: new rows are created, existing catalogue
+     * rows keep an administrator's wording, and only the workflow flags
+     * (phase, carry-forward, folder, real-estate-only, female-only) are
+     * brought into line with the brief. Pre-approval documents that were
+     * mirrored into post-approval by an earlier migration lose that Post
+     * tick unless they belong to COR, NIC or Passport.
      */
     public function syncPostApproval(): void
     {
-        foreach (CorRequirements::defaults() as $applicantType => $requirements) {
+        $this->syncCatalogue(CorRequirements::defaults(), 500);
+        $this->syncCatalogue(NicRequirements::defaults(), 600);
+        $this->syncCatalogue(PassportRequirements::defaults(), 700);
+
+        $keep = array_values(array_unique(array_merge(
+            CorRequirements::keys(),
+            NicRequirements::keys(),
+            PassportRequirements::keys(),
+        )));
+
+        $clear = [
+            'at_post_approval' => false,
+            'carry_forward' => false,
+            'real_estate_only' => false,
+        ];
+
+        if (Schema::hasColumn('cip_document_requirements', 'female_only')) {
+            $clear['female_only'] = false;
+        }
+
+        CipDocumentRequirement::query()
+            ->whereNotIn('key', $keep)
+            ->where(function ($query) {
+                $query->where('at_post_approval', true)
+                    ->orWhere('carry_forward', true)
+                    ->orWhere('real_estate_only', true);
+
+                if (Schema::hasColumn('cip_document_requirements', 'female_only')) {
+                    $query->orWhere('female_only', true);
+                }
+            })
+            ->update($clear);
+    }
+
+    /**
+     * @param  array<string, list<array<string, mixed>>>  $defaults
+     */
+    private function syncCatalogue(array $defaults, int $orderBase): void
+    {
+        $hasFemale = Schema::hasColumn('cip_document_requirements', 'female_only');
+
+        foreach ($defaults as $applicantType => $requirements) {
             foreach (array_values($requirements) as $index => $requirement) {
+                $sortOrder = $orderBase + (($index + 1) * 10);
                 $row = CipDocumentRequirement::query()
                     ->where('applicant_type', $applicantType)
                     ->where('key', $requirement['key'])
                     ->first();
 
+                $flags = [
+                    'at_pre_approval' => $requirement['at_pre_approval'],
+                    'at_post_approval' => $requirement['at_post_approval'],
+                    'carry_forward' => $requirement['carry_forward'],
+                    'real_estate_only' => $requirement['real_estate_only'],
+                    'folder' => $requirement['folder'],
+                ];
+
+                if ($hasFemale) {
+                    $flags['female_only'] = (bool) ($requirement['female_only'] ?? false);
+                }
+
                 if ($row === null) {
-                    CipDocumentRequirement::create([
+                    CipDocumentRequirement::create(array_merge([
                         'uuid' => (string) Str::uuid(),
                         'applicant_type' => $applicantType,
                         'key' => $requirement['key'],
                         'label' => $requirement['label'],
                         'required' => $requirement['required'],
                         'help' => $requirement['help'],
-                        'folder' => $requirement['folder'],
-                        'at_pre_approval' => $requirement['at_pre_approval'],
-                        'at_post_approval' => $requirement['at_post_approval'],
-                        'carry_forward' => $requirement['carry_forward'],
-                        'real_estate_only' => $requirement['real_estate_only'],
-                        'sort_order' => 500 + (($index + 1) * 10),
+                        'sort_order' => $sortOrder,
                         'active' => true,
-                    ]);
+                    ], $flags));
 
                     continue;
                 }
 
-                $row->forceFill([
-                    'at_pre_approval' => $requirement['at_pre_approval'] || $row->at_pre_approval,
-                    'at_post_approval' => $requirement['at_post_approval'],
-                    'carry_forward' => $requirement['carry_forward'],
-                    'real_estate_only' => $requirement['real_estate_only'],
-                    'folder' => $requirement['folder'] ?? $row->folder,
-                ])->save();
+                if ($row->sort_order < $orderBase) {
+                    $flags['sort_order'] = $sortOrder;
+                }
+
+                $flags['at_pre_approval'] = $requirement['at_pre_approval'] || $row->at_pre_approval;
+
+                $row->forceFill($flags)->save();
             }
         }
-
-        CipDocumentRequirement::query()
-            ->whereNotIn('key', CorRequirements::keys())
-            ->where(function ($query) {
-                $query->where('at_post_approval', true)
-                    ->orWhere('carry_forward', true)
-                    ->orWhere('real_estate_only', true);
-            })
-            ->update([
-                'at_post_approval' => false,
-                'carry_forward' => false,
-                'real_estate_only' => false,
-            ]);
     }
 
     /**

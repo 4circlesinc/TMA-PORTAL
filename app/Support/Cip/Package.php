@@ -25,8 +25,11 @@ use App\Support\Files\FolderTree;
  * are `cip_people.folder_id`. The application folder itself also freezes, so
  * later paper cannot land beside the original tree. Additional Documents
  * stays writable after the original lock. Post-Approval Documents stay
- * writable until the COR package is confirmed ({@see CipApplication::$cor_locked_at});
- * then that tree freezes too. A file that is a checklist slot is frozen even
+ * writable after the original lock; the COR drawers freeze when the COR
+ * package is confirmed ({@see CipApplication::$cor_locked_at}), and NIC
+ * and Passport drawers stay open until the file is closed. A closed file
+ * freezes the original tree and the post-approval drawers; Additional
+ * Documents stays writable. A file that is a checklist slot is frozen even
  * if it has wandered out of a person folder; a loose file in Additional
  * Documents is never frozen.
  */
@@ -35,7 +38,7 @@ class Package
     /** @var array<int, bool> folder id => frozen */
     private static array $folderLock = [];
 
-    /** @var array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>, cor: array<int, true>, postOpen: array<int, true>}|null */
+    /** @var array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>, cor: array<int, true>, postOpen: array<int, true>, closed: array<int, true>}|null */
     private static ?array $maps = null;
 
     /** Is this library file part of a confirmed original package? */
@@ -61,7 +64,15 @@ class Package
 
         $slot->loadMissing(['application', 'requirement']);
 
+        if ($slot->application?->isClosed()) {
+            return true;
+        }
+
         $requirement = $slot->requirement;
+        if (Pack::staysOpenAfterCorLock($requirement)) {
+            return false;
+        }
+
         if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
             return $slot->application?->isCorLocked() === true;
         }
@@ -82,8 +93,9 @@ class Package
      * package?
      *
      * Additional Documents, and everything inside it, answers no even on a
-     * locked application. Post-Approval Documents answer no until the COR
-     * package is confirmed, then yes.
+     * locked or closed application. Post-Approval Documents stay writable except the
+     * COR drawers, which freeze when the COR package is confirmed. A closed
+     * file freezes the post-approval tree as well.
      */
     public static function locksFolder(Folder $folder): bool
     {
@@ -133,11 +145,19 @@ class Package
     {
         $document->loadMissing(['file', 'application', 'requirement']);
 
+        if ($document->application?->isClosed()) {
+            return true;
+        }
+
         if ($document->file) {
             return self::locksFile($document->file);
         }
 
         $requirement = $document->requirement;
+        if (Pack::staysOpenAfterCorLock($requirement)) {
+            return false;
+        }
+
         if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
             return $document->application?->isCorLocked() === true;
         }
@@ -185,13 +205,13 @@ class Package
      */
     public static function revokeCorLinks(CipApplication $application): void
     {
-        $slotIds = Review::constrainToCurrentChecklist(
+        $slotIds = Review::constrainToPack(
             CipDocument::query()->where('application_id', $application->id),
-            Phase::POST_APPROVAL,
+            Pack::COR,
             $application,
         )->pluck('id');
 
-        $folderIds = self::corFolderIds($application);
+        $folderIds = self::namedFolderIds($application, CorRequirements::FOLDER);
 
         if ($slotIds->isEmpty() && $folderIds === []) {
             return;
@@ -222,7 +242,7 @@ class Package
         $maps = self::maps();
 
         if ($maps['people'] === [] && $maps['roots'] === [] && $maps['additional'] === []
-            && $maps['cor'] === [] && $maps['postOpen'] === []) {
+            && $maps['cor'] === [] && $maps['postOpen'] === [] && $maps['closed'] === []) {
             return false;
         }
 
@@ -235,7 +255,7 @@ class Package
         }
 
         foreach ($chain as $id) {
-            if (isset($maps['cor'][$id])) {
+            if (isset($maps['closed'][$id]) || isset($maps['cor'][$id])) {
                 return true;
             }
         }
@@ -256,7 +276,7 @@ class Package
     }
 
     /**
-     * @return array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>, cor: array<int, true>, postOpen: array<int, true>}
+     * @return array{people: array<int, true>, roots: array<int, true>, additional: array<int, true>, cor: array<int, true>, postOpen: array<int, true>, closed: array<int, true>}
      */
     private static function maps(): array
     {
@@ -270,13 +290,16 @@ class Package
             'additional' => [],
             'cor' => [],
             'postOpen' => [],
+            'closed' => [],
         ];
 
         $apps = CipApplication::query()
             ->where(function ($query) {
-                $query->whereNotNull('locked_at')->orWhereNotNull('cor_locked_at');
+                $query->whereNotNull('locked_at')
+                    ->orWhereNotNull('cor_locked_at')
+                    ->orWhere('status', Status::CLOSED);
             })
-            ->get(['id', 'folder_id', 'post_approval_folder_id', 'locked_at', 'cor_locked_at']);
+            ->get(['id', 'folder_id', 'post_approval_folder_id', 'locked_at', 'cor_locked_at', 'status']);
 
         if ($apps->isEmpty()) {
             return self::$maps = $empty;
@@ -306,17 +329,56 @@ class Package
                 ->all();
 
             $postOpen = $original
-                ->reject(fn (CipApplication $application) => $application->cor_locked_at !== null)
                 ->pluck('post_approval_folder_id')
                 ->filter()
                 ->map(fn ($id) => (int) $id)
                 ->all();
         }
 
-        $cor = $corLocked->pluck('post_approval_folder_id')
+        $corLockedPost = $corLocked
+            ->pluck('post_approval_folder_id')
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->all();
+
+        $postOpen = array_values(array_unique(array_merge(
+            $postOpen,
+            $corLockedPost,
+        )));
+
+        $cor = self::namedDescendantIds($corLockedPost, CorRequirements::FOLDER);
+
+        $closed = [];
+        $closedApps = $apps->filter(fn (CipApplication $application) => $application->isClosed());
+        foreach ($closedApps as $application) {
+            foreach ([$application->folder_id, $application->post_approval_folder_id] as $rootId) {
+                if (! $rootId) {
+                    continue;
+                }
+                $root = Folder::find($rootId);
+                if (! $root) {
+                    continue;
+                }
+                $closed[] = (int) $root->id;
+                $closed = array_merge($closed, FolderTree::descendantIds($root));
+            }
+        }
+
+        $closedRoots = $closedApps
+            ->pluck('folder_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        if ($closedRoots !== []) {
+            $additional = array_merge(
+                $additional,
+                Folder::query()
+                    ->whereIn('parent_id', $closedRoots)
+                    ->where('name', Tree::ADDITIONAL)
+                    ->pluck('id')
+                    ->all(),
+            );
+        }
 
         return self::$maps = [
             'people' => array_fill_keys(array_map('intval', $people), true),
@@ -324,24 +386,54 @@ class Package
             'additional' => array_fill_keys(array_map('intval', $additional), true),
             'cor' => array_fill_keys($cor, true),
             'postOpen' => array_fill_keys($postOpen, true),
+            'closed' => array_fill_keys(array_map('intval', array_values(array_unique($closed))), true),
         ];
     }
 
-    /** @return list<int> */
-    private static function corFolderIds(CipApplication $application): array
+    /**
+     * Named drawers under a post-approval tree, including what sits
+     * inside them.
+     *
+     * @param  list<int>  $rootIds
+     * @return list<int>
+     */
+    private static function namedDescendantIds(array $rootIds, string $name): array
     {
-        $root = $application->post_approval_folder_id
-            ? Folder::find($application->post_approval_folder_id)
-            : null;
-
-        if (! $root) {
+        if ($rootIds === []) {
             return [];
         }
 
-        return array_values(array_unique(array_merge(
-            [(int) $root->id],
-            FolderTree::descendantIds($root),
-        )));
+        $ids = [];
+
+        foreach ($rootIds as $rootId) {
+            $root = Folder::find($rootId);
+            if (! $root) {
+                continue;
+            }
+
+            $tree = array_merge([(int) $root->id], FolderTree::descendantIds($root));
+            $named = Folder::query()
+                ->whereIn('id', $tree)
+                ->where('name', $name)
+                ->get();
+
+            foreach ($named as $folder) {
+                $ids[] = (int) $folder->id;
+                $ids = array_merge($ids, FolderTree::descendantIds($folder));
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /** @return list<int> */
+    private static function namedFolderIds(CipApplication $application, string $name): array
+    {
+        $root = $application->post_approval_folder_id
+            ? (int) $application->post_approval_folder_id
+            : 0;
+
+        return $root === 0 ? [] : self::namedDescendantIds([$root], $name);
     }
 
     /** @return list<int> */

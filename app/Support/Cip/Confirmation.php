@@ -30,6 +30,8 @@ class Confirmation
 
     public const COR_LOCKED_MESSAGE = 'This application’s Certificate of Registration package is locked and cannot be modified.';
 
+    public const CLOSED_MESSAGE = 'This application’s file is closed and cannot be modified.';
+
     /**
      * What a screen needs to offer (or hide) the confirm verb.
      *
@@ -227,6 +229,11 @@ class Confirmation
         }
 
         $document->loadMissing(['requirement', 'application']);
+
+        if ($document->application?->isClosed()) {
+            throw new \InvalidArgumentException(self::CLOSED_MESSAGE);
+        }
+
         $requirement = $document->requirement;
         $corSlot = $requirement
             && $requirement->at_post_approval

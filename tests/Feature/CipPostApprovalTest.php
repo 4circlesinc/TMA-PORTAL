@@ -25,7 +25,10 @@ use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Engine;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\NicRequirements;
+use App\Support\Cip\Pack;
 use App\Support\Cip\Package;
+use App\Support\Cip\PassportRequirements;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
@@ -36,7 +39,9 @@ use App\Support\Cip\Tree;
 use Database\Seeders\CipDocumentRequirementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CipPostApprovalTest extends TestCase
@@ -47,6 +52,7 @@ class CipPostApprovalTest extends TestCase
     {
         parent::setUp();
         config(['services.cip.enabled' => true]);
+        Storage::fake(config('filesystems.files_disk', 'local'));
         CipDocumentRequirement::query()->forceDelete();
         Requirements::flush();
     }
@@ -271,10 +277,12 @@ class CipPostApprovalTest extends TestCase
                 'atPreApproval' => false,
                 'atPostApproval' => true,
                 'carryForward' => false,
+                'femaleOnly' => true,
             ])
             ->assertOk()
             ->assertJsonPath('requirement.atPreApproval', false)
-            ->assertJsonPath('requirement.atPostApproval', true);
+            ->assertJsonPath('requirement.atPostApproval', true)
+            ->assertJsonPath('requirement.femaleOnly', true);
     }
 
     public function test_form_endpoint_filters_requirements_by_phase(): void
@@ -402,6 +410,8 @@ class CipPostApprovalTest extends TestCase
         $this->assertContains(CorRequirements::OATH_OF_ALLEGIANCE, $mainKeys);
         $this->assertContains(CorRequirements::PROOF_OF_PAYMENT, $mainKeys);
         $this->assertContains(DocumentTypes::PASSPORT_PHOTO, $mainKeys);
+        $this->assertNotContains(NicRequirements::R3_FORM, $mainKeys);
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $mainKeys);
         $this->assertContains(CorRequirements::LETTER_OF_CONFIRMATION, $mainKeys);
         $this->assertContains(CorRequirements::SALES_PURCHASE_AGREEMENT, $mainKeys);
         $this->assertContains(CorRequirements::ESCROW_AGREEMENT, $mainKeys);
@@ -835,7 +845,14 @@ class CipPostApprovalTest extends TestCase
         $this->assertNotNull($additional);
         $this->assertNotNull($post);
         $this->assertFalse(Package::locksFolder($additional));
-        $this->assertTrue(Package::locksFolder($post));
+        $this->assertFalse(Package::locksFolder($post));
+
+        $corDrawer = Folder::query()
+            ->where('name', CorRequirements::FOLDER)
+            ->whereIn('id', array_merge([(int) $post->id], \App\Support\Files\FolderTree::descendantIds($post)))
+            ->first();
+        $this->assertNotNull($corDrawer);
+        $this->assertTrue(Package::locksFolder($corDrawer));
     }
 
     public function test_recording_the_cor_submission_moves_to_pending_cor(): void
@@ -1104,6 +1121,687 @@ class CipPostApprovalTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_nic_slots_wait_until_the_cor_is_received(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->corFile($staff);
+
+        $keys = $person->documents()->pluck('type')->all();
+        $this->assertNotContains(NicRequirements::R3_FORM, $keys);
+        $this->assertNotContains(NicRequirements::AUTHORIZATION_LETTER, $keys);
+
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+        Stages::record($application->fresh(), $staff, Stages::COR_SUBMITTED, Carbon::parse('2026-08-20'));
+
+        $stillPending = $person->fresh()->documents()->pluck('type')->all();
+        $this->assertNotContains(NicRequirements::R3_FORM, $stillPending);
+
+        Stages::record($application->fresh(), $staff, Stages::COR_RECEIVED, Carbon::parse('2026-08-21'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $keys = $person->documents()->pluck('type')->all();
+
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->status);
+        $this->assertTrue(Pack::hasReachedNic($application));
+        $this->assertContains(NicRequirements::R3_FORM, $keys);
+        $this->assertContains(NicRequirements::CERTIFIED_PASSPORT_BIO_PAGE, $keys);
+        $this->assertNotContains(DocumentTypes::PASSPORT_BIO_PAGE, $keys);
+        $this->assertContains(DocumentTypes::BIRTH_CERTIFICATE, $keys);
+        $this->assertContains(NicRequirements::NAME_CHANGE_DOCUMENT, $keys);
+        $this->assertContains('marriage_certificate', $keys);
+        $this->assertContains(NicRequirements::DIVORCE_DECREE, $keys);
+        $this->assertContains(NicRequirements::AUTHORIZATION_LETTER, $keys);
+        $this->assertContains(CorRequirements::OATH_OF_ALLEGIANCE, $keys);
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $keys);
+
+        $this->assertFalse($person->documents()->where('type', NicRequirements::NAME_CHANGE_DOCUMENT)->value('required'));
+        $this->assertFalse($person->documents()->where('type', 'marriage_certificate')->value('required'));
+        $this->assertFalse($person->documents()->where('type', NicRequirements::DIVORCE_DECREE)->value('required'));
+
+        $r3 = $person->documents()->where('type', NicRequirements::R3_FORM)->first();
+        $this->assertSame(NicRequirements::FOLDER, $r3->requirement->folder);
+        $this->assertTrue($r3->required);
+        $this->assertFalse(Package::locksDocument($r3));
+    }
+
+    public function test_nic_checklist_follows_age_and_gender(): void
+    {
+        $staff = $this->staff();
+        $this->seedCor();
+        $application = $this->granted($staff);
+        $this->family($application);
+        $application = $application->fresh(['people']);
+        $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ->forceFill(['gender' => 'Male'])->save();
+        $application->people->first(fn (CipPerson $person) => $person->relationship === 'spouse')
+            ->forceFill(['gender' => 'Female'])->save();
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_SPONSOR,
+            'first_name' => 'Karim',
+            'last_name' => 'Haddad',
+            'date_of_birth' => now()->subYears(62),
+            'gender' => 'Male',
+        ]);
+
+        PostApproval::enter($application->fresh(['people']), $staff);
+        $application->forceFill([
+            'status' => Status::APPLY_FOR_NIC,
+            'cor_locked_at' => now(),
+            'cor_received_at' => now(),
+        ])->save();
+        Requirements::flush();
+        Requirements::materialiseApplication($application->fresh(['people']));
+
+        $application = $application->fresh(['people.documents']);
+        $people = $application->people;
+        $people->each(fn (CipPerson $person) => $person->setRelation('application', $application));
+
+        $main = $people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $spouse = $people->first(fn (CipPerson $person) => $person->relationship === 'spouse');
+        $child = $people->first(fn (CipPerson $person) => ApplicantType::for($person) === ApplicantType::DEPENDENT_UNDER_16);
+        $adultDep = $people->first(fn (CipPerson $person) => ApplicantType::for($person) === ApplicantType::DEPENDENT_16_OVER);
+        $sponsor = $people->firstWhere('role', CipPerson::ROLE_SPONSOR);
+
+        $this->assertContains(NicRequirements::R3_FORM, $main->documents()->pluck('type')->all());
+        $this->assertNotContains(NicRequirements::DEATH_CERTIFICATE, $main->documents()->pluck('type')->all());
+
+        $this->assertContains(NicRequirements::R3_FORM, $spouse->documents()->pluck('type')->all());
+        $this->assertContains(NicRequirements::DEATH_CERTIFICATE, $spouse->documents()->pluck('type')->all());
+        $this->assertFalse($spouse->documents()->where('type', NicRequirements::DEATH_CERTIFICATE)->value('required'));
+        $this->assertTrue($spouse->documents()->where('type', 'marriage_certificate')->value('required'));
+
+        $this->assertNotContains(NicRequirements::R3_FORM, $child->documents()->pluck('type')->all());
+        $this->assertContains(NicRequirements::R3_FORM, $adultDep->documents()->pluck('type')->all());
+        $this->assertNotContains(NicRequirements::R3_FORM, $sponsor->documents()->pluck('type')->all());
+    }
+
+    public function test_nic_uploads_are_allowed_after_the_cor_package_is_locked(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForNic($staff);
+
+        $oath = $person->documents()->where('type', CorRequirements::OATH_OF_ALLEGIANCE)->first();
+        $r3 = $person->documents()->where('type', NicRequirements::R3_FORM)->first();
+        $this->assertTrue(Package::locksDocument($oath));
+        $this->assertFalse(Package::locksDocument($r3));
+
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents');
+
+        $this->assertFalse(collect($docs)->firstWhere('type', CorRequirements::OATH_OF_ALLEGIANCE)['canUpload']);
+        $this->assertTrue(collect($docs)->firstWhere('type', NicRequirements::R3_FORM)['canUpload']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$r3->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('r3.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('document.uploaded', true)
+            ->assertJsonPath('document.status', DocumentStatus::APPLICATION_REVIEW);
+
+        $this->assertTrue($r3->fresh()->isFilled());
+        $this->assertSame(NicRequirements::FOLDER, Folder::find($r3->fresh()->file->folder_id)?->name);
+    }
+
+    public function test_intake_birth_certificates_stay_out_of_the_nic_drawer(): void
+    {
+        $this->seedCor();
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $this->mainApplicant($application);
+        Tree::provision($application->fresh(['people']), $staff);
+        $person = $person->fresh();
+        Requirements::materialise($person->fresh(['application']));
+
+        $birth = DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            DocumentTypes::BIRTH_CERTIFICATE,
+            UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $this->assertSame($person->folder_id, $birth->file->folder_id);
+        $this->assertNotSame(NicRequirements::FOLDER, Folder::find($birth->file->folder_id)?->name);
+    }
+
+    public function test_a_carried_birth_certificate_stays_locked_on_apply_for_nic(): void
+    {
+        $this->seedCor();
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $this->mainApplicant($application);
+        Tree::provision($application->fresh(['people']), $staff);
+        $person = $person->fresh();
+        Requirements::materialise($person->fresh(['application']));
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            DocumentTypes::BIRTH_CERTIFICATE,
+            UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+        $application->forceFill(['locked_at' => now()])->save();
+        Package::forget();
+
+        $application->forceFill([
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+        ])->save();
+        PostApproval::enter($application->fresh(['people']), $staff);
+        $application->forceFill([
+            'status' => Status::APPLY_FOR_NIC,
+            'cor_locked_at' => now(),
+            'cor_received_at' => now(),
+        ])->save();
+        Requirements::flush();
+        Requirements::materialiseApplication($application->fresh(['people']));
+        Package::forget();
+
+        $birth = $person->fresh(['documents.file', 'documents.requirement', 'documents.application'])
+            ->documents()
+            ->where('type', DocumentTypes::BIRTH_CERTIFICATE)
+            ->first();
+
+        $this->assertNotNull($birth?->file_id);
+        $this->assertTrue(Package::locksDocument($birth));
+        $this->assertSame($person->folder_id, $birth->file->folder_id);
+
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents');
+
+        $this->assertFalse(collect($docs)->firstWhere('type', DocumentTypes::BIRTH_CERTIFICATE)['canUpload']);
+        $this->assertTrue(collect($docs)->firstWhere('type', NicRequirements::R3_FORM)['canUpload']);
+    }
+
+    public function test_refusing_an_nic_document_moves_the_file_to_updates_required(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForNic($staff);
+
+        $r3 = $person->documents()->where('type', NicRequirements::R3_FORM)->first();
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            NicRequirements::R3_FORM,
+            UploadedFile::fake()->create('r3.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$r3->uuid.'/request-changes', [
+                'comment' => 'The witness stamp is missing.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('document.status', DocumentStatus::UPDATE_REQUIRED);
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            NicRequirements::R3_FORM,
+            UploadedFile::fake()->create('r3-v2.pdf', 42, 'application/pdf'),
+            $staff,
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$r3->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+    }
+
+    public function test_recording_the_nic_submission_moves_to_pending_nic(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForNic($staff);
+
+        $ready = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Stages::NIC_SUBMITTED, $ready['stageAction']['key']);
+        $this->assertSame('Record NIC submission', $ready['stageAction']['label']);
+
+        $recorded = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::NIC_SUBMITTED,
+                'date' => '2026-08-22',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::PENDING_NIC, $recorded['status']);
+        $this->assertSame('Pending NIC', $recorded['statusLabel']);
+        $this->assertSame('2026-08-22', $recorded['nicSubmittedAt']);
+        $this->assertSame(Stages::NIC_RECEIVED, $recorded['stageAction']['key']);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_NIC_SUBMITTED,
+            'actor_id' => $staff->id,
+        ]);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, 'PENDING NIC');
+        });
+    }
+
+    public function test_a_bare_status_change_cannot_skip_the_nic_submission_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForNic($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::PENDING_NIC,
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+        $this->assertNull($application->fresh()->nic_submitted_at);
+    }
+
+    public function test_passport_slots_wait_until_the_nic_is_received(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForNic($staff);
+
+        $keys = $person->documents()->pluck('type')->all();
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $keys);
+        $this->assertNotContains(PassportRequirements::ORIGINAL_BIRTH_CERTIFICATE, $keys);
+        $this->assertNotContains(PassportRequirements::PHYSICAL_PASSPORT_PHOTOS, $keys);
+
+        Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
+
+        $stillPending = $person->fresh()->documents()->pluck('type')->all();
+        $this->assertSame(Status::PENDING_NIC, $application->fresh()->status);
+        $this->assertFalse(Pack::hasReachedPassport($application->fresh()));
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $stillPending);
+
+        Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $keys = $person->documents()->pluck('type')->all();
+
+        $this->assertSame(Status::APPLY_FOR_PASSPORT, $application->status);
+        $this->assertTrue(Pack::hasReachedPassport($application));
+        $this->assertContains(PassportRequirements::EPP_FORM, $keys);
+        $this->assertContains(PassportRequirements::ORIGINAL_BIRTH_CERTIFICATE, $keys);
+        $this->assertContains(PassportRequirements::CERTIFIED_PASSPORT_BIO_PAGE, $keys);
+        $this->assertContains(PassportRequirements::ORIGINAL_TRANSLATIONS, $keys);
+        $this->assertContains(PassportRequirements::PHYSICAL_PASSPORT_PHOTOS, $keys);
+        $this->assertContains(NicRequirements::R3_FORM, $keys);
+        $this->assertContains(NicRequirements::CERTIFIED_PASSPORT_BIO_PAGE, $keys);
+        $this->assertContains(DocumentTypes::BIRTH_CERTIFICATE, $keys);
+        $this->assertNotContains(DocumentTypes::PASSPORT_BIO_PAGE, $keys);
+
+        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        $this->assertSame(PassportRequirements::FOLDER, $epp->requirement->folder);
+        $this->assertTrue($epp->required);
+        $this->assertFalse(Package::locksDocument($epp));
+
+        $this->assertFalse(
+            $person->documents()->where('type', PassportRequirements::ORIGINAL_TRANSLATIONS)->value('required')
+        );
+        $this->assertTrue(
+            $person->documents()->where('type', PassportRequirements::PHYSICAL_PASSPORT_PHOTOS)->value('required')
+        );
+    }
+
+    public function test_passport_checklist_follows_age_and_gender(): void
+    {
+        $staff = $this->staff();
+        $this->seedCor();
+        $application = $this->granted($staff);
+        $this->family($application);
+        $application = $application->fresh(['people']);
+        $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ->forceFill(['gender' => 'Male'])->save();
+        $application->people->first(fn (CipPerson $person) => $person->relationship === 'spouse')
+            ->forceFill(['gender' => 'Female'])->save();
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_SPONSOR,
+            'first_name' => 'Karim',
+            'last_name' => 'Haddad',
+            'date_of_birth' => now()->subYears(62),
+            'gender' => 'Male',
+        ]);
+
+        PostApproval::enter($application->fresh(['people']), $staff);
+        $application->forceFill([
+            'status' => Status::APPLY_FOR_PASSPORT,
+            'cor_locked_at' => now(),
+            'cor_received_at' => now(),
+            'nic_received_at' => now(),
+        ])->save();
+        Requirements::flush();
+        Requirements::materialiseApplication($application->fresh(['people']));
+
+        $application = $application->fresh(['people.documents']);
+        $people = $application->people;
+        $people->each(fn (CipPerson $person) => $person->setRelation('application', $application));
+
+        $main = $people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $spouse = $people->first(fn (CipPerson $person) => $person->relationship === 'spouse');
+        $child = $people->first(fn (CipPerson $person) => ApplicantType::for($person) === ApplicantType::DEPENDENT_UNDER_16);
+        $adultDep = $people->first(fn (CipPerson $person) => ApplicantType::for($person) === ApplicantType::DEPENDENT_16_OVER);
+        $sponsor = $people->firstWhere('role', CipPerson::ROLE_SPONSOR);
+
+        $this->assertContains(PassportRequirements::EPP_FORM, $main->documents()->pluck('type')->all());
+        $this->assertNotContains(PassportRequirements::ORIGINAL_MARRIAGE_CERTIFICATE, $main->documents()->pluck('type')->all());
+        $this->assertNotContains(PassportRequirements::ORIGINAL_DIVORCE_CERTIFICATE, $main->documents()->pluck('type')->all());
+
+        $this->assertContains(PassportRequirements::EPP_FORM, $spouse->documents()->pluck('type')->all());
+        $this->assertContains(PassportRequirements::ORIGINAL_MARRIAGE_CERTIFICATE, $spouse->documents()->pluck('type')->all());
+        $this->assertContains(PassportRequirements::ORIGINAL_DIVORCE_CERTIFICATE, $spouse->documents()->pluck('type')->all());
+        $this->assertTrue($spouse->documents()->where('type', PassportRequirements::ORIGINAL_MARRIAGE_CERTIFICATE)->value('required'));
+        $this->assertFalse($spouse->documents()->where('type', PassportRequirements::ORIGINAL_DIVORCE_CERTIFICATE)->value('required'));
+
+        $this->assertContains(PassportRequirements::EPP_FORM, $child->documents()->pluck('type')->all());
+        $this->assertContains(PassportRequirements::PHYSICAL_PASSPORT_PHOTOS, $child->documents()->pluck('type')->all());
+        $this->assertNotContains(PassportRequirements::ORIGINAL_MARRIAGE_CERTIFICATE, $child->documents()->pluck('type')->all());
+        $this->assertNotContains(PassportRequirements::ORIGINAL_DIVORCE_CERTIFICATE, $child->documents()->pluck('type')->all());
+
+        $this->assertContains(PassportRequirements::EPP_FORM, $adultDep->documents()->pluck('type')->all());
+        $this->assertNotContains(PassportRequirements::EPP_FORM, $sponsor->documents()->pluck('type')->all());
+    }
+
+    public function test_passport_uploads_are_allowed_after_the_cor_package_is_locked(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForPassport($staff);
+
+        $oath = $person->documents()->where('type', CorRequirements::OATH_OF_ALLEGIANCE)->first();
+        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        $this->assertTrue(Package::locksDocument($oath));
+        $this->assertFalse(Package::locksDocument($epp));
+
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents');
+
+        $this->assertFalse(collect($docs)->firstWhere('type', CorRequirements::OATH_OF_ALLEGIANCE)['canUpload']);
+        $this->assertTrue(collect($docs)->firstWhere('type', PassportRequirements::EPP_FORM)['canUpload']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$epp->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('epp.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('document.uploaded', true)
+            ->assertJsonPath('document.status', DocumentStatus::APPLICATION_REVIEW);
+
+        $this->assertTrue($epp->fresh()->isFilled());
+        $this->assertSame(PassportRequirements::FOLDER, Folder::find($epp->fresh()->file->folder_id)?->name);
+    }
+
+    public function test_refusing_a_passport_document_moves_the_file_to_updates_required(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForPassport($staff);
+
+        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            PassportRequirements::EPP_FORM,
+            UploadedFile::fake()->create('epp.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$epp->uuid.'/request-changes', [
+                'comment' => 'Section 13 is not stamped.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('document.status', DocumentStatus::UPDATE_REQUIRED);
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            PassportRequirements::EPP_FORM,
+            UploadedFile::fake()->create('epp-v2.pdf', 42, 'application/pdf'),
+            $staff,
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$epp->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_PASSPORT, $application->fresh()->status);
+    }
+
+    public function test_recording_the_passport_application_moves_to_pending_passport(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForPassport($staff);
+
+        $ready = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Stages::PASSPORT_SUBMITTED, $ready['stageAction']['key']);
+        $this->assertSame('Record passport application', $ready['stageAction']['label']);
+
+        $recorded = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_SUBMITTED,
+                'date' => '2026-08-24',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::PENDING_PASSPORT, $recorded['status']);
+        $this->assertSame('Pending Passport', $recorded['statusLabel']);
+        $this->assertSame('plum', $recorded['statusTone']);
+        $this->assertSame('2026-08-24', $recorded['passportSubmittedAt']);
+        $this->assertSame(Stages::PASSPORT_RECEIVED, $recorded['stageAction']['key']);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_PASSPORT_SUBMITTED,
+            'actor_id' => $staff->id,
+        ]);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, 'PENDING PASSPORT');
+        });
+    }
+
+    public function test_a_bare_status_change_cannot_skip_the_passport_application_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForPassport($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::PENDING_PASSPORT,
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::APPLY_FOR_PASSPORT, $application->fresh()->status);
+        $this->assertNull($application->fresh()->passport_submitted_at);
+    }
+
+    public function test_passport_uploads_are_still_allowed_while_pending_passport(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoPendingPassport($staff);
+
+        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        $this->assertFalse(Package::locksDocument($epp));
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$epp->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('epp.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('document.uploaded', true);
+
+        $this->assertSame(Status::PENDING_PASSPORT, $application->fresh()->status);
+        $this->assertSame(PassportRequirements::FOLDER, Folder::find($epp->fresh()->file->folder_id)?->name);
+    }
+
+    public function test_recording_the_passport_received_moves_to_ready_for_delivery(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->intoPendingPassport($staff);
+
+        $ready = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Stages::PASSPORT_RECEIVED, $ready['stageAction']['key']);
+        $this->assertSame('Record passport received', $ready['stageAction']['label']);
+
+        $recorded = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_RECEIVED,
+                'date' => '2026-08-25',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::READY_FOR_DELIVERY, $recorded['status']);
+        $this->assertSame('Ready for Delivery', $recorded['statusLabel']);
+        $this->assertSame('mint', $recorded['statusTone']);
+        $this->assertSame('2026-08-25', $recorded['passportReceivedAt']);
+        $this->assertSame(Stages::PASSPORT_DELIVERED, $recorded['stageAction']['key']);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, 'READY FOR DELIVERY');
+        });
+    }
+
+    public function test_a_bare_status_change_cannot_skip_the_passport_received_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoPendingPassport($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_FOR_DELIVERY,
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::PENDING_PASSPORT, $application->fresh()->status);
+        $this->assertNull($application->fresh()->passport_received_at);
+    }
+
+    public function test_recording_the_passport_delivered_closes_the_file(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->intoReadyForDelivery($staff);
+
+        $ready = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Stages::PASSPORT_DELIVERED, $ready['stageAction']['key']);
+        $this->assertSame('Record passport delivered', $ready['stageAction']['label']);
+
+        $recorded = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_DELIVERED,
+                'date' => '2026-08-26',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::CLOSED, $recorded['status']);
+        $this->assertSame('Closed', $recorded['statusLabel']);
+        $this->assertSame('stone', $recorded['statusTone']);
+        $this->assertSame('2026-08-26', $recorded['passportDeliveredAt']);
+        $this->assertNull($recorded['stageAction']);
+        $this->assertSame([], $recorded['availableTransitions']);
+        $this->assertTrue($application->fresh()->isClosed());
+        $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
+        $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_PASSPORT_DELIVERED,
+            'actor_id' => $staff->id,
+        ]);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, 'FILE CLOSED');
+        });
+    }
+
+    public function test_a_bare_status_change_cannot_skip_the_passport_delivered_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoReadyForDelivery($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::CLOSED,
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::READY_FOR_DELIVERY, $application->fresh()->status);
+        $this->assertNull($application->fresh()->passport_delivered_at);
+        $this->assertFalse($application->fresh()->isClosed());
+    }
+
+    public function test_a_closed_file_refuses_further_uploads(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoClosed($staff);
+
+        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        $this->assertTrue(Package::locksDocument($epp));
+
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents');
+
+        $this->assertFalse(collect($docs)->firstWhere('type', PassportRequirements::EPP_FORM)['canUpload']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$epp->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('epp.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::CLOSED_MESSAGE);
+
+        $this->assertFalse($epp->fresh()->isFilled());
+        $this->assertSame(Status::CLOSED, $application->fresh()->status);
+    }
+
     public function test_apply_for_cor_is_not_offered_before_post_approval(): void
     {
         $staff = $this->staff();
@@ -1168,6 +1866,76 @@ class CipPostApprovalTest extends TestCase
                 ->postJson('/portal/cip/documents/'.$slot->uuid.'/approve')
                 ->assertOk();
         }
+    }
+
+    /** @return array{0: CipApplication, 1: CipPerson} */
+    private function intoApplyForNic(User $staff): array
+    {
+        [$application, $person] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+        Stages::record($application->fresh(), $staff, Stages::COR_SUBMITTED, Carbon::parse('2026-08-20'));
+        Stages::record($application->fresh(), $staff, Stages::COR_RECEIVED, Carbon::parse('2026-08-21'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+
+        return [$application, $person];
+    }
+
+    /** @return array{0: CipApplication, 1: CipPerson} */
+    private function intoApplyForPassport(User $staff): array
+    {
+        [$application, $person] = $this->intoApplyForNic($staff);
+        Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
+        Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+
+        return [$application, $person];
+    }
+
+    /** @return array{0: CipApplication, 1: CipPerson} */
+    private function intoPendingPassport(User $staff): array
+    {
+        [$application, $person] = $this->intoApplyForPassport($staff);
+        Stages::record($application->fresh(), $staff, Stages::PASSPORT_SUBMITTED, Carbon::parse('2026-08-24'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+
+        return [$application, $person];
+    }
+
+    /** @return array{0: CipApplication, 1: CipPerson} */
+    private function intoReadyForDelivery(User $staff): array
+    {
+        [$application, $person] = $this->intoPendingPassport($staff);
+        Stages::record($application->fresh(), $staff, Stages::PASSPORT_RECEIVED, Carbon::parse('2026-08-25'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+
+        return [$application, $person];
+    }
+
+    /** @return array{0: CipApplication, 1: CipPerson} */
+    private function intoClosed(User $staff): array
+    {
+        [$application, $person] = $this->intoReadyForDelivery($staff);
+        Stages::record($application->fresh(), $staff, Stages::PASSPORT_DELIVERED, Carbon::parse('2026-08-26'));
+
+        $application = $application->fresh(['people.documents.requirement']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+
+        return [$application, $person];
     }
 
     /** @return array{0: CipApplication, 1: CipPerson, 2: CipDocument} */

@@ -73,12 +73,67 @@ class Requirements
      *
      * Pre-approval lists requirements flagged for that lane. Post-approval
      * lists post-only requirements plus any pre-approval row marked to carry
-     * forward without re-uploading the file.
+     * forward without re-uploading the file. Once a file is in post-approval,
+     * only packs that stage has reached are opened — COR at Post-Approval
+     * (and at intake, where there is no file yet), NIC after the COR
+     * received date, Passport after the NIC received date.
      *
      * @return Collection<int, CipDocumentRequirement>
      */
-    public static function forPhase(string $applicantType, string $phase, ?CipApplication $application = null): Collection
-    {
+    public static function forPhase(
+        string $applicantType,
+        string $phase,
+        ?CipApplication $application = null,
+        ?CipPerson $person = null,
+    ): Collection {
+        $templates = self::catalogue($applicantType, $phase, $application, $person);
+
+        if ($phase === Phase::POST_APPROVAL) {
+            // No application yet is the intake wizard: Stage 1 COR only.
+            // NIC slots wait until the COR received date is on the file.
+            $open = $application ? Pack::open($application) : [Pack::COR];
+            $templates = $templates->filter(
+                fn (CipDocumentRequirement $row) => in_array(Pack::of($row), $open, true),
+            );
+        }
+
+        return $templates->values();
+    }
+
+    /**
+     * Post-approval templates that must stay on the person, including packs
+     * not yet opened, so a carried birth certificate is not withdrawn while
+     * the file is still collecting COR.
+     *
+     * @return Collection<int, CipDocumentRequirement>
+     */
+    public static function retainPhase(
+        string $applicantType,
+        string $phase,
+        ?CipApplication $application = null,
+        ?CipPerson $person = null,
+    ): Collection {
+        $templates = self::catalogue($applicantType, $phase, $application, $person);
+
+        if ($phase === Phase::POST_APPROVAL && $application) {
+            $keep = array_merge(Pack::open($application), Pack::upcoming($application));
+            $templates = $templates->filter(
+                fn (CipDocumentRequirement $row) => in_array(Pack::of($row), $keep, true),
+            );
+        }
+
+        return $templates->values();
+    }
+
+    /**
+     * @return Collection<int, CipDocumentRequirement>
+     */
+    private static function catalogue(
+        string $applicantType,
+        string $phase,
+        ?CipApplication $application = null,
+        ?CipPerson $person = null,
+    ): Collection {
         $templates = self::activeTemplates()
             ->where('applicant_type', $applicantType)
             ->filter(function (CipDocumentRequirement $row) use ($phase) {
@@ -95,7 +150,18 @@ class Requirements
             $templates = $templates->reject(fn (CipDocumentRequirement $row) => $row->real_estate_only);
         }
 
+        $templates = $templates->filter(fn (CipDocumentRequirement $row) => self::appliesToPerson($row, $person));
+
         return $templates->values();
+    }
+
+    private static function appliesToPerson(CipDocumentRequirement $row, ?CipPerson $person): bool
+    {
+        if (! $row->female_only || $person === null) {
+            return true;
+        }
+
+        return strcasecmp((string) $person->gender, 'Female') === 0;
     }
 
     /**
@@ -124,12 +190,14 @@ class Requirements
         }
 
         $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
-        $templates = self::forPhase(ApplicantType::for($person), $phase, $person->application);
+        $applicantType = ApplicantType::for($person);
+        $templates = self::forPhase($applicantType, $phase, $person->application, $person);
+        $keep = self::retainPhase($applicantType, $phase, $person->application, $person);
 
         // One transaction: a half-applied template change would leave a
         // checklist that is neither the old one nor the new one, and the next
         // reviewer to open it would have no way of telling.
-        DB::transaction(function () use ($person, $templates) {
+        DB::transaction(function () use ($person, $templates, $keep) {
             /*
              * The person's slots are read ONCE and handed down.
              *
@@ -150,7 +218,7 @@ class Requirements
             // requirement_id are left alone, see {@see self::openSlot()}.
             $person->documents()
                 ->whereNotNull('requirement_id')
-                ->whereNotIn('requirement_id', $templates->pluck('id')->all())
+                ->whereNotIn('requirement_id', $keep->pluck('id')->all())
                 ->get()
                 ->each(fn (CipDocument $slot) => self::withdraw($slot));
         });
@@ -375,8 +443,8 @@ class Requirements
      *
      * Confirm submission freezes the original package, not the questions the
      * post-approval lane still has to ask. A locked file that has moved into
-     * Post-Approval still opens COR slots; a locked pre-approval file does not
-     * grow or shrink its original checklist.
+     * Post-Approval still opens COR slots; after the COR package is confirmed
+     * it still opens NIC slots. Closed and denied files do not grow.
      */
     private static function isOpen(?CipApplication $application): bool
     {
@@ -385,7 +453,7 @@ class Requirements
         }
 
         if ($application->phase === Phase::POST_APPROVAL) {
-            return ! $application->isCorLocked();
+            return ! in_array($application->status, [Status::CLOSED, Status::DENIED], true);
         }
 
         if ($application->isLocked()) {
