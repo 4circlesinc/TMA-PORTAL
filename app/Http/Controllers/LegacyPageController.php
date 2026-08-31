@@ -35,8 +35,8 @@ class LegacyPageController extends Controller
         'calendar',
         // Staff-only (Role::PAGE_CAPABILITIES): recordings of client calls.
         'call-recordings',
-        // Admin-only while in development (Role::PAGE_CAPABILITIES gates it,
-        // and the whole module vanishes when FEATURE_CBI is off).
+        // Admin-only while FEATURE_CBI is on. /cbi itself redirects to
+        // CIP Applications while FEATURE_CIP is on (Phase 11c cutover).
         'cbi',
         'citizenship-applications',
         'clients',
@@ -140,6 +140,11 @@ class LegacyPageController extends Controller
                 if ($page === 'clients' && ($redirect = $this->redirectLegacyClientsPath($request))) {
                     return $redirect;
                 }
+            } elseif ($page === 'cbi') {
+                if ($redirect = $this->redirectRetiredCbiPath($request)) {
+                    return $redirect;
+                }
+                abort_unless(Role::canViewPage($request->user(), $page), 404);
             } elseif ($page === 'folders/all') {
                 abort_unless($this->canViewAllFilesPage($request), 404);
             } elseif ($page === 'workflows' || $page === 'workflows/feedback' || $page === 'workflows/updates') {
@@ -215,6 +220,23 @@ class LegacyPageController extends Controller
         }
 
         return redirect($target);
+    }
+
+    /**
+     * /cbi was the Smartsheet-mirror listing. CIP Applications is that table
+     * now (Phase 11c). Bookmarks and typed URLs land on the native caseload
+     * while FEATURE_CIP is on; /dev/cbi stays the read-only verification
+     * preview while FEATURE_CBI is on.
+     */
+    private function redirectRetiredCbiPath(Request $request): ?Response
+    {
+        if (! CipAccess::enabled()) {
+            return null;
+        }
+
+        abort_unless($this->canViewClientsPage($request), 404);
+
+        return redirect(Pages::HOME);
     }
 
     /**

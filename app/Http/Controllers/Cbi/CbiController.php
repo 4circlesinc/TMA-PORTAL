@@ -27,13 +27,16 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * CBI. Citizenship by Investment (development preview).
  *
- * Administrator-only while the module beds in. It ships in the SPA shell
- * (/cbi, with a sidebar row and the cbi.view capability) and also as a
- * chromeless preview at /dev/cbi. Every endpoint here 404s, never 403s —
- * unless the FEATURE_CBI flag is on AND the caller is an administrator, so
- * to everyone else the module still does not exist. Role::can() checks the
- * same flag before its admin short-circuit, which keeps the nav row, the
- * page gate and this API in agreement.
+ * Administrator-only while the module beds in. The SPA listing at /cbi
+ * retired at the CIP cutover (Phase 11c): while FEATURE_CIP is on, that
+ * URL redirects to /citizenship-applications. This controller still serves
+ * the chromeless preview at /dev/cbi and the /portal/cbi API for a
+ * read-only verification cycle, then 404s the same way when FEATURE_CBI
+ * is off. Every endpoint here 404s, never 403s — unless the FEATURE_CBI
+ * flag is on AND the caller is an administrator, so to everyone else the
+ * module still does not exist. Role::can() checks the same flag before its
+ * admin short-circuit, which keeps the nav row, the page gate and this API
+ * in agreement.
  */
 class CbiController extends Controller
 {

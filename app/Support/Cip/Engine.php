@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * The one path an application's status travels, a FROM→TO map plus a
  * per-transition permission, applied in a transaction that also writes the
- * append-only cip_events row. Nothing else writes cip_applications.status.
+ * append-only cip_events row. Live moves write cip_applications.status
+ * only here. {@see Cutover} is the one other writer: it restores a
+ * historical status the lifecycle cannot walk, without notices.
  *
  * The map is the whole lifecycle from day one. Notification fan-out attaches
  * at {@see write()}, every status change is one §22 notice, in the filing

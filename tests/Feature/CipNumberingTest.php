@@ -6,7 +6,9 @@ use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Numbering;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -80,6 +82,20 @@ class CipNumberingTest extends TestCase
         $this->assertSame('10T1G12661P', $application->displayNumber());
         // The internal number is retained for audit and invoicing.
         $this->assertNotNull($application->internal_number);
+    }
+
+    public function test_reserving_a_historical_number_keeps_the_sequence_ahead_of_it(): void
+    {
+        $creator = $this->creator();
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $yy = now()->format('y');
+
+        DB::transaction(function () use ($galaxy, $yy) {
+            Numbering::reserve($galaxy, "GAL{$yy}-00007");
+        });
+
+        $next = Applications::create($galaxy, $creator);
+        $this->assertSame("GAL{$yy}-00008", $next->internal_number);
     }
 
     public function test_family_size_counts_every_person(): void

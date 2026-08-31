@@ -17,7 +17,7 @@
 
   function cipApplicationsRest(pathname) {
     var p = String(pathname || '').replace(/\/+$/, '') || '/';
-    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients', '/cbi'];
     for (var i = 0; i < prefixes.length; i++) {
       var pre = prefixes[i];
       if (p === pre) return '';
@@ -505,10 +505,12 @@
       }
       if (p === '/cbi') {
         return {
-          navId: 'cbi',
-          view: 'cbi',
-          title: 'CBI',
-          crumb: 'CBI',
+          navId: 'clients',
+          view: 'clients',
+          title: 'CIP Applications',
+          crumb: 'CIP Applications',
+          clientsScreen: 'list',
+          legacyRedirect: true,
         };
       }
       if (p === '/pricing') {
@@ -569,7 +571,6 @@
       if (view === 'messages' || navId === 'so-messages') return '/social/messages';
       if (view === 'feed' || navId === 'so-feed') return '/social/feed';
       if (view === 'calendar' || navId === 'calendar') return '/calendar';
-      if (view === 'cbi' || navId === 'cbi') return '/cbi';
       if (view === 'pricing' || navId === 'pricing') return '/pricing';
       /* Generic fallback: use the sidebar leaf's href for this nav id */
       var leafForNav = leaves.filter(function (l) { return l.getAttribute('data-nav') === navId; })[0];

@@ -43,7 +43,6 @@
   <link rel="stylesheet" href="css/portal-files.css?v=39">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=23">
   <link rel="stylesheet" href="css/feed.css?v=3">
-  <link rel="stylesheet" href="css/cbi.css?v=10">
   <!-- In <head> on purpose: it settles the role-gated nav items before the
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
@@ -338,10 +337,6 @@
       </div>
 
       <div class="tma-dash__view" data-view="client-hub" hidden>
-        <div data-portal-mount></div>
-      </div>
-
-      <div class="tma-dash__view" data-view="cbi" hidden>
         <div data-portal-mount></div>
       </div>
 
@@ -640,7 +635,7 @@
   <script src="js/cip-sync.js?v=2" defer></script>
   <script src="js/files-sync.js?v=2" defer></script>
   <script src="js/clients-sync.js?v=1" defer></script>
-  <script src="js/clients.js?v=121" defer></script>
+  <script src="js/clients.js?v=122" defer></script>
   <script src="js/calendar.js?v=5" defer></script>
   <script src="js/pricing.js" defer></script>
   <script src="js/two-step-countries.js" defer></script>
@@ -665,7 +660,7 @@
   <script src="js/portal-admin.js?v=17" defer></script>
   <script src="js/portal-upload-manager.js?v=10" defer></script>
   <!-- The people cell and its hover card, shared by the File Library's Owner
-       column and CBI's Assigned column. Must precede both: they call
+       column and CIP's Assigned column. Must precede both: they call
        TMAPersonCard.faces() while rendering, and deferred scripts run in
        document order. -->
   <script src="js/person-card.js?v=2" defer></script>
@@ -674,12 +669,11 @@
        TMAFilesNet + TMAPortalUI, and must precede all three callers. -->
   <script src="js/portal-file-requests.js?v=1" defer></script>
   <script src="js/portal-files.js?v=55" defer></script>
-  <script src="js/cbi.js?v=17" defer></script>
   <script src="js/call-recordings.js?v=4" defer></script>
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=27" defer></script>
   <script src="js/portal-home.js?v=54" defer></script>
-  <script src="js/dashboard.js?v=44" defer></script>
+  <script src="js/dashboard.js?v=45" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>
   <script src="js/presence-status.js?v=11" defer></script>

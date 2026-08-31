@@ -41,15 +41,15 @@ class EmployeeReachTest extends TestCase
      * Every page slug the portal serves, sorted so the snapshot below reads as
      * a set rather than as the order of a constant. '/settings' is excluded:
      * it is a redirect to /account-settings, so it never answers 200 for
-     * anyone. '/clients' is the same kind of leftover: it redirects to
-     * /citizenship-applications.
+     * anyone. '/clients' and '/cbi' are the same kind of leftover: they
+     * redirect to /citizenship-applications.
      */
     private function pages(): array
     {
         $pages = array_values(array_diff(array_merge(
             LegacyPageController::SPA_PAGES,
             LegacyPageController::STANDALONE_PAGES,
-        ), ['settings', 'clients']));
+        ), ['settings', 'clients', 'cbi']));
 
         sort($pages);
 

@@ -22,6 +22,14 @@ class CipEvent extends Model
 
     public const ACTION_CREATED = 'created';
 
+    /**
+     * A historical Smartsheet / CBI file landed in the native caseload.
+     *
+     * Its own action rather than created: filing is a person opening a
+     * wizard; cutover is a system restore of a file that already existed.
+     */
+    public const ACTION_IMPORTED = 'imported';
+
     public const ACTION_STATUS_CHANGED = 'status_changed';
 
     public const ACTION_ASSIGNED = 'assigned';

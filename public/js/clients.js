@@ -34,7 +34,7 @@
 
   function cipPathPrefix(pathname) {
     var p = String(pathname || '').replace(/\/+$/, '') || '/';
-    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients', '/cbi'];
     for (var i = 0; i < prefixes.length; i++) {
       var pre = prefixes[i];
       if (p === pre || p.indexOf(pre + '/') === 0) return pre;
@@ -4849,19 +4849,29 @@
    */
   function cbiToolbarBtn(c) {
     if (!c) return '';
-    var cbi = (PROFILES[c.id] || {}).cbi;
-    if (!cbi || !cbi.applicationUuid) return '';
-
+    var profile = PROFILES[c.id] || {};
+    var cbi = profile.cbi;
+    var cip = profile.cip;
     var access = window.TMAPortalAccess;
-    if (access && access.can && !access.can('cbi.view')) return '';
+    var cipReach = access && typeof access.cipReach === 'function' && access.cipReach();
+    var number = (cbi && cbi.applicantNumber) || '';
+    var root = window.__TMA_SITE_ROOT || '';
+    var href = '';
+
+    // Cutover files (and native ones) open on the CIP application. Leftover
+    // mirror-only rows still use the /dev/cbi preview while FEATURE_CBI is on.
+    if (cipReach && cip && cip.applicationUuid) {
+      href = root + CIP_APPLICATIONS_PATH + '/' + encodeURIComponent(c.id);
+    } else if (cbi && cbi.applicationUuid && access && access.can && access.can('cbi.view')) {
+      href = root + '/dev/cbi#/app/' + encodeURIComponent(cbi.applicationUuid);
+    }
+    if (!href) return '';
 
     return (
-      // Spelled out rather than "CBI": the toolbar is read by people who do
-      // not live in the module, and the arrow says it leaves this page.
       '<a class="tma-dash__clients-edit-btn tma-dash__clients-edit-btn--accent" href="' +
-      esc((window.__TMA_SITE_ROOT || '') + '/cbi#/app/' + encodeURIComponent(cbi.applicationUuid)) +
+      esc(href) +
       '" title="' + esc('Open the Citizenship by Investment file' +
-        (cbi.applicantNumber ? ' ' + cbi.applicantNumber : '')) + '">' +
+        (number ? ' ' + number : '')) + '">' +
       '<img src="' + ICONS.ArrowUpRight + '" alt="">' +
       '<span>Citizenship by Investment file</span></a>'
     );

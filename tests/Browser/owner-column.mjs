@@ -307,8 +307,8 @@ try {
     log(`      (no name long enough to clip — ${cols.longestName} chars)`);
   }
 
-  step(9, 'CBI still works — the same component, not a copy');
-  await page.goto(`${BASE}/cbi`, { waitUntil: 'networkidle' });
+  step(9, 'CBI preview still works — the same component, not a copy');
+  await page.goto(`${BASE}/dev/cbi`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2500);
 
   // A fresh database has no CBI applications, so the table may legitimately be
