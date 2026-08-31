@@ -23,9 +23,10 @@
  *     pdfDocument), so a 40 MB scan costs the few hundred KB page one needs,
  *     and the document is destroyed the moment the thumbnail exists.
  *   - Results are cached by URL for the life of the page. The portal
- *     re-renders these lists constantly (every poll morphs the DOM), and a
- *     cached thumbnail is re-applied synchronously, so a repaint never flashes
- *     the icon back.
+ *     re-renders these lists constantly (every poll morphs the DOM). The
+ *     cached picture is written into the markup itself, so a repaint never
+ *     flashes the icon back. Applying it only after the morph was the blink:
+ *     icon, thumbnail, icon, thumbnail, until the poll stopped.
  *
  * Rows are found by a MutationObserver rather than by each caller remembering
  * to hydrate: markup that carries `data-file-thumb-pdf` gets a thumbnail no
@@ -184,6 +185,13 @@
 
     var pdf = canRenderPdf() ? pdfUrl(item) : '';
     if (pdf) {
+      // Already painted this session: put the picture in the markup. Leaving
+      // the icon here and swapping later is what made every list blink — the
+      // morph re-drew the icon, then the observer put the page back, forever.
+      if (cache[pdf]) {
+        return '<img class="' + esc((cls + ' tma-file-thumb--doc').trim()) +
+          '" src="' + esc(cache[pdf]) + '"' + alt + (size ? box : '') + extra + '>';
+      }
       // The icon first, always. Page one replaces it if and when it renders,
       // so a document that can't be painted simply keeps its icon.
       return '<img class="' + esc(iconCls) + '" src="' + esc(icon) + '"' + alt + iconBox + extra +
@@ -216,7 +224,7 @@
       img.removeAttribute('width');
       img.removeAttribute('height');
     }
-    img.src = dataUrl;
+    if (img.getAttribute('src') !== dataUrl) img.src = dataUrl;
   }
 
   /*
@@ -446,10 +454,13 @@
   function scanSoon() {
     if (scanQueued) return;
     scanQueued = true;
-    setTimeout(function () {
+    // Same frame as the morph, not 150ms later. Waiting was a visible flash
+    // of the type icon on every list refresh, even when the thumbnail was
+    // already in the cache.
+    requestAnimationFrame(function () {
       scanQueued = false;
       scan(document);
-    }, 150);
+    });
   }
 
   function start() {
