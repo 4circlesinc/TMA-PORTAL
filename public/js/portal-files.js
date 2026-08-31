@@ -1043,7 +1043,6 @@
     actions += toolBtn(state.dir === 'asc' ? 'SortAscending' : 'SortDescending', 'sortdir', 'Sort ' + (state.dir === 'asc' ? 'descending' : 'ascending'));
     actions += toolBtn('ArrowClockwise', 'refresh', 'Refresh');
     actions += sortFieldSelect();
-    actions += filterControl();
     actions += ownerControl();
 
     // Bulk actions appear inline after a divider + "N Selected", exactly like
@@ -1117,17 +1116,6 @@
       { value: 'size', label: 'Size' },
       { value: 'type', label: 'Type' },
     ], state.sort, 'data-files-sort-menu', 'Sort by');
-  }
-
-  function filterControl() {
-    return menuControl([
-      { value: '', label: 'All types' },
-      { value: 'pdf', label: 'PDF' }, { value: 'word', label: 'Word' },
-      { value: 'excel', label: 'Excel' }, { value: 'powerpoint', label: 'PowerPoint' },
-      { value: 'image', label: 'Images' }, { value: 'video', label: 'Video' },
-      { value: 'audio', label: 'Audio' }, { value: 'archive', label: 'Archives' },
-      { value: 'text', label: 'Text' },
-    ], state.filterType, 'data-files-filter-menu', 'Filter by type');
   }
 
   /*
@@ -1461,7 +1449,6 @@
       reload();
     });
     wireSortHeaders(el);
-    ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; reload(); });
     /*
      * Pressing the pill that is already on clears it, so the filter can always
      * be undone where it was set.
