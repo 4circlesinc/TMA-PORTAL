@@ -75,14 +75,20 @@ class CipLettersTest extends TestCase
     {
         $admin = $this->user(Role::ADMINISTRATOR);
 
-        $types = $this->actingAs($admin)
+        $payload = $this->actingAs($admin)
             ->getJson('/portal/cip/letters')
             ->assertOk()
             ->assertJsonPath('canEdit', true)
-            ->json('types');
+            ->json();
+
+        $types = $payload['types'];
 
         $this->assertSame(array_values(InvestmentType::ALL), array_column($types, 'label'));
         $this->assertCount(5, $types);
+        $this->assertSame(
+            array_column(Letters::placeholders(), 'token'),
+            array_column($payload['placeholders'], 'token'),
+        );
 
         foreach ($types as $type) {
             $this->assertSame(['Granted', 'Denied'], array_column($type['letters'], 'decisionLabel'));
@@ -156,9 +162,9 @@ class CipLettersTest extends TestCase
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
 
         $this->postCipDecision($admin, $application->uuid, [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk();
 
         $expected = 'AA - GRANTED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
@@ -188,9 +194,9 @@ class CipLettersTest extends TestCase
         $application = $this->inBackgroundCheck($admin, InvestmentType::NATIONAL_ACTION_BONDS);
 
         $this->postCipDecision($admin, $application->uuid, [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk();
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
@@ -212,9 +218,9 @@ class CipLettersTest extends TestCase
         $application = $this->inBackgroundCheck($admin, InvestmentType::ENTERPRISE_PROJECT);
 
         $this->postCipDecision($admin, $application->uuid, [
-                'decision' => Status::DENIED,
-                'decidedAt' => '2026-08-18',
-            ])
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk();
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
@@ -237,9 +243,9 @@ class CipLettersTest extends TestCase
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
 
         $this->postCipDecision($admin, $application->uuid, [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-18',
-            ])
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
             ->assertOk();
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
@@ -253,6 +259,66 @@ class CipLettersTest extends TestCase
                 && str_contains($body, 'STAGE 1')
                 && str_contains($body, 'font-weight:700')
                 && $mail->payload['greeting'] === 'Dear Ada Admin,';
+        });
+    }
+
+    public function test_an_other_route_fills_the_named_investment_and_the_decision_date(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $letter = CipDecisionTemplate::query()
+            ->where('investment_type', InvestmentType::OTHER)
+            ->where('decision', Status::GRANTED)
+            ->first();
+
+        $this->actingAs($admin)->patchJson('/portal/cip/letters/'.$letter->uuid, [
+            'title' => '{{number}} — {{investmentType}} granted',
+            'body' => '{{applicant}} was granted on {{decisionDate}} under {{investmentType}}.',
+        ])->assertOk();
+
+        $application = $this->inBackgroundCheck($admin, InvestmentType::OTHER);
+        $application->forceFill(['investment_type_other' => 'Hotel licence'])->save();
+
+        $this->postCipDecision($admin, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
+            ->assertOk();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return $mail->payload['title'] === '10T1G12661P — Hotel licence granted'
+                && $mail->payload['lead'] === 'Chen Wei was granted on 18.08.2026 under Hotel licence.';
+        });
+    }
+
+    public function test_an_unknown_investment_type_uses_the_other_letter(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $letter = CipDecisionTemplate::query()
+            ->where('investment_type', InvestmentType::OTHER)
+            ->where('decision', Status::GRANTED)
+            ->first();
+
+        $this->actingAs($admin)->patchJson('/portal/cip/letters/'.$letter->uuid, [
+            'title' => 'OTHER CATCH-ALL',
+            'body' => 'This is the Other granted letter.',
+        ])->assertOk();
+
+        $application = $this->inBackgroundCheck($admin, InvestmentType::NATIONAL_ACTION_BONDS);
+        $application->forceFill(['investment_type' => 'legacy_mystery'])->save();
+
+        $this->postCipDecision($admin, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])
+            ->assertOk();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return $mail->payload['title'] === 'OTHER CATCH-ALL'
+                && $mail->payload['lead'] === 'This is the Other granted letter.';
         });
     }
 }

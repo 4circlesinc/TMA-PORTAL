@@ -114,7 +114,7 @@ class CipLetterController extends Controller
             'id' => $letter->uuid,
             'investmentType' => $letter->investment_type,
             'decision' => $letter->decision,
-            'decisionLabel' => $letter->decision === Status::GRANTED ? 'Granted' : 'Denied',
+            'decisionLabel' => $letter->decisionLabel(),
             'title' => $letter->title,
             'body' => $letter->body,
             'customized' => Letters::isCustomized($letter),

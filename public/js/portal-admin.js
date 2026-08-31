@@ -1731,6 +1731,7 @@
 
   function cipLetterModal(found) {
     var letter = found.letter;
+    var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
     var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
       return '{{' + p.token + '}}, ' + p.meaning;
     }).join('<br>');
@@ -1741,17 +1742,21 @@
         '<p class="tma-portal-note">The email subject stays in the filing format. This is the letter itself. Placeholders are filled from the application when it is sent.</p>' +
         ui().field('Title', ui().input({
           value: letter.title,
-          attrs: 'data-cipletter-title maxlength="191"',
+          attrs: 'data-cipletter-title maxlength="191"' + (canEdit ? '' : ' disabled'),
           ariaLabel: 'Letter title',
         })) +
-        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000">' + ui().esc(letter.body) + '</textarea>') +
+        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000"' +
+          (canEdit ? '' : ' disabled') + '>' + ui().esc(letter.body) + '</textarea>') +
         '<p class="tma-portal-table__muted">' + tokens + '</p>' +
-        '<div class="tma-portal-form-actions">' +
-          ui().btn({ label: 'Save', attrs: 'data-cipletter-save' }) +
-          (letter.customized ? ui().btn({ label: 'Restore default', attrs: 'data-cipletter-restore', variant: 'ghost' }) : '') +
-        '</div>',
+        (canEdit
+          ? '<div class="tma-portal-form-actions">' +
+            ui().btn({ label: 'Save', attrs: 'data-cipletter-save' }) +
+            (letter.customized ? ui().btn({ label: 'Restore default', attrs: 'data-cipletter-restore', variant: 'ghost' }) : '') +
+            '</div>'
+          : '<p class="tma-portal-note">Only an administrator can change these letters.</p>'),
       onMount: function (host) {
-        host.querySelector('[data-cipletter-save]').addEventListener('click', function () {
+        var save = host.querySelector('[data-cipletter-save]');
+        if (save) save.addEventListener('click', function () {
           var title = (host.querySelector('[data-cipletter-title]').value || '').trim();
           var body = (host.querySelector('[data-cipletter-body]').value || '').trim();
           if (!title || !body) { ui().toastError('Title and letter are both required.'); return; }
@@ -1791,15 +1796,15 @@
         (CIPLETTERS.data.types || []).map(function (t) {
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
             ui().table(['Decision', 'Title', ''], t.letters.map(function (letter) {
+              var action = canEdit ? 'Edit letter' : 'View letter';
+              var icon = canEdit ? 'PencilSimple' : 'Eye';
               return '<tr>' +
                 '<td>' + ui().esc(letter.decisionLabel) +
                 (letter.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
                 '<td class="tma-portal-table__muted">' + ui().esc(letter.title) + '</td>' +
-                '<td>' + (canEdit
-                  ? '<div class="tma-portal-row-actions">' +
-                    '<button type="button" class="tma-portal-icon-btn" data-cipletter-edit="' + ui().esc(letter.id) + '" title="Edit letter" aria-label="Edit letter"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
-                    '</div>'
-                  : '') + '</td></tr>';
+                '<td><div class="tma-portal-row-actions">' +
+                  '<button type="button" class="tma-portal-icon-btn" data-cipletter-edit="' + ui().esc(letter.id) + '" title="' + action + '" aria-label="' + action + '"><img src="images/icons/phosphor/' + icon + '.svg" alt=""></button>' +
+                '</div></td></tr>';
             }).join(''));
         }).join('');
     },

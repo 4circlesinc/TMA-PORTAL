@@ -39,6 +39,6 @@ class CipDecisionTemplate extends Model
 
     public function decisionLabel(): string
     {
-        return Status::label((string) $this->decision);
+        return $this->decision === Status::GRANTED ? 'Granted' : 'Denied';
     }
 }

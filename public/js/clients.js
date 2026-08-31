@@ -10830,6 +10830,15 @@
     var picking = !chosen;
     var letterOptional = !!opts.letterOptional;
     var existingLetter = opts.existingLetter;
+    var held = applicationHeldById(applicationId);
+    var route = (opts.investmentType || (held && held.investmentType) || '').trim();
+    var letterLine = picking
+      ? (route
+        ? ' The ' + esc(route) + ' Granted or Denied letter will go out with the notice.'
+        : ' The Granted or Denied letter for this investment type will go out with the notice.')
+      : (route
+        ? ' The ' + esc(route) + ' ' + (chosen === 'granted' ? 'granted' : 'denied') + ' letter will go out with the notice.'
+        : ' The matching decision letter will go out with the notice.');
 
     var letterField =
       '<div class="tma-portal-drop' + (existingLetter && existingLetter.fileName ? ' is-filled' : '') + '" data-cip-decision-drop>' +
@@ -10871,10 +10880,10 @@
         letterField +
         '<p class="tma-portal-modal__text">' +
         (picking
-          ? 'The application will move to Approved or Denied. This cannot be undone from here.'
+          ? 'The application will move to Approved or Denied.' + letterLine + ' This cannot be undone from here.'
           : (chosen === 'granted'
-            ? 'The application will move to Approved. This cannot be undone from here.'
-            : 'The application will move to Denied. This cannot be undone from here.')) +
+            ? 'The application will move to Approved.' + letterLine + ' This cannot be undone from here.'
+            : 'The application will move to Denied.' + letterLine + ' This cannot be undone from here.')) +
         '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-decision>Cancel</button>' +
