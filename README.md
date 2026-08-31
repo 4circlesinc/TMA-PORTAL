@@ -146,6 +146,11 @@ docker compose exec app php artisan migrate:status
 docker compose exec app php artisan migrate:rollback --step=1
 ```
 
+`migrate:fresh`, `migrate:refresh`, `migrate:reset`, and `db:wipe` are
+blocked in every environment except PHPUnit (`--force` does not override
+them). They drop every table. Do not run them; do not ask an agent to run
+them. A clean local database is `docker compose down -v` below — ask first.
+
 Any artisan command works the same way:
 
 ```bash
@@ -185,6 +190,9 @@ docker compose down -v
 development database and the container-managed `vendor` directory. There is no
 undo and no backup is taken. The next `docker compose up` re-migrates from
 scratch and re-seeds the single administrator — you get an empty portal.
+
+Do not use `php artisan migrate:fresh` (or `refresh` / `reset` / `db:wipe`)
+for this. Those commands are prohibited.
 
 Use it when the schema is wedged or you want a clean slate. For everything else,
 plain `docker compose down` keeps your data.

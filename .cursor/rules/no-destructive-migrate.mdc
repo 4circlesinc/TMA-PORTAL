@@ -1,0 +1,15 @@
+---
+description: Never run migrate:fresh or other table-dropping Artisan commands; ask first.
+alwaysApply: true
+---
+
+# No destructive database resets
+
+`migrate:fresh`, `migrate:refresh`, `migrate:reset`, and `db:wipe` are prohibited in this app (see `AppServiceProvider`). `--force` does not override that.
+
+- Do not run those commands. Do not suggest them as a schema or test fix.
+- If a database reset is truly required, stop and ask. Do not proceed without explicit permission.
+- Forward-only: `php artisan migrate` or `docker compose run --rm migrate`.
+- Local wipe of Docker volumes (`docker compose down -v`) is also destructive. Ask first.
+
+PHPUnit `RefreshDatabase` is the exception; it uses in-memory SQLite and must keep working.

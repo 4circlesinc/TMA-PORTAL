@@ -7,7 +7,9 @@
 .phpactor.json
 .phpunit.result.cache
 /.codex
-/.cursor/
+# Local Cursor state. Project rules in .cursor/rules/ are committed.
+/.cursor/*
+!/.cursor/rules/
 /.idea
 /.nova
 /.phpunit.cache

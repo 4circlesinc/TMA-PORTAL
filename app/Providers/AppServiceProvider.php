@@ -6,8 +6,10 @@ use App\Mail\Transport\MicrosoftGraphTransport;
 use App\Support\Realtime;
 use App\Support\StaySignedIn;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Console\Migrations\RollbackCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -32,6 +34,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * migrate:fresh / refresh / reset / db:wipe drop every table.
+         * --force does not override this. PHPUnit stays allowed because
+         * RefreshDatabase calls migrate:fresh against in-memory SQLite.
+         * One-step rollback stays available (README; a deploy fix).
+         */
+        DB::prohibitDestructiveCommands(! $this->app->runningUnitTests());
+        RollbackCommand::prohibit(false);
+
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
 
