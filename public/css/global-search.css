@@ -806,6 +806,18 @@
   flex-shrink: 0;
 }
 
+/* A file row wearing its real thumbnail (image preview or painted PDF page)
+   rather than the generic document glyph. */
+.tma-search-popup__row-thumb {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--color-border-soft, rgba(0, 0, 0, 0.08));
+  background: var(--color-white, #fff);
+}
+
 .tma-search-popup__row-avatar {
   width: 24px;
   height: 24px;

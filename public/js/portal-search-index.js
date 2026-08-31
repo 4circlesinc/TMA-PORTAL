@@ -247,6 +247,21 @@
       view: 'folders',
       href: '/folders/all',
       keywords: [f.name, f.extension || '', folderName, 'file', 'files'],
+      // What TMAFileThumbs needs to draw the real thumbnail (or the
+      // extension's own icon) instead of a generic document glyph.
+      thumb: {
+        type: 'file',
+        id: f.id,
+        name: f.name,
+        extension: f.extension || '',
+        category: f.category || '',
+        mime: f.mime || '',
+        icon: f.icon || '',
+        thumbUrl: f.thumbUrl || '',
+        previewUrl: f.previewUrl || '',
+        permissions: f.permissions,
+        bytes: f.size,
+      },
     };
     if (!opts.compact) {
       row.subtitle = folderName;

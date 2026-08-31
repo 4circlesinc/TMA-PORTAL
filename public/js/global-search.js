@@ -334,7 +334,16 @@
     } else if (item.type === 'folder') {
       iconMarkup = `<img src="${iconUrl('Folder')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'file') {
-      iconMarkup = `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
+      // The file's own face: its thumbnail when one exists, otherwise the
+      // extension's icon — the same call every file list makes.
+      iconMarkup = (window.TMAFileThumbs && item.thumb)
+        ? window.TMAFileThumbs.imgHtml(item.thumb, {
+            size: 24,
+            iconSize: 16,
+            cls: 'tma-search-popup__row-thumb',
+            iconCls: 'tma-search-popup__row-icon',
+          })
+        : `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'query' || item.icon === 'search') {
       iconMarkup = `<img src="${iconUrl('Search16')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'page' || item.type === 'settings') {
@@ -796,6 +805,7 @@
       if (stateName === 'initial') {
         body.innerHTML = renderInitialBody({ interactive: true, designDemo: true });
         bindInitialBodyEvents(body, { onInitialSelect: handleInitialSelect });
+        if (window.TMAFileThumbs) window.TMAFileThumbs.hydrate(body);
         return;
       }
 
@@ -812,6 +822,7 @@
         body.querySelectorAll('[data-search-result]').forEach((btn, i) => {
           btn.addEventListener('click', (e) => navigateResult(state.results[i], e));
         });
+        if (window.TMAFileThumbs) window.TMAFileThumbs.hydrate(body);
       }
     }
 
@@ -1124,6 +1135,7 @@
         state.initialItems = initial.items;
         body.innerHTML = initial.html;
         bindInitialBodyEvents(body, { onInitialSelect: handleInitialSelect }, initial.items);
+        if (window.TMAFileThumbs) window.TMAFileThumbs.hydrate(body);
         return;
       }
 
@@ -1140,6 +1152,7 @@
         body.querySelectorAll('[data-search-result]').forEach((btn, i) => {
           btn.addEventListener('click', (e) => navigateResult(state.results[i], e));
         });
+        if (window.TMAFileThumbs) window.TMAFileThumbs.hydrate(body);
       }
     }
 
