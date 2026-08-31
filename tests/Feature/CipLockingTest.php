@@ -405,7 +405,7 @@ class CipLockingTest extends TestCase
             ->assertJsonPath('packageLocked', false);
 
         $this->actingAs($staff)->postJson('/portal/files/folders', [
-            'name' => 'Queries',
+            'name' => 'Follow-up',
             'parent' => $additional->uuid,
         ])->assertCreated();
 
@@ -419,6 +419,49 @@ class CipLockingTest extends TestCase
 
         $this->actingAs($staff)->post('/portal/files/files/'.$file->uuid.'/versions', [
             'file' => UploadedFile::fake()->create('query-v2.pdf', 14, 'application/pdf'),
+        ])->assertCreated();
+
+        $this->assertSame(2, FileVersion::where('file_id', $file->id)->count());
+    }
+
+    public function test_additional_documents_has_the_purpose_drawers_and_they_stay_writable(): void
+    {
+        ['staff' => $staff, 'additional' => $additional, 'main' => $main] = $this->lockedPackage();
+
+        $names = Folder::query()
+            ->where('parent_id', $additional->id)
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame([
+            Tree::ADDITIONAL_NON_COMPLIANCE,
+            Tree::ADDITIONAL_QUERIES,
+            Tree::ADDITIONAL_SUPPLEMENTARY,
+            Tree::ADDITIONAL_UNIT,
+        ], $names);
+
+        $queries = Folder::query()
+            ->where('parent_id', $additional->id)
+            ->where('name', Tree::ADDITIONAL_QUERIES)
+            ->firstOrFail();
+
+        $this->assertFalse(Package::locksFolder($queries));
+        $this->assertTrue(FileAccess::can($staff, 'upload', $queries));
+        $this->assertTrue(Package::locksFolder($main));
+        $this->assertFalse(FileAccess::can($staff, 'upload', $main));
+
+        $this->actingAs($staff)->post('/portal/files/files', [
+            'file' => UploadedFile::fake()->create('unit-query.pdf', 12, 'application/pdf'),
+            'folder' => $queries->uuid,
+        ])->assertCreated();
+
+        $file = FileItem::query()->where('folder_id', $queries->id)->firstOrFail();
+        $this->assertTrue(Versions::canAddVersion($staff, $file));
+
+        $this->actingAs($staff)->post('/portal/files/files/'.$file->uuid.'/versions', [
+            'file' => UploadedFile::fake()->create('unit-query-v2.pdf', 14, 'application/pdf'),
         ])->assertCreated();
 
         $this->assertSame(2, FileVersion::where('file_id', $file->id)->count());
@@ -591,7 +634,7 @@ class CipLockingTest extends TestCase
             'file' => UploadedFile::fake()->create('query.pdf', 12, 'application/pdf'),
         ])->assertCreated();
 
-        $this->assertSame($additional->id, FileItem::firstOrFail()->folder_id);
+        $this->assertSame($additional->id, FileItem::query()->where('name', 'query.pdf')->firstOrFail()->folder_id);
 
         $this->actingAs($staff)->postJson('/portal/files/requests', [
             'title' => 'Another query',

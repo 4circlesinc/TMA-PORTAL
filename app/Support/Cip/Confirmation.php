@@ -128,6 +128,7 @@ class Confirmation
 
             Package::forget();
             Package::revokeOutstandingLinks($application);
+            Tree::provisionAdditionalDrawers($application, $actor);
 
             Engine::record($application, CipEvent::ACTION_PACKAGE_CONFIRMED, $actor, [
                 'reason' => 'confirm_submission',

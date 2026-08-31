@@ -22,6 +22,10 @@ use Illuminate\Support\Str;
  *       ├── Dependent 1
  *       ├── Dependent 2
  *       └── Additional Documents
+ *             ├── Queries
+ *             ├── Non-Compliance Requests
+ *             ├── Supplementary Documents
+ *             └── Unit Requests
  *
  * **Where it hangs.** Every application's main applicant gets a lightweight
  * client-hub record, created here if the applicant is not already one, and
@@ -46,6 +50,23 @@ class Tree
 {
     public const ADDITIONAL = 'Additional Documents';
 
+    /** §17 — what still accepts paper after the original package is frozen. */
+    public const ADDITIONAL_QUERIES = 'Queries';
+
+    public const ADDITIONAL_NON_COMPLIANCE = 'Non-Compliance Requests';
+
+    public const ADDITIONAL_SUPPLEMENTARY = 'Supplementary Documents';
+
+    public const ADDITIONAL_UNIT = 'Unit Requests';
+
+    /** @var list<string> */
+    public const ADDITIONAL_DRAWERS = [
+        self::ADDITIONAL_QUERIES,
+        self::ADDITIONAL_NON_COMPLIANCE,
+        self::ADDITIONAL_SUPPLEMENTARY,
+        self::ADDITIONAL_UNIT,
+    ];
+
     public const POST_APPROVAL = 'Post-Approval Documents';
 
     /**
@@ -60,6 +81,10 @@ class Tree
      *       ├── Dependent 1
      *       ├── Dependent 2
      *       └── Additional Documents
+     *             ├── Queries
+     *             ├── Non-Compliance Requests
+     *             ├── Supplementary Documents
+     *             └── Unit Requests
      *
      * Not under a folder named for the application. Somebody opening a client
      * wants the people, and a numbered folder holding one more folder called
@@ -79,8 +104,8 @@ class Tree
         }
 
         // One shared drawer for everything that belongs to the file rather
-        // than to a person on it.
-        self::childNamed($root, self::ADDITIONAL, $actor);
+        // than to a person on it, plus the §17 purpose folders inside it.
+        self::provisionAdditionalDrawers($application, $actor, $root);
 
         if ($application->folder_id !== $root->id) {
             $application->forceFill(['folder_id' => $root->id])->save();
@@ -89,6 +114,29 @@ class Tree
         self::stampClient($root, $client);
 
         return $root;
+    }
+
+    /**
+     * Additional Documents and the four drawers §17 names for paper that
+     * arrives after confirm: queries, non-compliance, supplementary files,
+     * and Unit requests. Safe to call again; missing drawers are filled in.
+     */
+    public static function provisionAdditionalDrawers(
+        CipApplication $application,
+        ?User $actor = null,
+        ?Folder $root = null,
+    ): Folder {
+        $root ??= $application->folder_id ? Folder::find($application->folder_id) : null;
+        if ($root === null) {
+            $root = self::provision($application, $actor);
+        }
+
+        $additional = self::childNamed($root, self::ADDITIONAL, $actor);
+        foreach (self::ADDITIONAL_DRAWERS as $name) {
+            self::childNamed($additional, $name, $actor);
+        }
+
+        return $additional;
     }
 
     /**
