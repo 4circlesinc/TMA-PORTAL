@@ -93,6 +93,10 @@ class CipRequirementController extends Controller
              */
             $changes = ['label' => $data['label']];
 
+            if (array_key_exists('help', $data)) {
+                $changes['help'] = $this->helpText($data);
+            }
+
             if (array_key_exists('folder', $data)) {
                 $changes['folder'] = $this->folder($data);
             }
@@ -110,7 +114,7 @@ class CipRequirementController extends Controller
                 'key' => $key,
                 'label' => $data['label'],
                 'required' => $data['required'] ?? true,
-                'help' => $data['help'] ?? null,
+                'help' => $this->helpText($data),
                 'folder' => $this->folder($data),
                 'at_pre_approval' => $data['atPreApproval'] ?? true,
                 'at_post_approval' => $data['atPostApproval'] ?? false,
@@ -151,6 +155,10 @@ class CipRequirementController extends Controller
          */
         if (array_key_exists('folder', $data)) {
             $data['folder'] = $this->folder($data);
+        }
+
+        if (array_key_exists('help', $data)) {
+            $data['help'] = $this->helpText($data);
         }
 
         $data = $this->mapPhaseFields($data);
@@ -269,6 +277,21 @@ class CipRequirementController extends Controller
         $folder = trim(str_replace(['/', '\\'], '', (string) ($data['folder'] ?? '')));
 
         return $folder === '' ? null : $folder;
+    }
+
+    /**
+     * The words under the document name on the application.
+     *
+     * Trimmed, and a blank answer stored as null rather than '': the column
+     * means "there is an explanation", and an empty box is not an explanation.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function helpText(array $data): ?string
+    {
+        $help = trim((string) ($data['help'] ?? ''));
+
+        return $help === '' ? null : $help;
     }
 
     /**

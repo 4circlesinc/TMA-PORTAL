@@ -213,6 +213,51 @@ class CipRequirementAdminTest extends TestCase
         $this->assertNull($updated['folder']);
     }
 
+    public function test_the_description_is_written_and_can_be_rewritten(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $created = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Name change document',
+            'help' => '  If applicable. Soft copy only.  ',
+        ])->assertCreated()->json('requirement');
+
+        $this->assertSame('If applicable. Soft copy only.', $created['help']);
+
+        $updated = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$created['id'], [
+            'help' => 'Certified copy. Translate if not in English.',
+        ])->assertOk()->json('requirement');
+
+        $this->assertSame('Certified copy. Translate if not in English.', $updated['help']);
+
+        $cleared = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$created['id'], [
+            'help' => '   ',
+        ])->assertOk()->json('requirement');
+
+        $this->assertNull($cleared['help']);
+    }
+
+    public function test_re_adding_without_a_description_keeps_the_one_already_there(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $created = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Name change document',
+            'help' => 'If applicable. Soft copy only.',
+        ])->assertCreated()->json('requirement');
+
+        $this->actingAs($admin)->deleteJson('/portal/cip/requirements/'.$created['id'])->assertOk();
+
+        $again = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Name change document',
+        ])->assertCreated()->json('requirement');
+
+        $this->assertSame('If applicable. Soft copy only.', $again['help']);
+    }
+
     /**
      * Opening an application settles its checklist against today's templates.
      *

@@ -35,7 +35,7 @@
     { id: 'clienthub-access', label: 'Access', group: 'CIP Console' },
     { id: 'service-teams', label: 'Service teams', group: 'CIP Console' },
     { id: 'custom-fields', label: 'Custom fields', group: 'CIP Console' },
-    { id: 'cip-documents', label: 'Document requirements', group: 'CIP Console' },
+    { id: 'cip-documents', label: 'Document requirements', group: 'CIP Console', keywords: ['description', 'help', 'checklist'] },
     { id: 'cip-letters', label: 'Granted and Denied letters', group: 'CIP Console' },
     { id: 'cip-distribution', label: 'Distribution group', group: 'CIP Console' },
     { id: 'account-security', label: 'Account security', group: 'Security' },
@@ -132,7 +132,7 @@
         view: 'admin',
         adminPage: page.id,
         href: '/account-settings?settings-page=' + encodeURIComponent(page.id),
-        keywords: ['settings', 'admin', page.label, page.id, page.group || '', 'preferences', 'security', 'storage'],
+        keywords: ['settings', 'admin', page.label, page.id, page.group || '', 'preferences', 'security', 'storage'].concat(page.keywords || []),
       };
     });
   }

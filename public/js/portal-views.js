@@ -181,7 +181,7 @@
     var t = e.target;
     if (!t || t.nodeType !== 1 || !t.closest) return;
     var cell = t.closest('.tma-portal-table td');
-    if (!cell) return;
+    if (!cell || cell.classList.contains('tma-portal-cell--wrap')) return;
     var el = t;
     while (el && el !== cell.parentNode) {
       var ours = el.hasAttribute('data-clip-title');
@@ -250,6 +250,14 @@
       (o.ariaLabel ? ' aria-label="' + esc(o.ariaLabel) + '"' : '') + '>';
   }
 
+  function textarea(opts) {
+    var o = opts || {};
+    return '<textarea class="tma-portal-textarea" ' + (o.attrs || '') +
+      ' placeholder="' + esc(o.placeholder || '') + '"' +
+      (o.ariaLabel ? ' aria-label="' + esc(o.ariaLabel) + '"' : '') + '>' +
+      esc(o.value || '') + '</textarea>';
+  }
+
   function field(label, controlHtml) {
     return '<div class="tma-portal-field">' +
       '<span class="tma-portal-field__label">' + esc(label) + '</span>' +
@@ -272,6 +280,25 @@
     if (e.key === 'Escape') closeModal();
   }
 
+  /*
+   * A modal that is only a name field and one confirm button. Those used to
+   * stack the button under the input; mark them so CSS can sit Save on the
+   * field. Anything with a second field, a select, a textarea, Cancel, or
+   * extra copy is left alone.
+   */
+  function markPromptBody(host) {
+    var body = host.querySelector('.tma-portal-modal__body');
+    if (!body) return;
+    var kids = [];
+    for (var i = 0; i < body.children.length; i++) kids.push(body.children[i]);
+    if (kids.length !== 2) return;
+    if (!kids[0].classList.contains('tma-portal-field')) return;
+    if (!kids[1].classList.contains('tma-portal-form-actions') && !kids[1].classList.contains('tma-portal-modal__foot')) return;
+    if (kids[1].children.length !== 1) return;
+    if (body.querySelector('textarea, select, .tma-portal-btn--ghost')) return;
+    body.classList.add('tma-portal-modal__body--prompt');
+  }
+
   function openModal(opts) {
     var o = opts || {};
     closeModal();
@@ -292,6 +319,7 @@
       el.addEventListener('click', closeModal);
     });
     document.addEventListener('keydown', onModalKey);
+    markPromptBody(modalHost);
     if (typeof o.onMount === 'function') o.onMount(modalHost);
     var focusable = modalHost.querySelector('input, select, textarea, button:not([data-portal-modal-close])');
     if (focusable) focusable.focus();
@@ -455,6 +483,7 @@
     toggle: toggle,
     select: select,
     input: input,
+    textarea: textarea,
     field: field,
     openModal: openModal,
     closeModal: closeModal,

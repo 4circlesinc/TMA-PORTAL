@@ -370,6 +370,22 @@
   vertical-align: middle;
 }
 
+/* The document column holds a name and a description, so it wraps. Every
+   other cell stays one line; this one is the sentence, not a fact. */
+.tma-portal-table td.tma-portal-cell--wrap {
+  max-width: none;
+  height: auto;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  vertical-align: top;
+}
+
+.tma-portal-table td.tma-portal-cell--wrap .tma-portal-table__muted {
+  display: block;
+  margin-top: 2px;
+}
+
 .tma-portal-cipdocs-legend {
   margin: var(--space-12) 0 var(--space-20);
 }
@@ -1505,6 +1521,47 @@
 }
 
 .tma-portal-modal__body p { margin: 0; font-size: var(--text-size-14); line-height: var(--text-lh-14); color: var(--color-text-secondary); }
+
+.tma-portal-modal__body .tma-portal-input,
+.tma-portal-modal__body .tma-portal-textarea {
+  max-width: none;
+}
+
+/*
+ * One name field + one Save (or Create) button: the button sits on the
+ * input, not on a line of its own. Rename, new-folder, and every other
+ * prompt that is only "type a name and confirm" get this class from
+ * openModal. Multi-field forms stay stacked.
+ */
+.tma-portal-modal__body--prompt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-12);
+  row-gap: var(--space-8);
+  align-items: end;
+}
+
+.tma-portal-modal__body--prompt > .tma-portal-field {
+  grid-column: 1;
+}
+
+.tma-portal-modal__body--prompt > .tma-portal-field .tma-portal-input {
+  max-width: none;
+  width: 100%;
+}
+
+.tma-portal-modal__body--prompt > :is(.tma-portal-form-actions, .tma-portal-modal__foot) {
+  grid-column: 2;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  margin: 0;
+}
+
+.tma-portal-modal__body--prompt > :is(.tma-portal-form-actions, .tma-portal-modal__foot) .tma-no-data__btn {
+  min-height: 40px;
+  white-space: nowrap;
+}
 
 /* ── Request Files modal (portal-file-requests.js) ───
  *

@@ -1521,30 +1521,56 @@
   }
 
   // A modal, not window.prompt(): the desktop app's renderer has no prompt()
-  // at all, so the pencil did nothing there. Same shape as renameOrgModal.
-  function cipDocRenameModal(f, saved) {
+  // at all, so the pencil did nothing there. Name and description together —
+  // the description is the grey line under the document on the application.
+  function cipDocFormModal(opts) {
+    var isNew = !opts.id;
     ui().openModal({
-      title: 'Rename document',
-      body: ui().field('Document name', ui().input({ value: f.r.label, attrs: 'data-cipdoc-rename maxlength="191"' })) +
-        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipdoc-rename-save' }) + '</div>',
+      title: isNew ? 'Add a document' : 'Edit document',
+      body:
+        ui().field('Document name', ui().input({
+          value: opts.label || '',
+          attrs: 'data-cipdoc-name maxlength="191"',
+        })) +
+        ui().field('Description', ui().textarea({
+          value: opts.help || '',
+          placeholder: 'Shown under the name on the application — who it applies to, certified or original, soft copy or hard copy…',
+          attrs: 'data-cipdoc-help maxlength="2000" rows="6"',
+        })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipdoc-form-save' }) + '</div>',
       onMount: function (host) {
-        var input = host.querySelector('[data-cipdoc-rename]');
+        var nameEl = host.querySelector('[data-cipdoc-name]');
+        var helpEl = host.querySelector('[data-cipdoc-help]');
         function save() {
-          var label = (input.value || '').trim();
-          if (!label) { ui().toastError('Name the document first.'); return; }
-          if (label === f.r.label) { ui().closeModal(); return; }
-          filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(f.r.id), { label: label })
-            .then(function () { ui().closeModal(); ui().toast('Renamed'); saved(); })
-            .catch(function (e) { ui().toastError(e.message); });
+          var label = (nameEl.value || '').trim();
+          var help = (helpEl.value || '').trim();
+          if (!label) { ui().toastError('Name the document first.'); nameEl.focus(); return; }
+          var payload = { label: label };
+          var req;
+          if (isNew) {
+            payload.applicantType = opts.applicantType;
+            payload.required = true;
+            if (help) payload.help = help;
+            req = filelibJson('POST', '/portal/cip/requirements', payload);
+          } else {
+            payload.help = help || null;
+            if (label === opts.label && help === (opts.help || '')) { ui().closeModal(); return; }
+            req = filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(opts.id), payload);
+          }
+          req.then(function () {
+            ui().closeModal();
+            ui().toast(isNew ? 'Added' : 'Saved');
+            opts.saved();
+          }).catch(function (e) { ui().toastError(e.message); });
         }
-        host.querySelector('[data-cipdoc-rename-save]').addEventListener('click', save);
-        input.addEventListener('keydown', function (e) {
+        host.querySelector('[data-cipdoc-form-save]').addEventListener('click', save);
+        nameEl.addEventListener('keydown', function (e) {
           if (e.key !== 'Enter') return;
           e.preventDefault();
           save();
         });
-        input.focus();
-        input.select();
+        nameEl.focus();
+        if (opts.label) nameEl.select();
       },
     });
   }
@@ -1627,9 +1653,12 @@
       'Female applicants only, ' + r.label,
     );
 
-    var meta = [];
-    if (r.help) meta.push(ui().esc(r.help));
-    if (r.folder) meta.push('Filed in “' + ui().esc(r.folder) + '”');
+    var desc = r.help
+      ? '<span class="tma-portal-table__muted">' + ui().esc(r.help) + '</span>'
+      : '';
+    var filed = r.folder
+      ? '<span class="tma-portal-table__muted">Filed in “' + ui().esc(r.folder) + '”</span>'
+      : '';
 
     return '<tr>' +
       '<td class="tma-portal-table__check">' + tick + '</td>' +
@@ -1638,9 +1667,10 @@
       '<td class="tma-portal-table__check">' + carry + '</td>' +
       '<td class="tma-portal-table__check">' + reOnly + '</td>' +
       '<td class="tma-portal-table__check">' + femaleOnly + '</td>' +
-      '<td>' + name +
+      '<td class="tma-portal-cell--wrap">' + name +
       (r.retired ? ' <span class="tma-portal-tag">Retired</span>' : '') +
-      (meta.length ? '<br><span class="tma-portal-table__muted">' + meta.join(' · ') + '</span>' : '') +
+      desc +
+      filed +
       '</td>' +
       '<td>' + (canEdit
         ? '<div class="tma-portal-row-actions">' +
@@ -1649,7 +1679,7 @@
             : '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-down="' + ui().esc(r.id) + '" title="Move down" aria-label="Move down"><img src="images/icons/phosphor/CaretDown.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-folder="' + ui().esc(r.id) + '" title="Choose a folder" aria-label="Choose a folder"><img src="images/icons/phosphor/FolderSimple.svg" alt=""></button>' +
-              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Rename" aria-label="Rename"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Edit name and description" aria-label="Edit name and description"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-retire="' + ui().esc(r.id) + '" title="Retire" aria-label="Retire"><img src="images/icons/phosphor/Trash.svg" alt=""></button>') +
           '</div>'
         : '') + '</td></tr>';
@@ -1662,7 +1692,7 @@
 
       var canEdit = true;
 
-      return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval.</p>' +
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval. The pencil edits the name and the description shown under it on the application.</p>' +
         cipDocKey() +
         CIPDOCS.types.map(function (t) {
           var live = t.requirements.filter(function (r) { return !r.retired; });
@@ -1707,9 +1737,7 @@
           var type = b.getAttribute('data-cipdoc-add');
           var input = el.querySelector('[data-cipdoc-label="' + type + '"]');
           var label = input && input.value ? input.value.trim() : '';
-          if (!label) { ui().toastError('Name the document first.'); return; }
-          filelibJson('POST', '/portal/cip/requirements', { applicantType: type, label: label, required: true })
-            .then(function () { ui().toast('Added'); saved(); }).catch(failed);
+          cipDocFormModal({ applicantType: type, label: label, help: '', saved: saved });
         });
       });
 
@@ -1797,7 +1825,12 @@
       el.querySelectorAll('[data-cipdoc-edit]').forEach(function (b) {
         b.addEventListener('click', function () {
           var f = req(b.getAttribute('data-cipdoc-edit'));
-          if (f) cipDocRenameModal(f, saved);
+          if (f) cipDocFormModal({
+            id: f.r.id,
+            label: f.r.label,
+            help: f.r.help || '',
+            saved: saved,
+          });
         });
       });
 
