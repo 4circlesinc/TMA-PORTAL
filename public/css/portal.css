@@ -4680,7 +4680,21 @@ label.tma-portal-check-row:hover {
   outline: none;
 }
 
+/* The editor shows the email's own text, not modal commentary — it must
+   beat the generic grey `.tma-portal-modal__body p` note rule. The token
+   flips with the theme, so dark mode stays readable for free. */
+.tma-portal-modal__body .tma-portal-rich__editor,
+.tma-portal-modal__body .tma-portal-rich__editor p,
+.tma-portal-modal__body .tma-portal-rich__editor li {
+  color: var(--color-text-primary);
+}
+
 .tma-portal-rich__editor:focus-visible { outline: none; }
+
+/* Dark theme: the same panel treatment every input gets. */
+.tma-dash[data-theme="dark"] .tma-portal-rich {
+  background-color: var(--dash-panel-bg, var(--color-bg-card));
+}
 
 .tma-portal-connect-library {
   display: flex;
