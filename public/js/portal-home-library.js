@@ -27,9 +27,12 @@
     { key: 'excel', label: 'Excel', icon: 'images/icons/tma/XlsxIcon.svg' },
     { key: 'powerpoint', label: 'PowerPoint', icon: 'images/icons/tma/PptIcon.svg' },
     { key: 'image', label: 'Images', icon: 'images/icons/phosphor/FileImage.svg' },
+    { key: 'video', label: 'Video', icon: 'images/icons/phosphor/FileVideo.svg', mono: true },
+    { key: 'audio', label: 'Audio', icon: 'images/icons/phosphor/FileAudio.svg', mono: true },
     // Line art rather than a brand mark, so it has to be flipped to white when
     // the pill is pressed - see `mono` in pill().
     { key: 'archive', label: 'Archives', icon: 'images/icons/phosphor/FileArchive.svg', mono: true },
+    { key: 'text', label: 'Text', icon: 'images/icons/tma/TxtIcon.svg' },
   ];
 
   var state = {
@@ -650,10 +653,14 @@
      */
     function pill(o) {
       var cls = 'tma-portal-type-pill__icon' + (o.mono ? ' tma-portal-type-pill__icon--mono' : '');
-      return '<button type="button" class="tma-portal-type-pill' + (o.on ? ' is-active' : '') + '"' +
-        ' ' + o.attr + '="' + esc(o.key) + '" aria-pressed="' + o.on + '">' +
+      // Type pills are icon-only (the name rides as tooltip and accessible
+      // name); the tab pills keep their words — "Recent" has no glyph.
+      var iconOnly = o.iconOnly && o.icon;
+      return '<button type="button" class="tma-portal-type-pill' + (iconOnly ? ' tma-portal-type-pill--icon' : '') + (o.on ? ' is-active' : '') + '"' +
+        ' ' + o.attr + '="' + esc(o.key) + '" aria-pressed="' + o.on + '"' +
+        (iconOnly ? ' aria-label="' + esc(o.label) + '" title="' + esc(o.label) + '"' : '') + '>' +
         (o.icon ? '<img class="' + cls + '" src="' + esc(o.icon) + '" alt="">' : '') +
-        '<span class="tma-portal-type-pill__label">' + esc(o.label) + '</span>' +
+        (iconOnly ? '' : '<span class="tma-portal-type-pill__label">' + esc(o.label) + '</span>') +
         '</button>';
     }
 
@@ -667,7 +674,7 @@
     var filterRow = offered.length
       ? '<div class="tma-portal-home-library__types" role="group" aria-label="Filter by type">' +
         offered.map(function (t) {
-          return pill({ attr: 'data-home-lib-filter', key: t.key, label: t.label, icon: t.icon, mono: t.mono, on: t.key === state.filterType });
+          return pill({ attr: 'data-home-lib-filter', key: t.key, label: t.label, icon: t.icon, mono: t.mono, iconOnly: true, on: t.key === state.filterType });
         }).join('') +
         '</div>'
       : '';
