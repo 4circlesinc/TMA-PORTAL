@@ -95,6 +95,32 @@ class SystemEmailTemplatesTest extends TestCase
         $this->assertSame('Confirm email address', $mail->payload['button']['label']);
     }
 
+    public function test_a_rich_editor_body_is_sanitized_and_still_fills_placeholders(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $this->actingAs($admin)
+            ->patchJson('/portal/templates/system-emails/verify-email', ['fields' => [
+                'body' => '<div>Press it, <strong>{{name}}</strong>.'
+                    .'<script>alert(1)</script>'
+                    .'<span style="color:#b42318;position:fixed">soon</span>'
+                    .'<font size="5">please</font>'
+                    .'<span onclick="alert(2)">now</span></div>',
+            ]])
+            ->assertOk()
+            ->assertJsonPath('customized', true);
+
+        $mail = Postcards::verifyEmail('https://portal.test/verify/abc', 'Ada <script>');
+        $body = $mail->payload['bodyHtml'];
+
+        $this->assertStringContainsString('<strong>Ada &lt;script&gt;</strong>', $body, 'placeholder values are escaped');
+        $this->assertStringNotContainsString('<script', $body);
+        $this->assertStringNotContainsString('onclick', $body);
+        $this->assertStringNotContainsString('position:fixed', $body);
+        $this->assertStringContainsString('color:#b42318', $body, 'toolbar colours survive');
+        $this->assertStringContainsString('<font size="5">please</font>', $body, 'toolbar sizes survive');
+    }
+
     public function test_an_unknown_placeholder_is_rejected(): void
     {
         $this->actingAs($this->user(Role::ADMINISTRATOR))

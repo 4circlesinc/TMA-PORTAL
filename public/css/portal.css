@@ -4656,6 +4656,32 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+/* ── rich template editor (compose toolbar over contenteditable) ──── */
+.tma-portal-rich {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  overflow: visible;
+}
+
+.tma-portal-rich .tma-dash__email-compose-toolbar {
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: var(--space-4) var(--space-8);
+}
+
+.tma-portal-rich__editor {
+  min-height: 140px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-20, 1.5);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-portal-rich__editor:focus-visible { outline: none; }
+
 .tma-portal-connect-library {
   display: flex;
   flex-wrap: wrap;

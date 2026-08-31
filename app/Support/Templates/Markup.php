@@ -47,10 +47,14 @@ class Markup
     {
         $text = self::sections($text, $vars);
 
+        // Decided on the authored template, before any value is filled in, so
+        // a "<" typed into somebody's name can never switch the mode.
+        $isHtml = self::looksLikeHtml($text);
+
         // Trusted markup is parked behind tokens so the escaping and the
         // link-spotting below never touch it, then put back at the end.
         $raw = [];
-        $text = (string) preg_replace_callback(self::TOKEN, function (array $m) use ($vars, &$raw) {
+        $text = (string) preg_replace_callback(self::TOKEN, function (array $m) use ($vars, &$raw, $isHtml) {
             if (! array_key_exists($m[1], $vars)) {
                 return $m[0];
             }
@@ -63,8 +67,19 @@ class Markup
                 return "\x1A".(count($raw) - 1)."\x1A";
             }
 
-            return self::text($value);
+            // In an HTML-authored template the value lands inside markup, so
+            // it must be escaped here; the little language escapes whole
+            // lines later in inline() instead.
+            return $isHtml ? e(self::text($value)) : self::text($value);
         }, $text);
+
+        if ($isHtml) {
+            return (string) preg_replace_callback(
+                "/\x1A(\d+)\x1A/",
+                fn (array $m) => $raw[(int) $m[1]] ?? '',
+                self::sanitize($text),
+            );
+        }
 
         $paragraphs = preg_split("/\n[ \t]*\n/", str_replace(["\r\n", "\r"], "\n", trim($text))) ?: [];
         $html = '';
@@ -95,6 +110,139 @@ class Markup
         }
 
         return (string) preg_replace_callback("/\x1A(\d+)\x1A/", fn (array $m) => $raw[(int) $m[1]] ?? '', $html);
+    }
+
+    /**
+     * A body written by the rich editor rather than in the little language.
+     *
+     * The editor only ever saves real tags; hand-typed text virtually never
+     * contains one, and a stray "<" that is not a tag falls through to the
+     * little language and is escaped exactly as before.
+     */
+    public static function looksLikeHtml(string $text): bool
+    {
+        return (bool) preg_match(
+            '/<(p|div|br|strong|b|em|i|u|s|strike|ul|ol|li|a|font|span|blockquote)[\s\/>]/i',
+            $text,
+        );
+    }
+
+    /** Tags a rich-editor body may keep; everything else is unwrapped. */
+    private const SAFE_TAGS = [
+        'p', 'div', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike',
+        'ul', 'ol', 'li', 'a', 'font', 'span', 'blockquote',
+    ];
+
+    /** Inline style properties a span may carry (what the toolbar writes). */
+    private const SAFE_STYLES = ['color', 'background-color', 'font-size', 'font-family'];
+
+    /**
+     * Reduce editor HTML to the tags and attributes the compose toolbar can
+     * produce. Unknown elements are unwrapped (their text survives), event
+     * handlers and scripts never survive, and links keep only http(s) and
+     * mailto destinations — restyled to match the postcards' own links.
+     */
+    public static function sanitize(string $html): string
+    {
+        $doc = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        $doc->loadHTML(
+            '<?xml encoding="utf-8"?><div id="tma-root">'.$html.'</div>',
+            LIBXML_NOENT | LIBXML_NONET,
+        );
+        libxml_use_internal_errors($previous);
+
+        $root = $doc->getElementById('tma-root');
+        if (! $root) {
+            return '';
+        }
+
+        self::scrub($root);
+
+        $out = '';
+        foreach (iterator_to_array($root->childNodes) as $child) {
+            $out .= $doc->saveHTML($child);
+        }
+
+        return $out;
+    }
+
+    private static function scrub(\DOMElement $parent): void
+    {
+        foreach (iterator_to_array($parent->childNodes) as $node) {
+            if ($node instanceof \DOMText) {
+                continue;
+            }
+
+            if (! $node instanceof \DOMElement) {
+                $parent->removeChild($node);
+
+                continue;
+            }
+
+            $tag = strtolower($node->tagName);
+
+            // Their content is the dangerous part, so they go whole.
+            if (in_array($tag, ['script', 'style', 'iframe', 'object', 'embed', 'form', 'head', 'title'], true)) {
+                $parent->removeChild($node);
+
+                continue;
+            }
+
+            self::scrub($node);
+
+            if (! in_array($tag, self::SAFE_TAGS, true)) {
+                // Unwrap: the words stay, the unknown wrapper goes.
+                while ($node->firstChild) {
+                    $parent->insertBefore($node->firstChild, $node);
+                }
+                $parent->removeChild($node);
+
+                continue;
+            }
+
+            foreach (iterator_to_array($node->attributes) as $attr) {
+                $name = strtolower($attr->name);
+                $keep = match (true) {
+                    $tag === 'a' && $name === 'href' => (bool) preg_match('/^(https?:|mailto:)/i', trim($attr->value)),
+                    $tag === 'font' && in_array($name, ['size', 'color', 'face'], true) => true,
+                    $name === 'style' => false, // rebuilt below from the safe subset
+                    default => false,
+                };
+                $style = $name === 'style' ? $attr->value : null;
+                if (! $keep) {
+                    $node->removeAttribute($attr->name);
+                }
+                if ($style !== null) {
+                    $clean = self::safeStyle($style);
+                    if ($clean !== '') {
+                        $node->setAttribute('style', $clean);
+                    }
+                }
+            }
+
+            if ($tag === 'a') {
+                $node->setAttribute('style', self::LINK_STYLE);
+            }
+        }
+    }
+
+    /** The declarations the toolbar writes, and nothing else. */
+    private static function safeStyle(string $style): string
+    {
+        $kept = [];
+        foreach (explode(';', $style) as $declaration) {
+            [$property, $value] = array_pad(explode(':', $declaration, 2), 2, '');
+            $property = strtolower(trim($property));
+            $value = trim($value);
+            if ($value !== ''
+                && in_array($property, self::SAFE_STYLES, true)
+                && ! preg_match('/url\s*\(|expression|javascript/i', $value)) {
+                $kept[] = $property.':'.$value;
+            }
+        }
+
+        return implode(';', $kept);
     }
 
     /**

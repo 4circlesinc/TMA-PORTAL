@@ -6377,6 +6377,90 @@
     });
   }
 
+  /* Menu items live on document.body, so their handler must too — and it must
+   * be bound exactly once for the whole document: the mailbox and any other
+   * surface hosting this toolbar (system-email Templates) share the one open
+   * menu, and a second handler would run every command twice. */
+  var composeMenuDocBound = false;
+  function ensureComposeMenuDocHandler() {
+    if (composeMenuDocBound) return;
+    composeMenuDocBound = true;
+
+    document.addEventListener('mousedown', function (event) {
+      var item = event.target.closest('[data-email-compose-menu-cmd]');
+      if (item) {
+        event.preventDefault();
+        applyComposeCommand(
+          item.getAttribute('data-email-compose-menu-cmd'),
+          item.getAttribute('data-email-compose-menu-value') || undefined
+        );
+        var host = composeMenuEl && composeMenuEl._host;
+        closeComposeMenu();
+        if (host) syncComposeToolbarState(host);
+        return;
+      }
+
+      // A click anywhere else dismisses an open menu.
+      if (composeMenuEl && !event.target.closest('.tma-dash__email-compose-menu') &&
+          !event.target.closest('[data-email-compose-tool-menu]')) {
+        closeComposeMenu();
+      }
+    });
+  }
+
+  /*
+   * The compose toolbar as a shared component: another surface renders
+   * toolbarHtml() above a contenteditable marked data-tma-rich-editor and
+   * calls wire() on their common container — commands, menus and pressed
+   * states then behave exactly as they do in compose.
+   */
+  function wireRichEditorHost(container) {
+    if (!container || container._tmaRichBound) return;
+    container._tmaRichBound = true;
+
+    // mousedown, not click: execCommand needs the selection that is still
+    // live in the editor the instant before the button would steal focus.
+    container.addEventListener('mousedown', function (event) {
+      var menuBtn = event.target.closest('[data-email-compose-tool-menu]');
+      if (menuBtn) {
+        event.preventDefault();
+        var kind = menuBtn.getAttribute('data-email-compose-tool-menu');
+        if (composeMenuEl && composeMenuEl._kind === kind) {
+          closeComposeMenu();
+          return;
+        }
+        openComposeMenu(menuBtn, kind);
+        if (composeMenuEl) { composeMenuEl._kind = kind; composeMenuEl._host = container; }
+        return;
+      }
+
+      var toolBtn = event.target.closest('[data-email-compose-tool-cmd]');
+      if (!toolBtn) return;
+      event.preventDefault();
+      closeComposeMenu();
+      applyComposeCommand(toolBtn.getAttribute('data-email-compose-tool-cmd'));
+      syncComposeToolbarState(container);
+    });
+
+    ensureComposeMenuDocHandler();
+
+    document.addEventListener('selectionchange', function () {
+      if (!container.isConnected || !container.querySelector('[data-tma-rich-editor]')) return;
+      syncComposeToolbarState(container);
+    });
+
+    container.addEventListener('keyup', function (event) {
+      if (event.target.closest('[data-tma-rich-editor]')) syncComposeToolbarState(container);
+    });
+  }
+
+  window.TMAComposeEditor = {
+    toolbarHtml: function (opts) {
+      return renderComposeToolbar(opts || { expand: false, image: false });
+    },
+    wire: wireRichEditorHost,
+  };
+
   function wireComposeEvents(root, state, render) {
     MORPH.unwired(root, '[data-email-compose-window]').forEach(function (windowEl) {
       windowEl.addEventListener('mousedown', function () {
@@ -10582,7 +10666,7 @@
             return;
           }
           openComposeMenu(menuBtn, kind);
-          if (composeMenuEl) composeMenuEl._kind = kind;
+          if (composeMenuEl) { composeMenuEl._kind = kind; composeMenuEl._host = root; }
           return;
         }
 
@@ -10594,27 +10678,9 @@
         syncComposeToolbarState(root);
       });
 
-      // Menu items live on document.body, outside root, so they need their own
-      // listener, and the same mousedown timing for the same reason.
-      document.addEventListener('mousedown', function (event) {
-        var item = event.target.closest('[data-email-compose-menu-cmd]');
-        if (item) {
-          event.preventDefault();
-          applyComposeCommand(
-            item.getAttribute('data-email-compose-menu-cmd'),
-            item.getAttribute('data-email-compose-menu-value') || undefined
-          );
-          closeComposeMenu();
-          syncComposeToolbarState(root);
-          return;
-        }
-
-        // A click anywhere else dismisses an open menu.
-        if (composeMenuEl && !event.target.closest('.tma-dash__email-compose-menu') &&
-            !event.target.closest('[data-email-compose-tool-menu]')) {
-          closeComposeMenu();
-        }
-      });
+      // Menu items live on document.body, outside root; the handler is shared
+      // with every other surface hosting this toolbar and bound once.
+      ensureComposeMenuDocHandler();
 
       // Keep the pressed states honest as the caret moves or the user types.
       document.addEventListener('selectionchange', function () {

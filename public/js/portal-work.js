@@ -1335,6 +1335,58 @@
     });
   }
 
+  /* ── Rich template bodies ─────────────────────────────────────────
+   * The compose toolbar (email.js exports it as TMAComposeEditor) over a
+   * contenteditable, in place of the little-language textarea, so template
+   * editing offers the same formatting as writing a mail. The server
+   * renders either form and sanitises the HTML one (Markup::sanitize, at
+   * save and at render).
+   */
+  function richAvailable() {
+    return !!(window.TMAComposeEditor && window.TMAComposeEditor.toolbarHtml);
+  }
+
+  function looksLikeHtml(text) {
+    return /<(p|div|br|strong|b|em|i|u|s|strike|ul|ol|li|a|font|span|blockquote)[\s\/>]/i.test(text || '');
+  }
+
+  /* The little language, shown as the email it sends: paragraphs, "- "
+     bullets, **bold**, [label](url). Mirrors Markup::html so a default
+     template opens formatted instead of as source. */
+  function markupToHtml(text) {
+    var escDiv = document.createElement('div');
+    function escape(s) { escDiv.textContent = s; return escDiv.innerHTML; }
+    function inline(line) {
+      return escape(line)
+        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+    }
+    return String(text || '').replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n/)
+      .map(function (p) {
+        var lines = p.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+        if (!lines.length) return '';
+        if (lines.every(function (l) { return l.indexOf('- ') === 0; })) {
+          return '<ul>' + lines.map(function (l) { return '<li>' + inline(l.slice(2)) + '</li>'; }).join('') + '</ul>';
+        }
+        return '<p>' + lines.map(inline).join('<br>') + '</p>';
+      }).join('');
+  }
+
+  function richFieldControl(attr, name, value) {
+    // Stored HTML is sanitised at save, so it is safe to show as markup.
+    var html = looksLikeHtml(value) ? value : markupToHtml(value);
+    return '<div class="tma-portal-rich">' +
+      window.TMAComposeEditor.toolbarHtml() +
+      '<div class="tma-portal-rich__editor" contenteditable="true" data-tma-rich-editor ' +
+      attr + '="' + ui().esc(name) + '" role="textbox" aria-multiline="true" aria-label="' + ui().esc(name) + '">' +
+      html + '</div></div>';
+  }
+
+  /* Reads a field whichever control renders it. */
+  function fieldValue(el) {
+    return el.hasAttribute('data-tma-rich-editor') ? el.innerHTML : el.value;
+  }
+
   function etplEditorModal(t) {
     var isNew = !t;
     t = t || { name: '', subject: '', body: '' };
@@ -1348,8 +1400,10 @@
         '<p class="tma-portal-note">Anyone with a mailbox can start a message from this. Leave blanks to fill in.</p>' +
         ui().field('Name', ui().input({ value: t.name, attrs: 'data-etpl-field="name" maxlength="191"', ariaLabel: 'Template name' })) +
         ui().field('Subject', ui().input({ value: t.subject, attrs: 'data-etpl-field="subject" maxlength="500"', ariaLabel: 'Subject' })) +
-        ui().field('Body', '<textarea class="tma-portal-textarea" data-etpl-field="body" rows="12" maxlength="20000">' + ui().esc(t.body) + '</textarea>') +
-        '<p class="tma-portal-table__muted">Blank line for a new paragraph, "- " for bullets, **bold**, [label](url) for links.</p>' +
+        ui().field('Body', richAvailable()
+          ? richFieldControl('data-etpl-field', 'body', t.body)
+          : '<textarea class="tma-portal-textarea" data-etpl-field="body" rows="12" maxlength="20000">' + ui().esc(t.body) + '</textarea>') +
+        (richAvailable() ? '' : '<p class="tma-portal-table__muted">Blank line for a new paragraph, "- " for bullets, **bold**, [label](url) for links.</p>') +
         '<div class="tma-portal-form-actions">' +
         ui().btn({ label: isNew ? 'Create' : 'Save', attrs: ' data-etpl-save' }) +
         (isNew ? '' : ui().btn({ label: 'Delete', variant: 'danger', attrs: ' data-etpl-delete' })) +
@@ -1366,11 +1420,12 @@
 
   function wireEtplEditor(host, t, isNew) {
     var timer = null;
+    if (richAvailable()) window.TMAComposeEditor.wire(host);
 
     function draft() {
       var fields = {};
       host.querySelectorAll('[data-etpl-field]').forEach(function (input) {
-        fields[input.getAttribute('data-etpl-field')] = input.value;
+        fields[input.getAttribute('data-etpl-field')] = fieldValue(input);
       });
       return fields;
     }
@@ -1427,12 +1482,16 @@
   function tplEditorModal(t) {
     var labels = (TPL.data && TPL.data.fieldLabels) || {};
     var textareas = { body: 10, footNote: 2, lead: 2, quote: 2 };
+    var htmlFields = {};
+    ((TPL.data && TPL.data.htmlFields) || ['body', 'footNote']).forEach(function (f) { htmlFields[f] = true; });
 
     var fieldsHtml = t.editable.map(function (f) {
       var val = t.fields[f] || '';
-      var control = textareas[f]
-        ? '<textarea class="tma-portal-textarea" data-tpl-field="' + f + '" rows="' + textareas[f] + '" maxlength="20000">' + ui().esc(val) + '</textarea>'
-        : ui().input({ value: val, attrs: 'data-tpl-field="' + f + '" maxlength="2000"', ariaLabel: labels[f] || f });
+      var control = htmlFields[f] && richAvailable()
+        ? richFieldControl('data-tpl-field', f, val)
+        : textareas[f]
+          ? '<textarea class="tma-portal-textarea" data-tpl-field="' + f + '" rows="' + textareas[f] + '" maxlength="20000">' + ui().esc(val) + '</textarea>'
+          : ui().input({ value: val, attrs: 'data-tpl-field="' + f + '" maxlength="2000"', ariaLabel: labels[f] || f });
       return ui().field(labels[f] || f, control);
     }).join('');
 
@@ -1465,11 +1524,12 @@
 
   function wireTplEditor(host, t) {
     var timer = null;
+    if (richAvailable()) window.TMAComposeEditor.wire(host);
 
     function draft() {
       var fields = {};
       host.querySelectorAll('[data-tpl-field]').forEach(function (input) {
-        fields[input.getAttribute('data-tpl-field')] = input.value;
+        fields[input.getAttribute('data-tpl-field')] = fieldValue(input);
       });
       return fields;
     }

@@ -12997,7 +12997,9 @@
 /* Compose toolbar popup (text style, colour, more). Rendered to <body> so it
  * escapes the compose window's overflow, and above it in the stack. */
 .tma-dash__email-compose-menu {
-  z-index: 300;
+  /* Above the portal modal (620): the Templates editor hosts this toolbar
+     inside a modal, and a dropdown must never open underneath its owner. */
+  z-index: 700;
   min-width: 160px;
   padding: var(--space-4);
   border: 1px solid var(--color-overlay-8, var(--color-overlay-4));

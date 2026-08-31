@@ -6,6 +6,7 @@ use App\Models\Template;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Templates\ComposeTemplates;
+use App\Support\Templates\Markup;
 use App\Support\Templates\SystemEmails;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,6 +65,9 @@ class TemplatesController extends Controller
             'canEdit' => Role::can($request->user(), 'templates.view'),
             'fieldLabels' => SystemEmails::FIELD_LABELS,
             'fieldOrder' => SystemEmails::FIELDS,
+            // The fields the editor offers rich formatting for; the rest are
+            // plain text the postcard escapes.
+            'htmlFields' => SystemEmails::HTML_FIELDS,
             'templates' => $templates,
         ]);
     }
@@ -221,7 +225,15 @@ class TemplatesController extends Controller
             'body' => ['required', 'string', 'max:20000'],
         ]);
 
-        return array_map(fn ($v) => trim($v), $data);
+        $data = array_map(fn ($v) => trim($v), $data);
+
+        // A rich-editor body is stored already sanitized, so nothing unsafe
+        // ever sits in the row or reaches the editor that reopens it.
+        if (Markup::looksLikeHtml($data['body'])) {
+            $data['body'] = Markup::sanitize($data['body']);
+        }
+
+        return $data;
     }
 
     private function findEmailTemplate(string $uuid): Template

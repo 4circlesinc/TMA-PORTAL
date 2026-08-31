@@ -245,6 +245,12 @@ class SystemEmails
                 }
             }
 
+            // A rich-editor field is stored already sanitized, so nothing
+            // unsafe ever sits in the row or reaches the editor reopening it.
+            if (in_array($field, self::HTML_FIELDS, true) && Markup::looksLikeHtml($text)) {
+                $text = Markup::sanitize($text);
+            }
+
             $clean[$field] = $text;
         }
 
