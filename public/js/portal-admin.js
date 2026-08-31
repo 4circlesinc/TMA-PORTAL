@@ -364,6 +364,49 @@
         });
       }
 
+      load();
+    },
+  };
+
+  /* ── Account and Reporting ──────────────────────────────────────────
+     All three pages below used to read and write window.TMAPortalData, the
+     localStorage store, so a "report" held a name and a date and no numbers,
+     the notification history listed whatever the mock had pushed into it, and
+     branding applied to the one browser that typed it. They are server-backed
+     now: ReportsController (numbers computed from the portal's own tables),
+     NotificationHistoryController (the real email_deliveries log) and
+     BrandingController (portal_settings, shared by the whole firm). */
+
+  /* Delivery and report states, in the documented status-chip colours. */
+  function statusChip(status) {
+    var tone = {
+      ready: 'success', sent: 'success', delivered: 'success', opened: 'success', clicked: 'success',
+      failed: 'danger', bounced: 'danger',
+      pending: 'pending', queued: 'pending',
+    }[status] || 'neutral';
+    var label = String(status || '').replace(/^./, function (c) { return c.toUpperCase(); });
+    return '<span class="tma-portal-status tma-portal-status--' + tone + '">' + ui().esc(label) + '</span>';
+  }
+
+  function whenDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+  }
+
+  PAGES['reporting'] = {
+    tab: 'recent',
+    open: null,        // uid of the report being read, or null for the list
+    render: function () {
+      return '<div data-rep-root>' + ui().loading() + '</div>';
+    },
+    wire: function (el) {
+      var self = PAGES['reporting'];
+      var root = el.querySelector('[data-rep-root]');
+      if (!root) return;
+      var esc = ui().esc;
+      var payload = null;
+
       function fail(message) {
         root.innerHTML = '<p class="tma-portal-note">' + esc(message) + '</p>';
       }
