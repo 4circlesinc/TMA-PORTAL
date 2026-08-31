@@ -1389,6 +1389,19 @@ foreach (LegacyPageController::PUBLIC_PAGES as $publicPage) {
 Route::get('/auth/social/{provider}/redirect', [SocialAuthController::class, 'redirect'])
     ->name('social.redirect');
 
+/*
+ * Mailbox / calendar / OneDrive connect for someone already signed in.
+ *
+ * The desktop shell treats `/auth/social/.../redirect` from any `/auth/*`
+ * page as a fresh sign-in and opens `/auth/desktop/start` instead of
+ * Microsoft or Google. Getting-started lives under `/auth/`, so those
+ * Connect buttons have to leave that pattern.
+ */
+Route::get('/connect/{provider}', [SocialAuthController::class, 'redirect'])
+    ->middleware('auth')
+    ->where('provider', 'google|microsoft')
+    ->name('social.connect');
+
 Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'callback'])
     ->name('social.callback');
 

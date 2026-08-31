@@ -37,7 +37,7 @@
         <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
       </div>
     @else
-      <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'account-setup-email']) }}">
+      <a class="tma-auth__task" href="{{ route('social.connect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'account-setup-email']) }}">
         <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Outlook.svg" alt="" width="16" height="16"></span>
         <span class="tma-auth__task-copy">
           <span class="tma-auth__task-name">Connect Microsoft Outlook</span>

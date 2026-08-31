@@ -51,7 +51,7 @@
 
           @if ($microsoftReady)
             @php
-              $connectUrl = route('social.redirect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'getting-started']);
+              $connectUrl = route('social.connect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'getting-started']);
               $msBadge = $requireMicrosoft ? 'Required' : 'Optional';
               $msBadgeClass = $requireMicrosoft ? 'tma-auth__badge--recommended' : '';
               $rows = [
@@ -93,7 +93,7 @@
                 <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
               </div>
             @else
-              <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'getting-started']) }}">
+              <a class="tma-auth__task" href="{{ route('social.connect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'getting-started']) }}">
                 <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16"></span>
                 <span class="tma-auth__task-copy">
                   <span class="tma-auth__task-name">Connect Microsoft</span>
@@ -115,7 +115,7 @@
                 <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
               </div>
             @else
-              <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'google', 'sync_all' => 1, 'return' => 'getting-started']) }}">
+              <a class="tma-auth__task" href="{{ route('social.connect', ['provider' => 'google', 'sync_all' => 1, 'return' => 'getting-started']) }}">
                 <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16"></span>
                 <span class="tma-auth__task-copy">
                   <span class="tma-auth__task-name">Connect Google</span>
