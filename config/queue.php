@@ -39,8 +39,20 @@ return [
             'driver' => 'database',
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
-            'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            /*
+             * The worker pops this whole comma list when started without
+             * --queue, so every named queue must appear here: 'cbi' jobs
+             * starved for hours while the production worker served only
+             * 'default'.
+             */
+            'queue' => env('DB_QUEUE', 'default,cbi'),
+            /*
+             * Longer than the longest job timeout (SyncSharePointLibrary,
+             * 1800s). At the stock 90s, a mid-import reservation expired and
+             * a second worker re-ran the same step — attempts burned until
+             * MaxAttemptsExceeded failed real mailbox backfills.
+             */
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1830),
             // Signature mail is dispatched around transactions that write the
             // tokens the email links to. Waiting for the commit stops a worker
             // racing ahead and mailing a link that isn't in the database yet.
