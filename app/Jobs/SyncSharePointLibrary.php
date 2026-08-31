@@ -89,14 +89,25 @@ class SyncSharePointLibrary implements ShouldBeUniqueUntilProcessing, ShouldQueu
          * Tell open dashboards the library moved. A firm library's imports
          * concern every staff member's Recent Files, not just whoever owns
          * the connection; a personal OneDrive concerns its person alone.
+         *
+         * Throttled to one ping per half-minute: an initial import chains
+         * chunk after chunk, and an unthrottled signal per chunk stampeded
+         * every open dashboard into refetching Recent Files several times a
+         * second. The next allowed ping carries the news just as well.
          */
         $changed = ($result['created'] ?? 0) + ($result['updated'] ?? 0)
             + ($result['deleted'] ?? 0) + ($result['restored'] ?? 0);
         if ($changed > 0) {
-            if ($connection->drive_kind === 'onedrive') {
-                Live::user(Live::FILES, $connection->created_by);
-            } else {
-                Live::staff(Live::FILES);
+            $key = $connection->drive_kind === 'onedrive'
+                ? 'live.files.sync.user.'.$connection->created_by
+                : 'live.files.sync.staff';
+
+            if (\Illuminate\Support\Facades\Cache::add($key, 1, 30)) {
+                if ($connection->drive_kind === 'onedrive') {
+                    Live::user(Live::FILES, $connection->created_by);
+                } else {
+                    Live::staff(Live::FILES);
+                }
             }
         }
     }
