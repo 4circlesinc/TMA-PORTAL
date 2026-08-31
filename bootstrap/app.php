@@ -5,17 +5,17 @@ use App\Http\Middleware\EnforceTwoFactor;
 use App\Http\Middleware\EnsureAccountApproved;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureOnboarded;
+use App\Http\Middleware\EnsureProfileComplete;
 use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
-use App\Http\Middleware\EnsureProfileComplete;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\UploadConflictException;
 use App\Support\Mail\MailAuthException;
 use Illuminate\Foundation\Application;
-use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,6 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // scheme (https), host and client IP are honoured — otherwise PHP sees
         // plain http and $request->isSecure() is wrongly false.
         $middleware->trustProxies(at: '*');
+
+        $middleware->validateCsrfTokens(except: [
+            'hooks/microsoft-graph',
+        ]);
 
         $middleware->alias([
             'account.approved' => EnsureAccountApproved::class,

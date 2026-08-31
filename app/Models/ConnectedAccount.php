@@ -30,6 +30,33 @@ class ConnectedAccount extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * A killed SyncMailbox run leaves mail_status = syncing forever. The
+     * incremental pass is capped at two minutes, so anything still flagged
+     * after this window is a dead lock, not a live walk.
+     */
+    public const MAIL_STALE_MINUTES = 3;
+
+    /**
+     * What the UI should read — `syncing` only while the pass is still alive.
+     */
+    public function effectiveMailStatus(): string
+    {
+        $status = (string) ($this->mail_status ?: 'idle');
+
+        if ($status !== 'syncing') {
+            return $status;
+        }
+
+        $beat = $this->updated_at;
+
+        if ($beat === null || $beat->lte(now()->subMinutes(self::MAIL_STALE_MINUTES))) {
+            return 'idle';
+        }
+
+        return 'syncing';
+    }
+
     public function messages(): HasMany
     {
         return $this->hasMany(MailMessage::class);

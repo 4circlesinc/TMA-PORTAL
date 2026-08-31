@@ -37,7 +37,9 @@ class BackfillMailbox implements ShouldQueue
     /** @return array<int, object> */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('mailbox-backfill:'.$this->account->id))->dontRelease()];
+        // expireAfter sits above $timeout so a killed worker cannot pin the
+        // backfill lock forever (dontRelease without a TTL did exactly that).
+        return [(new WithoutOverlapping('mailbox-backfill:'.$this->account->id))->dontRelease()->expireAfter(660)];
     }
 
     public function handle(): void

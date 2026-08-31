@@ -104,7 +104,7 @@ class GraphClient
          */
         $response = $method === 'GET'
             ? ($query === [] ? $request->get($url) : $request->get($url, $query))
-            : $request->send($method, $url, ['json' => $body]);
+            : $request->send($method, $url, $body === [] ? [] : ['json' => $body]);
 
         // 429 and 503 carry Retry-After; the caller decides whether to wait,
         // because a background sync and an interactive request want different
@@ -122,6 +122,11 @@ class GraphClient
                 ($response->json('error.message') ?? $response->body()),
                 $response->status()
             );
+        }
+
+        // DELETE (and some PATCH) answers 204 with an empty body.
+        if ($response->status() === 204 || $response->body() === '') {
+            return [];
         }
 
         return $response->json() ?? [];

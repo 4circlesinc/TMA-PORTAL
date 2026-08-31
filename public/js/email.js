@@ -2373,15 +2373,21 @@
     }).catch(function () { /* best-effort */ });
   }
 
-  /* How often the page asks the provider whether anything has arrived. A
-   * mailbox has to feel live, so this is the fast inbox-only check, see
-   * MailSynchronizer::quickCheck, not the full folder walk. */
-  var MAIL_POLL_INTERVAL = 5000;
+  /* How often the page asks whether anything has arrived. Most ticks only
+   * re-read the local mirror (so a Graph push that just wrote a message
+   * shows up within a couple of seconds). Hitting the provider on every
+   * tick is what stacked requests until Graph throttled, which looked like
+   * auto-sync stopping. */
+  var MAIL_POLL_INTERVAL = 2000;
 
   /* How often the *full* pass runs instead: every folder, plus the reads,
    * moves and deletions a plain inbox listing cannot report. Expensive, so it
    * is measured in polls rather than run on every tick. */
-  var MAIL_FULL_SYNC_EVERY = 12; // ≈ 60s
+  var MAIL_FULL_SYNC_EVERY = 30; // ≈ 60s
+
+  /* Provider live-check cadence. Microsoft Graph pushes changes; this is the
+   * fallback. Gmail has no push here, so it asks every tick. */
+  var MAIL_PROVIDER_EVERY = 3; // ≈ 6s for Microsoft
 
   /* True while the tab has nothing to gain from being polled at all. Note this
    * no longer includes composing: mail must keep *arriving* while the user
@@ -2461,13 +2467,21 @@
 
     var token = ++state.loadToken;
 
-    // The cheap inbox check on most ticks; the full folder walk occasionally,
-    // since reads, moves and deletions made in Outlook never show up in a
-    // plain inbox listing.
+    // Cheap inbox check on most provider ticks; the full folder walk
+    // occasionally, since reads/moves/deletions made in Outlook never show
+    // up in a plain inbox listing. Microsoft Graph also pushes, so most
+    // ticks only refresh the local list. Gmail has no push here, so it
+    // still asks the provider every tick.
     state._mailPollTick = (state._mailPollTick || 0) + 1;
     var full = state._mailPollTick % MAIL_FULL_SYNC_EVERY === 0;
+    var microsoft = state.account && state.account.provider === 'microsoft';
+    var askProvider = full || !microsoft || (state._mailPollTick % MAIL_PROVIDER_EVERY === 1);
 
-    api().sync({ fast: !full }).then(function (data) {
+    var synced = askProvider
+      ? api().sync({ fast: !full })
+      : Promise.resolve(null);
+
+    synced.then(function (data) {
       // A sync that goes through means the grant is alive again, resume
       // polling without needing a reload.
       state.reconnectNeeded = false;

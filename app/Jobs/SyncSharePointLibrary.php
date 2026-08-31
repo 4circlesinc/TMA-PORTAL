@@ -6,22 +6,24 @@ use App\Models\SharePointConnection;
 use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Bus\Queueable;
-use Illuminate\Support\Str;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 /**
  * Pull one linked library.
  *
- * Queued and non-overlapping: two runs against the same delta cursor would
- * process the same page twice. Failures are retried with backoff rather than
- * abandoned, because most sync failures are transient (throttling, a token
- * expiring mid-run, a blip).
+ * UntilProcessing, not plain ShouldBeUnique: an incomplete or throttled run
+ * re-dispatches itself from handle(), and a lock held for the job's whole
+ * life swallowed that follow-up. The next chunk then waited on the scheduler
+ * (or, with uniqueFor defaulting to never-expire, never ran at all). The
+ * connection's status column is still the run lock, so two workers cannot
+ * walk the same delta cursor.
  */
-class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
+class SyncSharePointLibrary implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -32,12 +34,20 @@ class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
     /** Large libraries (150k+ items) need room for delta + reconciliation. */
     public int $timeout = 1800;
 
+    /**
+     * Seconds the queued-dedupe lock may live. UntilProcessing releases it
+     * when the worker starts; this is only the safety net if a job sits
+     * unclaimed. Must never be 0 — a uniqueFor of 0 never expires, and a
+     * killed worker then blocks this library until the cache is flushed.
+     */
+    public int $uniqueFor = 120;
+
     /** Seconds before a chained follow-up run starts. */
-    private const CHAIN_DELAY = 2;
+    private const CHAIN_DELAY = 1;
 
     public function __construct(public int $connectionId) {}
 
-    /** One run per connection at a time. */
+    /** One queued job per connection. */
     public function uniqueId(): string
     {
         return 'sharepoint-sync-'.$this->connectionId;
@@ -77,7 +87,7 @@ class SyncSharePointLibrary implements ShouldQueue, ShouldBeUnique
 
     /**
      * Worker timeout / SIGKILL never reaches Synchroniser's catch — release the
-     * lock here or the library reads as "syncing" until the 30-minute window
+     * lock here or the library reads as "syncing" until the heartbeat window
      * expires and the next run takes over.
      */
     public function failed(\Throwable $e): void

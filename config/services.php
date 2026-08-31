@@ -89,6 +89,10 @@ return [
         // Separate from MICROSOFT_TENANT=common used by interactive OAuth login.
         'graph_tenant_id' => env('MICROSOFT_GRAPH_TENANT_ID'),
         'graph_mailbox' => env('MICROSOFT_GRAPH_MAILBOX', env('MAIL_FROM_ADDRESS')),
+        // Public HTTPS URL Graph POSTs change notifications to. Empty means
+        // APP_URL/hooks/microsoft-graph. HTTP (local) is ignored — polling
+        // still covers mailbox and OneDrive, just not instantly.
+        'graph_webhook_url' => env('MICROSOFT_GRAPH_WEBHOOK_URL'),
     ],
 
     'slack' => [

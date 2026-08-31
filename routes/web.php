@@ -82,6 +82,7 @@ use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\Files\WorkflowHubController;
 use App\Http\Controllers\GettingStartedController;
+use App\Http\Controllers\GraphWebhookController;
 use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\InvitationAcceptController;
 use App\Http\Controllers\InvitationController;
@@ -143,6 +144,16 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/auth/email/confirm/{id}/{hash}', UnsignedVerifyEmailController::class)
     ->middleware(['signed', 'throttle:6,1'])
     ->name('verification.verify.unsigned');
+
+/*
+ * Microsoft Graph change notifications. Must be reachable without a session
+ * and without CSRF — Graph's handshake is an unauthenticated POST with a
+ * validationToken query string, and notifications are JSON with a clientState
+ * we minted ourselves.
+ */
+Route::post('/hooks/microsoft-graph', GraphWebhookController::class)
+    ->middleware('throttle:120,1')
+    ->name('hooks.microsoft-graph');
 
 /*
  * Portal - requires login, verified email, and administrator approval.
@@ -719,6 +730,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Library sync state, so "where are my files?" has a visible answer.
         Route::get('/sync-status', SyncStatusController::class)->name('sync-status');
         Route::post('/sync-status/retry', [SyncStatusController::class, 'retry'])->name('sync-status.retry');
+        Route::post('/sync-status/pull', [SyncStatusController::class, 'pull'])->name('sync-status.pull');
 
         Route::get('/shortcuts', [ShortcutController::class, 'index'])->name('shortcuts.index');
         Route::post('/shortcuts', [ShortcutController::class, 'store'])->name('shortcuts.store');

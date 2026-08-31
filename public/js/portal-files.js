@@ -1922,6 +1922,20 @@
 
   var syncState = null;
   var syncTimer = null;
+  var livePullTimer = null;
+
+  function pullOneDrive() {
+    if (document.hidden) return;
+    if (!state.el || !document.contains(state.el)) return;
+    net().fetchJSON(net().url('/sync-status/pull'), { method: 'POST', json: {} })
+      .catch(function () { /* best-effort — uniqueness drops repeats */ });
+  }
+
+  function startLivePull() {
+    if (livePullTimer) return;
+    pullOneDrive();
+    livePullTimer = setInterval(pullOneDrive, 15000);
+  }
 
   function loadSyncStatus() {
     net().fetchJSON(net().url('/sync-status'))
@@ -7738,6 +7752,8 @@
     syncUrl(true);
 
     render();
+
+    startLivePull();
 
     return load().then(function () {
       if (!wanted) return;

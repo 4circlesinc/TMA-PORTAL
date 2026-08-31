@@ -2,17 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncSharePointLibrary;
 use App\Models\FileItem;
 use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Models\User;
+use App\Support\Files\FolderProvisioner;
 use App\Support\SharePoint\Pusher;
 use App\Support\SharePoint\RemoteContent;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -138,7 +143,7 @@ class SharePointSyncTest extends TestCase
 
     private function registerGraphFake(): void
     {
-        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+        Http::fake(function (Request $request) {
             $url = $request->url();
 
             if (str_contains($url, 'login.microsoftonline.com')) {
@@ -578,7 +583,7 @@ class SharePointSyncTest extends TestCase
         }
 
         $queries = [];
-        \Illuminate\Support\Facades\DB::listen(function ($q) use (&$queries) {
+        DB::listen(function ($q) use (&$queries) {
             $queries[] = $q->sql;
         });
 
@@ -913,8 +918,8 @@ class SharePointSyncTest extends TestCase
         config(['portal.system_account_email' => 'nobody@example.com']);
 
         // An install with no service account still has to provision folders.
-        $this->assertSame($this->owner->id, \App\Support\Files\FolderProvisioner::systemOwnerId());
-        $this->assertNull(\App\Support\Files\FolderProvisioner::systemAccountId());
+        $this->assertSame($this->owner->id, FolderProvisioner::systemOwnerId());
+        $this->assertNull(FolderProvisioner::systemAccountId());
     }
 
     /** Hitting the page cap must not stamp success — more pages remain. */
@@ -951,12 +956,55 @@ class SharePointSyncTest extends TestCase
         ];
         $this->children = [['id' => 'i-1'], ['id' => 'i-2'], ['id' => 'i-3']];
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
-        (new \App\Jobs\SyncSharePointLibrary($this->connection->id))->handle();
+        (new SyncSharePointLibrary($this->connection->id))->handle();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(
-            \App\Jobs\SyncSharePointLibrary::class,
+        Queue::assertPushed(
+            SyncSharePointLibrary::class,
+            fn ($job) => $job->connectionId === $this->connection->id
+        );
+    }
+
+    public function test_a_stale_syncing_lock_is_taken_over(): void
+    {
+        $this->connection->update([
+            'status' => SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now()->subMinutes(SharePointConnection::HEARTBEAT_STALE_MINUTES + 1),
+        ]);
+        $this->fakeGraph([$this->fileItem('i-1', 'A.txt', 'c:1')], [['id' => 'i-1']]);
+
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertArrayNotHasKey('skipped', $stats);
+        $this->assertSame(1, $stats['created']);
+    }
+
+    public function test_a_live_syncing_lock_is_left_alone(): void
+    {
+        $this->connection->update([
+            'status' => SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now()->subMinute(),
+        ]);
+
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertTrue($stats['skipped'] ?? false);
+        $this->assertSame('already running', $stats['reason'] ?? null);
+    }
+
+    public function test_the_files_page_can_kick_this_persons_libraries(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->owner)
+            ->postJson('/portal/files/sync-status/pull')
+            ->assertOk()
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('count', 1);
+
+        Queue::assertPushed(
+            SyncSharePointLibrary::class,
             fn ($job) => $job->connectionId === $this->connection->id
         );
     }

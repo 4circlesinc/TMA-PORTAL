@@ -85,7 +85,7 @@ class MeSyncStatusController extends Controller
         $totals = array_map('intval', $account->mail_backfill['_totals'] ?? []);
         $total = $totals === [] ? null : array_sum($totals);
 
-        if ($account->mail_status === 'error') {
+        if ($account->effectiveMailStatus() === 'error') {
             return ['state' => 'error', 'synced' => $synced];
         }
 
@@ -103,7 +103,7 @@ class MeSyncStatusController extends Controller
          * An incremental pass has no total (the provider's change feed is a
          * stream, not a set), so the card runs indeterminate.
          */
-        if ($account->mail_status === 'syncing') {
+        if ($account->effectiveMailStatus() === 'syncing') {
             return ['state' => 'syncing', 'synced' => $synced, 'mode' => 'incremental'];
         }
 

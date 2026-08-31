@@ -124,6 +124,24 @@ class MeSyncStatusTest extends TestCase
             ->assertJsonPath('email.state', 'done');
     }
 
+    public function test_a_stale_mailbox_syncing_flag_does_not_pin_the_toast(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+        $account = ConnectedAccount::where('user_id', $user->id)->first();
+        $account->forceFill([
+            'mail_backfilled_at' => now()->subDay(),
+            'mail_status' => 'syncing',
+        ])->save();
+
+        DB::table('connected_accounts')->where('id', $account->id)
+            ->update(['updated_at' => now()->subMinutes(ConnectedAccount::MAIL_STALE_MINUTES + 1)]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'done');
+    }
+
     private function calendarAccount(User $user): ConnectedAccount
     {
         return ConnectedAccount::create([

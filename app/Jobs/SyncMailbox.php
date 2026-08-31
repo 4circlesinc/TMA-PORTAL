@@ -7,7 +7,7 @@ use App\Models\MailSyncProgress;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\MailSyncError;
 use App\Support\Mail\MailSynchronizer;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -15,26 +15,37 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 /**
  * Pulls one mailbox up to date on the queue.
  *
- * Dispatched when the email page opens and after actions that change the
- * server's view of the mailbox, so the UI never blocks on a provider round
- * trip it does not need.
+ * Dispatched when the email page opens, when Graph pushes a change, and
+ * after actions that change the server's view of the mailbox, so the UI
+ * never blocks on a provider round trip it does not need.
+ *
+ * UntilProcessing, not plain ShouldBeUnique: a lock held for the job's
+ * whole life dropped the next webhook/scheduler tick, so mail that arrived
+ * during a pass sat until the three-minute overlap cooldown also expired.
+ * Releasing at processing keeps queue-level dedupe; WithoutOverlapping
+ * still stops two workers racing the cursor, and releaseAfter parks the
+ * follow-up instead of throwing it away.
  */
-class SyncMailbox implements ShouldBeUnique, ShouldQueue
+class SyncMailbox implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 3;
+    /**
+     * Room to wait out an in-flight pass (releaseAfter × tries) rather than
+     * fail a webhook that arrived while the previous sync was still walking.
+     * maxExceptions keeps a real Graph failure from retrying 30 times.
+     */
+    public int $tries = 30;
+
+    public int $maxExceptions = 3;
 
     public int $timeout = 120;
 
     /**
-     * The email page polls a full sync roughly every minute and the
-     * mail:sync-all scheduler dispatches one too — without this, each of those
-     * would enqueue a fresh copy that only gets dropped at run time. Uniqueness
-     * collapses them to one queued job per mailbox. Kept comfortably longer
-     * than a normal sync so a queued job is never deduped against a stale lock.
+     * Queued-dedupe only — UntilProcessing releases this when the worker
+     * starts. Comfortably longer than a typical wait for a worker, never 0.
      */
-    public int $uniqueFor = 180;
+    public int $uniqueFor = 90;
 
     public function __construct(
         public ConnectedAccount $account,
@@ -46,17 +57,19 @@ class SyncMailbox implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Two syncs of the same mailbox would race on the cursor and duplicate
-     * work, so overlapping runs are dropped rather than queued behind.
+     * Two syncs of the same mailbox would race on the cursor, so a second
+     * run waits rather than overlapping. The lock is released when the job
+     * finishes (no dontRelease): a cooldown after a successful 10-second
+     * pass was what made the mailbox look stuck for minutes at a time.
      *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        // expireAfter releases the lock even if the worker is killed mid-sync
-        // (e.g. hits --max-time), so a dead run can't deadlock this mailbox's
-        // future syncs. Comfortably longer than $timeout.
-        return [(new WithoutOverlapping('mailbox:'.$this->account->id))->dontRelease()->expireAfter(180)];
+        // expireAfter is the dead-worker safety net, above $timeout so a
+        // killed run cannot deadlock this mailbox. releaseAfter parks a
+        // webhook that arrived mid-pass until this one is done.
+        return [(new WithoutOverlapping('mailbox:'.$this->account->id))->releaseAfter(5)->expireAfter(150)];
     }
 
     public function handle(): void

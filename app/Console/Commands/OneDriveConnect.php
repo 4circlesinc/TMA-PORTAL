@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\User;
+use App\Support\Microsoft\ChangeNotifications;
 use App\Support\SharePoint\GraphClient;
 use App\Support\SharePoint\GraphException;
 use Illuminate\Console\Command;
@@ -163,6 +164,8 @@ class OneDriveConnect extends Command
         $this->line('  connection: '.$connection->uuid);
         $this->line('');
         $this->line('Run:  php artisan sharepoint:sync');
+
+        rescue(fn () => ChangeNotifications::ensureDrive($connection), report: false);
 
         return self::SUCCESS;
     }

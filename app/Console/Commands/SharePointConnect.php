@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\User;
+use App\Support\Microsoft\ChangeNotifications;
 use App\Support\SharePoint\Drive;
 use App\Support\SharePoint\GraphClient;
 use App\Support\SharePoint\GraphException;
@@ -114,6 +115,8 @@ class SharePointConnect extends Command
         $this->line('');
         $this->line('Nothing has been imported yet. Run:');
         $this->line('  php artisan sharepoint:sync');
+
+        rescue(fn () => ChangeNotifications::ensureDrive($connection), report: false);
 
         return self::SUCCESS;
     }

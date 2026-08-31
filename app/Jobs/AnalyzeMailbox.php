@@ -7,6 +7,7 @@ use App\Models\MailSyncProgress;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSyncError;
 use App\Support\Mail\MailTokens;
+use App\Support\Microsoft\ChangeNotifications;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -133,6 +134,8 @@ class AnalyzeMailbox implements ShouldBeUnique, ShouldQueue
 
         // The seed / incremental pass paints the first messages quickly.
         SyncMailbox::dispatch($account);
+
+        rescue(fn () => ChangeNotifications::ensureMail($account), report: false);
 
         // Reconnecting a mailbox whose history is already imported must not
         // start it over: the messages are preserved, duplicates are prevented

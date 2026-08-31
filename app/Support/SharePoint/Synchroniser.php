@@ -6,6 +6,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
+use App\Models\SharePointSyncLog;
 use App\Models\User;
 use App\Support\Files\Activity;
 use App\Support\Files\FolderProvisioner;
@@ -13,6 +14,7 @@ use App\Support\Files\FolderTree;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -45,8 +47,14 @@ class Synchroniser
         return (int) config('services.sharepoint.max_pages', 150);
     }
 
-    /** How long a run may hold the lock before another may take over. */
-    public const LOCK_MINUTES = 30;
+    /**
+     * How long a run may hold the lock before another may take over.
+     *
+     * Same window the UI uses ({@see SharePointConnection::HEARTBEAT_STALE_MINUTES}).
+     * A 30-minute takeover left OneDrive sitting idle after a killed worker
+     * while the toast already said the run was over.
+     */
+    public const LOCK_MINUTES = SharePointConnection::HEARTBEAT_STALE_MINUTES;
 
     /** Rows read at a time where a whole table would not fit in memory. */
     private const CHUNK = 500;
@@ -148,9 +156,9 @@ class Synchroniser
          * connection permanently. After the window, a new run takes over.
          */
         if ($connection->status === SharePointConnection::STATUS_SYNCING) {
-            $startedAt = $connection->last_synced_at;
-
-            if ($startedAt && $startedAt->gt(now()->subMinutes(self::LOCK_MINUTES))) {
+            // Same verdict the toast uses: a heartbeat inside the window is a
+            // live run; anything older is a dead lock and must be taken over.
+            if ($connection->effectiveStatus() === SharePointConnection::STATUS_SYNCING) {
                 return ['skipped' => true, 'reason' => 'already running'];
             }
 
@@ -168,54 +176,54 @@ class Synchroniser
         try {
             // Inbound writes must never bounce back out as outbound pushes.
             Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp) {
-            for ($page = 0; $page < self::maxPages(); $page++) {
-                $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
-                $stats['pages']++;
+                for ($page = 0; $page < self::maxPages(); $page++) {
+                    $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
+                    $stats['pages']++;
 
-                // One query for this page's mappings, then none per item.
-                self::primeMappings($connection, $batch['items']);
+                    // One query for this page's mappings, then none per item.
+                    self::primeMappings($connection, $batch['items']);
 
-                foreach ($batch['items'] as $item) {
-                    // A deletion always changes its parent folder, so the
-                    // folders delta reports are exactly the places worth
-                    // re-checking for items that have gone.
-                    if (isset($item['folder']) && ! empty($item['id'])) {
-                        $changedFolders[] = $item['id'];
+                    foreach ($batch['items'] as $item) {
+                        // A deletion always changes its parent folder, so the
+                        // folders delta reports are exactly the places worth
+                        // re-checking for items that have gone.
+                        if (isset($item['folder']) && ! empty($item['id'])) {
+                            $changedFolders[] = $item['id'];
+                        }
+
+                        try {
+                            self::apply($connection, $item, $stats);
+                        } catch (\Throwable $e) {
+                            // §26: record the failure against the item and keep
+                            // going. One unreadable file must not stall a library.
+                            $stats['failed']++;
+                            self::markFailed($connection, $item, $e->getMessage());
+                            self::log($connection, 'item-failed', 'error', $item['id'] ?? null, $e->getMessage());
+                        }
                     }
 
-                    try {
-                        self::apply($connection, $item, $stats);
-                    } catch (\Throwable $e) {
-                        // §26: record the failure against the item and keep
-                        // going. One unreadable file must not stall a library.
-                        $stats['failed']++;
-                        self::markFailed($connection, $item, $e->getMessage());
-                        self::log($connection, 'item-failed', 'error', $item['id'] ?? null, $e->getMessage());
+                    if ($batch['delta']) {
+                        // Caught up. Store the cursor for next time.
+                        $connection->update(['delta_link' => $batch['delta']]);
+                        $caughtUp = true;
+                        break;
                     }
+
+                    if (! $batch['next']) {
+                        break;
+                    }
+                    $link = $batch['next'];
+
+                    // Remember where we got to, so a run that hits the page cap
+                    // resumes from there instead of starting over.
+                    $connection->update(['delta_link' => $link]);
+
+                    // Heartbeat: a worker killed mid-run stops updating this, so
+                    // the UI can tell a dead lock from a live one within minutes.
+                    $connection->update(['last_synced_at' => now()]);
                 }
 
-                if ($batch['delta']) {
-                    // Caught up. Store the cursor for next time.
-                    $connection->update(['delta_link' => $batch['delta']]);
-                    $caughtUp = true;
-                    break;
-                }
-
-                if (! $batch['next']) {
-                    break;
-                }
-                $link = $batch['next'];
-
-                // Remember where we got to, so a run that hits the page cap
-                // resumes from there instead of starting over.
-                $connection->update(['delta_link' => $link]);
-
-                // Heartbeat: a worker killed mid-run stops updating this, so
-                // the UI can tell a dead lock from a live one within minutes.
-                $connection->update(['last_synced_at' => now()]);
-            }
-
-            self::reconcileDeletions($connection, $changedFolders, $stats);
+                self::reconcileDeletions($connection, $changedFolders, $stats);
             });
 
             /*
@@ -646,7 +654,7 @@ class Synchroniser
         $ext = pathinfo($name, PATHINFO_EXTENSION) ?: '';
 
         $file = FileItem::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'folder_id' => $parent?->id,
             'name' => $name,
             'extension' => strtolower($ext),
@@ -661,7 +669,7 @@ class Synchroniser
             'owner_id' => self::ownerIdFor($connection),
             'uploaded_by' => $connection->created_by,
             'source_modified_at' => isset($item['lastModifiedDateTime'])
-                ? \Illuminate\Support\Carbon::parse($item['lastModifiedDateTime']) : null,
+                ? Carbon::parse($item['lastModifiedDateTime']) : null,
             // Origin drives conflict resolution: the firm chose that
             // SharePoint stays authoritative for the files it authored.
             'origin' => 'sharepoint',
@@ -682,7 +690,7 @@ class Synchroniser
         Drive::download($connection->drive_id, $item['id'], $temp);
 
         $stored = Vault::store($temp, strtolower((string) $file->extension));
-        $author = \App\Models\User::find($connection->created_by);
+        $author = User::find($connection->created_by);
 
         if (! $author) {
             return;
@@ -761,8 +769,8 @@ class Synchroniser
             'name' => $item['name'] ?? null,
             'size' => $item['size'] ?? null,
             'mime_type' => $item['file']['mimeType'] ?? null,
-            'graph_created_at' => isset($item['createdDateTime']) ? \Illuminate\Support\Carbon::parse($item['createdDateTime']) : null,
-            'graph_modified_at' => isset($item['lastModifiedDateTime']) ? \Illuminate\Support\Carbon::parse($item['lastModifiedDateTime']) : null,
+            'graph_created_at' => isset($item['createdDateTime']) ? Carbon::parse($item['createdDateTime']) : null,
+            'graph_modified_at' => isset($item['lastModifiedDateTime']) ? Carbon::parse($item['lastModifiedDateTime']) : null,
             'graph_modified_by' => $item['lastModifiedBy']['user']['displayName'] ?? null,
             'sync_status' => SharePointItem::SYNCED,
             'last_synced_at' => now(),
@@ -785,7 +793,7 @@ class Synchroniser
             'web_url' => $item['webUrl'] ?? null,
             'name' => $item['name'] ?? null,
             'size' => $item['size'] ?? null,
-            'graph_modified_at' => isset($item['lastModifiedDateTime']) ? \Illuminate\Support\Carbon::parse($item['lastModifiedDateTime']) : null,
+            'graph_modified_at' => isset($item['lastModifiedDateTime']) ? Carbon::parse($item['lastModifiedDateTime']) : null,
             'graph_modified_by' => $item['lastModifiedBy']['user']['displayName'] ?? null,
             // A successful pass clears an earlier failure. §26 says stale
             // failed statuses must not linger after things recover.
@@ -817,7 +825,7 @@ class Synchroniser
 
     public static function log(SharePointConnection $connection, string $action, string $level, ?string $graphItemId, ?string $detail, array $meta = []): void
     {
-        \App\Models\SharePointSyncLog::create([
+        SharePointSyncLog::create([
             'connection_id' => $connection->id,
             'action' => $action,
             'level' => $level,

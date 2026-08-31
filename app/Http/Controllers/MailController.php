@@ -13,6 +13,7 @@ use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\MailSyncProgress;
+use App\Models\Template;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Mail\MailAuthException;
@@ -21,9 +22,12 @@ use App\Support\Mail\MailSynchronizer;
 use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
+use App\Support\Microsoft\ChangeNotifications;
+use App\Support\Templates\ComposeTemplates;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -441,6 +445,8 @@ class MailController extends Controller
         }
 
         $account->forceFill(['sync_email' => false])->save();
+
+        rescue(fn () => ChangeNotifications::releaseMail($account), report: false);
 
         ActivityLogger::log([
             'actor' => $request->user(),
@@ -1523,12 +1529,12 @@ class MailController extends Controller
     public function composeTemplates(): JsonResponse
     {
         return response()->json([
-            'templates' => \App\Models\Template::query()
-                ->where('kind', \App\Support\Templates\ComposeTemplates::KIND)
+            'templates' => Template::query()
+                ->where('kind', ComposeTemplates::KIND)
                 ->orderBy('name')
                 ->get()
-                ->map(fn (\App\Models\Template $t) => \Illuminate\Support\Arr::only(
-                    \App\Support\Templates\ComposeTemplates::record($t),
+                ->map(fn (Template $t) => Arr::only(
+                    ComposeTemplates::record($t),
                     ['id', 'name', 'subject', 'bodyHtml'],
                 ))
                 ->values(),
@@ -1846,7 +1852,10 @@ class MailController extends Controller
                     // duplicates prevented by message-id upsert); a new one
                     // starts its background import.
                     AnalyzeMailbox::start($account);
+                    ChangeNotifications::ensureMail($account);
                 }, report: false);
+            } else {
+                rescue(fn () => ChangeNotifications::releaseMail($account), report: false);
             }
         }
 

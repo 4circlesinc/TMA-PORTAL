@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Jobs\SyncSharePointLibrary;
 use App\Models\FileItem;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
@@ -125,8 +126,39 @@ class SyncStatusController extends BaseFilesController
 
         abort_unless($runnable->isNotEmpty(), 422, 'That import is paused. Resume it in Settings → Background Operations.');
 
-        $runnable->each(fn (SharePointConnection $c) => \App\Jobs\SyncSharePointLibrary::dispatch($c->id));
+        $runnable->each(fn (SharePointConnection $c) => SyncSharePointLibrary::dispatch($c->id));
 
         return response()->json(['status' => 'queued']);
+    }
+
+    /**
+     * Kick this reader's own OneDrive (and any other library they linked)
+     * without waiting for the minute scheduler. The Files page calls this
+     * while it is open; uniqueness collapses repeats into one queued run.
+     */
+    public function pull(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+
+        if (! Role::isStaff($user)) {
+            return response()->json(['status' => 'skipped']);
+        }
+
+        $account = $user->connectedAccount('microsoft');
+
+        $connections = SharePointConnection::query()
+            ->where('sync_enabled', true)
+            ->where(function ($q) use ($user, $account) {
+                $q->where('created_by', $user->id);
+                if ($account?->email) {
+                    $q->orWhere('owner_upn', $account->email);
+                }
+            })
+            ->get()
+            ->reject(fn (SharePointConnection $c) => ImportPause::connection($c));
+
+        $connections->each(fn (SharePointConnection $c) => SyncSharePointLibrary::dispatch($c->id));
+
+        return response()->json(['status' => 'queued', 'count' => $connections->count()]);
     }
 }

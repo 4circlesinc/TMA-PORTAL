@@ -10,6 +10,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
+use App\Support\Microsoft\ChangeNotifications;
 use App\Support\Notifications\Notifier;
 use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
@@ -275,6 +276,8 @@ class SocialAuthController extends Controller
         if ($user->password_auto && $user->connectedAccounts->count() <= 1) {
             return $this->done($request, 'Set a password first so you can still sign in, then disconnect '.ucfirst($provider).'.', false);
         }
+
+        rescue(fn () => ChangeNotifications::releaseMail($account), report: false);
 
         $account->delete();
         $this->record($user->id, 'social_disconnected');

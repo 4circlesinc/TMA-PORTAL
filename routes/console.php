@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\EnsureGraphSubscriptions;
 use App\Jobs\PublishScheduledFeedPost;
 use App\Jobs\RefreshIcsSubscription;
 use App\Jobs\SyncCbiHub;
@@ -210,6 +211,20 @@ Schedule::command('sharepoint:sync --queue')
     ->withoutOverlapping();
 
 /*
+ * Graph push subscriptions expire in a few days. Recreate/renew them on a
+ * timer so a first-connect that happened before HTTPS was up, or a Graph
+ * drop, still gets instant mailbox and OneDrive after the next tick.
+ */
+Artisan::command('graph:ensure-subscriptions', function () {
+    EnsureGraphSubscriptions::dispatch();
+    $this->info('Queued Graph subscription ensure.');
+})->purpose('Create or renew Microsoft Graph change-notification subscriptions');
+
+Schedule::command('graph:ensure-subscriptions')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+/*
  * Message attachments are uploaded and staged the moment they are chosen, so a
  * composer that is abandoned - tab closed, message never sent - leaves rows
  * with no message and bytes with no owner. This removes both.
@@ -272,10 +287,8 @@ Artisan::command('mail:sync-all', function () {
 })->purpose('Queue an incremental sync for every connected mailbox');
 
 // Every minute is the floor cron can offer. It covers the mailbox nobody is
-// looking at; the email page itself polls every five seconds while open (see
-// MAIL_POLL_INTERVAL / MailSynchronizer::quickCheck), which is what makes it
-// feel live. Sub-minute delivery with no page open needs provider push —
-// Graph change notifications or Gmail Pub/Sub — not a tighter timer.
+// looking at, and is the fallback when Graph push is not available (local
+// http, Google mail). Instant Microsoft delivery is hooks/microsoft-graph.
 Schedule::command('mail:sync-all')
     ->everyMinute()
     // The job already drops overlapping runs per mailbox; this stops a slow

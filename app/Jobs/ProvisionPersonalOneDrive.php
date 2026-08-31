@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ConnectedAccount;
 use App\Models\SharePointConnection;
 use App\Support\Access\Role;
+use App\Support\Microsoft\ChangeNotifications;
 use App\Support\SharePoint\GraphClient;
 use App\Support\SharePoint\GraphException;
 use Illuminate\Bus\Queueable;
@@ -30,7 +31,7 @@ use Illuminate\Support\Str;
  * so it only works for accounts in the firm's tenant; a personal outlook.com
  * account fails the drive lookup and is skipped quietly.
  */
-class ProvisionPersonalOneDrive implements ShouldQueue, ShouldBeUnique
+class ProvisionPersonalOneDrive implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -39,9 +40,14 @@ class ProvisionPersonalOneDrive implements ShouldQueue, ShouldBeUnique
     /** @var int[] */
     public array $backoff = [60, 300, 900];
 
-    public function __construct(public int $accountId)
-    {
-    }
+    /**
+     * Safety net if a worker dies after dispatch and never starts. uniqueFor
+     * of 0 never expires, which left OneDrive provisioning stuck after a
+     * deploy until the cache was flushed.
+     */
+    public int $uniqueFor = 600;
+
+    public function __construct(public int $accountId) {}
 
     public function uniqueId(): string
     {
@@ -108,5 +114,7 @@ class ProvisionPersonalOneDrive implements ShouldQueue, ShouldBeUnique
         ]);
 
         SyncSharePointLibrary::dispatch($connection->id);
+
+        rescue(fn () => ChangeNotifications::ensureDrive($connection), report: false);
     }
 }
