@@ -13035,6 +13035,16 @@
   border-radius: 3px;
 }
 
+.tma-dash__email-compose-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-menu-icon {
+  filter: invert(1) brightness(1.6);
+}
+
 .tma-dash__email-compose-menu-sep {
   padding: var(--space-6) var(--space-8) var(--space-4);
   color: var(--color-text-secondary);

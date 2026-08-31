@@ -6322,6 +6322,9 @@
         (item.swatch
           ? '<span class="tma-dash__email-compose-menu-swatch" style="background:' + esc(item.swatch) + '"></span>'
           : '') +
+        (item.icon
+          ? '<img class="tma-dash__email-compose-menu-icon" src="' + esc(ICON + item.icon + '.svg') + '" alt="">'
+          : '') +
         esc(item.label) +
         '</button>'
       );
@@ -6709,14 +6712,14 @@
   /* The tools behind the "More" button: the formatting that does not earn a
    * permanent slot on a narrow toolbar but still has to work. */
   var COMPOSE_MORE_TOOLS = [
-    { label: 'Numbered list', cmd: 'insertOrderedList' },
-    { label: 'Indent', cmd: 'indent' },
-    { label: 'Outdent', cmd: 'outdent' },
-    { label: 'Align left', cmd: 'justifyLeft' },
-    { label: 'Align centre', cmd: 'justifyCenter' },
-    { label: 'Align right', cmd: 'justifyRight' },
-    { label: 'Remove link', cmd: 'unlink' },
-    { label: 'Clear formatting', cmd: 'removeFormat' },
+    { label: 'Numbered list', cmd: 'insertOrderedList', icon: 'ListNumbers' },
+    { label: 'Indent', cmd: 'indent', icon: 'TextIndent' },
+    { label: 'Outdent', cmd: 'outdent', icon: 'TextOutdent' },
+    { label: 'Align left', cmd: 'justifyLeft', icon: 'TextAlignLeft' },
+    { label: 'Align centre', cmd: 'justifyCenter', icon: 'TextAlignCenter' },
+    { label: 'Align right', cmd: 'justifyRight', icon: 'TextAlignRight' },
+    { label: 'Remove link', cmd: 'unlink', icon: 'LinkBreak' },
+    { label: 'Clear formatting', cmd: 'removeFormat', icon: 'Eraser' },
   ];
 
   /* opts.expand: compose windows get the expand control; the signature editor
