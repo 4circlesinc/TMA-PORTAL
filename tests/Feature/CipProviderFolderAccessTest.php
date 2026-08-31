@@ -267,6 +267,67 @@ class CipProviderFolderAccessTest extends TestCase
             ->assertJsonCount(0, 'folders');
     }
 
+    /**
+     * The firm's historical SharePoint tree is the firm's business, not the
+     * provider's window. A contact reaches the client folders the portal
+     * provisioned (and anything a staff member explicitly shares) — never
+     * the legacy folders the sync imported alongside them.
+     */
+    public function test_synced_legacy_folders_stay_closed_to_provider_contacts(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+
+        // The provider's own folder in the synced library, holding one
+        // legacy tree the SharePoint sync imported…
+        $library = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Citizenship Applications',
+            'folder_type' => Folder::TYPE_ORGANIZATION, 'audience' => 'all_staff', 'audience_role' => 'editor',
+            'owner_id' => $staff->id, 'created_by' => $staff->id, 'origin' => 'sharepoint',
+        ]);
+        $providerFolder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'GALAXY', 'parent_id' => $library->id,
+            'owner_id' => $staff->id, 'created_by' => $staff->id,
+        ]);
+        $galaxy->forceFill(['folder_id' => $providerFolder->id])->save();
+
+        $legacy = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'OLD APPLICANT - PAD 2025', 'parent_id' => $providerFolder->id,
+            'owner_id' => $staff->id, 'created_by' => $staff->id,
+        ]);
+        $legacyFile = \App\Models\FileItem::create([
+            'uuid' => (string) Str::uuid(), 'folder_id' => $legacy->id, 'name' => 'Old Passport.pdf',
+            'extension' => 'pdf', 'mime_type' => 'application/pdf', 'size' => 10,
+            'disk' => 'local', 'storage_path' => 'vault/old.pdf',
+            'owner_id' => $staff->id, 'uploaded_by' => $staff->id,
+        ]);
+
+        // …and one portal-provisioned client filing beside it.
+        ['root' => $clientFolder] = $this->filing($galaxy, $staff);
+
+        // The firm's window: the client folder, nothing historical.
+        $this->assertNotNull(FileAccess::folderRole($gil, $clientFolder->fresh()));
+        $this->assertNull(FileAccess::folderRole($gil, $providerFolder->fresh()));
+        $this->assertNull(FileAccess::folderRole($gil, $legacy->fresh()));
+        $this->assertNull(FileAccess::fileRole($gil, $legacyFile->fresh()));
+
+        $listed = collect(
+            $this->actingAs($gil)->getJson('/portal/files/?section=all')
+                ->assertOk()->json('folders')
+        )->pluck('name');
+        $this->assertFalse($listed->contains('OLD APPLICANT - PAD 2025'));
+        $this->assertFalse($listed->contains('GALAXY'));
+
+        // The one door that opens it: a staff member sharing it deliberately.
+        \App\Models\Share::create([
+            'uuid' => (string) Str::uuid(), 'token' => Str::random(40),
+            'item_type' => 'folder', 'item_id' => $legacy->id,
+            'shared_by' => $staff->id, 'kind' => 'user',
+            'target_user_id' => $gil->id, 'role' => 'viewer',
+        ]);
+        $this->assertNotNull(FileAccess::folderRole($gil, $legacy->fresh()));
+    }
+
     public function test_all_files_for_a_provider_contact_is_only_the_clients_folder(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
