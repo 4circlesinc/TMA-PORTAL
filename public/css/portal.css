@@ -4656,6 +4656,23 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+/* ── placeholder token chips (template and letter editors) ────────── */
+.tma-portal-token-chip {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  cursor: pointer;
+}
+
+.tma-portal-token-chip:hover { border-color: var(--color-black); }
+
 /* ── rich template editor (compose toolbar over contenteditable) ──── */
 .tma-portal-rich {
   border: 1px solid var(--color-border-soft);

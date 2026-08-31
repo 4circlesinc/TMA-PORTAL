@@ -1969,9 +1969,11 @@
     var letter = found.letter;
     var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
     var rich = canEdit && window.TMATplRich && window.TMATplRich.available();
+    // Every placeholder as a chip: press to drop it at the caret.
     var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
-      return '{{' + p.token + '}}, ' + p.meaning;
-    }).join('<br>');
+      return '<button type="button" class="tma-portal-token-chip" data-cipletter-token="' + ui().esc(p.token) + '"' +
+        ' title="' + ui().esc(p.meaning) + '">{{' + ui().esc(p.token) + '}}</button>';
+    }).join('');
 
     ui().openModal({
       title: found.type.label + ' · ' + letter.decisionLabel,
@@ -1999,6 +2001,19 @@
       onMount: function (host) {
         var save = host.querySelector('[data-cipletter-save]');
         if (rich && window.TMAComposeEditor) window.TMAComposeEditor.wire(host);
+
+        // mousedown keeps the editor's selection alive so the token lands
+        // exactly where the caret sits.
+        host.querySelectorAll('[data-cipletter-token]').forEach(function (b) {
+          b.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            if (!canEdit || !window.TMATplRich) return;
+            window.TMATplRich.insertToken(
+              host.querySelector('[data-cipletter-body]'),
+              '{{' + b.getAttribute('data-cipletter-token') + '}}'
+            );
+          });
+        });
 
         function saved(message) {
           ui().closeModal();

@@ -1434,9 +1434,30 @@
     return el.hasAttribute('data-tma-rich-editor') ? el.innerHTML : el.value;
   }
 
+  /* Drop a {{token}} at the caret — or the end, when the caret is elsewhere —
+     and let the field's own input listeners (draft, live preview) hear it. */
+  function insertToken(el, token) {
+    if (!el) return;
+    if (el.hasAttribute && el.hasAttribute('data-tma-rich-editor')) {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !el.contains(sel.anchorNode)) {
+        el.focus();
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      }
+      document.execCommand('insertText', false, token);
+    } else if ('value' in el) {
+      el.value += token;
+      el.focus();
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   /* Shared with the CIP letters editor (portal-admin.js), so every template
      body in the portal is written with the one rich control. */
-  window.TMATplRich = { available: richAvailable, control: richFieldControl, value: fieldValue };
+  window.TMATplRich = { available: richAvailable, control: richFieldControl, value: fieldValue, insertToken: insertToken };
 
   function etplEditorModal(t) {
     var isNew = !t;
@@ -1546,9 +1567,11 @@
       return ui().field(labels[f] || f, control);
     }).join('');
 
+    // Every placeholder as a chip: press to drop it at the caret.
     var tokens = (t.variables || []).map(function (v) {
-      return '<code>{{' + ui().esc(v.token) + '}}</code> ' + ui().esc(v.meaning);
-    }).join('<br>');
+      return '<button type="button" class="tma-portal-token-chip" data-tpl-token="' + ui().esc(v.token) + '"' +
+        ' title="' + ui().esc(v.meaning) + '">{{' + ui().esc(v.token) + '}}</button>';
+    }).join('');
 
     ui().openModal({
       title: t.name,
@@ -1576,6 +1599,16 @@
   function wireTplEditor(host, t) {
     var timer = null;
     if (richAvailable()) window.TMAComposeEditor.wire(host);
+
+    // mousedown, not click, so the editor's selection is still live when the
+    // token lands where the caret was.
+    host.querySelectorAll('[data-tpl-token]').forEach(function (b) {
+      b.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        var target = host.querySelector('[data-tma-rich-editor]') || host.querySelector('[data-tpl-field="body"]');
+        insertToken(target, '{{' + b.getAttribute('data-tpl-token') + '}}');
+      });
+    });
 
     function draft() {
       var fields = {};
