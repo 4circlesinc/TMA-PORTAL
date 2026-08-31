@@ -172,23 +172,33 @@
         return '<p class="tma-portal-note" style="text-align:center;padding:var(--space-16) 0">' + text + '</p>';
       }
 
+      // The official mark for each source; SharePoint libraries all share one.
+      var IMPORT_ICONS = {
+        smartsheet: 'images/icons/brands/Smartsheet40.png',
+        onedrive: 'images/icons/brands/OneDrive40.svg',
+        library: 'images/icons/brands/SharePoint40.svg',
+      };
+
       function importsSection(d) {
         var targets = (d.imports && d.imports.targets) || [];
         if (!targets.length) {
           return empty('No import sources are connected yet.');
         }
-        return targets.map(function (t) {
-          return '<div class="tma-portal-toggle-row">' +
-            '<span class="tma-portal-toggle-row__label">' +
-            '<strong>' + esc(t.name) + '</strong>' +
-            (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') +
-            '<br><span class="tma-portal-note">' + esc(t.detail || '') + '</span></span>' +
-            '<span style="display:flex;align-items:center;gap:6px">' +
+        return '<div class="tma-portal-connector-list">' + targets.map(function (t) {
+          var icon = IMPORT_ICONS[t.kind] || IMPORT_ICONS.library;
+          // The Smartsheet mark sits on a solid tile; round it like an app icon.
+          var rounded = t.kind === 'smartsheet' ? ' style="border-radius:6px"' : '';
+          return '<div class="tma-portal-connector">' +
+            '<span class="tma-portal-connector__logo"><img src="' + icon + '" alt=""' + rounded + '></span>' +
+            '<div class="tma-portal-connector__body">' +
+            '<span class="tma-portal-connector__name">' + esc(t.name) +
+            (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') + '</span>' +
+            '<span class="tma-portal-connector__desc">' + esc(t.detail || '') + '</span></div>' +
+            '<div class="tma-portal-connector__actions" style="display:flex;align-items:center;gap:8px">' +
             (t.paused ? '' : ui().btn({ label: 'Sync now', variant: 'ghost', small: true, attrs: 'data-ops-import-run="' + esc(t.id) + '"' })) +
             ui().toggle(!!t.paused, 'data-ops-import-pause="' + esc(t.id) + '"', 'Pause ' + t.name) +
-            '</span></div>';
-        }).join('') +
-          '<p class="tma-portal-note" style="margin:var(--space-8) 0 0">Pause one source at a time. Mailbox and calendar sync stay on each person\'s Connectors settings.</p>';
+            '</div></div>';
+        }).join('') + '</div>';
       }
 
       function load() {
