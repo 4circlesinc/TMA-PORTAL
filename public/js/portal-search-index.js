@@ -36,6 +36,7 @@
     { id: 'custom-fields', label: 'Custom fields', group: 'CIP Console' },
     { id: 'cip-documents', label: 'Document requirements', group: 'CIP Console' },
     { id: 'cip-letters', label: 'Granted and Denied letters', group: 'CIP Console' },
+    { id: 'cip-distribution', label: 'Distribution group', group: 'CIP Console' },
     { id: 'account-security', label: 'Account security', group: 'Security' },
     { id: 'security-insights', label: 'Security Insights', group: 'Security' },
     { id: 'signin-policy', label: 'Sign in policy', group: 'Security' },

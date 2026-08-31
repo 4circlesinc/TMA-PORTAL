@@ -58,6 +58,7 @@
       { id: 'custom-fields', label: 'Custom fields' },
       { id: 'cip-documents', label: 'Document requirements' },
       { id: 'cip-letters', label: 'Granted and Denied letters' },
+      { id: 'cip-distribution', label: 'Distribution group' },
     ] },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
@@ -1810,6 +1811,80 @@
           var found = cipLetterFor(b.getAttribute('data-cipletter-edit'));
           if (found) cipLetterModal(found);
         });
+      });
+    },
+  };
+
+  /* ── CIP Distribution group (§22) ───────────────────────────────────
+   *
+   * Membership is the People group of this name. Extra mailboxes that
+   * are not portal accounts are kept here.
+   */
+  var CIPDIST = { loaded: false, loading: false, error: '', data: null };
+
+  function loadCipDistribution() {
+    if (CIPDIST.loading) return;
+    CIPDIST.loading = true;
+    filelibJson('GET', '/portal/cip/distribution')
+      .then(function (d) { CIPDIST.data = d; CIPDIST.error = ''; })
+      .catch(function (e) { CIPDIST.error = e.message; })
+      .then(function () { CIPDIST.loaded = true; CIPDIST.loading = false; render(); });
+  }
+
+  PAGES['cip-distribution'] = {
+    render: function () {
+      if (CIPDIST.error) return '<p class="tma-portal-note">Couldn’t load the distribution group: ' + ui().esc(CIPDIST.error) + '</p>';
+      if (!CIPDIST.loaded) return ui().loading();
+
+      var data = CIPDIST.data || {};
+      var canEdit = !!data.canEdit;
+      var members = data.members || [];
+      var extra = (data.extraEmails || []).join('\n');
+
+      return '<p class="tma-portal-subtitle">Every CIP status email goes to four classes: this group, the assigned officer, every administrator, and the service provider contact. Duplicate mailboxes are sent once.</p>' +
+        '<h3 class="tma-portal-section__title">' + ui().esc(data.groupName || 'CIP Distribution Group') + '</h3>' +
+        (members.length
+          ? ui().table(['Name', 'Email'], members.map(function (m) {
+            return '<tr><td>' + ui().esc(m.name) + '</td><td class="tma-portal-table__muted">' + ui().esc(m.email) + '</td></tr>';
+          }).join(''))
+          : '<p class="tma-portal-note">Nobody is on this group yet. Add people on People → Distribution groups.</p>') +
+        '<div class="tma-portal-form-actions">' +
+          ui().btn({ label: 'Open Distribution groups', attrs: 'data-cipdist-people', variant: 'ghost' }) +
+        '</div>' +
+        ui().field('Extra mailboxes', '<textarea class="tma-portal-textarea" data-cipdist-emails rows="4" maxlength="4000"' +
+          (canEdit ? '' : ' disabled') + '>' + ui().esc(extra) + '</textarea>') +
+        '<p class="tma-portal-table__muted">Addresses that are not portal accounts, one per line. They still receive the email; they do not get a bell.</p>' +
+        (canEdit
+          ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipdist-save' }) + '</div>'
+          : '<p class="tma-portal-note">Only an administrator can change the extra mailboxes.</p>');
+    },
+    wire: function (el) {
+      if (!CIPDIST.loaded) { loadCipDistribution(); return; }
+
+      var people = el.querySelector('[data-cipdist-people]');
+      if (people) people.addEventListener('click', function () {
+        if (window.TMADashboard && window.TMADashboard.navigate) {
+          window.TMADashboard.navigate({
+            navId: 'people-groups',
+            view: 'people',
+            title: 'Distribution Groups',
+            crumb: 'People / Distribution Groups',
+          });
+        }
+      });
+
+      var save = el.querySelector('[data-cipdist-save]');
+      if (!save) return;
+      save.addEventListener('click', function () {
+        var raw = (el.querySelector('[data-cipdist-emails]') || {}).value || '';
+        var emails = raw.split(/[\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        filelibJson('PATCH', '/portal/cip/distribution', { extraEmails: emails })
+          .then(function (d) {
+            CIPDIST.data = d;
+            ui().toast('Distribution list saved');
+            render();
+          })
+          .catch(function (e) { ui().toastError(e.message); });
       });
     },
   };

@@ -30,9 +30,11 @@ return [
     |--------------------------------------------------------------------------
     |
     | Every CIP notice fans out to this People group (by name), plus any extra
-    | mailboxes listed here, then to the assigned officer, administrators, and
-    | the service provider contact. Maintain the group on People → Distribution
-    | groups; extra addresses cover mailboxes that are not portal accounts.
+    | mailboxes, then to the assigned officer, administrators, and the service
+    | provider contact. Maintain the group's people on People → Distribution
+    | groups. Extra addresses that are not portal accounts are edited on CIP
+    | Console → Distribution group; the env list below is the default until
+    | an administrator saves that page.
     |
     */
 

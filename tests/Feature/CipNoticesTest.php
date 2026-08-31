@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\Postcard;
+use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
+use App\Support\Cip\Distribution;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
@@ -36,6 +38,7 @@ class CipNoticesTest extends TestCase
     {
         parent::setUp();
         config(['services.cip.enabled' => true]);
+        Distribution::flush();
         $this->travelTo('2026-08-18 12:00:00');
     }
 
@@ -79,6 +82,10 @@ class CipNoticesTest extends TestCase
         $this->assertSame(
             'KM - PENDING REVIEW - 10T1G12661P - JOHN SMITH (F4) - 18.08.2026',
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'John Smith', 'familySize' => 4], Status::PENDING_REVIEW, $kim),
+        );
+        $this->assertSame(
+            'KM - NON-COMPLIANT - 10T1G12661P - JOHN SMITH (F4) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'John Smith', 'familySize' => 4], Status::NON_COMPLIANT, $kim),
         );
         $this->assertSame(
             'KM - BACKGROUND CHECK - 10T1G12661P - JOHN SMITH (F4) - 18.08.2026',
@@ -189,17 +196,63 @@ class CipNoticesTest extends TestCase
             'first_name' => 'Chen', 'last_name' => 'Wei',
         ]);
 
+        Distribution::putExtraEmails(['watch@tma.example']);
+
         Assignments::assign($application->fresh(), $rita, $ada);
 
         $expected = 'AA - REVIEW APPLICATION - '.$application->fresh()->displayNumber()
             .' - CHEN WEI (F1) - 18.08.2026';
 
-        foreach (['ada@example.com', 'rita@example.com', 'gil@galaxy.example', 'notices@galaxy.example', 'kim@dist.example'] as $mailbox) {
+        foreach ([
+            'ada@example.com', 'rita@example.com', 'gil@galaxy.example',
+            'notices@galaxy.example', 'kim@dist.example', 'watch@tma.example',
+        ] as $mailbox) {
             Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $expected
                 && $mail->hasTo($mailbox));
         }
 
-        Mail::assertQueuedCount(5);
+        Mail::assertQueuedCount(6);
+
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'kim@dist.example',
+            'template' => 'cip-assigned',
+            'related_id' => $application->id,
+            'related_type' => CipApplication::class,
+        ]);
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'watch@tma.example',
+            'template' => 'cip-assigned',
+            'related_id' => $application->id,
+            'related_type' => CipApplication::class,
+        ]);
+    }
+
+    public function test_a_person_in_two_classes_is_still_one_mailbox(): void
+    {
+        Mail::fake();
+
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $group = Group::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'CIP Distribution Group',
+            'group_type' => Group::TYPE_TEAM,
+            'created_by' => $ada->id,
+        ]);
+        GroupMember::create(['group_id' => $group->id, 'user_id' => $ada->id, 'role' => GroupMember::ROLE_MEMBER]);
+
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($provider, $ada);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen', 'last_name' => 'Wei',
+        ]);
+        $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
+
+        Engine::apply($application->fresh(), Status::DELAYED, null);
+
+        Mail::assertQueuedCount(1);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
     }
 
     public function test_a_status_change_is_one_notice_per_recipient(): void

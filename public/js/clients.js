@@ -1745,6 +1745,7 @@
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-documents">Manage documents</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-letters">Manage decision letters</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-distribution">Manage distribution group</button>' +
           '</div></div>'
         : '') +
       /*
@@ -11715,6 +11716,7 @@
     'custom-fields': { title: 'Custom fields' },
     'cip-documents': { title: 'Document requirements' },
     'cip-letters': { title: 'Granted and Denied letters' },
+    'cip-distribution': { title: 'Distribution group' },
   };
 
   function navigateToClientsAdminPage(adminPage) {

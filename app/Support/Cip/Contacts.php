@@ -5,7 +5,6 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CompanyMember;
-use App\Models\Group;
 use App\Models\User;
 use App\Support\Access\Role;
 
@@ -82,8 +81,8 @@ class Contacts
     }
 
     /**
-     * Members of the CIP Distribution Group, plus any extra mailboxes in
-     * config. A Person who is also an administrator is still one recipient.
+     * Members of the CIP Distribution Group, plus any extra mailboxes. A
+     * person who is also an administrator is still one recipient.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
      */
@@ -91,13 +90,10 @@ class Contacts
     {
         $recipients = [];
 
-        $name = trim((string) config('cip.distribution_group', 'CIP Distribution Group'));
+        $name = Distribution::groupName();
 
         if ($name !== '') {
-            $group = Group::query()
-                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-                ->where('is_archived', false)
-                ->first();
+            $group = Distribution::group();
 
             foreach ($group?->members()->with('user:id,name,email')->get() ?? [] as $member) {
                 $user = $member->user;
@@ -115,7 +111,7 @@ class Contacts
             }
         }
 
-        foreach (config('cip.distribution_emails', []) as $email) {
+        foreach (Distribution::extraEmails() as $email) {
             $email = trim((string) $email);
 
             if ($email === '' || isset($recipients[mb_strtolower($email)])) {

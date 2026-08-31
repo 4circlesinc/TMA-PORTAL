@@ -18,11 +18,11 @@ use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
+use App\Http\Controllers\Cip\CipDistributionController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipDocumentUploadController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
-use App\Http\Controllers\TemplatesController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
@@ -109,6 +109,7 @@ use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\StaySignedInController;
 use App\Http\Controllers\StorageUsageController;
+use App\Http\Controllers\TemplatesController;
 use App\Http\Controllers\UnsignedVerifyEmailController;
 use App\Support\Access\Role;
 use Illuminate\Http\Request;
@@ -518,6 +519,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('letters.restore');
 
         /*
+         * §22: the CIP Distribution Group. Membership is edited on People →
+         * Distribution groups; extra mailboxes that are not portal accounts
+         * are kept here.
+         */
+        Route::get('/distribution', [CipDistributionController::class, 'show'])
+            ->name('distribution.show');
+        Route::patch('/distribution', [CipDistributionController::class, 'update'])
+            ->name('distribution.update');
+
+        /*
          * §13: the conversation on one checklist document.
          *
          * Addressed by the document, not by the file in it — the slot outlives
@@ -837,7 +848,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      * stopping a client who connected Gmail from running a full mailbox
      * inside the portal.
      */
-        /*
+    /*
      * The Templates page (administrators only). System emails: every
      * transactional email's copy, editable, with restore and live preview.
      */
