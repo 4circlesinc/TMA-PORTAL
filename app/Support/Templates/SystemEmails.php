@@ -1317,7 +1317,9 @@ Children receive a passport and owe the same originals except marriage and divor
                 ],
             ],
             'cip-decision' => [
-                'name' => 'Decision recorded',
+                // Named so a reader scanning for "granted" or "denied" finds
+                // the one email that sends for both.
+                'name' => 'Decision — granted or denied',
                 'category' => 'CIP Applications',
                 'when' => 'Sent when the Unit decides. The letter itself is kept under CIP settings → Granted and Denied letters; this wraps it. '.$when,
                 'variables' => $vars + [
