@@ -94,4 +94,67 @@ class SocialConnectReturnTest extends TestCase
             ->get('/auth/social/google/redirect')
             ->assertRedirect(route('security-settings'));
     }
+
+    public function test_getting_started_connect_buttons_do_not_use_the_desktop_signin_path(): void
+    {
+        config([
+            'services.microsoft.client_id' => 'test-ms-client',
+            'services.microsoft.sync' => true,
+            'services.google.client_id' => 'test-google-client',
+        ]);
+
+        $html = $this->actingAs($this->onboardingUser())
+            ->get(route('getting-started'))
+            ->assertOk()
+            ->assertSee('Connect your email')
+            ->assertSee('Connect Google')
+            ->getContent();
+
+        $this->assertStringContainsString('/connect/microsoft?', $html);
+        $this->assertStringContainsString('/connect/google?', $html);
+        $this->assertStringNotContainsString('/auth/social/microsoft/redirect', $html);
+        $this->assertStringNotContainsString('/auth/social/google/redirect', $html);
+        $this->assertStringNotContainsString('/auth/desktop', $html);
+    }
+
+    public function test_the_connect_alias_sends_microsoft_to_the_account_picker(): void
+    {
+        config([
+            'services.microsoft.client_id' => 'test-ms-client',
+            'services.microsoft.client_secret' => 'test-secret',
+            'services.microsoft.redirect' => 'http://localhost/auth/social/microsoft/callback',
+            'services.microsoft.sync' => true,
+            'services.microsoft.scope_email' => 'Mail.ReadWrite',
+            'services.microsoft.scope_calendar' => 'Calendars.ReadWrite',
+            'services.microsoft.scope_onedrive' => 'Files.ReadWrite',
+        ]);
+
+        $response = $this->actingAs($this->onboardingUser())
+            ->get('/connect/microsoft?sync_all=1&return=getting-started');
+
+        $response->assertRedirect();
+        $target = (string) $response->headers->get('Location');
+
+        $this->assertStringContainsString('login.microsoftonline.com', $target);
+        $this->assertStringNotContainsString('/auth/desktop', $target);
+    }
+
+    public function test_the_connect_alias_sends_google_to_the_account_picker(): void
+    {
+        config([
+            'services.google.client_id' => 'test-client-id.apps.googleusercontent.com',
+            'services.google.client_secret' => 'test-secret',
+            'services.google.redirect' => 'http://localhost/auth/social/google/callback',
+        ]);
+
+        $response = $this->actingAs($this->onboardingUser())
+            ->get('/connect/google?sync_all=1&return=getting-started');
+
+        $response->assertRedirect();
+        $target = (string) $response->headers->get('Location');
+
+        $this->assertStringContainsString('accounts.google.com', $target);
+        $this->assertStringContainsString('prompt=', $target);
+        $this->assertStringNotContainsString('/auth/desktop', $target);
+    }
 }
