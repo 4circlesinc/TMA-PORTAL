@@ -1965,9 +1965,10 @@
     return found;
   }
 
-  function cipLetterModal(found) {
+  function cipLetterModal(found, onSaved) {
     var letter = found.letter;
     var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
+    var rich = canEdit && window.TMATplRich && window.TMATplRich.available();
     var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
       return '{{' + p.token + '}}, ' + p.meaning;
     }).join('<br>');
@@ -1981,8 +1982,10 @@
           attrs: 'data-cipletter-title maxlength="191"' + (canEdit ? '' : ' disabled'),
           ariaLabel: 'Letter title',
         })) +
-        ui().field('Letter', '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000"' +
-          (canEdit ? '' : ' disabled') + '>' + ui().esc(letter.body) + '</textarea>') +
+        ui().field('Letter', rich
+          ? window.TMATplRich.control('data-cipletter-body', 'Letter', letter.body)
+          : '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000"' +
+            (canEdit ? '' : ' disabled') + '>' + ui().esc(letter.body) + '</textarea>') +
         '<p class="tma-portal-table__muted">' + tokens + '</p>' +
         (canEdit
           ? '<div class="tma-portal-form-actions">' +
@@ -1992,33 +1995,54 @@
           : '<p class="tma-portal-note">Only an administrator can change these letters.</p>'),
       onMount: function (host) {
         var save = host.querySelector('[data-cipletter-save]');
+        if (rich && window.TMAComposeEditor) window.TMAComposeEditor.wire(host);
+
+        function saved(message) {
+          ui().closeModal();
+          ui().toast(message);
+          CIPLETTERS.loaded = false;
+          loadCipLetters();
+          if (onSaved) onSaved();
+        }
+
         if (save) save.addEventListener('click', function () {
+          var bodyEl = host.querySelector('[data-cipletter-body]');
           var title = (host.querySelector('[data-cipletter-title]').value || '').trim();
-          var body = (host.querySelector('[data-cipletter-body]').value || '').trim();
+          var body = ((window.TMATplRich ? window.TMATplRich.value(bodyEl) : bodyEl.value) || '').trim();
           if (!title || !body) { ui().toastError('Title and letter are both required.'); return; }
           filelibJson('PATCH', '/portal/cip/letters/' + encodeURIComponent(letter.id), { title: title, body: body })
-            .then(function () {
-              ui().closeModal();
-              ui().toast('Letter saved');
-              CIPLETTERS.loaded = false;
-              loadCipLetters();
-            })
+            .then(function () { saved('Letter saved'); })
             .catch(function (e) { ui().toastError(e.message); });
         });
         var restore = host.querySelector('[data-cipletter-restore]');
         if (restore) restore.addEventListener('click', function () {
           filelibJson('POST', '/portal/cip/letters/' + encodeURIComponent(letter.id) + '/restore')
-            .then(function () {
-              ui().closeModal();
-              ui().toast('Restored to the default');
-              CIPLETTERS.loaded = false;
-              loadCipLetters();
-            })
+            .then(function () { saved('Restored to the default'); })
             .catch(function (e) { ui().toastError(e.message); });
         });
       },
     });
   }
+
+  /* The letters, openable from the Templates page too (portal-work.js):
+     one loader, one modal, however many doors. */
+  window.TMACipLetters = {
+    load: function (cb) {
+      if (CIPLETTERS.loaded && CIPLETTERS.data) { cb(CIPLETTERS.data); return; }
+      filelibJson('GET', '/portal/cip/letters')
+        .then(function (d) {
+          CIPLETTERS.data = d;
+          CIPLETTERS.error = '';
+          CIPLETTERS.loaded = true;
+          cb(d);
+        })
+        .catch(function (e) { cb(null, e.message); });
+    },
+    open: function (id, onSaved) {
+      var found = cipLetterFor(id);
+      if (found) cipLetterModal(found, onSaved);
+    },
+  };
 
   PAGES['cip-letters'] = {
     render: function () {

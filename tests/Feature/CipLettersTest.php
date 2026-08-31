@@ -176,6 +176,42 @@ class CipLettersTest extends TestCase
         });
     }
 
+    public function test_a_rich_editor_letter_keeps_its_lead_and_sanitized_body(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $letter = CipDecisionTemplate::query()
+            ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('decision', Status::GRANTED)
+            ->first();
+
+        $this->actingAs($admin)->patchJson('/portal/cip/letters/'.$letter->uuid, [
+            'title' => '{{number}} was granted',
+            'body' => '<p>Congratulations to {{applicant}} on being granted citizenship.</p>'
+                .'<p><strong>STAGE 1</strong> requires the <font size="5">COR</font>.'
+                .'<script>alert(1)</script></p>',
+        ])->assertOk();
+
+        $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
+
+        $this->postCipDecision($admin, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+        ])->assertOk();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            $body = (string) $mail->payload['bodyHtml'];
+
+            // The first block is the centred lead, as plain text.
+            return $mail->payload['lead'] === 'Congratulations to Chen Wei on being granted citizenship.'
+                && str_contains($body, '<strong>STAGE 1</strong>')
+                && str_contains($body, '<font size="5">COR</font>')
+                && ! str_contains($body, '<script')
+                && ! str_contains($body, 'Congratulations');
+        });
+    }
+
     public function test_a_bonds_grant_does_not_use_the_real_estate_letter(): void
     {
         Mail::fake();

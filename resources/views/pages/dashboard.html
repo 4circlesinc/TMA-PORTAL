@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
-  <!-- tma-shell:2026-08-30-templates-subnav -->
+  <!-- tma-shell:2026-08-31-templates-letters -->
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
   <!-- Inter comes from a third-party origin, so the font file costs a DNS
@@ -47,7 +47,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=18"></script>
+  <script src="js/portal-access.js?v=19"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -153,6 +153,7 @@
         <div class="tma-dash__subnav" data-subnav="templates" hidden>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates" data-nav="templates-system" data-title="System emails" data-crumb="Templates / System emails" data-view="templates"><span>System emails</span></a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/email" data-nav="templates-email" data-title="Email templates" data-crumb="Templates / Email templates" data-view="templates"><span>Email templates</span></a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/letters" data-nav="templates-letters" data-title="Granted and Denied letters" data-crumb="Templates / Granted and Denied letters" data-view="templates"><span>Granted and Denied letters</span></a>
         </div>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="workflows" aria-expanded="false">
@@ -527,6 +528,9 @@
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates-email" data-title="Email templates" data-crumb="Templates / Email templates" data-view="templates">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Email templates</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates-letters" data-title="Granted and Denied letters" data-crumb="Templates / Granted and Denied letters" data-view="templates">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Granted and Denied letters</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Requests" data-crumb="Workflows / Requests" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>

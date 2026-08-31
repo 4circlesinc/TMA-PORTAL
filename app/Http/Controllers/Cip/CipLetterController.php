@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CipDecisionTemplate;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\CipAccess;
+use App\Support\Templates\Markup;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Letters;
 use App\Support\Cip\Status;
@@ -60,9 +61,16 @@ class CipLetterController extends Controller
             'body' => ['required', 'string', 'max:20000'],
         ]);
 
+        // A rich-editor letter is stored already sanitized, so nothing
+        // unsafe ever sits in the row or reaches the editor reopening it.
+        $body = trim($data['body']);
+        if (Markup::looksLikeHtml($body)) {
+            $body = Markup::sanitize($body);
+        }
+
         $letter->forceFill([
             'title' => trim($data['title']),
-            'body' => trim($data['body']),
+            'body' => $body,
             'updated_by' => $request->user()->id,
         ])->save();
 

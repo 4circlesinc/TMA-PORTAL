@@ -1044,13 +1044,16 @@
     TPL.el = el;
     // Two subpages share this view, the Workflows pattern: the nav id (or a
     // hard-refreshed deep link) says which pane this mount is.
-    TPL.pane = (opts && opts.navId) === 'templates-email'
-      || (window.location.pathname || '').indexOf('/templates/email') === 0
-      ? 'email' : 'system';
+    var navId = (opts && opts.navId) || '';
+    var path = window.location.pathname || '';
+    TPL.pane = navId === 'templates-email' || path.indexOf('/templates/email') === 0
+      ? 'email'
+      : navId === 'templates-letters' || path.indexOf('/templates/letters') === 0
+        ? 'letters' : 'system';
     renderTemplates();
     if (TPL.pane === 'email') {
       if (!ETPL.loaded && !ETPL.loading) loadEmailTemplates();
-    } else if (!TPL.loaded && !TPL.loading) {
+    } else if (TPL.pane === 'system' && !TPL.loaded && !TPL.loading) {
       loadTemplates();
     }
   }
@@ -1165,10 +1168,54 @@
     ], rows);
   }
 
+  /* ── Granted and Denied letters (the Templates-side door) ─────────
+   * The data and editor live with the CIP admin pages — portal-admin.js
+   * exports them as TMACipLetters — so both doors open the same modal.
+   */
+  function renderCipLetters() {
+    var el = TPL.el;
+    if (!el) return;
+    var lettersApi = window.TMACipLetters;
+    if (!lettersApi) {
+      el.innerHTML = '<p class="tma-portal-note">Couldn’t load the letters. Refresh to try again.</p>';
+      return;
+    }
+    el.innerHTML = '<div class="tma-portal-page tma-portal-page--templates">' + ui().loading() + '</div>';
+    lettersApi.load(function (d, err) {
+      if (!TPL.el || TPL.pane !== 'letters') return;
+      if (err || !d) {
+        TPL.el.innerHTML = '<p class="tma-portal-note">Couldn’t load the letters: ' + ui().esc(err || 'try again') + '</p>';
+        return;
+      }
+      var rows = (d.types || []).map(function (t) {
+        return (t.letters || []).map(function (l) {
+          return '<tr>' +
+            '<td>' + ui().esc(t.label) + '</td>' +
+            '<td>' + ui().esc(l.decisionLabel) +
+              (l.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
+            '<td class="tma-portal-table__muted">' + ui().esc(l.title) + '</td>' +
+            '<td><div class="tma-portal-row-actions">' +
+            '<button type="button" class="tma-portal-icon-btn" data-cipl-edit="' + ui().esc(l.id) + '" title="Edit letter" aria-label="Edit letter"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+            '</div></td></tr>';
+        }).join('');
+      }).join('');
+      TPL.el.innerHTML =
+        '<div class="tma-portal-page tma-portal-page--templates">' +
+        ui().table(['Investment type', 'Decision', 'Title', ''], rows) +
+        '</div>';
+      TPL.el.querySelectorAll('[data-cipl-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          lettersApi.open(b.getAttribute('data-cipl-edit'), function () { renderCipLetters(); });
+        });
+      });
+    });
+  }
+
   function renderTemplates() {
     var el = TPL.el;
     if (!el) return;
     if (TPL.pane === 'email') { renderEmailTemplates(); return; }
+    if (TPL.pane === 'letters') { renderCipLetters(); return; }
 
     var active = document.activeElement;
     var restoreSearch = active && active.matches && active.matches('[data-tpl-search]');
@@ -1386,6 +1433,10 @@
   function fieldValue(el) {
     return el.hasAttribute('data-tma-rich-editor') ? el.innerHTML : el.value;
   }
+
+  /* Shared with the CIP letters editor (portal-admin.js), so every template
+     body in the portal is written with the one rich control. */
+  window.TMATplRich = { available: richAvailable, control: richFieldControl, value: fieldValue };
 
   function etplEditorModal(t) {
     var isNew = !t;

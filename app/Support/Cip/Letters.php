@@ -142,6 +142,11 @@ class Letters
         $template = self::for($application, $decision);
         $vars = self::vars($application, $recipientName);
         $title = self::fill($template->title, $vars);
+
+        if (\App\Support\Templates\Markup::looksLikeHtml($template->body)) {
+            return self::htmlCopy($template->body, $vars, $title);
+        }
+
         $paragraphs = preg_split("/\n\s*\n/", trim(self::fill($template->body, $vars))) ?: [];
         $paragraphs = array_values(array_filter(array_map('trim', $paragraphs), fn (string $p) => $p !== ''));
 
@@ -230,6 +235,39 @@ class Letters
         }
 
         return $letters;
+    }
+
+    /**
+     * A letter kept as rich-editor HTML: tokens filled (escaped — they land
+     * inside markup), the whole thing sanitized, and the first block's text
+     * becoming the centred lead exactly as the first paragraph does for a
+     * plain-text letter.
+     *
+     * @return array{title:string, lead:string, bodyHtml:?string}
+     */
+    private static function htmlCopy(string $body, array $vars, string $title): array
+    {
+        $filled = (string) preg_replace_callback(
+            '/\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/',
+            fn (array $m) => array_key_exists($m[1], $vars) ? e((string) $vars[$m[1]]) : $m[0],
+            $body,
+        );
+
+        $html = trim(\App\Support\Templates\Markup::sanitize($filled));
+
+        if (preg_match('/^\s*<(p|div)\b[^>]*>(.*?)<\/\1>/is', $html, $m)) {
+            $lead = html_entity_decode(strip_tags($m[2]), ENT_QUOTES, 'UTF-8');
+            $rest = trim(substr($html, strlen($m[0])));
+        } else {
+            $lead = html_entity_decode(strip_tags($html), ENT_QUOTES, 'UTF-8');
+            $rest = '';
+        }
+
+        return [
+            'title' => $title,
+            'lead' => trim($lead),
+            'bodyHtml' => $rest === '' ? null : $rest,
+        ];
     }
 
     private static function paragraphHtml(string $p): string
