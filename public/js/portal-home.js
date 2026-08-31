@@ -75,12 +75,30 @@
     }
   }
 
-  function kpiCard(tone, label, iconName, card) {
+  /* Where each KPI card leads: the page whose numbers it summarises. The
+     hover arrow promises a destination, so every key here must name one. */
+  var KPI_CIP_NAV = { navId: 'clients', view: 'clients', title: 'CIP Applications', crumb: 'CIP Applications' };
+  var KPI_MESSAGES_NAV = { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' };
+  var KPI_NAVS = {
+    clientResponse: KPI_MESSAGES_NAV,
+    cipNew: KPI_CIP_NAV,
+    cipUpdatesRequired: KPI_CIP_NAV,
+    awaitingSignature: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' },
+    cipActive: KPI_CIP_NAV,
+    unreadMessages: KPI_MESSAGES_NAV,
+    openComments: KPI_CIP_NAV,
+  };
+
+  function kpiCard(tone, label, iconName, card, key) {
     var deltaUp = !!card.deltaUp;
-    return '<article class="tma-dash__card tma-dash__card--' + tone + '"' +
+    var nav = key && KPI_NAVS[key];
+    return '<article class="tma-dash__card tma-dash__card--' + tone + (nav ? ' tma-dash__card--link' : '') + '"' +
+      (nav ? ' data-kpi-nav="' + key + '" role="link" tabindex="0"' : '') +
       (card.hint ? ' title="' + ui().esc(card.hint) + '"' : '') + '>' +
       '<div class="tma-dash__card-head"><span class="tma-dash__card-label">' + ui().esc(label) + '</span>' +
-      '<img class="tma-dash__card-ico" src="images/icons/phosphor/' + iconName + '.svg" alt=""></div>' +
+      '<img class="tma-dash__card-ico tma-dash__card-ico--metric" src="images/icons/phosphor/' + iconName + '.svg" alt="">' +
+      (nav ? '<img class="tma-dash__card-ico tma-dash__card-ico--goto" src="images/icons/phosphor/ArrowUpRight.svg" alt="">' : '') +
+      '</div>' +
       '<div class="tma-dash__card-row"><div class="tma-dash__card-value">' + ui().esc(card.value) + '</div>' +
       '<div class="tma-dash__card-delta"><span class="tma-dash__card-delta-text">' + ui().esc(card.delta) + '</span>' +
       '<img src="images/icons/tma/' + (deltaUp ? 'ArrowRise' : 'ArrowFall') + '.svg" alt="' + (deltaUp ? 'up' : 'down') + '"></div></div></article>';
@@ -113,18 +131,18 @@
 
     if (homeMetrics && homeMetrics.provider) {
       return '<div class="tma-dash__cards">' +
-        kpiCard('blue', 'Active CIP Applications', 'FilePlus', card('cipActive')) +
-        kpiCard('purple', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired')) +
-        kpiCard('blue', 'Unread Messages', 'ChatsCircle', card('unreadMessages')) +
-        kpiCard('purple', 'Open Comments', 'ChatText', card('openComments')) +
+        kpiCard('blue', 'Active CIP Applications', 'FilePlus', card('cipActive'), 'cipActive') +
+        kpiCard('purple', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired'), 'cipUpdatesRequired') +
+        kpiCard('blue', 'Unread Messages', 'ChatsCircle', card('unreadMessages'), 'unreadMessages') +
+        kpiCard('purple', 'Open Comments', 'ChatText', card('openComments'), 'openComments') +
         '</div>';
     }
 
     return '<div class="tma-dash__cards">' +
-      kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse')) +
-      kpiCard('purple', 'New CIP Applications', 'FilePlus', card('cipNew')) +
-      kpiCard('blue', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired')) +
-      kpiCard('purple', 'Awaiting Signature', 'Signature', card('awaitingSignature')) +
+      kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse'), 'clientResponse') +
+      kpiCard('purple', 'New CIP Applications', 'FilePlus', card('cipNew'), 'cipNew') +
+      kpiCard('blue', 'CIP Updates Required', 'WarningCircle', card('cipUpdatesRequired'), 'cipUpdatesRequired') +
+      kpiCard('purple', 'Awaiting Signature', 'Signature', card('awaitingSignature'), 'awaitingSignature') +
       '</div>';
   }
 
@@ -3289,6 +3307,18 @@
     var bind = window.TMAMorph
       ? window.TMAMorph.on
       : function (node, type, fn) { if (node) node.addEventListener(type, fn); };
+
+    // A KPI card opens the page whose numbers it summarises.
+    pick('[data-kpi-nav]').forEach(function (cardEl) {
+      var go = function () {
+        var nav = KPI_NAVS[cardEl.getAttribute('data-kpi-nav')];
+        if (nav) navigate(nav);
+      };
+      bind(cardEl, 'click', go);
+      bind(cardEl, 'keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
 
     if (window.TMAOverview && typeof window.TMAOverview.bindRoadActions === 'function') {
       window.TMAOverview.bindRoadActions(el);
