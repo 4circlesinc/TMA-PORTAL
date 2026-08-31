@@ -3198,6 +3198,15 @@
     }
     el._homeMounting = true;
     try {
+    /*
+     * The Recent Files tile derives from the library strip's data, and the
+     * strip's load() skips its callback whenever it is fresh or unchanged —
+     * both of which left the tile painting an empty list it could have
+     * filled from state one call away. Derive on every paint instead; the
+     * map is a few dozen rows and the render-diff below already swallows
+     * no-op repaints.
+     */
+    if (window.TMAPortalHomeLibrary) applyRecentFromLibrary();
     var s = data().state();
     var show = tiles();
     // Local re-render only. Toggling a tile is a change to *this* view, not a
@@ -3602,6 +3611,7 @@
       loadHomeFiles(el);
       if (!window.TMAPortalHomeLibrary) return null;
       return window.TMAPortalHomeLibrary.refresh(function () {
+        applyRecentFromLibrary();
         var live = dashMount();
         if (live) mount(live, { fromLoad: true });
       });
