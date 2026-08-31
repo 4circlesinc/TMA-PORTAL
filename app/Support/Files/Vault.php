@@ -607,6 +607,17 @@ class Vault
      */
     public static function localCopy(FileItem $file): ?string
     {
+        /*
+         * A synced file's bytes may still be sitting in SharePoint — the
+         * import records the row first and fetches content on first use. A
+         * thumbnail or conversion cannot be made of a placeholder, so
+         * materialise it now; on failure the caller's null path stands.
+         */
+        if ($file->content_state === RemoteContent::PENDING) {
+            RemoteContent::ensure($file);
+            $file->refresh();
+        }
+
         $disk = self::diskFor($file);
         if (! $file->storage_path || ! $disk->exists($file->storage_path)) {
             return null;
