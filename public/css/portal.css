@@ -4691,6 +4691,12 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-rich__editor:focus-visible { outline: none; }
 
+/* A wide modal has the height for a long letter; let the editor use it. */
+.tma-portal-modal__card--wide .tma-portal-rich__editor {
+  min-height: 260px;
+  max-height: 56vh;
+}
+
 /* Dark theme: the same panel treatment every input gets. */
 .tma-dash[data-theme="dark"] .tma-portal-rich {
   background-color: var(--dash-panel-bg, var(--color-bg-card));

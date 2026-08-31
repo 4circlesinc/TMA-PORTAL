@@ -1975,6 +1975,9 @@
 
     ui().openModal({
       title: found.type.label + ' · ' + letter.decisionLabel,
+      // Wide like the system-email editor: these letters run to many
+      // paragraphs, and a narrow column made them read as a corridor.
+      cls: 'tma-portal-modal__card--wide',
       body:
         '<p class="tma-portal-note">The email subject stays in the filing format. This is the letter itself. Placeholders are filled from the application when it is sent.</p>' +
         ui().field('Title', ui().input({
