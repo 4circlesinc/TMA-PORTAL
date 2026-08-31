@@ -2,6 +2,8 @@
 
 namespace App\Support\Files;
 
+use App\Models\CipApplication;
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
@@ -145,7 +147,7 @@ class FolderProvisioner
 
         if (! $existing) {
             $ownerId = self::systemOwnerId($actor);
-            $root = self::clientsRoot();
+            $root = self::clientParentFolder($client) ?? self::clientsRoot();
             $existing = Folder::create([
                 'uuid' => (string) Str::uuid(),
                 'name' => self::uniqueChildName($client->name ?: 'Client', $root->id),
@@ -164,6 +166,38 @@ class FolderProvisioner
         self::ensureSubfolders($existing, FileLibrarySetting::clientSubfolders());
 
         return $existing;
+    }
+
+    /**
+     * Where a client's folder belongs: the service provider's folder in the
+     * Citizenship Applications library, which syncs with SharePoint. The
+     * provider comes from the client's CIP application, else the referring
+     * company, else the reserved private-clients bucket. Only an install
+     * with no linked provider folders at all falls back to the standalone
+     * clients root — retired on this one (2026-08-31).
+     */
+    public static function clientParentFolder(Client $client): ?Folder
+    {
+        $provider = CipProvider::query()
+            ->whereNotNull('folder_id')
+            ->whereIn('id', CipApplication::query()
+                ->select('provider_id')
+                ->where('client_id', $client->id))
+            ->first();
+
+        if (! $provider && $client->referred_by_company_id) {
+            $provider = CipProvider::query()
+                ->whereNotNull('folder_id')
+                ->where('company_id', $client->referred_by_company_id)
+                ->first();
+        }
+
+        $provider ??= CipProvider::query()
+            ->whereNotNull('folder_id')
+            ->where('code', CipProvider::PRIVATE_CLIENT_CODE)
+            ->first();
+
+        return $provider?->folder;
     }
 
     /**

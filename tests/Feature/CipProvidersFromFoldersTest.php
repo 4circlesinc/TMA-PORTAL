@@ -80,6 +80,34 @@ class CipProvidersFromFoldersTest extends TestCase
         $this->assertSame(2, $codes->unique()->count());
     }
 
+    public function test_client_folders_land_under_their_provider_folder(): void
+    {
+        $this->library(['GALAXY', 'PRIVATE']);
+        $this->artisan('cip:providers-from-folders')->assertSuccessful();
+
+        $company = \App\Models\Company::create(['uid' => 'galaxy-co', 'name' => 'Galaxy Consultants']);
+        CipProvider::where('name', 'GALAXY')->firstOrFail()
+            ->forceFill(['company_id' => $company->id])->save();
+
+        $referred = \App\Models\Client::create([
+            'uid' => 'ref-1', 'name' => 'Chen Wei',
+            'referral_type' => 'company', 'referred_by_company_id' => $company->id, 'data' => [],
+        ]);
+        $walkIn = \App\Models\Client::create([
+            'uid' => 'walkin-1', 'name' => 'Priya Sharma', 'data' => [],
+        ]);
+
+        $referredFolder = \App\Support\Files\FolderProvisioner::provisionClientFolder($referred);
+        $walkInFolder = \App\Support\Files\FolderProvisioner::provisionClientFolder($walkIn);
+
+        $this->assertSame('GALAXY', $referredFolder->parent->name);
+        // No provider matches, so the private-clients bucket takes it in.
+        $this->assertSame('PRIVATE', $walkInFolder->parent->name);
+        // The standalone clients root never came back to hold either.
+        $this->assertSame(0, Folder::whereNull('parent_id')
+            ->where('folder_type', Folder::TYPE_ROOT)->count());
+    }
+
     public function test_an_existing_provider_is_linked_not_duplicated(): void
     {
         $root = $this->library(['ARTON CAPITAL']);

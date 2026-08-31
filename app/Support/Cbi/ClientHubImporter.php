@@ -156,30 +156,51 @@ class ClientHubImporter
             return $n;
         }
 
-        $root = FolderProvisioner::clientsRoot();
+        /*
+         * Each client's folder goes under their service provider's folder in
+         * the Citizenship Applications library (referral company → provider),
+         * the private-clients bucket standing in when no provider matches.
+         * The standalone clients root is only the last resort of an install
+         * with no linked provider folders at all.
+         */
+        $parentByCompany = \App\Models\CipProvider::query()
+            ->whereNotNull('folder_id')
+            ->whereNotNull('company_id')
+            ->pluck('folder_id', 'company_id')
+            ->all();
+        $fallbackParentId = \App\Models\CipProvider::query()
+            ->whereNotNull('folder_id')
+            ->where('code', \App\Models\CipProvider::PRIVATE_CLIENT_CODE)
+            ->value('folder_id')
+            ?? FolderProvisioner::clientsRoot()->id;
+
         $ownerId = $this->actor->id;
         $now = now();
         $subfolders = FileLibrarySetting::clientSubfolders();
 
-        // Sibling names under Clients, lowercased, so uniqueness is
+        // Sibling names per parent folder, lowercased, so uniqueness is
         // settled in memory instead of one EXISTS round trip per person.
+        $parentIds = array_values(array_unique(array_merge(
+            array_values($parentByCompany),
+            [$fallbackParentId],
+        )));
         $taken = Folder::query()
-            ->where('parent_id', $root->id)
-            ->pluck('name')
-            ->mapWithKeys(fn ($name) => [mb_strtolower((string) $name) => true])
+            ->whereIn('parent_id', $parentIds)
+            ->get(['parent_id', 'name'])
+            ->mapWithKeys(fn ($f) => [$f->parent_id.'|'.mb_strtolower((string) $f->name) => true])
             ->all();
 
         $created = 0;
         $batch = [];
 
-        $flush = function () use (&$batch, &$created, $root, $ownerId, $now, $subfolders, $progress) {
+        $flush = function () use (&$batch, &$created, $ownerId, $now, $subfolders, $progress) {
             if ($batch === []) {
                 return;
             }
 
             $folderIdsByUuid = [];
 
-            DB::transaction(function () use (&$batch, &$folderIdsByUuid, $root, $ownerId, $now) {
+            DB::transaction(function () use (&$batch, &$folderIdsByUuid, $ownerId, $now) {
                 $rows = [];
                 foreach ($batch as $item) {
                     $rows[] = [
@@ -187,7 +208,7 @@ class ClientHubImporter
                         'name' => $item['name'],
                         'folder_type' => Folder::TYPE_CLIENT,
                         'client_id' => $item['client_id'],
-                        'parent_id' => $root->id,
+                        'parent_id' => $item['parent_id'],
                         'owner_id' => $ownerId,
                         'created_by' => $ownerId,
                         'created_at' => $now,
@@ -263,21 +284,26 @@ class ClientHubImporter
             ->whereNull('folder_id')
             ->whereIn('id', CbiApplication::query()->whereNotNull('client_id')->select('client_id'))
             ->orderBy('id')
-            ->chunkById($batchSize, function ($clients) use (&$batch, &$taken, $flush, $batchSize) {
+            ->chunkById($batchSize, function ($clients) use (&$batch, &$taken, $flush, $batchSize, $parentByCompany, $fallbackParentId) {
                 foreach ($clients as $client) {
+                    $parentId = $client->referred_by_company_id
+                        ? ($parentByCompany[$client->referred_by_company_id] ?? $fallbackParentId)
+                        : $fallbackParentId;
+
                     $base = Naming::clean($client->name ?: 'Client') ?: 'Client';
                     $name = $base;
                     $n = 2;
-                    while (isset($taken[mb_strtolower($name)])) {
+                    while (isset($taken[$parentId.'|'.mb_strtolower($name)])) {
                         $name = $base.' ('.$n.')';
                         $n++;
                     }
-                    $taken[mb_strtolower($name)] = true;
+                    $taken[$parentId.'|'.mb_strtolower($name)] = true;
 
                     $batch[] = [
                         'uuid' => (string) Str::uuid(),
                         'name' => $name,
                         'client_id' => $client->id,
+                        'parent_id' => $parentId,
                     ];
 
                     if (count($batch) >= $batchSize) {

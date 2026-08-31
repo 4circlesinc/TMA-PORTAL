@@ -95,7 +95,16 @@ class ShortcutController extends BaseFilesController
         // Ensure both exist so an admin always has the entry points, even before
         // the first client or staff folder is provisioned.
         if (FileAccess::isAdmin($user)) {
-            FolderProvisioner::clientsRoot();
+            // The standalone clients root is retired — client folders live
+            // under their provider's folder in the synced Citizenship
+            // Applications library — so it is kept (and legacy names still
+            // renamed) only while it exists; never resurrected empty.
+            if (Folder::whereNull('parent_id')
+                ->where('folder_type', Folder::TYPE_ROOT)
+                ->whereIn('name', FolderProvisioner::clientsRootNames())
+                ->exists()) {
+                FolderProvisioner::clientsRoot();
+            }
 
             // The staff container only earns its row while staff folders are
             // in use. With auto-creation off and none provisioned, ensuring

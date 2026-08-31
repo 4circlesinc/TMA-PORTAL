@@ -56,7 +56,7 @@ class FolderShortcutTest extends TestCase
         ]);
     }
 
-    public function test_admins_get_the_client_and_staff_file_libraries_auto_pinned(): void
+    public function test_no_retired_standalone_roots_are_resurrected_for_admins(): void
     {
         $admin = $this->approvedUser(['account_type' => 'Administrator']);
 
@@ -65,9 +65,10 @@ class FolderShortcutTest extends TestCase
                 ->assertOk()->json('groups.libraries')
         )->pluck('name');
 
-        $this->assertTrue($libraries->contains(FolderProvisioner::ROOT_CLIENTS));
-        // Staff folders are not in use (auto-creation defaults off), so no
-        // empty "Staff Files" container is resurrected for the admin.
+        // Client folders live under their provider's folder in the synced
+        // Citizenship Applications library, and staff folders are not in
+        // use — neither standalone root is resurrected empty.
+        $this->assertFalse($libraries->contains(FolderProvisioner::ROOT_CLIENTS));
         $this->assertFalse($libraries->contains('Staff Files'));
     }
 
