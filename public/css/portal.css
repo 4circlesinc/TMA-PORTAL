@@ -370,6 +370,51 @@
   vertical-align: middle;
 }
 
+.tma-portal-cipdocs-legend {
+  margin: var(--space-12) 0 var(--space-20);
+}
+
+.tma-portal-cipdocs-legend__title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-cipdocs-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-20);
+  margin: 0;
+}
+
+.tma-portal-cipdocs-key__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  margin: 0;
+  max-width: 22rem;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-16);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-cipdocs-key dt {
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-cipdocs-key dt::after {
+  content: ' — ';
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-cipdocs-key dd {
+  margin: 0;
+}
+
 .tma-portal-table th.tma-portal-cell--tight,
 .tma-portal-table td.tma-portal-cell--tight {
   text-align: center;

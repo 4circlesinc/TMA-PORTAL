@@ -1406,6 +1406,28 @@
     });
   }
 
+  var CIPDOC_COLUMNS = [
+    { label: 'Required', title: 'Must be uploaded' },
+    { label: 'Pre', title: 'Asked in pre-approval' },
+    { label: 'Post', title: 'Asked in post-approval' },
+    { label: 'Carry', title: 'Reuse the pre-approval file in post-approval' },
+    { label: 'RE', title: 'Real Estate applicants only' },
+    { label: 'F', title: 'Female applicants only' },
+  ];
+
+  function cipDocKey() {
+    return '<div class="tma-portal-cipdocs-legend">' +
+      '<p class="tma-portal-cipdocs-legend__title" id="cipdocs-key">Key</p>' +
+      '<dl class="tma-portal-cipdocs-key" aria-labelledby="cipdocs-key">' +
+      CIPDOC_COLUMNS.map(function (col) {
+        return '<div class="tma-portal-cipdocs-key__item">' +
+          '<dt>' + ui().esc(col.label) + '</dt>' +
+          '<dd>' + ui().esc(col.title) + '</dd>' +
+          '</div>';
+      }).join('') +
+      '</dl></div>';
+  }
+
   function cipDocCheck(canEdit, attr, checked, label) {
     if (!canEdit && !checked) return '';
     return '<input type="checkbox" class="tma-dash__check" ' + attr +
@@ -1498,22 +1520,20 @@
       var canEdit = true;
 
       return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval.</p>' +
+        cipDocKey() +
         CIPDOCS.types.map(function (t) {
           var live = t.requirements.filter(function (r) { return !r.retired; });
           var retired = t.requirements.filter(function (r) { return r.retired; });
 
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
             (t.requirements.length
-              ? ui().table([
-                  { label: 'Required', attrs: ' class="tma-portal-table__check" title="Must be uploaded"' },
-                  { label: 'Pre', attrs: ' class="tma-portal-table__check" title="Asked in pre-approval"' },
-                  { label: 'Post', attrs: ' class="tma-portal-table__check" title="Asked in post-approval"' },
-                  { label: 'Carry', attrs: ' class="tma-portal-table__check" title="Reuse the pre-approval file in post-approval"' },
-                  { label: 'RE', attrs: ' class="tma-portal-table__check" title="Real Estate applicants only"' },
-                  { label: 'F', attrs: ' class="tma-portal-table__check" title="Female applicants only"' },
-                  'Document',
-                  '',
-                ], live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''), { cls: 'tma-portal-table--cipdocs' })
+              ? ui().table(
+                CIPDOC_COLUMNS.map(function (col) {
+                  return { label: col.label, attrs: ' class="tma-portal-table__check" title="' + ui().esc(col.title) + '"' };
+                }).concat(['Document', '']),
+                live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''),
+                { cls: 'tma-portal-table--cipdocs' },
+              )
               : '<p class="tma-portal-note">Nothing required of this person yet.</p>') +
             '<div class="tma-dash__clients-assign-form">' +
             '<input class="tma-dash__clients-field-input" type="text" placeholder="Add a document…" data-cipdoc-label="' + ui().esc(t.value) + '" aria-label="Document name for ' + ui().esc(t.label) + '">' +
