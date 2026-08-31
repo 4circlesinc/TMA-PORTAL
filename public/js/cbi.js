@@ -1,9 +1,9 @@
 /*
  * CBI. Citizenship by Investment.
  *
- * Portal-view-pattern module: mounts standalone at /dev/cbi and registers
- * with TMAPortalViews for the SPA shell (/cbi). All data is live from
- * /portal/cbi/*, loading, empty and error states only, never mock rows.
+ * Portal-view-pattern module: mounts standalone at /dev/cbi. All data is
+ * live from /portal/cbi/*, loading, empty and error states only, never
+ * mock rows. /cbi is not a portal route.
  *
  * Rendering is design-system components only (DESIGN_SYSTEM.md):
  * .tma-portal-head, ui().tabs, the Users-table .tma-dash__toolbar (icon tool

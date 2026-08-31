@@ -17,7 +17,7 @@
 
   function cipApplicationsRest(pathname) {
     var p = String(pathname || '').replace(/\/+$/, '') || '/';
-    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients', '/cbi'];
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
     for (var i = 0; i < prefixes.length; i++) {
       var pre = prefixes[i];
       if (p === pre) return '';
@@ -501,16 +501,6 @@
           view: 'calendar',
           title: 'Calendar',
           crumb: 'Calendar',
-        };
-      }
-      if (p === '/cbi') {
-        return {
-          navId: 'clients',
-          view: 'clients',
-          title: 'CIP Applications',
-          crumb: 'CIP Applications',
-          clientsScreen: 'list',
-          legacyRedirect: true,
         };
       }
       if (p === '/pricing') {

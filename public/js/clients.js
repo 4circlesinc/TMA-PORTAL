@@ -34,7 +34,7 @@
 
   function cipPathPrefix(pathname) {
     var p = String(pathname || '').replace(/\/+$/, '') || '/';
-    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients', '/cbi'];
+    var prefixes = [CIP_APPLICATIONS_PATH, '/user-profile/clients', '/clients'];
     for (var i = 0; i < prefixes.length; i++) {
       var pre = prefixes[i];
       if (p === pre || p.indexOf(pre + '/') === 0) return pre;
@@ -4791,9 +4791,6 @@
       ' role="menu" aria-label="Message">' +
       renderMessageChooser(c, state) +
       '</div></div>' +
-      // Last in the row: it is the one action that leaves the page, so it
-      // reads as the way out rather than another thing to do here.
-      cbiToolbarBtn(c) +
       '</div></div>'
     );
   }
@@ -4837,44 +4834,6 @@
     return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-clients-message-with="' +
       esc(kind) + '">' +
       '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span></button>';
-  }
-
-  /*
-   * Straight to this person's citizenship file, beside Edit and Message.
-   *
-   * The link was only a row in the info list, which meant the one thing a case
-   * worker opens a CBI client's record to reach was buried under their phone
-   * numbers. Hidden from anyone without cbi.view, the module is still
-   * admin-only, and a button that 403s is worse than no button.
-   */
-  function cbiToolbarBtn(c) {
-    if (!c) return '';
-    var profile = PROFILES[c.id] || {};
-    var cbi = profile.cbi;
-    var cip = profile.cip;
-    var access = window.TMAPortalAccess;
-    var cipReach = access && typeof access.cipReach === 'function' && access.cipReach();
-    var number = (cbi && cbi.applicantNumber) || '';
-    var root = window.__TMA_SITE_ROOT || '';
-    var href = '';
-
-    // Cutover files (and native ones) open on the CIP application. Leftover
-    // mirror-only rows still use the /dev/cbi preview while FEATURE_CBI is on.
-    if (cipReach && cip && cip.applicationUuid) {
-      href = root + CIP_APPLICATIONS_PATH + '/' + encodeURIComponent(c.id);
-    } else if (cbi && cbi.applicationUuid && access && access.can && access.can('cbi.view')) {
-      href = root + '/dev/cbi#/app/' + encodeURIComponent(cbi.applicationUuid);
-    }
-    if (!href) return '';
-
-    return (
-      '<a class="tma-dash__clients-edit-btn tma-dash__clients-edit-btn--accent" href="' +
-      esc(href) +
-      '" title="' + esc('Open the Citizenship by Investment file' +
-        (number ? ' ' + number : '')) + '">' +
-      '<img src="' + ICONS.ArrowUpRight + '" alt="">' +
-      '<span>Citizenship by Investment file</span></a>'
-    );
   }
 
   /* Invite / resend, right next to Edit and Message.
@@ -5947,16 +5906,6 @@
       value: clientReferralLabel(c.id) || 'Not recorded',
     }));
 
-    // The applicant number is worth stating; the link to the case itself is a
-    // button on the toolbar (see cbiToolbarBtn) rather than a row down here.
-    var cbi = (PROFILES[c.id] || {}).cbi;
-    if (cbi && cbi.applicantNumber) {
-      listItems.push(renderListItem({
-        icon: ICONS.Briefcase,
-        label: 'CBI application',
-        value: cbi.applicantNumber,
-      }));
-    }
     if (c.work.jobTitle) listItems.push(renderListItem({ icon: ICONS.Briefcase, label: 'Job title', value: c.work.jobTitle }));
     if (c.work.department) listItems.push(renderListItem({ icon: ICONS.UserCircle, label: 'Department', value: c.work.department }));
     if (c.work.company) listItems.push(renderListItem({ icon: ICONS.Buildings, label: 'Company', value: c.work.company }));

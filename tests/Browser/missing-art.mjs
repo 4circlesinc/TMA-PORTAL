@@ -26,7 +26,7 @@ const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
 const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
 
 const SCREENS = [
-  '/', '/overview', '/clients', '/citizenship-applications', '/cbi', '/email', '/social/messages',
+  '/', '/overview', '/clients', '/citizenship-applications', '/email', '/social/messages',
   '/social/feed', '/calendar', '/signatures', '/folders', '/workflows',
   '/people', '/users', '/account-settings',
   '/clients/companies/new', '/citizenship-applications/companies/new', '/clients/new', '/citizenship-applications/new', '/users/new',

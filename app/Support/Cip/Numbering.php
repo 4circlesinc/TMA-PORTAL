@@ -36,9 +36,9 @@ class Numbering
     /**
      * Keep a historical internal number from being minted again.
      *
-     * Cutover adopts the numbers the caseload already carried. Without this
-     * the next native create would hand GAL26-00001 to a new filing while a
-     * migrated row already wears it.
+     * Adopting a number the caseload already carried without this would let
+     * the next native create hand GAL26-00001 to a new filing while a row
+     * already wears it.
      */
     public static function reserve(CipProvider $provider, string $number): void
     {

@@ -27,12 +27,10 @@
 <body>
   <!--
     CBI chromeless development preview, served at /dev/cbi (FEATURE_CBI +
-    admin, 404 otherwise). This is the SAME module that ships in the SPA
-    shell at /cbi, which has its own SPA_PAGES entry, sidebar row and
-    cbi.view capability. This file exists only to mount the view without the
-    sidebar, so it can be developed and screenshotted in isolation. Both
-    doors load public/js/cbi.js, which self-mounts on #cbi-root here and
-    registers via TMAPortalViews.register('cbi', mount) in the shell.
+    admin, 404 otherwise). It is not a portal page: /cbi 404s, there is no
+    sidebar row, and CIP Applications is a separate product. This file
+    exists only to mount the view without the sidebar. public/js/cbi.js
+    self-mounts on #cbi-root here.
   -->
   <div class="cbi-shell">
     <header class="cbi-shell__bar">

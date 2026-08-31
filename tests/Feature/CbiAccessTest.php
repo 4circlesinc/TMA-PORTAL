@@ -42,6 +42,17 @@ class CbiAccessTest extends TestCase
         $this->actingAs($admin)->getJson('/portal/cbi/applications')->assertNotFound();
     }
 
+    public function test_the_spa_listing_does_not_exist(): void
+    {
+        config([
+            'services.smartsheet.cbi_enabled' => true,
+            'services.cip.enabled' => true,
+        ]);
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $this->actingAs($admin)->get('/cbi')->assertNotFound();
+    }
+
     public function test_non_admins_get_404_not_403_with_the_flag_on(): void
     {
         config(['services.smartsheet.cbi_enabled' => true]);

@@ -12,12 +12,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
- * One citizenship application — the native record the CBI Smartsheet mirror
- * is being replaced by. Status values live in {@see Status}; live changes
- * go through App\Support\Cip\Engine so the transition rules and the
- * append-only cip_events audit cannot be bypassed. Cutover
- * ({@see \App\Support\Cip\Cutover}) is the one other writer: it restores a
- * historical status the lifecycle cannot walk.
+ * One citizenship application. Status values live in {@see Status}; every
+ * change goes through App\Support\Cip\Engine so the transition rules and the
+ * append-only cip_events audit cannot be bypassed.
  */
 // Deliberately narrow: only intake fields fill from arrays. The server owns
 // status (Engine), both numbers (Numbering / the submission verb), the
@@ -106,15 +103,6 @@ class CipApplication extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
-    }
-
-    /**
-     * The Smartsheet mirror row this application was restored from, when
-     * it is a cutover file rather than one filed in the portal.
-     */
-    public function cbiApplication(): BelongsTo
-    {
-        return $this->belongsTo(CbiApplication::class, 'cbi_application_id');
     }
 
     public function creator(): BelongsTo

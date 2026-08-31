@@ -131,13 +131,10 @@ try {
   await page.waitForSelector('.cbi-table tbody tr', { timeout: 10000 });
   check(!page.url().includes('#/app/'), 'back returns to the list');
 
-  step(8, '/cbi is a CIP Applications bookmark, not a second listing');
-  // The shell used to mount the CBI table at /cbi. Cutover sends that URL
-  // to /citizenship-applications; verification of the mirror stays on /dev/cbi.
-  await page.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(500);
-  const cbiListing = await page.locator('.cbi-table, tr[data-cbi-open]').count();
-  check(cbiListing === 0, '/cbi does not mount the CBI table');
+  step(8, '/cbi does not exist — it is not CIP Applications');
+  const retired = await page.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
+  check(retired.status() === 404, `/cbi is ${retired.status()} (expected 404)`);
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   check(await page.locator('.tma-dash__nav-item[data-nav="cbi"]').count() === 0, 'sidebar has no CBI row');
 
   step(9, 'A non-admin gets a 404, not a page');
@@ -149,8 +146,7 @@ try {
     const res = await emp.goto(`${BASE}/dev/cbi`, { waitUntil: 'domcontentloaded' });
     check(res.status() === 404, `employee sees ${res.status()} (expected 404)`);
     const spa = await emp.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
-    const spaOk = spa.status() === 404 || (spa.url() && spa.url().includes('citizenship-applications'));
-    check(spaOk, `employee /cbi sees ${spa.status()} ${spa.url()} (404 or CIP Applications)`);
+    check(spa.status() === 404, `employee /cbi sees ${spa.status()} (expected 404)`);
     const api = await emp.evaluate(async (base) => {
       const r = await fetch(base + '/portal/cbi/summary', {
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },

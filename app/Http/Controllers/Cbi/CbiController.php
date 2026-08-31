@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SyncCbiHub;
 use App\Jobs\SyncSmartsheetSheet;
 use App\Models\CbiApplication;
+use App\Models\CbiApplicationEvent;
+use App\Models\CbiApplicationSource;
 use App\Models\CbiComment;
 use App\Models\SmartsheetAttachment;
 use App\Models\SmartsheetSheet;
 use App\Models\SmartsheetSyncLog;
+use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\Names;
@@ -20,6 +23,8 @@ use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -27,16 +32,11 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * CBI. Citizenship by Investment (development preview).
  *
- * Administrator-only while the module beds in. The SPA listing at /cbi
- * retired at the CIP cutover (Phase 11c): while FEATURE_CIP is on, that
- * URL redirects to /citizenship-applications. This controller still serves
- * the chromeless preview at /dev/cbi and the /portal/cbi API for a
- * read-only verification cycle, then 404s the same way when FEATURE_CBI
- * is off. Every endpoint here 404s, never 403s — unless the FEATURE_CBI
+ * Administrator-only while the module beds in. It is a chromeless preview
+ * at /dev/cbi. Every endpoint here 404s, never 403s — unless the FEATURE_CBI
  * flag is on AND the caller is an administrator, so to everyone else the
  * module still does not exist. Role::can() checks the same flag before its
- * admin short-circuit, which keeps the nav row, the page gate and this API
- * in agreement.
+ * admin short-circuit, which keeps the page gate and this API in agreement.
  */
 class CbiController extends Controller
 {
@@ -121,7 +121,7 @@ class CbiController extends Controller
                 'sync' => [
                     'configured' => Client::configured(),
                     'lastSuccessAt' => ! empty($sheetStats?->last_success_at)
-                        ? \Illuminate\Support\Carbon::parse($sheetStats->last_success_at)->toIso8601String()
+                        ? Carbon::parse($sheetStats->last_success_at)->toIso8601String()
                         : null,
                     'sheets' => (int) ($sheetStats->sheets ?? 0),
                     'sheetsWithErrors' => (int) ($sheetStats->sheets_with_errors ?? 0),
@@ -378,7 +378,7 @@ class CbiController extends Controller
         $rows = Cache::remember('cbi.staff-directory', 300, function () {
             Cache::forget('cbi.staff-users');
 
-            return \App\Models\User::whereIn('account_type', Role::STAFF)
+            return User::whereIn('account_type', Role::STAFF)
                 ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url'])
                 ->map(fn ($user) => [
                     'id' => $user->id,
@@ -502,7 +502,7 @@ class CbiController extends Controller
         ]);
 
         $application->events()->create([
-            'type' => \App\Models\CbiApplicationEvent::TYPE_COMMENT_ADDED,
+            'type' => CbiApplicationEvent::TYPE_COMMENT_ADDED,
             'source' => 'portal',
             'actor_user_id' => $request->user()->id,
             'occurred_at' => now(),
@@ -593,8 +593,8 @@ class CbiController extends Controller
      * Attachments for one application, loaded in two queries rather than one
      * per source row (the previous path was a classic N+1 on open).
      *
-     * @param  \Illuminate\Support\Collection<int, \App\Models\CbiApplicationSource>  $sources
-     * @return \Illuminate\Support\Collection<int, SmartsheetAttachment>
+     * @param  Collection<int, CbiApplicationSource>  $sources
+     * @return Collection<int, SmartsheetAttachment>
      */
     private function attachmentsFor(CbiApplication $application, $sources)
     {

@@ -136,7 +136,6 @@ class Timeline
 
         $line = match ($event->action) {
             CipEvent::ACTION_CREATED => "{$who} filed the application",
-            CipEvent::ACTION_IMPORTED => "{$who} imported this file from the Smartsheet caseload",
             CipEvent::ACTION_STATUS_CHANGED => self::statusSentence($event, $who),
             CipEvent::ACTION_ASSIGNED => "{$who} assigned ".($meta['officer'] ?? 'an officer'),
             CipEvent::ACTION_UNASSIGNED => "{$who} ended ".($meta['officer'] ?? 'an officer').'’s assignment',
