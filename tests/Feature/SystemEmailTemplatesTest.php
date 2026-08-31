@@ -219,6 +219,7 @@ class SystemEmailTemplatesTest extends TestCase
             Postcards::cipStatus($facts, Status::ASSESSMENT_FEEDBACK, 'https://x.test', 'Priya'),
             Postcards::cipStatus($facts, Status::PENDING_REVIEW, 'https://x.test', 'Priya'),
             Postcards::cipStatus($facts, Status::BACKGROUND_CHECK, 'https://x.test', 'Priya'),
+            Postcards::cipBackgroundCheck($facts, 'https://x.test', '2026-08-18', 'Priya'),
             Postcards::cipAssigned($facts, null, 'https://x.test', 'SUBJ', 'Priya'),
             Postcards::cipUpdatesRequired(
                 $facts,

@@ -223,6 +223,9 @@ class Notices
             Status::NON_COMPLIANT => Postcards::cipNonCompliant(
                 $facts, $url, $application->query_received_at?->toDateString(), $recipientName, $actor, $subject,
             ),
+            Status::BACKGROUND_CHECK => Postcards::cipBackgroundCheck(
+                $facts, $url, $application->accepted_at?->toDateString(), $recipientName, $actor, $subject,
+            ),
             Status::DELAYED => Postcards::cipDelayed(
                 $facts, $url, $application->accepted_at?->toDateString(), self::daysDelayed($application), $recipientName, $subject,
             ),
@@ -280,6 +283,7 @@ class Notices
             Status::READY_TO_SUBMIT => 'cip-ready-to-submit',
             Status::APPLY_FOR_COR => 'cip-apply-for-cor',
             Status::NON_COMPLIANT => 'cip-non-compliant',
+            Status::BACKGROUND_CHECK => 'cip-status-background-check',
             Status::DELAYED => 'cip-delayed',
             Status::GRANTED => 'cip-granted',
             Status::POST_APPROVAL => 'cip-status-post-approval',
@@ -296,6 +300,7 @@ class Notices
             Status::READY_TO_SUBMIT => 'cip.ready-to-submit',
             Status::APPLY_FOR_COR => 'cip.apply-for-cor',
             Status::NON_COMPLIANT => 'cip.non-compliant',
+            Status::BACKGROUND_CHECK => 'cip.background-check',
             Status::DELAYED => 'cip.delayed',
             Status::GRANTED => 'cip.granted',
             Status::POST_APPROVAL => 'cip.post-approval',
@@ -315,6 +320,7 @@ class Notices
             Status::READY_TO_SUBMIT => 'Confirm submission to lock the original package.',
             Status::APPLY_FOR_COR => 'Confirm submission to lock the Certificate of Registration package.',
             Status::NON_COMPLIANT => 'The Unit has requested additional information.',
+            Status::BACKGROUND_CHECK => 'The Unit has accepted this file for processing. A background check is underway.',
             Status::DELAYED => self::daysDelayed($application).' days have passed since acceptance with no decision.',
             Status::GRANTED => 'The Unit has granted this application.',
             Status::POST_APPROVAL => 'Stage 1 (Certificate of Registration) documents are now required. Soft copies only.',

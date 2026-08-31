@@ -736,6 +736,41 @@ class Postcards
     }
 
     /**
+     * §19's notice: the Unit accepted the file and a background check is on.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipBackgroundCheck(
+        array $facts,
+        string $url,
+        ?string $acceptedAt = null,
+        ?string $recipientName = null,
+        ?User $actor = null,
+        ?string $subject = null,
+    ): Postcard {
+        $subject ??= Notices::line($facts, Status::BACKGROUND_CHECK, $actor);
+        $label = Status::label(Status::BACKGROUND_CHECK);
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+        ];
+        if ($acceptedAt) {
+            $details[] = ['Accepted for processing', $acceptedAt];
+        }
+
+        return self::postcard('cip-status-background-check', self::cipVars($facts, $recipientName) + [
+            'url' => $url,
+            'status' => $label,
+        ], [
+            'subject' => $subject,
+            'url' => $url,
+            'details' => $details,
+        ]);
+    }
+
+    /**
      * §20's notice: 180 days after acceptance, still no decision.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
@@ -823,7 +858,8 @@ class Postcards
 
     /**
      * A §22 status notice whose body is the move itself. New Application,
-     * Assessment Feedback, Pending Review, Background Check.
+     * Assessment Feedback, Pending Review. Background Check uses
+     * {@see cipBackgroundCheck} so the accepted-for-processing date is named.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */

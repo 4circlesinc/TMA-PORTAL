@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\CompanyMember;
+use App\Models\Notification;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -15,7 +18,9 @@ use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -46,7 +51,7 @@ class CipBackgroundCheckTest extends TestCase
         return $user;
     }
 
-    private function pending(User $staff): CipApplication
+    private function pending(User $staff, ?Company &$company = null): CipApplication
     {
         $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $staff->id]);
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
@@ -107,6 +112,79 @@ class CipBackgroundCheckTest extends TestCase
             'from_status' => Status::PENDING_REVIEW,
             'to_status' => Status::BACKGROUND_CHECK,
         ]);
+    }
+
+    public function test_the_provider_side_is_told_a_background_check_is_underway(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $company = null;
+        $application = $this->pending($staff, $company);
+        Tree::provision($application->fresh(), $staff);
+
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $staff->id,
+        ]);
+        $application->provider->forceFill([
+            'contact_email' => 'notices@galaxy.example',
+            'contact_name' => 'Galaxy Notices',
+        ])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-08-18',
+            ])
+            ->assertOk();
+
+        $expected = 'AA - BACKGROUND CHECK - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
+            $details = collect($mail->payload['details'] ?? []);
+
+            return $mail->subjectLine === $expected
+                && $mail->hasTo('gil@galaxy.example')
+                && str_contains((string) ($mail->payload['bodyHtml'] ?? ''), 'background check')
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Accepted for processing' && ($row[1] ?? null) === '2026-08-18');
+        });
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('notices@galaxy.example'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
+
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => 'gil@galaxy.example', 'template' => 'cip-status-background-check',
+        ]);
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id, 'type' => 'cip.background-check',
+        ]);
+
+        $path = '/citizenship-applications/'.$application->fresh()->client->uid.'?tab=folders';
+        $this->assertSame($path, Notification::query()
+            ->where('user_id', $contact->id)
+            ->where('type', 'cip.background-check')
+            ->value('action_url'));
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($path) {
+            return str_contains((string) data_get($mail->payload, 'button.url'), $path);
+        });
+    }
+
+    public function test_updating_the_accepted_date_does_not_send_another_notice(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+
+        BackgroundCheck::record($application, $staff, now()->startOfDay()->setDate(2026, 8, 10));
+        Mail::assertQueued(Postcard::class);
+        $first = count(Mail::queued(Postcard::class));
+
+        BackgroundCheck::record($application->fresh(), $staff, now()->startOfDay()->setDate(2026, 8, 18));
+        $this->assertSame($first, count(Mail::queued(Postcard::class)));
     }
 
     public function test_the_accepted_date_is_required(): void
