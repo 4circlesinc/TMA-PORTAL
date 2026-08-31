@@ -1468,7 +1468,7 @@
    hover (and keyboard focus), the card's promise that it opens a page. */
 .tma-dash__card--link { cursor: pointer; }
 
-.tma-dash__card-ico--goto { display: none; }
+.tma-dash__card--link .tma-dash__card-ico--goto { display: none; }
 
 .tma-dash__card--link:hover .tma-dash__card-ico--metric,
 .tma-dash__card--link:focus-visible .tma-dash__card-ico--metric { display: none; }
