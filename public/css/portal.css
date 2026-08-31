@@ -4979,6 +4979,38 @@ label.tma-portal-check-row:hover {
   overflow: auto;
 }
 
+.tma-portal-modal__card.tma-rep-create {
+  width: min(640px, calc(100vw - 48px));
+}
+
+.tma-rep-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-16);
+}
+
+.tma-rep-filters[hidden] {
+  display: none;
+}
+
+.tma-rep-filters__span {
+  grid-column: 1 / -1;
+}
+
+.tma-rep-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .tma-rep-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .tma-rep-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .tma-portal-admin--page .tma-portal-admin__content {
   width: 100%;
   padding: 0;

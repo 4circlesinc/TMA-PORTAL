@@ -2,9 +2,11 @@
 
 namespace App\Support\Reports;
 
+use App\Models\CipApplicationAssignment;
 use App\Models\CipPerson;
 use App\Models\Report;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Pages;
 use App\Support\Cip\Status;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -82,7 +84,7 @@ final class CipReport
 
     public static function title(array $filters, string $rangeLabel): string
     {
-        $preset = $filters['preset'] ?? null;
+        $preset = (string) ($filters['preset'] ?? '');
         $head = self::PRESET_LABELS[$preset] ?? 'CIP Applications';
 
         return $head.': '.$rangeLabel;
@@ -96,18 +98,23 @@ final class CipReport
             ->where('role', CipPerson::ROLE_MAIN_APPLICANT)
             ->select(
                 'application_id',
-                DB::raw("trim(coalesce(first_name, '') || ' ' || coalesce(last_name, '')) as name"),
+                DB::raw(self::personNameSql().' as name'),
             );
 
         $query = DB::table('cip_applications as a')
             ->leftJoin('cip_providers as p', 'p.id', '=', 'a.provider_id')
             ->leftJoin('users as o', 'o.id', '=', 'a.assigned_officer_id')
+            ->leftJoin('clients as c', 'c.id', '=', 'a.client_id')
             ->leftJoinSub($applicants, 'pe', 'pe.application_id', '=', 'a.id');
 
         $status = self::status($filters);
 
         if ($status !== null) {
             $query->where('a.status', $status);
+        } else {
+            // Leftover DRAFT rows are not a live status. Admin buckets do not
+            // name them, and an unfiltered report must not either.
+            $query->where('a.status', '!=', Status::DRAFT);
         }
 
         if (! empty($filters['providerId'])) {
@@ -119,7 +126,17 @@ final class CipReport
         }
 
         if (! empty($filters['officerId'])) {
-            $query->where('a.assigned_officer_id', (int) $filters['officerId']);
+            $officerId = (int) $filters['officerId'];
+            $query->where(function (Builder $q) use ($officerId) {
+                $q->where('a.assigned_officer_id', $officerId)
+                    ->orWhereExists(function ($sub) use ($officerId) {
+                        $sub->from('cip_application_assignments')
+                            ->whereColumn('cip_application_assignments.application_id', 'a.id')
+                            ->where('cip_application_assignments.user_id', $officerId)
+                            ->where('cip_application_assignments.status', CipApplicationAssignment::STATUS_ACTIVE)
+                            ->whereNull('cip_application_assignments.ended_at');
+                    });
+            });
         }
 
         $applicant = trim((string) ($filters['applicant'] ?? ''));
@@ -163,13 +180,18 @@ final class CipReport
 
     private static function status(array $filters): ?string
     {
+        $preset = (string) ($filters['preset'] ?? '');
+        $pinned = $preset !== '' ? (self::PRESETS[$preset] ?? null) : null;
+
+        if ($pinned) {
+            return $pinned;
+        }
+
         if (! empty($filters['status']) && Status::isValid($filters['status'])) {
             return $filters['status'];
         }
 
-        $preset = $filters['preset'] ?? null;
-
-        return self::PRESETS[$preset] ?? null;
+        return null;
     }
 
     /* ── answers ────────────────────────────────────────────────────── */
@@ -190,6 +212,7 @@ final class CipReport
                 'o.name as officer',
                 'a.submitted_at',
                 'a.decided_at',
+                'c.uid as client_uid',
             ]);
 
         $listed = $rows->count();
@@ -211,6 +234,11 @@ final class CipReport
                 self::day($row->submitted_at),
                 self::day($row->decided_at),
             ])->all(),
+            'rowHrefs' => $rows->map(function ($row) {
+                $uid = trim((string) ($row->client_uid ?? ''));
+
+                return $uid !== '' ? Pages::application($uid) : '';
+            })->all(),
         ];
     }
 
@@ -272,5 +300,13 @@ final class CipReport
     private static function escapeLike(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    /** Applicant display name in SQL both sqlite/pgsql (`||`) and mysql understand. */
+    private static function personNameSql(): string
+    {
+        return DB::connection()->getDriverName() === 'mysql'
+            ? "trim(concat(coalesce(first_name, ''), ' ', coalesce(last_name, '')))"
+            : "trim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))";
     }
 }

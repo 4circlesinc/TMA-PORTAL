@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Report;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Assignments;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Pages;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -347,5 +351,84 @@ class CipReportingTest extends TestCase
         foreach ($this->rows($report)[0] as $cell) {
             $this->assertStringContainsString($cell, $csv);
         }
+    }
+
+    public function test_a_leftover_draft_is_not_in_an_unfiltered_report(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+        $draft = $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+        $draft->forceFill(['status' => Status::DRAFT])->save();
+
+        $report = $this->create($admin);
+
+        $this->assertSame('1', $this->metric($report, 'Applications'));
+        $this->assertNotContains($draft->internal_number, collect($this->rows($report))->pluck(0)->all());
+    }
+
+    public function test_an_officer_on_the_assignment_row_matches_even_if_they_are_not_the_cached_holder(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $sam = $this->user(Role::REVIEWING_OFFICER, 'sam@example.com', 'Sam Compliance');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+
+        Assignments::assign($application, $rita, $admin);
+        Assignments::assign($application, $sam, $admin, CipAccess::COMPLIANCE_OFFICER);
+
+        $this->assertSame($rita->id, $application->fresh()->assigned_officer_id);
+
+        $report = $this->create($admin, ['filters' => ['officerId' => $sam->id]]);
+        $this->assertSame('1', $this->metric($report, 'Applications'));
+        $this->assertSame($application->internal_number, $this->rows($report)[0][0]);
+    }
+
+    public function test_a_status_preset_wins_over_a_conflicting_status_filter(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $this->application($admin, $galaxy, Status::GRANTED, [
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => '2026-08-01',
+        ]);
+        $this->application($admin, $galaxy, Status::DENIED, [
+            'decision' => CipApplication::DECISION_DENIED,
+            'decided_at' => '2026-08-02',
+        ]);
+
+        $report = $this->create($admin, ['filters' => [
+            'preset' => 'granted',
+            'status' => Status::DENIED,
+        ]]);
+
+        $this->assertSame('Granted Applications: All dates', $report['name']);
+        $this->assertSame('1', $this->metric($report, 'Applications'));
+        $this->assertSame('Approved', $this->rows($report)[0][2]);
+    }
+
+    public function test_the_report_page_can_open_the_application_from_the_number(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $client = Client::create([
+            'uid' => 'chen-wei', 'name' => 'Chen Wei', 'email' => 'chen@example.com',
+            'created_by' => $admin->id, 'data' => [],
+        ]);
+        $application = $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+        $application->forceFill(['client_id' => $client->id])->save();
+
+        $report = $this->create($admin);
+
+        $this->assertSame(
+            [Pages::application('chen-wei')],
+            $report['data']['table']['rowHrefs'],
+        );
+        $this->assertSame($application->internal_number, $this->rows($report)[0][0]);
+
+        $index = $this->actingAs($admin)->getJson('/admin/reports')->assertOk()->json();
+        $this->assertSame('CIP Applications', collect($index['types'])->firstWhere('value', 'cip')['label']);
+        $this->assertCount(7, $index['cip']['presets']);
     }
 }

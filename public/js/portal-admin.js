@@ -456,13 +456,20 @@
             '</article>';
         }).join('');
 
-        var breakdown = d.table && (d.table.rows || []).length
-          ? ui().section(d.table.title, ui().table(d.table.columns || [], d.table.rows.map(function (row) {
+        var breakdown = d.table
+          ? ui().section(d.table.title || 'Applications', ui().table(d.table.columns || [], (d.table.rows || []).map(function (row, rowIndex) {
+              var hrefs = d.table.rowHrefs || [];
               return '<tr>' + row.map(function (cell, i) {
-                return '<td' + (i ? ' class="tma-portal-table__muted"' : '') + '>' + esc(cell) + '</td>';
+                var inner = esc(cell);
+                if (i === 0 && hrefs[rowIndex]) {
+                  inner = '<a class="tma-portal-link" href="' + esc(hrefs[rowIndex]) + '">' + inner + '</a>';
+                }
+                return '<td' + (i ? ' class="tma-portal-table__muted"' : '') + '>' + inner + '</td>';
               }).join('') + '</tr>';
             }).join('')))
           : '';
+
+        var extra = cipFilterLine(report.filters);
 
         root.innerHTML =
           '<div class="tma-portal-toolbar">' +
@@ -475,10 +482,11 @@
           '<p class="tma-portal-subtitle">' + esc(report.range) +
           (report.generatedAt ? ' · measured ' + esc(new Date(report.generatedAt).toLocaleString()) : '') +
           (report.frequency ? ' · repeats ' + esc(report.frequency) : '') +
+          (extra ? ' · ' + esc(extra) : '') +
           '</p>' +
           (report.status === 'failed'
             ? ui().banner('warning', 'This report could not be generated. ' + esc(report.error || ''))
-            : '<div class="tma-dash__cards">' + cards + '</div>' + breakdown);
+            : '<div class="tma-dash__cards' + (report.type === 'cip' ? ' tma-rep-cards' : '') + '">' + cards + '</div>' + breakdown);
 
         root.querySelector('[data-rep-back]').addEventListener('click', paintList);
 
@@ -495,23 +503,55 @@
         });
       }
 
+      function cipFilterLine(filters) {
+        if (!filters) return '';
+        var cip = (payload && payload.cip) || {};
+        function named(list, value) {
+          if (!value) return '';
+          var hit = (list || []).filter(function (x) { return String(x.value) === String(value); })[0];
+          return hit ? hit.label : String(value);
+        }
+        var pinned = filters.preset && ['pending_review', 'background_check', 'delayed', 'granted', 'denied'].indexOf(filters.preset) !== -1;
+        var bits = [];
+        if (!pinned && filters.status) bits.push(named(cip.statuses, filters.status));
+        if (filters.providerId) bits.push(named(cip.providers, filters.providerId));
+        if (filters.investmentType) bits.push(named(cip.investmentTypes, filters.investmentType));
+        if (filters.applicant) bits.push(filters.applicant);
+        if (filters.officerId) bits.push(named(cip.officers, filters.officerId));
+        if (filters.submittedFrom || filters.submittedTo) {
+          bits.push('Submitted ' + (filters.submittedFrom || '…') + ' – ' + (filters.submittedTo || '…'));
+        }
+        if (filters.decidedFrom || filters.decidedTo) {
+          bits.push('Decision ' + (filters.decidedFrom || '…') + ' – ' + (filters.decidedTo || '…'));
+        }
+        return bits.join(' · ');
+      }
+
       /* ── create ───────────────────────────────────── */
       function createDialog() {
         var today = new Date().toISOString().slice(0, 10);
         var cip = payload.cip || null;
         var any = [{ value: '', label: 'Any' }];
+        var pinnedPresets = ['pending_review', 'background_check', 'delayed', 'granted', 'denied'];
         ui().openModal({
           title: 'Create Report',
+          cls: cip ? 'tma-rep-create' : '',
           body:
             ui().field('Report type', ui().select(payload.types || [], 'usage', 'data-rep-type', 'Report type')) +
-            '<div data-rep-cip hidden>' +
+            '<div class="tma-rep-filters" data-rep-cip hidden>' +
             (cip
-              ? ui().field('Preset', ui().select([{ value: '', label: 'Custom' }].concat(cip.presets || []), '', 'data-rep-preset', 'Preset')) +
+              ? '<div class="tma-rep-filters__span">' +
+                ui().field('Preset', ui().select([{ value: '', label: 'Custom' }].concat(cip.presets || []), '', 'data-rep-preset', 'Preset')) +
+                '</div>' +
+                '<div data-rep-status-field>' +
                 ui().field('Status', ui().select(any.concat(cip.statuses || []), '', 'data-rep-status', 'Status')) +
+                '</div>' +
                 ui().field('Service provider', ui().select(any.concat(cip.providers || []), '', 'data-rep-provider', 'Service provider')) +
                 ui().field('Investment type', ui().select(any.concat(cip.investmentTypes || []), '', 'data-rep-investment', 'Investment type')) +
-                ui().field('Applicant', ui().input({ attrs: 'data-rep-applicant', placeholder: 'Name', ariaLabel: 'Applicant' })) +
                 ui().field('Assigned officer', ui().select(any.concat(cip.officers || []), '', 'data-rep-officer', 'Assigned officer')) +
+                '<div class="tma-rep-filters__span">' +
+                ui().field('Applicant', ui().input({ attrs: 'data-rep-applicant', placeholder: 'Name', ariaLabel: 'Applicant' })) +
+                '</div>' +
                 ui().field('Submitted from', ui().input({ type: 'date', attrs: 'data-rep-submitted-from' })) +
                 ui().field('Submitted to', ui().input({ type: 'date', attrs: 'data-rep-submitted-to' })) +
                 ui().field('Decision from', ui().input({ type: 'date', attrs: 'data-rep-decided-from' })) +
@@ -535,16 +575,27 @@
             var cipBox = host.querySelector('[data-rep-cip]');
             var recurring = host.querySelector('[data-rep-recurring]');
             var freq = host.querySelector('[data-rep-freq]');
+            var preset = host.querySelector('[data-rep-preset]');
+            var statusField = host.querySelector('[data-rep-status-field]');
+
+            function syncPreset() {
+              var value = preset ? preset.value : '';
+              var pinned = pinnedPresets.indexOf(value) !== -1;
+              if (statusField) statusField.hidden = pinned;
+            }
 
             function syncType() {
               var isCip = type.value === 'cip';
               if (cipBox) cipBox.hidden = !isCip;
-              if (isCip && range.value === 'last_30') range.value = 'all';
+              if (isCip && (range.value === 'last_30' || range.value === 'last_7')) range.value = 'all';
+              custom.hidden = range.value !== 'custom';
+              syncPreset();
             }
 
             range.addEventListener('change', function () { custom.hidden = range.value !== 'custom'; });
             recurring.addEventListener('change', function () { freq.hidden = !recurring.checked; });
             if (type) type.addEventListener('change', syncType);
+            if (preset) preset.addEventListener('change', syncPreset);
             syncType();
 
             function val(attr) {
@@ -564,9 +615,10 @@
                 frequency: recurring.checked ? host.querySelector('[data-rep-frequency]').value : null,
               };
               if (type.value === 'cip') {
+                var chosen = val('data-rep-preset');
                 body.filters = {
-                  preset: val('data-rep-preset'),
-                  status: val('data-rep-status'),
+                  preset: chosen,
+                  status: pinnedPresets.indexOf(chosen) !== -1 ? '' : val('data-rep-status'),
                   providerId: val('data-rep-provider'),
                   investmentType: val('data-rep-investment'),
                   applicant: val('data-rep-applicant'),
