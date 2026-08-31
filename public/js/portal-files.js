@@ -29,7 +29,7 @@
    * did) would keep saying the old word. One map, used wherever a folder
    * name is shown.
    */
-  var LIBRARY_ROOT_NAME = 'Citizenship By Investment Application';
+  var LIBRARY_ROOT_NAME = 'Citizenship Applications Portal';
   var LIBRARY_ROOT_ALIASES = { Client: 1, Clients: 1, 'Client Files': 1 };
 
   function displayLibraryFolderName(name) {
@@ -77,7 +77,7 @@
   var SECTIONS = {
     all: { title: 'All Files', desc: 'All files and folders you can access.', empty: 'No files yet' },
     clients: {
-      title: 'Citizenship By Investment Application',
+      title: 'Citizenship Applications Portal',
       desc: 'Citizenship by investment application folders you can open.',
       empty: 'No application folders yet',
       emptyHint: 'Folders for the applications you work with will appear here.',

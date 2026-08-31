@@ -35,6 +35,26 @@ class FileLibrarySettingsTest extends TestCase
             ->assertJsonPath('organizationFolders', []);
     }
 
+    public function test_only_admins_rename_an_organization_folder_in_the_library(): void
+    {
+        $admin = $this->user('Administrator');
+        $staff = $this->user('Reviewing Officer');
+
+        $id = $this->actingAs($admin)->postJson('/portal/file-library/organization-folders', [
+            'name' => 'Company Documents', 'audience' => 'all_staff', 'role' => 'editor',
+        ])->assertCreated()->json('folder.id');
+
+        // Editor role on the audience is not enough: a firm folder's name is
+        // the firm's navigation, so rename stays with administrators — the
+        // same split colour and icon already draw.
+        $this->actingAs($staff)->patchJson('/portal/files/folders/'.$id, ['name' => 'Renamed'])
+            ->assertForbidden();
+
+        $this->actingAs($admin)->patchJson('/portal/files/folders/'.$id, ['name' => 'Renamed'])
+            ->assertOk()
+            ->assertJsonPath('name', 'Renamed');
+    }
+
     public function test_admin_can_create_rename_and_archive_an_organization_folder(): void
     {
         $admin = $this->user('Administrator');

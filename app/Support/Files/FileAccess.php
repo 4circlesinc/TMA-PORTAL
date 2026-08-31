@@ -589,6 +589,19 @@ class FileAccess
             }
         }
 
+        /*
+         * Renaming a firm-level container — a library root, an organization
+         * folder, a client or staff main folder; anything that is not a
+         * personal TYPE_USER folder — is an administrator's call, the same
+         * split colour() and icon() already draw: those names are the firm's
+         * navigation, not a personal label.
+         */
+        if ($ability === 'rename' && $item instanceof Folder
+            && $item->folder_type !== Folder::TYPE_USER
+            && ! self::isAdmin($user)) {
+            return false;
+        }
+
         /* A client's right to re-share is the firm's to decide, not the item
            role's, an owner or editor role says what they may do with the
            file, not who else may end up holding it. Settings > Advanced
@@ -692,6 +705,13 @@ class FileAccess
                 continue;
             }
             if (in_array($ability, self::PACKAGE_LOCKED, true) && $frozen) {
+                $out[$ability] = false;
+
+                continue;
+            }
+            if ($ability === 'rename' && $item instanceof Folder
+                && $item->folder_type !== Folder::TYPE_USER
+                && ! self::isAdmin($user)) {
                 $out[$ability] = false;
 
                 continue;

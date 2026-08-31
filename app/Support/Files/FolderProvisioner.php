@@ -20,10 +20,10 @@ use Illuminate\Support\Str;
  */
 class FolderProvisioner
 {
-    public const ROOT_CLIENTS = 'Citizenship By Investment Application';
+    public const ROOT_CLIENTS = 'Citizenship Applications Portal';
 
     /** Older labels. Looked up so an existing install is renamed, not duplicated. */
-    public const ROOT_CLIENTS_ALIASES = ['Client', 'Clients', 'Client Files'];
+    public const ROOT_CLIENTS_ALIASES = ['Citizenship By Investment Application', 'Client', 'Clients', 'Client Files'];
 
     public const ROOT_STAFF = 'Staff Files';
 

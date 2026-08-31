@@ -837,7 +837,7 @@ final class Hub
     }
 
     /**
-     * folder id => "Citizenship By Investment Application / Acme Ltd", plus
+     * folder id => "Citizenship Applications Portal / Acme Ltd", plus
      * "uuid:<id>" => folder uuid.
      *
      * One query for the whole page rather than walking each file's ancestry on
