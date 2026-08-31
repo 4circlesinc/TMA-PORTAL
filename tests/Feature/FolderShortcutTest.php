@@ -66,6 +66,21 @@ class FolderShortcutTest extends TestCase
         )->pluck('name');
 
         $this->assertTrue($libraries->contains(FolderProvisioner::ROOT_CLIENTS));
+        // Staff folders are not in use (auto-creation defaults off), so no
+        // empty "Staff Files" container is resurrected for the admin.
+        $this->assertFalse($libraries->contains('Staff Files'));
+    }
+
+    public function test_the_staff_library_returns_once_staff_folders_are_in_use(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        \App\Models\FileLibrarySetting::put(['autoCreateStaffFolder' => true]);
+
+        $libraries = collect(
+            $this->actingAs($admin)->getJson('/portal/files/shortcuts')
+                ->assertOk()->json('groups.libraries')
+        )->pluck('name');
+
         $this->assertTrue($libraries->contains('Staff Files'));
     }
 
