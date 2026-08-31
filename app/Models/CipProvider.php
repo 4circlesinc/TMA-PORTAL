@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  * per-provider sequence, so it must never change once numbers exist under it.
  */
 #[Fillable([
-    'uuid', 'name', 'code', 'company_id', 'contact_name', 'contact_email',
+    'uuid', 'name', 'code', 'company_id', 'folder_id', 'contact_name', 'contact_email',
     'notification_emails', 'active',
 ])]
 class CipProvider extends Model
@@ -54,6 +54,12 @@ class CipProvider extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /** The firm's folder in the Citizenship Applications library. */
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(Folder::class);
     }
 
     public function applications(): HasMany

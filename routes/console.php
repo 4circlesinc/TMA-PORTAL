@@ -211,6 +211,13 @@ Schedule::command('sharepoint:sync --queue')
     ->withoutOverlapping();
 
 /*
+ * Provider folders in the Citizenship Applications library become CIP
+ * service providers on their own, linked to their folder. Idempotent, so
+ * an hour with nothing new writes nothing.
+ */
+Schedule::command('cip:providers-from-folders')->hourly()->withoutOverlapping();
+
+/*
  * Graph push subscriptions expire in a few days. Recreate/renew them on a
  * timer so a first-connect that happened before HTTPS was up, or a Graph
  * drop, still gets instant mailbox and OneDrive after the next tick.
