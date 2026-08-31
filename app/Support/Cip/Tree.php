@@ -139,6 +139,19 @@ class Tree
         return $additional;
     }
 
+    /** The Additional Documents drawer, if this application already has a tree. */
+    public static function additionalFolder(CipApplication $application): ?Folder
+    {
+        if (! $application->folder_id) {
+            return null;
+        }
+
+        return Folder::query()
+            ->where('parent_id', $application->folder_id)
+            ->where('name', self::ADDITIONAL)
+            ->first();
+    }
+
     /**
      * The post-approval repository tree under the client folder.
      *

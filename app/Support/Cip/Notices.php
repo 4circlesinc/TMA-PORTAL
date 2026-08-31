@@ -57,7 +57,8 @@ class Notices
         }
 
         $facts = Contacts::facts($application);
-        $url = Contacts::url($application);
+        $path = Contacts::path($application, $to);
+        $url = rtrim(config('app.url'), '/').$path;
         $initials = self::initials($actor, $application);
 
         self::fanOut(
@@ -68,6 +69,7 @@ class Notices
             $actor,
             $facts['number'].': '.Status::label($to),
             self::bellMessage($application, $to, $facts),
+            path: $path,
         );
     }
 
@@ -152,8 +154,9 @@ class Notices
         string $title,
         string $message,
         ?string $skipMailbox = null,
+        ?string $path = null,
     ): void {
-        $path = Contacts::path($application);
+        $path ??= Contacts::path($application);
 
         foreach (Contacts::notices($application) as $recipient) {
             if ($skipMailbox !== null && mb_strtolower($recipient['email']) === mb_strtolower($skipMailbox)) {

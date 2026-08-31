@@ -1298,6 +1298,7 @@ class CipApplicationController extends Controller
                 : [],
             ...Confirmation::payload($application, $viewer),
             ...Stages::into($application, $viewer),
+            'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
             'provider' => $application->provider?->name,

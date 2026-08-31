@@ -18,6 +18,7 @@ use App\Support\Cip\Phase;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
+use App\Support\Cip\Tree;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -482,6 +483,7 @@ class CipTransitionController extends Controller
             'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),
+            'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
             'decisionLetter' => $this->decisionLetter($application),

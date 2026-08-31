@@ -9,6 +9,8 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\Folder;
+use App\Models\Notification;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -17,6 +19,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\NonCompliance;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -155,6 +158,25 @@ class CipNonComplianceTest extends TestCase
         $this->assertDatabaseHas('portal_notifications', [
             'user_id' => $contact->id, 'type' => 'cip.non-compliant',
         ]);
+
+        $additional = Tree::additionalFolder($application->fresh());
+        $this->assertNotNull($additional);
+        $queries = Folder::query()
+            ->where('parent_id', $additional->id)
+            ->where('name', Tree::ADDITIONAL_QUERIES)
+            ->first();
+        $this->assertNotNull($queries);
+
+        $path = '/citizenship-applications/'.$application->fresh()->client->uid
+            .'?tab=folders&folder='.$additional->uuid;
+        $this->assertSame($path, Notification::query()
+            ->where('user_id', $contact->id)
+            ->where('type', 'cip.non-compliant')
+            ->value('action_url'));
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($path) {
+            return str_contains((string) data_get($mail->payload, 'button.url'), $path);
+        });
     }
 
     public function test_the_query_date_is_required(): void
@@ -278,5 +300,20 @@ class CipNonComplianceTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::NON_COMPLIANT);
+    }
+
+    public function test_a_query_can_land_from_delayed(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+        $application->forceFill(['status' => Status::DELAYED])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::NON_COMPLIANT)
+            ->assertJsonPath('application.additionalDocumentsFolder', Tree::additionalFolder($application->fresh())?->uuid);
     }
 }

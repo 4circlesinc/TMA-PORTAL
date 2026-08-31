@@ -271,17 +271,28 @@ class Contacts
     }
 
     /** The portal path a notice's button opens. */
-    public static function path(CipApplication $application): string
+    public static function path(CipApplication $application, ?string $status = null): string
     {
         $application->loadMissing('client');
 
-        return $application->client
-            ? Pages::application($application->client->uid, 'tab=folders')
-            : Pages::home('q='.urlencode($application->displayNumber()));
+        if (! $application->client) {
+            return Pages::home('q='.urlencode($application->displayNumber()));
+        }
+
+        $query = 'tab=folders';
+
+        if ($status === Status::NON_COMPLIANT) {
+            $additional = Tree::additionalFolder($application);
+            if ($additional) {
+                $query .= '&folder='.$additional->uuid;
+            }
+        }
+
+        return Pages::application($application->client->uid, $query);
     }
 
-    public static function url(CipApplication $application): string
+    public static function url(CipApplication $application, ?string $status = null): string
     {
-        return rtrim(config('app.url'), '/').self::path($application);
+        return rtrim(config('app.url'), '/').self::path($application, $status);
     }
 }

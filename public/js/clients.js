@@ -1417,6 +1417,19 @@
   }
 
   /*
+   * Open this folder the next time the Documents panel mounts. Recording a
+   * query (§18) sends the reader to Additional Documents instead of leaving
+   * them on Overview.
+   */
+  var OPEN_FOLDER_AFTER_MOVE = null;
+
+  function queueFolderOpen(uuid, name) {
+    if (!uuid) return;
+    OPEN_FOLDER_AFTER_MOVE = { uuid: uuid, name: name || 'Additional Documents' };
+    if (clientsMountState) clientsMountState.profileTab = 'folders';
+  }
+
+  /*
    * What the server matched for the current term.
    *
    * Search used to run over the profiles the browser held. The listing does not
@@ -8307,13 +8320,24 @@
       var boot = takeBootPosition('folder');
       if (boot) clientFolderNav.path.push({ uuid: boot, name: '…' });
     }
+    var opened = OPEN_FOLDER_AFTER_MOVE;
+    if (opened) {
+      OPEN_FOLDER_AFTER_MOVE = null;
+      clientFolderNav = {
+        rootUuid: rootUuid,
+        path: [
+          { uuid: rootUuid, name: 'Client documents' },
+          { uuid: opened.uuid, name: opened.name || 'Additional Documents' },
+        ],
+      };
+    }
     wrap.setAttribute('data-folder-uuid', clientFolderNav.path[clientFolderNav.path.length - 1].uuid);
     renderFolderCrumbs(root);
 
     var current = function () { return clientFolderCurrentUuid(root); };
 
     bindClientFolderUploadRefresh();
-    if (switchedClient || !clientFolderPanelHasContents(wrap)) loadClientFolder(root);
+    if (switchedClient || opened || !clientFolderPanelHasContents(wrap)) loadClientFolder(root);
 
     MORPH.unwired(root, '[data-clients-folder-new]').forEach(function (btn) {
       btn.addEventListener('click', function () { createClientUntitledFolder(root); });
@@ -10566,9 +10590,11 @@
             method: 'POST',
             json: { queryReceivedAt: date },
           })
-            .then(function () {
+            .then(function (res) {
+              var folder = res && res.application && res.application.additionalDocumentsFolder;
+              queueFolderOpen(folder, 'Additional Documents');
               ui.closeModal();
-              clientsToast('Query recorded, the file is non-compliant.', 'positive');
+              clientsToast('Query recorded. Upload the response in Additional Documents.', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {

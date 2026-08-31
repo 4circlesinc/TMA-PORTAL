@@ -51,6 +51,9 @@ class NonCompliance
         }
 
         $application = DB::transaction(function () use ($application, $actor, $queryReceivedAt, $already) {
+            Tree::provisionAdditionalDrawers($application, $actor);
+            $application->refresh();
+
             $application->forceFill(['query_received_at' => $queryReceivedAt])->save();
 
             $meta = ['queryReceivedAt' => $queryReceivedAt->toDateString()];
