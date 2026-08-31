@@ -286,6 +286,32 @@
     return !!(window.TMADesktop && window.TMADesktop.isDesktop);
   }
 
+  /*
+   * In the desktop app a social-connect link must open as a popup: the
+   * shell's page loader follows the OAuth redirect internally, so a same-tab
+   * click never reaches Google/Microsoft and lands back where it started.
+   * Popups go through the shell's window-open handler, which gives connects
+   * a child window sharing this session (desktop/main.js). Capture phase so
+   * no in-page router sees the click first.
+   */
+  document.addEventListener('click', function (e) {
+    if (!isDesktop()) return;
+    var a = e.target && e.target.closest && e.target.closest('a[href*="/auth/social/"]');
+    if (!a || a.href.indexOf('/redirect') === -1) return;
+    e.preventDefault();
+    window.open(a.href);
+  }, true);
+
+  // A connect popup that has done its job closes itself; the opener holds
+  // the same session and shows the new connection on its next refresh.
+  if (isDesktop() && window.opener) {
+    try {
+      if (new URLSearchParams(window.location.search).get('notice') === 'social-connected') {
+        window.close();
+      }
+    } catch (e) { /* leave the window up */ }
+  }
+
   function rememberMe(j) {
     if (!isDesktop()) return;
     try { localStorage.setItem(ME_KEY, JSON.stringify(j)); } catch (e) { /* full disk */ }
