@@ -304,9 +304,20 @@ function attachNavigationRules(win) {
       return { action: 'deny' };
     }
 
-    // Connecting a mailbox from Settings: the session is already ours, so keep
-    // it in-app in a child window that shares our cookies.
-    if (isAuthUrl(url) || isSocialRedirect(url, PORTAL_ORIGIN)) {
+    /*
+     * A social connect can only finish in the system browser. Every https
+     * load in this session goes through the asset-cache handler, which
+     * follows OAuth redirects internally, so a provider's login page renders
+     * under the portal's own address and its forms post back to the portal
+     * (the "Not found" after picking an account). Sign-in learned this first
+     * — startBrowserSignIn — and connects go out the same door.
+     */
+    if (isSocialRedirect(url, PORTAL_ORIGIN)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+
+    if (isAuthUrl(url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -332,6 +343,14 @@ function attachNavigationRules(win) {
     if (provider) {
       event.preventDefault();
       startBrowserSignIn(provider);
+      return;
+    }
+
+    // Same-tab social connects go to the system browser for the same reason
+    // as the window-open branch above: OAuth cannot survive the asset-cache.
+    if (isSocialRedirect(url, PORTAL_ORIGIN)) {
+      event.preventDefault();
+      shell.openExternal(url);
       return;
     }
 

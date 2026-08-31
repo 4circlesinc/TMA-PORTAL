@@ -1,1 +1,1 @@
-- Connecting your Google or Microsoft account from settings now opens the account-consent screen instead of restarting sign-in
+- Connecting your Google or Microsoft account now finishes in your web browser, where the provider sign-in can complete safely
