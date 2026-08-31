@@ -370,6 +370,31 @@
   vertical-align: middle;
 }
 
+/*
+ * Stick the column labels to the top of the settings pane.
+ *
+ * The wrap around every portal table sets overflow-x so a wide sheet can
+ * scroll sideways. That wrap then becomes the sticky containing block, and
+ * because it is as tall as the table, top: 0 never fires. This page's pane
+ * is already the scroller, so the wrap must not clip, and the header paints
+ * its own white so rows sliding under it do not show through.
+ */
+.tma-portal-admin__content .tma-portal-table-wrap:has(.tma-portal-table--cipdocs) {
+  overflow: visible;
+}
+
+.tma-portal-table--cipdocs {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tma-portal-table--cipdocs thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-white);
+}
+
 /* The document column holds a name and a description, so it wraps. Every
    other cell stays one line; this one is the sentence, not a fact. */
 .tma-portal-table td.tma-portal-cell--wrap {
