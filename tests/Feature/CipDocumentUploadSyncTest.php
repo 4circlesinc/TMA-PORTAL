@@ -315,5 +315,7 @@ class CipDocumentUploadSyncTest extends TestCase
         $shown = collect($docs)->firstWhere('type', DocumentTypes::PASSPORT_BIO_PAGE);
         $this->assertSame($file->uuid, $shown['fileId']);
         $this->assertStringContainsString('?v=2', (string) $shown['previewUrl']);
+        $this->assertStringContainsString('?v=2', (string) $shown['downloadUrl']);
+        $this->assertStringContainsString('/download', (string) $shown['downloadUrl']);
     }
 }

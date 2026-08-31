@@ -35718,6 +35718,56 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-link, var(--dash-accent));
 }
 
+/* Download is a neighbour of the open control, not inside it — clicking it
+   must not open the viewer. Hidden until the row is the one being looked at. */
+.tma-dash__clients-checklist-download {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-4, 4px);
+  color: var(--color-text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  text-decoration: none;
+}
+
+.tma-dash__clients-checklist-download-slot {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+
+.tma-dash__clients-checklist-download img {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.tma-dash__clients-checklist-row:hover .tma-dash__clients-checklist-download,
+.tma-dash__clients-checklist-row:focus-within .tma-dash__clients-checklist-download {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tma-dash__clients-checklist-download:hover,
+.tma-dash__clients-checklist-download:focus-visible {
+  color: var(--color-text-link, var(--dash-accent));
+  background: var(--color-bg-hover, rgba(15, 23, 42, 0.04));
+}
+
+@media (hover: none) {
+  .tma-dash__clients-checklist-download {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* The document's own picture, beside the line it answers — see
    checklistThumbHtml. The empty slot on an unfiled line is deliberate: it
    keeps every label in one column. */

@@ -1110,7 +1110,7 @@ class SystemEmails
     private static function cip(): array
     {
         $vars = [
-            'number' => 'Application number (CIP number once it has one)',
+            'number' => 'Application number, or CIP application number once assigned',
             'applicant' => "Main applicant's name",
             'provider' => 'Service provider',
             'recipient' => 'First name of the person this copy is addressed to, when known',

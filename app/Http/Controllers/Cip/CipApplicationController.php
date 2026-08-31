@@ -1552,7 +1552,8 @@ class CipApplicationController extends Controller
                         /*
                          * What the checklist draws beside the line: the picture
                          * of the document, the same one every other list in the
-                         * portal shows.
+                         * portal shows, and a download URL so the row can offer
+                         * a file without opening the viewer first.
                          *
                          * Only what a thumbnail needs, not a whole presented
                          * file row — a main applicant owes a dozen of these and
@@ -1581,16 +1582,23 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * Thumbnail fields for a filled slot: the server's image thumbnail where
-     * GD can make one, and the preview route otherwise so a PDF can have its
-     * first page painted in the browser.
+     * Picture, preview, and download URLs for a filled slot. The checklist
+     * draws the thumbnail; hover download uses the same revisioned file route
+     * every other list uses. Empty slots still send the keys as null so the
+     * client does not have to know which fields appear only once a file lands.
      *
      * @return array<string, string|null>
      */
     private function slotThumb(?FileItem $file): array
     {
         if (! $file) {
-            return ['thumbUrl' => null, 'previewUrl' => null, 'fileMime' => null, 'fileCategory' => null];
+            return [
+                'thumbUrl' => null,
+                'previewUrl' => null,
+                'downloadUrl' => null,
+                'fileMime' => null,
+                'fileCategory' => null,
+            ];
         }
 
         $ext = (string) $file->extension;
@@ -1598,6 +1606,7 @@ class CipApplicationController extends Controller
         return [
             'thumbUrl' => Thumbnail::supportsExt($ext) ? Presenter::revisionedUrl('files.thumb', $file) : null,
             'previewUrl' => FileType::isPreviewable($ext) ? Presenter::revisionedUrl('files.preview', $file) : null,
+            'downloadUrl' => Presenter::revisionedUrl('files.download', $file),
             'fileMime' => $file->mime_type,
             'fileCategory' => FileType::category($ext),
         ];

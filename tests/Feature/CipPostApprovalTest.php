@@ -1066,6 +1066,16 @@ class CipPostApprovalTest extends TestCase
         $oath->refresh();
         $this->assertTrue($oath->isFilled());
         $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $oath->status);
+
+        $filed = collect(
+            $this->actingAs($staff)
+                ->getJson('/portal/cip/applications/'.$application->uuid)
+                ->assertOk()
+                ->json('application.applicant.documents')
+        )->firstWhere('id', $oath->uuid);
+        $this->assertNotEmpty($filed['downloadUrl']);
+        $this->assertStringContainsString('/download', $filed['downloadUrl']);
+        $this->assertSame($oath->file->uuid, $filed['fileId']);
     }
 
     public function test_a_provider_can_upload_a_cor_document_after_the_original_package_is_locked(): void

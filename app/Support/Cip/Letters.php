@@ -29,7 +29,7 @@ class Letters
     public static function placeholders(): array
     {
         return [
-            ['token' => 'number', 'meaning' => 'Application number (CIP number once it has one)'],
+            ['token' => 'number', 'meaning' => 'Application number, or CIP application number once assigned'],
             ['token' => 'applicant', 'meaning' => 'Main applicant’s name'],
             ['token' => 'provider', 'meaning' => 'Service provider'],
             ['token' => 'familySize', 'meaning' => 'Family size as F4'],

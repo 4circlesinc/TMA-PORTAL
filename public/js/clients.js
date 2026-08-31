@@ -91,6 +91,32 @@
     return false;
   }
 
+  function applicationHeldById(applicationId) {
+    if (!applicationId) return null;
+    var uid;
+    for (uid in APPLICATIONS) {
+      if (!Object.prototype.hasOwnProperty.call(APPLICATIONS, uid)) continue;
+      if (APPLICATIONS[uid] && APPLICATIONS[uid].id === applicationId) {
+        return APPLICATIONS[uid];
+      }
+    }
+
+    return applicationRowById(applicationId);
+  }
+
+  function applicationRecord(state) {
+    if (!state) return null;
+
+    return applicationFor(state.selectedId) || applicationHeldById(state.applicationId);
+  }
+
+  /* Pre-approval still uses the intake form. Post-approval Edit is documents. */
+  function editApplicationPhase(state) {
+    var app = applicationRecord(state);
+
+    return (app && app.phase) || null;
+  }
+
   /*
    * Client uids that belong to a CIP application, even while the file itself
    * is being refetched.
@@ -299,6 +325,7 @@
     FolderNotch: ICON + 'FolderNotch.svg',
     FolderFilled: ICON + 'FolderFilled.svg',
     FolderEmpty: ICON + 'FolderEmpty.svg',
+    DownloadSimple: ICON + 'DownloadSimple.svg',
     TwitterLogo: ICON + 'TwitterLogo.svg',
     InstagramLogo: ICON + 'InstagramLogo.svg',
     ThreadsLogo: ICON + 'ThreadsLogo.svg',
@@ -4159,6 +4186,10 @@
       return renderCompanyProfile(state, opts);
     }
     if (state.screen === 'new-application' || state.screen === 'edit-application') {
+      if (state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
+        return renderPostApprovalDocumentsEdit(state);
+      }
+
       return '<div class="tma-dash__clients-detail">' +
         // --cards, not --form: the sections are cards, and a card inside the
         // panel's own fill reads as one grey block.
@@ -4721,7 +4752,6 @@
       (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + subtitle + '</span>' : '') +
       '</div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
-      renderCorrectNumberAction(app) +
       (clientFolderUuid(c.id)
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
@@ -4917,6 +4947,10 @@
       var editingApp = state.screen === 'edit-application';
       var newPhase = state.applicationPhase || 'pre_approval';
       var packageLocked = editingApp && !!state.applicationLocked;
+      // Post-approval Edit is live uploads, not a form save. Until the phase
+      // is known, hide Save rather than offering a button that would submit
+      // the intake wizard that is not on the page.
+      var hideSave = packageLocked || (editingApp && editApplicationPhase(state) !== 'pre_approval');
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
         renderClientsBackArrow(state) +
@@ -4925,7 +4959,7 @@
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
-        (packageLocked
+        (hideSave
           ? ''
           : '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>' +
             (editingApp ? 'Save' : 'Add') + '</button>') +
@@ -6357,8 +6391,8 @@
 
   function renderOverviewApplication(app) {
     return overviewList(
-      overviewRow('Number', app.number) +
-      overviewRow('Internal', app.cipNumber && app.internalNumber ? app.internalNumber : '') +
+      overviewRow('Application number', app.internalNumber || app.number) +
+      overviewRow('CIP application number', app.cipNumber || '') +
       overviewRow('Status', cipStatusChip(app), true) +
       overviewRow('Investment', app.investmentType) +
       overviewRow('Referred by', app.provider) +
@@ -6419,13 +6453,14 @@
    * that are left are the ones a file is chased on, and the two gaps between
    * them are what §20's delay is measured across.
    *
-   * Application number is `displayNumber()`: the internal number until the
-   * CIP number is recorded, the CIP number after. Submitted and Accepted stay
-   * on the strip even before the Unit has them, as empty dates — the wait is
-   * the thing being watched, and a slot that appeared only once the waiting
-   * stopped would be missing from every file anybody was waiting on. Empty
-   * decision dates still drop out; Assigned always answers, Unassigned if
-   * nobody.
+   * The number on the strip is ours until the Unit assigns one. Application
+   * number is the internal file (GAL26-00004). Once a CIP number is recorded
+   * the label switches to CIP application number and the value is the Unit's.
+   * Both remain on Overview. Submitted and Accepted stay on the strip even
+   * before the Unit has them, as empty dates — the wait is the thing being
+   * watched, and a slot that appeared only once the waiting stopped would be
+   * missing from every file anybody was waiting on. Empty decision dates still
+   * drop out; Assigned always answers, Unassigned if nobody.
    *
    * The verbs stand at the strip's end, beside the facts they act on: one
    * card that says what the file is and what can be done to it next.
@@ -6475,8 +6510,11 @@
     if (!app) return '';
 
     var decision = cipMilestone(app, 'decision');
+    var numberFact = app.cipNumber
+      ? cipFact('CIP application number', app.cipNumber)
+      : cipFact('Application number', app.internalNumber || app.number);
     var html =
-      cipFact('Application number', app.number) +
+      numberFact +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
       cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
       cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
@@ -6527,8 +6565,7 @@
    * Offered only from Ready to submit, because that is the one edge the server
    * accepts (§16), an action that could be pressed from anywhere and then
    * refused would be the interface hiding a rule it could have simply not
-   * shown. A typo in a number already recorded is Edit CIP number, up in the
-   * profile head, it does not move the status and does not belong here.
+   * shown. A number already recorded stays; it is not edited from here.
    */
   function renderSubmissionAction(state, app) {
     if (app.status === 'apply_for_cor' && app.canConfirm && !app.corLocked) {
@@ -6555,18 +6592,6 @@
     }
 
     return '';
-  }
-
-  /*
-   * A CIP number already recorded, but typed wrong. Lives next to the name
-   * and the other profile actions, it is a correction to this file, not a
-   * step in the workflow band under the tabs.
-   */
-  function renderCorrectNumberAction(app) {
-    if (!app || !app.cipNumber || !canRecordSubmission()) return '';
-
-    return '<button type="button" class="tma-dash__clients-edit-btn" data-cip-fix-number>' +
-      'Edit CIP number</button>';
   }
 
   function canRecordSubmission() {
@@ -7012,26 +7037,19 @@
     }
 
     /*
-     * Post-approval uses the same drop zones as the intake form. The original
-     * package is already locked, so Edit application cannot take these files;
-     * the person tab is the form.
+     * Pre- and post-approval details use the same checklist: status, view,
+     * download. Uploads for post-approval live on Edit application, because
+     * the original answers cannot be changed after the file has moved on.
      */
-    var body = postApproval
-      ? (cipChecklistNote(app) +
-        '<div class="tma-portal-drops">' +
-        docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
-        '</div>')
-      : ('<ul class="tma-dash__clients-checklist">' +
-        docs.map(renderChecklistRow).join('') +
-        '</ul>');
-
     return (
       '<div class="tma-dash__clients-checklist-block">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
       tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
       '</header>' +
-      body +
+      '<ul class="tma-dash__clients-checklist">' +
+      docs.map(renderChecklistRow).join('') +
+      '</ul>' +
       '</div>'
     );
   }
@@ -7043,6 +7061,44 @@
     }
 
     return '<p class="tma-portal-drop__meta">The Citizenship by Investment Unit requires soft copies only. These slots come from Document Requirements.</p>';
+  }
+
+  /*
+   * Post-approval Edit: pending (and replaceable) documents, grouped by
+   * person. The original application is locked; this is where those files go.
+   */
+  function renderPostApprovalDocumentsEdit(state) {
+    var app = applicationFor(state.selectedId);
+    if (!isApplicationProfile(app)) {
+      return '<div class="tma-dash__clients-detail">' +
+        '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
+        '<div class="tma-dash__clients-assigned-empty">Loading the application…</div>' +
+        '</div></div>';
+    }
+
+    var note = cipChecklistNote(app);
+    var people = cipFamily(app);
+    var cards = people.map(function (person) {
+      var docs = (person && person.documents) || [];
+      var drops = docs.length
+        ? '<div class="tma-portal-drops">' +
+          docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
+          '</div>'
+        : '<p class="tma-dash__clients-checklist-empty">' +
+          'No document requirements are assigned to this person for post-approval.</p>';
+
+      return '<div class="tma-dash__clients-card">' +
+        renderCipPersonCardHead(person, app) +
+        drops +
+        '</div>';
+    }).join('');
+
+    return '<div class="tma-dash__clients-detail">' +
+      '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
+      (note || '') +
+      '<div class="tma-dash__clients-cards">' +
+      (cards || '<div class="tma-dash__clients-assigned-empty">Nobody is on this application yet.</div>') +
+      '</div></div></div>';
   }
 
   function cipDocFileIcon(name) {
@@ -7197,6 +7253,15 @@
     return '<span class="tma-dash__clients-checklist-thumb" aria-hidden="true">' + img + '</span>';
   }
 
+  function checklistDownloadHtml(d) {
+    if (!d.uploaded || !d.fileId || !d.downloadUrl) return '';
+
+    return '<a class="tma-dash__clients-checklist-download" href="' + esc(d.downloadUrl) + '"' +
+      (d.fileName ? ' download="' + esc(d.fileName) + '"' : ' download') +
+      ' title="Download" aria-label="Download ' + esc(d.label || 'document') + '">' +
+      '<img src="' + ICONS.DownloadSimple + '" alt="" width="16" height="16"></a>';
+  }
+
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
     var status = filed
@@ -7235,10 +7300,13 @@
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
         ' tma-portal-status--inline">' + esc(status) + '</span>';
     }
+    var download = checklistDownloadHtml(d) ||
+      '<span class="tma-dash__clients-checklist-download-slot" aria-hidden="true"></span>';
     var body = opens
       ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
-        esc(d.fileId) + '" title="Open the filed document">' + thumb + name + '</button>' + chip
-      : thumb + name + chip;
+        esc(d.fileId) + '" title="Open the filed document">' + thumb + name + '</button>' +
+        download + chip
+      : thumb + name + download + chip;
     var reason = (d.status === 'update_required' && d.updateReason)
       ? '<p class="tma-dash__clients-checklist-reason">' + esc(d.updateReason) + '</p>'
       : '';
@@ -11757,7 +11825,10 @@
     // re-render would wipe a half-typed application.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
     if (intakeMount && !intakeMount.querySelector('[data-cip-form]')) intakeMount._cipMounted = false;
-    if (intakeMount) {
+    if (intakeMount && state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
+      intakeMount._cipMounted = false;
+      intakeMount.innerHTML = '';
+    } else if (intakeMount) {
       var editing = state.screen === 'edit-application';
       var wantPhase = state.applicationPhase || 'pre_approval';
       if (intakeMount._cipPhase !== wantPhase || intakeMount._cipEditing !== editing) {
@@ -11765,7 +11836,8 @@
         intakeMount.innerHTML = '';
       }
     }
-    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
+    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake &&
+        !(state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval')) {
       intakeMount._cipMounted = true;
       var editing = state.screen === 'edit-application';
       intakeMount._cipPhase = state.applicationPhase || 'pre_approval';
@@ -11880,9 +11952,12 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         // Dropped so the profile re-reads it after the save, rather than
-        // showing the answers the reader has just changed.
-        delete APPLICATIONS[state.selectedId];
-        forgetApplication(state.selectedId);
+        // showing the answers the reader has just changed. Post-approval
+        // Edit is the upload surface and needs the checklist already in hand.
+        if (app.phase !== 'post_approval') {
+          delete APPLICATIONS[state.selectedId];
+          forgetApplication(state.selectedId);
+        }
         navigate('edit-application', null, { applicationId: app.id });
       });
     }
@@ -12543,11 +12618,6 @@
       });
     });
 
-    var fixNumberBtn = unwiredClientsChrome(root, '[data-cip-fix-number]');
-    if (fixNumberBtn) {
-      MORPH.on(fixNumberBtn, 'click', function () { openSubmissionDialog(state, render, true); });
-    }
-
     MORPH.unwired(root, '[data-cip-milestone]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () { openMilestoneRow(state, render, btn); });
     });
@@ -12717,6 +12787,41 @@
           ensureApplicationLoaded(state, render);
           return;
         }
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+  }
+
+  /*
+   * Post-approval Edit needs the full record (people and slots). The URL
+   * addresses the application; the profile cache is keyed by client.
+   */
+  function ensureEditApplicationLoaded(state, render) {
+    if (state.screen !== 'edit-application') return;
+
+    if (state.selectedId) {
+      state.applicationFreshFor = null;
+      ensureApplicationLoaded(state, render);
+      return;
+    }
+
+    var id = state.applicationId;
+    if (!id || state.editAppLoadingFor === id) return;
+    state.editAppLoadingFor = id;
+
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(id))
+      .then(function (json) {
+        var app = json && json.application;
+        var uid = app && app.clientUid;
+        if (!uid) return;
+        APPLICATION_OWNERS[id] = uid;
+        rememberApplication(uid, app);
+        if (state.applicationId === id && !state.selectedId) state.selectedId = uid;
+      })
+      .catch(function () { /* paint whatever we have */ })
+      .then(function () {
+        if (state.editAppLoadingFor === id) state.editAppLoadingFor = null;
+        if (state.screen !== 'edit-application' || state.applicationId !== id) return;
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
@@ -13198,6 +13303,10 @@
       // only appears once you open the tab is no use to anybody.
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
+      if (state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
+        ensureEditApplicationLoaded(state, render);
+      }
+
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
         state.applicationFreshFor = null;
         ensureProfileLoaded(state, render);
