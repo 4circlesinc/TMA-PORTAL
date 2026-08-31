@@ -11,6 +11,7 @@ use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DecisionLetter;
+use App\Support\Cip\Delay;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\NonCompliance;
@@ -118,6 +119,10 @@ class CipTransitionController extends Controller
      *  - BACKGROUND CHECK is {@see BackgroundCheck::record()}, which writes
      *    the Accepted for processing date. Driven bare, the delay clock (§20)
      *    has nothing to measure from.
+     *  - DELAYED is {@see Delay::flag()}, the daily job that measures 180
+     *    days from that accepted date. Driven bare, a file can be labelled
+     *    delayed before the clock has run, and the job's idempotent notice
+     *    would then never fire for the real wait.
      *  - PENDING COR through CLOSED are {@see Stages::record()}, which write
      *    the post-approval date that hop is named for. Driven bare, the day
      *    the package was sent or the document arrived is never stored.
@@ -138,6 +143,10 @@ class CipTransitionController extends Controller
 
         if ($status === Status::BACKGROUND_CHECK) {
             abort(422, 'Record the accepted for processing date instead, so the day the Unit accepted it is stored.');
+        }
+
+        if (Delay::owns($status)) {
+            abort(422, 'Delayed files are flagged by the daily check after 180 days with no decision.');
         }
 
         if ($status === Status::GRANTED || $status === Status::DENIED) {

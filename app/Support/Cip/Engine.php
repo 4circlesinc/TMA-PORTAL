@@ -126,7 +126,8 @@ class Engine
             fn (string $to) => self::canTransition($application, $to)
                 && self::allows($actor, $application, $to)
                 && self::checklistAllows($application, $to, $forListing)
-                && ! Stages::owns($to),
+                && ! Stages::owns($to)
+                && ! Delay::owns($to),
         ));
     }
 
@@ -152,7 +153,8 @@ class Engine
                 && ! in_array($to, $next, true)
                 && self::checklistAllows($application, $to, $forListing)
                 && self::overrideFits($application, $to)
-                && ! Stages::owns($to),
+                && ! Stages::owns($to)
+                && ! Delay::owns($to),
         ));
     }
 

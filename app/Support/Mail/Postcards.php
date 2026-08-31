@@ -793,6 +793,7 @@ class Postcards
         if ($acceptedAt) {
             $details[] = ['Accepted for processing', $acceptedAt];
         }
+        $details[] = ['Days since acceptance', (string) $days];
 
         return self::postcard('cip-delayed', self::cipVars($facts, $recipientName) + [
             'days' => (string) $days,

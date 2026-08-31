@@ -25,6 +25,12 @@ class Delay
     /** Days after acceptance with no decision before the file is delayed. */
     public const DAYS = 180;
 
+    /** The picker does not offer Delayed; the daily job is the only door. */
+    public static function owns(string $status): bool
+    {
+        return $status === Status::DELAYED;
+    }
+
     /**
      * Flag every file whose delay clock has run out.
      *
@@ -75,7 +81,7 @@ class Delay
     }
 
     /**
-     * Move one file to Delayed and tell the three named classes.
+     * Move one file to Delayed and tell §22's four classes.
      *
      * Returns the refreshed application, or null when it was not due, already
      * delayed, already decided, or not on an edge the engine will walk.

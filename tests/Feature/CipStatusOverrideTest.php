@@ -133,7 +133,7 @@ class CipStatusOverrideTest extends TestCase
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::DELAYED,
+                'status' => Status::UPDATE_REQUIRED,
             ])
             ->assertForbidden();
 

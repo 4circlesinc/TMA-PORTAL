@@ -15,7 +15,9 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Delay;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -86,6 +88,7 @@ class CipDelayTest extends TestCase
         ])->save();
 
         Assignments::assign($application->fresh(), $officer, $admin);
+        Tree::provision($application->fresh(), $admin);
 
         CompanyMember::create([
             'company_id' => $company->id, 'user_id' => $contact->id,
@@ -123,10 +126,17 @@ class CipDelayTest extends TestCase
         ]);
 
         $expected = 'RO - DELAYED - 10T1G12661P - CHEN WEI (F1) - '.now()->format('d.m.Y');
+        $accepted = now()->subDays(181)->toDateString();
+        $path = '/citizenship-applications/'.$application->fresh()->client->uid.'?tab=folders';
 
-        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected, $accepted) {
+            $details = collect($mail->payload['details'] ?? []);
+
             return $mail->subjectLine === $expected
-                && $mail->hasTo('ada@example.com');
+                && $mail->hasTo('ada@example.com')
+                && str_contains((string) ($mail->payload['lead'] ?? ''), '181 days')
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Accepted for processing' && ($row[1] ?? null) === $accepted)
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Days since acceptance' && ($row[1] ?? null) === '181');
         });
         Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
         Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
@@ -138,6 +148,22 @@ class CipDelayTest extends TestCase
                 'user_id' => $user->id, 'type' => 'cip.delayed',
             ]);
         }
+
+        $this->assertSame($path, Notification::query()
+            ->where('user_id', $contact->id)
+            ->where('type', 'cip.delayed')
+            ->value('action_url'));
+        $this->assertSame(
+            '181 days have passed since acceptance with no decision.',
+            Notification::query()
+                ->where('user_id', $contact->id)
+                ->where('type', 'cip.delayed')
+                ->value('message'),
+        );
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($path) {
+            return str_contains((string) data_get($mail->payload, 'button.url'), $path);
+        });
 
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => 'ada@example.com', 'template' => 'cip-delayed',
@@ -232,5 +258,36 @@ class CipDelayTest extends TestCase
 
         $addresses = array_column(Delay::recipients($application->fresh()), 'email');
         $this->assertSame(['ada@example.com'], $addresses);
+    }
+
+    public function test_the_status_endpoint_is_not_a_way_around_the_clock(): void
+    {
+        [$application, $admin] = $this->overdue(50);
+
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::DELAYED,
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
+        $this->assertDatabaseMissing('cip_events', [
+            'application_id' => $application->id,
+            'to_status' => Status::DELAYED,
+        ]);
+    }
+
+    public function test_the_picker_does_not_offer_delayed(): void
+    {
+        [$application, $admin] = $this->overdue(50);
+
+        $this->assertNotContains(
+            Status::DELAYED,
+            Engine::availableTransitions($application, $admin),
+        );
+        $this->assertNotContains(
+            Status::DELAYED,
+            Engine::availableOverrides($application, $admin),
+        );
     }
 }

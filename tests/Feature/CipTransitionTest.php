@@ -50,7 +50,7 @@ class CipTransitionTest extends TestCase
      * stores the outcome and its date.
      */
     private const OWNED_ELSEWHERE = [
-        'new', 'pending_review', 'non_compliant', 'background_check', 'granted', 'denied',
+        'new', 'pending_review', 'non_compliant', 'background_check', 'delayed', 'granted', 'denied',
         'pending_cor', 'apply_for_nic', 'pending_nic', 'apply_for_passport',
         'pending_passport', 'ready_for_delivery', 'closed',
     ];
@@ -428,17 +428,17 @@ class CipTransitionTest extends TestCase
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         // An edge this endpoint actually owns: a decision has its own verb.
-        $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
+        $application = $this->at($this->application($admin), Status::REVIEW_APPLICATION);
 
         $this->actingAs($admin)
             ->postJson($this->statusUrl($application), [
-                'status' => Status::DELAYED,
+                'status' => Status::ASSESSMENT_FEEDBACK,
                 'note' => 'The Unit wrote on 14 August.',
             ])->assertOk();
 
         $event = CipEvent::query()->latest('id')->first();
 
-        $this->assertSame(Status::DELAYED, $event->to_status);
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $event->to_status);
         $this->assertSame('The Unit wrote on 14 August.', $event->meta['note']);
     }
 
@@ -544,6 +544,12 @@ class CipTransitionTest extends TestCase
             ->assertStatus(422);
         $this->assertSame(Status::PENDING_REVIEW, $pending->refresh()->status);
         $this->assertNull($pending->refresh()->accepted_at);
+
+        $check = $this->at($this->application($staff), Status::BACKGROUND_CHECK);
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$check->uuid.'/status', ['status' => 'delayed'])
+            ->assertStatus(422);
+        $this->assertSame(Status::BACKGROUND_CHECK, $check->refresh()->status);
 
         foreach (['granted', 'denied'] as $owned) {
             $this->actingAs($staff)

@@ -10191,6 +10191,9 @@
       overrides = overrides.filter(function (status) { return status.value !== 'ready_to_submit'; });
     }
 
+    next = next.filter(function (status) { return status.value !== 'delayed'; });
+    overrides = overrides.filter(function (status) { return status.value !== 'delayed'; });
+
     return { next: next, overrides: overrides, current: source && source.status };
   }
 
@@ -10491,6 +10494,12 @@
 
     if (to === 'background_check') {
       openAcceptanceDialog(applicationId, clientUid);
+
+      return;
+    }
+
+    if (to === 'delayed') {
+      clientsToast('Delayed files are flagged automatically after 180 days with no decision.', 'neutral');
 
       return;
     }
