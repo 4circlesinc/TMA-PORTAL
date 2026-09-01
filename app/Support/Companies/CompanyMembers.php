@@ -232,9 +232,40 @@ final class CompanyMembers
         return $member->fresh();
     }
 
-    /** Take a member's access away. The row stays as a record. */
+    /**
+     * Take a member's access away.
+     *
+     * A member who held an account keeps their row as a record — provider
+     * history binds to it. An invite that never became an account has no
+     * history worth keeping: the row goes entirely and its invitation is
+     * cancelled, so re-entering the same address later starts clean instead
+     * of reviving a stale name.
+     */
     public static function remove(Company $company, CompanyMember $member, User $by): CompanyMember
     {
+        if (! $member->user_id) {
+            Invitation::query()
+                ->where('type', Invitation::TYPE_COMPANY_MEMBER)
+                ->where('company_id', $company->id)
+                ->whereRaw('LOWER(email) = ?', [Str::lower((string) $member->displayEmail())])
+                ->whereIn('status', Invitation::LIVE_STATUSES)
+                ->get()
+                ->each(fn (Invitation $invitation) => Invitations::cancel($invitation, $by));
+
+            ActivityLogger::log([
+                'actor' => $by,
+                'type' => 'company.member_removed',
+                'module' => 'clients',
+                'description' => $by->name.' removed '.$member->displayName().' from '.$company->name,
+                'subject' => $company,
+                'metadata' => ['companyUid' => $company->uid],
+            ]);
+
+            $member->delete();
+
+            return $member;
+        }
+
         $member->forceFill([
             'status' => CompanyMember::STATUS_REMOVED,
             'is_primary' => false,

@@ -379,25 +379,47 @@ class CompanyAccountsTest extends TestCase
         $this->assertSame(1, CompanyMember::where('company_id', $company->id)->where('is_primary', true)->count());
     }
 
-    public function test_re_adding_a_removed_member_revives_their_row(): void
+    public function test_re_adding_a_removed_member_with_an_account_revives_their_row(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $company = $this->company();
+        [$user, $member] = $this->memberWithAccount($company, 'viewer', $admin);
+
+        $this->actingAs($admin)->deleteJson("/portal/companies/{$company->uid}/members/{$member->uuid}")->assertOk();
+        $this->assertSame('removed', $member->fresh()->status);
+
+        $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
+            'email' => $user->email, 'role' => 'finance',
+        ])->assertCreated();
+
+        $this->assertSame(1, CompanyMember::count());
+        $this->assertSame('finance', CompanyMember::first()->role);
+    }
+
+    public function test_removing_an_invited_member_wipes_them_clean(): void
     {
         Mail::fake();
         $admin = $this->admin();
         $company = $this->company();
 
         $uuid = $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
-            'email' => 'dana@acme.test', 'role' => 'viewer',
+            'name' => 'Old Name', 'email' => 'dana@acme.test', 'role' => 'viewer', 'invite' => true,
         ])->json('member.id');
 
         $this->actingAs($admin)->deleteJson("/portal/companies/{$company->uid}/members/{$uuid}")->assertOk();
-        $this->assertSame('removed', CompanyMember::first()->status);
 
+        // Nothing left to revive: no member row, and the invitation cancelled.
+        $this->assertSame(0, CompanyMember::count());
+        $this->assertSame(Invitation::STATUS_CANCELLED, Invitation::first()->status);
+
+        // Re-entering the address starts from what is typed now, not history.
         $this->actingAs($admin)->postJson("/portal/companies/{$company->uid}/members", [
-            'email' => 'dana@acme.test', 'role' => 'finance',
+            'name' => 'Travis Thomas', 'email' => 'dana@acme.test', 'role' => 'member', 'invite' => true,
         ])->assertCreated();
 
         $this->assertSame(1, CompanyMember::count());
-        $this->assertSame('finance', CompanyMember::first()->role);
+        $this->assertSame('Travis Thomas', CompanyMember::first()->name);
     }
 
     // ------------------------------------------- role permissions (Phase 14)

@@ -80,6 +80,12 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Share::deleted($forget);
         \App\Models\CompanyMember::saved($forget);
         \App\Models\CompanyMember::deleted($forget);
+        // Assignments end rather than delete, and an ended one moves grants
+        // exactly as a deleted one would.
+        \App\Models\CompanyStaffAssignment::saved($forget);
+        \App\Models\CompanyStaffAssignment::deleted($forget);
+        \App\Models\ClientAssignment::saved($forget);
+        \App\Models\ClientAssignment::deleted($forget);
         \App\Models\CipProvider::saved($whenChanged(['company_id']));
         \App\Models\CipProvider::deleted($forget);
         \App\Models\CipApplication::saved($whenChanged(['provider_id', 'client_id']));
