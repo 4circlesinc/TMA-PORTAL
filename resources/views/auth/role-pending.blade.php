@@ -53,8 +53,19 @@
 
 @push('scripts')
 <script>
-  // When an administrator assigns a role, this page's next load redirects to
-  // the portal. Poll so the person does not have to know to refresh.
-  setInterval(function () { window.location.reload(); }, 5000);
+  // When an administrator assigns a role, this screen releases itself. A
+  // status poll, not a blind reload loop — the old five-second refresh
+  // flashed the page whether anything had changed or not.
+  (function () {
+    var timer = setInterval(function () {
+      fetch('/auth/pending-status', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && d.approved && d.hasRole) { clearInterval(timer); window.location.replace('/'); }
+          else if (d && ! d.approved) { clearInterval(timer); window.location.replace('/auth/pending'); }
+        })
+        .catch(function () { /* offline blip; the next tick asks again */ });
+    }, 7000);
+  })();
 </script>
 @endpush

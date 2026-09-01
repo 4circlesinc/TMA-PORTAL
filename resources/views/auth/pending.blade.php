@@ -61,3 +61,20 @@
     <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
   </main>
 @endsection
+
+@push('scripts')
+<script>
+  // The administrator's approval releases this screen on its own: the portal
+  // front door re-routes to whatever comes next for this account.
+  (function () {
+    var timer = setInterval(function () {
+      fetch('/auth/pending-status', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && d.approved) { clearInterval(timer); window.location.replace('/'); }
+        })
+        .catch(function () { /* offline blip; the next tick asks again */ });
+    }, 7000);
+  })();
+</script>
+@endpush

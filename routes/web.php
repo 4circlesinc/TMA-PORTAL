@@ -1310,6 +1310,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'user' => $request->user(),
     ]))->name('pending');
 
+    // The waiting screens poll this and release themselves the moment an
+    // administrator acts — nobody should have to know to refresh.
+    Route::get('/auth/pending-status', fn (Request $request) => response()->json([
+        'approved' => (bool) $request->user()?->isApproved(),
+        'hasRole' => $request->user() && $request->user()->account_type !== Role::EMPLOYEE,
+    ]))->name('pending.status');
+
     // The holding screen for approved accounts still typed 'Employee' — the
     // portal's roles are the brief's five (Administrator, the two officer
     // types, and the external Service Provider / Private Client accounts),
