@@ -9,7 +9,9 @@ use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Models\Invitation;
 use App\Support\AvatarService;
+use App\Support\Invitations\Invitations;
 use App\Support\Microsoft\ChangeNotifications;
 use App\Support\Notifications\Notifier;
 use App\Support\StaySignedIn;
@@ -61,6 +63,12 @@ class SocialAuthController extends Controller
         // onboarding screen dumped people in Account settings instead of
         // leaving them on onboarding with the reason.
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
+
+        // An invitation riding the OAuth round-trip: the callback fulfils it
+        // instead of opening a generic self-registration.
+        if (! $request->user() && ($invite = (string) $request->query('invite'))) {
+            $request->session()->put('social.invite', $invite);
+        }
         $request->session()->put(
             'social.return',
             in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email', 'calendar', 'onboarding', 'account-setup-email'], true) ? $request->query('return') : 'security-settings',
@@ -361,6 +369,40 @@ class SocialAuthController extends Controller
         }
 
         $user = User::where('email', $email)->first();
+
+        /*
+         * An invitation carried through the round-trip: the account is
+         * created the way the invite's password form creates it — company
+         * membership wired, the invitation marked accepted — rather than as
+         * a generic self-registration waiting on review. The OAuth email
+         * must be the invited address; picking the wrong Google or Microsoft
+         * account bounces back to the invite to try again.
+         */
+        $inviteToken = (string) $request->session()->pull('social.invite', '');
+        if (! $user && $inviteToken !== '') {
+            $invitation = Invitation::findByToken($inviteToken);
+
+            if ($invitation && $invitation->isAcceptable() && $invitation->existingUser() === null) {
+                if (! Str::of($email)->exactly(Str::lower($invitation->email))) {
+                    return redirect('/invite/'.$inviteToken.'?notice=social-mismatch');
+                }
+
+                $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
+                $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $first = array_shift($parts) ?: $display;
+                $last = count($parts) ? array_pop($parts) : '';
+
+                $user = Invitations::acceptAsNewUser($invitation, Str::password(32), [
+                    'first_name' => $first,
+                    'middle_name' => count($parts) ? implode(' ', $parts) : null,
+                    'last_name' => $last,
+                ]);
+                $user->forceFill([
+                    'password_auto' => true,
+                    'email_verified_at' => $user->email_verified_at ?? now(),
+                ])->save();
+            }
+        }
 
         if (! $user) {
             $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');

@@ -100,6 +100,27 @@
             @include('partials.invite-summary')
           </div>
 
+          @if (request('notice') === 'social-mismatch')
+            <div class="tma-auth__alert tma-auth__alert--error" role="alert">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+              <span>That account uses a different email. Sign in with the account for {{ $invitation->email }}, or set a password below.</span>
+            </div>
+          @endif
+
+          {{-- The invitation rides the OAuth round-trip: the callback creates
+               the account through this invite, membership and all, and any
+               Google or Microsoft account with the invited email will do. --}}
+          <div class="tma-auth__social">
+            <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'google') }}?invite={{ urlencode($token) }}">
+              <img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16" aria-hidden="true">
+              <span>Sign up with Google</span>
+            </a>
+            <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'microsoft') }}?invite={{ urlencode($token) }}">
+              <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
+              <span>Sign up with Microsoft</span>
+            </a>
+          </div>
+
           <form class="tma-auth__form" method="POST" action="{{ url('/invite/'.$token) }}">
             @csrf
             <div class="tma-auth__group">
