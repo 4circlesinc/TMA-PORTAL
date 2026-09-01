@@ -12,7 +12,8 @@
     <p class="tma-auth__section-label">Photo or logo</p>
     <div class="tma-photo__row">
       <span class="tma-photo__preview">
-        <img data-photo-preview src="{{ $photo }}" alt="" @unless($photo) hidden @endunless>
+        <img data-photo-preview src="{{ $photo }}" alt="" @unless($photo) hidden @endunless
+             onerror="this.hidden=true;var p=this.nextElementSibling;if(p)p.hidden=false;">
         <span class="tma-photo__placeholder" data-photo-placeholder @if($photo) hidden @endif>
           <img src="/images/icons/phosphor/User.svg" alt="" width="26" height="26">
         </span>

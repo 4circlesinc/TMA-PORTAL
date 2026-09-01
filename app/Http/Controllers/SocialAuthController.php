@@ -757,10 +757,26 @@ class SocialAuthController extends Controller
         } else {
             $avatar = $oauth->getAvatar();
             if ($avatar && str_starts_with($avatar, 'https://')) {
-                // A public URL (Google). Drop any file we stored for a previous
-                // provider photo so it doesn't orphan.
-                AvatarService::deletePrevious($oldProvider);
-                $providerUrl = $avatar;
+                /*
+                 * A public URL (Google). Pull the bytes and serve the photo
+                 * from our own media store, the same as Microsoft: Google's
+                 * lh3 URLs rotate and hot-linking left a face that could
+                 * quietly stop loading. The direct URL stays as the fallback
+                 * when the fetch fails — better a hot-link than no photo.
+                 */
+                try {
+                    $response = \Illuminate\Support\Facades\Http::timeout(10)->get($avatar);
+                    $providerUrl = $response->successful()
+                        ? AvatarService::storeBinary($response->body(), $oldProvider)
+                        : null;
+                } catch (\Throwable) {
+                    $providerUrl = null;
+                }
+
+                if (! $providerUrl) {
+                    AvatarService::deletePrevious($oldProvider);
+                    $providerUrl = $avatar;
+                }
             }
         }
 
