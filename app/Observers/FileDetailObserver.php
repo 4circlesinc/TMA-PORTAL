@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Events\FileDetailChanged;
+use App\Models\CipDocument;
 use App\Models\FileActivity;
 use App\Models\FileItem;
 use App\Models\FileVersion;
@@ -28,16 +29,47 @@ class FileDetailObserver
 {
     public function created(Model $model): void
     {
+        // A file's own creation has no viewer open on it yet — and the
+        // synchroniser creates them by the thousand.
+        if ($model instanceof FileItem) {
+            return;
+        }
+
         $this->signal($model);
     }
 
     public function updated(Model $model): void
     {
+        /*
+         * The file row itself only signals for a review change. Every other
+         * column the library writes (names, sizes, moves, sync bookkeeping)
+         * already reaches open viewers through the listing refresh, and a
+         * SharePoint pass re-saves rows far too often to broadcast each one.
+         * `reviewed_at` is in the set because judging a CIP slot stamps the
+         * file without necessarily moving its own review_status column.
+         */
+        if ($model instanceof FileItem && ! $model->wasChanged(['review_status', 'review_note', 'reviewed_at'])) {
+            return;
+        }
+
+        /*
+         * A CIP slot's status IS the file's review pill when the file answers
+         * a checklist slot — and judging from the application page moves only
+         * the slot, never a file column. Same channel, same 'details' section.
+         */
+        if ($model instanceof CipDocument && ! $model->wasChanged(['status', 'file_id'])) {
+            return;
+        }
+
         $this->signal($model);
     }
 
     public function deleted(Model $model): void
     {
+        if ($model instanceof FileItem) {
+            return;
+        }
+
         $this->signal($model);
     }
 
@@ -63,6 +95,8 @@ class FileDetailObserver
     private function section(Model $model): string
     {
         return match (true) {
+            $model instanceof FileItem,
+            $model instanceof CipDocument => FileDetailChanged::DETAILS,
             $model instanceof FileVersion => FileDetailChanged::VERSIONS,
             $model instanceof FileActivity => FileDetailChanged::ACTIVITY,
             default => FileDetailChanged::APPROVALS,
@@ -72,6 +106,18 @@ class FileDetailObserver
     /** Resolve the file a record belongs to, however indirectly. */
     private function fileUuid(Model $model): ?string
     {
+        if ($model instanceof FileItem) {
+            return $model->uuid;
+        }
+
+        if ($model instanceof CipDocument) {
+            // An emptied slot leaves nothing to repaint; a filled one names
+            // its file. withTrashed because the slot may point at a binned row.
+            return $model->file_id === null
+                ? null
+                : FileItem::withTrashed()->whereKey($model->file_id)->value('uuid');
+        }
+
         if ($model instanceof FileActivity) {
             // Activity is polymorphic over files and folders; only the file
             // rows have a viewer panel to update.

@@ -22,11 +22,14 @@ use Illuminate\Foundation\Events\Dispatchable;
  * reopens: the panel patches in place and the reader's scroll and open menus
  * survive.
  *
- * `section` is one of: versions | approvals | activity.
+ * `section` is one of: details | versions | approvals | activity.
  */
 class FileDetailChanged implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets;
+
+    /** The file's own facts — today that means its review status. */
+    public const DETAILS = 'details';
 
     public const VERSIONS = 'versions';
 

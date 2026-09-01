@@ -3346,6 +3346,22 @@
         e.details = null;
         loadTabCounts(f);
 
+        /*
+         * The file's own facts changed — a reviewer moved its status. The
+         * pill draws from the row, not the details payload, so refetch the
+         * row, patch it in place, and repaint the panel if it is on show.
+         */
+        if (section === 'details') {
+          net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id)))
+            .then(function (row) {
+              if (!lb || !row || current().id !== f.id) return;
+              Object.assign(current(), row);
+              if (viewerPrefs.panel && viewerPrefs.tab === 'details') paintPanel();
+            })
+            .catch(function () {});
+          return;
+        }
+
         if (section === 'versions') {
           e.versions = null;
           if (viewerPrefs.tab === 'versions') loadVersions(f);

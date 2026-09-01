@@ -132,6 +132,12 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\FileComment::observe(\App\Observers\ReviewActivityObserver::class);
         \App\Models\FileWorkflow::observe(\App\Observers\ReviewActivityObserver::class);
 
+        // The file row itself: a review-status change reaches open viewers
+        // (the observer ignores every other FileItem write). CipDocument is in
+        // the list because a checklist slot's status IS the pill on its file,
+        // and judging from the application page never touches a file column.
+        \App\Models\FileItem::observe(\App\Observers\FileDetailObserver::class);
+        \App\Models\CipDocument::observe(\App\Observers\FileDetailObserver::class);
         \App\Models\FileVersion::observe(\App\Observers\FileDetailObserver::class);
         \App\Models\FileWorkflow::observe(\App\Observers\FileDetailObserver::class);
         \App\Models\FileWorkflowStep::observe(\App\Observers\FileDetailObserver::class);
