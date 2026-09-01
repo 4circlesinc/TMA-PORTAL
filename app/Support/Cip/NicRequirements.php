@@ -90,11 +90,15 @@ class NicRequirements
             atPreApproval: true,
         );
 
+        // The original package asks for proof of a name change too, so a copy
+        // filed pre-approval answers the NIC pack without a second upload.
         $nameChange = self::row(
             self::NAME_CHANGE_DOCUMENT,
             'Certified copy of name change document',
             required: false,
             help: 'If applicable. Soft copy only. '.self::GUIDELINES,
+            carryForward: true,
+            atPreApproval: true,
         );
 
         $marriage = self::row(
@@ -104,13 +108,23 @@ class NicRequirements
             help: 'If applicable. Soft copy only. '.self::GUIDELINES,
         );
 
+        // The submission guide files the marriage record and any divorce
+        // decree in the principal applicant's own folder, so theirs are the
+        // rows that ask pre-approval and carry forward.
+        $paMarriage = self::row(
+            'marriage_certificate',
+            'Marriage Record or Marriage Certificate',
+            required: false,
+            help: 'Married applicants. A copy already on the original package carries forward. Soft copy only. '.self::GUIDELINES,
+            carryForward: true,
+            atPreApproval: true,
+        );
+
         $spouseMarriage = self::row(
             'marriage_certificate',
             'Certified copy of Marriage Certificate',
             required: true,
-            help: 'Notarized and certified a true copy of the original. A copy already on the original package carries forward. Soft copy only. '.self::GUIDELINES,
-            carryForward: true,
-            atPreApproval: true,
+            help: 'Notarized and certified a true copy of the original. Soft copy only. '.self::GUIDELINES,
         );
 
         $divorce = self::row(
@@ -118,6 +132,15 @@ class NicRequirements
             'Divorce Decree',
             required: false,
             help: 'If applicable. Soft copy only. '.self::GUIDELINES,
+        );
+
+        $paDivorce = self::row(
+            self::DIVORCE_DECREE,
+            'Divorce Decree',
+            required: false,
+            help: 'Divorced applicants. A copy already on the original package carries forward. Soft copy only. '.self::GUIDELINES,
+            carryForward: true,
+            atPreApproval: true,
         );
 
         $death = self::row(
@@ -135,12 +158,10 @@ class NicRequirements
             help: 'The applicant signs the letter. A Notary or Attorney-at-Law signs and stamps it. Soft copy only. '.self::GUIDELINES,
         );
 
-        $adult = [$r3, $bio, $birth, $nameChange, $marriage, $divorce, $death, $auth];
-
         return [
-            ApplicantType::PRINCIPAL_APPLICANT => $adult,
+            ApplicantType::PRINCIPAL_APPLICANT => [$r3, $bio, $birth, $nameChange, $paMarriage, $paDivorce, $death, $auth],
             ApplicantType::SPOUSE => [$r3, $bio, $birth, $nameChange, $spouseMarriage, $divorce, $death, $auth],
-            ApplicantType::DEPENDENT_16_OVER => $adult,
+            ApplicantType::DEPENDENT_16_OVER => [$r3, $bio, $birth, $nameChange, $marriage, $divorce, $death, $auth],
         ];
     }
 

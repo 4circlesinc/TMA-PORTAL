@@ -90,12 +90,17 @@ class Intake
                 'help' => $t->help,
                 'required' => (bool) $t->required,
                 'realEstateOnly' => (bool) $t->real_estate_only,
-                // Only the main applicant's uploads gate filing. A sponsor's
-                // paperwork is often added after the application exists, and
-                // dependants follow the same rule — their required flags still
-                // drive the checklist once the file is open.
+                // Only the main applicant's uploads gate filing, and
+                // pre-approval only §2's three: the official checklist runs to
+                // thirty-odd rows, and demanding every required one before the
+                // application may exist would mean no application exists. The
+                // rest of the checklist is what the document-management phase
+                // collects once the file is open. A post-approval filing still
+                // demands its pack's required documents, which is its own
+                // documented behaviour.
                 'atFiling' => $applicantType === ApplicantType::PRINCIPAL_APPLICANT
-                    && (bool) $t->required,
+                    && (bool) $t->required
+                    && ($phase !== Phase::PRE_APPROVAL || in_array($t->key, self::AT_FILING, true)),
             ])
             ->values();
     }

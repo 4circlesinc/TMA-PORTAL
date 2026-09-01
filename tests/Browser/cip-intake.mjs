@@ -145,7 +145,7 @@ try {
     return out;
   });
   let marks = await starred();
-  check(marks['First name'] && marks['Passport photo'] && marks['Birth certificate'],
+  check(marks['First name'] && marks['Passport photo'] && marks['Certified Copy of Birth Record'],
     'the applicant’s fields and uploads are marked');
   check(marks['Specify investment type'] === undefined, 'a hidden conditional field has no mark yet');
   check(await page.locator('[data-cip-field="firstName"]').getAttribute('aria-required') === 'true',
@@ -378,7 +378,11 @@ try {
    * application filed a second ago rightly still owes the rest of them.
    */
   const stillOwed = body?.application?.applicant?.outstanding || ['x'];
-  const collected = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+  const collected = [
+    'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
+    'Certified Copy of Passport Bio Data Page',
+    'Certified Copy of Birth Record',
+  ];
   check(collected.every(label => !stillOwed.includes(label)),
     '§2’s three uploads answered their slots');
   check(body?.application?.sponsor?.name === 'Maryam Haddad', 'the sponsor was filed with it');

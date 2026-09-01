@@ -280,14 +280,14 @@ class CipRequirementAdminTest extends TestCase
         (new CipDocumentRequirement)->forceFill([
             'uuid' => (string) Str::uuid(),
             'applicant_type' => ApplicantType::PRINCIPAL_APPLICANT,
-            'key' => 'bank_reference_letter',
-            'label' => 'Bank reference letter',
+            'key' => 'tax_clearance',
+            'label' => 'Tax clearance certificate',
             'required' => true,
             'sort_order' => 99,
             'active' => true,
         ])->save();
 
-        $this->assertNotContains('Bank reference letter', $person->documents()->pluck('label')->all());
+        $this->assertNotContains('Tax clearance certificate', $person->documents()->pluck('label')->all());
 
         $shown = $this->actingAs($admin)->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()->json('application');
@@ -295,10 +295,10 @@ class CipRequirementAdminTest extends TestCase
         // One read, and the answer that read returns is already caught up —
         // not the stale checklist with a promise about next time.
         $this->assertContains(
-            'Bank reference letter',
+            'Tax clearance certificate',
             collect($shown['applicant']['documents'])->pluck('label')->all(),
         );
-        $this->assertContains('Bank reference letter', $person->documents()->pluck('label')->all());
+        $this->assertContains('Tax clearance certificate', $person->documents()->pluck('label')->all());
     }
 
     public function test_the_client_profile_read_catches_the_checklist_up_too(): void
@@ -320,20 +320,20 @@ class CipRequirementAdminTest extends TestCase
         (new CipDocumentRequirement)->forceFill([
             'uuid' => (string) Str::uuid(),
             'applicant_type' => ApplicantType::PRINCIPAL_APPLICANT,
-            'key' => 'bank_reference_letter',
-            'label' => 'Bank reference letter',
+            'key' => 'tax_clearance',
+            'label' => 'Tax clearance certificate',
             'required' => true,
             'sort_order' => 99,
             'active' => true,
         ])->save();
 
-        $this->assertNotContains('Bank reference letter', $person->documents()->pluck('label')->all());
+        $this->assertNotContains('Tax clearance certificate', $person->documents()->pluck('label')->all());
 
         $shown = $this->actingAs($admin)->getJson('/portal/cip/clients/chen-wei/application')
             ->assertOk()->json('application');
 
         $this->assertContains(
-            'Bank reference letter',
+            'Tax clearance certificate',
             collect($shown['applicant']['documents'])->pluck('label')->all(),
         );
     }
@@ -379,33 +379,35 @@ class CipRequirementAdminTest extends TestCase
         $this->assertTrue($required['required'], 'ticked means required');
     }
 
-    public function test_a_required_principal_requirement_gates_filing_and_the_form(): void
+    /**
+     * Since the official checklist arrived, being required is not the same as
+     * gating filing: the guide's principal list runs to thirty-odd rows, and a
+     * wizard that demanded every required one before the application could
+     * exist would mean no application exists. Only §2's intake documents gate
+     * a pre-approval filing; everything else is offered on the form and
+     * collected once the file is open.
+     */
+    public function test_a_required_principal_requirement_reaches_the_form_without_gating_filing(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com');
 
-        $requirement = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+        $this->actingAs($admin)->postJson('/portal/cip/requirements', [
             'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
             'label' => 'Proof of funds',
             'required' => true,
-        ])->assertCreated()->json('requirement');
+        ])->assertCreated();
 
-        $field = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
-            ->assertOk()->json('requirements.principal'))
-            ->firstWhere('label', 'Proof of funds');
+        $principal = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'));
 
-        $this->assertTrue($field['required']);
-        $this->assertTrue($field['atFiling']);
+        $field = $principal->firstWhere('label', 'Proof of funds');
+        $this->assertTrue($field['required'], 'the form marks it required');
+        $this->assertFalse($field['atFiling'], 'but it does not block the save');
 
-        $optional = $this->actingAs($admin)->patchJson('/portal/cip/requirements/'.$requirement['id'], [
-            'required' => false,
-        ])->assertOk()->json('requirement');
-
-        $field = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
-            ->assertOk()->json('requirements.principal'))
-            ->firstWhere('label', 'Proof of funds');
-
-        $this->assertFalse($optional['required']);
-        $this->assertFalse($field['atFiling']);
+        // The intake documents still do — required and demanded at filing.
+        $bio = $principal->firstWhere('key', 'passport_bio_page');
+        $this->assertTrue($bio['required']);
+        $this->assertTrue($bio['atFiling']);
     }
 
     public function test_the_order_the_checklist_reads_in_is_the_firms(): void

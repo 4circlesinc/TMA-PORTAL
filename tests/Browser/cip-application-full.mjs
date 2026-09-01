@@ -177,7 +177,11 @@ try {
    * three it collects — each upload has to land in its slot and close it.
    */
   step(8, 'Checklists (§2 uploads → document slots)');
-  const collected = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+  const collected = [
+    'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
+    'Certified Copy of Passport Bio Data Page',
+    'Certified Copy of Birth Record',
+  ];
   const applicantOwes = app.applicant?.outstanding || ['x'];
   check(collected.every(label => !applicantOwes.includes(label)),
     `the applicant's three uploads closed their slots (${JSON.stringify(applicantOwes)})`);
@@ -186,8 +190,8 @@ try {
   // of the three still open — the evidence that a slot stays open until a file
   // actually arrives in it.
   const sponsorOwes = app.sponsor?.outstanding || [];
-  check(sponsorOwes.includes('Birth certificate'), 'the one the sponsor skipped is still owed');
-  check(!sponsorOwes.includes('Passport photo') && !sponsorOwes.includes('Passport bio page'),
+  check(sponsorOwes.includes('Certified Copy of Birth Certificate'), 'the one the sponsor skipped is still owed');
+  check(!sponsorOwes.includes('Passport photo') && !sponsorOwes.includes('Certified Copy of the Passport Bio Data Page'),
     `and the two they did upload are not (${JSON.stringify(sponsorOwes)})`);
 
   const dep = (app.dependents || [])[0];

@@ -134,9 +134,7 @@ class CipIntakeTest extends TestCase
             'passportBioPage' => $this->scan('bio.pdf'),
             'birthCertificate' => $this->scan('birth.pdf'),
             'policeCertificate' => [$this->scan('police.pdf')],
-            'medicalCertificate' => [$this->scan('medical.pdf')],
             'proofOfAddress' => [$this->scan('address.pdf')],
-            'evidenceOfFunds' => [$this->scan('funds.pdf')],
             'investmentType' => InvestmentType::REAL_ESTATE,
             'sponsored' => '0',
         ], $overrides);
@@ -558,8 +556,8 @@ class CipIntakeTest extends TestCase
          * time somebody edited one in the portal, which is the feature.
          */
         $outstanding = DocumentSlots::outstanding($sponsor);
-        $this->assertContains('Passport bio page', $outstanding);
-        $this->assertContains('Birth certificate', $outstanding);
+        $this->assertContains('Certified Copy of the Passport Bio Data Page', $outstanding);
+        $this->assertContains('Certified Copy of Birth Certificate', $outstanding);
     }
 
     public function test_a_sponsors_scans_are_offered_but_never_demanded(): void
@@ -577,8 +575,8 @@ class CipIntakeTest extends TestCase
         // folder — not the applicant's.
         $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
         $outstanding = DocumentSlots::outstanding($sponsor);
-        $this->assertNotContains('Passport bio page', $outstanding, 'the one they sent is answered');
-        $this->assertContains('Birth certificate', $outstanding, 'the ones they did not still stand');
+        $this->assertNotContains('Certified Copy of the Passport Bio Data Page', $outstanding, 'the one they sent is answered');
+        $this->assertContains('Certified Copy of Birth Certificate', $outstanding, 'the ones they did not still stand');
 
         $slot = CipDocument::where('person_id', $sponsor->id)
             ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->first();
@@ -592,7 +590,11 @@ class CipIntakeTest extends TestCase
         $this->assertSame(
             [],
             array_intersect(
-                ['Passport photo', 'Passport bio page', 'Birth certificate'],
+                [
+                    'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
+                    'Certified Copy of Passport Bio Data Page',
+                    'Certified Copy of Birth Record',
+                ],
                 $body['applicant']['outstanding'],
             ),
         );
@@ -674,7 +676,7 @@ class CipIntakeTest extends TestCase
         $this->assertNotNull($lina);
         $this->assertNotEmpty($lina['photo'], 'the passport photo is their face');
         $this->assertContains(
-            'Passport bio page',
+            'Certified Copy of Passport Bio Data Page',
             collect($lina['documents'])->where('uploaded', true)->pluck('label')->all(),
         );
 
@@ -823,7 +825,11 @@ class CipIntakeTest extends TestCase
         // §2's three uploads are answers to requirements from the first save,
         // not loose files Phase 3 would have to find and re-home.
         $documents = collect($body['applicant']['documents']);
-        $intake = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+        $intake = [
+            'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
+            'Certified Copy of Passport Bio Data Page',
+            'Certified Copy of Birth Record',
+        ];
 
         // The three the form asks for are answered by the save. The rest of
         // the checklist — whatever the firm's templates say — is outstanding,
@@ -1009,7 +1015,11 @@ class CipIntakeTest extends TestCase
         $this->assertSame(
             [],
             array_intersect(
-                ['Passport photo', 'Passport bio page', 'Birth certificate'],
+                [
+                    'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
+                    'Certified Copy of Passport Bio Data Page',
+                    'Certified Copy of Birth Record',
+                ],
                 $body['applicant']['outstanding'],
             ),
             'the filed uploads survive an edit',
