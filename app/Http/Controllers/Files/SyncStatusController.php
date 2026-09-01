@@ -26,8 +26,10 @@ class SyncStatusController extends BaseFilesController
     {
         $user = $this->user($request);
 
-        // Staff-only: a client has no business seeing the firm's sync plumbing.
-        if (! Role::isStaff($user)) {
+        // Admin-only: the firm's import machinery (library sync strips and
+        // panels) is an administrator's concern. Everyone else just sees
+        // their files; an empty payload renders nothing client-side.
+        if (! Role::isAdmin($user)) {
             return response()->json(['connections' => [], 'syncing' => false]);
         }
 

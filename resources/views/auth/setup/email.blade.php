@@ -27,7 +27,7 @@
   @endif
 
   <div class="tma-auth__checklist">
-    @if ($microsoft)
+    @if ($mailReady)
       <div class="tma-auth__task tma-auth__task--done">
         <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16"></span>
         <span class="tma-auth__task-copy">
@@ -37,11 +37,14 @@
         <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
       </div>
     @else
+      {{-- A sign-in-only Microsoft account is not Done: it holds no mail
+           grant, so the mailbox would sit empty. Same link either way —
+           sync_all widens the existing grant without touching anything. --}}
       <a class="tma-auth__task" href="{{ route('social.connect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'account-setup-email']) }}">
         <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Outlook.svg" alt="" width="16" height="16"></span>
         <span class="tma-auth__task-copy">
-          <span class="tma-auth__task-name">Connect Microsoft Outlook</span>
-          <span class="tma-auth__task-desc">Mail syncs into the portal. We do not connect Gmail for email.</span>
+          <span class="tma-auth__task-name">{{ $microsoft ? 'Finish connecting Microsoft Outlook' : 'Connect Microsoft Outlook' }}</span>
+          <span class="tma-auth__task-desc">{{ $microsoft ? 'Your sign-in works, but mail access is missing.' : 'Mail syncs into the portal. We do not connect Gmail for email.' }}</span>
         </span>
         <span class="tma-auth__task-side"><span class="tma-auth__badge">Optional</span></span>
       </a>

@@ -147,7 +147,17 @@ class AccountSetupController extends Controller
                 'nonSilenceable' => NotificationType::NON_SILENCEABLE,
             ],
             'email' => [
-                'microsoft' => $user->connectedAccount('microsoft'),
+                'microsoft' => $microsoft = $user->connectedAccount('microsoft'),
+                /*
+                 * A row alone is not a mailbox. Signing UP with Microsoft
+                 * creates a connected account with sign-in scopes only — no
+                 * refresh token, no mail sync — and marking that "Done" here
+                 * is exactly how someone finished onboarding with an inbox
+                 * that never synced. Judge it the way the mailbox itself does.
+                 */
+                'mailReady' => (bool) ($microsoft
+                    && $microsoft->sync_email
+                    && $microsoft->getRawOriginal('token') !== null),
                 'mail' => $this->mailPrefs($user),
             ],
             default => [],

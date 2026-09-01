@@ -36,10 +36,15 @@ class GettingStartedController extends Controller
         $requireMicrosoft = (bool) ($policy['requireMicrosoftConnect'] ?? false) && $microsoftConfigured;
         $requireGoogle = (bool) ($policy['requireGoogleConnect'] ?? false) && $googleConfigured;
 
+        // The flags alone are not enough: every pipeline runs on the stored
+        // refresh token, and a sign-in-only connect leaves the flags off AND
+        // the token empty — but a half-granted consent can leave flags on
+        // with nothing to sync with. Ticked means it will actually work.
+        $hasToken = $microsoft && $microsoft->getRawOriginal('token') !== null;
         $features = [
-            'email' => (bool) ($microsoft?->sync_email),
-            'calendar' => (bool) ($microsoft?->sync_calendar),
-            'onedrive' => (bool) ($microsoft?->sync_onedrive),
+            'email' => $hasToken && (bool) $microsoft->sync_email,
+            'calendar' => $hasToken && (bool) $microsoft->sync_calendar,
+            'onedrive' => $hasToken && (bool) $microsoft->sync_onedrive,
         ];
         $microsoftConnected = $features['email'] && $features['calendar'] && $features['onedrive'];
         $googleConnected = (bool) $google;
@@ -80,6 +85,7 @@ class GettingStartedController extends Controller
         if (($policy['requireMicrosoftConnect'] ?? false) && $microsoftConfigured) {
             $microsoft = $user->connectedAccount('microsoft');
             $connected = $microsoft
+                && $microsoft->getRawOriginal('token') !== null
                 && $microsoft->sync_email
                 && $microsoft->sync_calendar
                 && $microsoft->sync_onedrive;

@@ -124,7 +124,7 @@ Artisan::command('files:workflow-maintenance', function () {
     $this->info("Expired {$expired} request(s), sent {$reminded} reminder(s).");
 })->purpose('Expire overdue file requests and send approval reminders');
 
-Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping();
+Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping(120);
 
 /*
  * CIP delayed applications (§20).
@@ -146,7 +146,7 @@ Artisan::command('cip:flag-delayed', function () {
     $this->info("Flagged {$flagged} delayed application(s).");
 })->purpose('Mark CIP applications delayed after 180 days with no decision');
 
-Schedule::command('cip:flag-delayed')->dailyAt('04:00')->withoutOverlapping();
+Schedule::command('cip:flag-delayed')->dailyAt('04:00')->withoutOverlapping(180);
 
 /*
  * Drop file-presence rows whose tab stopped renewing. Staleness is already
@@ -164,7 +164,7 @@ Schedule::command('files:prune-presence')->everyThirtyMinutes();
  * enough for a window measured in days, and it runs off-peak because it
  * touches every account.
  */
-Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping();
+Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping(180);
 
 /*
  * Recompute recurring account reports whose next run is due.
@@ -196,7 +196,7 @@ Artisan::command('reports:run {--all : Recompute every recurring report, due or 
 
 // Hourly rather than daily: the cadences are weekly and monthly, so this only
 // has to be fine enough that a report lands on the right day.
-Schedule::command('reports:run')->hourly()->withoutOverlapping();
+Schedule::command('reports:run')->hourly()->withoutOverlapping(120);
 
 /*
  * Pull every connected SharePoint library on a timer.
@@ -205,17 +205,24 @@ Schedule::command('reports:run')->hourly()->withoutOverlapping();
  * which is exactly how the mailbox ended up looking like it was losing mail.
  * Queued so a large library cannot hold up the scheduler, and non-overlapping
  * because two runs would process the same delta cursor twice.
+ *
+ * Every withoutOverlapping() in this file carries an explicit expiry. The
+ * default is 24 HOURS, and a schedule:run killed mid-command (restarts,
+ * deploys) leaks the mutex: this entry and mail:sync-all were silently
+ * skipped every minute for most of 2026-09-01 that way, which is why
+ * freshly connected personal OneDrives never imported. An expiry of a few
+ * cadences makes a leaked mutex cost minutes, not a day.
  */
 Schedule::command('sharepoint:sync --queue')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Provider folders in the Citizenship Applications library become CIP
  * service providers on their own, linked to their folder. Idempotent, so
  * an hour with nothing new writes nothing.
  */
-Schedule::command('cip:providers-from-folders')->hourly()->withoutOverlapping();
+Schedule::command('cip:providers-from-folders')->hourly()->withoutOverlapping(120);
 
 /*
  * Graph push subscriptions expire in a few days. Recreate/renew them on a
@@ -229,7 +236,7 @@ Artisan::command('graph:ensure-subscriptions', function () {
 
 Schedule::command('graph:ensure-subscriptions')
     ->everyFiveMinutes()
-    ->withoutOverlapping();
+    ->withoutOverlapping(15);
 
 /*
  * Message attachments are uploaded and staged the moment they are chosen, so a
@@ -250,7 +257,7 @@ Artisan::command('messaging:prune-attachments {--hours=24}', function () {
 Schedule::command('messaging:prune-attachments')->hourly();
 
 // Escalating email reminders (1h/20h/24h) for unread portal messages.
-Schedule::command('messaging:send-unread-reminders')->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command('messaging:send-unread-reminders')->everyFifteenMinutes()->withoutOverlapping(30);
 
 /*
  * Create the firm-wide default conversation if it does not exist yet.
@@ -300,7 +307,7 @@ Schedule::command('mail:sync-all')
     ->everyMinute()
     // The job already drops overlapping runs per mailbox; this stops a slow
     // provider from stacking scheduler ticks on top of each other as well.
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Wake snoozed messages that are due: clear the snooze (which returns the
@@ -346,7 +353,7 @@ Artisan::command('mail:wake-snoozed', function () {
 // the picker's datetime input, which has minute resolution itself.
 Schedule::command('mail:wake-snoozed')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Re-fetch subscribed ICS calendars that are due.
@@ -384,7 +391,7 @@ Artisan::command('calendar:refresh-subscriptions', function () {
 
 Schedule::command('calendar:refresh-subscriptions')
     ->everyFifteenMinutes()
-    ->withoutOverlapping();
+    ->withoutOverlapping(30);
 
 /*
  * Pull every connected provider calendar up to date.
@@ -414,7 +421,7 @@ Artisan::command('calendar:sync-providers', function () {
 
 Schedule::command('calendar:sync-providers')
     ->everyTenMinutes()
-    ->withoutOverlapping();
+    ->withoutOverlapping(30);
 
 /*
  * Publish scheduled Feed posts whose time has come (§6).
@@ -447,7 +454,7 @@ Artisan::command('feed:publish-scheduled', function () {
 // Minute granularity matches the composer's time picker, which is to the minute.
 Schedule::command('feed:publish-scheduled')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Remove staged Feed attachments that were never claimed by a post.
@@ -564,7 +571,7 @@ Schedule::command('smartsheet:sync --queue')
     ->everyTenMinutes()
     // The per-sheet job already refuses to overlap itself; this stops a slow
     // workspace walk from stacking scheduler ticks as well.
-    ->withoutOverlapping();
+    ->withoutOverlapping(30);
 
 /*
  * Client hub + paperwork, after the metadata sync.
@@ -583,7 +590,7 @@ Schedule::call(function () {
         return;
     }
     SyncCbiHub::dispatch();
-})->name('cbi:sync-hub')->everyTenMinutes()->withoutOverlapping();
+})->name('cbi:sync-hub')->everyTenMinutes()->withoutOverlapping(30);
 
 /*
  * Re-run the mirror → CBI mapping without touching the Smartsheet API.
