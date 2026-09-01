@@ -37,23 +37,36 @@ class BackgroundCheck
         CipApplication $application,
         User $actor,
         ?Carbon $acceptedAt = null,
+        bool $override = false,
+        ?string $note = null,
     ): CipApplication {
         $acceptedAt ??= Carbon::now();
         $already = $application->status === Status::BACKGROUND_CHECK;
+        $edge = $already || Engine::canTransition($application, Status::BACKGROUND_CHECK);
 
-        if (! $already && ! Engine::canTransition($application, Status::BACKGROUND_CHECK)) {
+        /*
+         * Off the lifecycle map, this is not a flat refusal any more: an
+         * administrator who typed the confirmation may drive it anyway,
+         * through Engine::set, which holds the admin gate and demands the
+         * reason. Everyone else keeps the explanation.
+         */
+        if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'Acceptance for processing can only be recorded on an application the Unit already holds.',
             );
         }
 
-        return DB::transaction(function () use ($application, $actor, $acceptedAt, $already) {
+        return DB::transaction(function () use ($application, $actor, $acceptedAt, $already, $edge, $note) {
             $application->forceFill(['accepted_at' => $acceptedAt])->save();
 
             $meta = ['acceptedAt' => $acceptedAt->toDateString()];
 
             if (! $already) {
-                Engine::apply($application, Status::BACKGROUND_CHECK, $actor, $meta);
+                if ($edge) {
+                    Engine::apply($application, Status::BACKGROUND_CHECK, $actor, $meta);
+                } else {
+                    Engine::set($application, Status::BACKGROUND_CHECK, $actor, $meta + ['note' => (string) $note]);
+                }
             }
 
             Engine::record($application, CipEvent::ACTION_ACCEPTED_FOR_PROCESSING, $actor, $meta);

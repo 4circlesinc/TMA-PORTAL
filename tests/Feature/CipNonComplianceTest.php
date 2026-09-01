@@ -255,6 +255,62 @@ class CipNonComplianceTest extends TestCase
         $this->assertSame(0, CipEvent::where('action', CipEvent::ACTION_QUERY_RECEIVED)->count());
     }
 
+    public function test_an_administrator_may_override_a_query_onto_a_file_off_the_map(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+        $application->forceFill(['status' => Status::NEW])->save();
+
+        // The typed confirmation on the screen becomes override + note here;
+        // the reason is demanded, the move goes through Engine::set.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+                'override' => true,
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+                'override' => true,
+                'note' => 'Unit letter arrived before the portal caught up.',
+            ])
+            ->assertOk();
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::NON_COMPLIANT, $fresh->status);
+        $this->assertSame('2026-08-18', $fresh->query_received_at?->toDateString());
+    }
+
+    public function test_an_officer_cannot_override_a_query_onto_a_file_off_the_map(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+        $application->forceFill(['status' => Status::NEW])->save();
+        $officer = $this->user('Reviewing Officer', 'off@example.com', 'Olive Officer');
+        // On the file, so the scope shows it to them — the refusal has to be
+        // the override gate, not the application being invisible.
+        \App\Models\CipApplicationAssignment::create([
+            'application_id' => $application->id,
+            'user_id' => $officer->id,
+            'role' => 'reviewing_officer',
+            'status' => \App\Models\CipApplicationAssignment::STATUS_ACTIVE,
+            'assigned_by' => $staff->id,
+            'starts_at' => now(),
+        ]);
+
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+                'override' => true,
+                'note' => 'Trying anyway.',
+            ])
+            ->assertStatus(403);
+
+        $this->assertSame(Status::NEW, $application->fresh()->status);
+    }
+
     public function test_recording_again_updates_the_date_without_a_second_notice(): void
     {
         Mail::fake();

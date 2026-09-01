@@ -10527,6 +10527,42 @@
     render({ forceFull: true });
   }
 
+  /*
+   * The typed-confirmation strip every admin override carries. Reading a
+   * warning is not the same as meaning it: the word has to be typed before
+   * the button will move a file somewhere the lifecycle map refuses.
+   */
+  var CIP_OVERRIDE_WORD = 'OVERRIDE';
+
+  function cipOverrideFieldsHtml() {
+    return '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
+      '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
+      '</div>' +
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-override-word">Type ' + CIP_OVERRIDE_WORD + ' to confirm</label>' +
+      '<input type="text" id="cip-override-word" class="tma-dash__clients-field-input" data-cip-override-word autocomplete="off" spellcheck="false" placeholder="' + CIP_OVERRIDE_WORD + '">' +
+      '</div>';
+  }
+
+  /** The reason, once both fields hold up; null (and a toast) otherwise. */
+  function cipOverrideFieldsRead(el) {
+    var note = el.querySelector('[data-cip-override-note]');
+    var word = el.querySelector('[data-cip-override-word]');
+    var reason = note && note.value ? note.value.trim() : '';
+
+    if (!reason) {
+      clientsToast('Give a reason for changing the status.', 'negative');
+      return null;
+    }
+    if (!word || word.value.trim().toUpperCase() !== CIP_OVERRIDE_WORD) {
+      clientsToast('Type ' + CIP_OVERRIDE_WORD + ' to confirm the move.', 'negative');
+      return null;
+    }
+
+    return reason;
+  }
+
   function openCipOverrideDialog(to, extra, clientUid, label) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
@@ -10535,10 +10571,7 @@
       title: 'Override status',
       body:
         '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. The Activity tab keeps the reason.</p>' +
-        '<div class="tma-dash__clients-field">' +
-        '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
-        '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
-        '</div>' +
+        cipOverrideFieldsHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-override>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-override>Change status</button>' +
@@ -10553,11 +10586,8 @@
         if (!save) return;
 
         save.addEventListener('click', function () {
-          var reason = field && field.value ? field.value.trim() : '';
-          if (!reason) {
-            clientsToast('Give a reason for changing the status.', 'negative');
-            return;
-          }
+          var reason = cipOverrideFieldsRead(el);
+          if (reason === null) return;
           ui.closeModal();
           changeCipStatus(to, extra, clientUid, label, reason);
         });
@@ -10614,14 +10644,21 @@
       return;
     }
 
+    /*
+     * A dated status picked from the Admin override column is still an
+     * override: the date dialog opens with the typed-confirmation strip so
+     * the server's Engine::set can drive the move instead of refusing it.
+     */
+    var pickedAsOverride = statusValues(source && source.availableOverrides).indexOf(to) !== -1;
+
     if (to === 'non_compliant') {
-      openQueryDialog(applicationId, clientUid);
+      openQueryDialog(applicationId, clientUid, pickedAsOverride);
 
       return;
     }
 
     if (to === 'background_check') {
-      openAcceptanceDialog(applicationId, clientUid);
+      openAcceptanceDialog(applicationId, clientUid, pickedAsOverride);
 
       return;
     }
@@ -10695,7 +10732,7 @@
    * fact as often as on the day, and quietly stamping today would put the
    * wrong date on an audit trail nobody would think to check.
    */
-  function openQueryDialog(applicationId, clientUid) {
+  function openQueryDialog(applicationId, clientUid, override) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
 
@@ -10711,6 +10748,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-query>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-query>Record query</button>' +
@@ -10730,12 +10768,20 @@
             return;
           }
 
+          var body = { queryReceivedAt: date };
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/query', {
             method: 'POST',
-            json: { queryReceivedAt: date },
+            json: body,
           })
             .then(function (res) {
               var folder = res && res.application && res.application.additionalDocumentsFolder;
@@ -10745,6 +10791,13 @@
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
+              // Same door as acceptance: a refused plain record reopens with
+              // the confirmation strip for a reader who may override.
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openQueryDialog(applicationId, clientUid, true);
+                return;
+              }
               save.disabled = false;
               save.textContent = 'Record query';
               clientsToast((err && err.message) || 'Could not record this query.', 'negative');
@@ -10830,7 +10883,7 @@
    * Background check. Asked for rather than assumed, staff record it after
    * the fact as often as on the day.
    */
-  function openAcceptanceDialog(applicationId, clientUid) {
+  function openAcceptanceDialog(applicationId, clientUid, override) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
 
@@ -10846,6 +10899,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Background check.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-accept>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-accept>Record acceptance</button>' +
@@ -10865,12 +10919,20 @@
             return;
           }
 
+          var body = { acceptedAt: date };
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/acceptance', {
             method: 'POST',
-            json: { acceptedAt: date },
+            json: body,
           })
             .then(function () {
               ui.closeModal();
@@ -10878,6 +10940,14 @@
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
+              // The lifecycle refused a plain record, but this reader may
+              // override: reopen with the confirmation strip instead of
+              // parking the refusal in a toast.
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openAcceptanceDialog(applicationId, clientUid, true);
+                return;
+              }
               save.disabled = false;
               save.textContent = 'Record acceptance';
               clientsToast((err && err.message) || 'Could not record this acceptance.', 'negative');
@@ -10885,6 +10955,13 @@
         });
       },
     });
+  }
+
+  /** Does the payload offer this reader any admin override at all? */
+  function cipViewerMayOverride(clientUid) {
+    var app = applicationFor(clientUid);
+
+    return !!(app && statusValues(app.availableOverrides).length);
   }
 
   /*

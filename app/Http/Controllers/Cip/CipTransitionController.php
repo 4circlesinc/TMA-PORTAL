@@ -308,6 +308,10 @@ class CipTransitionController extends Controller
             // Recorded, not assumed: a Unit letter is dated, and staff enter
             // it after the fact as often as on the day.
             'queryReceivedAt' => ['required', 'date'],
+            // An administrator's typed-confirmation step back; Engine::set
+            // holds the gate and demands the reason.
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'queryReceivedAt.required' => 'Enter the query received date.',
         ]);
@@ -317,6 +321,8 @@ class CipTransitionController extends Controller
                 $application,
                 $user,
                 Carbon::parse($data['queryReceivedAt']),
+                $request->boolean('override'),
+                $data['note'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -343,6 +349,10 @@ class CipTransitionController extends Controller
             // Recorded, not assumed: an acceptance letter is dated, and staff
             // enter it after the fact as often as on the day.
             'acceptedAt' => ['required', 'date'],
+            // An administrator's typed-confirmation step back; Engine::set
+            // holds the gate and demands the reason.
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'acceptedAt.required' => 'Enter the accepted for processing date.',
         ]);
@@ -352,6 +362,8 @@ class CipTransitionController extends Controller
                 $application,
                 $user,
                 Carbon::parse($data['acceptedAt']),
+                $request->boolean('override'),
+                $data['note'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());

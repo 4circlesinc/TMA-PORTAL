@@ -40,17 +40,26 @@ class NonCompliance
         CipApplication $application,
         User $actor,
         ?Carbon $queryReceivedAt = null,
+        bool $override = false,
+        ?string $note = null,
     ): CipApplication {
         $queryReceivedAt ??= Carbon::now();
         $already = $application->status === Status::NON_COMPLIANT;
+        $edge = $already || Engine::canTransition($application, Status::NON_COMPLIANT);
 
-        if (! $already && ! Engine::canTransition($application, Status::NON_COMPLIANT)) {
+        /*
+         * The same door BackgroundCheck::record opens: off the map, an
+         * administrator who typed the confirmation drives it through
+         * Engine::set (admin gate, reason demanded); everyone else keeps
+         * the explanation.
+         */
+        if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'A query can only be recorded on an application the Unit already holds.',
             );
         }
 
-        $application = DB::transaction(function () use ($application, $actor, $queryReceivedAt, $already) {
+        $application = DB::transaction(function () use ($application, $actor, $queryReceivedAt, $already, $edge, $note) {
             Tree::provisionAdditionalDrawers($application, $actor);
             $application->refresh();
 
@@ -59,7 +68,11 @@ class NonCompliance
             $meta = ['queryReceivedAt' => $queryReceivedAt->toDateString()];
 
             if (! $already) {
-                Engine::apply($application, Status::NON_COMPLIANT, $actor, $meta);
+                if ($edge) {
+                    Engine::apply($application, Status::NON_COMPLIANT, $actor, $meta);
+                } else {
+                    Engine::set($application, Status::NON_COMPLIANT, $actor, $meta + ['note' => (string) $note]);
+                }
             }
 
             Engine::record($application, CipEvent::ACTION_QUERY_RECEIVED, $actor, $meta);

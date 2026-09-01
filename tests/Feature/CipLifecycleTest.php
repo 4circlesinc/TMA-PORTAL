@@ -51,6 +51,33 @@ class CipLifecycleTest extends TestCase
         return $user;
     }
 
+    public function test_an_administrator_may_override_acceptance_onto_a_file_off_the_map(): void
+    {
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($provider, $ada);
+
+        // NEW has no edge to Background check. A plain record is refused as
+        // ever; the typed confirmation arrives as override + note and drives
+        // the move through Engine::set, date recorded.
+        $this->actingAs($ada)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-02-18',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($ada)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-02-18',
+                'override' => true,
+                'note' => 'Unit letter predates the portal record.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
+
+        $this->assertSame('2026-02-18', $application->fresh()->accepted_at?->toDateString());
+    }
+
     public function test_chen_wei_walks_from_new_applications_to_the_decision_letter(): void
     {
         $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
