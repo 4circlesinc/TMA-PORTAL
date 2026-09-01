@@ -3243,9 +3243,12 @@
     }
 
     if (!clickable || !canChangeCipPersonStatus(appRecord, person)) {
+      // Read-only for this reader — say so on hover, or the pill looks like
+      // a button that ignores clicks.
       return '<span class="tma-portal-status tma-portal-status--' +
         esc(person.statusTone || 'neutral') +
-        ' tma-portal-status--inline"' + title + '>' + label + '</span>';
+        ' tma-portal-status--inline"' + (title || ' title="Updated by the firm"') +
+        '>' + label + '</span>';
     }
 
     return '<button type="button" class="tma-portal-status tma-portal-status--' +
