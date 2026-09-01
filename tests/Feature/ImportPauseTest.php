@@ -173,4 +173,82 @@ class ImportPauseTest extends TestCase
             ->assertJsonPath('importsPaused', true)
             ->assertJsonPath('smartsheet.importsPaused', true);
     }
+
+    private function personalDrive(User $owner): SharePointConnection
+    {
+        return SharePointConnection::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'onedrive:'.$owner->email,
+            'drive_kind' => 'onedrive',
+            'owner_upn' => $owner->email,
+            'drive_id' => 'drive-'.Str::random(8),
+            'drive_name' => 'OneDrive, '.$owner->email,
+            'status' => SharePointConnection::STATUS_IDLE,
+            'sync_enabled' => true,
+            'created_by' => $owner->id,
+        ]);
+    }
+
+    public function test_an_owner_can_pause_and_resume_their_own_onedrive(): void
+    {
+        $owner = $this->officer();
+        $drive = $this->personalDrive($owner);
+
+        $this->actingAs($owner)
+            ->postJson('/me/onedrive/pause')
+            ->assertOk()
+            ->assertJsonPath('paused', true);
+
+        $drive->refresh();
+        $this->assertNotNull($drive->paused_at);
+        $this->assertTrue(ImportPause::connection($drive));
+
+        Queue::fake();
+
+        $this->actingAs($owner)
+            ->postJson('/me/onedrive/resume')
+            ->assertOk()
+            ->assertJsonPath('paused', false);
+
+        $drive->refresh();
+        $this->assertNull($drive->paused_at);
+        $this->assertFalse(ImportPause::connection($drive));
+
+        // Resuming catches up immediately instead of waiting for a schedule.
+        Queue::assertPushed(SyncSharePointLibrary::class, fn ($job) => $job->connectionId === $drive->id);
+    }
+
+    public function test_pausing_your_drive_touches_nobody_elses(): void
+    {
+        $a = $this->officer();
+        $b = $this->officer();
+        $driveA = $this->personalDrive($a);
+        $driveB = $this->personalDrive($b);
+
+        $this->actingAs($a)->postJson('/me/onedrive/pause')->assertOk();
+
+        $this->assertNotNull($driveA->fresh()->paused_at);
+        $this->assertNull($driveB->fresh()->paused_at);
+        $this->assertFalse(ImportPause::connection($driveB->fresh()));
+    }
+
+    public function test_pause_without_a_connected_drive_is_a_404(): void
+    {
+        $this->actingAs($this->officer())
+            ->postJson('/me/onedrive/pause')
+            ->assertNotFound();
+    }
+
+    public function test_sync_job_noops_while_the_owner_has_paused_their_drive(): void
+    {
+        $owner = $this->officer();
+        $drive = $this->personalDrive($owner);
+        $drive->forceFill(['paused_at' => now()])->save();
+
+        (new SyncSharePointLibrary($drive->id))->handle();
+
+        $fresh = $drive->fresh();
+        $this->assertSame(SharePointConnection::STATUS_IDLE, $fresh->status);
+        $this->assertNull($fresh->last_synced_at);
+    }
 }

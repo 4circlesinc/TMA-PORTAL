@@ -190,15 +190,7 @@ class MeSyncStatusController extends Controller
             return ['state' => 'off'];
         }
 
-        $connection = SharePointConnection::where('drive_kind', 'onedrive')
-            ->where(function ($q) use ($user, $account) {
-                $q->where('created_by', $user->id);
-                if ($account->email) {
-                    $q->orWhere('owner_upn', $account->email);
-                }
-            })
-            ->orderBy('id')
-            ->first();
+        $connection = SharePointConnection::personalDriveFor($user);
 
         if (! $connection) {
             // Provisioning is queued but has not created the link yet.
@@ -231,10 +223,17 @@ class MeSyncStatusController extends Controller
 
         // Initial walk still in progress, or a run actively holding the lock.
         if ($running || self::initialImportPending($connection)) {
-            return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+            // The owner's own pause reads the same as the admin's global one.
+            return $this->withImportPause(
+                ['state' => 'syncing', 'synced' => $synced, 'total' => $total],
+                $connection->paused_at !== null,
+            );
         }
 
-        return ['state' => 'done', 'synced' => $synced];
+        return $this->withImportPause(
+            ['state' => 'done', 'synced' => $synced],
+            $connection->paused_at !== null,
+        );
     }
 
     /**

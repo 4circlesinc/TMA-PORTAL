@@ -3369,6 +3369,7 @@
 
       var CONNECT_URL = '/auth/social/microsoft/redirect?sync_all=1&return=connectors';
 
+      function paint() {
       secApi('GET', '/admin/connectors').then(function (r) { return r.json(); }).then(function (d) {
         var features = d.features || {};
 
@@ -3387,6 +3388,15 @@
                 '<a class="tma-auth__chip-btn" style="margin-left:8px" href="' + CONNECT_URL + '"><span>Reconnect</span></a>';
             } else if (f.linked && c.id === 'calendar' && !f.readable) {
               right = '<a class="tma-auth__chip-btn" href="' + CONNECT_URL + '"><span>Reconnect</span></a>';
+            } else if (f.linked && c.id === 'onedrive' && f.ready) {
+              // The owner's own pause switch: stops this one drive's sync
+              // passes without touching anybody else's (admin global switch
+              // lives in Background Operations and wins while on).
+              right = (f.paused
+                  ? '<span class="tma-portal-chip">Paused</span>'
+                  : '<span class="tma-portal-chip tma-portal-chip--ok">Connected</span>') +
+                '<button type="button" class="tma-auth__chip-btn" data-onedrive-toggle="' + (f.paused ? 'resume' : 'pause') + '"' +
+                ' style="margin-left:8px"><span>' + (f.paused ? 'Resume sync' : 'Pause sync') + '</span></button>';
             } else if (f.linked) {
               right = '<span class="tma-portal-chip tma-portal-chip--ok">Connected</span>';
             } else {
@@ -3406,9 +3416,25 @@
             ? '<p class="tma-portal-note" style="margin-top:12px">Connected as ' + esc(d.email || '') +
               ' · <a href="' + CONNECT_URL + '">Reconnect</a></p>'
             : '');
+
+        var toggle = root.querySelector('[data-onedrive-toggle]');
+        if (toggle) toggle.addEventListener('click', function () {
+          toggle.disabled = true;
+          var action = toggle.getAttribute('data-onedrive-toggle');
+          secApi('POST', '/me/onedrive/' + action).then(function (r) {
+            if (!r.ok) throw new Error('pause toggle failed');
+            ui().toast(action === 'pause' ? 'OneDrive sync paused' : 'OneDrive sync resumed');
+            paint();
+          }).catch(function () {
+            toggle.disabled = false;
+            ui().toast("That didn't save. Try again.");
+          });
+        });
       }).catch(function () {
         root.innerHTML = '<p class="tma-portal-note">Couldn\'t load connectors. Refresh to try again.</p>';
       });
+      }
+      paint();
     },
   };
 

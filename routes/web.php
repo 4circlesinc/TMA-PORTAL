@@ -89,6 +89,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
@@ -238,6 +239,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
     Route::get('/me/sync-status', [MeSyncStatusController::class, 'show'])->name('me.sync-status');
+    Route::post('/me/onedrive/pause', [MeOneDriveController::class, 'pause'])->name('me.onedrive.pause');
+    Route::post('/me/onedrive/resume', [MeOneDriveController::class, 'resume'])->name('me.onedrive.resume');
 
     Route::prefix('me/availability')->name('me.availability.')->group(function () {
         Route::get('/', [AvailabilityController::class, 'show'])->name('show');

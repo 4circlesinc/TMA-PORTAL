@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'uuid', 'tenant_id', 'site_id', 'site_name', 'site_url', 'drive_id', 'drive_name',
     'drive_kind', 'owner_upn', 'root_item_id', 'root_path', 'root_child_count',
-    'folder_id', 'delta_link', 'status', 'sync_enabled', 'direction',
+    'folder_id', 'delta_link', 'status', 'sync_enabled', 'paused_at', 'direction',
     'last_synced_at', 'last_success_at', 'last_error', 'error_count', 'created_by',
 ])]
 class SharePointConnection extends Model
@@ -46,6 +46,7 @@ class SharePointConnection extends Model
     {
         return [
             'sync_enabled' => 'boolean',
+            'paused_at' => 'datetime',
             'last_synced_at' => 'datetime',
             'last_success_at' => 'datetime',
             'error_count' => 'integer',
@@ -55,6 +56,30 @@ class SharePointConnection extends Model
     public function folder(): BelongsTo
     {
         return $this->belongsTo(Folder::class, 'folder_id');
+    }
+
+    /**
+     * This user's own OneDrive link, if they connected one.
+     *
+     * Matched on `created_by` OR the Microsoft account's email against
+     * `owner_upn`: the row is created by a queued job, so created_by is the
+     * owner for OAuth-provisioned drives, while command-connected drives are
+     * only recognisable by UPN. Same lookup the sync-status toasts use.
+     */
+    public static function personalDriveFor(User $user): ?self
+    {
+        $email = $user->connectedAccount('microsoft')?->email;
+
+        return static::query()
+            ->where('drive_kind', 'onedrive')
+            ->where(function ($q) use ($user, $email) {
+                $q->where('created_by', $user->id);
+                if ($email) {
+                    $q->orWhere('owner_upn', $email);
+                }
+            })
+            ->orderBy('id')
+            ->first();
     }
 
     public function items(): HasMany

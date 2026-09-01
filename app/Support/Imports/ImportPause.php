@@ -87,13 +87,14 @@ class ImportPause
     }
 
     /**
-     * True when this connection should not sync. OneDrive uses the service
-     * switch; site libraries use their own uuid entry.
+     * True when this connection should not sync. OneDrive answers to the
+     * admin's global switch OR the owner's own per-drive pause (paused_at,
+     * set from Settings → Connectors); site libraries use their uuid entry.
      */
     public static function connection(SharePointConnection $connection): bool
     {
         if ($connection->drive_kind === 'onedrive') {
-            return self::onedrive();
+            return self::onedrive() || $connection->paused_at !== null;
         }
 
         return self::library((string) $connection->uuid);

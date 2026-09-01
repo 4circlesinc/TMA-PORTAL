@@ -48,6 +48,19 @@ class Synchroniser
     }
 
     /**
+     * Wall-clock budget per run, seconds. The page cap bounds how many ITEMS
+     * a run may touch, but not how long they take — and a chunk that outlives
+     * the queue job's $timeout is killed mid-walk, which burns retry attempts
+     * and reports "has timed out" as though the sync were broken. Stopping
+     * cleanly inside the budget hands back complete=false, and the job chains
+     * its own follow-up exactly as it does for the page cap.
+     */
+    private static function timeBudget(): int
+    {
+        return (int) config('services.sharepoint.time_budget', 1200);
+    }
+
+    /**
      * How long a run may hold the lock before another may take over.
      *
      * Same window the UI uses ({@see SharePointConnection::HEARTBEAT_STALE_MINUTES}).
@@ -172,11 +185,19 @@ class Synchroniser
         $link = $connection->delta_link;
         $changedFolders = [];
         $caughtUp = false;
+        $startedAt = microtime(true);
 
         try {
             // Inbound writes must never bounce back out as outbound pushes.
-            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp) {
+            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp, $startedAt) {
                 for ($page = 0; $page < self::maxPages(); $page++) {
+                    // Out of clock: stop cleanly on the saved cursor and let
+                    // the chained follow-up run continue, rather than being
+                    // killed mid-page by the queue's job timeout.
+                    if ($page > 0 && microtime(true) - $startedAt > self::timeBudget()) {
+                        break;
+                    }
+
                     $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
                     $stats['pages']++;
 
@@ -223,7 +244,18 @@ class Synchroniser
                     $connection->update(['last_synced_at' => now()]);
                 }
 
-                self::reconcileDeletions($connection, $changedFolders, $stats);
+                /*
+                 * Skipped until the first complete walk. During an initial
+                 * import every folder arrives through delta, so this pass
+                 * would list every folder in the library against Graph —
+                 * tens of thousands of round-trips on a big site — to settle
+                 * mappings this very run just created. There is nothing
+                 * stale to find yet: the first incremental pass after the
+                 * cursor exists reconciles any folder that changes.
+                 */
+                if ($connection->last_success_at !== null) {
+                    self::reconcileDeletions($connection, $changedFolders, $stats);
+                }
             });
 
             /*
@@ -237,7 +269,10 @@ class Synchroniser
             $connection->update([
                 'status' => SharePointConnection::STATUS_IDLE,
                 'last_success_at' => $complete ? now() : $connection->last_success_at,
-                'last_error' => $complete ? null : 'Import did not finish, more pages remain.',
+                // A chunk that stopped at the page or time cap is normal
+                // progress, not an error — writing one here kept "sync
+                // failed" on screen through a healthy multi-run import.
+                'last_error' => null,
                 'error_count' => $complete ? 0 : $connection->error_count,
             ]);
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SharePointConnection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,6 +21,8 @@ class ConnectorsController extends Controller
             ->where('provider', 'microsoft')
             ->first();
 
+        $drive = SharePointConnection::personalDriveFor($request->user());
+
         return response()->json([
             'microsoftReady' => (bool) config('services.microsoft.sync') && (bool) config('services.microsoft.client_id'),
             'connected' => (bool) $account,
@@ -36,6 +39,10 @@ class ConnectorsController extends Controller
                 ],
                 'onedrive' => [
                     'linked' => (bool) $account?->sync_onedrive,
+                    // The drive row exists once provisioning ran; the pause
+                    // control only makes sense against a real connection.
+                    'ready' => (bool) $drive,
+                    'paused' => (bool) $drive?->paused_at,
                 ],
             ],
         ]);

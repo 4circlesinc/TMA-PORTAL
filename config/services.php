@@ -125,6 +125,11 @@ return [
         // but each job holds the worker longer. 500 × 150 ≈ 75k items/run.
         'delta_page_size' => max(200, (int) env('SHAREPOINT_DELTA_PAGE_SIZE', 500)),
         'max_pages' => max(10, (int) env('SHAREPOINT_SYNC_MAX_PAGES', 150)),
+        // Wall-clock budget per run, seconds. Must sit well under the job's
+        // 1800s $timeout: the page cap bounds items, not time, and a 278k-item
+        // library blew the clock mid-chunk — burning retries and stamping
+        // "has timed out" errors while actually making progress.
+        'time_budget' => max(60, (int) env('SHAREPOINT_SYNC_TIME_BUDGET', 1200)),
     ],
 
 ];
