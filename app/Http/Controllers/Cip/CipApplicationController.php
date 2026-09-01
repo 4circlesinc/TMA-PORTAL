@@ -1633,8 +1633,12 @@ class CipApplicationController extends Controller
     private function personPhotoUrls(CipPerson $person, ?FileItem $photoFile = null): array
     {
         $photoUrl = $person->photoUrl();
+        // Revisioned like every thumbnail URL: the endpoint lets browsers
+        // cache for an hour, so a stable address kept showing the old face
+        // for an hour after a new photo was filed.
         $passportPhotoUrl = $person->photo_path
-            ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
+            ? '/portal/cip/people/'.$person->uuid.'/passport-photo?v='
+                .substr(md5($person->photo_path.'|'.($person->updated_at?->getTimestamp() ?? 0)), 0, 8)
             : null;
 
         if ($photoFile) {
