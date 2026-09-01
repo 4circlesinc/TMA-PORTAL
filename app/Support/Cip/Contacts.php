@@ -248,6 +248,21 @@ class Contacts
     }
 
     /**
+     * The provider-side people who hold portal accounts — the reach of a
+     * live signal. Staff hear every CIP write through Live::staff; without
+     * this the provider watching the same application only learned of a
+     * status move by reloading.
+     *
+     * @return list<int>
+     */
+    public static function providerUserIds(CipApplication $application): array
+    {
+        return array_values(array_unique(array_filter(
+            array_column(self::providerSide($application), 'userId'),
+        )));
+    }
+
+    /**
      * The facts every CIP notice names: number, applicant, firm, family.
      *
      * @return array{number:string, applicant:string, provider:string, familySize:int}

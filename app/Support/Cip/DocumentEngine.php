@@ -179,7 +179,7 @@ class DocumentEngine
                 'new' => ['status' => $to],
             ]);
 
-            Live::staff(Live::CIP);
+            Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
             return $document;
         });
@@ -246,7 +246,7 @@ class DocumentEngine
                 'new' => ['status' => $to],
             ]);
 
-            Live::staff(Live::CIP);
+            Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
             if ($to === DocumentStatus::UPDATE_REQUIRED) {
                 try {
@@ -325,7 +325,7 @@ class DocumentEngine
             ]);
 
             if ($broadcast) {
-                Live::staff(Live::CIP);
+                Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
             }
         });
     }

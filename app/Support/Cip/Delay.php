@@ -119,7 +119,7 @@ class Delay
             return $application->refresh();
         });
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return $application;
     }

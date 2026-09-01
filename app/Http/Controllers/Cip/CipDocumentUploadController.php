@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -68,7 +69,7 @@ class CipDocumentUploadController extends Controller
         $document = $document->fresh(['file', 'application', 'requirement']);
         $application = $document->application;
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json([
             'document' => [

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DecisionLetter;
 use App\Support\Cip\Delay;
@@ -234,7 +235,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -286,7 +287,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -321,7 +322,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -356,7 +357,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -392,7 +393,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -421,7 +422,7 @@ class CipTransitionController extends Controller
 
         // Colleagues watching the table or this application see the move
         // without reloading, the same signal every other CIP write sends.
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return $application;
     }

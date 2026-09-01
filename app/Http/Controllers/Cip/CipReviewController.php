@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Review;
@@ -103,7 +104,7 @@ class CipReviewController extends Controller
     {
         $application = $document->loadMissing('application')->application;
 
-        Live::staff(Live::CIP);
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json([
             'document' => [
