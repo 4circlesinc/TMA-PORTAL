@@ -6560,6 +6560,12 @@
       return '<p class="tma-dash__clients-appbar-note">Waiting for the service provider to confirm submission.</p>';
     }
 
+    // Confirmed: the press worked, and the bar has to say so — going blank
+    // here read as the button having done nothing.
+    if (app.status === 'apply_for_cor' && app.corLocked && !canRecordSubmission()) {
+      return '<p class="tma-dash__clients-appbar-note">COR package confirmed and locked. The firm records the submission next.</p>';
+    }
+
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
       return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-confirm>' +
         'Confirm submission</button>';
@@ -6572,6 +6578,10 @@
 
     if (app.status === 'ready_to_submit' && !app.locked && !app.canConfirm) {
       return '<p class="tma-dash__clients-appbar-note">Waiting for the service provider to confirm submission.</p>';
+    }
+
+    if (app.status === 'ready_to_submit' && app.locked && !canRecordSubmission()) {
+      return '<p class="tma-dash__clients-appbar-note">Package confirmed and locked. The firm records the submission next.</p>';
     }
 
     return '';

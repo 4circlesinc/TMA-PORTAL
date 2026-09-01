@@ -148,6 +148,26 @@ class CipConfirmationTest extends TestCase
         ]);
     }
 
+    public function test_confirming_tells_the_firm_to_record_the_submission(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = null;
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $contact = $this->contact($company, $staff);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertOk();
+
+        // The press only the provider can make lands with the people whose
+        // move is next — not only in the activity trail.
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $staff->id,
+            'type' => 'cip.package_confirmed',
+        ]);
+    }
+
     /**
      * The day the package froze is recorded, not assumed.
      *

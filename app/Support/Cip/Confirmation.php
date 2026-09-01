@@ -9,6 +9,7 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -143,6 +144,14 @@ class Confirmation
                 'subject' => $application,
             ]);
 
+            self::tellFirm(
+                $application,
+                $actor,
+                'cip.package_confirmed',
+                $application->displayNumber().' package confirmed',
+                'The service provider confirmed the submission. Record the submission to the Unit.',
+            );
+
             return $application->refresh();
         });
     }
@@ -195,8 +204,51 @@ class Confirmation
                 'subject' => $application,
             ]);
 
+            self::tellFirm(
+                $application,
+                $actor,
+                'cip.cor_package_confirmed',
+                $application->displayNumber().' COR package confirmed',
+                'The service provider confirmed the Certificate of Registration package. Record the COR submission.',
+            );
+
             return $application->refresh();
         });
+    }
+
+    /**
+     * The press only the provider side can make, told to the people whose
+     * move is next. Without this the confirmation landed in the activity
+     * trail and nowhere else — the firm found out by happening to look.
+     */
+    private static function tellFirm(
+        CipApplication $application,
+        User $actor,
+        string $type,
+        string $title,
+        string $message,
+    ): void {
+        $told = [];
+
+        foreach ([...Contacts::administrators(), ...Contacts::assignedOfficers($application)] as $recipient) {
+            $userId = $recipient['userId'] ?? null;
+
+            if ($userId === null || $userId === $actor->id || isset($told[$userId])) {
+                continue;
+            }
+            $told[$userId] = true;
+
+            Notifier::send([
+                'user' => User::find($userId),
+                'actor' => $actor,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'subject' => $application,
+                'action_url' => Contacts::path($application),
+                'dedupe_key' => $type.':'.$application->id,
+            ]);
+        }
     }
 
     /**
