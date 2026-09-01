@@ -340,6 +340,26 @@ class SocialAuthController extends Controller
 
     private function authenticate(Request $request, string $provider, OAuthUser $oauth, bool $verified): RedirectResponse
     {
+        /*
+         * The invitation is judged BEFORE any sign-in short-circuit. The
+         * provider's chooser may hand back a different account than the one
+         * the person meant — signing them into it (as an early return here
+         * once did) hijacks an invite flow into somebody else's session.
+         * With an invitation in play, a mismatched email always bounces back
+         * to the invite, whoever the mismatched account belongs to.
+         */
+        $inviteToken = (string) $request->session()->pull('social.invite', '');
+        $invitation = $inviteToken !== '' ? Invitation::findByToken($inviteToken) : null;
+        if ($invitation && ! $invitation->isAcceptable()) {
+            $invitation = null;
+        }
+
+        $oauthEmail = Str::lower((string) $oauth->getEmail());
+
+        if ($invitation && ! Str::of($oauthEmail)->exactly(Str::lower($invitation->email))) {
+            return redirect('/invite/'.$inviteToken.'?notice=social-mismatch');
+        }
+
         $account = ConnectedAccount::where('provider', $provider)
             ->where('provider_id', $oauth->getId())
             ->first();
@@ -349,9 +369,24 @@ class SocialAuthController extends Controller
             // connected accounts still resolve - but the relation is filtered
             // by the soft-delete scope and comes back null. Say what happened
             // rather than dying on it.
-            return $account->user
-                ? $this->login($request, $account->user)
-                : $this->fail($request, 'That account has been removed. Ask an administrator to restore it.');
+            if (! $account->user) {
+                return $this->fail($request, 'That account has been removed. Ask an administrator to restore it.');
+            }
+
+            if ($invitation) {
+                // The invited address already signed in with this provider:
+                // fulfil the invitation onto that account — never onto a
+                // session with a different email (guarded above), and land
+                // on the front door so every gate runs.
+                if (! Str::of(Str::lower($account->user->email))->exactly(Str::lower($invitation->email))) {
+                    return redirect('/invite/'.$inviteToken.'?notice=social-mismatch');
+                }
+                Invitations::acceptAs($invitation, $account->user);
+
+                return $this->login($request, $account->user, forceHome: true);
+            }
+
+            return $this->login($request, $account->user);
         }
 
         if (! $verified) {
@@ -374,34 +409,28 @@ class SocialAuthController extends Controller
          * An invitation carried through the round-trip: the account is
          * created the way the invite's password form creates it — company
          * membership wired, the invitation marked accepted — rather than as
-         * a generic self-registration waiting on review. The OAuth email
-         * must be the invited address; picking the wrong Google or Microsoft
-         * account bounces back to the invite to try again.
+         * a generic self-registration waiting on review. The email match was
+         * settled at the top of this method.
          */
-        $inviteToken = (string) $request->session()->pull('social.invite', '');
-        if (! $user && $inviteToken !== '') {
-            $invitation = Invitation::findByToken($inviteToken);
+        if ($invitation && $user) {
+            Invitations::acceptAs($invitation, $user);
+        }
 
-            if ($invitation && $invitation->isAcceptable() && $invitation->existingUser() === null) {
-                if (! Str::of($email)->exactly(Str::lower($invitation->email))) {
-                    return redirect('/invite/'.$inviteToken.'?notice=social-mismatch');
-                }
+        if ($invitation && ! $user) {
+            $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
+            $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $first = array_shift($parts) ?: $display;
+            $last = count($parts) ? array_pop($parts) : '';
 
-                $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
-                $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-                $first = array_shift($parts) ?: $display;
-                $last = count($parts) ? array_pop($parts) : '';
-
-                $user = Invitations::acceptAsNewUser($invitation, Str::password(32), [
-                    'first_name' => $first,
-                    'middle_name' => count($parts) ? implode(' ', $parts) : null,
-                    'last_name' => $last,
-                ]);
-                $user->forceFill([
-                    'password_auto' => true,
-                    'email_verified_at' => $user->email_verified_at ?? now(),
-                ])->save();
-            }
+            $user = Invitations::acceptAsNewUser($invitation, Str::password(32), [
+                'first_name' => $first,
+                'middle_name' => count($parts) ? implode(' ', $parts) : null,
+                'last_name' => $last,
+            ]);
+            $user->forceFill([
+                'password_auto' => true,
+                'email_verified_at' => $user->email_verified_at ?? now(),
+            ])->save();
         }
 
         if (! $user) {
@@ -451,10 +480,13 @@ class SocialAuthController extends Controller
 
         $this->rememberAvatar($user, $oauth, $provider);
 
-        return $this->login($request, $user);
+        // A fulfilled invitation or a brand-new registration lands on the
+        // front door, letting the approval, profile and onboarding gates
+        // route it — never a leftover intended URL from an older session.
+        return $this->login($request, $user, forceHome: $invitation !== null || $user->wasRecentlyCreated);
     }
 
-    private function login(Request $request, User $user): RedirectResponse
+    private function login(Request $request, User $user, bool $forceHome = false): RedirectResponse
     {
         // Respect two-factor authentication: hand off to Fortify's challenge,
         // unless this is a device the user already trusted. Remember-me is
@@ -471,6 +503,12 @@ class SocialAuthController extends Controller
 
         Auth::login($user, false);
         $request->session()->regenerate();
+
+        if ($forceHome) {
+            $request->session()->forget('url.intended');
+
+            return redirect('/');
+        }
 
         if ($redirect = StaySignedIn::afterAuthenticated($request)) {
             return $redirect;

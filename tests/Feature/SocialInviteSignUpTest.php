@@ -93,6 +93,52 @@ class SocialInviteSignUpTest extends TestCase
         $this->assertSame(Invitation::STATUS_ACCEPTED, Invitation::first()->fresh()->status);
     }
 
+    public function test_a_wrong_google_session_cannot_hijack_the_invite_into_another_account(): void
+    {
+        config(['services.google.client_id' => 'client-id']);
+        $token = $this->inviteToken('owner@acme.test');
+
+        // Somebody else's account, already linked to this Google identity —
+        // the provider's chooser handing it back must not sign them in.
+        $other = User::factory()->create([
+            'status' => 'approved', 'account_type' => 'Client', 'email' => 'vtfslu@gmail.com',
+            'email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+        ]);
+        $other->connectedAccounts()->create([
+            'provider' => 'google', 'provider_id' => 'g-1', 'email' => $other->email, 'name' => $other->name,
+        ]);
+        $this->fakeGoogleUser('vtfslu@gmail.com');
+
+        $this->get("/auth/social/google/redirect?invite={$token}");
+        $response = $this->get('/auth/social/google/callback');
+
+        $response->assertRedirect("/invite/{$token}?notice=social-mismatch");
+        $this->assertGuest();
+        $this->assertNotSame(\App\Models\Invitation::STATUS_ACCEPTED, \App\Models\Invitation::first()->status);
+    }
+
+    public function test_an_existing_linked_account_with_the_invited_email_fulfils_and_lands_home(): void
+    {
+        config(['services.google.client_id' => 'client-id']);
+        $token = $this->inviteToken('owner@acme.test');
+
+        $owner = User::factory()->create([
+            'status' => 'approved', 'account_type' => 'Client', 'email' => 'owner@acme.test',
+            'email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+        ]);
+        $owner->connectedAccounts()->create([
+            'provider' => 'google', 'provider_id' => 'g-1', 'email' => $owner->email, 'name' => $owner->name,
+        ]);
+        $this->fakeGoogleUser('owner@acme.test');
+
+        $this->get("/auth/social/google/redirect?invite={$token}");
+        $response = $this->get('/auth/social/google/callback');
+
+        $response->assertRedirect('/');
+        $this->assertAuthenticatedAs($owner);
+        $this->assertSame(Invitation::STATUS_ACCEPTED, Invitation::first()->fresh()->status);
+    }
+
     public function test_the_wrong_account_bounces_back_to_the_invite(): void
     {
         config(['services.google.client_id' => 'client-id']);
