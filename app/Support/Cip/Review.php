@@ -294,6 +294,18 @@ class Review
      */
     public static function settle(CipApplication $application, ?User $actor = null): CipApplication
     {
+        /*
+         * The pack's checklist has to exist before it is judged. A
+         * post-approval file whose slots have not materialised yet would
+         * otherwise be tallied over the untagged fallback — the pre-approval
+         * documents — and flip forward on a checklist that was never the
+         * stage's. Materialise is cheap when nothing changed: existing slots
+         * are no-ops.
+         */
+        if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            Requirements::materialiseApplication($application);
+        }
+
         self::forgetTally($application);
 
         /*

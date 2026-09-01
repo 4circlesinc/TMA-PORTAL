@@ -961,6 +961,51 @@ class CipPostApprovalTest extends TestCase
         $this->assertNull($application->fresh()->cor_submitted_at);
     }
 
+    public function test_a_submission_stage_refuses_while_required_documents_are_not_ready(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_SUBMITTED, 'date' => '2026-08-20',
+            ])->assertOk();
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_RECEIVED, 'date' => '2026-08-21',
+            ])->assertOk();
+
+        $application = $application->fresh();
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->status);
+
+        // The NIC checklist materialised on arrival and stands pending, so
+        // the file may NOT move on: required documents come first.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::NIC_SUBMITTED, 'date' => '2026-08-22',
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+        $this->assertNull($application->fresh()->nic_submitted_at);
+
+        // Uploaded and marked ready, the same stage records cleanly.
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::NIC_SUBMITTED, 'date' => '2026-08-22',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::PENDING_NIC);
+    }
+
     public function test_the_remaining_post_approval_dates_walk_the_file_to_closed(): void
     {
         $staff = $this->staff();
@@ -987,6 +1032,14 @@ class CipPostApprovalTest extends TestCase
 
         foreach ($hops as [$stage, $status, $subject, $dateKey]) {
             Mail::fake();
+
+            // A *_submitted stage hands the current pack to the Unit and
+            // refuses while its required documents are not ready — file and
+            // approve the pack the file is now collecting before sending it.
+            if (in_array($stage, [Stages::NIC_SUBMITTED, Stages::PASSPORT_SUBMITTED], true)) {
+                $this->fileRequiredCor($application->fresh(['people']), $staff);
+                $this->approveRequiredCor($application->fresh(), $staff);
+            }
 
             $body = $this->actingAs($staff)
                 ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
@@ -1384,6 +1437,11 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame(Stages::NIC_SUBMITTED, $ready['stageAction']['key']);
         $this->assertSame('Record NIC submission', $ready['stageAction']['label']);
 
+        // Sending the pack requires the pack: every required NIC document
+        // stands ready before the stage will record.
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
+
         $recorded = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::NIC_SUBMITTED,
@@ -1614,6 +1672,10 @@ class CipPostApprovalTest extends TestCase
 
         $this->assertSame(Stages::PASSPORT_SUBMITTED, $ready['stageAction']['key']);
         $this->assertSame('Record passport application', $ready['stageAction']['label']);
+
+        // The same rule as NIC: the passport pack has to be ready to go.
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
 
         $recorded = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [

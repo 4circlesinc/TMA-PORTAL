@@ -226,6 +226,21 @@ class Stages
             );
         }
 
+        /*
+         * Sending a pack to the Unit requires the pack. Each *_submitted step
+         * hands over the current stage's documents, so every required slot in
+         * that pack has to stand at Ready for submission first. Outstanding,
+         * not complete: a pack the administrators have written no
+         * requirements for owes nothing and may move — the refusal is for
+         * required documents that exist and are not ready.
+         */
+        if (in_array($key, [self::COR_SUBMITTED, self::NIC_SUBMITTED, self::PASSPORT_SUBMITTED], true)
+            && Review::progress($application)['outstanding'] > 0) {
+            throw new \InvalidArgumentException(
+                'Every required document must be ready for submission before this stage can be recorded.',
+            );
+        }
+
         $date ??= Carbon::now();
         $already = $application->status === $step['to'];
 
