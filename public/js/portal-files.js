@@ -3689,7 +3689,21 @@
       if (input && e.draft) input.value = e.draft;
     }
 
+    /*
+     * One comment write at a time. The send buttons give no feedback while
+     * the request crosses the wire, and on a slow round trip a second press
+     * posted the same words twice — the server absorbs resends now, but the
+     * first press should be the only one that leaves the browser at all.
+     */
+    var commentInFlight = false;
+
+    function commentButtonsBusy(busy) {
+      lb.querySelectorAll('[data-lb-send], [data-lb-replysend], [data-lb-editsave]')
+        .forEach(function (b) { b.disabled = busy; });
+    }
+
     function sendComment() {
+      if (commentInFlight) return;
       var f = current();
       var e = entry(f);
       var input = lb.querySelector('[data-lb-input]');
@@ -3712,11 +3726,14 @@
       e.composerOpen = false;
       clearAnchorOverlay();
 
+      commentInFlight = true;
+      commentButtonsBusy(true);
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
         method: 'POST',
         json: { body: body, mentions: mentions.map(function (m) { return m.id; }), anchor: anchor },
       })
         .then(function () {
+          commentInFlight = false;
           e.comments = null;
           // The whole column, not just the feed: the composer has to leave
           // the screen with the words it delivered.
@@ -3725,6 +3742,8 @@
           else loadComments(f);
         })
         .catch(function (err) {
+          commentInFlight = false;
+          commentButtonsBusy(false);
           // Give the words back rather than losing them to a failed request.
           e.draft = body;
           e.pendingAnchor = anchor;
@@ -3736,6 +3755,7 @@
     }
 
     function sendReply(threadId) {
+      if (commentInFlight) return;
       var f = current();
       var e = entry(f);
       var input = lb.querySelector('[data-lb-replyinput]');
@@ -3749,15 +3769,22 @@
       });
       e.pendingMentions = [];
 
+      commentInFlight = true;
+      commentButtonsBusy(true);
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
         method: 'POST',
         json: { body: body, parent: threadId, mentions: mentions.map(function (m) { return m.id; }) },
       })
-        .then(function () { e.replyingTo = null; e.comments = null; loadComments(f); })
-        .catch(function (err) { ui().toast((err && err.message) || 'Could not post that reply'); });
+        .then(function () { commentInFlight = false; e.replyingTo = null; e.comments = null; loadComments(f); })
+        .catch(function (err) {
+          commentInFlight = false;
+          commentButtonsBusy(false);
+          ui().toast((err && err.message) || 'Could not post that reply');
+        });
     }
 
     function saveEdit(commentId) {
+      if (commentInFlight) return;
       var f = current();
       var e = entry(f);
       var input = lb.querySelector('[data-lb-editinput]');
@@ -3765,11 +3792,17 @@
       var body = input.value.trim();
       if (!body) return;
 
+      commentInFlight = true;
+      commentButtonsBusy(true);
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments/' + encodeURIComponent(commentId)), {
         method: 'PATCH', json: { body: body },
       })
-        .then(function () { e.editing = null; e.comments = null; loadComments(f); })
-        .catch(function (err) { ui().toast((err && err.message) || 'Could not save that edit'); });
+        .then(function () { commentInFlight = false; e.editing = null; e.comments = null; loadComments(f); })
+        .catch(function (err) {
+          commentInFlight = false;
+          commentButtonsBusy(false);
+          ui().toast((err && err.message) || 'Could not save that edit');
+        });
     }
 
     function deleteComment(commentId) {

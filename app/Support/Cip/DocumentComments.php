@@ -70,6 +70,26 @@ class DocumentComments
         string $body,
         ?CipDocumentComment $parent = null,
     ): CipDocumentComment {
+        $body = trim($body);
+
+        // The same absorb as Files\Comments::create — a send button pressed
+        // again while the first request is still on the wire is a resend of
+        // one comment, not a second comment.
+        $resent = CipDocumentComment::where('document_id', $document->id)
+            ->where('author_id', $author->id)
+            ->when($parent,
+                fn ($q) => $q->where('parent_id', $parent->id),
+                fn ($q) => $q->whereNull('parent_id'))
+            ->where('body', $body)
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->whereNull('deleted_at')
+            ->latest('id')
+            ->first();
+
+        if ($resent) {
+            return $resent;
+        }
+
         return DB::transaction(function () use ($document, $author, $body, $parent) {
             /*
              * A reply to a reply belongs to the same conversation as the one

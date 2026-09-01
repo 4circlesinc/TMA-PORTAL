@@ -266,6 +266,38 @@ class FileCommentTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_resend_of_the_same_reply_is_absorbed_into_one_comment(): void
+    {
+        $user = $this->user();
+        $file = $this->file($user);
+
+        $root = $this->actingAs($user)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Question about clause 4.'])
+            ->json('id');
+
+        // The send button pressed twice while the first request was still on
+        // the wire: the second POST must come back as the same comment, not a
+        // duplicate in the thread.
+        $first = $this->actingAs($user)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Cool', 'parent' => $root])
+            ->assertCreated()->json('id');
+        $second = $this->actingAs($user)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Cool', 'parent' => $root])
+            ->assertCreated()->json('id');
+
+        $this->assertSame($first, $second);
+
+        $res = $this->actingAs($user)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+        $this->assertCount(1, $res->json('threads.0.replies'));
+
+        // Different words a moment later are a new comment, as ever.
+        $this->actingAs($user)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'And one more thing', 'parent' => $root])
+            ->assertCreated();
+        $res = $this->actingAs($user)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+        $this->assertCount(2, $res->json('threads.0.replies'));
+    }
+
     public function test_replies_thread_one_level_deep(): void
     {
         $admin = $this->user();

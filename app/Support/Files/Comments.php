@@ -57,6 +57,28 @@ class Comments
     ): FileComment {
         $body = trim($body);
 
+        /*
+         * The same words from the same person in the same place, seconds
+         * apart, are one comment pressed twice — a send button clicked again
+         * while the first request was still crossing the wire — not two
+         * comments. Absorb the resend into the row it duplicates, whatever
+         * client it came from; the caller gets a comment back either way.
+         */
+        $resent = FileComment::where('file_id', $file->id)
+            ->where('author_id', $author->id)
+            ->when($parent,
+                fn ($q) => $q->where('parent_id', $parent->id),
+                fn ($q) => $q->whereNull('parent_id'))
+            ->where('body', $body)
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->whereNull('deleted_at')
+            ->latest('id')
+            ->first();
+
+        if ($resent) {
+            return $resent;
+        }
+
         $comment = DB::transaction(function () use ($file, $author, $body, $parent, $mentionIds, $anchor) {
             $stamp = ContactIdentity::stamp($author, ContactIdentity::companyIdForFile($file));
 

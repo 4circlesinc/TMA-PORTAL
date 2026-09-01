@@ -91,6 +91,29 @@ class CipDocumentCommentTest extends TestCase
         $this->assertSame(1, $thread[0]['repliesCount']);
     }
 
+    public function test_a_resend_of_the_same_reply_is_absorbed_into_one_comment(): void
+    {
+        $staff = $this->user('Administrator', 'ada@example.com');
+        $slot = $this->slot($staff);
+
+        $root = $this->actingAs($staff)->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+            'body' => 'Cut off.',
+        ])->json();
+
+        $first = $this->actingAs($staff)->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+            'body' => 'Sent again.', 'parent' => $root['id'],
+        ])->json('id');
+        $second = $this->actingAs($staff)->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+            'body' => 'Sent again.', 'parent' => $root['id'],
+        ])->json('id');
+
+        $this->assertSame($first, $second);
+
+        $thread = $this->actingAs($staff)
+            ->getJson('/portal/cip/documents/'.$slot->uuid.'/comments')->json('comments');
+        $this->assertCount(1, $thread[0]['replies']);
+    }
+
     public function test_a_reply_to_a_reply_stays_in_the_same_conversation(): void
     {
         $staff = $this->user('Administrator', 'ada@example.com');

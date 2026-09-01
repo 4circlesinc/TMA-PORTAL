@@ -761,6 +761,9 @@
   }
 
   function wfSendReply(id) {
+    // A second press while the first reply is still on the wire is the same
+    // reply, not another one.
+    if (wf.replySending) return;
     var c = wfRecord(id);
     if (!c || !c.file) return;
 
@@ -769,6 +772,10 @@
 
     if (!body) { ui().toastError('Write something first.'); return; }
 
+    wf.replySending = true;
+    var btn = wf.el.querySelector('[data-wfh-reply-send="' + CSS.escape(id) + '"]');
+    if (btn) btn.disabled = true;
+
     net().fetchJSON(net().url('/files/' + encodeURIComponent(c.file.id) + '/comments'), {
       method: 'POST',
       // The thread, not the comment: replies are one level deep, so answering
@@ -776,11 +783,16 @@
       json: { body: body, parent: c.threadId || c.id },
     })
       .then(function () {
+        wf.replySending = false;
         wf.replyingTo = null;
         ui().toast('Reply posted');
         loadWorkflows();
       })
-      .catch(function (err) { ui().toastError((err && err.message) || 'Could not post that reply.'); });
+      .catch(function (err) {
+        wf.replySending = false;
+        if (btn) btn.disabled = false;
+        ui().toastError((err && err.message) || 'Could not post that reply.');
+      });
   }
 
   function wfResolve(id, resolved) {
