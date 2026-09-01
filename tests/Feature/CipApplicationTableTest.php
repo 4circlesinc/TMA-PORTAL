@@ -473,6 +473,38 @@ class CipApplicationTableTest extends TestCase
         );
     }
 
+    public function test_a_closed_file_lives_on_the_closed_tab_not_the_lane(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $open = $this->application($staff, $provider, 0, false);
+        $open->forceFill(['phase' => Phase::POST_APPROVAL, 'post_approval_at' => now()])->save();
+        $closed = $this->application($staff, $provider, 0, false);
+        $closed->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'status' => Status::CLOSED,
+        ])->save();
+
+        // The lane tab lists work in flight.
+        $lane = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=post_approval')
+            ->assertOk()->json();
+        $this->assertCount(1, $lane['applications']);
+        $this->assertSame($open->uuid, $lane['applications'][0]['id']);
+
+        // The archive holds the finished, and the badges split the same way.
+        $archive = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=closed')
+            ->assertOk()->json();
+        $this->assertCount(1, $archive['applications']);
+        $this->assertSame($closed->uuid, $archive['applications'][0]['id']);
+        $this->assertSame(1, $archive['phaseCounts']['post_approval']);
+        $this->assertSame(1, $archive['phaseCounts']['closed']);
+        $this->assertSame(2, $archive['phaseCounts']['all']);
+    }
+
     public function test_phase_filter_narrows_to_pre_approval(): void
     {
         $staff = $this->staff();

@@ -375,8 +375,18 @@ class CipApplicationController extends Controller
             $query->where('status', $data['status']);
         }
 
-        if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
-            $query->where('phase', $data['phase']);
+        if (! empty($data['phase'])) {
+            if ($data['phase'] === 'closed') {
+                // The archive tab: finished files, whatever lane closed them.
+                $query->where('status', Status::CLOSED);
+            } elseif (Phase::isValid($data['phase'])) {
+                $query->where('phase', $data['phase']);
+
+                // The lane tabs list work in flight; Closed holds the rest.
+                if ($data['phase'] === Phase::POST_APPROVAL) {
+                    $query->where('status', '!=', Status::CLOSED);
+                }
+            }
         }
 
         /*
@@ -490,13 +500,21 @@ class CipApplicationController extends Controller
             ->groupBy('phase')
             ->pluck('aggregate', 'phase');
 
+        // Its own count and its own tab: a closed file is phase post-approval
+        // in the column but archive to the reader, so the lane badge excludes
+        // it and the Closed badge carries it.
+        $closed = (int) ApplicationScope::query($user)
+            ->where('status', Status::CLOSED)
+            ->count();
+
         $pre = (int) ($counts[Phase::PRE_APPROVAL] ?? 0);
         $post = (int) ($counts[Phase::POST_APPROVAL] ?? 0);
 
         return [
             'all' => $pre + $post,
             'pre_approval' => $pre,
-            'post_approval' => $post,
+            'post_approval' => max(0, $post - $closed),
+            'closed' => $closed,
         ];
     }
 

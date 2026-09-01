@@ -173,6 +173,7 @@
     { id: 'all_applications', label: 'All Applications' },
     { id: 'pre_approval', label: 'Pre-Approval Applications' },
     { id: 'post_approval', label: 'Post-Approval Applications' },
+    { id: 'closed', label: 'Closed' },
     { id: 'providers', label: 'Service providers' },
     { id: 'people', label: 'Provider contacts' },
   ];
@@ -203,7 +204,8 @@
       return LIST_TABS.filter(function (tab) {
         return tab.id === 'all_applications'
           || tab.id === 'pre_approval'
-          || tab.id === 'post_approval';
+          || tab.id === 'post_approval'
+          || tab.id === 'closed';
       });
     }
 
@@ -248,7 +250,8 @@
   function onApplicationsTable(state) {
     if (!state || state.screen !== 'list') return false;
     var tab = listTabOf(state);
-    return tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval';
+    return tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval'
+      || tab === 'closed';
   }
 
   /** Which workflow lane the current application tab filters to, if any. */
@@ -256,6 +259,8 @@
     var tab = listTabOf(state);
     if (tab === 'pre_approval') return 'pre_approval';
     if (tab === 'post_approval') return 'post_approval';
+    // Not a lane: the server reads 'closed' as status = closed, the archive.
+    if (tab === 'closed') return 'closed';
     return null;
   }
 
@@ -281,6 +286,7 @@
     if (tab.id === 'all_applications') return 'all';
     if (tab.id === 'pre_approval') return 'pre_approval';
     if (tab.id === 'post_approval') return 'post_approval';
+    if (tab.id === 'closed') return 'closed';
     return null;
   }
 
@@ -2736,7 +2742,7 @@
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
     assignees: [], providers: [], statuses: [], personStatuses: [],
-    phaseCounts: { all: 0, pre_approval: 0, post_approval: 0 },
+    phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, closed: 0 },
     expanded: {},
   };
 
