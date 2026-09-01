@@ -10708,7 +10708,14 @@
 
     clientsFetch(url, body)
       .then(function (json) {
-        clientsToast('Moved to ' + (label || 'the next status'), 'positive');
+        // Name both ends of the move: a file pulled out of Approved should
+        // say so, not read like an ordinary step forward.
+        clientsToast(
+          previous && previous.statusLabel
+            ? 'Moved from ' + previous.statusLabel + ' to ' + (label || 'the next status')
+            : 'Moved to ' + (label || 'the next status'),
+          'positive'
+        );
         if (clientUid && json && json.application) {
           paintCipApplicationStatus(clientUid, json.application.status, json.application);
         }
@@ -10776,6 +10783,8 @@
             body.note = reason;
           }
 
+          var fromLabel = (applicationFor(clientUid) || {}).statusLabel;
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
@@ -10787,7 +10796,9 @@
               var folder = res && res.application && res.application.additionalDocumentsFolder;
               queueFolderOpen(folder, 'Additional Documents');
               ui.closeModal();
-              clientsToast('Query recorded. Upload the response in Additional Documents.', 'positive');
+              clientsToast(override && fromLabel
+                ? 'Pulled from ' + fromLabel + ' to Non-compliant, query recorded.'
+                : 'Query recorded. Upload the response in Additional Documents.', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {
@@ -10927,6 +10938,8 @@
             body.note = reason;
           }
 
+          var fromLabel = (applicationFor(clientUid) || {}).statusLabel;
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
@@ -10936,7 +10949,9 @@
           })
             .then(function () {
               ui.closeModal();
-              clientsToast('Accepted for processing, the file is in background check.', 'positive');
+              clientsToast(override && fromLabel
+                ? 'Pulled from ' + fromLabel + ' to Background check, acceptance recorded.'
+                : 'Accepted for processing, the file is in background check.', 'positive');
               refreshAfterCipMove(clientUid);
             })
             .catch(function (err) {

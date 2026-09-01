@@ -404,7 +404,7 @@ class Engine
                 'type' => 'cip.status_changed',
                 'module' => 'cip',
                 'description' => ! empty($meta['override'])
-                    ? $application->displayNumber().' status overridden to '.Status::label($to)
+                    ? $application->displayNumber().' pulled from '.Status::label($from).' to '.Status::label($to)
                     : $application->displayNumber().' moved to '.Status::label($to),
                 'subject' => $application,
                 'old' => ['status' => $from],
