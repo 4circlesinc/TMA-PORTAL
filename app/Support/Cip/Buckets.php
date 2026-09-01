@@ -153,6 +153,30 @@ class Buckets
             'statuses' => [Status::GRANTED],
             'scope' => self::SCOPE_ALL,
         ],
+        /*
+         * The whole post-approval lane as one block: COR, NIC and passport
+         * stages are steps of one journey, and ten more chips would say less
+         * than one saying how many files are on it. CLOSED is deliberately
+         * not here — a closed file is finished, and a "waiting" count that
+         * never goes down teaches people to stop reading it.
+         */
+        'post_approval' => [
+            'label' => 'Post-Approval',
+            // 'Post-Approval' is 13 characters and the legend column holds
+            // 12 — see the short-name test for why that budget exists.
+            'short' => 'Post-Grant',
+            'statuses' => [
+                Status::POST_APPROVAL,
+                Status::APPLY_FOR_COR,
+                Status::PENDING_COR,
+                Status::APPLY_FOR_NIC,
+                Status::PENDING_NIC,
+                Status::APPLY_FOR_PASSPORT,
+                Status::PENDING_PASSPORT,
+                Status::READY_FOR_DELIVERY,
+            ],
+            'scope' => self::SCOPE_ALL,
+        ],
         'denied' => [
             'label' => 'Denied',
             'short' => 'Denied',
@@ -205,7 +229,7 @@ class Buckets
         self::ADMINISTRATOR => [
             'new', 'review_application', 'assessment_feedback', 'update_required',
             'ready_to_submit', 'pending_review', 'background_check', 'delayed',
-            'approved', 'denied',
+            'approved', 'post_approval', 'denied',
         ],
         self::REVIEWING_OFFICER => [
             'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
@@ -213,7 +237,7 @@ class Buckets
         ],
         self::SERVICE_PROVIDER => [
             'update_required', 'ready_to_submit', 'pending_review', 'delayed',
-            'approved', 'denied',
+            'approved', 'post_approval', 'denied',
         ],
     ];
 

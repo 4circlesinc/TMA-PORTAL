@@ -171,7 +171,7 @@ class CipBucketTest extends TestCase
         return $account;
     }
 
-    public function test_the_administrator_dashboard_is_section_9s_ten_buckets(): void
+    public function test_the_administrator_dashboard_is_section_9s_buckets_plus_the_post_approval_lane(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
 
@@ -181,7 +181,8 @@ class CipBucketTest extends TestCase
         $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
         $this->assertSame([
             'New Applications', 'Review Applications', 'Assessment Feedback', 'Updates Required',
-            'Ready to Submit', 'Pending Review', 'Background Check', 'Delayed', 'Approved', 'Denied',
+            'Ready to Submit', 'Pending Review', 'Background Check', 'Delayed', 'Approved',
+            'Post-Approval', 'Denied',
         ], array_column($body['buckets'], 'label'), 'The order is §9’s, not a renderer’s choice.');
     }
 
@@ -222,7 +223,7 @@ class CipBucketTest extends TestCase
         );
     }
 
-    public function test_the_service_provider_dashboard_is_the_applicant_facing_six(): void
+    public function test_the_service_provider_dashboard_is_the_applicant_facing_seven(): void
     {
         [, $contact] = $this->providerWithContact('GAL');
 
@@ -230,13 +231,14 @@ class CipBucketTest extends TestCase
 
         $this->assertSame(Buckets::SERVICE_PROVIDER, $body['dashboard']);
         $this->assertSame([
-            'Updates Required', 'Ready to Submit', 'Pending Review', 'Delayed', 'Approved', 'Denied',
+            'Updates Required', 'Ready to Submit', 'Pending Review', 'Delayed', 'Approved',
+            'Post-Approval', 'Denied',
         ], array_column($body['buckets'], 'label'));
 
         // A provider firm has no queue of its own — what it sees is its whole
         // book, which ApplicationScope has already narrowed to its own files.
         $this->assertSame(
-            array_fill(0, 6, Buckets::SCOPE_ALL),
+            array_fill(0, 7, Buckets::SCOPE_ALL),
             array_column($body['buckets'], 'scope'),
         );
     }
@@ -727,7 +729,7 @@ class CipBucketTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->assertCount(10, $buckets);
-        $this->assertCount(1, $queries, 'Ten buckets are one grouped count, not ten questions.');
+        $this->assertCount(11, $buckets);
+        $this->assertCount(1, $queries, 'Eleven buckets are one grouped count, not eleven questions.');
     }
 }
