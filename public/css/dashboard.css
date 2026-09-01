@@ -19782,7 +19782,16 @@ button.tma-file-status-chip:focus-visible,
 }
 
 .tma-dash__clients-field--stacked .tma-dash__clients-field-label {
-  justify-content: flex-start;
+  /* Block, not inline-flex: flex drops the spaces around the inline
+     override-word span, printing "TypeOVERRIDEto confirm". */
+  display: block;
+  text-align: left;
+}
+
+/* The word itself carries the weight of the move. */
+.tma-dash__clients-override-word {
+  color: var(--color-danger, #d92d20);
+  font-weight: 600;
 }
 
 .tma-dash__clients-field-label img {
