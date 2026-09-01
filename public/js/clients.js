@@ -10535,11 +10535,11 @@
   var CIP_OVERRIDE_WORD = 'OVERRIDE';
 
   function cipOverrideFieldsHtml() {
-    return '<div class="tma-dash__clients-field">' +
+    return '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
       '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
       '</div>' +
-      '<div class="tma-dash__clients-field">' +
+      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="cip-override-word">Type ' + CIP_OVERRIDE_WORD + ' to confirm</label>' +
       '<input type="text" id="cip-override-word" class="tma-dash__clients-field-input" data-cip-override-word autocomplete="off" spellcheck="false" placeholder="' + CIP_OVERRIDE_WORD + '">' +
       '</div>';

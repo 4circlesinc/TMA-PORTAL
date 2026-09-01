@@ -19774,6 +19774,17 @@ button.tma-file-status-chip:focus-visible,
   flex-shrink: 0;
 }
 
+/* Label above the control, left aligned — the admin-override strip. */
+.tma-dash__clients-field--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.tma-dash__clients-field--stacked .tma-dash__clients-field-label {
+  justify-content: flex-start;
+}
+
 .tma-dash__clients-field-label img {
   width: 16px;
   height: 16px;
