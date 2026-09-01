@@ -23,7 +23,6 @@ use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipDocumentUploadController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
-use App\Http\Controllers\Cip\CipMergeController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
@@ -536,14 +535,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/letters/{uuid}', [CipLetterController::class, 'update'])->name('letters.update');
         Route::post('/letters/{uuid}/restore', [CipLetterController::class, 'restore'])
             ->name('letters.restore');
-
-        /*
-         * Mail merge: a Word template with {{shortcodes}} filled from one
-         * application and filed with it (as PDF when Graph can convert).
-         */
-        Route::get('/merge-templates', [CipMergeController::class, 'templates'])->name('merge.templates');
-        Route::post('/applications/{uuid}/generate-document', [CipMergeController::class, 'generate'])
-            ->name('merge.generate');
 
         /*
          * §22: the CIP Distribution Group. Membership is edited on People →

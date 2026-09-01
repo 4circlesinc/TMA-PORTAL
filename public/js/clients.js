@@ -6537,24 +6537,9 @@
     if (postApproval) parts.push(postApproval);
     var stage = renderStageAction(app);
     if (stage) parts.push(stage);
-    var merge = renderMergeAction();
-    if (merge) parts.push(merge);
     if (!parts.length) return '';
 
     return '<div class="tma-dash__clients-appbar">' + parts.join('') + '</div>';
-  }
-
-  /*
-   * Mail merge: a Word template with {{shortcodes}} filled from this
-   * application. Staff only; the verb never moves the file, so it stays
-   * outlined whatever the status.
-   */
-  function renderMergeAction() {
-    var me = window.TMACurrentUser && window.TMACurrentUser.get();
-    if (!me || !(me.isAdmin || me.isStaff)) return '';
-
-    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-merge>' +
-      'Generate document</button>';
   }
 
   /*
@@ -10987,83 +10972,6 @@
     });
   }
 
-  /*
-   * Mail merge from a Word template. The list is every .docx the reader can
-   * see in the File Library; the shortcodes are the letter placeholders, so
-   * {{provider}}, {{applicant}}, {{number}} mean the same thing everywhere.
-   */
-  function openMergeDialog(applicationId, clientUid) {
-    var ui = window.TMAPortalUI;
-    if (!ui || !ui.openModal) return;
-
-    clientsFetch('/portal/cip/merge-templates')
-      .then(function (json) {
-        var templates = (json && json.templates) || [];
-        var codes = ((json && json.placeholders) || []).map(function (p) {
-          return '{{' + p.token + '}}';
-        }).join(' ');
-
-        if (!templates.length) {
-          clientsToast('Upload a Word (.docx) template with shortcodes to the File Library first.', 'neutral');
-
-          return;
-        }
-
-        ui.openModal({
-          title: 'Generate document',
-          body:
-            '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-            '<label class="tma-dash__clients-field-label" for="cip-merge-tpl">Word template</label>' +
-            '<select id="cip-merge-tpl" class="tma-dash__clients-field-input" data-cip-merge-tpl>' +
-            templates.map(function (t) {
-              return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>';
-            }).join('') +
-            '</select>' +
-            '</div>' +
-            '<p class="tma-portal-modal__text">Shortcodes are filled from this application: ' + esc(codes) + '</p>' +
-            '<div class="tma-portal-modal__foot">' +
-            '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-merge-cancel>Cancel</button>' +
-            '<button type="button" class="tma-no-data__btn" data-cip-merge-go>Generate</button>' +
-            '</div>',
-          onMount: function (el) {
-            var cancel = el.querySelector('[data-cip-merge-cancel]');
-            if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
-
-            var go = el.querySelector('[data-cip-merge-go]');
-            if (!go) return;
-
-            go.addEventListener('click', function () {
-              var pick = el.querySelector('[data-cip-merge-tpl]');
-              if (!pick || !pick.value) return;
-
-              go.disabled = true;
-              go.textContent = 'Generating…';
-
-              clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/generate-document', {
-                method: 'POST',
-                json: { file: pick.value },
-              })
-                .then(function (res) {
-                  ui.closeModal();
-                  clientsToast(res && res.converted
-                    ? 'Document generated and filed in Additional Documents.'
-                    : 'Merged Word file filed in Additional Documents.', 'positive');
-                  refreshAfterCipMove(clientUid);
-                })
-                .catch(function (err) {
-                  go.disabled = false;
-                  go.textContent = 'Generate';
-                  clientsToast((err && err.message) || 'Could not generate that document.', 'negative');
-                });
-            });
-          },
-        });
-      })
-      .catch(function (err) {
-        clientsToast((err && err.message) || 'Could not load the templates.', 'negative');
-      });
-  }
-
   /** Does the payload offer this reader any admin override at all? */
   function cipViewerMayOverride(clientUid) {
     var app = applicationFor(clientUid);
@@ -13001,14 +12909,6 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openAcceptanceDialog(app.id, app.clientUid);
-      });
-    });
-
-    MORPH.unwired(root, '[data-cip-merge]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        var app = applicationFor(state.selectedId);
-        if (!app) return;
-        openMergeDialog(app.id, app.clientUid);
       });
     });
 
