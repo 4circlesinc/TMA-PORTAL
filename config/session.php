@@ -18,7 +18,18 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    /*
+     * Never the cookie driver. Laravel Cloud injects SESSION_DRIVER=cookie
+     * into environments that don't set their own, and a cookie session
+     * cannot be revoked: the browser holds the whole session, every response
+     * re-issues it, so sign-out is undone by the next Live/presence poll and
+     * the security page's device list has no rows to show. Sessions must live
+     * in the database for logout, "sign out other devices", and the sessions
+     * list to mean anything.
+     */
+    'driver' => env('SESSION_DRIVER', 'database') === 'cookie'
+        ? 'database'
+        : env('SESSION_DRIVER', 'database'),
 
     /*
     |--------------------------------------------------------------------------
