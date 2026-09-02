@@ -1730,7 +1730,7 @@
 
     // Live rows drag to reorder; retired rows keep their seat at the bottom.
     var drag = (canEdit && !r.retired)
-      ? ' draggable="true" data-cipdoc-row="' + ui().esc(r.id) + '"'
+      ? ' data-cipdoc-row="' + ui().esc(r.id) + '"'
       : '';
 
     return '<tr' + drag + '>' +
@@ -1964,66 +1964,190 @@
       });
 
       /*
-       * Drag to reorder, one binding per type's table so a row can never be
-       * dropped into another person's checklist. The row moves live under
-       * the pointer (the same pattern as the Folder Shortcuts sidebar) and
-       * the order is saved once, on release. Retired rows carry no
-       * data-cipdoc-row, so they are neither draggable nor a drop target,
-       * and the tail of the list stays theirs.
+       * Drag to reorder — pointer-driven, not HTML5 drag-and-drop.
+       *
+       * The native drag ghost is an OS-composited snapshot that trails the
+       * cursor, and re-inserting the row on every dragover made the list
+       * jump a whole slot at a time. Here the row itself rides the pointer
+       * on a transform, the rows it passes glide aside on eased transforms
+       * of their own, and the DOM is reordered exactly once, on release —
+       * the order saved is the same persistOrder the carets use.
+       *
+       * One binding per type's table so a row can never be dropped into
+       * another person's checklist. Retired rows carry no data-cipdoc-row,
+       * so they neither drag nor make way, and the tail stays theirs.
+       * A mouse picks a row up anywhere that is not a control; touch and
+       * pen must use the grip, so a finger can still scroll the page.
        */
       el.querySelectorAll('.tma-portal-table--cipdocs tbody').forEach(function (body) {
-        var dragged = null;
+        body.addEventListener('pointerdown', function (down) {
+          if (down.button !== 0) return;
+          var row = down.target && down.target.closest ? down.target.closest('[data-cipdoc-row]') : null;
+          if (!row || row.parentNode !== body || body.classList.contains('is-row-drag')) return;
+          if (down.target.closest('button, input, a, select, textarea')) return;
+          if (down.pointerType !== 'mouse' && !down.target.closest('.tma-portal-icon-btn--grip')) return;
 
-        function rowFrom(target) {
-          var row = target && target.closest ? target.closest('[data-cipdoc-row]') : null;
-          return row && row.parentNode === body ? row : null;
-        }
+          var scroller = body.closest('.tma-portal-admin__content')
+            || body.closest('.tma-dash__main')
+            || document.scrollingElement;
+          var startScroll = scroller.scrollTop;
+          var pointerY = down.clientY;
+          var active = false;
+          var raf = 0;
+          var others = [];
+          var dragH = 0;
+          var startCenter = 0;
+          var minDy = 0;
+          var maxDy = 0;
 
-        body.addEventListener('dragstart', function (e) {
-          var row = rowFrom(e.target);
-          if (!row) return;
-          dragged = row;
-          row.classList.add('is-dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          // Firefox won't start a drag without data on the transfer.
-          try { e.dataTransfer.setData('text/plain', row.getAttribute('data-cipdoc-row')); } catch (err) {}
-        });
+          /*
+           * Geometry is taken once, at pick-up, in scroller space so a
+           * mid-drag edge-scroll does not move the goalposts. Every later
+           * frame is transforms only — no reads, no layout.
+           */
+          function engage() {
+            active = true;
+            var scrollTop = scroller.scrollTop;
+            body.querySelectorAll('[data-cipdoc-row]').forEach(function (r) {
+              var box = r.getBoundingClientRect();
+              var center = box.top + box.height / 2 + scrollTop;
+              if (r === row) { dragH = box.height; startCenter = center; return; }
+              others.push({ el: r, center: center, height: box.height, above: false, shift: 0 });
+            });
+            others.forEach(function (o) { o.above = o.center < startCenter; });
+            minDy = 0;
+            maxDy = 0;
+            others.forEach(function (o) {
+              minDy = Math.min(minDy, o.center - startCenter);
+              maxDy = Math.max(maxDy, o.center - startCenter);
+            });
+            // Half a row of slack, so the last centre line can be crossed.
+            minDy -= dragH / 2;
+            maxDy += dragH / 2;
+            body.classList.add('is-row-drag');
+            row.classList.add('is-dragging');
+            document.body.classList.add('tma-cipdoc-dragging');
+            try { row.setPointerCapture(down.pointerId); } catch (err) {}
+            raf = requestAnimationFrame(loop);
+          }
 
-        body.addEventListener('dragover', function (e) {
-          if (!dragged) return;
-          var row = rowFrom(e.target);
-          if (!row || row === dragged) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          var box = row.getBoundingClientRect();
-          var after = e.clientY > box.top + box.height / 2;
-          body.insertBefore(dragged, after ? row.nextSibling : row);
-        });
+          function loop() {
+            if (!active) return;
 
-        body.addEventListener('drop', function (e) { if (dragged) e.preventDefault(); });
+            // Ride the pane's edges and a long list keeps coming.
+            var edge = scroller.getBoundingClientRect();
+            if (pointerY < edge.top + 56) {
+              scroller.scrollTop -= Math.min(18, (edge.top + 56 - pointerY) / 3);
+            } else if (pointerY > edge.bottom - 56) {
+              scroller.scrollTop += Math.min(18, (pointerY - (edge.bottom - 56)) / 3);
+            }
 
-        body.addEventListener('dragend', function () {
-          if (!dragged) return;
-          dragged.classList.remove('is-dragging');
-          var id = dragged.getAttribute('data-cipdoc-row');
-          dragged = null;
+            var dy = (pointerY - down.clientY) + (scroller.scrollTop - startScroll);
+            dy = Math.max(minDy, Math.min(maxDy, dy));
+            var center = startCenter + dy;
 
-          var f = req(id);
-          if (!f) return;
-          var live = Array.prototype.map.call(
-            body.querySelectorAll('[data-cipdoc-row]'),
-            function (row) { return row.getAttribute('data-cipdoc-row'); },
-          );
+            /*
+             * A neighbour makes way the moment the dragged row's centre
+             * crosses its resting centre — resting, not shifted, so the
+             * comparison never chases its own effect and the row cannot
+             * flap between two slots under a still pointer.
+             */
+            others.forEach(function (o) {
+              var shift = o.above
+                ? (center < o.center ? dragH : 0)
+                : (center > o.center ? -dragH : 0);
+              if (shift !== o.shift) {
+                o.shift = shift;
+                o.el.style.transform = shift ? 'translate3d(0,' + shift + 'px,0)' : '';
+              }
+            });
+            row.style.transform = 'translate3d(0,' + dy + 'px,0)';
 
-          // A drag that ended where it began saves nothing.
-          var before = f.type.requirements.filter(function (r) { return !r.retired; })
-            .map(function (r) { return r.id; });
-          if (live.join('\n') === before.join('\n')) return;
+            raf = requestAnimationFrame(loop);
+          }
 
-          persistOrder(f.type, live.concat(
-            f.type.requirements.filter(function (r) { return r.retired; })
-              .map(function (r) { return r.id; }),
-          ));
+          function onMove(e) {
+            pointerY = e.clientY;
+            if (!active && Math.abs(pointerY - down.clientY) >= 4) engage();
+            if (active) e.preventDefault();
+          }
+
+          function onUp() { settle(true); }
+
+          function onCancel() { settle(false); }
+
+          function onKey(e) { if (e.key === 'Escape') settle(false); }
+
+          function squelchClick(e) { e.stopPropagation(); e.preventDefault(); }
+
+          function settle(commit) {
+            document.removeEventListener('pointermove', onMove, true);
+            document.removeEventListener('pointerup', onUp, true);
+            document.removeEventListener('pointercancel', onCancel, true);
+            document.removeEventListener('keydown', onKey, true);
+            if (!active) return;
+            active = false;
+            if (raf) cancelAnimationFrame(raf);
+            document.body.classList.remove('tma-cipdoc-dragging');
+
+            // The row was picked up, so the release is not also a click on
+            // whatever the pointer happens to be over.
+            body.addEventListener('click', squelchClick, true);
+            setTimeout(function () { body.removeEventListener('click', squelchClick, true); }, 0);
+
+            // Land the row in its slot — the offset is the height of what it
+            // passed — with the same ease its neighbours used, then touch the
+            // DOM exactly once.
+            var dyFinal = 0;
+            others.forEach(function (o) { if (o.shift) dyFinal += o.above ? -o.height : o.height; });
+            if (!commit) dyFinal = 0;
+
+            var done = false;
+            function finish() {
+              if (done) return;
+              done = true;
+              row.style.transition = '';
+              row.style.transform = '';
+              others.forEach(function (o) { o.el.style.transform = ''; });
+              body.classList.remove('is-row-drag');
+              row.classList.remove('is-dragging');
+              if (!commit) return;
+
+              // The first row still after the dragged one, in the settled
+              // order; none left means the slot just above the retired tail.
+              var nextEl = null;
+              var moved = false;
+              for (var i = 0; i < others.length; i++) {
+                var o = others[i];
+                if (o.shift) moved = true;
+                var stillBefore = (o.above && !o.shift) || (!o.above && o.shift);
+                if (!stillBefore && !nextEl) nextEl = o.el;
+              }
+              if (!moved) return;
+              body.insertBefore(row, nextEl || (others.length ? others[others.length - 1].el.nextSibling : null));
+
+              var f = req(row.getAttribute('data-cipdoc-row'));
+              if (!f) return;
+              var live = Array.prototype.map.call(
+                body.querySelectorAll('[data-cipdoc-row]'),
+                function (r) { return r.getAttribute('data-cipdoc-row'); },
+              );
+              persistOrder(f.type, live.concat(
+                f.type.requirements.filter(function (r) { return r.retired; })
+                  .map(function (r) { return r.id; }),
+              ));
+            }
+
+            row.style.transition = 'transform 140ms cubic-bezier(0.2, 0, 0, 1)';
+            row.style.transform = 'translate3d(0,' + dyFinal + 'px,0)';
+            row.addEventListener('transitionend', finish, { once: true });
+            setTimeout(finish, 180);
+          }
+
+          document.addEventListener('pointermove', onMove, true);
+          document.addEventListener('pointerup', onUp, true);
+          document.addEventListener('pointercancel', onCancel, true);
+          document.addEventListener('keydown', onKey, true);
         });
       });
     },

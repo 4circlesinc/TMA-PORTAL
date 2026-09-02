@@ -406,12 +406,39 @@
   top: -28px; /* .tma-dash__main pads 28px */
 }
 
-/* Rows reorder by drag; the grip is the signpost, the carets stay for keyboards. */
-.tma-portal-table--cipdocs tr[draggable="true"] { cursor: grab; }
-.tma-portal-table--cipdocs tr.is-dragging { opacity: 0.5; }
-.tma-portal-table--cipdocs tr.is-dragging td { background: var(--color-hover); }
-.tma-portal-icon-btn--grip { cursor: grab; }
+/*
+ * Rows reorder by a pointer-driven drag (portal-admin.js); the grip is the
+ * signpost, the carets stay for keyboards. The picked-up row rides the
+ * pointer on a transform, solid and lifted on a shadow, while the rows it
+ * passes glide aside on eased transforms of their own. The dragged row
+ * stays under the sticky header (z-index 1 against its 2), the way every
+ * other row does.
+ */
+.tma-portal-table--cipdocs tr[data-cipdoc-row] { cursor: grab; }
+
+.tma-portal-table--cipdocs tbody.is-row-drag tr:not(.is-dragging) {
+  transition: transform 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tma-portal-table--cipdocs tr.is-dragging {
+  position: relative;
+  z-index: 1;
+  cursor: grabbing;
+  will-change: transform;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.tma-portal-table--cipdocs tr.is-dragging td { background: var(--color-white); }
+
+.tma-portal-icon-btn--grip { cursor: grab; touch-action: none; }
 .tma-portal-icon-btn--grip:hover { background: none; }
+
+/* While a row is held, nothing selects and everything says so. */
+.tma-cipdoc-dragging, .tma-cipdoc-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 /* The document column holds a name and a description, so it wraps. Every
    other cell stays one line; this one is the sentence, not a fact. */
