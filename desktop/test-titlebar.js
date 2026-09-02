@@ -500,7 +500,8 @@ app.whenReady().then(async () => {
     })()))))
   `, true);
 
-  check('narrow: the search is there', narrow.search, true);
+  // The drawer carries the search at these widths; the strip does not repeat it.
+  check('narrow: no second search in the strip', narrow.search, false);
   check('narrow: the activity button is there', narrow.activities, true);
   check('narrow: the bell is there', narrow.notifications, true);
   check('narrow: the heading is there', narrow.title, true);

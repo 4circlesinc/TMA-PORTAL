@@ -560,16 +560,14 @@ function buildCss(platform = process.platform) {
       box-shadow: none !important;
     }
 
-    /* The search is the one control people go looking for by name. */
+    /*
+     * No second search in a narrow strip. At these widths the nav drawer
+     * already opens with a full search field at the top, and the bar is the
+     * one place on the window that cannot spare the room — the strip, the
+     * status, four icons and the caption buttons already fill it.
+     */
     .tma-dash--desktop-bar .tma-dash__header-center > .tma-dash__search {
-      display: flex !important;
-    }
-
-    /* It cannot keep its 260px floor in a 960px window and leave room for the
-       strip, the icons and the caption buttons, so it is allowed to shrink. */
-    .tma-dash--desktop-bar .tma-dash__search {
-      min-width: 0 !important;
-      width: 100%;
+      display: none !important;
     }
 
     .tma-dash--desktop-bar .tma-dash__header-icons [data-action="toggle-activities-popup"],
@@ -578,16 +576,27 @@ function buildCss(platform = process.platform) {
     }
 
     /*
-     * The phone layout groups the icons into one bordered pill on a card
-     * background. On the blue that reads as a white box sitting in the bar, so
-     * the group is flattened back to plain buttons at the size they are at
-     * every other width.
+     * The phone layout groups the icons into one glass pill on a card
+     * background. On the blue that reads as a white box sitting in the bar,
+     * so the group is flattened back to plain buttons at the size they are
+     * at every other width. The pill looks like four separate declarations
+     * and is: background, border, the inset-highlight box-shadow, and the
+     * backdrop blur each draw a box of their own if left behind.
      */
     .tma-dash--desktop-bar .tma-dash__header-icons {
       background: transparent !important;
       border: 0 !important;
       border-radius: 0 !important;
+      box-shadow: none !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+      overflow: visible !important;
       gap: 2px;
+    }
+
+    /* No divider between the status and the icons on the blue. */
+    .tma-dash--desktop-bar .tma-dash__header-icons .tma-dash__header-presence {
+      border: 0 !important;
     }
 
     .tma-dash--desktop-bar .tma-dash__header-icons .tma-dash__icon-btn {
