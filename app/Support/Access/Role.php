@@ -359,6 +359,8 @@ class Role
         'social/feed' => 'feed.view',
         'templates' => 'templates.view',
         'templates/email' => 'templates.view',
+        'templates/letters' => 'templates.view',
+        'templates/documents' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
         // Also served to CIP service-provider contacts, scoped by FileAccess

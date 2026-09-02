@@ -1501,13 +1501,23 @@
    */
   var CIPDOCS = { loaded: false, loading: false, error: '', types: null };
 
+  /*
+   * The requirements are shown through two doors — the settings pane and the
+   * Templates page (portal-work.js, the TMACipLetters arrangement) — and a
+   * save must repaint whichever one is actually open. The door that wired
+   * last owns the hook; the settings pane's own render() is the default.
+   */
+  function cipDocsRepaint() {
+    (CIPDOCS.repaint || render)();
+  }
+
   function loadCipDocs() {
     if (CIPDOCS.loading) return;
     CIPDOCS.loading = true;
     filelibJson('GET', '/portal/cip/requirements')
       .then(function (d) { CIPDOCS.types = d.types || []; CIPDOCS.error = ''; })
       .catch(function (e) { CIPDOCS.error = e.message; })
-      .then(function () { CIPDOCS.loaded = true; CIPDOCS.loading = false; render(); });
+      .then(function () { CIPDOCS.loaded = true; CIPDOCS.loading = false; cipDocsRepaint(); });
   }
 
   function cipDocFolders() {
@@ -1779,6 +1789,9 @@
         }).join('');
     },
     wire: function (el) {
+      // The Templates mount marks its host; wiring from anywhere else hands
+      // the repaint back to the settings pane.
+      CIPDOCS.repaint = el.__cipDocsRepaint || null;
       if (!CIPDOCS.loaded) { loadCipDocs(); return; }
 
       function req(id) {
@@ -1827,14 +1840,14 @@
             .then(function () { ui().toast(required ? 'Now required' : 'Now optional'); saved(); })
             // The box flipped the moment it was clicked; a redraw from the
             // unchanged state snaps it back so it never shows a saved lie.
-            .catch(function (e) { failed(e); render(); });
+            .catch(function (e) { failed(e); cipDocsRepaint(); });
         });
       });
 
       function patchPhase(id, payload) {
         filelibJson('PATCH', '/portal/cip/requirements/' + encodeURIComponent(id), payload)
           .then(function () { ui().toast('Saved'); saved(); })
-          .catch(function (e) { failed(e); render(); });
+          .catch(function (e) { failed(e); cipDocsRepaint(); });
       }
 
       el.querySelectorAll('[data-cipdoc-pre]').forEach(function (box) {
@@ -1924,10 +1937,10 @@
 
       function persistOrder(type, order) {
         filelibJson('POST', '/portal/cip/requirements/reorder', { applicantType: type.value, order: order })
-          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; render(); })
+          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; cipDocsRepaint(); })
           // A failed save re-renders from the unchanged state, so a row
           // dropped somewhere the server never recorded snaps back.
-          .catch(function (e) { failed(e); render(); });
+          .catch(function (e) { failed(e); cipDocsRepaint(); });
       }
 
       function move(id, delta) {
@@ -2013,6 +2026,25 @@
           ));
         });
       });
+    },
+  };
+
+  /* The requirements, openable from the Templates page too (portal-work.js):
+     one state, one page, however many doors — the TMACipLetters arrangement. */
+  window.TMACipDocuments = {
+    mount: function (host) {
+      function repaint() {
+        // The reader has navigated on; hand the repaint back to settings.
+        if (!host.isConnected) {
+          if (CIPDOCS.repaint === repaint) CIPDOCS.repaint = null;
+          return;
+        }
+        host.innerHTML = '<div class="tma-portal-page tma-portal-page--templates">' +
+          PAGES['cip-documents'].render() + '</div>';
+        PAGES['cip-documents'].wire(host);
+      }
+      host.__cipDocsRepaint = repaint;
+      repaint();
     },
   };
 

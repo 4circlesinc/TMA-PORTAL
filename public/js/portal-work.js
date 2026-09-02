@@ -1061,7 +1061,9 @@
     TPL.pane = navId === 'templates-email' || path.indexOf('/templates/email') === 0
       ? 'email'
       : navId === 'templates-letters' || path.indexOf('/templates/letters') === 0
-        ? 'letters' : 'system';
+        ? 'letters'
+        : navId === 'templates-documents' || path.indexOf('/templates/documents') === 0
+          ? 'documents' : 'system';
     renderTemplates();
     if (TPL.pane === 'email') {
       if (!ETPL.loaded && !ETPL.loading) loadEmailTemplates();
@@ -1223,11 +1225,27 @@
     });
   }
 
+  /* ── Document requirements (the Templates-side door) ──────────────
+   * The whole page lives with the CIP admin pages — portal-admin.js
+   * exports it as TMACipDocuments — so both doors show the same tables
+   * and repaint each other's saves.
+   */
+  function renderCipDocuments() {
+    var el = TPL.el;
+    if (!el) return;
+    if (!window.TMACipDocuments) {
+      el.innerHTML = '<p class="tma-portal-note">Couldn’t load the requirements. Refresh to try again.</p>';
+      return;
+    }
+    window.TMACipDocuments.mount(el);
+  }
+
   function renderTemplates() {
     var el = TPL.el;
     if (!el) return;
     if (TPL.pane === 'email') { renderEmailTemplates(); return; }
     if (TPL.pane === 'letters') { renderCipLetters(); return; }
+    if (TPL.pane === 'documents') { renderCipDocuments(); return; }
 
     var active = document.activeElement;
     var restoreSearch = active && active.matches && active.matches('[data-tpl-search]');

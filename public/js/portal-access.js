@@ -33,6 +33,7 @@
     'templates-system': 'templates.view',
     'templates-email': 'templates.view',
     'templates-letters': 'templates.view',
+    'templates-documents': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
