@@ -224,8 +224,10 @@ class Presenter
                 ?? $this->memberPerson($file->uploadedByMember),
             // Everyone on the file, owner first, what the Owner column draws
             // as faces. `assignedTo` stays the bare names it has always been.
-            'people' => $this->peopleOn($file->owner, $sharedWith, $fileAudience),
-            'peopleTotal' => $this->peopleTotal($file->owner, $sharedWith, $fileAudience),
+            'people' => $this->peopleOn($file->owner, $sharedWith, $fileAudience,
+                FileAccess::isInPersonalDrive($file)),
+            'peopleTotal' => $this->peopleTotal($file->owner, $sharedWith, $fileAudience,
+                FileAccess::isInPersonalDrive($file)),
             'audience' => $fileAudience,
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
@@ -286,8 +288,10 @@ class Presenter
             'deletedAt' => optional($folder->deleted_at)->toIso8601String(),
             'owner' => $this->person($folder->owner),
             'createdBy' => $this->person($folder->creator),
-            'people' => $this->peopleOn($folder->owner, $sharedWith, $folderAudience),
-            'peopleTotal' => $this->peopleTotal($folder->owner, $sharedWith, $folderAudience),
+            'people' => $this->peopleOn($folder->owner, $sharedWith, $folderAudience,
+                FileAccess::isPersonalSpaceFolder($folder)),
+            'peopleTotal' => $this->peopleTotal($folder->owner, $sharedWith, $folderAudience,
+                FileAccess::isPersonalSpaceFolder($folder)),
             // From the folder itself: a folder granted to all staff is shared
             // with them, not merely sitting inside something that is.
             'audience' => $folderAudience,
@@ -660,7 +664,7 @@ class Presenter
      * @param  array<int, array<string, mixed>>  $sharedWith
      * @return array<int, array<string, mixed>>
      */
-    private function peopleOn(?User $owner, array $sharedWith, ?array $audience = null): array
+    private function peopleOn(?User $owner, array $sharedWith, ?array $audience = null, bool $personal = false): array
     {
         $people = [];
 
@@ -701,6 +705,18 @@ class Presenter
          * Only the first few travel, the cell draws four and a "+N", with the
          * real figure alongside so the "+N" can be honest.
          */
+        /*
+         * A personal OneDrive space is the one place administrators hold
+         * NOTHING (2026-08-05 ruling — FileAccess checks the drive before its
+         * own admin short-circuit). Drawing their faces on those rows told
+         * the owner their private drive was open to the admins, which is
+         * exactly the lie the ruling exists to prevent. Owner and explicit
+         * shares only.
+         */
+        if ($personal) {
+            return $people;
+        }
+
         /*
          * Administrators are always on it.
          *
@@ -752,8 +768,17 @@ class Presenter
      *
      * @param  array<int, array<string, mixed>>  $sharedWith
      */
-    private function peopleTotal(?User $owner, array $sharedWith, ?array $audience): int
+    private function peopleTotal(?User $owner, array $sharedWith, ?array $audience, bool $personal = false): int
     {
+        // Personal space: the owner plus whoever they explicitly shared with,
+        // never the administrators — they cannot open it (see peopleOn).
+        if ($personal) {
+            return max(1, count(array_unique(array_filter(array_merge(
+                [$owner?->id],
+                array_column($sharedWith, 'userId'),
+            )))));
+        }
+
         if ($audience && ($audience['count'] ?? null)) {
             // The grant reaches every member of staff; the owner is already one
             // of them when they are staff, and is one more when they are not.

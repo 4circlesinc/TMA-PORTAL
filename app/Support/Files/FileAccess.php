@@ -66,6 +66,12 @@ class FileAccess
         return self::personalSpaceOwner($file->folder_id, $file->owner_id) !== null;
     }
 
+    /** Folder flavour of {@see self::isInPersonalDrive}, same rule, same reasons. */
+    public static function isPersonalSpaceFolder(Folder $folder): bool
+    {
+        return self::personalSpaceOwner($folder->id, $folder->owner_id) !== null;
+    }
+
     /** Staff = internal users (never clients). Drives org/client/staff access. */
     public static function isStaff(User $user): bool
     {

@@ -95,6 +95,47 @@ class FileOrgDefaultAccessTest extends TestCase
     }
 
     /**
+     * The listing must not ADVERTISE access that does not exist.
+     *
+     * The Owner column draws "everyone on this item" as faces, and it used to
+     * merge every administrator onto every row — right on files inside a
+     * personal drive, where administrators hold nothing. The owner read it as
+     * "the admins can open my OneDrive". Faces and the +N count must both
+     * stop at the owner plus explicit shares.
+     */
+    public function test_the_listing_does_not_advertise_admins_on_personal_drive_rows(): void
+    {
+        $olive = User::factory()->create([
+            'email' => 'olive@example.com', 'account_type' => 'Reviewing Officer',
+            'status' => 'approved', 'email_verified_at' => now(),
+            'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+        ]);
+        $this->user('Administrator', 'root@example.com');
+        $this->user('Administrator', 'boss@example.com');
+
+        $drive = $this->folder($olive, "Olive's OneDrive");
+        $this->file($olive, $drive);
+
+        \App\Models\SharePointConnection::create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'personal', 'drive_id' => 'drive-olive',
+            'drive_kind' => 'onedrive', 'owner_upn' => 'olive@example.com',
+            'folder_id' => $drive->id, 'created_by' => $olive->id,
+            'status' => 'idle', 'sync_enabled' => true, 'direction' => 'two-way',
+        ]);
+
+        $rows = $this->actingAs($olive)
+            ->getJson('/portal/files/?folder='.$drive->uuid)
+            ->assertOk();
+
+        foreach ($rows->json('files') as $row) {
+            $this->assertSame([$olive->id], array_column($row['people'], 'userId'),
+                'only the owner may be drawn on a personal-drive row');
+            $this->assertSame(1, $row['peopleTotal']);
+        }
+    }
+
+    /**
      * A colleague must not even see the FOLDER, let alone its files.
      *
      * fileRole and folderRole are separate doors. Closing only the first leaves
