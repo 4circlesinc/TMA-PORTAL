@@ -1,2 +1,1 @@
-- The title bar keeps its clean desktop look in narrow windows: the new tablet/phone header bubble and logo mark stay out of the blue strip, and the menu button matches the other bar controls
-- Ships the portal's tablet and mobile refresh built in: card-style tables, scrollable tabs, and the reworked header
+- Narrow windows lose the redundant search in the title bar — the menu drawer carries the search there — and the stray box behind the status and toolbar icons is gone; they sit flat on the blue like at full width
