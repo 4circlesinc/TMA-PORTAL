@@ -3876,12 +3876,23 @@
 .tma-dash[data-theme="dark"] .tma-dash__logo-mark,
 :root[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
+/* Client-hub cards: a half-white wash reads as a card on the light page but
+   composites to flat grey over the dark one. */
+.tma-dash[data-theme="dark"] .tma-dash__clients-folder,
+:root[data-theme="dark"] .tma-dash__clients-folder,
+.tma-dash[data-theme="dark"] .tma-dash__clients-assigned,
+:root[data-theme="dark"] .tma-dash__clients-assigned,
+.tma-dash[data-theme="dark"] .tma-dash__clients-address-block,
+:root[data-theme="dark"] .tma-dash__clients-address-block {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 /* ── Dark safety net: any bare phosphor <img> nobody styles ──
    Phosphor art is black line work; unlifted it vanishes on the dark theme.
    :where() keeps this at img+attr specificity, so every explicit icon rule
    (including the brightness(0) ones for flipped-white buttons) outranks it.
    The handful of coloured phosphor files keep their own paint. */
-:where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) img[src*="icons/phosphor/"]:where(:not([src*="FilePdf"]):not([src*="FlagFilled"]):not([src*="PushPinFilled"]):not([src*="StarFilled"]):not([src*="YoutubeLogo"])) {
+:where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) img[src*="icons/phosphor/"]:where(:not([src*="FilePdf"]):not([src*="FileImage"]):not([src*="FileJpg"]):not([src*="FilePng"]):not([src*="FlagFilled"]):not([src*="PushPinFilled"]):not([src*="StarFilled"]):not([src*="YoutubeLogo"]):not([src*="Smart_sheet"]):not([src*="Folder"])) {
   filter: invert(1) brightness(1.6);
 }
 
@@ -30463,7 +30474,8 @@ button.tma-dash__header-popup-item:focus-visible {
   min-height: 48px;
   height: 60vh;
   border: none;
-  background: var(--color-white);
+  /* Literal: HTML mail is authored against white in either theme. */
+  background: #ffffff;
 }
 
 /* Sits above a list that still has mail in it: the connection is broken, so

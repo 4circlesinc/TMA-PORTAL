@@ -1750,9 +1750,9 @@
   color: var(--color-text-primary);
 }
 
-/* The preview stage stays the darker of the two surfaces, so the document
-   being read is the brightest thing on screen rather than the panel. */
-.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__stage { background: var(--color-bg-page); }
+/* The stage deliberately has no background of its own in either theme: the
+   translucent backdrop (rgba 0 0 0 / .82) is the ground, so dark mode keeps
+   the same see-through frosting the light theme has instead of going opaque. */
 
 /* Not theme-scoped: the panel is dark in both themes now, because it belongs
    to the viewer rather than to the page behind it.
@@ -1969,4 +1969,36 @@
   padding: var(--space-16) 0;
   color: var(--color-text-secondary);
   font-size: var(--text-size-12);
+}
+
+/* ── viewer comments: dark ───────────────────────────────────────────
+ * The bubbles are white cards floating over the document; with the viewer's
+ * dark stamp the text tokens flip white, so the cards must flip too or the
+ * words vanish into them. */
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__thread {
+  background: #2a2a2c;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__thread.is-resolved {
+  background: #232325;
+}
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comments .tma-portal-viewer__empty {
+  background: rgba(34, 34, 36, 0.92);
+}
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comments-add {
+  background: #2a2a2c;
+}
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comments-add:hover {
+  background: #3a3a3c;
+}
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comment-menu {
+  background: #2a2a2c;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+/* The deep brand blue sits too close to a dark card; the lighter primary is
+   the same brand hue at a legible level. */
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__mention,
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comment-flag--ok,
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comment-act:hover {
+  color: var(--color-primary);
 }

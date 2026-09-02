@@ -5138,6 +5138,10 @@
       // the frame edges. Senders that set their own body padding still win.
       ':where(body){margin:0;padding:20px 24px 12px;box-sizing:border-box;' +
       'font-family:Inter,system-ui,sans-serif;font-size:14px;' +
+      // A white canvas in BOTH themes: mail is authored against white, and on
+      // the dark theme a transparent body would show the dark frame through
+      // the sender's black text. Senders that paint their own background win.
+      'background:#fff;' +
       'line-height:1.5;color:#1c1c1c;word-wrap:break-word;overflow-wrap:anywhere;}' +
       // Pictures are held to the pane width so they cannot force the message
       // sideways; wide tables keep their real layout and scroll instead of
