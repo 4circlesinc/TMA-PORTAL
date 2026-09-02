@@ -4880,13 +4880,14 @@
     overflow: hidden;
   }
 
-  /* One bubble on the left: menu icon with the logo mark to its right. */
+  /* Menu icon with the logo mark to its right — no chrome behind them,
+     the controls sit straight on the page. */
   .tma-dash__header-left {
     gap: 0;
     flex: 0 0 auto;
     border-radius: var(--radius-pill);
-    background: var(--color-bg-card);
-    border: 0.5px solid var(--color-overlay-4);
+    background: transparent;
+    border: none;
   }
 
   .tma-dash__header-logo {
@@ -4942,10 +4943,9 @@
   .tma-dash__header-icons {
     gap: 0;
     padding: 0;
-    overflow: hidden;
     border-radius: var(--radius-pill);
-    background: var(--color-bg-card);
-    border: 0.5px solid var(--color-overlay-4);
+    background: transparent;
+    border: none;
   }
 
   .tma-dash__header-icons .tma-dash__icon-btn {
@@ -4953,16 +4953,12 @@
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    border-radius: 0;
+    border-radius: var(--radius-pill);
     background: transparent;
   }
 
   .tma-dash__header-icons .tma-dash__icon-btn:hover {
     background: var(--color-hover);
-  }
-
-  .tma-dash__header-icons [data-action="toggle-theme"] {
-    border-right: 0.5px solid var(--color-overlay-4);
   }
 
   .tma-dash__header-right {
