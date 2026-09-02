@@ -377,9 +377,11 @@
  * scroll sideways. That wrap then becomes the sticky containing block, and
  * because it is as tall as the table, top: 0 never fires. This page's pane
  * is already the scroller, so the wrap must not clip, and the header paints
- * its own white so rows sliding under it do not show through.
+ * its own white so rows sliding under it do not show through. The same
+ * carve-out covers the Templates door, which mounts the same tables.
  */
-.tma-portal-admin__content .tma-portal-table-wrap:has(.tma-portal-table--cipdocs) {
+.tma-portal-admin__content .tma-portal-table-wrap:has(.tma-portal-table--cipdocs),
+.tma-portal-page--templates .tma-portal-table-wrap:has(.tma-portal-table--cipdocs) {
   overflow: visible;
 }
 
@@ -388,11 +390,20 @@
   border-spacing: 0;
 }
 
+/*
+ * The negative top matches the scroller's own padding-top, so the header
+ * pins flush under the topbar instead of 20px below it — rows were peeking
+ * through that padding band above the pinned header.
+ */
 .tma-portal-table--cipdocs thead th {
   position: sticky;
-  top: 0;
+  top: -20px; /* .tma-portal-admin__content pads 20px */
   z-index: 2;
   background: var(--color-white);
+}
+
+.tma-portal-page--templates .tma-portal-table--cipdocs thead th {
+  top: -28px; /* .tma-dash__main pads 28px */
 }
 
 /* Rows reorder by drag; the grip is the signpost, the carets stay for keyboards. */
