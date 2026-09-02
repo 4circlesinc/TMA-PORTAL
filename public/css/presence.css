@@ -83,34 +83,25 @@
   --presence-pill-border: rgba(245, 158, 11, 0.55);
 }
 
-/* Desktop title bar — white pill on brand blue */
+/* Desktop title bar — the pill deliberately has NO variant of its own: it is
+   the same .tma-presence-pill the browser header shows, so both themes render
+   it identically in the app and in a tab (light: card-white pill; dark: dark
+   card pill with the theme's ink). Only the wrap's drag opt-out is ours. */
 #tma-desktop-titlebar .tma-tb-presence-wrap {
   margin-left: 10px;
   -webkit-app-region: no-drag;
 }
 
-#tma-desktop-titlebar .tma-presence-pill {
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 0 1px var(--presence-pill-border, var(--color-border, #e2e8f0));
-  /* The pill is white on every theme, so its ink is literal: the token turns
-     white in dark mode and camouflaged the label. */
-  color: rgba(0, 0, 0, 0.9);
-}
-
-#tma-desktop-titlebar .tma-presence-pill:hover {
-  background: #fff;
-}
-
-/* Blue bar header (desktop shell restyles portal header) */
-.tma-dash--desktop-bar .tma-dash__header-presence .tma-presence-pill {
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 0 1px var(--presence-pill-border, var(--color-border, #e2e8f0));
-  /* White pill on every theme; the token flips white in dark and hid the label. */
-  color: rgba(0, 0, 0, 0.9);
-}
-
+/* The injected bar CSS knocks every header <img> out to white for the blue
+   strip; the pill's glyph sits on the pill, not the blue, so it opts back in:
+   dark ink on the light pill, lifted to white on the dark one. */
 .tma-dash--desktop-bar .tma-dash__header-presence .tma-presence__icon-img {
   filter: none;
+}
+
+.tma-dash--desktop-bar[data-theme="dark"] .tma-dash__header-presence .tma-presence__icon-img,
+:root[data-theme="dark"] .tma-dash--desktop-bar .tma-dash__header-presence .tma-presence__icon-img {
+  filter: invert(1) brightness(1.6);
 }
 
 .tma-presence-popover {
@@ -194,6 +185,9 @@
   text-align: left;
   cursor: pointer;
   font: inherit;
+  /* Buttons default to the UA's buttontext, not the popover's ink — which
+     left the rows black on the dark card. */
+  color: inherit;
 }
 
 .tma-presence-popover__item:hover {
@@ -457,4 +451,38 @@
   .tma-presence-pill {
     max-width: min(180px, 44vw);
   }
+}
+
+/* ── Dark theme — the popover mounts on <body>, scoped by the :root stamp.
+   Its light face keeps the undefined-token fallbacks it always had; dark
+   restates each against the real palette. ── */
+:root[data-theme="dark"] .tma-presence-popover {
+  background: #2a2a2c;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .tma-presence-popover__section {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="dark"] .tma-presence-popover__message input {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+}
+
+:root[data-theme="dark"] .tma-presence-popover__message input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme="dark"] .tma-presence-popover__pill {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+}
+
+:root[data-theme="dark"] .tma-presence-popover__item:hover,
+:root[data-theme="dark"] .tma-presence-popover__pill:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
