@@ -1,1 +1,2 @@
-- Dark mode now reaches the app's blue title bar: it turns the deeper brand blue with the dark theme, and the status pill's label stays readable
+- The title bar keeps its clean desktop look in narrow windows: the new tablet/phone header bubble and logo mark stay out of the blue strip, and the menu button matches the other bar controls
+- Ships the portal's tablet and mobile refresh built in: card-style tables, scrollable tabs, and the reworked header

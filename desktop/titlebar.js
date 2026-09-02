@@ -528,6 +528,38 @@ function buildCss(platform = process.platform) {
       padding: 0 14px !important;
     }
 
+    /*
+     * The phone layout (Sep 2026) turns .tma-dash__header-left into a glass
+     * bubble holding the menu button and a logo mark. On the blue strip the
+     * bubble reads as a white box and the mark duplicates the bar's own
+     * branding, so both are undone here. The portal CSS carries the same
+     * guards under .tma-dash--desktop-bar; restated here so the bar is
+     * correct even against a portal build that predates them.
+     */
+    .tma-dash--desktop-bar .tma-dash__header-left {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+    }
+
+    .tma-dash--desktop-bar .tma-dash__header-logo {
+      display: none !important;
+    }
+
+    /* Match the flattened 32px buttons on the right, not the phone's 44px. */
+    .tma-dash--desktop-bar .tma-dash__header-left [data-action="toggle-sidebar"] {
+      width: 32px !important;
+      height: 32px !important;
+      min-width: 32px !important;
+      min-height: 32px !important;
+      padding: 4px !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
     /* The search is the one control people go looking for by name. */
     .tma-dash--desktop-bar .tma-dash__header-center > .tma-dash__search {
       display: flex !important;
