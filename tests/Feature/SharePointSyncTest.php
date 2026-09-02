@@ -793,6 +793,35 @@ class SharePointSyncTest extends TestCase
         $this->assertStringContainsString('did not overwrite', $mapping->conflict_reason);
     }
 
+    /**
+     * A push that died on a gateway timeout may still have landed: the 504
+     * comes from the gateway, not the drive. SharePoint's "newer" content is
+     * then OUR OWN bytes, and that is an acknowledgement, not a conflict —
+     * the mapping adopts SharePoint's cursor and nothing is re-uploaded.
+     */
+    public function test_a_landed_upload_is_acknowledged_not_conflicted(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $file = FileItem::firstOrFail();
+        RemoteContent::ensure($file);   // the bytes the "failed" push sent
+
+        $hasher = new \App\Support\SharePoint\QuickXorHash;
+        $hasher->update($this->content);
+        $remote = $this->fileItem('i-1', 'Brief.txt', 'c:2');   // cTag moved…
+        $remote['file']['hashes'] = ['quickXorHash' => $hasher->base64()];   // …to our bytes
+        $this->remoteItem = $remote;
+
+        $result = Pusher::pushFile($file->fresh());
+
+        $this->assertSame('unchanged', $result['status']);
+        $mapping = SharePointItem::first();
+        $this->assertSame(SharePointItem::SYNCED, $mapping->sync_status);
+        $this->assertSame('c:2', $mapping->ctag);
+        $this->assertNull($mapping->conflict_reason);
+    }
+
     public function test_a_portal_originated_file_wins_the_same_conflict(): void
     {
         $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);

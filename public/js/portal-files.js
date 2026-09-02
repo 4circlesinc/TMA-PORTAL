@@ -2083,10 +2083,17 @@
      */
     if (syncNoticeDismissed() && !d.conflicts) return '';
 
+    // The count is firm-wide but the line names one library — pairing the
+    // total with whichever synced most recently blamed the wrong library.
+    var confLib = d.conflicts
+      ? d.connections.filter(function (c) { return c.conflicts > 0; })[0]
+      : null;
+
     return '<div class="tma-portal-sync" data-sync-strip>' +
       '<img src="images/icons/phosphor/CloudCheck.svg" alt="" width="16" height="16">' +
       '<span>' + esc(newest.name) + ' synced ' + esc(relativeTime(newest.lastSuccessAt)) + '</span>' +
-      (d.conflicts ? '<span class="tma-portal-sync__flag">' + d.conflicts + ' conflict(s)</span>' : '') +
+      (d.conflicts ? '<span class="tma-portal-sync__flag">' + d.conflicts + ' conflict(s)' +
+        (confLib && confLib.name !== newest.name ? ' in ' + esc(confLib.name) : '') + '</span>' : '') +
       '<button type="button" class="tma-portal-sync__close" data-sync-dismiss' +
         ' aria-label="Hide sync status">' +
         '<span class="tma-portal-sync__close-glyph" aria-hidden="true"></span></button>' +

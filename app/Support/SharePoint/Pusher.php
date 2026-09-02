@@ -279,6 +279,34 @@ class Pusher
             return null;   // unchanged since our last sync
         }
 
+        /*
+         * Not every moved cTag is somebody's edit. A push that died on a
+         * gateway timeout can still have landed — SharePoint's "newer"
+         * content is then OUR OWN bytes, and flagging that as a conflict
+         * told the owner their file had diverged when nothing had (seen
+         * live: a 504 stamped 01:45:40 against a remote modified 01:45:39
+         * by this very app). Identical bytes are an acknowledgement, not a
+         * conflict: adopt SharePoint's cursor and upload nothing.
+         */
+        $remoteHash = $remote['file']['hashes']['quickXorHash'] ?? null;
+        if ($remoteHash !== null
+            && (int) ($remote['size'] ?? -1) === (int) $file->size
+            && self::contentMatches($file, $remoteHash)) {
+            $mapping->update([
+                'sync_status' => SharePointItem::SYNCED,
+                'etag' => $remote['eTag'] ?? $mapping->etag,
+                'ctag' => $remoteCtag,
+                'conflict_reason' => null,
+                'last_error' => null,
+                'failure_count' => 0,
+                'last_synced_at' => now(),
+            ]);
+            Synchroniser::log($connection, 'push-acknowledged', 'info', $mapping->graph_item_id,
+                'SharePoint already holds these exact bytes; adopted its cursor.');
+
+            return ['status' => 'unchanged'];
+        }
+
         if ($file->origin === 'portal') {
             // Portal wins for what the portal authored, the firm's decision.
             Synchroniser::log($connection, 'conflict-overridden', 'warning', $mapping->graph_item_id,
@@ -296,6 +324,37 @@ class Pusher
         Synchroniser::log($connection, 'conflict', 'warning', $mapping->graph_item_id, $file->name);
 
         return ['status' => 'conflict', 'reason' => $mapping->conflict_reason];
+    }
+
+    /**
+     * Do our stored bytes hash to what Graph says SharePoint holds?
+     * QuickXorHash, streamed, so size never matters to worker memory.
+     */
+    private static function contentMatches(FileItem $file, string $remoteHash): bool
+    {
+        $local = Vault::localCopy($file);
+        if (! $local) {
+            return false;
+        }
+
+        try {
+            $stream = @fopen($local, 'rb');
+            if (! $stream) {
+                return false;
+            }
+
+            try {
+                $hash = QuickXorHash::ofStream($stream);
+            } finally {
+                fclose($stream);
+            }
+
+            return $hash !== null && hash_equals($remoteHash, $hash);
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            Vault::cleanupLocalCopy($local);
+        }
     }
 
     private static function recordMapping(
