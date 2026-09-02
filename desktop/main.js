@@ -1343,9 +1343,23 @@ if (!app.requestSingleInstanceLock()) {
      * and Windows — which has no way to hide its caption buttons — repaints
      * the strip beneath them in the viewer's own colour.
      */
+    /*
+     * The strip and the bar under it must agree on which blue: the injected
+     * CSS turns the bar dark blue with the portal's dark theme, and Windows'
+     * caption buttons sit in titleBarOverlay.color on top of it. Both events
+     * feed the same repaint so a viewer closing lands on the right blue.
+     */
+    let viewerOpen = false;
+    let darkTheme = false;
     ipcMain.on('tma:overlay', (event, open) => {
       if (!fromMainWindow(event)) return;
-      titlebar.setViewerChrome(mainWindow, !!open);
+      viewerOpen = !!open;
+      titlebar.setViewerChrome(mainWindow, viewerOpen, darkTheme);
+    });
+    ipcMain.on('tma:theme', (event, dark) => {
+      if (!fromMainWindow(event)) return;
+      darkTheme = !!dark;
+      if (!viewerOpen) titlebar.setOverlayColor(mainWindow, titlebar.viewerOverlayColor(false, darkTheme));
     });
     ipcMain.on('tma:signin-reopen', (event) => {
       if (!fromMainWindow(event) || !pendingBrowserSignInUrl) return;

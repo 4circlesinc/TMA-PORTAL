@@ -31,6 +31,10 @@ const RELAYS = [
   // A full-screen file viewer is open. macOS draws its traffic lights above
   // the page, so the shell takes them off screen while one is up.
   { attribute: 'data-tma-overlay', channel: 'tma:overlay', read: (raw) => raw === '1' },
+  // The portal's theme (dashboard.js stamps <html>). Windows paints its own
+  // caption buttons in titleBarOverlay.color, which only the main process can
+  // change, so the strip needs telling when the bar under it goes dark blue.
+  { attribute: 'data-theme', channel: 'tma:theme', read: (raw) => raw === 'dark' },
   { attribute: 'data-tma-focus', channel: 'tma:focus', read: () => true, skipInitial: true },
   // Sign-in waiting screen (file://) — reopen the system-browser tab, or cancel.
   { attribute: 'data-tma-signin-reopen', channel: 'tma:signin-reopen', read: () => true, skipInitial: true },

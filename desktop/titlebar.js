@@ -26,6 +26,10 @@ const HEIGHT = 64;
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
 const BLUE = '#03a5e9';
 
+// --color-primary-dark, the darker brand blue. The portal's dark theme keeps
+// the bar recognisably brand-coloured but stops it glowing over a dark page.
+const BLUE_DARK = '#136da0';
+
 /*
  * The file viewer's own header (.tma-portal-viewer__head in portal-files.css).
  *
@@ -581,6 +585,27 @@ function buildCss(platform = process.platform) {
       padding-top: 0 !important;
     }
   }
+
+  /*
+   * Dark theme: the bar follows the portal onto the darker brand blue.
+   * dashboard.js (and auth-flow.js on the auth pages) stamp data-theme on
+   * <html>, so injected CSS can react without the shell being told. The
+   * Windows caption strip is repainted separately - see the data-tma relay
+   * for 'data-theme' in preload.js and the tma:theme handler in main.js.
+   */
+  :root[data-theme="dark"] #tma-desktop-titlebar {
+    background: ${BLUE_DARK};
+  }
+
+  :root[data-theme="dark"] .tma-dash--desktop-bar .tma-dash__header,
+  .tma-dash--desktop-bar[data-theme="dark"] .tma-dash__header {
+    background: ${BLUE_DARK} !important;
+  }
+
+  /* The unread pill's separating ring must match whichever blue is behind it. */
+  :root[data-theme="dark"] .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-btn-badge {
+    box-shadow: 0 0 0 2px ${BLUE_DARK};
+  }
 `;
 }
 
@@ -837,8 +862,8 @@ function setWindowButtonsVisible(win, visible) {
 }
 
 /** What the caption strip is painted while a viewer is or is not open. */
-function viewerOverlayColor(open) {
-  return open ? VIEWER_BAR : BLUE;
+function viewerOverlayColor(open, dark) {
+  return open ? VIEWER_BAR : (dark ? BLUE_DARK : BLUE);
 }
 
 /**
@@ -853,7 +878,7 @@ function viewerOverlayColor(open) {
  * @param {Electron.BrowserWindow} win
  * @param {boolean} open
  */
-function setViewerChrome(win, open) {
+function setViewerChrome(win, open, dark) {
   if (!win || win.isDestroyed()) return;
 
   if (process.platform === 'darwin') {
@@ -862,7 +887,7 @@ function setViewerChrome(win, open) {
     return;
   }
 
-  setOverlayColor(win, viewerOverlayColor(open));
+  setOverlayColor(win, viewerOverlayColor(open, dark));
 }
 
 function windowOptions() {
@@ -932,5 +957,5 @@ async function apply(webContents) {
 module.exports = {
   apply, refresh, windowOptions, setOverlayColor, setWindowButtonsVisible,
   setViewerChrome, viewerOverlayColor,
-  script, buildCss, metrics, CSS, HEIGHT, BLUE, VIEWER_BAR,
+  script, buildCss, metrics, CSS, HEIGHT, BLUE, BLUE_DARK, VIEWER_BAR,
 };
