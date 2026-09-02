@@ -33,7 +33,7 @@
   }
 
   var MOBILE_SETTINGS_MQ = typeof window.matchMedia === 'function'
-    ? window.matchMedia('(max-width: 960px)')
+    ? window.matchMedia('(max-width: 1024px)')
     : null;
 
   function isSettingsMobile() {

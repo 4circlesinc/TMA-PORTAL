@@ -158,13 +158,43 @@
   /* Data table */
   function table(headers, rowsHtml, opts) {
     var o = opts || {};
-    return '<div class="tma-portal-table-wrap"><table class="tma-portal-table' + (o.cls ? ' ' + esc(o.cls) : '') + '"' + (o.tableAttrs || '') + '>' +
+    var html = '<div class="tma-portal-table-wrap"><table class="tma-portal-table' + (o.cls ? ' ' + esc(o.cls) : '') + '"' + (o.tableAttrs || '') + '>' +
       '<thead><tr>' + headers.map(function (h) {
         if (typeof h === 'string') return '<th scope="col">' + esc(h) + '</th>';
         return '<th scope="col"' + (h.attrs || '') + '>' + (h.html != null ? h.html : esc(h.label)) + '</th>';
       }).join('') + '</tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody>' +
       '</table></div>';
+    return stampCellLabels(html);
+  }
+
+  /*
+   * Tablet/phone card layout: each td carries its column header as
+   * data-label so the stacked card view can caption bare values
+   * (td::before { content: attr(data-label) }). Stamped here once so all
+   * listings built through ui().table() get it without touching callers.
+   * Rows with colspan cells (expanders, empty states) are left alone.
+   */
+  function stampCellLabels(html) {
+    try {
+      var tpl = document.createElement('template');
+      tpl.innerHTML = html;
+      var tbl = tpl.content.querySelector('table');
+      if (!tbl) return html;
+      var labels = Array.prototype.map.call(
+        tbl.querySelectorAll('thead th'),
+        function (th) { return (th.textContent || '').replace(/\s+/g, ' ').trim(); }
+      );
+      Array.prototype.forEach.call(tbl.querySelectorAll('tbody tr'), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) {
+          if (td.hasAttribute('colspan') || td.hasAttribute('data-label')) return;
+          if (labels[i]) td.setAttribute('data-label', labels[i]);
+        });
+      });
+      return tpl.innerHTML;
+    } catch (err) {
+      return html;
+    }
   }
 
   /*

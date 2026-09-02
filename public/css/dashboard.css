@@ -4242,7 +4242,8 @@
     --dash-mobile-header-h: calc(44px + var(--space-12) + var(--space-12) + env(safe-area-inset-top, 0px));
     --dash-tabbar-float-gap: var(--space-12);
     --dash-tabbar-block-h: calc(var(--space-6) + 20px + var(--space-2) + 11px + var(--space-6));
-    --dash-tabbar-clearance: calc(var(--dash-tabbar-float-gap) + var(--dash-tabbar-block-h));
+    /* Bottom tab bar retired (to be redesigned) — no clearance reserved. */
+    --dash-tabbar-clearance: 0px;
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
   }
@@ -4582,7 +4583,8 @@
     margin-top: auto;
   }
 
-  .tma-dash__tabbar { display: flex; }
+  /* Bottom tab bar retired (to be redesigned) — stays hidden on mobile too. */
+  .tma-dash__tabbar { display: none !important; }
 
   .tma-dash__cmd {
     z-index: 110;
@@ -4878,115 +4880,35 @@
     overflow: hidden;
   }
 
+  /* One bubble on the left: menu icon with the logo mark to its right. */
+  .tma-dash__header-left {
+    gap: 0;
+    flex: 0 0 auto;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg-card);
+    border: 0.5px solid var(--color-overlay-4);
+  }
+
   .tma-dash__header-logo {
-    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(36px, calc(153px - var(--header-logo-progress, 0) * 117px), min(153px, 36vw));
-    height: clamp(32px, calc(45px - var(--header-logo-progress, 0) * 9px), 45px);
-    flex-shrink: 1;
-    min-width: 0;
+    flex-shrink: 0;
+    padding: 0 var(--space-12) 0 var(--space-2);
     text-decoration: none;
     color: inherit;
   }
 
-  .tma-dash__header-logo .tma-dash__logo-expanded,
-  .tma-dash__header-logo .tma-dash__logo-collapsed {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    min-width: 0;
-    will-change: opacity, transform, filter;
-  }
-
-  .tma-dash__header-logo .tma-dash__logo-horizontal {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    max-height: 45px;
-    object-fit: contain;
-    object-position: center;
-  }
-
   .tma-dash__header-logo .tma-dash__logo-mark {
     display: block;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     object-fit: contain;
   }
 
+  /* Legacy two-state logo markup (kept only until every shell re-renders). */
   .tma-dash__header-logo .tma-dash__logo-expanded {
-    opacity: calc(1 - var(--header-logo-progress, 0));
-    transform: scale(calc(1 - var(--header-logo-progress, 0) * 0.14))
-      translateY(calc(var(--header-logo-progress, 0) * -8px));
-    filter: blur(calc(var(--header-logo-progress, 0) * 5px));
-    pointer-events: none;
-  }
-
-  .tma-dash__header-logo .tma-dash__logo-collapsed {
-    opacity: var(--header-logo-progress, 0);
-    transform: scale(calc(0.64 + var(--header-logo-progress, 0) * 0.36))
-      rotate(calc((1 - var(--header-logo-progress, 0)) * -14deg));
-    filter: blur(calc((1 - var(--header-logo-progress, 0)) * 4px));
-    pointer-events: none;
-  }
-
-  .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-expanded {
-    pointer-events: none;
-  }
-
-  .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-collapsed {
-    pointer-events: auto;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .tma-dash__header-logo {
-      width: min(153px, 36vw);
-      height: 45px;
-      transition: width 0.25s ease, height 0.25s ease;
-    }
-
-    .tma-dash__header-logo .tma-dash__logo-expanded,
-    .tma-dash__header-logo .tma-dash__logo-collapsed {
-      transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-        transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-        filter 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-      will-change: auto;
-    }
-
-    .tma-dash__header-logo .tma-dash__logo-expanded {
-      opacity: 1;
-      transform: none;
-      filter: none;
-    }
-
-    .tma-dash__header-logo .tma-dash__logo-collapsed {
-      opacity: 0;
-      transform: scale(0.78) rotate(-8deg);
-      filter: blur(2px);
-    }
-
-    .tma-dash.is-header-scrolled .tma-dash__header-logo {
-      width: 36px;
-      height: 32px;
-    }
-
-    .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-expanded {
-      opacity: 0;
-      transform: scale(0.9) translateY(-4px);
-      filter: blur(3px);
-    }
-
-    .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-collapsed {
-      opacity: 1;
-      transform: scale(1) rotate(0deg);
-      filter: blur(0);
-    }
+    display: none;
   }
 
 .tma-dash[data-theme="dark"] .tma-dash__header,
@@ -5001,8 +4923,8 @@
     min-height: 44px;
     padding: var(--space-8);
     border-radius: var(--radius-pill);
-    background: var(--color-bg-card);
-    border: 0.5px solid var(--color-overlay-4);
+    background: transparent;
+    border: none;
     flex-shrink: 0;
     display: grid;
     place-items: center;
@@ -27431,8 +27353,9 @@ button.tma-dash__header-popup-item:focus-visible {
   background: rgba(255, 255, 255, 0.4);
 }
 
-/* Settings - mobile profile + change name (≤960px) */
-@media (max-width: 960px) {
+/* Settings - mobile profile + change name (tablet & phone; matches the
+   shell's 1024px drawer breakpoint so 961-1024 no longer mixes modes) */
+@media (max-width: 1024px) {
   .tma-dash__settings-panel[data-settings-panel="profile"].is-active {
     gap: 0;
   }
@@ -29167,7 +29090,7 @@ button.tma-dash__header-popup-item:focus-visible {
   }
 }
 
-@media (min-width: 961px) {
+@media (min-width: 1025px) {
   .tma-dash__settings-card {
     flex-direction: row;
   }

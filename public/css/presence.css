@@ -13,6 +13,56 @@
   gap: var(--space-8);
 }
 
+/* Tablet/phone: the status is one icon in the header bubble, beside dark mode
+   and the rightbar toggle. The label lives in the popover instead. */
+@media (max-width: 1024px) {
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-dash__header-presence {
+    border-right: 0.5px solid var(--color-overlay-4);
+  }
+
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    max-width: none;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    position: relative;
+  }
+
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill:hover {
+    background: var(--color-hover, rgba(0, 0, 0, 0.04));
+  }
+
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill .tma-presence-pill__label {
+    display: none;
+  }
+
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill .tma-presence__icon-img {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* The status colour survives as a small dot on the icon's corner —
+     only when the glyph is an icon; a dot glyph already carries it. */
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill:has(.tma-presence__icon-img)::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    bottom: 9px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--presence-pill-border, var(--color-border, #e2e8f0));
+    box-shadow: 0 0 0 2px var(--color-white, #fff);
+  }
+}
+
 .tma-presence-pill {
   appearance: none;
   display: inline-flex;

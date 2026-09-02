@@ -141,7 +141,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=11';
+    link.href = (ROOT || '') + 'css/presence.css?v=12';
     document.head.appendChild(link);
   }
 
@@ -475,7 +475,8 @@
   }
 
   function ensureSlots() {
-    /* Browser / desktop shell: right side of header, beside toolbar icons. */
+    /* Browser / desktop shell: first slot inside the header icon cluster, so
+     * on tablet/phone the status shares the same bubble as dark mode etc. */
     document.querySelectorAll('.tma-dash__header-right').forEach(function (right) {
       var icons = right.querySelector('.tma-dash__header-icons');
       if (!icons) return;
@@ -485,13 +486,13 @@
         wrap.className = 'tma-dash__header-presence';
         wrap.setAttribute('data-presence-header', '');
         wrap.appendChild(makePresenceButton());
-        icons.insertAdjacentElement('beforebegin', wrap);
+        icons.insertAdjacentElement('afterbegin', wrap);
       } else {
         if (!wrap.querySelector('[data-presence-indicator]')) {
           wrap.appendChild(makePresenceButton());
         }
-        if (wrap.parentElement !== right || wrap.nextElementSibling !== icons) {
-          icons.insertAdjacentElement('beforebegin', wrap);
+        if (wrap.parentElement !== icons || icons.firstElementChild !== wrap) {
+          icons.insertAdjacentElement('afterbegin', wrap);
         }
       }
       wrap.querySelectorAll('[data-presence-user-name]').forEach(function (el) { el.remove(); });

@@ -507,7 +507,8 @@ a.tma-dash__tab-btn:visited {
     --dash-mobile-header-h: calc(44px + var(--space-12) + var(--space-12) + env(safe-area-inset-top, 0px));
     --dash-tabbar-float-gap: var(--space-12);
     --dash-tabbar-block-h: calc(var(--space-6) + 20px + var(--space-2) + 11px + var(--space-6));
-    --dash-tabbar-clearance: calc(var(--dash-tabbar-float-gap) + var(--dash-tabbar-block-h));
+    /* Bottom tab bar retired (to be redesigned) — no clearance reserved. */
+    --dash-tabbar-clearance: 0px;
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
     /* dashboard.css steps this down at =<560px, but this file's unconditional
@@ -829,6 +830,16 @@ a.tma-dash__tab-btn:visited {
     grid-column: 1;
     justify-self: start;
     overflow: visible;
+    gap: 0;
+    flex: 0 0 auto;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(165%);
+    backdrop-filter: blur(20px) saturate(165%);
   }
 
   .tma-dash__header-center {
@@ -844,69 +855,30 @@ a.tma-dash__tab-btn:visited {
     display: none !important;
   }
 
+  /* Logo is the bare mark, riding in the same bubble as the menu icon. */
   .tma-dash__header-logo {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(36px, calc(153px - var(--header-logo-progress, 0) * 117px), min(153px, 36vw));
-    height: clamp(32px, calc(45px - var(--header-logo-progress, 0) * 9px), 45px);
-    flex-shrink: 1;
-    min-width: 0;
+    flex-shrink: 0;
+    width: auto;
+    height: auto;
+    padding: 0 var(--space-12) 0 var(--space-2);
     text-decoration: none;
     color: inherit;
   }
 
-  .tma-dash__header-logo .tma-dash__logo-expanded,
-  .tma-dash__header-logo .tma-dash__logo-collapsed {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    min-width: 0;
-  }
-
-  .tma-dash__header-logo .tma-dash__logo-horizontal {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    max-height: 45px;
-    object-fit: contain;
-    object-position: center;
-  }
-
   .tma-dash__header-logo .tma-dash__logo-mark {
     display: block;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     object-fit: contain;
   }
 
+  /* Legacy two-state logo markup (kept only until every shell re-renders). */
   .tma-dash__header-logo .tma-dash__logo-expanded {
-    opacity: calc(1 - var(--header-logo-progress, 0));
-    transform: scale(calc(1 - var(--header-logo-progress, 0) * 0.14))
-      translateY(calc(var(--header-logo-progress, 0) * -8px));
-    filter: blur(calc(var(--header-logo-progress, 0) * 5px));
-    pointer-events: none;
-  }
-
-  .tma-dash__header-logo .tma-dash__logo-collapsed {
-    opacity: var(--header-logo-progress, 0);
-    transform: scale(calc(0.64 + var(--header-logo-progress, 0) * 0.36))
-      rotate(calc((1 - var(--header-logo-progress, 0)) * -14deg));
-    filter: blur(calc((1 - var(--header-logo-progress, 0)) * 4px));
-    pointer-events: none;
-  }
-
-  .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-expanded {
-    pointer-events: none;
-  }
-
-  .tma-dash.is-header-scrolled .tma-dash__header-logo .tma-dash__logo-collapsed {
-    pointer-events: auto;
+    display: none;
   }
 
   .tma-dash__header-left [data-action="toggle-sidebar"] {
@@ -916,13 +888,9 @@ a.tma-dash__tab-btn:visited {
     min-height: 44px;
     padding: var(--space-8);
     border-radius: var(--radius-pill);
-    background: rgba(255, 255, 255, 0.52);
-    border: 1px solid rgba(255, 255, 255, 0.42);
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    -webkit-backdrop-filter: blur(20px) saturate(165%);
-    backdrop-filter: blur(20px) saturate(165%);
+    background: transparent;
+    border: none;
+    box-shadow: none;
     flex-shrink: 0;
     display: grid;
     place-items: center;
@@ -980,8 +948,8 @@ a.tma-dash__tab-btn:visited {
     display: none;
   }
 
-.tma-dash[data-theme="dark"] .tma-dash__header-left [data-action="toggle-sidebar"],
-:root[data-theme="dark"] .tma-dash__header-left [data-action="toggle-sidebar"],
+.tma-dash[data-theme="dark"] .tma-dash__header-left,
+:root[data-theme="dark"] .tma-dash__header-left,
 .tma-dash[data-theme="dark"] .tma-dash__header-icons,
 :root[data-theme="dark"] .tma-dash__header-icons {
     background: rgba(24, 24, 26, 0.48);
@@ -1013,7 +981,8 @@ a.tma-dash__tab-btn:visited {
     overflow: visible;
   }
 
-  .tma-dash__tabbar { display: flex; }
+  /* Bottom tab bar retired (to be redesigned) — stays hidden on mobile too. */
+  .tma-dash__tabbar { display: none !important; }
 }
 
 @media (min-width: 1025px) {
@@ -1386,4 +1355,404 @@ body::-webkit-scrollbar,
 
 .tma-portal-tile {
   min-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Tablet & mobile responsive layer (Sep 2026)
+ * One place for the touch-width behaviour of the header bubble, the CIP
+ * module, the mailbox chrome, and the shared table card layout. Loads
+ * after dashboard.css / portal.css, so plain declarations win ties.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Desktop app (Electron): the blue title bar is the header. The browser
+ *    header's glass bubble and in-bubble logo mark must not appear there. ── */
+@media (max-width: 1024px) {
+  .tma-dash--desktop-bar .tma-dash__header-left {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .tma-dash--desktop-bar .tma-dash__header-logo {
+    display: none !important;
+  }
+}
+
+/* ── Underline tab rows (CIP list tabs, applicant detail tabs, any page
+ *    head tabs): scroll sideways on touch widths, never wrap or clip. ── */
+@media (max-width: 1024px) {
+  .tma-dash__head-tabs {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .tma-dash__head-tabs .tma-tab-group,
+  .tma-dash__clients-profile-tablist {
+    display: flex;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    /* right edge fades so a cut-off row reads as "more this way" */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  }
+
+  .tma-dash__head-tabs .tma-tab,
+  .tma-dash__clients-profile-tablist .tma-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  /* Page head stacks: tabs row first, action buttons drop below when tight. */
+  .tma-dash__main-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-12);
+  }
+
+  .tma-dash__main-head-right {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .tma-dash__main-head-right .tma-dash__clients-head-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 767px) {
+  .tma-dash__main-head-right {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
+/* ── CIP applications table → cards (the grid needs 1148px, so tablet and
+ *    phone both get the card form). Labels come from data-label, stamped by
+ *    portal-views.js from the column headers. ── */
+@media (max-width: 1024px) {
+  .tma-cip-table {
+    min-width: 0;
+    display: block;
+    width: 100%;
+  }
+
+  .tma-cip-table thead {
+    display: none;
+  }
+
+  .tma-cip-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .tma-cip-table tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8) var(--space-16);
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--radius-16);
+    background: var(--dash-row-card-bg, var(--color-bg-card));
+    border: 0.5px solid var(--dash-row-card-border, var(--color-overlay-4));
+    cursor: pointer;
+  }
+
+  .tma-cip-table tbody tr:hover {
+    background: var(--color-hover);
+  }
+
+  .tma-cip-table tbody tr td {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border-bottom: 0;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .tma-cip-table tbody tr:hover td,
+  .tma-cip-table tbody tr td {
+    background: transparent;
+  }
+
+  .tma-cip-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+  }
+
+  /* The applicant heads the card; status and the row menu pin to its right. */
+  .tma-cip-table td:has(.tma-cip-table__applicant) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 120px;
+    font-size: var(--text-size-14);
+    line-height: var(--text-lh-14);
+  }
+
+  .tma-cip-table td:has(.tma-cip-table__applicant)::before {
+    display: none;
+  }
+
+  .tma-cip-table td:has(.tma-cip-status-chip) {
+    position: absolute;
+    top: var(--space-12);
+    right: 44px;
+    width: auto;
+  }
+
+  .tma-cip-table td:has(.tma-cip-status-chip)::before {
+    display: none;
+  }
+
+  .tma-cip-table td.tma-portal-cell--menu {
+    position: absolute;
+    top: var(--space-8);
+    right: var(--space-8);
+    width: auto;
+  }
+
+  .tma-cip-table td.tma-portal-cell--menu::before {
+    display: none;
+  }
+
+  /* Expanded family members keep their own full-width card. */
+  .tma-cip-table tr.tma-cip-table__member-row td {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Every other ui().table() listing (People, Admin, Files, Templates,
+ *    CBI…) gets the same card form on phones. Tablets keep the sheet with
+ *    the wrap's horizontal scroll. ── */
+@media (max-width: 767px) {
+  .tma-portal-table:not(.tma-cip-table) {
+    display: block;
+    width: 100%;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) thead {
+    display: none;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .tma-portal-table:not(.tma-cip-table) tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8) var(--space-16);
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--radius-16);
+    background: var(--dash-row-card-bg, var(--color-bg-card));
+    border: 0.5px solid var(--dash-row-card-border, var(--color-overlay-4));
+  }
+
+  .tma-portal-table:not(.tma-cip-table) tbody tr td {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border-bottom: 0;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    background: transparent;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) td.tma-portal-cell--menu {
+    position: absolute;
+    top: var(--space-8);
+    right: var(--space-8);
+    width: auto;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) td.tma-portal-cell--menu::before {
+    display: none;
+  }
+
+  .tma-portal-table:not(.tma-cip-table) td[colspan] {
+    grid-column: 1 / -1;
+  }
+
+  /* Full-width sweep for cells that carry no label (checkbox columns, empty
+     states) so they don't leave a blank half-column. */
+  .tma-portal-table:not(.tma-cip-table) td.tma-portal-cell--tight {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Clients / providers / contacts ctable cards: cells that never got a
+ *    named grid area stack full-width instead of auto-scattering. ── */
+@media (max-width: 767px) {
+  .tma-dash__ctable--clients .tma-dash__ctr--body .tma-dash__cc {
+    grid-column: 1 / -1;
+    grid-area: auto;
+  }
+}
+
+/* ── CIP applicant detail: one scrolling pane, sticky tabs, stacking facts
+ *    strip, wrapping chrome. ── */
+@media (max-width: 1024px) {
+  /* The detail pane is the scroller; the profile section releases its own
+     inner scroll so the facts strip and panels travel together. */
+  .tma-dash__clients-page--detail .tma-dash__clients-detail {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .tma-dash__clients-page--detail .tma-dash__clients-profile {
+    flex: 0 0 auto !important;
+    min-height: 0;
+    overflow: visible !important;
+  }
+
+  .tma-dash__clients-profile-tablist {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--color-white);
+    margin-bottom: var(--space-16);
+  }
+
+  .tma-dash__cip-strip {
+    gap: var(--space-12) var(--space-16);
+    padding: var(--space-12) var(--space-16);
+  }
+
+  .tma-dash__cip-strip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12) var(--space-16);
+  }
+
+  .tma-dash__clients-appbar {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .tma-dash__clients-appbar-action {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  /* Profile header chrome wraps instead of squeezing the name. */
+  .tma-dash__clients-profile-toolbar {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-dash__clients-profile-actions {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  /* Documents tab: crumbs and the action buttons share the row politely. */
+  .tma-dash__clients-folders-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-dash__clients-folders-actions {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-dash__clients-checklist-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-4);
+  }
+}
+
+/* ── Mailbox: the folder strip is a normal labelled tab row on touch
+ *    widths — every folder reachable, scrolls sideways. ── */
+@media (max-width: 1024px) {
+  .tma-dash__email-categories {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
+  }
+
+  .tma-dash__email-category {
+    flex: 0 0 auto;
+  }
+
+  .tma-dash__email-category:not(.tma-dash__email-category--active) {
+    width: auto;
+    padding: 0 var(--space-12);
+  }
+
+  .tma-dash__email-category:not(.tma-dash__email-category--active) .tma-dash__email-category-label {
+    display: inline;
+  }
+
+  /* Compose recipient pills: touch-sized targets, no 120px input floor
+     forcing the row wide. */
+  .tma-dash__email-recipients input {
+    flex: 1 1 60px;
+    min-width: 60px;
+  }
+
+  .tma-dash__email-recipient {
+    max-width: 100%;
+    min-height: 26px;
+  }
+
+  .tma-dash__email-recipient-remove {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* ── Listing toolbars (count / filters / search) wrap on touch widths and
+ *    the search takes the full second row when it drops. ── */
+@media (max-width: 1024px) {
+  .tma-dash__toolbar {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-dash__toolbar-actions {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .tma-dash__toolbar .tma-dash__toolbar-search {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
 }

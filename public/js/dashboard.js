@@ -651,16 +651,17 @@
     }
 
     function setupMobileHeaderLogo() {
-      var headerCenter = root.querySelector('.tma-dash__header-center');
-      if (!headerCenter) return;
+      var headerLeft = root.querySelector('.tma-dash__header-left');
+      if (!headerLeft) return;
 
       function syncHeaderLogo() {
-        var existing = headerCenter.querySelector('[data-header-logo]');
+        var existing = root.querySelector('[data-header-logo]');
         if (!isMobileSidebar()) {
           if (existing) existing.remove();
           return;
         }
-        if (existing) return;
+        if (existing && existing.parentNode === headerLeft) return;
+        if (existing) existing.remove();
 
         var logo = document.createElement('a');
         logo.className = 'tma-dash__header-logo';
@@ -668,14 +669,12 @@
         logo.href = appUrl(window.TMA_CLASSIC ? '/classic' : '/');
         logo.setAttribute('aria-label', 'TM ANTOINE Advisory home');
         logo.innerHTML =
-          '<span class="tma-dash__logo-expanded">' +
-          '<img class="tma-dash__logo-horizontal" src="images/brand/tma/tma-logo-horizontal.png" alt="" loading="lazy">' +
-          '</span>' +
-          '<span class="tma-dash__logo-collapsed">' +
-          '<img class="tma-dash__logo-mark" src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="32" height="32" loading="lazy">' +
-          '</span>';
+          '<img class="tma-dash__logo-mark" src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="28" height="28" loading="lazy">';
 
-        headerCenter.insertBefore(logo, headerCenter.firstChild);
+        // Mark sits in the same bubble as the menu icon, to its right.
+        var toggle = headerLeft.querySelector('[data-action="toggle-sidebar"]');
+        if (toggle && toggle.nextSibling) headerLeft.insertBefore(logo, toggle.nextSibling);
+        else headerLeft.appendChild(logo);
       }
 
       syncHeaderLogo();
