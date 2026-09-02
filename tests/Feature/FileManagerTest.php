@@ -690,11 +690,10 @@ class FileManagerTest extends TestCase
             $this->fileIn($user, $docs, 'b.pdf', 10);
         }
 
-        $recursiveTotals = 0;
-        DB::listen(function ($q) use (&$recursiveTotals) {
-            $sql = strtolower($q->sql);
-            if (str_contains($sql, 'recursive') && str_contains($sql, 'total_size')) {
-                $recursiveTotals++;
+        $recursive = 0;
+        DB::listen(function ($q) use (&$recursive) {
+            if (str_contains(strtolower($q->sql), 'recursive')) {
+                $recursive++;
             }
         });
 
@@ -702,7 +701,7 @@ class FileManagerTest extends TestCase
             ->getJson('/portal/files/?section=all')
             ->assertOk();
 
-        $this->assertSame(0, $recursiveTotals, 'All Files must not recurse the library to draw its roots');
+        $this->assertSame(0, $recursive, 'All Files must not recurse the library to draw its roots');
         $clients = collect($browse->json('folders'))->firstWhere('name', FolderProvisioner::ROOT_CLIENTS);
         $this->assertNotNull($clients);
         $this->assertSame(40, $clients['folderCount']);
@@ -712,7 +711,7 @@ class FileManagerTest extends TestCase
             ->getJson('/portal/files/?section=all&folder='.$root->uuid)
             ->assertOk();
 
-        $this->assertSame(0, $recursiveTotals, 'Opening the citizenship library must not walk every client tree');
+        $this->assertSame(0, $recursive, 'Opening the citizenship library must not walk every client tree');
         $this->assertSame(40, $inside->json('counts.folders'));
         $this->assertCount(40, $inside->json('folders'));
         $this->assertFalse($inside->json('hasMore'));

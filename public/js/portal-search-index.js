@@ -308,7 +308,7 @@
   function fetchFiles(q) {
     var net = window.TMAFilesNet;
     if (!net || typeof net.fetchJSON !== 'function') return Promise.resolve([]);
-    var params = 'section=all&search=' + encodeURIComponent(q) + '&perPage=12';
+    var params = 'section=all&search=' + encodeURIComponent(q) + '&perPage=12&lean=1';
     return net.fetchJSON(net.url('/?' + params)).then(function (res) {
       var folders = (res.folders || []).slice(0, 8).map(function (f) {
         return {

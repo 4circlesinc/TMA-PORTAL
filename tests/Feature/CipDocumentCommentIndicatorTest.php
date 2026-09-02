@@ -14,6 +14,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Files\Comments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -143,5 +144,35 @@ class CipDocumentCommentIndicatorTest extends TestCase
 
         $this->actingAs($mate)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
         $this->assertNull($folderRow($mate, $root)['comments'], 'reading it empties the folder row too');
+    }
+
+    public function test_a_library_root_reports_unread_without_walking_the_tree(): void
+    {
+        [$staff, $mate, , $root, , $file] = $this->filing();
+
+        $library = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Citizenship Applications Portal',
+            'folder_type' => Folder::TYPE_ROOT,
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+        ]);
+        $root->forceFill(['parent_id' => $library->id])->save();
+
+        Comments::create($file, $staff, 'Needs a re-scan @Bo Colleague', null, [$mate->id]);
+
+        $recursive = 0;
+        DB::listen(function ($q) use (&$recursive) {
+            if (str_contains(strtolower($q->sql), 'recursive')) {
+                $recursive++;
+            }
+        });
+
+        $row = collect(
+            $this->actingAs($mate)->getJson('/portal/files/?section=all')->assertOk()->json('folders')
+        )->firstWhere('name', 'Citizenship Applications Portal');
+
+        $this->assertSame(0, $recursive, 'unread chips must not recurse the library');
+        $this->assertSame(1, $row['comments']['unread']);
     }
 }

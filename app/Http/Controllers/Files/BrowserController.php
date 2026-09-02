@@ -7,7 +7,6 @@ use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
-use App\Support\Cip\CipAccess;
 use App\Support\Cip\Package;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
@@ -105,7 +104,7 @@ class BrowserController extends BaseFilesController
         $hasMore = false;
 
         if ($section === 'recent' && $folderQuery && $fileQuery) {
-            [$folders, $files, $hasMore] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage);
+            [$folders, $files, $hasMore] = $this->recencyWindow($folderQuery, $fileQuery, $sort, $dir, $offset, $perPage, $user);
             $folderTotal = $folders->count();
             $fileTotal = $files->count();
             $total = $offset + $folderTotal + $fileTotal + ($hasMore ? 1 : 0);
@@ -143,8 +142,15 @@ class BrowserController extends BaseFilesController
                 $this->orderFiles($fileQuery, $sort, $dir);
                 $need = $perPage - $folders->count();
                 $fileOffset = $offset > 0 && $folders->isEmpty() ? $offset : 0;
+                $fetch = $need + 1;
+                if ($section === 'recent' && FileAccess::isAdmin($user)) {
+                    $fetch = min(($need + 1) * 3, 200);
+                }
                 $fileRows = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])
-                    ->offset($fileOffset)->limit($need + 1)->get();
+                    ->offset($fileOffset)->limit($fetch)->get();
+                if ($section === 'recent' && FileAccess::isAdmin($user)) {
+                    [, $fileRows] = $this->dropForeignPersonalSpace($user, collect(), $fileRows);
+                }
                 $hasMore = $hasMore || $fileRows->count() > $need;
                 $files = $fileRows->take($need);
             }
@@ -154,9 +160,8 @@ class BrowserController extends BaseFilesController
         }
 
         $presenter = $this->presenter($request);
-        // Direct child counts on the page, not unread-comment walks of each
-        // subtree. Opening a client folder used to recurse every person and
-        // document folder under it before a single row could paint.
+        // Direct child counts on the page. Unread chips walk the reader's
+        // own threads, not each folder's subtree — see CommentReads::unreadByFolder.
         $withStats = $section !== 'recycle' && ! $lean;
         $presenter->prime($files->all(), $folders->all(), $withStats);
 
@@ -297,15 +302,10 @@ class BrowserController extends BaseFilesController
                 // nothing but two empty containers created moments earlier.
                 // Actual client/organization/staff folders (not the root type)
                 // still belong here.
-                $this->visibleFolders($user)
-                    ->where('folder_type', '!=', Folder::TYPE_ROOT)
-                    ->orderByDesc('updated_at'),
+                $this->recentFolders($user),
                 // File Box files (folder_id null) must be included: `folder_id
                 // NOT IN (...)` is never true for NULL, so they'd silently drop.
-                $this->visibleFiles($user)
-                    ->where(fn ($q) => $q->whereNull('folder_id')
-                        ->orWhereNotIn('folder_id', Folder::onlyTrashed()->select('id')))
-                    ->orderByDesc('updated_at'),
+                $this->recentFiles($user),
             ],
             'recycle' => [
                 $this->trashedTopFolders($user),
@@ -450,6 +450,37 @@ class BrowserController extends BaseFilesController
         });
     }
 
+    /**
+     * Recent's folder side. Administrators skip the personal-drive WHERE that
+     * made ORDER BY updated_at LIMIT a sequential scan of the whole table;
+     * those rows are dropped in {@see recencyWindow} after the page is read.
+     */
+    private function recentFolders(User $user): Builder
+    {
+        $q = FileAccess::isAdmin($user)
+            ? Folder::query()
+            : $this->visibleFolders($user);
+
+        return $q->where('folder_type', '!=', Folder::TYPE_ROOT)
+            ->orderByDesc('updated_at');
+    }
+
+    /**
+     * Recent's file side. Same reason as {@see recentFolders}: the admin
+     * personal-drive OR cannot use an updated_at index, and that is what
+     * 504'd dashboard widgets asking for `section=recent&lean=1`.
+     */
+    private function recentFiles(User $user): Builder
+    {
+        $q = FileAccess::isAdmin($user)
+            ? FileItem::query()
+            : $this->visibleFiles($user);
+
+        return $q->where(fn ($w) => $w->whereNull('folder_id')
+            ->orWhereNotIn('folder_id', Folder::onlyTrashed()->select('id')))
+            ->orderByDesc('updated_at');
+    }
+
     private function ownedFolders(User $user): Builder
     {
         return Folder::query()->where('owner_id', $user->id);
@@ -579,15 +610,22 @@ class BrowserController extends BaseFilesController
      *
      * @return array{0: Collection, 1: Collection, 2: bool}
      */
-    private function recencyWindow(Builder $folderQuery, Builder $fileQuery, string $sort, string $dir, int $offset, int $perPage): array
+    private function recencyWindow(Builder $folderQuery, Builder $fileQuery, string $sort, string $dir, int $offset, int $perPage, User $user): array
     {
         $reach = $offset + $perPage + 1;
+        // Administrators read a wider window so dropping colleagues' personal
+        // drives afterwards still fills the page.
+        $fetch = FileAccess::isAdmin($user) ? min($reach * 3, 200) : $reach;
 
         $this->orderFolders($folderQuery, $sort, $dir);
         $this->orderFiles($fileQuery, $sort, $dir);
 
-        $folders = $folderQuery->with(['owner', 'creator', 'parent'])->limit($reach)->get();
-        $files = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])->limit($reach)->get();
+        $folders = $folderQuery->with(['owner', 'creator', 'parent'])->limit($fetch)->get();
+        $files = $fileQuery->with(['owner', 'uploader', 'uploadedByMember', 'folder'])->limit($fetch)->get();
+
+        if (FileAccess::isAdmin($user)) {
+            [$folders, $files] = $this->dropForeignPersonalSpace($user, $folders, $files);
+        }
 
         // Microseconds, not seconds: a bulk import writes hundreds of rows
         // inside one second, and a whole-second key would order them by which
@@ -613,6 +651,35 @@ class BrowserController extends BaseFilesController
             $page->where('kind', 'file')->pluck('row')->values(),
             $hasMore,
         ];
+    }
+
+    /**
+     * Drop other people's personal OneDrive rows from a page already read.
+     *
+     * Kept off the SQL of Recent so ORDER BY updated_at LIMIT can use an
+     * index. Shared items stay: an explicit share is how a personal file
+     * is supposed to appear in someone else's library.
+     *
+     * @param  Collection<int, Folder>  $folders
+     * @param  Collection<int, FileItem>  $files
+     * @return array{0: Collection, 1: Collection}
+     */
+    private function dropForeignPersonalSpace(User $user, Collection $folders, Collection $files): array
+    {
+        FileAccess::warmChains($folders->pluck('id')->merge($files->pluck('folder_id')));
+
+        $sharedFolders = array_fill_keys(FileAccess::sharedFolderIds($user), true);
+        $sharedFiles = array_fill_keys(FileAccess::sharedFileIds($user), true);
+
+        $folders = $folders->reject(fn (Folder $f) => FileAccess::isPersonalSpaceFolder($f)
+            && $f->owner_id !== $user->id
+            && ! isset($sharedFolders[$f->id]))->values();
+
+        $files = $files->reject(fn (FileItem $f) => FileAccess::isInPersonalDrive($f)
+            && $f->owner_id !== $user->id
+            && ! isset($sharedFiles[$f->id]))->values();
+
+        return [$folders, $files];
     }
 
     private function orderFolders(Builder $q, string $sort, string $dir): void

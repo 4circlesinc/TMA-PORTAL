@@ -217,47 +217,67 @@ final class CommentReads
      * hides, and de-duplicated by thread so a conversation spanning two files
      * is one thing to go and read.
      *
+     * Walks UP from the reader's unread threads, not DOWN from every folder
+     * on the page. The old subtree expansion of a library root (Citizenship
+     * Applications, Staff Files) pulled tens of thousands of descendant ids
+     * into PHP and rebound them as a WHERE IN — that is the 504 on
+     * `/portal/files`, and past Postgres's bind limit it is the 500.
+     *
      * @param  list<int>  $folderIds
      * @return array<int, int> folder id => unread thread count beneath it
      */
     public static function unreadByFolder(User $user, array $folderIds): array
     {
-        $subtrees = FolderTree::subtreeMap($folderIds);
+        $folderIds = array_values(array_unique(array_filter(array_map('intval', $folderIds))));
 
-        if ($subtrees === []) {
+        if ($folderIds === []) {
             return [];
         }
 
-        $all = array_values(array_unique(array_merge(...array_values($subtrees))));
-
-        if ($all === []) {
-            return [];
-        }
-
-        // thread id => the folders it sits in, so a root can count its own.
-        $threads = self::unreadQuery($user)
+        $rows = self::unreadQuery($user)
             ->join('files', 'files.id', '=', 'file_comments.file_id')
-            ->whereIn('files.folder_id', $all)
+            ->whereNotNull('files.folder_id')
             ->whereNull('files.deleted_at')
+            ->select('file_comments.root_id as thread_id', 'files.folder_id as folder_id')
             ->distinct()
-            ->pluck('files.folder_id', 'file_comments.root_id');
+            ->toBase()
+            ->get();
 
-        if ($threads->isEmpty()) {
+        if ($rows->isEmpty()) {
             return [];
         }
 
+        $hits = [];
+        $touched = [];
+        foreach ($rows as $row) {
+            $threadId = (int) $row->thread_id;
+            $folderId = (int) $row->folder_id;
+            if (! $threadId || ! $folderId) {
+                continue;
+            }
+            $hits[$threadId][$folderId] = true;
+            $touched[$folderId] = true;
+        }
+
+        if ($touched === []) {
+            return [];
+        }
+
+        FileAccess::warmChains(array_keys($touched));
+
+        $wanted = array_fill_keys($folderIds, true);
         $out = [];
 
-        foreach ($subtrees as $rootId => $ids) {
-            $inside = array_flip($ids);
-            $count = 0;
-            foreach ($threads as $folderId) {
-                if (isset($inside[$folderId])) {
-                    $count++;
+        foreach ($hits as $folders) {
+            $counted = [];
+            foreach (array_keys($folders) as $folderId) {
+                foreach (FileAccess::lineage($folderId) as $node) {
+                    $id = (int) $node->id;
+                    if (isset($wanted[$id]) && ! isset($counted[$id])) {
+                        $counted[$id] = true;
+                        $out[$id] = ($out[$id] ?? 0) + 1;
+                    }
                 }
-            }
-            if ($count > 0) {
-                $out[$rootId] = $count;
             }
         }
 
