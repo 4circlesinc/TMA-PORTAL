@@ -19664,6 +19664,13 @@ button.tma-file-status-chip:focus-visible,
   padding-top: 0;
 }
 
+/* In the facts grid the items sit BESIDE each other, so the first-row trim
+   above would float the first fact 8px above its own row — every fact keeps
+   the shared padding and the labels line up (the company Details card). */
+.tma-dash__clients-list--profile.tma-dash__clients-list--facts > .tma-dash__clients-list-item:first-child {
+  padding-top: var(--space-8);
+}
+
 .tma-dash__clients-page--list,
 .tma-dash__clients-page--detail {
   flex-direction: column;
