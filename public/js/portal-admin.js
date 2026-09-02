@@ -1718,7 +1718,12 @@
       ? '<span class="tma-portal-table__muted">Filed in “' + ui().esc(r.folder) + '”</span>'
       : '';
 
-    return '<tr>' +
+    // Live rows drag to reorder; retired rows keep their seat at the bottom.
+    var drag = (canEdit && !r.retired)
+      ? ' draggable="true" data-cipdoc-row="' + ui().esc(r.id) + '"'
+      : '';
+
+    return '<tr' + drag + '>' +
       '<td class="tma-portal-table__check">' + tick + '</td>' +
       '<td class="tma-portal-table__check">' + pre + '</td>' +
       '<td class="tma-portal-table__check">' + post + '</td>' +
@@ -1734,7 +1739,8 @@
         ? '<div class="tma-portal-row-actions">' +
           (r.retired
             ? '<button type="button" class="tma-portal-icon-btn" data-cipdoc-restore="' + ui().esc(r.id) + '" title="Bring it back" aria-label="Bring it back"><img src="images/icons/phosphor/ArrowCounterClockwise.svg" alt=""></button>'
-            : '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
+            : '<span class="tma-portal-icon-btn tma-portal-icon-btn--grip" title="Drag to reorder" aria-hidden="true"><img src="images/icons/phosphor/DotsSixVertical.svg" alt=""></span>' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-down="' + ui().esc(r.id) + '" title="Move down" aria-label="Move down"><img src="images/icons/phosphor/CaretDown.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-folder="' + ui().esc(r.id) + '" title="Choose a folder" aria-label="Choose a folder"><img src="images/icons/phosphor/FolderSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Edit name and description" aria-label="Edit name and description"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
@@ -1916,6 +1922,14 @@
         });
       });
 
+      function persistOrder(type, order) {
+        filelibJson('POST', '/portal/cip/requirements/reorder', { applicantType: type.value, order: order })
+          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; render(); })
+          // A failed save re-renders from the unchanged state, so a row
+          // dropped somewhere the server never recorded snaps back.
+          .catch(function (e) { failed(e); render(); });
+      }
+
       function move(id, delta) {
         var f = req(id);
         if (!f) return;
@@ -1925,10 +1939,8 @@
         if (at === -1 || to < 0 || to >= live.length) return;
         live.splice(at, 1);
         live.splice(to, 0, f.r);
-        var order = live.concat(f.type.requirements.filter(function (r) { return r.retired; }))
-          .map(function (r) { return r.id; });
-        filelibJson('POST', '/portal/cip/requirements/reorder', { applicantType: f.type.value, order: order })
-          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; render(); }).catch(failed);
+        persistOrder(f.type, live.concat(f.type.requirements.filter(function (r) { return r.retired; }))
+          .map(function (r) { return r.id; }));
       }
 
       el.querySelectorAll('[data-cipdoc-up]').forEach(function (b) {
@@ -1936,6 +1948,70 @@
       });
       el.querySelectorAll('[data-cipdoc-down]').forEach(function (b) {
         b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-down'), 1); });
+      });
+
+      /*
+       * Drag to reorder, one binding per type's table so a row can never be
+       * dropped into another person's checklist. The row moves live under
+       * the pointer (the same pattern as the Folder Shortcuts sidebar) and
+       * the order is saved once, on release. Retired rows carry no
+       * data-cipdoc-row, so they are neither draggable nor a drop target,
+       * and the tail of the list stays theirs.
+       */
+      el.querySelectorAll('.tma-portal-table--cipdocs tbody').forEach(function (body) {
+        var dragged = null;
+
+        function rowFrom(target) {
+          var row = target && target.closest ? target.closest('[data-cipdoc-row]') : null;
+          return row && row.parentNode === body ? row : null;
+        }
+
+        body.addEventListener('dragstart', function (e) {
+          var row = rowFrom(e.target);
+          if (!row) return;
+          dragged = row;
+          row.classList.add('is-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          // Firefox won't start a drag without data on the transfer.
+          try { e.dataTransfer.setData('text/plain', row.getAttribute('data-cipdoc-row')); } catch (err) {}
+        });
+
+        body.addEventListener('dragover', function (e) {
+          if (!dragged) return;
+          var row = rowFrom(e.target);
+          if (!row || row === dragged) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          var box = row.getBoundingClientRect();
+          var after = e.clientY > box.top + box.height / 2;
+          body.insertBefore(dragged, after ? row.nextSibling : row);
+        });
+
+        body.addEventListener('drop', function (e) { if (dragged) e.preventDefault(); });
+
+        body.addEventListener('dragend', function () {
+          if (!dragged) return;
+          dragged.classList.remove('is-dragging');
+          var id = dragged.getAttribute('data-cipdoc-row');
+          dragged = null;
+
+          var f = req(id);
+          if (!f) return;
+          var live = Array.prototype.map.call(
+            body.querySelectorAll('[data-cipdoc-row]'),
+            function (row) { return row.getAttribute('data-cipdoc-row'); },
+          );
+
+          // A drag that ended where it began saves nothing.
+          var before = f.type.requirements.filter(function (r) { return !r.retired; })
+            .map(function (r) { return r.id; });
+          if (live.join('\n') === before.join('\n')) return;
+
+          persistOrder(f.type, live.concat(
+            f.type.requirements.filter(function (r) { return r.retired; })
+              .map(function (r) { return r.id; }),
+          ));
+        });
       });
     },
   };

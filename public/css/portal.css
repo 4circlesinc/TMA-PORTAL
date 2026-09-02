@@ -395,6 +395,13 @@
   background: var(--color-white);
 }
 
+/* Rows reorder by drag; the grip is the signpost, the carets stay for keyboards. */
+.tma-portal-table--cipdocs tr[draggable="true"] { cursor: grab; }
+.tma-portal-table--cipdocs tr.is-dragging { opacity: 0.5; }
+.tma-portal-table--cipdocs tr.is-dragging td { background: var(--color-hover); }
+.tma-portal-icon-btn--grip { cursor: grab; }
+.tma-portal-icon-btn--grip:hover { background: none; }
+
 /* The document column holds a name and a description, so it wraps. Every
    other cell stays one line; this one is the sentence, not a fact. */
 .tma-portal-table td.tma-portal-cell--wrap {
