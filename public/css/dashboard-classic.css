@@ -1336,7 +1336,8 @@
   flex: 1 0 0;
   width: 0;
 }
-.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
+.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
 
 .tma-dash__users--grid .tma-dash__uavatar-grid {
   display: flex;
@@ -1537,25 +1538,30 @@
   z-index: 130;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control {
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label {
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label,
+:root[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label {
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger,
+:root[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
@@ -2255,12 +2261,19 @@
 
 /* dark theme: table toolbar glyphs */
 .tma-dash[data-theme="dark"] .tma-dash__tool-btn img,
+:root[data-theme="dark"] .tma-dash__tool-btn img,
 .tma-dash[data-theme="dark"] .tma-dash__toolbar-search img,
+:root[data-theme="dark"] .tma-dash__toolbar-search img,
 .tma-dash[data-theme="dark"] .tma-dash__messages-search img,
+:root[data-theme="dark"] .tma-dash__messages-search img,
 .tma-dash[data-theme="dark"] .tma-dash__clients-search img,
+:root[data-theme="dark"] .tma-dash__clients-search img,
 .tma-dash[data-theme="dark"] .tma-dash__email-search img,
+:root[data-theme="dark"] .tma-dash__email-search img,
 .tma-dash[data-theme="dark"] .tma-dash__cc--date img,
-.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__cc--date img,
+.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
 
 /* Chart panel base */
 .tma-dash__panel {
@@ -2786,33 +2799,50 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__sidebar,
-.tma-dash[data-theme="dark"] .tma-dash__rightbar {
+:root[data-theme="dark"] .tma-dash__sidebar,
+.tma-dash[data-theme="dark"] .tma-dash__rightbar,
+:root[data-theme="dark"] .tma-dash__rightbar {
   background: var(--dash-panel-bg);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__menu,
-.tma-dash[data-theme="dark"] .tma-search-popup--standalone {
+:root[data-theme="dark"] .tma-dash__menu,
+.tma-dash[data-theme="dark"] .tma-search-popup--standalone,
+:root[data-theme="dark"] .tma-search-popup--standalone {
   background: rgba(255, 255, 255, 0.9);
 }
 /* invert monochrome icons + avatars stay; flip black line/glyph icons to light */
 .tma-dash[data-theme="dark"] .tma-dash__nav-icon,
+:root[data-theme="dark"] .tma-dash__nav-icon,
 .tma-dash[data-theme="dark"] .tma-dash__nav-dot,
+:root[data-theme="dark"] .tma-dash__nav-dot,
 .tma-dash[data-theme="dark"] .tma-dash__nav-caret svg,
+:root[data-theme="dark"] .tma-dash__nav-caret svg,
 .tma-dash[data-theme="dark"] .tma-dash__icon-btn img,
+:root[data-theme="dark"] .tma-dash__icon-btn img,
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon img,
+:root[data-theme="dark"] .tma-dash__notice-icon img,
 .tma-dash[data-theme="dark"] .tma-dash__search img,
+:root[data-theme="dark"] .tma-dash__search img,
 .tma-dash[data-theme="dark"] .tma-dash__today img,
+:root[data-theme="dark"] .tma-dash__today img,
 .tma-dash[data-theme="dark"] .tma-dash__back-btn img,
-.tma-dash[data-theme="dark"] .tma-dash__profile-action-btn img {
+:root[data-theme="dark"] .tma-dash__back-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__profile-action-btn img,
+:root[data-theme="dark"] .tma-dash__profile-action-btn img {
   filter: invert(1) brightness(1.6);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__card-ico,
-.tma-dash[data-theme="dark"] .tma-dash__card-delta img { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__card-ico,
+.tma-dash[data-theme="dark"] .tma-dash__card-delta img,
+:root[data-theme="dark"] .tma-dash__card-delta img { filter: invert(1) brightness(1.6); }
 /* the wordmark is navy + cyan on transparent; brightness(0) flattens every opaque
    pixel to black and invert(1) lifts it to white, leaving the alpha channel intact */
-.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal { filter: brightness(0) invert(1); }
-.tma-dash[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
+.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal,
+:root[data-theme="dark"] .tma-dash__logo-horizontal { filter: brightness(0) invert(1); }
+.tma-dash[data-theme="dark"] .tma-dash__logo-mark,
+:root[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
 /* ─────────────────────────────────────────
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
@@ -3012,15 +3042,18 @@
 
 /* dark theme: tab bar + menu surfaces and glyphs */
 .tma-dash[data-theme="dark"] { --color-bg-page: #161616; }
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar {
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-card,
+:root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
+.tma-dash[data-theme="dark"] .tma-dash__tabbar,
+:root[data-theme="dark"] .tma-dash__tabbar {
   background: rgba(24, 24, 26, 0.48);
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow: none;
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   backdrop-filter: blur(20px) saturate(140%);
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::before {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::before,
+:root[data-theme="dark"] .tma-dash__tabbar::before {
   background: linear-gradient(
     155deg,
     rgba(255, 255, 255, 0.1) 0%,
@@ -3028,12 +3061,16 @@
     rgba(255, 255, 255, 0.05) 100%
   );
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::after {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::after,
+:root[data-theme="dark"] .tma-dash__tabbar::after {
   box-shadow: none;
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
+:root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 .tma-dash[data-theme="dark"] .tma-dash__mrow-icon,
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__mrow-icon,
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img,
+:root[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
 
 /* ─────────────────────────────────────────
  * RESPONSIVE
@@ -3812,7 +3849,8 @@
     }
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__header {
+.tma-dash[data-theme="dark"] .tma-dash__header,
+:root[data-theme="dark"] .tma-dash__header {
     background: transparent;
   }
 
@@ -4650,8 +4688,11 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--body:hover,
+:root[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--body:hover,
 .tma-dash[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--selected,
-.tma-dash[data-theme="dark"] .tma-dash__tasks-row {
+:root[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--selected,
+.tma-dash[data-theme="dark"] .tma-dash__tasks-row,
+:root[data-theme="dark"] .tma-dash__tasks-row {
   background: var(--color-hover);
 }
 
@@ -5093,7 +5134,8 @@
   padding: var(--space-4);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon {
+.tma-dash[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon {
   filter: invert(1) brightness(1.6);
 }
 
@@ -5262,7 +5304,9 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-pagination__icon,
-.tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img {
+:root[data-theme="dark"] .tma-dash__files--overview .tma-pagination__icon,
+.tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img,
+:root[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -5423,7 +5467,9 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-pagination__icon,
-.tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img {
+:root[data-theme="dark"] .tma-dash__activity--overview .tma-pagination__icon,
+.tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img,
+:root[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -6227,7 +6273,8 @@
   color: var(--color-white);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__overview-settings-upload-icon img {
+.tma-dash[data-theme="dark"] .tma-dash__overview-settings-upload-icon img,
+:root[data-theme="dark"] .tma-dash__overview-settings-upload-icon img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -6937,21 +6984,27 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__account-settings-callout,
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn {
+:root[data-theme="dark"] .tma-dash__account-settings-callout,
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn,
+:root[data-theme="dark"] .tma-dash__account-settings-deactivate-warn {
   background: rgba(255, 255, 255, 0.06);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__account-settings-callout img,
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img {
+:root[data-theme="dark"] .tma-dash__account-settings-callout img,
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img,
+:root[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img {
   filter: invert(1) brightness(1.6);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-btn--primary {
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-btn--primary,
+:root[data-theme="dark"] .tma-dash__account-settings-btn--primary {
   background: var(--color-white);
   color: var(--color-black);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-stat-divider {
+.tma-dash[data-theme="dark"] .tma-dash__account-stat-divider,
+:root[data-theme="dark"] .tma-dash__account-stat-divider {
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -7190,7 +7243,8 @@
   background: var(--color-hover);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-security-stats {
+.tma-dash[data-theme="dark"] .tma-dash__account-security-stats,
+:root[data-theme="dark"] .tma-dash__account-security-stats {
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -10118,7 +10172,7 @@
   border: none;
   border-radius: var(--radius-16);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-14);
   line-height: 20px;
@@ -11082,7 +11136,8 @@
     background: var(--color-white);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__email-row-swipe-action--archive {
+.tma-dash[data-theme="dark"] .tma-dash__email-row-swipe-action--archive,
+:root[data-theme="dark"] .tma-dash__email-row-swipe-action--archive {
     background: #15803d;
     color: #ffffff;
   }
@@ -11897,7 +11952,7 @@
 
 .tma-dash__email-compose-send-btn--primary {
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 /* Email - compose window (Gmail-style bottom panel) */
@@ -12047,7 +12102,7 @@
   border-radius: var(--radius-16) var(--radius-16) 0 0;
   border-bottom: none;
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -12090,12 +12145,14 @@
   opacity: 0.85;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-compose-window {
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-window,
+:root[data-theme="dark"] .tma-dash__email-compose-window {
   background: var(--color-bg-card);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-compose-window-btn img {
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-window-btn img,
+:root[data-theme="dark"] .tma-dash__email-compose-window-btn img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -13474,7 +13531,8 @@
     background: var(--color-white);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row {
+.tma-dash[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row,
+:root[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row {
     background: var(--color-bg-card);
   }
 
@@ -13752,7 +13810,7 @@
   border: none;
   border-radius: var(--radius-12);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-12);
   line-height: 16px;
@@ -14864,7 +14922,7 @@
   border: none;
   border-radius: var(--radius-12);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-12);
   line-height: 16px;
@@ -15054,7 +15112,7 @@
   background: var(--color-black);
   font-size: var(--text-size-12);
   line-height: 16px;
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 .tma-dash__clients-schedule-now-line {
@@ -16111,13 +16169,16 @@
   min-height: 0;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__feed-composer {
+.tma-dash[data-theme="dark"] .tma-dash__feed-composer,
+:root[data-theme="dark"] .tma-dash__feed-composer {
   background: var(--color-bg-card);
   border-color: var(--dash-border);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__feed-compose-type--active,
-.tma-dash[data-theme="dark"] .tma-dash__feed-compose-type:hover {
+:root[data-theme="dark"] .tma-dash__feed-compose-type--active,
+.tma-dash[data-theme="dark"] .tma-dash__feed-compose-type:hover,
+:root[data-theme="dark"] .tma-dash__feed-compose-type:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -16703,28 +16764,37 @@
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-canvas--auth-light {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-canvas--auth-light,
+:root[data-theme="dark"] .tma-dash__email-template-canvas--auth-light {
   background: #1a1a1a;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-card {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-card,
+:root[data-theme="dark"] .tma-dash__email-template-auth-card {
   background: #2d2d2d;
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-title,
+:root[data-theme="dark"] .tma-dash__email-template-auth-title,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-lead,
+:root[data-theme="dark"] .tma-dash__email-template-auth-lead,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-help,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-body-copy {
+:root[data-theme="dark"] .tma-dash__email-template-auth-help,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-body-copy,
+:root[data-theme="dark"] .tma-dash__email-template-auth-body-copy {
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-code {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-code,
+:root[data-theme="dark"] .tma-dash__email-template-auth-code {
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-contact,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-legal {
+:root[data-theme="dark"] .tma-dash__email-template-auth-contact,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-legal,
+:root[data-theme="dark"] .tma-dash__email-template-auth-legal {
   color: var(--color-text-secondary);
 }
 
@@ -16975,24 +17045,32 @@
   margin-top: var(--space-16);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-preview--mobile {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-preview--mobile,
+:root[data-theme="dark"] .tma-dash__email-template-preview--mobile {
   background: rgba(0, 0, 0, 0.24);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-device,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-device,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-chrome {
   background: var(--color-bg-elevated);
   border-color: var(--color-border-subtle);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome-title,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-chrome-title,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-brand span,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-brand span,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title {
   color: var(--color-text-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-address,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-note {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-address,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-note,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-note {
   color: var(--color-text-secondary);
 }
 
@@ -18128,7 +18206,8 @@
   display: none;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-profile-inner-divider {
+.tma-dash[data-theme="dark"] .tma-dash__settings-profile-inner-divider,
+:root[data-theme="dark"] .tma-dash__settings-profile-inner-divider {
   border-top-color: var(--color-border-soft);
 }
 
@@ -18285,7 +18364,8 @@
   background: var(--color-hover);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-plugin-dropdown {
+.tma-dash[data-theme="dark"] .tma-dash__settings-plugin-dropdown,
+:root[data-theme="dark"] .tma-dash__settings-plugin-dropdown {
   background: var(--dash-panel-bg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
@@ -18504,13 +18584,16 @@
   border-color: var(--color-border-strong);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-invoice {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-invoice,
+:root[data-theme="dark"] .tma-dash__settings-payment-invoice {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-soft);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-wrap .tma-card--add-address,
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add {
+:root[data-theme="dark"] .tma-dash__settings-payment-add-wrap .tma-card--add-address,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add,
+:root[data-theme="dark"] .tma-dash__settings-payment-add {
   border-color: var(--color-border-soft);
 }
 
@@ -19060,16 +19143,19 @@
   margin-top: var(--space-12);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-option {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-option,
+:root[data-theme="dark"] .tma-dash__settings-payment-option {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input,
+:root[data-theme="dark"] .tma-dash__settings-payment-input {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder,
+:root[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder {
   color: rgba(255, 255, 255, 0.25);
 }
 
@@ -19179,11 +19265,13 @@
   display: none !important;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active,
+:root[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active {
   border-color: var(--color-border-strong);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-select {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-select,
+:root[data-theme="dark"] .tma-dash__settings-payment-select {
   background-color: rgba(255, 255, 255, 0.06);
 }
 
@@ -20574,11 +20662,13 @@
   height: 16px;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-picker {
+.tma-dash[data-theme="dark"] .tma-dash__settings-picker,
+:root[data-theme="dark"] .tma-dash__settings-picker {
   background: rgba(35, 35, 37, 0.96);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-picker-search {
+.tma-dash[data-theme="dark"] .tma-dash__settings-picker-search,
+:root[data-theme="dark"] .tma-dash__settings-picker-search {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-soft);
   color: var(--color-text-primary);
@@ -20638,53 +20728,66 @@
   cursor: not-allowed;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-cookie-popover {
+.tma-dash[data-theme="dark"] .tma-dash__settings-cookie-popover,
+:root[data-theme="dark"] .tma-dash__settings-cookie-popover {
   background: rgba(35, 35, 37, 0.96);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-divider {
+.tma-dash[data-theme="dark"] .tma-dash__settings-divider,
+:root[data-theme="dark"] .tma-dash__settings-divider {
   border-top-color: var(--color-border-soft);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__settings-nav-icon img,
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-icon {
+:root[data-theme="dark"] .tma-dash__settings-nav-icon img,
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-icon,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-icon {
   filter: invert(1) brightness(1.6);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step::before {
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step::before,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-step::before {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after {
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track,
+:root[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup,
+:root[data-theme="dark"] .tma-dash__settings-popup {
   scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active {
   scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.4);
 }
 
@@ -21457,14 +21560,19 @@
     padding: 0;
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-row,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-payout-row,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-row,
+:root[data-theme="dark"] .tma-dash__settings-payment-add-row,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-payout-row,
+:root[data-theme="dark"] .tma-dash__settings-payment-payout-row,
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal {
     background: var(--dash-panel-bg, #232325);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default,
+:root[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default {
     background: rgba(255, 255, 255, 0.08);
   }
 
@@ -21553,20 +21661,25 @@
     display: none !important;
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-search {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-search,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-search {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-card {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-card,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-card {
     background: var(--dash-panel-bg, #232325);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-option {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-option,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-option {
     border-bottom-color: rgba(255, 255, 255, 0.12);
   }
 
@@ -22335,44 +22448,60 @@
     line-height: var(--text-lh-18);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body {
     background: var(--color-bg-card);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title {
     color: var(--color-text-primary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc {
     color: var(--color-text-secondary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.16);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-plugins-group {
+.tma-dash[data-theme="dark"] .tma-dash__settings-plugins-group,
+:root[data-theme="dark"] .tma-dash__settings-plugins-group {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name {
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name {
     color: var(--color-text-primary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc {
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc {
     color: var(--color-text-secondary);
   }
 }

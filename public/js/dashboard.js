@@ -1556,13 +1556,26 @@
     var systemThemeMq = window.matchMedia('(prefers-color-scheme: dark)');
 
     function applyThemeVisual(resolved) {
-      if (resolved === 'dark') root.setAttribute('data-theme', 'dark');
-      else root.removeAttribute('data-theme');
+      /* Stamp the document root as well: header popups, context menus and
+         other overlays mount on <body>, outside .tma-dash, and only see
+         tokens scoped to :root[data-theme]. */
+      if (resolved === 'dark') {
+        root.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        root.removeAttribute('data-theme');
+        document.documentElement.removeAttribute('data-theme');
+      }
       if (themeBtn) {
         var img = themeBtn.querySelector('img');
         if (img) img.src = resolved === 'dark' ? 'images/icons/phosphor/MoonStars.svg' : 'images/icons/phosphor/Sun.svg';
       }
       store.set('tma.theme', resolved);
+      /* The branded header colour is painted inline and only belongs on the
+         light chrome; re-running branding drops or restores it per theme. */
+      try {
+        if (window.TMABranding && window.TMABranding.get()) window.TMABranding.apply(window.TMABranding.get());
+      } catch (e) { /* branding is decoration */ }
     }
 
     function applyFontScale(scale) {

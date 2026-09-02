@@ -964,7 +964,8 @@
   padding-top: var(--space-8);
 }
 
-.tma-dash[data-theme="dark"] .tma-search-popup--sidebar .tma-search-popup__header {
+.tma-dash[data-theme="dark"] .tma-search-popup--sidebar .tma-search-popup__header,
+:root[data-theme="dark"] .tma-search-popup--sidebar .tma-search-popup__header {
   border-bottom-color: var(--color-border-soft);
 }
 

@@ -167,7 +167,7 @@
 
 .tma-button--filled.tma-button--state-hover,
 .tma-button--filled:not([aria-hidden="true"]):hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: color-mix(in srgb, var(--btn-color-filled-bg, #000) 80%, transparent);
 }
 
 /* Component set matrix - 33311:3641 */

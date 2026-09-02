@@ -1227,7 +1227,7 @@
 
 .tma-dash__head-dropdown-btn--primary {
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 .tma-dash__head-dropdown-btn--primary:hover {
@@ -1992,7 +1992,8 @@
   flex: 1 0 0;
   width: 0;
 }
-.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
+.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
 
 .tma-dash__users--grid .tma-dash__uavatar-grid {
   display: flex;
@@ -2186,32 +2187,37 @@
   padding: 10px 14px;
   border-radius: var(--radius-16);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__add-data-date .tma-date-picker-field__popover {
   z-index: 130;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input__control {
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label,
+:root[data-theme="dark"] .tma-dash__add-data-fields .tma-input__label {
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label,
+:root[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__label {
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger {
+.tma-dash[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger,
+:root[data-theme="dark"] .tma-dash__add-data-date .tma-date-picker-field__trigger {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
@@ -2950,12 +2956,19 @@
 
 /* dark theme: table toolbar glyphs */
 .tma-dash[data-theme="dark"] .tma-dash__tool-btn img,
+:root[data-theme="dark"] .tma-dash__tool-btn img,
 .tma-dash[data-theme="dark"] .tma-dash__toolbar-search img,
+:root[data-theme="dark"] .tma-dash__toolbar-search img,
 .tma-dash[data-theme="dark"] .tma-dash__messages-search img,
+:root[data-theme="dark"] .tma-dash__messages-search img,
 .tma-dash[data-theme="dark"] .tma-dash__clients-search img,
+:root[data-theme="dark"] .tma-dash__clients-search img,
 .tma-dash[data-theme="dark"] .tma-dash__email-search img,
+:root[data-theme="dark"] .tma-dash__email-search img,
 .tma-dash[data-theme="dark"] .tma-dash__cc--date img,
-.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__cc--date img,
+.tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users .tma-pagination__icon { filter: invert(1) brightness(1.6); }
 
 /* Chart panel base */
 .tma-dash__panel {
@@ -3718,6 +3731,7 @@
  * DARK THEME - scoped token overrides
  * ───────────────────────────────────────── */
 
+:root[data-theme="dark"],
 .tma-dash[data-theme="dark"] {
   --color-white: #1c1c1c;
   --color-black: #ffffff;
@@ -3726,11 +3740,23 @@
   --color-text-placeholder: rgba(255, 255, 255, 0.25);
   --color-border-soft: rgba(255, 255, 255, 0.12);
   --color-border-medium: rgba(255, 255, 255, 0.28);
+  --color-border-strong: rgba(255, 255, 255, 0.45);
+  --color-border-heavy: rgba(255, 255, 255, 0.85);
   --color-hover: rgba(255, 255, 255, 0.08);
   --color-hover-deep: rgba(255, 255, 255, 0.12);
+  --color-active: rgba(255, 255, 255, 0.16);
+  --color-inactive: rgba(255, 255, 255, 0.40);
   --color-bg-card: #2a2a2c;
+  --color-bg-input: rgba(255, 255, 255, 0.07);
+  --color-bg-popup: rgba(40, 40, 42, 0.92);
+  --color-bg-popup-glass: rgba(40, 40, 42, 0.85);
+  --color-1: color-mix(in srgb, var(--color-primary) 16%, #1c1c1c);
+  --color-2: color-mix(in srgb, var(--color-primary-dark) 22%, #1c1c1c);
+  --color-accent-bg: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --color-accent-bg-hover: color-mix(in srgb, var(--color-primary) 24%, transparent);
   --color-overlay-4: rgba(255, 255, 255, 0.08);
   --color-overlay-10: rgba(255, 255, 255, 0.14);
+  --color-overlay-20: rgba(255, 255, 255, 0.22);
   --color-overlay-40: rgba(255, 255, 255, 0.45);
   --dash-card-1: #1e2b38;
   --dash-card-2: #29243a;
@@ -3738,41 +3764,117 @@
   --dash-kpi-2: #10557c;
   --dash-panel-bg: #232325;
   --dash-border: rgba(255, 255, 255, 0.12);
+  /* Aliases defined at :root (theme.css, components.css) substitute their
+     var() references THERE, so they freeze the light values; restating them
+     here re-resolves each against the flipped primitives above. */
+  --component-black: var(--color-black);
+  --component-black-4: var(--color-hover);
+  --component-white-80: rgba(28, 28, 28, 0.8);
+  --tma-table-text-color: var(--color-text-primary);
+  --tma-table-header-muted-color: var(--color-text-secondary);
+  --table-title-border-color: var(--color-overlay-20);
+  --pagination-muted-color: var(--color-text-secondary);
+  --pagination-button-border-color: var(--color-border-soft);
+  --pagination-button-active-background: var(--color-hover);
+  --btn-color-filled-bg: var(--color-black);
+  --btn-color-filled-fg: var(--color-white);
+  --btn-color-grey-bg: var(--color-hover);
+  --btn-color-grey-hover: var(--color-hover-deep);
+  --btn-color-outline-border: var(--color-border-medium);
+  --btn-color-hover-bg: var(--color-hover);
+  --card-bg: var(--color-bg-card);
+  --card-color-text: var(--color-text-primary);
+  --card-color-sub: var(--color-text-secondary);
+  --card-border: var(--color-border-soft);
+  --input-bg: var(--color-bg-input);
+  --input-border: var(--color-border-medium);
+  --input-border-focus: var(--color-border-strong);
+  --input-color: var(--color-text-primary);
+  --input-placeholder: var(--color-text-placeholder);
+  --tag-bg: var(--color-1);
+  --tag-color: var(--color-text-primary);
+  --table-border: var(--color-border-soft);
+  --table-row-hover: var(--color-hover);
+  --table-header-color: var(--color-text-secondary);
+  --search-popup-bg: var(--color-bg-popup);
+  --search-row-hover: var(--color-hover);
+  --search-label-color: var(--color-text-secondary);
+  --search-placeholder: var(--color-text-placeholder);
+  --toast-bg: var(--color-bg-popup);
+  --popover-bg: var(--color-white);
+  --popover-border: var(--color-border-soft);
+  --pagination-border: var(--color-border-soft);
+  --pagination-active-bg: var(--color-hover);
+  --filter-bg: var(--color-hover);
+  --filter-border: var(--color-border-soft);
+  --color-bg-tag: var(--color-1);
   background: var(--color-white);
   color: var(--color-text-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__sidebar,
-.tma-dash[data-theme="dark"] .tma-dash__rightbar {
+:root[data-theme="dark"] .tma-dash__sidebar,
+.tma-dash[data-theme="dark"] .tma-dash__rightbar,
+:root[data-theme="dark"] .tma-dash__rightbar {
   background: var(--dash-panel-bg);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__menu,
-.tma-dash[data-theme="dark"] .tma-search-popup--standalone {
-  background: rgba(255, 255, 255, 0.9);
+:root[data-theme="dark"] .tma-dash__menu,
+.tma-dash[data-theme="dark"] .tma-search-popup--standalone,
+:root[data-theme="dark"] .tma-search-popup--standalone {
+  background: var(--color-bg-popup);
 }
 /* invert monochrome icons + avatars stay; flip black line/glyph icons to light.
    Masked icons opt out: they're painted by background-color (the accent, or
    currentColor which already follows the theme), so inverting would only shift
    them to a wrong hue. This still catches <img> nav icons in the classic shell. */
 .tma-dash[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink),
+:root[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink),
 .tma-dash[data-theme="dark"] .tma-dash__nav-dot,
+:root[data-theme="dark"] .tma-dash__nav-dot,
 .tma-dash[data-theme="dark"] .tma-dash__nav-caret svg,
+:root[data-theme="dark"] .tma-dash__nav-caret svg,
 .tma-dash[data-theme="dark"] .tma-dash__icon-btn img,
+:root[data-theme="dark"] .tma-dash__icon-btn img,
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon img,
+:root[data-theme="dark"] .tma-dash__notice-icon img,
 .tma-dash[data-theme="dark"] .tma-dash__search img,
+:root[data-theme="dark"] .tma-dash__search img,
 .tma-dash[data-theme="dark"] .tma-dash__today img,
+:root[data-theme="dark"] .tma-dash__today img,
 .tma-dash[data-theme="dark"] .tma-dash__back-btn img,
-.tma-dash[data-theme="dark"] .tma-dash__profile-action-btn img {
+:root[data-theme="dark"] .tma-dash__back-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__profile-action-btn img,
+:root[data-theme="dark"] .tma-dash__profile-action-btn img {
   filter: invert(1) brightness(1.6);
 }
 
+/* Segmented control: light keeps the flat white pill; dark lifts the active
+   pill above the translucent track instead of flipping to a black pill. */
+.tma-dash[data-theme="dark"] .tma-tab-group--segmented .tma-tab.is-active,
+:root[data-theme="dark"] .tma-tab-group--segmented .tma-tab.is-active {
+  background: rgba(255, 255, 255, 0.16);
+}
+/* Filled/icon tab icons are forced white for the black active pill; on the
+   flipped (white) pill they must go back to black or they vanish. */
+.tma-dash[data-theme="dark"] .tma-tab-group--filled .tma-tab.is-active .tma-tab__icon,
+:root[data-theme="dark"] .tma-tab-group--filled .tma-tab.is-active .tma-tab__icon,
+.tma-dash[data-theme="dark"] .tma-tab-group--icon .tma-tab.is-active .tma-tab__icon,
+:root[data-theme="dark"] .tma-tab-group--icon .tma-tab.is-active .tma-tab__icon {
+  filter: brightness(0);
+}
+
 .tma-dash[data-theme="dark"] .tma-dash__card-ico,
-.tma-dash[data-theme="dark"] .tma-dash__card-delta img { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__card-ico,
+.tma-dash[data-theme="dark"] .tma-dash__card-delta img,
+:root[data-theme="dark"] .tma-dash__card-delta img { filter: invert(1) brightness(1.6); }
 /* the wordmark is navy + cyan on transparent; brightness(0) flattens every opaque
    pixel to black and invert(1) lifts it to white, leaving the alpha channel intact */
-.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal { filter: brightness(0) invert(1); }
-.tma-dash[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
+.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal,
+:root[data-theme="dark"] .tma-dash__logo-horizontal { filter: brightness(0) invert(1); }
+.tma-dash[data-theme="dark"] .tma-dash__logo-mark,
+:root[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
 /* ─────────────────────────────────────────
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
@@ -3987,16 +4089,20 @@
 .tma-dash__mrow--active { font-weight: var(--font-weight-semibold); }
 
 /* dark theme: tab bar + menu surfaces and glyphs */
+:root[data-theme="dark"],
 .tma-dash[data-theme="dark"] { --color-bg-page: #161616; }
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar {
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-card,
+:root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
+.tma-dash[data-theme="dark"] .tma-dash__tabbar,
+:root[data-theme="dark"] .tma-dash__tabbar {
   background: rgba(24, 24, 26, 0.48);
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow: none;
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   backdrop-filter: blur(20px) saturate(140%);
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::before {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::before,
+:root[data-theme="dark"] .tma-dash__tabbar::before {
   background: linear-gradient(
     155deg,
     rgba(255, 255, 255, 0.1) 0%,
@@ -4004,12 +4110,16 @@
     rgba(255, 255, 255, 0.05) 100%
   );
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::after {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::after,
+:root[data-theme="dark"] .tma-dash__tabbar::after {
   box-shadow: none;
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
+:root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 .tma-dash[data-theme="dark"] .tma-dash__mrow-icon,
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__mrow-icon,
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img,
+:root[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
 
 /* ─────────────────────────────────────────
  * RESPONSIVE
@@ -4799,7 +4909,8 @@
     }
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__header {
+.tma-dash[data-theme="dark"] .tma-dash__header,
+:root[data-theme="dark"] .tma-dash__header {
     background: transparent;
   }
 
@@ -5443,7 +5554,7 @@
 
 .tma-dash__overview-day--active {
   background: var(--color-text-primary);
-  color: #fff;
+  color: var(--color-white);
 }
 
 .tma-dash__overview-day--active .tma-dash__overview-day-label {
@@ -5644,7 +5755,7 @@
   box-sizing: border-box;
   padding: var(--space-12) var(--space-16);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__overview-upload-hint {
@@ -5736,8 +5847,11 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--body:hover,
+:root[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--body:hover,
 .tma-dash[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--selected,
-.tma-dash[data-theme="dark"] .tma-dash__tasks-row {
+:root[data-theme="dark"] .tma-dash__ctable .tma-dash__ctr--selected,
+.tma-dash[data-theme="dark"] .tma-dash__tasks-row,
+:root[data-theme="dark"] .tma-dash__tasks-row {
   background: var(--color-hover);
 }
 
@@ -5912,7 +6026,7 @@
   min-width: 1px;
   height: 100%;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.8);
+  background: color-mix(in srgb, var(--color-black) 80%, transparent);
 }
 
 .tma-dash__overview-budget-seg--indigo {
@@ -5920,7 +6034,7 @@
 }
 
 .tma-dash__overview-budget .tma-strip__segment--black {
-  background: rgba(0, 0, 0, 0.8);
+  background: color-mix(in srgb, var(--color-black) 80%, transparent);
 }
 
 .tma-dash__overview-budget-remaining {
@@ -5945,19 +6059,19 @@
   min-width: 0;
   width: 100%;
   max-width: none;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
 }
 
 .tma-dash__overview-budget .tma-card--usage-selected {
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   border: 2px solid var(--color-text-primary);
   padding: calc(var(--space-24) - 1px);
 }
 
 .tma-dash__overview-budget .tma-input--form-field {
   width: 100%;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-16);
 }
@@ -6289,7 +6403,8 @@
   padding: var(--space-4);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon {
+.tma-dash[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon,
+:root[data-theme="dark"] .tma-dash__users--overview .tma-pagination__icon {
   filter: invert(1) brightness(1.6);
 }
 
@@ -6495,7 +6610,9 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-pagination__icon,
-.tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img {
+:root[data-theme="dark"] .tma-dash__files--overview .tma-pagination__icon,
+.tma-dash[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img,
+:root[data-theme="dark"] .tma-dash__files--overview .tma-dash__cc--file-time img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -6668,7 +6785,9 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-pagination__icon,
-.tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img {
+:root[data-theme="dark"] .tma-dash__activity--overview .tma-pagination__icon,
+.tma-dash[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img,
+:root[data-theme="dark"] .tma-dash__activity--overview .tma-dash__cc--activity-date img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -7542,7 +7661,8 @@
   color: var(--color-white);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__overview-settings-upload-icon img {
+.tma-dash[data-theme="dark"] .tma-dash__overview-settings-upload-icon img,
+:root[data-theme="dark"] .tma-dash__overview-settings-upload-icon img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -8017,7 +8137,7 @@
   width: 100%;
   padding: var(--space-16);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__account-settings-callout--compact {
@@ -8214,7 +8334,7 @@
   width: 100%;
   padding: var(--space-16);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__account-settings-deactivate-warn img {
@@ -8252,21 +8372,27 @@
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__account-settings-callout,
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn {
+:root[data-theme="dark"] .tma-dash__account-settings-callout,
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn,
+:root[data-theme="dark"] .tma-dash__account-settings-deactivate-warn {
   background: rgba(255, 255, 255, 0.06);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__account-settings-callout img,
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img {
+:root[data-theme="dark"] .tma-dash__account-settings-callout img,
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img,
+:root[data-theme="dark"] .tma-dash__account-settings-deactivate-warn img {
   filter: invert(1) brightness(1.6);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-settings-btn--primary {
+.tma-dash[data-theme="dark"] .tma-dash__account-settings-btn--primary,
+:root[data-theme="dark"] .tma-dash__account-settings-btn--primary {
   background: var(--color-white);
   color: var(--color-black);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-stat-divider {
+.tma-dash[data-theme="dark"] .tma-dash__account-stat-divider,
+:root[data-theme="dark"] .tma-dash__account-stat-divider {
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -8395,7 +8521,7 @@
   gap: var(--space-28);
   padding: var(--space-16);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__account-security-stat {
@@ -8505,7 +8631,8 @@
   background: var(--color-hover);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__account-security-stats {
+.tma-dash[data-theme="dark"] .tma-dash__account-security-stats,
+:root[data-theme="dark"] .tma-dash__account-security-stats {
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -8699,7 +8826,7 @@
   gap: var(--space-8);
   padding: var(--space-16);
   border-radius: var(--radius-16);
-  background: var(--color-surface, rgba(255, 255, 255, 0.8));
+  background: var(--color-surface, var(--color-bg-input));
 }
 
 .tma-dash__account-billing-alert-copy {
@@ -8809,7 +8936,7 @@
   padding: 16px 24px;
   border: 0;
   border-radius: 16px;
-  background: var(--color-surface, rgba(255, 255, 255, 0.8));
+  background: var(--color-surface, var(--color-bg-input));
   box-sizing: border-box;
 }
 
@@ -8972,7 +9099,7 @@
   padding: var(--space-4) var(--space-12);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-12);
-  background: var(--color-surface, rgba(255, 255, 255, 0.8));
+  background: var(--color-surface, var(--color-bg-input));
 }
 
 .tma-dash__account-referrals-link-text {
@@ -9020,7 +9147,7 @@
 .tma-dash__account-referrals-withdraw {
   padding: var(--space-16);
   border-radius: var(--radius-16);
-  background: var(--color-surface, rgba(255, 255, 255, 0.8));
+  background: var(--color-surface, var(--color-bg-input));
 }
 
 .tma-dash__account-referrals-withdraw-main {
@@ -9066,7 +9193,7 @@
   padding: var(--space-4) var(--space-12);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-12);
-  background: var(--color-surface, rgba(255, 255, 255, 0.8));
+  background: var(--color-surface, var(--color-bg-input));
   cursor: pointer;
 }
 
@@ -13053,7 +13180,8 @@
   flex: none;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-compose-menu-icon {
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-menu-icon,
+:root[data-theme="dark"] .tma-dash__email-compose-menu-icon {
   filter: invert(1) brightness(1.6);
 }
 
@@ -13169,7 +13297,7 @@
   border: none;
   border-radius: var(--radius-16);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-14);
   line-height: 20px;
@@ -14298,7 +14426,8 @@
     background: var(--color-white);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__email-row-swipe-action--archive {
+.tma-dash[data-theme="dark"] .tma-dash__email-row-swipe-action--archive,
+:root[data-theme="dark"] .tma-dash__email-row-swipe-action--archive {
     background: #15803d;
     color: #ffffff;
   }
@@ -15378,7 +15507,7 @@
 
 .tma-dash__email-compose-send-btn--primary {
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 /* Email - compose window (Gmail-style bottom panel) */
@@ -15542,7 +15671,7 @@
   border-radius: var(--radius-16) var(--radius-16) 0 0;
   border-bottom: none;
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -15585,12 +15714,14 @@
   opacity: 0.85;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-compose-window {
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-window,
+:root[data-theme="dark"] .tma-dash__email-compose-window {
   background: var(--color-bg-card);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-compose-window-btn img {
+.tma-dash[data-theme="dark"] .tma-dash__email-compose-window-btn img,
+:root[data-theme="dark"] .tma-dash__email-compose-window-btn img {
   filter: invert(1) brightness(1.6);
 }
 
@@ -17120,7 +17251,8 @@
     background: var(--color-white);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row {
+.tma-dash[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row,
+:root[data-theme="dark"] .tma-dash__messages-row-swipe-track .tma-dash__messages-row {
     background: var(--color-bg-card);
   }
 
@@ -17953,7 +18085,7 @@
   border: none;
   border-radius: var(--radius-12);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-12);
   line-height: 16px;
@@ -18451,7 +18583,7 @@ button.tma-file-status-chip:focus-visible,
 .tma-dash__clients-appbar-action--primary {
   border-color: var(--color-black);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 .tma-dash__clients-appbar-action--primary:hover {
@@ -19947,7 +20079,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
   border: none;
   border-radius: var(--radius-12);
   background: var(--color-black);
-  color: var(--color-text-white);
+  color: var(--color-white);
   font: inherit;
   font-size: var(--text-size-12);
   line-height: 16px;
@@ -20280,7 +20412,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
   background: var(--color-black);
   font-size: var(--text-size-12);
   line-height: 16px;
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 .tma-dash__clients-schedule-now-line {
@@ -20862,7 +20994,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
 .tma-dash__calendar-panel-btn--primary {
   border-color: transparent;
   background: var(--color-text-primary);
-  color: var(--color-text-white);
+  color: var(--color-white);
 }
 
 .tma-dash__calendar-panel-btn--primary:hover {
@@ -22110,7 +22242,8 @@ a.tma-dash__clients-edit-btn--accent:visited {
 
 /* The mailbox sidebar is a card now, so it needs the same dark surface every
    other card gets. */
-.tma-dash[data-theme="dark"] .tma-dash__email-sidebar {
+.tma-dash[data-theme="dark"] .tma-dash__email-sidebar,
+:root[data-theme="dark"] .tma-dash__email-sidebar {
   background: var(--color-bg-card);
   border-color: var(--dash-border);
 }
@@ -22305,13 +22438,16 @@ a.tma-dash__clients-edit-btn--accent:visited {
   min-height: 0;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__feed-composer {
+.tma-dash[data-theme="dark"] .tma-dash__feed-composer,
+:root[data-theme="dark"] .tma-dash__feed-composer {
   background: var(--color-bg-card);
   border-color: var(--dash-border);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__feed-compose-type--active,
-.tma-dash[data-theme="dark"] .tma-dash__feed-compose-type:hover {
+:root[data-theme="dark"] .tma-dash__feed-compose-type--active,
+.tma-dash[data-theme="dark"] .tma-dash__feed-compose-type:hover,
+:root[data-theme="dark"] .tma-dash__feed-compose-type:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -22424,7 +22560,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
   width: 260px;
   padding: var(--space-4);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   backdrop-filter: blur(40px);
 }
 
@@ -22994,28 +23130,37 @@ a.tma-dash__clients-edit-btn--accent:visited {
   color: var(--color-text-secondary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-canvas--auth-light {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-canvas--auth-light,
+:root[data-theme="dark"] .tma-dash__email-template-canvas--auth-light {
   background: #1a1a1a;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-card {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-card,
+:root[data-theme="dark"] .tma-dash__email-template-auth-card {
   background: #2d2d2d;
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-title,
+:root[data-theme="dark"] .tma-dash__email-template-auth-title,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-lead,
+:root[data-theme="dark"] .tma-dash__email-template-auth-lead,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-help,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-body-copy {
+:root[data-theme="dark"] .tma-dash__email-template-auth-help,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-body-copy,
+:root[data-theme="dark"] .tma-dash__email-template-auth-body-copy {
   color: var(--color-text-primary);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-code {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-code,
+:root[data-theme="dark"] .tma-dash__email-template-auth-code {
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-auth-contact,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-legal {
+:root[data-theme="dark"] .tma-dash__email-template-auth-contact,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-auth-legal,
+:root[data-theme="dark"] .tma-dash__email-template-auth-legal {
   color: var(--color-text-secondary);
 }
 
@@ -23273,24 +23418,32 @@ a.tma-dash__clients-edit-btn--accent:visited {
   margin-top: var(--space-16);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__email-template-preview--mobile {
+.tma-dash[data-theme="dark"] .tma-dash__email-template-preview--mobile,
+:root[data-theme="dark"] .tma-dash__email-template-preview--mobile {
   background: rgba(0, 0, 0, 0.24);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-device,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-device,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-chrome {
   background: var(--color-bg-elevated);
   border-color: var(--color-border-subtle);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-chrome-title,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-chrome-title,
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-brand span,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-brand span,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-unsub-title {
   color: var(--color-text-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-address,
-.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-note {
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-address,
+.tma-dash[data-theme="dark"] .tma-dash__email-template-mobile-foot-note,
+:root[data-theme="dark"] .tma-dash__email-template-mobile-foot-note {
   color: var(--color-text-secondary);
 }
 
@@ -24473,7 +24626,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-16) var(--space-20);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__settings-field:focus-within {
@@ -24503,7 +24656,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-16) var(--space-20);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   outline: 0;
 }
 
@@ -24572,7 +24725,8 @@ button.tma-dash__header-popup-item:focus-visible {
   display: none;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-profile-inner-divider {
+.tma-dash[data-theme="dark"] .tma-dash__settings-profile-inner-divider,
+:root[data-theme="dark"] .tma-dash__settings-profile-inner-divider {
   border-top-color: var(--color-border-soft);
 }
 
@@ -24732,7 +24886,8 @@ button.tma-dash__header-popup-item:focus-visible {
   background: var(--color-hover);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-plugin-dropdown {
+.tma-dash[data-theme="dark"] .tma-dash__settings-plugin-dropdown,
+:root[data-theme="dark"] .tma-dash__settings-plugin-dropdown {
   background: var(--dash-panel-bg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
@@ -24934,7 +25089,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-8) var(--space-16);
   border: 0.5px solid var(--color-border-medium);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   font-family: inherit;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -24951,13 +25106,16 @@ button.tma-dash__header-popup-item:focus-visible {
   border-color: var(--color-border-strong);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-invoice {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-invoice,
+:root[data-theme="dark"] .tma-dash__settings-payment-invoice {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-soft);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-wrap .tma-card--add-address,
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add {
+:root[data-theme="dark"] .tma-dash__settings-payment-add-wrap .tma-card--add-address,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add,
+:root[data-theme="dark"] .tma-dash__settings-payment-add {
   border-color: var(--color-border-soft);
 }
 
@@ -25441,7 +25599,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-12) var(--space-16);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
 }
 
 .tma-dash__settings-payment-input--half {
@@ -25507,16 +25665,19 @@ button.tma-dash__header-popup-item:focus-visible {
   margin-top: var(--space-12);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-option {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-option,
+:root[data-theme="dark"] .tma-dash__settings-payment-option {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input,
+:root[data-theme="dark"] .tma-dash__settings-payment-input {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder,
+:root[data-theme="dark"] .tma-dash__settings-payment-input-control::placeholder {
   color: rgba(255, 255, 255, 0.25);
 }
 
@@ -25626,11 +25787,13 @@ button.tma-dash__header-popup-item:focus-visible {
   display: none !important;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active,
+:root[data-theme="dark"] .tma-dash__settings-payment-type-btn.is-active {
   border-color: var(--color-border-strong);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-payment-select {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-select,
+:root[data-theme="dark"] .tma-dash__settings-payment-select {
   background-color: rgba(255, 255, 255, 0.06);
 }
 
@@ -26032,7 +26195,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-12) var(--space-16);
   border: 0.5px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   font-family: inherit;
   font-size: var(--text-size-18);
   line-height: var(--text-lh-18);
@@ -26966,7 +27129,7 @@ button.tma-dash__header-popup-item:focus-visible {
   max-height: 284px;
   padding: var(--space-12);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-bg-popup);
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow-popup);
   overflow: hidden;
@@ -26986,7 +27149,7 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-4) var(--space-12);
   border: 0.5px solid var(--color-border-medium);
   border-radius: var(--radius-8);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-bg-input);
   font-family: inherit;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -27054,11 +27217,13 @@ button.tma-dash__header-popup-item:focus-visible {
   height: 16px;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-picker {
+.tma-dash[data-theme="dark"] .tma-dash__settings-picker,
+:root[data-theme="dark"] .tma-dash__settings-picker {
   background: rgba(35, 35, 37, 0.96);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-picker-search {
+.tma-dash[data-theme="dark"] .tma-dash__settings-picker-search,
+:root[data-theme="dark"] .tma-dash__settings-picker-search {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-soft);
   color: var(--color-text-primary);
@@ -27075,7 +27240,7 @@ button.tma-dash__header-popup-item:focus-visible {
   width: min(360px, calc(100vw - 48px));
   padding: var(--space-12);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-bg-popup);
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow-popup);
 }
@@ -27118,53 +27283,66 @@ button.tma-dash__header-popup-item:focus-visible {
   cursor: not-allowed;
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-cookie-popover {
+.tma-dash[data-theme="dark"] .tma-dash__settings-cookie-popover,
+:root[data-theme="dark"] .tma-dash__settings-cookie-popover {
   background: rgba(35, 35, 37, 0.96);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-divider {
+.tma-dash[data-theme="dark"] .tma-dash__settings-divider,
+:root[data-theme="dark"] .tma-dash__settings-divider {
   border-top-color: var(--color-border-soft);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__settings-nav-icon img,
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-icon {
+:root[data-theme="dark"] .tma-dash__settings-nav-icon img,
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-icon,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-icon {
   filter: invert(1) brightness(1.6);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step::before {
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step::before,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-step::before {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after {
+.tma-dash[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after,
+:root[data-theme="dark"] .tma-dash__settings-font-scale-step:not(:last-child)::after {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track,
+:root[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .tma-dash__settings-popup::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-popup {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup,
+:root[data-theme="dark"] .tma-dash__settings-popup {
   scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active {
   scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.28);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover {
+.tma-dash[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover,
+:root[data-theme="dark"] .tma-dash__settings-change-card--payment-flow .tma-dash__settings-payment-step.is-active::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.4);
 }
 
@@ -27958,14 +28136,19 @@ button.tma-dash__header-popup-item:focus-visible {
     padding: 0;
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-row,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-payout-row,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-add-row,
+:root[data-theme="dark"] .tma-dash__settings-payment-add-row,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-payout-row,
+:root[data-theme="dark"] .tma-dash__settings-payment-payout-row,
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit,
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="payment"] .tma-card--credit-paypal {
     background: var(--dash-panel-bg, #232325);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default,
+:root[data-theme="dark"] .tma-dash__settings-payment-swipe-action--default {
     background: rgba(255, 255, 255, 0.08);
   }
 
@@ -28054,20 +28237,25 @@ button.tma-dash__header-popup-item:focus-visible {
     display: none !important;
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-search {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-search,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-search {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-card {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-pinned,
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-card,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-card {
     background: var(--dash-panel-bg, #232325);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-option {
+.tma-dash[data-theme="dark"] .tma-dash__settings-mobile-select-option,
+:root[data-theme="dark"] .tma-dash__settings-mobile-select-option {
     border-bottom-color: rgba(255, 255, 255, 0.12);
   }
 
@@ -28157,7 +28345,7 @@ button.tma-dash__header-popup-item:focus-visible {
     border-radius: var(--radius-16);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     max-width: 313px;
   }
 
@@ -28222,7 +28410,7 @@ button.tma-dash__header-popup-item:focus-visible {
     border-radius: var(--radius-16);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     max-width: 313px;
   }
 
@@ -28790,7 +28978,7 @@ button.tma-dash__header-popup-item:focus-visible {
     padding: var(--space-16) var(--space-20);
     border: 0.5px solid rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
   }
@@ -28831,49 +29019,65 @@ button.tma-dash__header-popup-item:focus-visible {
     padding: var(--space-16) var(--space-20);
     border: 0.5px solid rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-mobile-sheet,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-change-card--payment-flow,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-flow-body,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-flow-body {
     background: var(--color-bg-card);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:hover,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:focus,
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option:active,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-field-step--save .tma-dash__settings-row {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option-title {
     color: var(--color-text-primary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc {
+.tma-dash[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc,
+:root[data-theme="dark"] .tma-dash__settings-payment-mobile-option-desc {
     color: var(--color-text-secondary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
-  .tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control {
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment .tma-dash__settings-payment-input-control,
+.tma-dash[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control,
+:root[data-theme="dark"] .tma-dash__settings-popup--payment [data-payment-step="paypal"] .tma-dash__settings-payment-input-control {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.16);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-plugins-group {
+.tma-dash[data-theme="dark"] .tma-dash__settings-plugins-group,
+:root[data-theme="dark"] .tma-dash__settings-plugins-group {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name {
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-name {
     color: var(--color-text-primary);
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc {
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc,
+:root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc {
     color: var(--color-text-secondary);
   }
 }
@@ -29064,7 +29268,7 @@ button.tma-dash__header-popup-item:focus-visible {
     padding: var(--space-16) var(--space-20);
     border: 0.5px solid rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     max-width: none;
   }
 
@@ -29095,7 +29299,7 @@ button.tma-dash__header-popup-item:focus-visible {
     height: 56px;
     padding: var(--space-16) var(--space-20);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
     max-width: none;
@@ -29140,7 +29344,7 @@ button.tma-dash__header-popup-item:focus-visible {
     padding: var(--space-16) var(--space-20);
     border: 0.5px solid rgba(0, 0, 0, 0.2);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     max-width: none;
   }
 
@@ -29171,7 +29375,7 @@ button.tma-dash__header-popup-item:focus-visible {
     height: 56px;
     padding: var(--space-16) var(--space-20);
     border-radius: var(--radius-16);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--color-bg-input);
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
     max-width: none;
@@ -33692,8 +33896,11 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__actlog-detail-line code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; color: var(--color-black); }
 
 .tma-dash[data-theme="dark"] .tma-dash__actlog-filter-panel,
+:root[data-theme="dark"] .tma-dash__actlog-filter-panel,
 .tma-dash[data-theme="dark"] .tma-dash__actlog-field select,
-.tma-dash[data-theme="dark"] .tma-dash__actlog-field input { background: var(--dash-card-2); }
+:root[data-theme="dark"] .tma-dash__actlog-field select,
+.tma-dash[data-theme="dark"] .tma-dash__actlog-field input,
+:root[data-theme="dark"] .tma-dash__actlog-field input { background: var(--dash-card-2); }
 
 /* ── Notification preferences grid (Settings → Notifications) ── */
 .tma-dash__settings-notifications-hint {
@@ -33875,17 +34082,24 @@ span.tma-dash__messages-profile-avatar {
   background: #5ec8f5;
   box-shadow: 0 0 0 2px rgba(94, 200, 245, 0.2);
 }
-.tma-dash[data-theme="dark"] .tma-dash__notice--unread {
+.tma-dash[data-theme="dark"] .tma-dash__notice--unread,
+:root[data-theme="dark"] .tma-dash__notice--unread {
   background: transparent !important;
 }
 
 /* Dark theme: the extra tones read on the dark popup/sidebar too. */
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon--green,
-.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--green { background: color-mix(in srgb, var(--color-green) 30%, #1e2b38); }
+:root[data-theme="dark"] .tma-dash__notice-icon--green,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--green,
+:root[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--green { background: color-mix(in srgb, var(--color-green) 30%, #1e2b38); }
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon--amber,
-.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--amber { background: color-mix(in srgb, var(--color-warning, #c77d18) 30%, #1e2b38); }
+:root[data-theme="dark"] .tma-dash__notice-icon--amber,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--amber,
+:root[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--amber { background: color-mix(in srgb, var(--color-warning, #c77d18) 30%, #1e2b38); }
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon--red,
-.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--red { background: color-mix(in srgb, var(--color-red) 30%, #1e2b38); }
+:root[data-theme="dark"] .tma-dash__notice-icon--red,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--red,
+:root[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--red { background: color-mix(in srgb, var(--color-red) 30%, #1e2b38); }
 
 /* Overview → Recycle Bin (admin) */
 .tma-dash__overview-recycle-tab {
@@ -34314,14 +34528,16 @@ span.tma-dash__messages-profile-avatar {
 /* In dark mode --color-white resolves to the near-black panel tone, which is
  * the wallpaper's own tone: the incoming bubble would lose its edges entirely.
  * It gets a raised slate surface instead. */
-.tma-dash[data-theme="dark"] .tma-dash__messages-bubble--in {
+.tma-dash[data-theme="dark"] .tma-dash__messages-bubble--in,
+:root[data-theme="dark"] .tma-dash__messages-bubble--in {
   background: #2b3138;
   box-shadow: none;
 }
 
 /* Same reason for the system pill: --color-1 is a pale blue that leaves it
  * white-on-white once the thread is dark. */
-.tma-dash[data-theme="dark"] .tma-dash__messages-divider--system {
+.tma-dash[data-theme="dark"] .tma-dash__messages-divider--system,
+:root[data-theme="dark"] .tma-dash__messages-divider--system {
   background: rgb(255 255 255 / 0.10);
   color: var(--color-text-primary);
 }

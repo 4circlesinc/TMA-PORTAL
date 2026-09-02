@@ -88,7 +88,7 @@
   color: var(--color-black);
 }
 
-.tma-portal-btn--ghost:hover { filter: none; background: rgba(0, 0, 0, 0.08); }
+.tma-portal-btn--ghost:hover { filter: none; background: var(--color-hover-deep); }
 
 .tma-portal-btn--ghost .tma-no-data__btn-icon { filter: none; opacity: 0.7; }
 
@@ -97,7 +97,7 @@
   color: var(--color-red);
 }
 
-.tma-portal-btn--danger:hover { filter: none; background: rgba(0, 0, 0, 0.08); }
+.tma-portal-btn--danger:hover { filter: none; background: var(--color-hover-deep); }
 
 .tma-portal-btn--small {
   min-height: 28px;
@@ -308,15 +308,15 @@
   font-weight: var(--tma-table-font-weight-regular, 400);
   font-size: var(--tma-table-font-size, 12px);
   line-height: var(--tma-table-line-height, 16px);
-  color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4));
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  color: var(--tma-table-header-muted-color, var(--color-text-secondary));
+  border-bottom: 1px solid var(--color-overlay-20);
   white-space: nowrap;
 }
 
 .tma-portal-table td {
   height: 40px;
   padding: var(--space-8) var(--space-12);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--color-overlay-4);
   font-size: var(--tma-table-font-size, 12px);
   line-height: var(--tma-table-line-height, 16px);
   color: var(--tma-table-text-color, var(--color-black));
@@ -347,7 +347,7 @@
 
 .tma-portal-table tbody tr:hover td { background: var(--color-hover); }
 
-.tma-portal-table__muted { color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4)); }
+.tma-portal-table__muted { color: var(--tma-table-header-muted-color, var(--color-text-secondary)); }
 
 /* tight control columns (select / star) */
 .tma-portal-table th.tma-portal-cell--tight,
@@ -564,7 +564,7 @@
   max-width: calc(100vw - 16px);
   padding: var(--space-4);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-bg-popup);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
@@ -1312,8 +1312,8 @@
   padding: 0;
   border: 0;
   border-radius: 5px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  background: var(--color-bg-input);
+  box-shadow: inset 0 0 0 1px var(--color-overlay-20);
   cursor: pointer;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -1372,12 +1372,12 @@
 }
 
 .tma-portal-matrix th {
-  color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4));
+  color: var(--tma-table-header-muted-color, var(--color-text-secondary));
   font-weight: var(--tma-table-font-weight-regular, 400);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--color-overlay-20);
 }
 
-.tma-portal-matrix td { border-bottom: 1px solid rgba(0, 0, 0, 0.04); }
+.tma-portal-matrix td { border-bottom: 1px solid var(--color-overlay-4); }
 
 .tma-portal-matrix tbody tr:last-child td { border-bottom: 0; }
 
@@ -1459,7 +1459,7 @@
   width: auto;
   height: auto;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--color-overlay-10);
   transition: background 0.15s ease;
 }
 
@@ -1628,7 +1628,7 @@
 
 .tma-portal-request__section + .tma-portal-request__section {
   padding-top: var(--space-16);
-  border-top: 0.5px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
+  border-top: 0.5px solid var(--color-border-light, var(--color-border-soft));
 }
 
 .tma-portal-request__heading {
@@ -1841,7 +1841,7 @@
   flex: 1;
   height: 4px;
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--color-hover-deep);
 }
 
 .tma-portal-tilerow__preview-bar--title {
@@ -2818,9 +2818,11 @@
 
 .tma-portal-employee__action:hover img { opacity: 1; }
 
+.tma-dash[data-theme="dark"] .tma-portal-employee__action:hover,
 :root[data-theme="dark"] .tma-portal-employee__action:hover {
   background: rgba(255, 255, 255, 0.1);
 }
+.tma-dash[data-theme="dark"] .tma-portal-employee__action img,
 :root[data-theme="dark"] .tma-portal-employee__action img { filter: invert(1); }
 
 /* A touch screen has no hover, so the actions would never appear at all. */
@@ -2836,7 +2838,7 @@
   font-weight: 600;
   padding: 5px 8px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--color-hover-deep);
   color: var(--color-text-secondary);
 }
 
@@ -2860,31 +2862,41 @@
 .tma-portal-employee__badge--away,
 .tma-portal-employee__badge--offline,
 .tma-portal-employee__badge--neutral {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--color-hover-deep);
   color: var(--color-text-secondary);
 }
 
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--away,
 :root[data-theme="dark"] .tma-portal-employee__badge--away,
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--offline,
 :root[data-theme="dark"] .tma-portal-employee__badge--offline,
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--neutral,
 :root[data-theme="dark"] .tma-portal-employee__badge--neutral {
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-secondary);
 }
 
+.tma-dash[data-theme="dark"] .tma-portal-employee__avatar.is-online::after,
 :root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after,
+.tma-dash[data-theme="dark"] .tma-portal-employee__avatar.is-offline::after,
 :root[data-theme="dark"] .tma-portal-employee__avatar.is-offline::after,
+.tma-dash[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after,
 :root[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after {
   box-shadow: 0 0 0 2px var(--color-bg-card, #1a1a1a);
 }
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--online,
 :root[data-theme="dark"] .tma-portal-employee__badge--online,
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--office,
 :root[data-theme="dark"] .tma-portal-employee__badge--office {
   background: rgba(34, 160, 107, 0.22);
   color: #7dcea0;
 }
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--remote,
 :root[data-theme="dark"] .tma-portal-employee__badge--remote {
   background: rgba(47, 111, 237, 0.22);
   color: #9db7f5;
 }
+.tma-dash[data-theme="dark"] .tma-portal-employee__badge--leave,
 :root[data-theme="dark"] .tma-portal-employee__badge--leave {
   background: rgba(201, 92, 46, 0.22);
   color: #e0a07a;
@@ -2921,7 +2933,7 @@
      --color-bg-tag — a blue tint — which only ever showed in the boot window
      before the theme attribute is stamped, so the sidebar profile chip loaded
      baby-blue while every other placeholder was grey. */
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--color-hover-deep);
   border-radius: 6px;
 }
 .tma-skeleton::after {
@@ -2934,9 +2946,11 @@
 }
 /* Keyed off the chosen theme only — never the device. A dark-mode laptop on a
    light portal was painting charcoal skeletons onto white cards. */
+.tma-dash[data-theme="dark"] .tma-skeleton,
 :root[data-theme="dark"] .tma-skeleton { background: rgba(255, 255, 255, 0.08); }
+.tma-dash[data-theme="dark"] .tma-skeleton::after,
 :root[data-theme="dark"] .tma-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
-:root[data-theme="light"] .tma-skeleton { background: rgba(0, 0, 0, 0.06); }
+.tma-dash:not([data-theme="dark"]) .tma-skeleton { background: var(--color-hover-deep); }
 @keyframes tma-skeleton-shimmer { 100% { transform: translateX(100%); } }
 .tma-skeleton--text { height: 12px; width: 60%; }
 .tma-skeleton--avatar { border-radius: 50%; }
@@ -3119,7 +3133,8 @@
 /* Dark: the inks below are chosen to carry on white glass, and the glass goes
    dark with the theme. Lifted toward the page rather than re-picked twelve
    times, so the hues stay recognisably the same tiles. */
-.tma-dash[data-theme="dark"] .tma-portal-shortcut__art {
+.tma-dash[data-theme="dark"] .tma-portal-shortcut__art,
+:root[data-theme="dark"] .tma-portal-shortcut__art {
   background-color: color-mix(in srgb, var(--tma-sc-ink, var(--color-primary)) 45%, #fff);
 }
 
@@ -3766,7 +3781,7 @@ html.tma-dash--signatures-wizard body {
   display: block;
   height: 6px;
   border-radius: var(--radius-pill, 80px);
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--color-hover-deep);
 }
 
 .tma-portal-sig-wizard__doc-preview-line--short {
@@ -4219,7 +4234,7 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-sig-wizard__canvas {
   min-width: 0;
-  background: #ececef;
+  background: var(--color-bg-page);
   overflow: hidden;
 }
 
@@ -4540,7 +4555,7 @@ label.tma-portal-check-row:hover {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--color-hover-deep);
   font-size: 10px;
   line-height: 1;
   font-weight: 600;
@@ -4730,7 +4745,8 @@ label.tma-portal-check-row:hover {
 }
 
 /* Dark theme: the same panel treatment every input gets. */
-.tma-dash[data-theme="dark"] .tma-portal-rich {
+.tma-dash[data-theme="dark"] .tma-portal-rich,
+:root[data-theme="dark"] .tma-portal-rich {
   background-color: var(--dash-panel-bg, var(--color-bg-card));
 }
 
@@ -5047,11 +5063,17 @@ label.tma-portal-check-row:hover {
 
 /* dark theme adjustments piggyback on data-theme handled by dashboard.css tokens */
 .tma-dash[data-theme="dark"] .tma-portal-input,
+:root[data-theme="dark"] .tma-portal-input,
 .tma-dash[data-theme="dark"] .tma-portal-select,
+:root[data-theme="dark"] .tma-portal-select,
 .tma-dash[data-theme="dark"] .tma-portal-textarea,
+:root[data-theme="dark"] .tma-portal-textarea,
 .tma-dash[data-theme="dark"] .tma-portal-tpl-card,
+:root[data-theme="dark"] .tma-portal-tpl-card,
 .tma-dash[data-theme="dark"] .tma-portal-plan,
-.tma-dash[data-theme="dark"] .tma-portal-connector-list {
+:root[data-theme="dark"] .tma-portal-plan,
+.tma-dash[data-theme="dark"] .tma-portal-connector-list,
+:root[data-theme="dark"] .tma-portal-connector-list {
   /* background-color, not the shorthand: a select carries its caret as a
      background-image and the shorthand would clear it. */
   background-color: var(--dash-panel-bg, var(--color-bg-card));
@@ -5265,7 +5287,8 @@ label.tma-portal-check-row:hover {
   opacity: 0.85;
 }
 
-.tma-dash[data-theme="dark"] .tma-portal-admin__nav-icon {
+.tma-dash[data-theme="dark"] .tma-portal-admin__nav-icon,
+:root[data-theme="dark"] .tma-portal-admin__nav-icon {
   filter: invert(1) brightness(1.6);
 }
 
@@ -5434,7 +5457,7 @@ label.tma-portal-check-row:hover {
   gap: var(--space-6);
   min-height: 36px;
   padding: var(--space-8) var(--space-12);
-  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--color-border, var(--color-border-soft));
   border-radius: var(--radius-pill, 999px);
   background: var(--color-bg-page, #ffffff);
   color: var(--color-text-primary);
@@ -5455,7 +5478,7 @@ label.tma-portal-check-row:hover {
 .tma-portal-type-pill.is-active {
   background: var(--component-black, #000);
   border-color: var(--component-black, #000);
-  color: #ffffff;
+  color: var(--color-white, #ffffff);
 }
 
 .tma-portal-type-pill:focus-visible {
@@ -5474,6 +5497,11 @@ label.tma-portal-check-row:hover {
    is flipped — a brand mark keeps its own colours. */
 .tma-portal-type-pill.is-active .tma-portal-type-pill__icon--mono {
   filter: brightness(0) invert(1);
+}
+
+.tma-dash[data-theme="dark"] .tma-portal-type-pill.is-active .tma-portal-type-pill__icon--mono,
+:root[data-theme="dark"] .tma-portal-type-pill.is-active .tma-portal-type-pill__icon--mono {
+  filter: brightness(0);
 }
 
 .tma-portal-home-defaults__title {

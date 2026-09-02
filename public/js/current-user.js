@@ -558,11 +558,14 @@
     if (b.accentColor) {
       document.documentElement.style.setProperty('--color-accent', b.accentColor);
     }
-    if (b.headerColor) {
-      document.querySelectorAll('.tma-dash__header').forEach(function (el) {
-        el.style.background = b.headerColor;
-      });
-    }
+    /* The branded header colour is picked against the light chrome; painting
+       it inline in dark mode camouflages the flipped header text. Dark keeps
+       the theme's own header and clears any colour a light session left. */
+    var dark = document.querySelector('.tma-dash[data-theme="dark"]');
+    document.querySelectorAll('.tma-dash__header').forEach(function (el) {
+      if (b.headerColor && !dark) el.style.background = b.headerColor;
+      else el.style.removeProperty('background');
+    });
   }
 
   function loadBranding() {

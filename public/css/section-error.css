@@ -64,12 +64,14 @@
   filter: brightness(0.97);
 }
 
-.tma-dash[data-theme="dark"] .tma-section-error {
+.tma-dash[data-theme="dark"] .tma-section-error,
+:root[data-theme="dark"] .tma-section-error {
   border-color: rgba(255, 71, 71, 0.35);
   background: rgba(255, 71, 71, 0.12);
 }
 
-.tma-dash[data-theme="dark"] .tma-section-error__retry {
+.tma-dash[data-theme="dark"] .tma-section-error__retry,
+:root[data-theme="dark"] .tma-section-error__retry {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.16);
   color: #fff;

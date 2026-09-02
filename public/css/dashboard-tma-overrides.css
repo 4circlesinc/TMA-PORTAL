@@ -377,9 +377,12 @@ a.tma-dash__tab-btn:visited {
 .tma-dash__mrow--active { font-weight: var(--font-weight-semibold); }
 
 /* dark theme: tab bar + menu surfaces and glyphs */
+:root[data-theme="dark"],
 .tma-dash[data-theme="dark"] { --color-bg-page: #161616; }
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar {
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-card,
+:root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
+.tma-dash[data-theme="dark"] .tma-dash__tabbar,
+:root[data-theme="dark"] .tma-dash__tabbar {
   background: rgba(24, 24, 26, 0.48);
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow:
@@ -388,7 +391,8 @@ a.tma-dash__tab-btn:visited {
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   backdrop-filter: blur(20px) saturate(140%);
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::before {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::before,
+:root[data-theme="dark"] .tma-dash__tabbar::before {
   background: linear-gradient(
     155deg,
     rgba(255, 255, 255, 0.1) 0%,
@@ -396,10 +400,12 @@ a.tma-dash__tab-btn:visited {
     rgba(255, 255, 255, 0.05) 100%
   );
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::after {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar::after,
+:root[data-theme="dark"] .tma-dash__tabbar::after {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator,
+:root[data-theme="dark"] .tma-dash__tabbar-indicator {
   background: rgba(40, 40, 42, 0.82);
   border-color: rgba(255, 255, 255, 0.22);
   box-shadow:
@@ -407,7 +413,8 @@ a.tma-dash__tab-btn:visited {
     0 1px 3px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
-.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator::before {
+.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator::before,
+:root[data-theme="dark"] .tma-dash__tabbar-indicator::before {
   background: linear-gradient(
     168deg,
     rgba(255, 255, 255, 0.22) 0%,
@@ -416,8 +423,11 @@ a.tma-dash__tab-btn:visited {
   );
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
+:root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 .tma-dash[data-theme="dark"] .tma-dash__mrow-icon,
-.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
+:root[data-theme="dark"] .tma-dash__mrow-icon,
+.tma-dash[data-theme="dark"] .tma-dash__mmenu-search img,
+:root[data-theme="dark"] .tma-dash__mmenu-search img { filter: invert(1) brightness(1.6); }
 
 /* ─────────────────────────────────────────
  * RESPONSIVE
@@ -970,8 +980,10 @@ a.tma-dash__tab-btn:visited {
     display: none;
   }
 
-  .tma-dash[data-theme="dark"] .tma-dash__header-left [data-action="toggle-sidebar"],
-  .tma-dash[data-theme="dark"] .tma-dash__header-icons {
+.tma-dash[data-theme="dark"] .tma-dash__header-left [data-action="toggle-sidebar"],
+:root[data-theme="dark"] .tma-dash__header-left [data-action="toggle-sidebar"],
+.tma-dash[data-theme="dark"] .tma-dash__header-icons,
+:root[data-theme="dark"] .tma-dash__header-icons {
     background: rgba(24, 24, 26, 0.48);
     border-color: rgba(255, 255, 255, 0.14);
     box-shadow:
@@ -1314,7 +1326,8 @@ a.tma-dash__tab-btn:visited {
 .tma-rup__event strong { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
 .tma-rup__event span { color: var(--color-text-secondary); }
 .tma-rup__footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-top: 0.5px solid var(--color-border-soft); background: var(--color-white); }
-.tma-dash[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }
+.tma-dash[data-theme="dark"] .tma-rup__footer,
+:root[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }
 
 /* ── Global scroll policy: hidden scrollbars, no widget horizontal scroll ──
  * Loaded last so it wins over per-component scrollbar-width: thin/auto.

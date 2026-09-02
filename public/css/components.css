@@ -250,7 +250,7 @@
 
 .tma-tab-group--filled .tma-tab.is-active {
   background: var(--component-black);
-  color: #ffffff;
+  color: var(--color-white, #ffffff);
   opacity: 1;
 }
 
@@ -289,7 +289,7 @@
 
 .tma-tab-group--icon .tma-tab.is-active {
   background: var(--component-black);
-  color: #ffffff;
+  color: var(--color-white, #ffffff);
   opacity: 1;
 }
 

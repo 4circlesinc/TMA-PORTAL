@@ -98,16 +98,19 @@
 
 .tma-no-data__btn-icon { filter: invert(1); }
 
-.tma-dash[data-theme="dark"] .tma-no-data__divider {
+.tma-dash[data-theme="dark"] .tma-no-data__divider,
+:root[data-theme="dark"] .tma-no-data__divider {
   border-top-color: rgba(255, 255, 255, 0.12);
 }
 
-.tma-dash[data-theme="dark"] .tma-no-data__btn {
+.tma-dash[data-theme="dark"] .tma-no-data__btn,
+:root[data-theme="dark"] .tma-no-data__btn {
   background: #fff;
   color: #000;
 }
 
-.tma-dash[data-theme="dark"] .tma-no-data__btn-icon { filter: none; }
+.tma-dash[data-theme="dark"] .tma-no-data__btn-icon,
+:root[data-theme="dark"] .tma-no-data__btn-icon { filter: none; }
 
 /* Compact inline empty state for tables / section panels */
 .tma-no-data--compact {

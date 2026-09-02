@@ -311,7 +311,8 @@
   }
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-overlay__mask {
+.tma-dash[data-theme="dark"] .tma-user-info-overlay__mask,
+:root[data-theme="dark"] .tma-user-info-overlay__mask {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-primary) 16%, transparent) 0%,
@@ -319,26 +320,33 @@
   );
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-panel {
+.tma-dash[data-theme="dark"] .tma-user-info-panel,
+:root[data-theme="dark"] .tma-user-info-panel {
   background: rgba(24, 24, 28, 0.92);
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-overlay--docked .tma-user-info-panel {
+.tma-dash[data-theme="dark"] .tma-user-info-overlay--docked .tma-user-info-panel,
+:root[data-theme="dark"] .tma-user-info-overlay--docked .tma-user-info-panel {
   background: var(--color-white);
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-panel__field {
+.tma-dash[data-theme="dark"] .tma-user-info-panel__field,
+:root[data-theme="dark"] .tma-user-info-panel__field {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-panel__field--muted {
+.tma-dash[data-theme="dark"] .tma-user-info-panel__field--muted,
+:root[data-theme="dark"] .tma-user-info-panel__field--muted {
   background: rgba(255, 255, 255, 0.06);
 }
 
 .tma-dash[data-theme="dark"] .tma-user-info-panel__icon,
+:root[data-theme="dark"] .tma-user-info-panel__icon,
 .tma-dash[data-theme="dark"] .tma-user-info-panel__field-icon,
-.tma-dash[data-theme="dark"] .tma-user-info-panel__note-resize {
+:root[data-theme="dark"] .tma-user-info-panel__field-icon,
+.tma-dash[data-theme="dark"] .tma-user-info-panel__note-resize,
+:root[data-theme="dark"] .tma-user-info-panel__note-resize {
   color: var(--color-white);
 }
 
@@ -435,7 +443,8 @@
 
 .tma-rup__footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-top: 0.5px solid var(--color-border-soft); background: var(--color-white); }
 .tma-rup__footer .tma-rup__btn { font-size: var(--text-size-14); line-height: var(--text-lh-14); padding: var(--space-6) var(--space-16); }
-.tma-dash[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }
+.tma-dash[data-theme="dark"] .tma-rup__footer,
+:root[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }
 
 /* ═══ Docked user detail column (clients-style split view) ═══ */
 .tma-dash__view--split {
@@ -573,7 +582,8 @@
   padding: var(--space-16) var(--space-28);
 }
 
-.tma-dash[data-theme="dark"] .tma-user-info-panel__toolbar {
+.tma-dash[data-theme="dark"] .tma-user-info-panel__toolbar,
+:root[data-theme="dark"] .tma-user-info-panel__toolbar {
   background: var(--color-bg-card);
 }
 

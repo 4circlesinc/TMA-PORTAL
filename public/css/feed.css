@@ -2520,44 +2520,69 @@ img.tma-dash__feed-badge {
 /* ── dark theme ──────────────────────────────────────────── */
 
 .tma-dash[data-theme="dark"] .tma-dash__feed-sidebar,
+:root[data-theme="dark"] .tma-dash__feed-sidebar,
 .tma-dash[data-theme="dark"] .tma-dash__feed-head,
+:root[data-theme="dark"] .tma-dash__feed-head,
 .tma-dash[data-theme="dark"] .tma-dash__feed-channel-head,
+:root[data-theme="dark"] .tma-dash__feed-channel-head,
 .tma-dash[data-theme="dark"] .tma-dash__feed-post,
+:root[data-theme="dark"] .tma-dash__feed-post,
 .tma-dash[data-theme="dark"] .tma-dash__feed-panel,
+:root[data-theme="dark"] .tma-dash__feed-panel,
 .tma-dash[data-theme="dark"] .tma-dash__feed-stat,
+:root[data-theme="dark"] .tma-dash__feed-stat,
 .tma-dash[data-theme="dark"] .tma-dash__feed-state,
+:root[data-theme="dark"] .tma-dash__feed-state,
 .tma-dash[data-theme="dark"] .tma-dash__feed-modal,
+:root[data-theme="dark"] .tma-dash__feed-modal,
 .tma-dash[data-theme="dark"] .tma-dash__feed-comment-bubble,
+:root[data-theme="dark"] .tma-dash__feed-comment-bubble,
 .tma-dash[data-theme="dark"] .tma-dash__feed-comment-input,
+:root[data-theme="dark"] .tma-dash__feed-comment-input,
 .tma-dash[data-theme="dark"] .tma-dash__feed-poll-row,
+:root[data-theme="dark"] .tma-dash__feed-poll-row,
 .tma-dash[data-theme="dark"] .tma-dash__feed-icon-pick,
-.tma-dash[data-theme="dark"] .tma-dash__feed-btn {
+:root[data-theme="dark"] .tma-dash__feed-icon-pick,
+.tma-dash[data-theme="dark"] .tma-dash__feed-btn,
+:root[data-theme="dark"] .tma-dash__feed-btn {
   background: var(--color-bg-card);
   border-color: var(--dash-border);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__feed-btn--primary {
+.tma-dash[data-theme="dark"] .tma-dash__feed-btn--primary,
+:root[data-theme="dark"] .tma-dash__feed-btn--primary {
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__feed-comments,
+:root[data-theme="dark"] .tma-dash__feed-comments,
 .tma-dash[data-theme="dark"] .tma-dash__feed-pinned-band,
+:root[data-theme="dark"] .tma-dash__feed-pinned-band,
 .tma-dash[data-theme="dark"] .tma-dash__feed-poll,
+:root[data-theme="dark"] .tma-dash__feed-poll,
 .tma-dash[data-theme="dark"] .tma-dash__feed-file,
+:root[data-theme="dark"] .tma-dash__feed-file,
 .tma-dash[data-theme="dark"] .tma-dash__feed-attach,
+:root[data-theme="dark"] .tma-dash__feed-attach,
 .tma-dash[data-theme="dark"] .tma-dash__feed-compose-options,
-.tma-dash[data-theme="dark"] .tma-dash__feed-poll-builder {
+:root[data-theme="dark"] .tma-dash__feed-compose-options,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-builder,
+:root[data-theme="dark"] .tma-dash__feed-poll-builder {
   background: var(--color-overlay-4);
 }
 
-.tma-dash[data-theme="dark"] .tma-dash__feed-channel-head--cover .tma-dash__feed-badge--lg {
+.tma-dash[data-theme="dark"] .tma-dash__feed-channel-head--cover .tma-dash__feed-badge--lg,
+:root[data-theme="dark"] .tma-dash__feed-channel-head--cover .tma-dash__feed-badge--lg {
   border-color: var(--color-bg-card);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__feed-file-icon,
+:root[data-theme="dark"] .tma-dash__feed-file-icon,
 .tma-dash[data-theme="dark"] .tma-dash__feed-poll-dot.is-on,
-.tma-dash[data-theme="dark"] .tma-dash__feed-poll-box.is-on {
+:root[data-theme="dark"] .tma-dash__feed-poll-dot.is-on,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-box.is-on,
+:root[data-theme="dark"] .tma-dash__feed-poll-box.is-on {
   box-shadow: inset 0 0 0 2px var(--color-bg-card);
 }
 

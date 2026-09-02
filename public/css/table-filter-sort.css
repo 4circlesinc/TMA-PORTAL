@@ -640,19 +640,24 @@
    rules above, which set explicit black text — so the dark treatment mirrors
    them rather than relying on tokens the panel does not use. */
 .tma-dash[data-theme="dark"] .tma-filter-popover__title,
-.tma-dash[data-theme="dark"] .tma-filter-popover__note {
+:root[data-theme="dark"] .tma-filter-popover__title,
+.tma-dash[data-theme="dark"] .tma-filter-popover__note,
+:root[data-theme="dark"] .tma-filter-popover__note {
   color: rgba(255, 255, 255, 0.55);
 }
 
-.tma-dash[data-theme="dark"] .tma-filter-popover__check {
+.tma-dash[data-theme="dark"] .tma-filter-popover__check,
+:root[data-theme="dark"] .tma-filter-popover__check {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.tma-dash[data-theme="dark"] .tma-filter-popover__item--check:hover {
+.tma-dash[data-theme="dark"] .tma-filter-popover__item--check:hover,
+:root[data-theme="dark"] .tma-filter-popover__item--check:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral {
+.tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral,
+:root[data-theme="dark"] .tma-filter-popover__dot--neutral {
   background: #6b7280;
 }
 
@@ -679,6 +684,7 @@
   background: transparent;
 }
 
-.tma-dash[data-theme="dark"] .tma-filter-popover__face--none {
+.tma-dash[data-theme="dark"] .tma-filter-popover__face--none,
+:root[data-theme="dark"] .tma-filter-popover__face--none {
   border-color: rgba(255, 255, 255, 0.3);
 }
