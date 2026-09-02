@@ -2872,3 +2872,15 @@ html.tma-feed-gallery-open { overflow: hidden; }
     border-top: 0.5px solid var(--dash-border);
   }
 }
+
+/* ── Dark: black line-art icons on dark grounds (dark-audit-6) ── */
+.tma-dash[data-theme="dark"] .tma-dash__feed-nav-icon,
+:root[data-theme="dark"] .tma-dash__feed-nav-icon,
+.tma-dash[data-theme="dark"] .tma-dash__feed-search img,
+:root[data-theme="dark"] .tma-dash__feed-search img,
+.tma-dash[data-theme="dark"] .tma-dash__feed-channel-search img,
+:root[data-theme="dark"] .tma-dash__feed-channel-search img,
+.tma-dash[data-theme="dark"] .tma-dash__feed-state-icon img,
+:root[data-theme="dark"] .tma-dash__feed-state-icon img {
+  filter: invert(1) brightness(1.6);
+}

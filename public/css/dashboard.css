@@ -3876,6 +3876,77 @@
 .tma-dash[data-theme="dark"] .tma-dash__logo-mark,
 :root[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
+/* ── Dark safety net: any bare phosphor <img> nobody styles ──
+   Phosphor art is black line work; unlifted it vanishes on the dark theme.
+   :where() keeps this at img+attr specificity, so every explicit icon rule
+   (including the brightness(0) ones for flipped-white buttons) outranks it.
+   The handful of coloured phosphor files keep their own paint. */
+:where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) img[src*="icons/phosphor/"]:where(:not([src*="FilePdf"]):not([src*="FlagFilled"]):not([src*="PushPinFilled"]):not([src*="StarFilled"]):not([src*="YoutubeLogo"])) {
+  filter: invert(1) brightness(1.6);
+}
+
+/* ── Dark: black <img> line-art that never got an invert ──
+   Phosphor icons ship as black art; every one that sits on a dark surface
+   needs the same lift the nav icons get. Grouped here, found by
+   tests/Browser/dark-audit-6.mjs (pixel-luminance vs composited ground). */
+.tma-dash[data-theme="dark"] .tma-dash__rb-empty-icon img,
+:root[data-theme="dark"] .tma-dash__rb-empty-icon img,
+.tma-dash[data-theme="dark"] .tma-dash__head-dropdown-btn:not(.tma-dash__head-dropdown-btn--primary) .tma-dash__head-dropdown-caret,
+:root[data-theme="dark"] .tma-dash__head-dropdown-btn:not(.tma-dash__head-dropdown-btn--primary) .tma-dash__head-dropdown-caret,
+.tma-dash[data-theme="dark"] .tma-dash__account-meta-item img,
+:root[data-theme="dark"] .tma-dash__account-meta-item img,
+.tma-dash[data-theme="dark"] .tma-dash__email-sidebar-menu-btn img,
+:root[data-theme="dark"] .tma-dash__email-sidebar-menu-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__email-layout-btn img,
+:root[data-theme="dark"] .tma-dash__email-layout-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__email-filter img,
+:root[data-theme="dark"] .tma-dash__email-filter img,
+.tma-dash[data-theme="dark"] .tma-dash__overview-btn:not(.tma-dash__overview-btn--solid) img,
+:root[data-theme="dark"] .tma-dash__overview-btn:not(.tma-dash__overview-btn--solid) img,
+.tma-dash[data-theme="dark"] .tma-dash__overview-week-nav img,
+:root[data-theme="dark"] .tma-dash__overview-week-nav img,
+.tma-dash[data-theme="dark"] .tma-dash__overview-file-icon img,
+:root[data-theme="dark"] .tma-dash__overview-file-icon img,
+.tma-dash[data-theme="dark"] .tma-dash__clients-icon-btn img,
+:root[data-theme="dark"] .tma-dash__clients-icon-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__toolbar-divider,
+:root[data-theme="dark"] .tma-dash__toolbar-divider,
+.tma-dash[data-theme="dark"] .tma-dash__filter-drop-caret,
+:root[data-theme="dark"] .tma-dash__filter-drop-caret,
+.tma-dash[data-theme="dark"] .tma-dash__view-toggle-btn img,
+:root[data-theme="dark"] .tma-dash__view-toggle-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__messages-nav-icon img,
+:root[data-theme="dark"] .tma-dash__messages-nav-icon img,
+.tma-dash[data-theme="dark"] .tma-dash__messages-fab img,
+:root[data-theme="dark"] .tma-dash__messages-fab img,
+.tma-dash[data-theme="dark"] .tma-dash__messages-archived-reveal-btn img,
+:root[data-theme="dark"] .tma-dash__messages-archived-reveal-btn img {
+  filter: invert(1) brightness(1.6);
+}
+
+/* Idle email chips: keep the monochrome treatment but in light ink. */
+.tma-dash[data-theme="dark"] .tma-dash__email-category:not(.tma-dash__email-category--active) img,
+:root[data-theme="dark"] .tma-dash__email-category:not(.tma-dash__email-category--active) img {
+  filter: brightness(0) invert(1) opacity(0.55);
+}
+
+/* Primary buttons flip to white in dark, so their forced-white glyphs must
+   drop back to ink or they vanish into the button. */
+.tma-dash[data-theme="dark"] .tma-dash__head-dropdown-btn--primary .tma-dash__head-dropdown-caret,
+:root[data-theme="dark"] .tma-dash__head-dropdown-btn--primary .tma-dash__head-dropdown-caret,
+.tma-dash[data-theme="dark"] .tma-dash__clients-add-btn img,
+:root[data-theme="dark"] .tma-dash__clients-add-btn img {
+  filter: brightness(0);
+}
+
+/* Platform pills: --color-black flips them white, hiding the white Apple
+   mark drawn for the black pill. Keep an elevated dark pill instead. */
+.tma-dash[data-theme="dark"] .tma-dash__account-promo-btn,
+:root[data-theme="dark"] .tma-dash__account-promo-btn {
+  background: var(--color-overlay-10);
+  color: var(--color-text-primary);
+}
+
 /* ─────────────────────────────────────────
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */

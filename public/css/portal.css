@@ -6338,3 +6338,36 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   line-height: 1;
   opacity: 0.7;
 }
+
+/* ── Dark: black line-art icons on dark grounds (dark-audit-6) ── */
+.tma-dash[data-theme="dark"] .tma-portal-icon-btn img,
+:root[data-theme="dark"] .tma-portal-icon-btn img,
+.tma-dash[data-theme="dark"] .tma-portal-row-menu img,
+:root[data-theme="dark"] .tma-portal-row-menu img,
+.tma-dash[data-theme="dark"] .tma-portal-admin__caret,
+:root[data-theme="dark"] .tma-portal-admin__caret,
+.tma-dash[data-theme="dark"] .tma-portal-file-thumb.is-fallback,
+:root[data-theme="dark"] .tma-portal-file-thumb.is-fallback,
+.tma-dash[data-theme="dark"] .tma-auth__chip-btn img,
+:root[data-theme="dark"] .tma-auth__chip-btn img {
+  filter: invert(1) brightness(1.6);
+}
+
+/* Type pills: mono line art flips to light; brand-coloured badges only get a
+   lift so they read against the dark chip without shifting hue. The active
+   pill flips white, so its mono art goes back to ink (rule further up). */
+.tma-dash[data-theme="dark"] .tma-portal-type-pill:not(.is-active) .tma-portal-type-pill__icon--mono,
+:root[data-theme="dark"] .tma-portal-type-pill:not(.is-active) .tma-portal-type-pill__icon--mono {
+  filter: invert(1) brightness(1.6);
+}
+
+.tma-dash[data-theme="dark"] .tma-portal-type-pill:not(.is-active) .tma-portal-type-pill__icon:not(.tma-portal-type-pill__icon--mono),
+:root[data-theme="dark"] .tma-portal-type-pill:not(.is-active) .tma-portal-type-pill__icon:not(.tma-portal-type-pill__icon--mono) {
+  filter: brightness(1.4);
+}
+
+/* The favourite star is inline SVG filled black; starred keeps its own paint. */
+.tma-dash[data-theme="dark"] .tma-portal-star:not(.is-starred) svg,
+:root[data-theme="dark"] .tma-portal-star:not(.is-starred) svg {
+  fill: rgba(255, 255, 255, 0.75);
+}
