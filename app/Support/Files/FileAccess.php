@@ -72,24 +72,27 @@ class FileAccess
         return Role::isStaff($user);
     }
 
-    /** @var array<string, string|null> */
-    private static array $resolvedRoles = [];
-
     /** @var array<string, ClientAssignment|null> */
     private static array $liveAssignments = [];
 
-    /** @var array<string, string|null> */
+    /** @var array<string, array{assignment: CompanyStaffAssignment, role: string|null}|null> */
     private static array $companyStaffRoles = [];
 
-    /** Effective role a user holds over a file (null = no access). */
+    /**
+     * Effective role a user holds over a file (null = no access).
+     *
+     * Deliberately NOT memoised. A resolved role composes every rule below —
+     * shares, folder grants, assignments, the org default, and the
+     * personal-drive guard — so a cached ANSWER goes stale whenever any one
+     * of them moves, including moves no model event can announce: a sync job
+     * connecting a OneDrive, a settings toggle, an assignment lapsing by
+     * date. A stale answer fails OPEN (it kept serving a colleague 'editor'
+     * over a freshly connected personal drive). The row-level memos below
+     * carry the query cost; recomposing from them is in-memory work.
+     */
     public static function fileRole(User $user, FileItem $file): ?string
     {
-        $key = 'file|'.$user->id.'|'.$file->id;
-        if (array_key_exists($key, self::$resolvedRoles)) {
-            return self::$resolvedRoles[$key];
-        }
-
-        return self::$resolvedRoles[$key] = self::computeFileRole($user, $file);
+        return self::computeFileRole($user, $file);
     }
 
     private static function computeFileRole(User $user, FileItem $file): ?string
@@ -264,7 +267,6 @@ class FileAccess
         self::$userShares = [];
         self::$companyShares = [];
         self::$companyMemberships = [];
-        self::$resolvedRoles = [];
         self::$liveAssignments = [];
         self::$companyStaffRoles = [];
 
@@ -354,15 +356,13 @@ class FileAccess
         return self::$personalRootOwnerIds;
     }
 
-    /** Effective role a user holds over a folder (null = no access). */
+    /**
+     * Effective role a user holds over a folder (null = no access).
+     * Not memoised, for the same fail-open reasons as {@see self::fileRole}.
+     */
     public static function folderRole(User $user, Folder $folder): ?string
     {
-        $key = 'folder|'.$user->id.'|'.$folder->id;
-        if (array_key_exists($key, self::$resolvedRoles)) {
-            return self::$resolvedRoles[$key];
-        }
-
-        return self::$resolvedRoles[$key] = self::computeFolderRole($user, $folder);
+        return self::computeFolderRole($user, $folder);
     }
 
     private static function computeFolderRole(User $user, Folder $folder): ?string
@@ -515,24 +515,39 @@ class FileAccess
                 ->first();
         }
 
-        return self::$liveAssignments[$key];
+        // The ROW is cached; liveness is a clock test, re-asked on every
+        // read. An assignment that ends by date must stop granting on its
+        // own — no write fires when time passes, so no event can clear this.
+        $assignment = self::$liveAssignments[$key];
+
+        return $assignment && $assignment->isLive() ? $assignment : null;
     }
 
     private static function companyStaffRole(User $user, int $clientId): ?string
     {
         $cacheKey = $user->id.'|'.$clientId;
-        if (array_key_exists($cacheKey, self::$companyStaffRoles)) {
-            return self::$companyStaffRoles[$cacheKey];
+        if (! array_key_exists($cacheKey, self::$companyStaffRoles)) {
+            self::$companyStaffRoles[$cacheKey] = self::companyStaffGrant($user, $clientId);
         }
 
+        $grant = self::$companyStaffRoles[$cacheKey];
+
+        // Same clock rule as liveClientAssignment: the cached row must still
+        // be live now, not merely have been live when it was fetched.
+        return $grant && $grant['assignment']->isLive() ? $grant['role'] : null;
+    }
+
+    /** @return array{assignment: CompanyStaffAssignment, role: string|null}|null */
+    private static function companyStaffGrant(User $user, int $clientId): ?array
+    {
         if (! self::isStaff($user)) {
-            return self::$companyStaffRoles[$cacheKey] = null;
+            return null;
         }
 
         $companyId = Client::whereKey($clientId)->value('company_id');
 
         if (! $companyId) {
-            return self::$companyStaffRoles[$cacheKey] = null;
+            return null;
         }
 
         $assignment = CompanyStaffAssignment::live()
@@ -543,17 +558,17 @@ class FileAccess
         // An assignment scoped to the company alone stops at the company's own
         // files, it is not a way to read every contact's folder.
         if (! $assignment || ! $assignment->reachesClients()) {
-            return self::$companyStaffRoles[$cacheKey] = null;
+            return null;
         }
 
         if (! $assignment->reachesFutureClients()) {
             $addedAt = Client::whereKey($clientId)->value('created_at');
             if ($addedAt !== null && $addedAt > $assignment->created_at) {
-                return self::$companyStaffRoles[$cacheKey] = null;
+                return null;
             }
         }
 
-        return self::$companyStaffRoles[$cacheKey] = $assignment->fileRole();
+        return ['assignment' => $assignment, 'role' => $assignment->fileRole()];
     }
 
     public static function can(User $user, string $ability, FileItem|Folder $item): bool

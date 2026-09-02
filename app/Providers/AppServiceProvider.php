@@ -76,6 +76,20 @@ class AppServiceProvider extends ServiceProvider
             }
         };
 
+        /*
+         * A queue worker is one PHP process serving thousands of jobs, and
+         * every memo above would otherwise live for all of them — including
+         * grants revoked by a web request this process never saw. Model
+         * events only fire in the process that writes, so cross-process
+         * invalidation does not exist: the only safe worker is one that
+         * starts every job with a cold access cache, exactly like a fresh
+         * request. Folder rows and personal-drive flags go too — a drive
+         * connected by one job must be private in the next.
+         */
+        \Illuminate\Support\Facades\Queue::before(
+            fn () => \App\Support\Files\FileAccess::forgetFolders()
+        );
+
         \App\Models\Share::saved($forget);
         \App\Models\Share::deleted($forget);
         \App\Models\CompanyMember::saved($forget);
@@ -86,6 +100,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\CompanyStaffAssignment::deleted($forget);
         \App\Models\ClientAssignment::saved($forget);
         \App\Models\ClientAssignment::deleted($forget);
+        // The org-wide default and its role feed organizationDefaultRole.
+        \App\Models\FileLibrarySetting::saved($forget);
         \App\Models\CipProvider::saved($whenChanged(['company_id']));
         \App\Models\CipProvider::deleted($forget);
         \App\Models\CipApplication::saved($whenChanged(['provider_id', 'client_id']));
