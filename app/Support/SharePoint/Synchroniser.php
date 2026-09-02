@@ -649,6 +649,58 @@ class Synchroniser
      * Public because `sharepoint:recover-recycled` undoes the deletions made
      * before that was true, and must undo them exactly the same way.
      */
+    /**
+     * Re-apply one FAILED item straight from Graph.
+     *
+     * A transient failure (a reset connection, a 504) used to be permanent:
+     * delta never re-emits an unchanged item, so nothing ever tried again and
+     * "2 item(s) could not sync" sat on screen until a person intervened.
+     * This fetches the item fresh and runs it through the same apply() the
+     * walk uses. A confirmed 404 is a real deletion — the one verdict the
+     * reconciler trusts — and is applied as one.
+     */
+    public static function retryItem(SharePointConnection $connection, SharePointItem $mapping): bool
+    {
+        $item = Drive::find($connection->drive_id, $mapping->graph_item_id);
+
+        if ($item === null) {
+            // Gone in SharePoint for real (Drive::find nulls only on 404/410).
+            self::applyDelete($connection, $mapping);
+            self::log($connection, 'retry-settled', 'info', $mapping->graph_item_id,
+                'Failed item is gone in SharePoint; recycled.');
+
+            return true;
+        }
+
+        $stats = ['created' => 0, 'updated' => 0, 'deleted' => 0, 'failed' => 0, 'pages' => 0];
+
+        try {
+            Pusher::suspend(fn () => self::apply($connection, $item, $stats));
+        } catch (\Throwable $e) {
+            self::markFailed($connection, $item, $e->getMessage());
+
+            return false;
+        }
+
+        /*
+         * The eTag short-circuit in apply() skips an unchanged item without
+         * touching sync_status, so a clean pass over a freshly fetched item
+         * settles the row explicitly: the content is confirmed present and
+         * current, which is what SYNCED means.
+         */
+        $mapping->refresh();
+        if ($mapping->sync_status === SharePointItem::FAILED) {
+            $mapping->update([
+                'sync_status' => SharePointItem::SYNCED,
+                'last_error' => null,
+                'failure_count' => 0,
+                'last_synced_at' => now(),
+            ]);
+        }
+
+        return true;
+    }
+
     public static function applyRestore(SharePointConnection $connection, SharePointItem $mapping): void
     {
         DB::transaction(function () use ($mapping) {

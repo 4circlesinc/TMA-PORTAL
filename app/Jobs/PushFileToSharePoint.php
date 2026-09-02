@@ -46,5 +46,23 @@ class PushFileToSharePoint implements ShouldQueue
             self::dispatch($this->fileId, $this->action)
                 ->delay(now()->addSeconds($result['retryAfter'] ?? 30));
         }
+
+        /*
+         * "Retries with backoff" in the docblock was aspirational: Pusher
+         * catches its own exceptions (an OAuth callback or observer must not
+         * die on a push), so a failure comes back as a STATUS and the
+         * queue's tries never fire — one reset connection was permanent.
+         * Re-dispatch with a delay instead, bounded by the mapping's own
+         * failure_count; past three, RetrySharePointFailures owns it with
+         * longer spacing and a final cap.
+         */
+        if (($result['status'] ?? null) === 'failed') {
+            $failures = (int) \App\Models\SharePointItem::query()
+                ->where('file_id', $this->fileId)->max('failure_count');
+            if ($failures > 0 && $failures < 3) {
+                self::dispatch($this->fileId, $this->action)
+                    ->delay(now()->addSeconds(60 * $failures));
+            }
+        }
     }
 }

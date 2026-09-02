@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RetrySharePointFailures;
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\FileItem;
 use App\Models\FileVersion;
@@ -1040,5 +1041,100 @@ class SharePointSyncTest extends TestCase
             SyncSharePointLibrary::class,
             fn ($job) => $job->connectionId === $this->connection->id
         );
+    }
+
+    /**
+     * A transient item failure heals itself.
+     *
+     * One reset connection used to mean "could not sync" for ever: delta
+     * never re-emits an unchanged item, so nothing returned to it. The sweep
+     * re-fetches and settles the row.
+     */
+    public function test_a_failed_pull_item_is_refetched_and_settles(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->firstOrFail();
+        $mapping->forceFill([
+            'sync_status' => SharePointItem::FAILED,
+            'last_error' => 'cURL error 56: Recv failure',
+            'failure_count' => 1,
+            'updated_at' => now()->subMinutes(30),
+        ])->save();
+        // No push side to this failure: make the connection import-only so
+        // the sweep takes the re-fetch path deterministically.
+        $this->connection->update(['direction' => 'import']);
+
+        $this->remoteItem = $this->fileItem('i-1', 'Brief.txt', 'c:1');
+        (new RetrySharePointFailures)->handle();
+
+        $fresh = $mapping->fresh();
+        $this->assertSame(SharePointItem::SYNCED, $fresh->sync_status);
+        $this->assertNull($fresh->last_error);
+        $this->assertSame(0, $fresh->failure_count);
+    }
+
+    /** Retries are spaced by how often the item has failed, not hammered. */
+    public function test_a_recent_failure_waits_for_its_backoff(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->firstOrFail();
+        $mapping->forceFill([
+            'sync_status' => SharePointItem::FAILED,
+            'failure_count' => 3,
+            'updated_at' => now()->subMinutes(5),   // 3 failures want 30 quiet minutes
+        ])->save();
+        $this->connection->update(['direction' => 'import']);
+
+        (new RetrySharePointFailures)->handle();
+
+        $this->assertSame(SharePointItem::FAILED, $mapping->fresh()->sync_status);
+    }
+
+    /** Past the attempt cap the failure is real, and stays for a human. */
+    public function test_a_persistently_failing_item_stops_being_retried(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->firstOrFail();
+        $mapping->forceFill([
+            'sync_status' => SharePointItem::FAILED,
+            'failure_count' => RetrySharePointFailures::MAX_ATTEMPTS,
+            'updated_at' => now()->subDay(),
+        ])->save();
+        $this->connection->update(['direction' => 'import']);
+        $this->remoteItem = $this->fileItem('i-1', 'Brief.txt', 'c:1');
+
+        (new RetrySharePointFailures)->handle();
+
+        $this->assertSame(SharePointItem::FAILED, $mapping->fresh()->sync_status);
+    }
+
+    /**
+     * A failed item that is truly gone is settled as a deletion — the same
+     * confirmed-404 verdict the reconciler trusts, and nothing weaker.
+     */
+    public function test_a_failed_item_gone_in_sharepoint_is_recycled_on_retry(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+        $file = FileItem::firstOrFail();
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->firstOrFail();
+        $mapping->forceFill([
+            'sync_status' => SharePointItem::FAILED,
+            'failure_count' => 1,
+            'updated_at' => now()->subMinutes(30),
+        ])->save();
+        $this->connection->update(['direction' => 'import']);
+        $this->deletedItems = ['i-1'];
+
+        (new RetrySharePointFailures)->handle();
+
+        $this->assertTrue(FileItem::withTrashed()->find($file->id)->trashed(), 'recycled, not purged');
     }
 }

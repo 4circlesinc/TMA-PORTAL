@@ -218,6 +218,21 @@ Schedule::command('sharepoint:sync --queue')
     ->withoutOverlapping(10);
 
 /*
+ * Item-level failures heal themselves. One reset connection or Graph 504
+ * marks an item FAILED and nothing else ever returns to it — delta only
+ * re-emits changed items. The sweep retries with growing spacing and a
+ * cap, so "could not sync" only stays on screen for failures that are real.
+ */
+Artisan::command('sharepoint:retry-failed', function () {
+    \App\Jobs\RetrySharePointFailures::dispatch();
+    $this->info('Queued the failed-item retry sweep.');
+})->purpose('Retry SharePoint items whose last sync attempt failed');
+
+Schedule::command('sharepoint:retry-failed')
+    ->everyTenMinutes()
+    ->withoutOverlapping(30);
+
+/*
  * Provider folders in the Citizenship Applications library become CIP
  * service providers on their own, linked to their folder. Idempotent, so
  * an hour with nothing new writes nothing.
