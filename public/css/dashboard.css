@@ -3878,8 +3878,6 @@
 
 /* Client-hub cards: a half-white wash reads as a card on the light page but
    composites to flat grey over the dark one. */
-.tma-dash[data-theme="dark"] .tma-dash__clients-folder,
-:root[data-theme="dark"] .tma-dash__clients-folder,
 .tma-dash[data-theme="dark"] .tma-dash__clients-assigned,
 :root[data-theme="dark"] .tma-dash__clients-assigned,
 .tma-dash[data-theme="dark"] .tma-dash__clients-address-block,
@@ -18945,7 +18943,6 @@ button.tma-file-status-chip:focus-visible,
 .tma-dash__clients-folder.is-selected,
 .tma-dash__clients-folder.is-selected:hover {
   background: var(--color-accent-bg);
-  border-color: var(--color-accent);
 }
 
 .tma-dash__clients-folder .tma-portal-rename-input {
@@ -18953,23 +18950,29 @@ button.tma-file-status-chip:focus-visible,
   width: 100%;
 }
 
+/* Flat rows, the way the File Library lists things: a hairline between
+   rows and a hover wash — not a stack of bordered cards glued together. */
 .tma-dash__clients-folder {
   display: flex;
   align-items: center;
   gap: var(--space-12);
   width: 100%;
-  padding: var(--space-12);
-  border: 1px solid var(--color-overlay-4);
-  border-radius: var(--radius-12);
-  background: rgba(255, 255, 255, 0.5);
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   cursor: pointer;
   font: inherit;
 }
 
+.tma-dash__clients-folder:last-child {
+  border-bottom: 0;
+}
+
 .tma-dash__clients-folder:hover {
   background: var(--color-hover);
-  border-color: var(--color-border-medium);
 }
 
 .tma-dash__clients-folder-icon {
