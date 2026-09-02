@@ -594,7 +594,7 @@ function buildCss(platform = process.platform) {
    * for 'data-theme' in preload.js and the tma:theme handler in main.js.
    */
   :root[data-theme="dark"] #tma-desktop-titlebar {
-    background: ${BLUE_DARK};
+    background: ${BLUE_DARK} !important;
   }
 
   :root[data-theme="dark"] .tma-dash--desktop-bar .tma-dash__header,
@@ -604,7 +604,7 @@ function buildCss(platform = process.platform) {
 
   /* The unread pill's separating ring must match whichever blue is behind it. */
   :root[data-theme="dark"] .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-btn-badge {
-    box-shadow: 0 0 0 2px ${BLUE_DARK};
+    box-shadow: 0 0 0 2px ${BLUE_DARK} !important;
   }
 `;
 }

@@ -1,1 +1,1 @@
-- Connecting your Google or Microsoft account now finishes in your web browser, where the provider sign-in can complete safely
+- Dark mode now reaches the app's blue title bar: it turns the deeper brand blue with the dark theme, and the status pill's label stays readable
