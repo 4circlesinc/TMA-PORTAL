@@ -45,6 +45,7 @@ use App\Support\Files\Thumbnail;
 use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -148,12 +149,78 @@ class CipApplicationController extends Controller
 
         $data = $request->validate(Intake::rules(), Intake::messages());
 
+        /*
+         * The same submission landing twice is not a new application.
+         *
+         * A gateway timeout shows the reader "Could not file this
+         * application" while the insert commits behind it; their retry
+         * carries the key the wizard minted at open, so it finds the row
+         * the first attempt created and returns it as the success the
+         * reader never saw. GLO26-00002 exists because this check did not.
+         */
+        $key = trim((string) ($data['submissionId'] ?? ''));
+        if ($key !== '') {
+            $landed = CipApplication::query()
+                ->where('submission_key', $key)
+                ->where('created_by', $user->id)
+                ->first();
+            if ($landed) {
+                return response()->json([
+                    'application' => $this->record($landed, $user),
+                ], 200);
+            }
+        }
+
         // A provider this account may not file under is not offered and not
         // accepted, the same list the form was drawn from decides.
         $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
 
-        $application = Intake::create($provider, $user, $data);
+        /*
+         * The same person filed twice on purpose is an administrator's call.
+         *
+         * A retry replays a key and never reaches here; matching on the
+         * applicant catches the filing that is genuinely a second one. An
+         * administrator is shown what it repeats and must say "file it
+         * anyway"; everyone else is stopped and told who can.
+         */
+        if ($duplicate = Intake::duplicateOf($data)) {
+            $applicant = trim($data['firstName'].' '.$data['lastName']);
+            if (! Role::isAdmin($user)) {
+                abort(422, sprintf(
+                    'An application for %s is already on file (%s). An administrator has to approve a duplicate.',
+                    $applicant,
+                    $duplicate->internal_number,
+                ));
+            }
+            if (! $request->boolean('allowDuplicate')) {
+                return response()->json([
+                    'duplicate' => [
+                        'id' => $duplicate->uuid,
+                        'internalNumber' => $duplicate->internal_number,
+                        'name' => $applicant,
+                    ],
+                ], 409);
+            }
+        }
+
+        try {
+            $application = Intake::create($provider, $user, $data);
+        } catch (UniqueConstraintViolationException $e) {
+            // Two lands of the same submission racing: the index picked the
+            // winner, hand the loser the winner's row.
+            $landed = $key !== '' ? CipApplication::query()
+                ->where('submission_key', $key)
+                ->where('created_by', $user->id)
+                ->first() : null;
+            if ($landed === null) {
+                throw $e;
+            }
+
+            return response()->json([
+                'application' => $this->record($landed, $user),
+            ], 200);
+        }
 
         Live::staff(Live::CIP);
 

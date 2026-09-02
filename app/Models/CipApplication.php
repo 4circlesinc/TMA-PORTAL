@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'uuid', 'provider_id', 'client_id', 'created_by',
     'investment_type', 'investment_type_other', 'sponsored', 'unit_contact',
+    'submission_key',
 ])]
 class CipApplication extends Model
 {

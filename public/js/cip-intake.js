@@ -147,6 +147,12 @@
     saving: false,
     errors: {},
     onDone: null,
+    /* Minted once per new filing. A retry after a timeout repeats this key,
+       and the server answers with the application the first attempt already
+       created instead of numbering a second one. */
+    submissionKey: null,
+    /* An administrator said "file it anyway" to the duplicate warning. */
+    allowDuplicate: false,
   };
 
   function esc(s) { return ui().esc(s); }
@@ -1173,6 +1179,14 @@
       out.push({ name: 'phase', value: state.phase });
     }
 
+    if (!state.applicationId && state.submissionKey) {
+      out.push({ name: 'submissionId', value: state.submissionKey });
+    }
+
+    if (!state.applicationId && state.allowDuplicate) {
+      out.push({ name: 'allowDuplicate', value: '1' });
+    }
+
     return out;
   }
 
@@ -1263,6 +1277,14 @@
           return;
         }
 
+        // The same person is already on file; only an administrator sees
+        // this — everyone else was refused with a message above.
+        if (res.status === 409 && json.duplicate) {
+          confirmDuplicate(json.duplicate);
+
+          return;
+        }
+
         if (!res.ok) {
           ui().toastError((json && json.message)
             || (state.applicationId ? 'Could not save this application' : 'Could not file this application'));
@@ -1281,6 +1303,34 @@
        * so parking it is a reasonable bet rather than a hope.
        */
       park(url);
+    });
+  }
+
+  /**
+   * The server found this applicant already on file, and the reader is an
+   * administrator, whose call it is. Filing anyway resubmits with their
+   * approval on it; nobody else is ever offered the button.
+   */
+  function confirmDuplicate(duplicate) {
+    ui().openModal({
+      title: 'Already on file',
+      body: '<p class="tma-portal-modal__text">' +
+        esc((duplicate.name || 'This applicant') + ' already has application ' + duplicate.internalNumber + '.') +
+        '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-dup-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-dup-file>File anyway</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-dup-cancel]').addEventListener('click', function () {
+          ui().closeModal();
+        });
+        host.querySelector('[data-dup-file]').addEventListener('click', function () {
+          ui().closeModal();
+          state.allowDuplicate = true;
+          submit();
+        });
+      },
     });
   }
 
@@ -1331,6 +1381,12 @@
       ui().toastError('Could not reach the server');
       if (root) render(root);
     });
+  }
+
+  function mintKey() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+
+    return 'sub-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
   function fullName() {
@@ -1484,6 +1540,9 @@
     state.error = '';
     state.applicationId = opts.applicationId || null;
     state.phase = state.applicationId ? null : (opts.phase === 'post_approval' ? 'post_approval' : 'pre_approval');
+    // One key for this filing, however many times Add is pressed or retried.
+    state.submissionKey = state.applicationId ? null : mintKey();
+    state.allowDuplicate = false;
     state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;

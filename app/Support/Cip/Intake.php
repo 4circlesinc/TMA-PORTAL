@@ -173,6 +173,9 @@ class Intake
             $editing ? [] : [
                 'providerId' => ['required', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+                // Minted once when the wizard opens, so a retry after a
+                // timeout names the submission it repeats — see store().
+                'submissionId' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
             self::mainApplicantDocumentRules($editing),
@@ -428,6 +431,40 @@ class Intake
     }
 
     /**
+     * The live application this filing would repeat, if any.
+     *
+     * The same human, not the same form: a match on the main applicant's
+     * name and date of birth, or on their passport number, whatever provider
+     * either was filed under. Withdrawn or decided applications still count
+     * — refiling for a person already in the caseload is exactly the
+     * duplicate an administrator has to approve.
+     *
+     * @param  array<string, mixed>  $data  already validated by self::rules()
+     */
+    public static function duplicateOf(array $data): ?CipApplication
+    {
+        $first = mb_strtolower(trim((string) $data['firstName']));
+        $last = mb_strtolower(trim((string) $data['lastName']));
+        $passport = mb_strtolower(trim((string) $data['passportNumber']));
+
+        return CipApplication::query()
+            ->whereHas('people', function ($q) use ($first, $last, $passport, $data) {
+                $q->where('role', CipPerson::ROLE_MAIN_APPLICANT)
+                    ->where(function ($q) use ($first, $last, $passport, $data) {
+                        $q->where(fn ($person) => $person
+                            ->whereRaw('lower(first_name) = ?', [$first])
+                            ->whereRaw('lower(last_name) = ?', [$last])
+                            ->whereDate('date_of_birth', $data['dateOfBirth']));
+                        if ($passport !== '') {
+                            $q->orWhereRaw('lower(passport_number) = ?', [$passport]);
+                        }
+                    });
+            })
+            ->latest('id')
+            ->first();
+    }
+
+    /**
      * File a new draft: the application, everyone on it, their folders and
      * their document slots.
      *
@@ -449,6 +486,7 @@ class Intake
                     ? trim((string) ($data['investmentTypeOther'] ?? ''))
                     : null,
                 'sponsored' => (bool) $data['sponsored'],
+                'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
             ];
 
             $application = Applications::create($provider, $creator, $attributes);

@@ -1165,4 +1165,105 @@ class CipIntakeTest extends TestCase
         $this->assertNotContains('GAL', $offered());
         $this->assertContains('BLU', $offered(), 'the live firm is untouched');
     }
+
+    /*
+     * A gateway timeout shows the reader "Could not file this application"
+     * while the insert commits behind it. Their retry repeats the key the
+     * wizard minted, and must get back the application the first attempt
+     * created — not GLO26-00002.
+     */
+    public function test_a_retried_submission_returns_the_application_it_already_created(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $first = $this->file($staff, $this->payload($provider, ['submissionId' => 'retry-key-1']))
+            ->assertCreated()
+            ->json('application');
+
+        $second = $this->file($staff, $this->payload($provider, ['submissionId' => 'retry-key-1']))
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame($first['id'], $second['id']);
+        $this->assertSame(1, CipApplication::count());
+    }
+
+    public function test_filing_the_same_applicant_again_needs_an_administrator(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($officer, $this->payload($provider, ['submissionId' => 'officer-1']))
+            ->assertCreated();
+
+        // A different submission, the same human: name, birth date and
+        // passport all match the application already on file.
+        $this->file($officer, $this->payload($provider, ['submissionId' => 'officer-2']))
+            ->assertStatus(422)
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, 'GAL'.now()->format('y').'-00001'));
+
+        $this->assertSame(1, CipApplication::count());
+    }
+
+    public function test_an_administrator_must_say_file_anyway_to_a_duplicate(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($admin, $this->payload($provider, ['submissionId' => 'admin-1']))
+            ->assertCreated();
+
+        // Without the confirmation the answer is the application it repeats,
+        // for the dialog to name — and nothing is filed.
+        $this->file($admin, $this->payload($provider, ['submissionId' => 'admin-2']))
+            ->assertStatus(409)
+            ->assertJsonPath('duplicate.internalNumber', 'GAL'.now()->format('y').'-00001')
+            ->assertJsonPath('duplicate.name', 'John Smith');
+        $this->assertSame(1, CipApplication::count());
+
+        $this->file($admin, $this->payload($provider, ['submissionId' => 'admin-2', 'allowDuplicate' => '1']))
+            ->assertCreated();
+        $this->assertSame(2, CipApplication::count());
+    }
+
+    /*
+     * Matching is of the person, not the string: case and a different
+     * passport must not smuggle a duplicate past the gate, and a genuinely
+     * different person must never be stopped by it.
+     */
+    public function test_a_different_person_is_not_mistaken_for_a_duplicate(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($officer, $this->payload($provider, ['submissionId' => 'p-1']))
+            ->assertCreated();
+
+        // Same name, different date of birth and passport: a namesake, filed.
+        $this->file($officer, $this->payload($provider, [
+            'submissionId' => 'p-2',
+            'dateOfBirth' => '1990-09-30',
+            'passportNumber' => 'Z9999999',
+        ]))->assertCreated();
+
+        // Shouting the name with the same birth date is still the same person.
+        $this->file($officer, $this->payload($provider, [
+            'submissionId' => 'p-3',
+            'firstName' => 'JOHN',
+            'lastName' => 'SMITH',
+            'passportNumber' => 'Q1111111',
+        ]))->assertStatus(422);
+
+        // So is a fresh identity carrying a passport already on file.
+        $this->file($officer, $this->payload($provider, [
+            'submissionId' => 'p-4',
+            'firstName' => 'Jonathan',
+            'lastName' => 'Smythe',
+            'dateOfBirth' => '1991-01-01',
+            'passportNumber' => 'x1234567',
+        ]))->assertStatus(422);
+
+        $this->assertSame(2, CipApplication::count());
+    }
 }
