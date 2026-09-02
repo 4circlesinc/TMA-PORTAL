@@ -772,11 +772,12 @@ class CipPostApprovalTest extends TestCase
         $this->approveRequiredCor($application, $staff);
         $contact = $this->contactOn($application, $staff);
 
+        // The admin holds the override, so confirm is offered to them too.
         $this->actingAs($staff)
             ->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()
             ->assertJsonPath('application.status', Status::APPLY_FOR_COR)
-            ->assertJsonPath('application.canConfirm', false)
+            ->assertJsonPath('application.canConfirm', true)
             ->assertJsonPath('application.corLocked', false);
 
         $body = $this->actingAs($contact)

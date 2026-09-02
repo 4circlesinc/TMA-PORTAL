@@ -173,8 +173,8 @@ class Milestones
      *
      * The lock is not a status change, so it is asked of
      * {@see Confirmation::allows()} instead — the authority the Confirm
-     * submission button itself uses. Staff never hold it: the press is the
-     * submitting party's.
+     * submission button itself uses. The press is the submitting party's,
+     * or an administrator's override on their behalf.
      */
     private static function canRecord(CipApplication $application, ?User $actor, string $key): bool
     {

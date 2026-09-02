@@ -55,10 +55,13 @@ class Confirmation
      * Staff record the CIP number / COR submission date; they do not confirm.
      * The button is the provider side's, while the file stands at Ready to
      * submit or Apply for COR and that lane's package is still open.
+     * Administrators are the one exception: they may confirm on the
+     * provider's behalf when the provider isn't going to press it, and the
+     * event trail records that the press was an override.
      */
     public static function allows(User $actor, CipApplication $application): bool
     {
-        if (! self::isSubmittingParty($actor, $application)) {
+        if (! self::isSubmittingParty($actor, $application) && ! Role::isAdmin($actor)) {
             return false;
         }
 
@@ -99,7 +102,7 @@ class Confirmation
         }
 
         if ($application->isLocked()) {
-            if (! self::isSubmittingParty($actor, $application)) {
+            if (! self::isSubmittingParty($actor, $application) && ! Role::isAdmin($actor)) {
                 throw new AuthorizationException('Only the service provider can confirm this submission.');
             }
 
@@ -123,18 +126,20 @@ class Confirmation
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
+        $override = ! self::isSubmittingParty($actor, $application);
 
-        return DB::transaction(function () use ($application, $actor, $lockedAt) {
+        return DB::transaction(function () use ($application, $actor, $lockedAt, $override) {
             $application->forceFill(['locked_at' => $lockedAt])->save();
 
             Package::forget();
             Package::revokeOutstandingLinks($application);
             Tree::provisionAdditionalDrawers($application, $actor);
 
-            Engine::record($application, CipEvent::ACTION_PACKAGE_CONFIRMED, $actor, [
+            Engine::record($application, CipEvent::ACTION_PACKAGE_CONFIRMED, $actor, array_filter([
                 'reason' => 'confirm_submission',
                 'lockedAt' => $lockedAt->toDateString(),
-            ]);
+                'override' => $override,
+            ]));
 
             ActivityLogger::log([
                 'actor' => $actor,
@@ -149,7 +154,9 @@ class Confirmation
                 $actor,
                 'cip.package_confirmed',
                 $application->displayNumber().' package confirmed',
-                'The service provider confirmed the submission. Record the submission to the Unit.',
+                $override
+                    ? 'An administrator confirmed the submission on the provider’s behalf. Record the submission to the Unit.'
+                    : 'The service provider confirmed the submission. Record the submission to the Unit.',
             );
 
             return $application->refresh();
@@ -166,7 +173,7 @@ class Confirmation
         ?Carbon $lockedAt,
     ): CipApplication {
         if ($application->isCorLocked()) {
-            if (! self::isSubmittingParty($actor, $application)) {
+            if (! self::isSubmittingParty($actor, $application) && ! Role::isAdmin($actor)) {
                 throw new AuthorizationException('Only the service provider can confirm this submission.');
             }
 
@@ -184,17 +191,19 @@ class Confirmation
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
+        $override = ! self::isSubmittingParty($actor, $application);
 
-        return DB::transaction(function () use ($application, $actor, $lockedAt) {
+        return DB::transaction(function () use ($application, $actor, $lockedAt, $override) {
             $application->forceFill(['cor_locked_at' => $lockedAt])->save();
 
             Package::forget();
             Package::revokeCorLinks($application);
 
-            Engine::record($application, CipEvent::ACTION_COR_PACKAGE_CONFIRMED, $actor, [
+            Engine::record($application, CipEvent::ACTION_COR_PACKAGE_CONFIRMED, $actor, array_filter([
                 'reason' => 'confirm_submission',
                 'lockedAt' => $lockedAt->toDateString(),
-            ]);
+                'override' => $override,
+            ]));
 
             ActivityLogger::log([
                 'actor' => $actor,
@@ -209,7 +218,9 @@ class Confirmation
                 $actor,
                 'cip.cor_package_confirmed',
                 $application->displayNumber().' COR package confirmed',
-                'The service provider confirmed the Certificate of Registration package. Record the COR submission.',
+                $override
+                    ? 'An administrator confirmed the Certificate of Registration package on the provider’s behalf. Record the COR submission.'
+                    : 'The service provider confirmed the Certificate of Registration package. Record the COR submission.',
             );
 
             return $application->refresh();

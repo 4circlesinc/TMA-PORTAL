@@ -220,17 +220,66 @@ class CipConfirmationTest extends TestCase
         );
     }
 
-    public function test_staff_cannot_confirm_submission(): void
+    public function test_non_admin_staff_cannot_confirm_submission(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
         $application = $this->application($staff, Status::READY_TO_SUBMIT);
         $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
-        $this->actingAs($staff)
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
             ->assertForbidden();
 
         $this->assertNull($application->fresh()->locked_at);
+    }
+
+    /**
+     * The one exception to "the press is the provider's": an administrator
+     * may confirm on the provider's behalf, and the event says it was an
+     * override rather than passing as the provider's own press.
+     */
+    public function test_an_administrator_can_confirm_on_the_providers_behalf(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertOk()
+            ->json('application');
+
+        $this->assertTrue($body['locked']);
+        $this->assertNotNull($application->fresh()->locked_at);
+
+        $meta = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_PACKAGE_CONFIRMED)
+            ->value('meta');
+        $this->assertTrue($meta['override']);
+        $this->assertSame($staff->id, CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_PACKAGE_CONFIRMED)
+            ->value('actor_id'));
+    }
+
+    public function test_the_providers_own_press_is_not_marked_an_override(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = null;
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page');
+        $contact = $this->contact($company, $staff);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertOk();
+
+        $meta = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_PACKAGE_CONFIRMED)
+            ->value('meta');
+        $this->assertArrayNotHasKey('override', $meta);
     }
 
     public function test_a_stranger_is_not_told_the_application_exists(): void
@@ -283,7 +332,7 @@ class CipConfirmationTest extends TestCase
         $this->assertNull($application->fresh()->locked_at);
     }
 
-    public function test_the_show_payload_offers_confirm_only_to_the_provider(): void
+    public function test_the_show_payload_offers_confirm_to_the_provider_and_the_admin(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $company = null;
@@ -296,7 +345,15 @@ class CipConfirmationTest extends TestCase
             ->assertJsonPath('application.canConfirm', true)
             ->assertJsonPath('application.locked', false);
 
+        // The admin holds the override, so the button is offered rather than
+        // the waiting-for-the-provider note.
         $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->assertJsonPath('application.canConfirm', true)
+            ->assertJsonPath('application.locked', false);
+
+        $this->actingAs($this->officer($application))
             ->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()
             ->assertJsonPath('application.canConfirm', false)
