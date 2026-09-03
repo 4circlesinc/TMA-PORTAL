@@ -5965,11 +5965,21 @@ label.tma-portal-check-row:hover {
   border-radius: var(--radius-6);
 }
 
+/*
+ * A document preview fills the card's width and is cropped at the bottom.
+ *
+ * It used to be `width: auto` against a fixed 128px height, which fits a
+ * whole portrait page into the box — the page ends up ~90px wide with grey
+ * gutters either side, and the words in it are far too small to read. The
+ * top of a document is the part that identifies it (letterhead, "Dear
+ * {{applicant}}", the subject line), so scale to the width and let the rest
+ * run past the bottom edge.
+ */
 .tma-portal-wf-card__preview .tma-file-thumb--doc {
-  object-fit: contain;
+  object-fit: cover;
   object-position: top center;
   height: 128px;
-  width: auto;
+  width: 100%;
   background: #fff;
 }
 
