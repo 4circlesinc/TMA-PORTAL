@@ -1549,10 +1549,12 @@ body::-webkit-scrollbar,
     flex: 1 1 auto;
   }
 
-  /* Status pills shrink to caption size on touch widths — at 11px uppercase
-     with full padding they shouted over the names they annotate. Scoped to
-     the clients/CIP view so file-status pills elsewhere keep their size. */
-  .tma-dash__clients .tma-portal-status,
+  /* Status pills shrink to caption size on touch widths, everywhere in the
+     portal — at 11px uppercase with full padding they shouted over the
+     names and rows they annotate (CIP cards, the applicant header, the
+     workflow strip). Scoped to the shell so the design-system pages that
+     document the full-size pill keep it. */
+  .tma-dash .tma-portal-status,
   .tma-dash__clients-detail-head .tma-portal-status {
     font-size: 10px;
     line-height: 14px;

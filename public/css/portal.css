@@ -5881,15 +5881,11 @@ label.tma-portal-check-row:hover {
   border-color: transparent;
 }
 
-/* Unread and it names you: the accent edge stays, on white, so the one card
-   that is actually addressed to you is the loudest thing on the page. */
-/* A left edge rather than a fill: the row still has to be readable next to
-   twenty others, and a tinted card competes with the status badge it sits
-   beside for the same job. */
-.tma-portal-wf-card.is-mine {
-  border-left: 3px solid var(--color-accent);
-  padding-left: calc(var(--space-12) - 2px);
-}
+/* Unread and it names you: no accent edge. The card used to carry a 3px
+   left rule for this, which read as a stray line down the card on a phone
+   and said the same thing as the "Mentioned you" chip inside it. The chip
+   keeps the job; the class stays for JS and for anything that wants to
+   style this state later. */
 
 .tma-portal-wf-card__head {
   display: flex;
