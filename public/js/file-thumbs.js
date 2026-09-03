@@ -97,6 +97,12 @@
     return match ? match[1].toLowerCase() : '';
   }
 
+  function isMono(src) {
+    return !(global.TMAFileIcons && global.TMAFileIcons.isMonoIcon)
+      ? false
+      : global.TMAFileIcons.isMonoIcon(src);
+  }
+
   function iconSrcFor(item) {
     if (global.TMAFileIcons && global.TMAFileIcons.fileIconSrc) {
       return global.TMAFileIcons.fileIconSrc(item.icon || '', item.name || '');
@@ -182,6 +188,16 @@
     var cls = ((opts.cls || '') + ' tma-file-thumb').trim();
     var iconCls = opts.iconCls == null ? (opts.cls || '') : opts.iconCls;
     var icon = opts.icon || iconSrcFor(item);
+    /*
+     * Ink gets a class, art does not.
+     *
+     * Dark mode has to flip a black glyph or it is a black shape on a black
+     * row, and must NOT flip the Acrobat red or the Office blues — an
+     * inverted brand mark is the wrong logo, not a dark-mode one. Stamped
+     * here rather than in each list, because every list draws its fallback
+     * icon through this one function.
+     */
+    if (isMono(icon)) iconCls = (iconCls + ' is-mono').trim();
     var alt = ' alt="' + esc(opts.alt || '') + '"';
     var box = size ? ' width="' + size + '" height="' + size + '"' : '';
     var iconBox = iconSize ? ' width="' + iconSize + '" height="' + iconSize + '"' : '';

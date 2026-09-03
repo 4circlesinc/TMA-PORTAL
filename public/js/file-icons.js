@@ -155,6 +155,24 @@
     return TMA + 'DefaultIcon.svg';
   }
 
+  /*
+   * Marks that carry their own colour: the Acrobat red, the Office blues and
+   * greens, the image gradient. Everything else in the set is ink — either
+   * `fill="currentColor"`, which an <img> renders black, or a flat black
+   * default — and ink is what a dark ground needs flipped.
+   *
+   * The distinction has to be drawn somewhere, and it belongs here, beside the
+   * map that chose the file. A dark-mode rule that flipped every fallback icon
+   * turned the PDF badge cyan and Word orange: an inverted brand mark is not a
+   * dark-mode brand mark, it is the wrong logo.
+   */
+  var COLOUR_MARKS = /(FilePdf|FileImage|FileJpg|FilePng|DocxIcon|XlsxIcon|PptIcon|OnenoteIcon|FormIcon|TxtIcon)\.svg(\?|$)/i;
+
+  /** Is this icon ink we may flip, rather than art we must not touch? */
+  function isMonoIcon(src) {
+    return !COLOUR_MARKS.test(String(src || ''));
+  }
+
   function fileIconSrc(key, filename) {
     if (filename) {
       var fromName = fileIconFromFilename(filename);
@@ -172,5 +190,6 @@
     TMA: TMA,
     fileIconSrc: fileIconSrc,
     fileIconFromFilename: fileIconFromFilename,
+    isMonoIcon: isMonoIcon,
   };
 })(typeof window !== 'undefined' ? window : this);
