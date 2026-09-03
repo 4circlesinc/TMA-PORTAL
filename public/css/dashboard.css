@@ -4534,6 +4534,15 @@
     border-bottom: none;
     pointer-events: none;
     overflow: visible;
+  }
+
+  /* Company branding paints its headerColor as an INLINE style on the header
+     (current-user.js applyBranding) — picked for the desktop chrome, but on
+     the floating mobile header it reads as a solid band over the page. The
+     !important is the only thing that outranks an inline style. Email's own
+     mobile header and the desktop app's blue bar keep their paint. */
+  .tma-dash:not(.tma-dash--email):not(.tma-dash--desktop-bar) .tma-dash__header {
+    background: transparent !important;
     padding-top: calc(var(--space-12) + env(safe-area-inset-top, 0px));
     padding-bottom: var(--space-12);
     padding-left: max(var(--dash-mobile-gutter), env(safe-area-inset-left, 0px));

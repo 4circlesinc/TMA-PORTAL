@@ -820,6 +820,12 @@ a.tma-dash__tab-btn:visited {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
 
+  /* Branding's inline headerColor must not paint the floating mobile header
+     (see dashboard.css — only !important outranks an inline style). */
+  .tma-dash:not(.tma-dash--email):not(.tma-dash--desktop-bar) .tma-dash__header {
+    background: transparent !important;
+  }
+
   .tma-dash__header-left,
   .tma-dash__header-right,
   .tma-dash__header-center {
