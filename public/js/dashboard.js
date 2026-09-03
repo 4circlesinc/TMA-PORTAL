@@ -681,6 +681,43 @@
       window.addEventListener('resize', syncHeaderLogo, { passive: true });
     }
 
+    /*
+     * The bell rides in the left bubble on touch widths.
+     *
+     * The right bubble hides both popup triggers there — it is already
+     * carrying presence, the theme switch and the right-panel toggle, and a
+     * fifth 44px target does not fit a phone. But notifications are the one a
+     * reader actually needs at hand, so the button MOVES into the bubble
+     * beside the menu and the logo. Moving it, rather than drawing a second
+     * one, is the whole trick: the popup, the unread badge and the click
+     * handler are all bound to that node, and a copy would carry none of them.
+     */
+    function setupMobileHeaderBell() {
+      var headerLeft = root.querySelector('.tma-dash__header-left');
+      var bell = root.querySelector('[data-action="toggle-notifications-popup"]');
+      if (!headerLeft || !bell) return;
+
+      // Where it came from, so the desktop header gets it back in its own
+      // order rather than at the end of the row.
+      var home = bell.parentNode;
+      var homeNext = bell.nextSibling;
+
+      function syncHeaderBell() {
+        if (isMobileSidebar()) {
+          if (bell.parentNode === headerLeft) return;
+          bell.setAttribute('data-header-bell', '');
+          headerLeft.appendChild(bell);
+          return;
+        }
+        if (bell.parentNode === home) return;
+        bell.removeAttribute('data-header-bell');
+        home.insertBefore(bell, homeNext);
+      }
+
+      syncHeaderBell();
+      window.addEventListener('resize', syncHeaderBell, { passive: true });
+    }
+
     function syncMobileHeaderScrollNow() {
       if (!isMobileSidebar()) {
         root.classList.remove('is-header-scrolled');
@@ -778,6 +815,7 @@
 
     setupMobileSidebarHead();
     setupMobileHeaderLogo();
+    setupMobileHeaderBell();
     setupMobileHeaderScroll();
     setupSidebarProfileActions();
 

@@ -694,6 +694,42 @@
     background: var(--color-hover);
   }
 
+  /* The bell, moved in beside the logo by dashboard.js (the same button the
+     desktop header uses, so the popup and the unread badge come with it).
+     Same 44px target as the menu icon it now shares the bubble with. */
+  .tma-dash__header-left [data-header-bell] {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: var(--space-8);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tma-dash__header-left [data-header-bell] img {
+    width: var(--dash-icon-lg);
+    height: var(--dash-icon-lg);
+  }
+
+  .tma-dash__header-left [data-header-bell]:hover {
+    background: var(--color-hover);
+  }
+
+  /* Reading a message or picking messages in bulk, the left of the mail
+     header belongs to that job — the bell would be a third thing to hit. */
+  .tma-dash--email-mobile-reading .tma-dash__header-left [data-header-bell],
+  .tma-dash--email-mobile-bulk .tma-dash__header-left [data-header-bell] {
+    display: none;
+  }
+
   .tma-dash__header-icons {
     gap: 0;
     padding: 0;
@@ -1164,6 +1200,12 @@ body::-webkit-scrollbar,
   .tma-dash--desktop-bar .tma-dash__header-logo {
     display: none !important;
   }
+
+  /* No bubble there, so nothing for the bell to ride in either — it keeps the
+     desktop app's own header behaviour. */
+  .tma-dash--desktop-bar .tma-dash__header-left [data-header-bell] {
+    display: none !important;
+  }
 }
 
 /* ── Underline tab rows (CIP list tabs, applicant detail tabs, any page
@@ -1232,6 +1274,19 @@ body::-webkit-scrollbar,
     flex: 1 1 100%;
     margin-left: 0;
     justify-content: flex-start;
+  }
+
+  /* The bell's panel docks above the bottom bar on a phone, and its head then
+     has to fit "Notifications", "Unread" and "Mark all as read" across ~300px.
+     The heading was the one that gave way and ellipsized to "Notificatio…",
+     which reads as a bug — and a longer translation would only shorten it
+     further. Heading keeps its line; the actions take the next one. */
+  .tma-dash__header-popups--tabbar .tma-dash__header-popup-head {
+    flex-wrap: wrap;
+  }
+
+  .tma-dash__header-popups--tabbar .tma-dash__header-popup-head .tma-dash__header-popup-heading {
+    flex: 1 1 100%;
   }
 }
 
