@@ -205,7 +205,16 @@
       el.alt = me.name;
     });
     document.querySelectorAll('[data-home-add-picture]').forEach(function (el) {
-      el.textContent = me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+      var full = me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+      var short = me.hasAvatar ? 'Change photo' : 'Add photo';
+      var fullEl = el.querySelector('.tma-portal-hello__picture-full');
+      var shortEl = el.querySelector('.tma-portal-hello__picture-short');
+      if (fullEl && shortEl) {
+        fullEl.textContent = full;
+        shortEl.textContent = short;
+      } else {
+        el.textContent = full;
+      }
     });
 
     markProfileClickable();

@@ -3238,6 +3238,7 @@
       : '<h2 class="tma-portal-hello__title tma-skeleton tma-skeleton--text"></h2>';
 
     var picLinkLabel = me && me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+    var picLinkShort = me && me.hasAvatar ? 'Change photo' : 'Add photo';
 
     var html =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
@@ -3247,7 +3248,9 @@
       '<div class="tma-portal-hello__copy">' +
       heroTitleHtml +
       '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>' +
-      picLinkLabel + '</button>' +
+      '<span class="tma-portal-hello__picture-full">' + ui().esc(picLinkLabel) + '</span>' +
+      '<span class="tma-portal-hello__picture-short">' + ui().esc(picLinkShort) + '</span>' +
+      '</button>' +
       '</div></div>' +
       '<div class="tma-portal-hello__actions">' +
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +

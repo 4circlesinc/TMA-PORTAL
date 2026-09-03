@@ -1996,6 +1996,10 @@
   line-height: var(--text-lh-12);
 }
 
+.tma-portal-hello__picture-short {
+  display: none;
+}
+
 .tma-portal-hello__actions {
   flex: 0 0 auto;
   display: flex;
@@ -2144,28 +2148,33 @@
   -webkit-line-clamp: 3;
 }
 
-@media (max-width: 640px) {
-  /* One row when it fits: greeting left, actions right. When a third button
-     (Hide workflows) joins in, the ACTIONS wrap to their own right-aligned
-     line — the name never gets crushed to "Hello Ve…" to make room. */
+@media (max-width: 767px) {
+  /*
+   * Two stacked rows, both full width: identity, then the tools.
+   *
+   * Wrapping the tools onto the right of a leftover gap left a stair-step
+   * (Hello top-left, This year / Edit Dashboard bottom-right) with a hole
+   * in the middle. Column layout keeps the name whole and the pills even.
+   */
   .tma-portal-hello {
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-8) var(--space-12);
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: var(--space-12);
   }
 
   .tma-portal-hello__main {
-    flex: 1 0 auto;
-    min-width: 0;
+    flex: 0 0 auto;
+    width: 100%;
     max-width: 100%;
-    gap: var(--space-8);
+    gap: var(--space-12);
   }
 
   .tma-portal-hello__copy {
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: flex-start;
-    gap: var(--space-2);
+    gap: 2px;
     min-width: 0;
   }
 
@@ -2178,23 +2187,60 @@
   }
 
   .tma-portal-hello__avatar {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
   }
 
   .tma-portal-hello__title {
-    font-size: var(--text-size-16);
-    line-height: var(--text-lh-16);
+    font-size: var(--text-size-18);
+    line-height: var(--text-lh-18);
+  }
+
+  .tma-portal-hello__picture-link {
+    min-height: 20px;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+  }
+
+  .tma-portal-hello__picture-link:hover,
+  .tma-portal-hello__picture-link:focus-visible {
+    color: var(--color-text-link);
+    text-decoration: underline;
+  }
+
+  .tma-portal-hello__picture-full {
+    display: none;
+  }
+
+  .tma-portal-hello__picture-short {
+    display: inline;
   }
 
   .tma-portal-hello__actions {
-    width: auto;
-    flex: 0 1 auto;
-    margin-left: auto;
-    justify-content: flex-end;
+    width: 100%;
+    flex: none;
+    margin-left: 0;
+    justify-content: stretch;
     flex-wrap: wrap;
-    row-gap: var(--space-6);
     gap: var(--space-8);
+  }
+
+  .tma-portal-hello__actions > * {
+    flex: 1 1 calc(50% - var(--space-8));
+    min-width: 0;
+  }
+
+  .tma-portal-hello__actions .tma-dash__head-dropdown-wrap,
+  .tma-portal-hello__actions .tma-no-data__btn {
+    width: 100%;
+  }
+
+  .tma-portal-hello__actions .tma-dash__head-dropdown-btn,
+  .tma-portal-hello__actions .tma-no-data__btn {
+    width: 100%;
+    min-height: 40px;
+    justify-content: center;
+    box-sizing: border-box;
   }
 }
 
