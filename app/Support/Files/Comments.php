@@ -245,8 +245,19 @@ class Comments
      * Who hears about a new comment.
      *
      * Mentions first and unconditionally, being named is the whole point.
-     * Then the thread's other participants and the file owner, each only once,
-     * and never the author of the comment itself.
+     * Then the person replied to. Then everyone the conversation belongs to,
+     * each only once, and never the author of the comment itself:
+     *
+     *  - the thread's other participants and the file's owner, and
+     *  - everyone holding a grant on the file, administrators included, which
+     *    is {@see CommentAudience} — the people who can open the document are
+     *    the people a question about it is for.
+     *
+     * That second set is deliberately narrower than "everyone who could open
+     * this": the firm-wide default is excluded, or a comment on a routine file
+     * would notify all staff. The audience notifications carry a dedupe key so
+     * a busy thread refreshes one row per reader per file rather than filling
+     * a bell — and a dedupe refresh never sends a second email.
      */
     private static function notify(FileComment $comment, FileItem $file, User $author, ?FileComment $parent): void
     {
@@ -268,13 +279,17 @@ class Comments
                     $author->name.' replied to your comment on '.$file->name, $comment->body);
             }
 
-            // Everyone else already in this thread, plus the file's owner.
-            $participants = self::participants($file, $comment)
+            // Everyone else already in this thread, plus the file's owner, plus
+            // everyone the file itself is granted to.
+            $others = self::participants($file, $comment)
+                ->merge(CommentAudience::forFile($file))
+                ->unique()
                 ->reject(fn (int $id) => isset($told[$id]));
 
-            foreach ($participants as $userId) {
+            foreach ($others as $userId) {
                 self::notifyOne($userId, 'file.comment', $file, $author,
-                    $author->name.' commented on '.$file->name, $comment->body);
+                    $author->name.' commented on '.$file->name, $comment->body,
+                    'file.comment:'.$file->id);
             }
         } catch (\Throwable $e) {
             // A comment that saved but failed to notify is a smaller problem
@@ -305,7 +320,7 @@ class Comments
             });
     }
 
-    private static function notifyOne(int $userId, string $type, FileItem $file, User $actor, string $title, ?string $message = null): void
+    private static function notifyOne(int $userId, string $type, FileItem $file, User $actor, string $title, ?string $message = null, ?string $dedupeKey = null): void
     {
         Notifier::send([
             'user' => $userId,
@@ -315,6 +330,7 @@ class Comments
             'message' => $message ? Str::limit($message, 140) : null,
             'subject' => $file,
             'action_url' => '/folders/all?file='.$file->uuid,
+            'dedupe_key' => $dedupeKey,
         ]);
     }
 

@@ -8,6 +8,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Notification;
 use App\Models\Share;
+use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Files\Workflow\Hub;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -410,6 +411,94 @@ class FileCommentTest extends TestCase
         ])->assertCreated();
 
         $this->assertSame(0, FileComment::first()->mentions()->count());
+    }
+
+    /**
+     * Administrators answer for every document in the portal, so a question
+     * asked on one reaches them without anybody having to name them.
+     */
+    public function test_every_administrator_hears_about_a_comment(): void
+    {
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
+        $file = $this->file($owner);
+        $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+
+        $this->actingAs($owner)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Is this the final version?'])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $admin->id, 'type' => 'file.comment',
+        ]);
+    }
+
+    /** The person the file was actually shared with is who the question is for. */
+    public function test_someone_the_file_is_shared_with_hears_about_a_comment(): void
+    {
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
+        $file = $this->file($owner);
+        $guest = $this->user('Client', 'guest@example.com', 'Gale Guest');
+
+        Share::create([
+            'uuid' => (string) Str::uuid(), 'token' => Str::random(48),
+            'item_type' => 'file', 'item_id' => $file->id, 'shared_by' => $owner->id,
+            'kind' => 'user', 'target_user_id' => $guest->id, 'role' => 'viewer',
+        ]);
+
+        $this->actingAs($owner)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Signed copy attached.'])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $guest->id, 'type' => 'file.comment',
+        ]);
+    }
+
+    /**
+     * The line the audience stops at: the firm-wide default means nearly every
+     * colleague *could* open a routine file, and notifying all of them on every
+     * comment is what teaches people to switch notifications off.
+     */
+    public function test_a_comment_does_not_notify_the_whole_firm(): void
+    {
+        $admin = $this->user();
+        $file = $this->orgFile($admin);
+        $bystander = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+
+        $this->actingAs($admin)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Filed.'])
+            ->assertCreated();
+
+        $this->assertSame(0, Notification::where('user_id', $bystander->id)->count());
+    }
+
+    /**
+     * A personal OneDrive is the owner's alone — FileAccess denies even an
+     * administrator, so a comment on one must not name the file in their bell.
+     */
+    public function test_a_comment_in_a_personal_drive_stays_out_of_administrator_bells(): void
+    {
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
+        $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'My OneDrive',
+            'owner_id' => $owner->id, 'created_by' => $owner->id,
+            'folder_type' => Folder::TYPE_USER,
+        ]);
+        SharePointConnection::create([
+            'uuid' => (string) Str::uuid(), 'site_id' => 'onedrive:'.$owner->email,
+            'drive_id' => 'drive-1', 'drive_name' => 'OneDrive', 'drive_kind' => 'onedrive',
+            'folder_id' => $folder->id, 'created_by' => $owner->id, 'owner_upn' => $owner->email,
+        ]);
+
+        $file = $this->file($owner, $folder);
+
+        $this->actingAs($owner)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Draft two.'])
+            ->assertCreated();
+
+        $this->assertSame(0, Notification::where('user_id', $admin->id)->count());
     }
 
     public function test_replying_notifies_the_parent_author(): void
