@@ -1987,3 +1987,18 @@ body::-webkit-scrollbar,
   max-width: 100%;
 }
 
+/* ── Home shortcuts: three to a row on touch widths ───────────────────
+ *
+ * Four columns is a desktop measure — the panel is a third of a wide board
+ * there, and each tile gets ~112px. The same four columns leave 73px on a
+ * phone and 83px on a tablet, so "Feedback and Comments" came down as three
+ * stacked words and pushed its row to twice the height of the ones either
+ * side of it. Three columns give the labels the width they need, at the
+ * price of one more row.
+ */
+@media (max-width: 1024px) {
+  .tma-portal-shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-16) var(--space-8);
+  }
+}
