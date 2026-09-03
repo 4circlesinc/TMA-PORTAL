@@ -444,6 +444,21 @@ Schedule::command('calendar:sync-providers')
     ->withoutOverlapping(30);
 
 /*
+ * Keep the folders' rolled-up subtree stats fresh. The tick only queues; the
+ * job does the walk and writes only rows whose numbers changed, so the
+ * steady-state run costs two grouped reads.
+ */
+Artisan::command('files:refresh-folder-stats', function () {
+    \App\Jobs\RefreshFolderStats::dispatch();
+
+    $this->info('Queued the folder stats refresh.');
+})->purpose("Queue a refresh of every folder's rolled-up subtree stats");
+
+Schedule::command('files:refresh-folder-stats')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
+
+/*
  * Publish scheduled Feed posts whose time has come (§6).
  *
  * The tick only *finds* due posts; the job does the publishing and claims each

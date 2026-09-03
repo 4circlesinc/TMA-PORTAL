@@ -86,6 +86,53 @@ class FileManagerTest extends TestCase
             ->assertJsonPath('message', 'A folder with that name already exists here.');
     }
 
+    public function test_folder_sizes_roll_up_through_subfolders(): void
+    {
+        // Direct-only counts (the 27 Aug perf cut) made every organising
+        // folder read "0 files, 0 B" because its content lives in
+        // subfolders. The refresh job rolls the subtree up; the listing
+        // must show that, not the direct number.
+        $user = $this->approvedUser(['account_type' => 'Administrator']);
+        $root = $this->folder($user, 'Citizenship Applications');
+        $sub = $this->folder($user, 'Applicant A', $root);
+        $this->fileIn($user, $sub, 'passport.pdf', 1234);
+        $this->fileIn($user, $root, 'index.txt', 100);
+
+        $before = $root->fresh()->updated_at;
+
+        (new \App\Jobs\RefreshFolderStats)->handle();
+
+        $root->refresh();
+        $this->assertSame(1334, (int) $root->subtree_size);
+        $this->assertSame(2, (int) $root->subtree_file_count);
+        $this->assertSame(1, (int) $root->subtree_folder_count);
+        // A stats refresh is not an edit: updated_at must not move, or every
+        // refresh would re-sort "modified" columns and ring the observers.
+        $this->assertTrue($before->eq($root->fresh()->updated_at));
+
+        $browse = $this->actingAs($user)->getJson('/portal/files/?section=all');
+        $browse->assertOk();
+        $row = collect($browse->json('folders'))->firstWhere('name', 'Citizenship Applications');
+        $this->assertNotNull($row);
+        $this->assertSame(1334, (int) $row['size']);
+        $this->assertSame(2, (int) $row['fileCount']);
+    }
+
+    public function test_an_unmeasured_folder_falls_back_to_direct_counts(): void
+    {
+        // A folder created after the last refresh has null subtree stats;
+        // the listing shows its direct children rather than nothing.
+        $user = $this->approvedUser(['account_type' => 'Administrator']);
+        $root = $this->folder($user, 'Fresh folder');
+        $this->fileIn($user, $root, 'a.txt', 42);
+
+        $browse = $this->actingAs($user)->getJson('/portal/files/?section=all');
+        $row = collect($browse->json('folders'))->firstWhere('name', 'Fresh folder');
+        $this->assertNotNull($row);
+        $this->assertSame(42, (int) $row['size']);
+        $this->assertSame(1, (int) $row['fileCount']);
+    }
+
     public function test_direct_upload_then_browse_lists_the_file(): void
     {
         $user = $this->approvedUser();

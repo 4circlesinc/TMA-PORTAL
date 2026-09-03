@@ -265,6 +265,22 @@ class Presenter
             ? ($this->folderStats[$folder->id] ?? ['fileCount' => 0, 'folderCount' => 0, 'size' => 0])
             : ['fileCount' => null, 'folderCount' => null, 'size' => null];
 
+        /*
+         * The rolled-up subtree totals, when they have been measured
+         * (files:refresh-folder-stats, every few minutes). Direct counts
+         * above are the fallback for rows the refresh has not reached yet -
+         * without this preference, a folder whose content lives in
+         * subfolders read "0 files, 0 B", which is how the File Library
+         * looked broken for every organising folder in the library.
+         */
+        if ($withStats && $folder->subtree_size !== null) {
+            $stats = [
+                'fileCount' => (int) $folder->subtree_file_count,
+                'folderCount' => (int) $folder->subtree_folder_count,
+                'size' => (int) $folder->subtree_size,
+            ];
+        }
+
         return [
             'id' => $folder->uuid,
             'type' => 'folder',
