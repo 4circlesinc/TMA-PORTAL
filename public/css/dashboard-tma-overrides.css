@@ -1253,6 +1253,8 @@ body::-webkit-scrollbar,
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
+    /* Air between the toolbar panel and the first card. */
+    margin-top: var(--space-12);
   }
 
   .tma-cip-table tbody tr {
@@ -1262,13 +1264,12 @@ body::-webkit-scrollbar,
     gap: var(--space-8) var(--space-16);
     padding: var(--space-12) var(--space-16);
     border-radius: var(--radius-16);
-    background: var(--dash-row-card-bg, var(--color-bg-card));
+    /* The toolbar panel's surface, so every card reads as a card on the
+       white page — and no :hover repaint: on touch, hover sticks after a
+       tap and left "one gray card" among white ones. */
+    background: var(--dash-panel-bg, var(--color-bg-card));
     border: 0.5px solid var(--dash-row-card-border, var(--color-overlay-4));
     cursor: pointer;
-  }
-
-  .tma-cip-table tbody tr:hover {
-    background: var(--color-hover);
   }
 
   .tma-cip-table tbody tr td {
@@ -1283,8 +1284,17 @@ body::-webkit-scrollbar,
     text-overflow: clip;
   }
 
+  /* Hover keeps its hands off the cards entirely — on touch it sticks
+     after a tap and leaves one card discoloured among its siblings. The
+     [data-cip-open] variant matches the stronger hover rule upstream. */
+  .tma-cip-table tbody tr[data-cip-open]:hover,
+  .tma-cip-table tbody tr:hover {
+    background: var(--dash-panel-bg, var(--color-bg-card));
+  }
+
+  .tma-cip-table tbody tr td,
   .tma-cip-table tbody tr:hover td,
-  .tma-cip-table tbody tr td {
+  .tma-cip-table tbody tr[data-cip-open]:hover td {
     background: transparent;
   }
 
@@ -1309,7 +1319,8 @@ body::-webkit-scrollbar,
     padding-right: 40px;
     padding-bottom: var(--space-8);
     margin-bottom: var(--space-4);
-    border-bottom: 1px solid var(--color-overlay-4);
+    /* overlay-8, not overlay-4 — the hairline must survive a white card. */
+    border-bottom: 1px solid var(--color-overlay-8, rgba(0, 0, 0, 0.08));
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
   }
