@@ -1902,3 +1902,29 @@ body::-webkit-scrollbar,
     justify-content: center;
   }
 }
+
+/* ── Workflow cards on touch widths ──────────────────────────────────
+ *
+ * The head is [who] + [status chips]. The chips are flex-shrink: 0 — right
+ * on a desktop card, ruinous on a phone one: "Mentioned you" and "Open"
+ * together are most of a 332px card, so the name they annotate collapsed
+ * to "i…" and the time under it to "t…". The name is what the card is
+ * about, so it takes the row and the chips drop to their own line.
+ */
+@media (max-width: 1024px) {
+  .tma-portal-wf-card__head {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-portal-wf-card__head > .tma-portal-wf-author,
+  .tma-portal-wf-card__head > .tma-portal-wf-card__headline {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .tma-portal-wf-card__head > .tma-portal-wf-chips {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+}
