@@ -2063,6 +2063,32 @@
  * The bubbles are white cards floating over the document; with the viewer's
  * dark stamp the text tokens flip white, so the cards must flip too or the
  * words vanish into them. */
+
+/*
+ * The comments column carries its own copy of the light tokens, so that white
+ * cards keep reading as white cards over a dark stage whatever the page
+ * behind is doing. That island is unconditional, which meant dark mode
+ * repainted the CARD from the rules below and left the INK at #1a1a1a: near
+ * black on #2a2a2c, a comment you could only read by selecting it.
+ *
+ * An overlay that redeclares tokens needs a [data-theme] twin that
+ * redeclares them back — the same rule the dashboard's overlays follow.
+ */
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__comments {
+  --color-white: #2a2a2c;
+  --color-bg-card: #2a2a2c;
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.56);
+  --color-text-placeholder: rgba(255, 255, 255, 0.32);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --color-border-soft: rgba(255, 255, 255, 0.12);
+  --color-hover: rgba(255, 255, 255, 0.08);
+  /* The deep brand green is unreadable on a dark card; the lighter primary
+     is the same hue at a level that carries. */
+  --color-primary-dark: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
 .tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__thread {
   background: #2a2a2c;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
