@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\UserLocation;
 use App\Models\UserPresenceState;
+use App\Models\UserStatusSchedule;
 use App\Support\Presence\AvailabilityService;
 use App\Support\Presence\AvailabilityStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +79,43 @@ class AvailabilityStatusTest extends TestCase
 
         $presence = AvailabilityService::recompute($user);
         $this->assertSame(AvailabilityStatus::IN_OFFICE, $presence->primary_status);
+    }
+
+    public function test_active_schedule_applies_without_recursing(): void
+    {
+        $user = $this->user();
+
+        UserStatusSchedule::create([
+            'user_id' => $user->id,
+            'status' => AvailabilityStatus::DO_NOT_DISTURB,
+            'status_message' => 'Focus time',
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'enabled' => true,
+        ]);
+
+        $presence = AvailabilityService::recompute($user);
+
+        $this->assertSame(AvailabilityStatus::DO_NOT_DISTURB, $presence->primary_status);
+        $this->assertSame(AvailabilityStatus::SOURCE_SCHEDULED, $presence->status_source);
+    }
+
+    public function test_me_survives_an_active_schedule(): void
+    {
+        $user = $this->user();
+
+        UserStatusSchedule::create([
+            'user_id' => $user->id,
+            'status' => AvailabilityStatus::AWAY,
+            'starts_at' => now()->subMinutes(5),
+            'ends_at' => now()->addMinutes(30),
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/me')
+            ->assertOk()
+            ->assertJsonPath('availability.primary.status', AvailabilityStatus::AWAY);
     }
 
     public function test_me_includes_availability_payload(): void

@@ -102,6 +102,29 @@ class AvailabilityService
         ?string $message = null,
         ?array $meta = null,
     ): UserPresenceState {
+        $row = self::writeState($user, $status, $source, $expiresAt, $startsAt, $message, $meta);
+
+        self::recompute($user);
+
+        return $row;
+    }
+
+    /**
+     * Persist a layered state without resolving the primary.
+     *
+     * applySchedules must use this, not setState: it runs inside syncPrimary,
+     * which resolves the primary right after, and setState's recompute would
+     * re-enter syncPrimary → applySchedules → setState without end.
+     */
+    private static function writeState(
+        User $user,
+        string $status,
+        string $source,
+        ?Carbon $expiresAt = null,
+        ?Carbon $startsAt = null,
+        ?string $message = null,
+        ?array $meta = null,
+    ): UserPresenceState {
         $row = UserPresenceState::updateOrCreate(
             ['user_id' => $user->id, 'status' => $status],
             [
@@ -114,7 +137,6 @@ class AvailabilityService
         );
 
         self::forgetPrimedStates();
-        self::recompute($user);
 
         return $row;
     }
@@ -400,7 +422,7 @@ class AvailabilityService
             ->get();
 
         foreach ($active as $schedule) {
-            self::setState(
+            self::writeState(
                 $user,
                 $schedule->status,
                 AvailabilityStatus::SOURCE_SCHEDULED,
