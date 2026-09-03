@@ -1772,14 +1772,20 @@ body::-webkit-scrollbar,
     display: block;
   }
 
+  /*
+   * The mark is lifted out of the flow and centred on the row (see below),
+   * so the row itself carries the space it stands in: 24px of art, the gap
+   * after it, and the 4px inset it starts at.
+   */
   .tma-portal-table.tma-portal-files-table tbody tr {
-    position: static;
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     gap: 0 var(--space-12);
     align-items: center;
-    padding: var(--space-8) var(--space-4);
+    padding: var(--space-8) var(--space-4) var(--space-8)
+      calc(24px + var(--space-8) + var(--space-4));
     margin: 0;
     border: none;
     border-bottom: 1px solid var(--color-overlay-4);
@@ -1853,12 +1859,29 @@ body::-webkit-scrollbar,
     width: auto;
   }
 
-  /* Line 2: modified date under the name (indented past the icon), the
-     size on the same line pinned far right. */
+  /*
+   * The square stands beside BOTH lines, not on top of the first.
+   *
+   * The mark and the date are in different cells — a two-row grid can only
+   * put the mark in one of them, and in row 1 it read as a bullet for the
+   * name with the date hanging off underneath. Out of flow it belongs to the
+   * row instead of to a line, and centres against the pair of them; the row's
+   * own left padding is the column it stands in, so both lines start clear
+   * of it whatever they say.
+   */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name
+    .tma-portal-avatar-cell > :first-child {
+    position: absolute;
+    left: var(--space-4);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* Line 2: the modified date under the name, the size on the same line
+     pinned far right. */
   .tma-portal-table.tma-portal-files-table td.tma-portal-cell--when {
     grid-column: 1;
     grid-row: 2;
-    padding-left: calc(24px + var(--space-8));
     font-size: var(--text-size-12);
     line-height: var(--text-lh-12);
   }
