@@ -2,8 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\FileItem;
-use App\Models\Folder;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -37,27 +35,41 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
     public function handle(): void
     {
-        $folders = Folder::query()
-            ->reorder()
-            ->get(['id', 'parent_id', 'subtree_file_count', 'subtree_folder_count', 'subtree_size']);
-
-        $direct = FileItem::query()
-            ->reorder()
-            ->selectRaw('folder_id, count(*) as n, coalesce(sum(size), 0) as bytes')
-            ->groupBy('folder_id')
-            ->get();
+        /*
+         * Query-builder reads streamed into primitive arrays, never Eloquent:
+         * hydrating the production tree (74k folders) as models exhausted a
+         * 256MB worker before the walk even started.
+         */
+        $parent = [];
+        $current = [];
+        foreach (DB::table('folders')->whereNull('deleted_at')
+            ->select('id', 'parent_id', 'subtree_file_count', 'subtree_folder_count', 'subtree_size')
+            ->orderBy('id')->cursor() as $row) {
+            $id = (int) $row->id;
+            $parent[$id] = $row->parent_id === null ? null : (int) $row->parent_id;
+            $current[$id] = $row->subtree_size === null ? null : [
+                'files' => (int) $row->subtree_file_count,
+                'folders' => (int) $row->subtree_folder_count,
+                'size' => (int) $row->subtree_size,
+            ];
+        }
 
         $fileCount = [];
         $size = [];
-        foreach ($direct as $row) {
+        foreach (DB::table('files')->whereNull('deleted_at')
+            ->selectRaw('folder_id, count(*) as n, coalesce(sum(size), 0) as bytes')
+            ->groupBy('folder_id')->orderBy('folder_id')->cursor() as $row) {
+            if ($row->folder_id === null) {
+                continue;
+            }
             $fileCount[(int) $row->folder_id] = (int) $row->n;
             $size[(int) $row->folder_id] = (int) $row->bytes;
         }
 
         $children = [];
-        foreach ($folders as $f) {
-            if ($f->parent_id !== null) {
-                $children[(int) $f->parent_id][] = (int) $f->id;
+        foreach ($parent as $id => $parentId) {
+            if ($parentId !== null) {
+                $children[$parentId][] = $id;
             }
         }
 
@@ -70,8 +82,7 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
         $stats = [];
         $visited = [];
 
-        foreach ($folders as $f) {
-            $rootId = (int) $f->id;
+        foreach (array_keys($parent) as $rootId) {
             if (isset($visited[$rootId])) {
                 continue;
             }
@@ -115,17 +126,14 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         $changed = [];
-        foreach ($folders as $f) {
-            $s = $stats[(int) $f->id] ?? null;
+        foreach (array_keys($parent) as $id) {
+            $s = $stats[$id] ?? null;
             if (! $s) {
                 continue;
             }
 
-            if ((int) $f->subtree_file_count !== $s['files']
-                || (int) $f->subtree_folder_count !== $s['folders']
-                || (int) $f->subtree_size !== $s['size']
-                || $f->subtree_size === null) {
-                $changed[(int) $f->id] = $s;
+            if ($current[$id] === null || $current[$id] !== $s) {
+                $changed[$id] = $s;
             }
         }
 
@@ -139,6 +147,12 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
      * builder (not Eloquent) so observers stay quiet and updated_at is left
      * alone - a stats refresh is not an edit.
      *
+     * Every id and value is inlined, not bound, on purpose: with all-bound
+     * CASE branches Postgres cannot infer the CASE's type, defaults it to
+     * text, and refuses the bigint assignment (SQLSTATE 42804 - SQLite let
+     * it through, which is why tests alone missed it). All of these are
+     * integers this job just computed, so there is nothing to escape.
+     *
      * @param  array<int, int>  $ids
      * @param  array<int, array{files: int, folders: int, size: int}>  $stats
      */
@@ -147,28 +161,15 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
         $fileCase = 'case id ';
         $folderCase = 'case id ';
         $sizeCase = 'case id ';
-        $bindings = [];
 
         foreach ($ids as $id) {
-            $fileCase .= 'when ? then ? ';
-            $bindings[] = $id;
-            $bindings[] = $stats[$id]['files'];
-        }
-        foreach ($ids as $id) {
-            $folderCase .= 'when ? then ? ';
-            $bindings[] = $id;
-            $bindings[] = $stats[$id]['folders'];
-        }
-        foreach ($ids as $id) {
-            $sizeCase .= 'when ? then ? ';
-            $bindings[] = $id;
-            $bindings[] = $stats[$id]['size'];
+            $id = (int) $id;
+            $fileCase .= 'when '.$id.' then '.(int) $stats[$id]['files'].' ';
+            $folderCase .= 'when '.$id.' then '.(int) $stats[$id]['folders'].' ';
+            $sizeCase .= 'when '.$id.' then '.(int) $stats[$id]['size'].' ';
         }
 
-        $in = implode(',', array_fill(0, count($ids), '?'));
-        foreach ($ids as $id) {
-            $bindings[] = $id;
-        }
+        $in = implode(',', array_map('intval', $ids));
 
         DB::update(
             'update folders set '
@@ -176,7 +177,6 @@ class RefreshFolderStats implements ShouldQueue, ShouldBeUniqueUntilProcessing
             .'subtree_folder_count = '.$folderCase.'end, '
             .'subtree_size = '.$sizeCase.'end '
             ."where id in ($in)",
-            $bindings,
         );
     }
 }
