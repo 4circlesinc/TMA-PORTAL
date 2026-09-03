@@ -1791,8 +1791,14 @@ body::-webkit-scrollbar,
     border-bottom: 0;
   }
 
+  /* Both names for a picked row: the File Library marks one
+     .tma-portal-table__row--selected, the home strip's copy of the same list
+     marks it .is-selected. The rule above paints every cell transparent, so a
+     selection left out here simply stops showing on touch. */
   .tma-portal-table.tma-portal-files-table tbody tr.tma-portal-table__row--selected,
-  .tma-portal-table.tma-portal-files-table tbody tr.tma-portal-table__row--selected td {
+  .tma-portal-table.tma-portal-files-table tbody tr.tma-portal-table__row--selected td,
+  .tma-portal-table.tma-portal-files-table tbody tr.is-selected,
+  .tma-portal-table.tma-portal-files-table tbody tr.is-selected td {
     background: var(--color-accent-bg);
   }
 
@@ -1980,3 +1986,4 @@ body::-webkit-scrollbar,
   flex-wrap: wrap;
   max-width: 100%;
 }
+

@@ -558,8 +558,19 @@
        * asking; it is answered where the answers differ, in the File Library's
        * own table and in the viewer's details panel.
        */
-      'Name', 'Type', 'Size', 'Modified',
-      { html: '', attrs: ' class="tma-portal-cell--tight"' },
+      /*
+       * The File Library's own column classes, and its table class below.
+       * They are what the touch layer keys off: at ≤1024 a row folds into
+       * two lines — icon and name over the date, size far right, the row
+       * menu top-right — instead of the generic stacked card, where every
+       * value arrived under its own "Name:" / "Type:" caption. This list
+       * mirrors Folders → All Files, so it has to fold the same way.
+       */
+      { html: 'Name', attrs: ' class="tma-portal-cell--name"' },
+      { html: 'Type', attrs: ' class="tma-portal-cell--type"' },
+      { html: 'Size', attrs: ' class="tma-portal-cell--size"' },
+      { html: 'Modified', attrs: ' class="tma-portal-cell--when"' },
+      { html: '', attrs: ' class="tma-portal-cell--menu"' },
     ];
 
     var rows = all.map(function (it) {
@@ -571,13 +582,13 @@
         (picked[it.id] ? ' class="is-selected"' : '') +
         ' aria-selected="' + (picked[it.id] ? 'true' : 'false') + '">' +
         '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' +
-        '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
-        '<button type="button" class="tma-portal-file-link" data-home-lib-name="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
+        '<td class="tma-portal-cell--name"><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
+        '<button type="button" class="tma-portal-file-link" data-home-lib-name="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         '</span></td>' +
-        '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(size) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
-        '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-home-lib-menu="' + esc(it.id) + '" aria-label="More actions">' +
+        '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size) + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
+        '<td class="tma-portal-cell--menu"><button type="button" class="tma-portal-row-menu" data-home-lib-menu="' + esc(it.id) + '" aria-label="More actions">' +
         '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';
     }).join('');
@@ -620,7 +631,7 @@
       : '';
 
     var tableHtml = ui() && ui().table
-      ? ui().table(headers, rows || '')
+      ? ui().table(headers, rows || '', { cls: 'tma-portal-files-table' })
       : '';
 
     /*
