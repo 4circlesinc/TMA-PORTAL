@@ -1928,3 +1928,29 @@ body::-webkit-scrollbar,
     max-width: 100%;
   }
 }
+
+/*
+ * The home strip's cards are 280px at EVERY width — `flex: 0 0 min(280px,
+ * 82vw)` on the slide — so this is not a phone problem and a breakpoint
+ * cannot fix it: on a desktop too, a name plus "Mentioned you" and "Open"
+ * has never fitted on one 256px line, and the chips simply painted past
+ * the card's right edge. The constraint is the card, so the rule is on the
+ * card: in the strip the head always stacks.
+ */
+.tma-portal-wf-strip .tma-portal-wf-card__head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  flex-wrap: nowrap;
+}
+
+.tma-portal-wf-strip .tma-portal-wf-card__head > .tma-portal-wf-author,
+.tma-portal-wf-strip .tma-portal-wf-card__head > .tma-portal-wf-card__headline {
+  width: 100%;
+  min-width: 0;
+}
+
+.tma-portal-wf-strip .tma-portal-wf-chips {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
