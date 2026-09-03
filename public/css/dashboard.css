@@ -4876,14 +4876,13 @@
     overflow: hidden;
   }
 
-  /* One bubble on the left: menu icon, the logo mark, then the bell. */
+  /* One bubble on the left: menu icon with the logo mark to its right. */
   .tma-dash__header-left {
     gap: 0;
     flex: 0 0 auto;
     border-radius: var(--radius-pill);
     background: var(--color-bg-card);
     border: 0.5px solid var(--color-overlay-4);
-    overflow: visible;
   }
 
   .tma-dash__header-logo {
@@ -4936,31 +4935,6 @@
     background: var(--color-hover);
   }
 
-  /* The bell, moved in beside the logo by dashboard.js. Same 44px target as
-     the menu icon it shares the bubble with. */
-  .tma-dash__header-left [data-header-bell] {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: var(--space-8);
-    border-radius: var(--radius-pill);
-    background: transparent;
-    border: none;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-  }
-
-  .tma-dash__header-left [data-header-bell] img {
-    width: var(--dash-icon-lg);
-    height: var(--dash-icon-lg);
-  }
-
-  .tma-dash__header-left [data-header-bell]:hover {
-    background: var(--color-hover);
-  }
-
   .tma-dash__header-icons {
     gap: 0;
     padding: 0;
@@ -4988,8 +4962,10 @@
     justify-self: end;
   }
 
-  .tma-dash__header-icons [data-action="toggle-activities-popup"],
-  .tma-dash__header-icons [data-action="toggle-notifications-popup"] {
+  /* The activity clock is the one that goes: its log is a desktop reading, and
+     four 44px targets is what the bubble holds. The bell stays — notifications
+     are the thing a reader needs at hand on a phone. */
+  .tma-dash__header-icons [data-action="toggle-activities-popup"] {
     display: none;
   }
 
