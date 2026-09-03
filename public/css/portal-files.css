@@ -507,7 +507,7 @@
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
   display: flex; flex-direction: column; align-items: center;
-  gap: var(--space-12); padding: var(--space-16) var(--space-16) var(--space-60);
+  gap: var(--space-12); padding: var(--space-16) var(--space-16) var(--space-56);
   cursor: zoom-out;
 }
 .tma-portal-viewer__pdf-scroll::-webkit-scrollbar { display: none; }
@@ -1343,6 +1343,94 @@
   .tma-portal-viewer { --viewer-comments-width: clamp(220px, 72vw, 280px); }
   .tma-portal-viewer__panel { flex-basis: 100%; max-width: 100%; }
   .tma-portal-viewer__sub { display: none; }
+}
+
+/* ── The viewer on a phone ────────────────────────────────────────────
+ *
+ * It takes the whole screen there, so the chrome has to give way to the
+ * file rather than the other way round.
+ */
+@media (max-width: 767px) {
+  /*
+   * Nothing shows through. The backdrop dims the portal to 82%, which is
+   * right when a page frames a document and wrong when it IS the screen —
+   * the home board's cards and the bottom dock ghosted behind the pages,
+   * and the floating zoom bar sat on top of the ghost.
+   */
+  .tma-portal-viewer__backdrop { background: #0d0d0f; }
+
+  .tma-portal-viewer__head {
+    gap: var(--space-8);
+    padding: var(--space-8);
+  }
+
+  /*
+   * Eleven tools do not fit 390px.
+   *
+   * They are flex-none, so the name was crushed to nothing and Close ran off
+   * the right edge — a viewer with no way to shut it, on the one device with
+   * no Escape key. What stays is the name, the conversation, the details
+   * panel, ⋯ and Close; what goes is everything ⋯ already carries (download,
+   * share, rename, move, delete, activity) and the two panel tabs the Details
+   * button opens onto anyway (Versions, Approvals).
+   */
+  .tma-portal-viewer__tools [data-lb-act="download"],
+  .tma-portal-viewer__tools [data-lb-act="favorite"],
+  .tma-portal-viewer__tools [data-lb-act="print"],
+  .tma-portal-viewer__tools [data-lb-act="share"],
+  .tma-portal-viewer__tools [data-lb-act="delete"],
+  .tma-portal-viewer__tools [data-lb-act="approvals"],
+  .tma-portal-viewer__tools [data-lb-act="versions"],
+  .tma-portal-viewer__tool-sep {
+    display: none;
+  }
+
+  /* The name takes the room the tools gave back. */
+  .tma-portal-viewer__identity { flex: 1 1 auto; }
+  .tma-portal-viewer__tools { gap: 0; }
+  .tma-portal-viewer__tool { width: 40px; height: 40px; }
+
+  /* Edge to edge: the desktop's 16px sides are 8% of a 390px screen.
+     (The 56px foot is the band the floating zoom bar sits in — it read
+     --space-60 until now, which is not a token, so the whole shorthand was
+     invalid and every side of it resolved to 0.) */
+  .tma-portal-viewer__pdf-scroll {
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-4) var(--space-56);
+  }
+
+  .tma-portal-viewer__stage { padding: 0 var(--space-8) var(--space-8); }
+
+  /* Clear of the home button bar on a phone with no bezel. */
+  .tma-portal-viewer__pdf-toolbar {
+    bottom: calc(var(--space-12) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /*
+   * Comments lie across the bottom, not down the side.
+   *
+   * The gutter is 280px wide, which is three quarters of a phone: a bubble
+   * covered the document it was about. Across the bottom it covers the part
+   * of the page the reader has already passed, and the page keeps its width.
+   */
+  .tma-portal-viewer__comments {
+    top: auto;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 58%;
+    /* The foot clears the floating zoom bar, which sits 12px above the
+       stage's own bottom — a bubble over the page controls is a bubble you
+       cannot zoom past. */
+    padding: var(--space-8) var(--space-8) calc(var(--space-56) + var(--space-40));
+    justify-content: flex-end;
+  }
+
+  .tma-portal-viewer__comments-feed {
+    align-items: stretch;
+    padding-right: 0;
+  }
 }
 
 /* ── attachment lightbox (shared with the mailbox) ───

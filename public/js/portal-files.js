@@ -5154,6 +5154,15 @@
 
     /* ── PDF via pdf.js, continuous scroll, floating toolbar ── */
 
+    /* Where the viewer's chrome folds (portal-files.css, same 767px). */
+    function phoneViewer() {
+      try {
+        return !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+      } catch (err) {
+        return false;
+      }
+    }
+
     var PDF_ZOOM_STEP = 1.25;
     var PDF_ZOOM_MIN = 0.25;
     var PDF_ZOOM_MAX = 4;
@@ -5164,6 +5173,14 @@
     function pdfCommentsGutter() {
       var panel = lb.querySelector('[data-lb-comments-panel]');
       if (!panel || panel.hidden) return 0;
+      /*
+       * No gutter on a phone: the bubbles lie ACROSS the bottom of the stage
+       * there rather than beside the page, so there is no margin to keep clear
+       * of them. Charging for one was most of why the document was a stamp:
+       * two 280px gutters taken off a 374px stage left the width at its 120px
+       * floor, and the page was fitted to that.
+       */
+      if (phoneViewer()) return 0;
       return panel.getBoundingClientRect().width || 0;
     }
 
@@ -5177,9 +5194,20 @@
       var h = Math.max(120, scrollEl.clientHeight - padY);
       var fitWidth = w / vp1.width;
       var fitPage  = Math.min(fitWidth, h / vp1.height);
+      /*
+       * 'width' used to fall past every branch and come back as fit-page, so
+       * asking for fit-width silently did nothing. It is the phone's default
+       * now, which is what surfaced it: a portrait page fitted to a phone's
+       * HEIGHT is about 120px of document with the rest of the screen black.
+       */
+      if (e.pdfZoomMode === 'width')  return fitWidth;
       if (e.pdfZoomMode === 'page')   return fitPage;
-      if (e.pdfZoomMode === 'custom') return fitPage * e.pdfZoomScale;
-      return fitPage; // default / 'page'
+      // A zoom step measures from whichever fit the reader stepped away from,
+      // or + on a phone would first shrink the page back to fit-page.
+      if (e.pdfZoomMode === 'custom') {
+        return (e.pdfZoomBase === 'width' ? fitWidth : fitPage) * e.pdfZoomScale;
+      }
+      return fitPage;
     }
 
     function pdfUpdateToolbar(f) {
@@ -5203,7 +5231,8 @@
       var e = entry(f);
       if (!e.pdfDoc) return;
       if (e.pdfZoomMode !== 'custom') {
-        // Leaving fit-page: seed the scale at 1× (fit-page), then step up.
+        // Leaving a fit: seed the scale at 1× of THAT fit, then step up.
+        e.pdfZoomBase = e.pdfZoomMode === 'width' ? 'width' : 'page';
         e.pdfZoomMode = 'custom';
         e.pdfZoomScale = 1;
       }
@@ -5215,6 +5244,7 @@
       var e = entry(f);
       if (!e.pdfDoc) return;
       if (e.pdfZoomMode !== 'custom') {
+        e.pdfZoomBase = e.pdfZoomMode === 'width' ? 'width' : 'page';
         e.pdfZoomMode = 'custom';
         e.pdfZoomScale = 1;
       }
@@ -5225,6 +5255,7 @@
     function pdfFitWidth(f) {
       var e = entry(f);
       e.pdfZoomMode = 'width';
+      e.pdfZoomBase = 'width';
       e.pdfZoomScale = 1;
       renderAllPdfPages(f);
     }
@@ -5232,6 +5263,7 @@
     function pdfFitPage(f) {
       var e = entry(f);
       e.pdfZoomMode = 'page';
+      e.pdfZoomBase = 'page';
       e.pdfZoomScale = 1;
       renderAllPdfPages(f);
     }
@@ -5356,7 +5388,19 @@
             e.pdfDoc = pdf;
             e.pdfUrl = f.previewUrl;
             e.pdfPage = 1;
-            e.pdfZoomMode = 'page'; // always open fit-page
+            /*
+             * Fit-page on a desktop, fit-width on a phone.
+             *
+             * Fit-page is the right first sight of a document you have room
+             * for: the whole page, at once. On a phone there is no such room —
+             * the page's height is what the fit is measured against, and a
+             * portrait page inside 700px of stage came out 120px wide, an
+             * unreadable stamp in the middle of a black screen. Every phone
+             * PDF reader fills the width and lets the reader scroll, which is
+             * the same document at four times the size.
+             */
+            e.pdfZoomMode = phoneViewer() ? 'width' : 'page';
+            e.pdfZoomBase = e.pdfZoomMode;
             e.pdfZoomScale = 1;
             return pdf;
           });
