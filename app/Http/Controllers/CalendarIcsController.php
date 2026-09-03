@@ -263,7 +263,10 @@ class CalendarIcsController extends Controller
             'source' => Calendar::SOURCE_ICS_SUBSCRIPTION,
             'subscription_url' => $url,
             'subscription_frequency' => $data['frequency'] ?? 1440,
+            // 'syncing' means "queued"; attempted_at starts the staleness
+            // clock so an undelivered dispatch is reclaimed, never wedged.
             'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now(),
         ]);
 
         CalendarProvisioner::subscribe($user, $calendar);
@@ -288,9 +291,11 @@ class CalendarIcsController extends Controller
             'That calendar is not a subscription.');
 
         // A manual refresh clears the back-off, since the user has presumably
-        // just fixed whatever was wrong.
+        // just fixed whatever was wrong. attempted_at starts the staleness
+        // clock on the stamp, so an undelivered dispatch is reclaimed.
         $calendar->forceFill([
             'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now(),
             'subscription_failures' => 0,
         ])->save();
 
@@ -314,6 +319,7 @@ class CalendarIcsController extends Controller
 
         $calendar->forceFill([
             'subscription_status' => $enabled ? 'syncing' : 'disabled',
+            'subscription_attempted_at' => $enabled ? now() : $calendar->subscription_attempted_at,
             'subscription_failures' => 0,
             'subscription_error' => null,
         ])->save();

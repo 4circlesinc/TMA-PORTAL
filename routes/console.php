@@ -385,7 +385,7 @@ Artisan::command('calendar:refresh-subscriptions', function () {
         ->whereNotNull('subscription_frequency')
         ->where(function ($q) {
             $q->whereNull('subscription_status')
-                ->orWhereNotIn('subscription_status', ['disabled', 'syncing']);
+                ->orWhereNotIn('subscription_status', ['disabled']);
         })
         ->where(function ($q) {
             $q->whereNull('subscription_synced_at')
@@ -393,9 +393,11 @@ Artisan::command('calendar:refresh-subscriptions', function () {
         })
         ->get()
         // The frequency comparison is done here rather than in SQL because it
-        // is per row, and the set is small.
-        ->filter(fn (Calendar $c) => $c->subscription_synced_at === null
-            || $c->subscription_synced_at->addMinutes((int) $c->subscription_frequency)->isPast());
+        // is per row, and the set is small. A live 'syncing' run holds its
+        // slot; a stale one is reclaimed rather than skipped for ever.
+        ->filter(fn (Calendar $c) => ! $c->syncRunIsLive()
+            && ($c->subscription_synced_at === null
+                || $c->subscription_synced_at->addMinutes((int) $c->subscription_frequency)->isPast()));
 
     foreach ($due as $calendar) {
         RefreshIcsSubscription::dispatch($calendar->id);
@@ -417,15 +419,18 @@ Schedule::command('calendar:refresh-subscriptions')
  * until a manual sync clears it.
  */
 Artisan::command('calendar:sync-providers', function () {
+    /*
+     * Due-ness is judged in PHP (the set is small): a live 'syncing' run
+     * holds its slot, a stale one is reclaimed rather than skipped for ever,
+     * and failures back off exponentially instead of the old permanent
+     * cutoff at ten - both of which used to wedge a calendar out of the
+     * schedule with no way back but a manual sync.
+     */
     $calendars = Calendar::query()
         ->whereIn('source', [Calendar::SOURCE_GOOGLE, Calendar::SOURCE_MICROSOFT])
         ->whereNotNull('connected_account_id')
-        ->where(function ($q) {
-            $q->whereNull('subscription_status')
-                ->orWhereNotIn('subscription_status', ['syncing']);
-        })
-        ->where('subscription_failures', '<', 10)
-        ->get();
+        ->get()
+        ->filter(fn (Calendar $c) => $c->providerSyncIsDue());
 
     foreach ($calendars as $calendar) {
         SyncProviderCalendar::dispatch($calendar->id);

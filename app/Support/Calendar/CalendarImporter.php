@@ -71,7 +71,12 @@ class CalendarImporter
                         : 'import',
                     'remote_can_write' => $remoteCanWrite,
                     'sync_window_start' => now()->subMonths($monthsBack),
+                    // 'syncing' here means "queued", and the connect progress
+                    // panel reads it. attempted_at starts the staleness clock,
+                    // so a dispatch that never runs is reclaimed by the sweep
+                    // instead of wedging the calendar for ever.
                     'subscription_status' => 'syncing',
+                    'subscription_attempted_at' => now(),
                 ]);
 
                 CalendarProvisioner::subscribe($user, $calendar);

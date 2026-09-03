@@ -149,7 +149,12 @@ class CalendarSyncController extends Controller
             'sync_direction' => $direction,
             'remote_can_write' => $remoteCanWrite,
             'sync_window_start' => now()->subMonths($data['monthsBack'] ?? 3),
+            // 'syncing' here means "queued", and the connect progress panel
+            // reads it. attempted_at starts the staleness clock, so a
+            // dispatch that never runs is reclaimed by the sweep instead of
+            // wedging the calendar for ever.
             'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now(),
         ]);
 
         CalendarProvisioner::subscribe($user, $calendar);
@@ -329,8 +334,14 @@ class CalendarSyncController extends Controller
         abort_unless(CalendarAccess::can($user, $calendar, 'edit_calendar'), 403, 'You cannot sync this calendar.');
         abort_unless($calendar->isProviderSynced(), 422, 'That calendar is not connected to a provider.');
 
-        // Clear the back-off, the user asked, so retry now.
-        $calendar->forceFill(['subscription_status' => 'syncing', 'subscription_failures' => 0])->save();
+        // Clear the back-off, the user asked, so retry now. attempted_at
+        // starts the staleness clock on the 'syncing' stamp, so even a
+        // dispatch that never runs is reclaimed rather than wedged.
+        $calendar->forceFill([
+            'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now(),
+            'subscription_failures' => 0,
+        ])->save();
 
         SyncProviderCalendar::dispatch($calendar->id);
 

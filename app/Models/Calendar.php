@@ -100,6 +100,47 @@ class Calendar extends Model
         return $this->subscription_synced_at ? 'ok' : 'error';
     }
 
+    /**
+     * Is a 'syncing' stamp a live run rather than an abandoned one?
+     *
+     * The stamp is written at run start (subscription_attempted_at rides
+     * along), so a row past the staleness window belongs to a run that died
+     * without recording its outcome - the sweeps treat it as reclaimable
+     * instead of skipping it for ever, which is how calendars used to wedge.
+     */
+    public function syncRunIsLive(): bool
+    {
+        return $this->subscription_status === 'syncing'
+            && $this->subscription_attempted_at !== null
+            && $this->subscription_attempted_at->gt(now()->subMinutes(self::SYNC_STALE_MINUTES));
+    }
+
+    /**
+     * Should the provider sweep queue this calendar this tick?
+     *
+     * Failures back off exponentially - 20m, 40m, 80m ... capped at a day -
+     * instead of the old hard cutoff at ten, which dropped a calendar from
+     * the schedule permanently: nothing ever reset the counter, so one bad
+     * afternoon at the provider retired the calendar for good.
+     */
+    public function providerSyncIsDue(): bool
+    {
+        if ($this->syncRunIsLive()) {
+            return false;
+        }
+
+        $failures = (int) $this->subscription_failures;
+
+        if ($failures === 0) {
+            return true;
+        }
+
+        $waitMinutes = min(10 * (2 ** min($failures, 8)), 1440);
+
+        return $this->subscription_attempted_at === null
+            || $this->subscription_attempted_at->lte(now()->subMinutes($waitMinutes));
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');

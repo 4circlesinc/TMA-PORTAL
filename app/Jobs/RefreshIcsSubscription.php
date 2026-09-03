@@ -99,6 +99,20 @@ class RefreshIcsSubscription implements ShouldQueue
         }
     }
 
+    /**
+     * A hard death - killed by the timeout, worker gone - skips the catch in
+     * handle() and used to leave 'syncing' on the row for ever. Same
+     * recording as any other failure.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        $calendar = Calendar::find($this->calendarId);
+
+        if ($calendar && $calendar->subscription_status === 'syncing') {
+            $this->fail($calendar, $e?->getMessage() ?: 'The refresh was interrupted.');
+        }
+    }
+
     private function succeed(Calendar $calendar, ?string $etag): void
     {
         $calendar->forceFill([

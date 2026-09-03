@@ -500,6 +500,84 @@ class CalendarProviderSyncTest extends TestCase
     /**
      * @return array{0: User, 1: Calendar}
      */
+    /* ── self-healing ────────────────────────────────────────── */
+
+    public function test_a_hard_death_clears_the_syncing_stamp(): void
+    {
+        [, $calendar] = $this->connectedCalendar([
+            'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now(),
+            'subscription_failures' => 0,
+        ]);
+
+        (new SyncProviderCalendar($calendar->id))->failed(new \RuntimeException('worker killed'));
+
+        $calendar->refresh();
+        $this->assertSame('error', $calendar->subscription_status);
+        $this->assertSame(1, (int) $calendar->subscription_failures);
+        $this->assertSame('worker killed', $calendar->subscription_error);
+    }
+
+    public function test_the_sweep_reclaims_a_stale_syncing_calendar(): void
+    {
+        // A run that died without recording its outcome must not hold the
+        // calendar out of the schedule for ever.
+        [, $calendar] = $this->connectedCalendar([
+            'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now()->subHours(2),
+        ]);
+
+        Queue::fake();
+        $this->artisan('calendar:sync-providers');
+
+        Queue::assertPushed(SyncProviderCalendar::class,
+            fn (SyncProviderCalendar $j) => $j->calendarId === $calendar->id);
+    }
+
+    public function test_the_sweep_leaves_a_live_run_alone(): void
+    {
+        $this->connectedCalendar([
+            'subscription_status' => 'syncing',
+            'subscription_attempted_at' => now()->subMinute(),
+        ]);
+
+        Queue::fake();
+        $this->artisan('calendar:sync-providers');
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_failures_back_off_instead_of_retiring_the_calendar(): void
+    {
+        // Ten failures used to drop a calendar from the schedule permanently:
+        // nothing ever reset the counter, so it never came back.
+        $this->connectedCalendar([
+            'subscription_status' => 'error',
+            'subscription_failures' => 12,
+            'subscription_attempted_at' => now()->subDays(2),
+        ]);
+
+        Queue::fake();
+        $this->artisan('calendar:sync-providers');
+
+        Queue::assertPushed(SyncProviderCalendar::class);
+    }
+
+    public function test_a_failing_calendar_waits_out_its_backoff(): void
+    {
+        // Five failures wait 320 minutes; an hour is not enough.
+        $this->connectedCalendar([
+            'subscription_status' => 'error',
+            'subscription_failures' => 5,
+            'subscription_attempted_at' => now()->subHour(),
+        ]);
+
+        Queue::fake();
+        $this->artisan('calendar:sync-providers');
+
+        Queue::assertNothingPushed();
+    }
+
     private function connectedCalendar(array $overrides = [], ?User $user = null, ?ConnectedAccount $account = null): array
     {
         $user ??= $this->user();
