@@ -975,7 +975,8 @@ a.tma-dash__tab-btn:visited {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-top: var(--dash-mobile-header-h);
+    /* Header height plus a breath (kept in step with dashboard.css). */
+    padding-top: calc(var(--dash-mobile-header-h) + var(--space-12));
     padding-bottom: calc(var(--dash-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
     padding-left: max(var(--dash-mobile-gutter), env(safe-area-inset-left, 0px));
     padding-right: max(var(--dash-mobile-gutter), env(safe-area-inset-right, 0px));

@@ -2145,17 +2145,19 @@
 }
 
 @media (max-width: 640px) {
-  /* One row on phones too: greeting left, Today + Edit Dashboard right.
-     The copy ellipsizes rather than pushing the actions to a second line. */
+  /* One row when it fits: greeting left, actions right. When a third button
+     (Hide workflows) joins in, the ACTIONS wrap to their own right-aligned
+     line — the name never gets crushed to "Hello Ve…" to make room. */
   .tma-portal-hello {
     align-items: center;
-    flex-wrap: nowrap;
-    gap: var(--space-8);
+    flex-wrap: wrap;
+    gap: var(--space-8) var(--space-12);
   }
 
   .tma-portal-hello__main {
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     min-width: 0;
+    max-width: 100%;
     gap: var(--space-8);
   }
 
@@ -2187,9 +2189,11 @@
 
   .tma-portal-hello__actions {
     width: auto;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     margin-left: auto;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    row-gap: var(--space-6);
     gap: var(--space-8);
   }
 }
