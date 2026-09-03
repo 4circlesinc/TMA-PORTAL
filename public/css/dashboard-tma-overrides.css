@@ -1173,13 +1173,31 @@ body::-webkit-scrollbar,
 /* ── Underline tab rows (CIP list tabs, applicant detail tabs, any page
  *    head tabs): scroll sideways on touch widths, never wrap or clip. ── */
 @media (max-width: 1024px) {
+  /* The slot is the scroller: the tab group arrives wrapped in an
+     unclassed patch <div> that grows to content width, so a scroll set on
+     the group itself never engages — the group is as wide as its tabs. */
   .tma-dash__head-tabs {
     min-width: 0;
     max-width: 100%;
     flex: 1 1 auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    /* right edge fades so a cut-off row reads as "more this way" */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
   }
 
-  .tma-dash__head-tabs .tma-tab-group,
+  .tma-dash__head-tabs > div {
+    flex: 0 0 auto;
+  }
+
+  .tma-dash__head-tabs .tma-tab-group {
+    display: flex;
+    flex-wrap: nowrap;
+    width: max-content;
+  }
+
   .tma-dash__clients-profile-tablist {
     display: flex;
     flex-wrap: nowrap;
@@ -1187,7 +1205,6 @@ body::-webkit-scrollbar,
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
-    /* right edge fades so a cut-off row reads as "more this way" */
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
   }
@@ -1464,15 +1481,78 @@ body::-webkit-scrollbar,
     min-height: 40px;
   }
 
-  /* Profile header chrome wraps instead of squeezing the name. */
+  /* Profile header stays ONE line: back, face, name, status on the left;
+     the actions collapse to icon-only buttons on the right. */
   .tma-dash__clients-profile-toolbar {
-    flex-wrap: wrap;
-    row-gap: var(--space-8);
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .tma-dash__clients-profile-head {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--space-8);
+  }
+
+  .tma-dash__clients-profile-ident,
+  .tma-dash__clients-profile-name-row {
+    min-width: 0;
+  }
+
+  /* The name is the row's protagonist — it gets the room first and only
+     then gives way; the chip caps itself instead of starving the name. */
+  .tma-dash__clients-profile-name {
+    flex: 1 1 auto;
+    min-width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tma-dash__clients-profile-name-row {
+    flex: 1 1 auto;
+  }
+
+  .tma-dash__clients-profile-name-row .tma-cip-status-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 44%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The elevated head must never outgrow the viewport row it sits in. */
+  .tma-dash__main-head-left--clients-detail,
+  .tma-dash__clients-detail-head,
+  .tma-dash__clients-detail-head .tma-dash__clients-profile-toolbar {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .tma-dash__clients-profile-actions {
-    flex-wrap: wrap;
-    row-gap: var(--space-8);
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    gap: var(--space-6);
+  }
+
+  /* Icon-only actions: the words go, the glyphs stay tappable. */
+  .tma-dash__clients-profile-actions .tma-dash__clients-message-btn span,
+  .tma-dash__clients-profile-actions .tma-dash__clients-edit-btn span,
+  .tma-dash__clients-profile-actions .tma-dash__clients-message-caret {
+    display: none;
+  }
+
+  .tma-dash__clients-profile-actions .tma-dash__clients-message-btn,
+  .tma-dash__clients-profile-actions .tma-dash__clients-edit-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
   }
 
   /* Documents tab: crumbs and the action buttons share the row politely. */
@@ -1486,9 +1566,51 @@ body::-webkit-scrollbar,
     row-gap: var(--space-8);
   }
 
+  /* Checklist rows stay one line: the name gives way, the status chip
+     rides the right edge in a compact size instead of dropping to its own
+     row as a giant pill. The block and list pin min-width so a grid column
+     can't grow to the rows' nowrap content and shove the card offscreen. */
+  .tma-dash__clients-checklist-block,
+  .tma-dash__clients-checklist {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .tma-dash__clients-checklist-row {
-    flex-wrap: wrap;
-    row-gap: var(--space-4);
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* The document name may take two lines before it ellipsizes — a row of
+     "Certified C…" stubs helps nobody. */
+  .tma-dash__clients-checklist-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    font-size: var(--text-size-14);
+    line-height: var(--text-lh-14);
+  }
+
+  .tma-dash__clients-checklist-row .tma-file-status-chip {
+    margin-left: auto;
+    flex-shrink: 0;
+    max-width: 44%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px var(--space-8);
+    font-size: 10px;
+    line-height: 14px;
+  }
+
+  .tma-dash__clients-checklist-optional {
+    flex-shrink: 0;
   }
 }
 
