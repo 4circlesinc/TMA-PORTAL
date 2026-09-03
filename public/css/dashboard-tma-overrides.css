@@ -1911,32 +1911,43 @@ body::-webkit-scrollbar,
  * to "i…" and the time under it to "t…". The name is what the card is
  * about, so it takes the row and the chips drop to their own line.
  */
-@media (max-width: 1024px) {
+/*
+ * The card measures itself, not the window.
+ *
+ * A workflow card is narrow in places that have nothing to do with the
+ * screen: the home strip's slides are `flex: 0 0 min(280px, 82vw)`, and the
+ * Workflows list sits in a column of its own. A name plus "Mentioned you"
+ * and "Open" needs ~420px on one line, so on a wide desktop the same card
+ * could crush the sender to "i…" — which is why every viewport breakpoint
+ * tried here missed. The card is the container that decides.
+ */
+.tma-portal-wf-card {
+  container-type: inline-size;
+  container-name: wf-card;
+}
+
+@container wf-card (max-width: 420px) {
   .tma-portal-wf-card__head {
-    flex-wrap: wrap;
-    row-gap: var(--space-8);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-6);
+    flex-wrap: nowrap;
   }
 
   .tma-portal-wf-card__head > .tma-portal-wf-author,
   .tma-portal-wf-card__head > .tma-portal-wf-card__headline {
-    flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
   }
 
-  .tma-portal-wf-card__head > .tma-portal-wf-chips {
+  .tma-portal-wf-chips {
     flex-wrap: wrap;
     max-width: 100%;
   }
 }
 
-/*
- * The home strip's cards are 280px at EVERY width — `flex: 0 0 min(280px,
- * 82vw)` on the slide — so this is not a phone problem and a breakpoint
- * cannot fix it: on a desktop too, a name plus "Mentioned you" and "Open"
- * has never fitted on one 256px line, and the chips simply painted past
- * the card's right edge. The constraint is the card, so the rule is on the
- * card: in the strip the head always stacks.
- */
+/* Belt for the strip, whose cards are known to be 280px: it needs no query
+   support to be right, and the strip is where this was first seen. */
 .tma-portal-wf-strip .tma-portal-wf-card__head {
   flex-direction: column;
   align-items: flex-start;
