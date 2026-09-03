@@ -1600,6 +1600,12 @@
     if (row) {
       if (e.target.closest('.tma-portal-star, [data-files-menu], [data-files-status], input, .tma-portal-rename-input')) return;
       e.preventDefault();
+      // On a touch layout the tap opens: there is no second click to spend,
+      // and picking one row bought nothing without Shift or Ctrl.
+      if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) {
+        openItem(row.getAttribute('data-id'));
+        return;
+      }
       selectRow(row.getAttribute('data-id'), e);
       return;
     }
@@ -1617,6 +1623,13 @@
    * told apart by where the pointer was, not by a timer.
    */
   function onDblClick(e) {
+    /*
+     * Nothing on a touch layout: the first tap already opened the row, and a
+     * second one landing on the name would put the reader in a rename they
+     * never asked for.
+     */
+    if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) return;
+
     var name = e.target.closest('[data-files-name]');
     if (name) {
       e.preventDefault();

@@ -8021,6 +8021,9 @@
         }
         if (!window.TMAFileSelect) { openClientFolderItem(root, id); return; }
 
+        // On a touch layout the tap opens, as it does in every file list.
+        if (window.TMAFileSelect.tapOpens()) { openClientFolderItem(root, id); return; }
+
         clientFolderSelected = window.TMAFileSelect.click({
           ids: clientFolderIds(), selected: clientFolderSelected, id: id,
           event: e, anchor: clientFolderAnchor,
@@ -8029,6 +8032,8 @@
       });
 
       btn.addEventListener('dblclick', function (e) {
+        // The touch layout opened it on the first tap.
+        if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) return;
         e.preventDefault();
         openClientFolderItem(root, id);
       });

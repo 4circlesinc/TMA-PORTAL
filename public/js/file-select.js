@@ -165,6 +165,31 @@
     fromKeyboard: function (e) { return !!e && e.detail === 0; },
 
     /**
+     * Does a single tap open, rather than pick?
+     *
+     * A double-click is a mouse gesture. On a phone the second tap is a
+     * guess — the reader has no way to know one is wanted, nothing hovers to
+     * hint at it, and a double tap is just as likely to be read by the
+     * browser as a zoom. Nor is anything lost by opening on the first: with
+     * no Shift and no Ctrl, a tap could only ever select ONE row (a plain
+     * click collapses the selection to the row it landed on), so the picking
+     * a tap used to do bought nothing a reader could act on. The row's own
+     * menu still carries the actions.
+     *
+     * Measured on width rather than pointer type, deliberately: the lists
+     * fold into their two-line touch rows at 1024px, and how a row opens must
+     * change with how it is drawn — a narrow window is a touch layout even on
+     * a machine with a mouse.
+     */
+    tapOpens: function () {
+      try {
+        return !!(window.matchMedia && window.matchMedia('(max-width: 1024px)').matches);
+      } catch (err) {
+        return false;
+      }
+    },
+
+    /**
      * Stop Shift-click painting a blue streak of text across the rows.
      *
      * `user-select: none` on the list handles the general case, but a caller

@@ -687,6 +687,14 @@
           if (!rowEl) return;
           if (e.target.closest('[data-files-row-more], [data-files-uploader-photo], [data-files-open-folder]')) return;
           if (!window.TMAFileSelect) return;
+          // On a touch layout the tap opens rather than picks, as it does in
+          // every other file list.
+          if (window.TMAFileSelect.tapOpens()) {
+            e.preventDefault();
+            var tapped = rowById(rowEl.getAttribute('data-id'));
+            if (tapped) openFilePreview(tapped, reloadFiles);
+            return;
+          }
           state.selected = window.TMAFileSelect.click({
             ids: pageIds(), selected: state.selected, id: rowEl.getAttribute('data-id'),
             event: e, anchor: selectAnchor,
@@ -695,6 +703,8 @@
         });
 
         body.addEventListener('dblclick', function (e) {
+          // The touch layout already opened it on the first tap.
+          if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) return;
           var rowEl = e.target.closest('[data-files-row]');
           if (!rowEl) return;
           if (e.target.closest('[data-files-row-more], [data-files-uploader-photo], [data-files-open-folder]')) return;

@@ -841,6 +841,12 @@
       var row = e.target.closest('[data-home-lib-row]');
       if (row && host.contains(row)) {
         if (e.target.closest('.tma-portal-star, [data-home-lib-menu]')) return;
+        // On a touch layout the tap opens, the same as the File Library's own
+        // list — there is no second click to spend.
+        if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) {
+          openItem(findItem(row.getAttribute('data-id')));
+          return;
+        }
         selectRow(row.getAttribute('data-id'), e);
         return;
       }
@@ -856,6 +862,9 @@
     // A second click on the row opens it; on the name it is the library's
     // rename gesture, which this table does not offer, so it opens too.
     bindOnce(host, 'dblclick', function (e) {
+      // The touch layout opened on the first tap; a second must not open it
+      // again on top of itself.
+      if (window.TMAFileSelect && window.TMAFileSelect.tapOpens()) return;
       var row = e.target.closest('[data-home-lib-row]');
       if (!row || !host.contains(row)) return;
       if (e.target.closest('.tma-portal-star, [data-home-lib-menu]')) return;
