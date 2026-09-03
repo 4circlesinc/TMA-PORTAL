@@ -23,6 +23,7 @@ use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
 use App\Support\Microsoft\ChangeNotifications;
+use Illuminate\Support\Facades\Cache;
 use App\Support\Templates\ComposeTemplates;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -84,21 +85,31 @@ class MailController extends Controller
         // way. Guarded because on a synchronous queue this runs inline, and a
         // provider outage must not stop the mailbox from opening, the stored
         // sync status is how a failure gets reported.
-        rescue(function () use ($account) {
-            // Called as a statement, not returned: dispatch() hands back a
-            // PendingDispatch that only fires when it is destroyed, and
-            // returning it would push that past this guard.
-            SyncMailbox::dispatch($account);
+        //
+        // Behind a cache gate, because this endpoint is polled: the dashboard
+        // asks every 30 seconds per open tab, and although the job's
+        // uniqueness drops the duplicates, every attempt still cost a lock
+        // check and a jobs-table insert per uniqueness window. One poke a
+        // minute per account is as fresh as a 30-second poll can ever see;
+        // the manual sync, the send paths and the Graph webhook dispatch
+        // directly and stay immediate.
+        if (Cache::add('mail-sync-poke:'.$account->id, 1, 60)) {
+            rescue(function () use ($account) {
+                // Called as a statement, not returned: dispatch() hands back a
+                // PendingDispatch that only fires when it is destroyed, and
+                // returning it would push that past this guard.
+                SyncMailbox::dispatch($account);
 
-            // A mailbox whose history was never fully imported gets the
-            // analyze → import pipeline (re)started here. Both jobs are
-            // unique per account, so opening the page twice costs nothing —
-            // and a backfill that quietly died resumes from its saved page
-            // tokens instead of leaving the panel spinning forever.
-            if (! $account->mail_backfilled_at) {
-                AnalyzeMailbox::dispatch($account);
-            }
-        }, report: false);
+                // A mailbox whose history was never fully imported gets the
+                // analyze → import pipeline (re)started here. Both jobs are
+                // unique per account, so opening the page twice costs nothing —
+                // and a backfill that quietly died resumes from its saved page
+                // tokens instead of leaving the panel spinning forever.
+                if (! $account->mail_backfilled_at) {
+                    AnalyzeMailbox::dispatch($account);
+                }
+            }, report: false);
+        }
 
         return response()->json([
             'connected' => true,

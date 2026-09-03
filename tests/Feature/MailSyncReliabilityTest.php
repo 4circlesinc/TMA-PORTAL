@@ -164,6 +164,34 @@ class MailSyncReliabilityTest extends TestCase
         });
     }
 
+    /**
+     * The mailbox bootstrap is polled — the dashboard asks every 30 seconds
+     * per open tab — so it must not buy a dispatch per call. One poke a
+     * minute per account; the gate reopens once its minute has passed.
+     */
+    public function test_the_mail_bootstrap_dispatches_one_sync_per_minute(): void
+    {
+        $user = $this->user();
+        $this->account($user);
+
+        Queue::fake([SyncMailbox::class, \App\Jobs\AnalyzeMailbox::class]);
+
+        $this->actingAs($user);
+        $this->getJson('/portal/mail')->assertOk();
+        $this->getJson('/portal/mail')->assertOk();
+        $this->getJson('/portal/mail')->assertOk();
+
+        Queue::assertPushed(SyncMailbox::class, 1);
+
+        // Past the gate's minute AND the job's 90s uniqueness window — the
+        // faked job is never processed, so its until-processing lock never
+        // releases the way a real worker's pickup would.
+        $this->travel(120)->seconds();
+        $this->getJson('/portal/mail')->assertOk();
+
+        Queue::assertPushed(SyncMailbox::class, 2);
+    }
+
     /** The same address queued twice is one job, not two. */
     public function test_a_repeated_photo_lookup_is_deduplicated(): void
     {
