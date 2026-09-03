@@ -826,7 +826,6 @@ a.tma-dash__tab-btn:visited {
     pointer-events: auto;
   }
 
-  /* Bare controls on the page — no glass pill behind the header chrome. */
   .tma-dash__header-left {
     grid-column: 1;
     justify-self: start;
@@ -834,11 +833,13 @@ a.tma-dash__tab-btn:visited {
     gap: 0;
     flex: 0 0 auto;
     border-radius: var(--radius-pill);
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(165%);
+    backdrop-filter: blur(20px) saturate(165%);
   }
 
   .tma-dash__header-center {
@@ -909,12 +910,15 @@ a.tma-dash__tab-btn:visited {
   .tma-dash__header-icons {
     gap: 0;
     padding: 0;
+    overflow: hidden;
     border-radius: var(--radius-pill);
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(165%);
+    backdrop-filter: blur(20px) saturate(165%);
   }
 
   .tma-dash__header-icons .tma-dash__icon-btn {
@@ -922,12 +926,16 @@ a.tma-dash__tab-btn:visited {
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    border-radius: var(--radius-pill);
+    border-radius: 0;
     background: transparent;
   }
 
   .tma-dash__header-icons .tma-dash__icon-btn:hover {
     background: var(--color-hover);
+  }
+
+  .tma-dash__header-icons [data-action="toggle-theme"] {
+    border-right: 0.5px solid var(--color-overlay-4);
   }
 
   .tma-dash__header-right {
@@ -940,14 +948,15 @@ a.tma-dash__tab-btn:visited {
     display: none;
   }
 
-/* Dark theme matches: bare controls, no bubble. */
 .tma-dash[data-theme="dark"] .tma-dash__header-left,
 :root[data-theme="dark"] .tma-dash__header-left,
 .tma-dash[data-theme="dark"] .tma-dash__header-icons,
 :root[data-theme="dark"] .tma-dash__header-icons {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    background: rgba(24, 24, 26, 0.48);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
   .tma-dash__breadcrumb {
