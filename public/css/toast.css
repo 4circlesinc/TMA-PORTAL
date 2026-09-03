@@ -97,9 +97,10 @@
   pointer-events: auto;
 }
 
+/* Bottom tab bar retired — toasts sit at the bottom edge on touch widths. */
 @media (max-width: 1024px) {
   .tma-toast-floating-host {
-    bottom: calc(var(--dash-tabbar-clearance, 72px) + var(--space-16, 16px) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--space-16, 16px) + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -340,7 +341,8 @@
   .tma-notify-toast-host--bottom-left,
   .tma-notify-toast-host:not([class*="--"]) {
     top: auto;
-    bottom: calc(var(--dash-tabbar-clearance, 72px) + 16px + env(safe-area-inset-bottom, 0px));
+    /* Tab bar retired — no clearance above the bottom edge. */
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -566,7 +568,7 @@
   width: 420px;
   max-width: calc(100vw - 32px);
   pointer-events: none;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   right: 20px;
 }
 
@@ -750,9 +752,10 @@
   width: 140px;
 }
 
+/* Tab bar retired — the sync stack hugs the bottom edge on touch widths. */
 @media (max-width: 1024px) {
   .tma-sync-toast-host {
-    bottom: calc(16px + var(--dash-tabbar-clearance, 64px) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }
 
