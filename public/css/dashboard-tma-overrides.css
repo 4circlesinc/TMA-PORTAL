@@ -1315,7 +1315,7 @@ body::-webkit-scrollbar,
     display: none;
   }
 
-  .tma-cip-table td:has(.tma-cip-status-chip) {
+  .tma-cip-table td:has(.tma-portal-status) {
     position: absolute;
     top: var(--space-12);
     right: 38px;
@@ -1323,8 +1323,13 @@ body::-webkit-scrollbar,
     max-width: 42%;
   }
 
-  .tma-cip-table td:has(.tma-cip-status-chip) .tma-cip-status-chip {
+  /* inline-block, not the pill's inline-flex: text inside a flex container
+     hard-clips mid-letter — ellipsis only works on a block container. */
+  .tma-cip-table td:has(.tma-portal-status) .tma-portal-status {
+    display: inline-block;
+    vertical-align: middle;
     max-width: 100%;
+    box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1514,10 +1519,15 @@ body::-webkit-scrollbar,
     flex: 1 1 auto;
   }
 
-  .tma-dash__clients-profile-name-row .tma-cip-status-chip {
+  /* Same inline-block trade as the card chips: ellipsis needs a block
+     container, inline-flex hard-clips mid-letter. */
+  .tma-dash__clients-profile-name-row .tma-portal-status--inline {
+    display: inline-block;
+    vertical-align: middle;
     flex: 0 1 auto;
     min-width: 0;
     max-width: 44%;
+    box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1598,6 +1608,11 @@ body::-webkit-scrollbar,
   }
 
   .tma-dash__clients-checklist-row .tma-file-status-chip {
+    /* inline-block so a long status ellipsizes instead of clipping
+       mid-letter (the pill's own inline-flex cannot ellipsize). */
+    display: inline-block;
+    vertical-align: middle;
+    box-sizing: border-box;
     margin-left: auto;
     flex-shrink: 0;
     max-width: 44%;
