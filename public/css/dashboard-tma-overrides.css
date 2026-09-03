@@ -2100,43 +2100,27 @@ body::-webkit-scrollbar,
 }
 
 
-/* ── Folder Shortcuts: the folders start where their heading does ─────
+/* ── Folder Shortcuts: the group label starts where its folders do ────
  *
- * Every nav item in the rail opens with a caret column — drawn on the groups
- * that expand, invisible but in flow on the ones that do not — so the folders
- * began 26px in while "Organization Folders" sat flush at the edge, and the
- * pair read as ragged rather than as a heading over a list.
+ * The label sat flush against the rail's edge while every folder under it
+ * began 22px in, and the pair read as ragged rather than as a heading over a
+ * list.
  *
- * Nothing in this panel expands: it is folders and the labels above them, and
- * not one row has a caret to draw. The column was reserving space for a
- * control that never arrives, so it goes, and the folders line up under their
- * heading.
+ * The rows are not what moves. Every nav item in the rail opens with a caret
+ * column — visible on the groups that expand, invisible but in flow on the
+ * ones that do not — and that column is what keeps every icon in the sidebar
+ * on one line, collapsed or expanded (dashboard.css says so, at length, and
+ * it is right: taking it out of these rows would slide their icons 20px left
+ * of every other icon the moment the rail collapsed or the reader switched
+ * back to the menu).
  *
- * The exception is the narrow rail. There the row is only ever its icon, and
- * that same column is what puts the icon where every other icon in the strip
- * sits; taking it out would step the folders left of the menu above them. The
- * two selectors are the ones dashboard.css already calls collapsed — the
- * hover rail that is not being hovered, and the pinned rail closed by hand.
+ * So the heading moves to meet them, along the row's own measurements: the
+ * 2px it starts at, the caret column (1em of the rail's 14px rows, both
+ * hard-coded together in dashboard.css), and the 10px gap after it.
  */
-.tma-dash__shortcuts .tma-dash__nav-caret--hidden {
-  display: none;
-}
-
-/* And the row starts where the heading starts: the label's own 4px, not the
-   2px the rail gives a row whose first 14px is a caret. */
-.tma-dash__shortcuts .tma-dash__nav-item--shortcut {
-  padding-left: var(--space-4);
-}
-
 @media (min-width: 1025px) {
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcuts .tma-dash__nav-caret--hidden,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcuts .tma-dash__nav-caret--hidden {
-    display: grid;
-  }
-
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcuts .tma-dash__nav-item--shortcut,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcuts .tma-dash__nav-item--shortcut {
-    padding-left: var(--space-2);
+  .tma-dash__shortcuts .tma-dash__group-label {
+    padding-left: calc(var(--space-2) + 14px + var(--space-10));
   }
 }
 
