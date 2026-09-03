@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -42,6 +43,21 @@ class AppServiceProvider extends ServiceProvider
          */
         DB::prohibitDestructiveCommands(! $this->app->runningUnitTests());
         RollbackCommand::prohibit(false);
+
+        /*
+         * The 'database' session driver, minus the UPDATE nothing needed:
+         * byte-identical sessions skip the per-request write (see the
+         * handler). Overrides the built-in driver name so Laravel Cloud's
+         * cookie→database mapping in config/session.php keeps working.
+         */
+        Session::extend('database', function ($app) {
+            return new \App\Support\Session\ThrottledDatabaseSessionHandler(
+                $app['db']->connection($app['config']['session.connection']),
+                $app['config']['session.table'],
+                $app['config']['session.lifetime'],
+                $app,
+            );
+        });
 
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
