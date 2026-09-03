@@ -4615,7 +4615,8 @@
     display: none !important;
   }
 
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-logo,
+  /* The mark rides in the left bubble on Email too; only the legacy
+     centre-slot logo stays hidden. */
   .tma-dash--email.tma-dash--email-mobile [data-mobile-header-logo] {
     display: none !important;
   }
@@ -13922,20 +13923,36 @@
     padding: 0;
   }
 
+  /* Rows read exactly like the main menu drawer's nav items: same box,
+     same regular weight, full-ink icons, quiet secondary counts. */
   .tma-dash__email-folder {
     gap: var(--space-12);
     padding: var(--space-12);
     min-height: 52px;
     font-size: var(--text-size-16);
     line-height: var(--text-lh-16);
+    font-weight: var(--font-weight-regular, 400);
     border-radius: var(--radius-16);
+  }
+
+  .tma-dash__email-folder--active {
+    background: var(--color-hover);
+    font-weight: 600;
   }
 
   .tma-dash__email-folder img {
     width: 24px;
     height: 24px;
     flex: 0 0 24px;
-    opacity: 0.75;
+    opacity: 1;
+  }
+
+  .tma-dash__email-folder-count,
+  .tma-dash__email-folder-count--unread {
+    font-size: var(--text-size-12);
+    line-height: var(--text-lh-12);
+    font-weight: var(--font-weight-regular, 400);
+    color: var(--color-text-secondary);
   }
 
   .tma-dash__email-labels-section {

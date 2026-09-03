@@ -259,8 +259,10 @@
     } catch (e) { /* ignore */ }
   }
 
-  /* A group is open unless it was explicitly closed. */
+  /* A group is open unless it was explicitly closed. On a phone the drawer
+     is the only way to the mailboxes, so that group never stays folded. */
   function isSidebarGroupOpen(state, key) {
+    if (key === 'folders' && isEmailMobile()) return true;
     return !(state.sidebarGroups && state.sidebarGroups[key] === false);
   }
 

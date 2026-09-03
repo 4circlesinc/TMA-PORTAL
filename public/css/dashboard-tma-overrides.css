@@ -1284,11 +1284,12 @@ body::-webkit-scrollbar,
     margin-bottom: 2px;
   }
 
-  /* The applicant heads the card; status and the row menu pin to its right. */
+  /* The applicant heads the card; the status chip and the row menu sit as
+     one right-aligned cluster on the same line, flush to the card edge. */
   .tma-cip-table td:has(.tma-cip-table__applicant) {
     grid-column: 1 / -1;
     grid-row: 1;
-    padding-right: 120px;
+    padding-right: 44%;
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
   }
@@ -1300,8 +1301,16 @@ body::-webkit-scrollbar,
   .tma-cip-table td:has(.tma-cip-status-chip) {
     position: absolute;
     top: var(--space-12);
-    right: 44px;
+    right: 38px;
     width: auto;
+    max-width: 42%;
+  }
+
+  .tma-cip-table td:has(.tma-cip-status-chip) .tma-cip-status-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .tma-cip-table td:has(.tma-cip-status-chip)::before {
@@ -1310,8 +1319,8 @@ body::-webkit-scrollbar,
 
   .tma-cip-table td.tma-portal-cell--menu {
     position: absolute;
-    top: var(--space-8);
-    right: var(--space-8);
+    top: var(--space-10, 10px);
+    right: var(--space-6, 6px);
     width: auto;
   }
 
@@ -1544,5 +1553,122 @@ body::-webkit-scrollbar,
     flex: 1 1 100%;
     width: 100%;
     max-width: none;
+  }
+}
+
+/* ── File Library on touch widths: list rows, not cards. The desktop table
+ *    compresses into a two-line row — icon and name on top, the modified
+ *    date under the name, the size far right on the date's line, the row
+ *    menu top-right. Type / Shared-with / star columns step aside; sorting
+ *    stays in the toolbar's Sort control. Placed after the generic
+ *    portal-table card layer so these rules win the tie. ── */
+@media (max-width: 1024px) {
+  .tma-portal-table.tma-portal-files-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tma-portal-table.tma-portal-files-table thead {
+    display: none;
+  }
+
+  .tma-portal-table.tma-portal-files-table tbody {
+    display: block;
+  }
+
+  .tma-portal-table.tma-portal-files-table tbody tr {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0 var(--space-12);
+    align-items: center;
+    padding: var(--space-8) var(--space-4);
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--color-overlay-4);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .tma-portal-table.tma-portal-files-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tma-portal-table.tma-portal-files-table tbody tr.tma-portal-table__row--selected,
+  .tma-portal-table.tma-portal-files-table tbody tr.tma-portal-table__row--selected td {
+    background: var(--color-accent-bg);
+  }
+
+  .tma-portal-table.tma-portal-files-table tbody tr td {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .tma-portal-table.tma-portal-files-table td::before {
+    content: none !important;
+  }
+
+  /* Columns that don't earn phone room. */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--tight,
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--type,
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--owner {
+    display: none;
+  }
+
+  /* Line 1: icon + name (+ chips), the row menu at the far right. */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name .tma-portal-avatar-cell {
+    display: flex;
+    width: 100%;
+  }
+
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name .tma-portal-file-link {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--menu {
+    grid-column: 2;
+    grid-row: 1;
+    position: static;
+    justify-self: end;
+    width: auto;
+  }
+
+  /* Line 2: modified date under the name (indented past the icon), the
+     size on the same line pinned far right. */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--when {
+    grid-column: 1;
+    grid-row: 2;
+    padding-left: calc(24px + var(--space-8));
+    font-size: var(--text-size-12);
+    line-height: var(--text-lh-12);
+  }
+
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--size {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    text-align: right;
+    font-size: var(--text-size-12);
+    line-height: var(--text-lh-12);
+    white-space: nowrap;
   }
 }
