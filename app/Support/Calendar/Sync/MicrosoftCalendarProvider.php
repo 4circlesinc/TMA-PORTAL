@@ -89,10 +89,15 @@ class MicrosoftCalendarProvider implements CalendarProvider
         ];
     }
 
-    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array
+    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart, ?callable $onPage = null): array
     {
         // A stored deltaLink is followed as-is; otherwise start a delta run
-        // bounded by the import window.
+        // bounded by the import window. calendarView/delta returns *expanded
+        // instances*, so the forward bound is what the first pull costs: six
+        // months of a busy recurring calendar is a handful of pages, the two
+        // years it used to ask for was thousands of rows nobody would scroll
+        // to. Anything further out arrives when a later run's window reaches
+        // it, or on the full re-pull after a cursor expiry.
         // Pass datetimes as query params (Zulu), a bare `+00:00` in a hand-
         // built query string is decoded as a space and Graph returns HTTP 400.
         $url = $cursor;
@@ -101,7 +106,7 @@ class MicrosoftCalendarProvider implements CalendarProvider
             $url = self::BASE.'/me/calendars/'.rawurlencode($externalCalendarId).'/calendarView/delta';
             $query = [
                 'startDateTime' => CarbonImmutable::parse($windowStart)->utc()->format('Y-m-d\TH:i:s\Z'),
-                'endDateTime' => now()->addYears(2)->utc()->format('Y-m-d\TH:i:s\Z'),
+                'endDateTime' => now()->addMonths(6)->utc()->format('Y-m-d\TH:i:s\Z'),
             ];
         }
 
@@ -123,22 +128,35 @@ class MicrosoftCalendarProvider implements CalendarProvider
 
             $this->assertOk($response, 'list events');
 
+            $pageEvents = [];
+            $pageDeleted = [];
+
             foreach ($response->json('value', []) as $item) {
                 // A delta removal carries only an id and @removed.
                 if (isset($item['@removed'])) {
-                    $deleted[] = $item['id'];
+                    $pageDeleted[] = $item['id'];
 
                     continue;
                 }
 
                 $mapped = $this->mapEvent($item);
                 if ($mapped) {
-                    $events[] = $mapped;
+                    $pageEvents[] = $mapped;
                 }
             }
 
             $url = $response->json('@odata.nextLink');
             $nextCursor = $response->json('@odata.deltaLink') ?: $nextCursor;
+
+            if ($onPage) {
+                // A nextLink is a complete URL the cursor path follows as-is,
+                // so mid-pass it IS a resumable cursor; the final page hands
+                // over the deltaLink instead.
+                $onPage($pageEvents, $pageDeleted, $url ?: $nextCursor);
+            } else {
+                $events = array_merge($events, $pageEvents);
+                $deleted = array_merge($deleted, $pageDeleted);
+            }
         } while ($url);
 
         return ['events' => $events, 'deleted' => $deleted, 'cursor' => $nextCursor];

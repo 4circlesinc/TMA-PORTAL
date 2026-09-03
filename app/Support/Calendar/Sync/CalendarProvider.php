@@ -36,9 +36,19 @@ interface CalendarProvider
      * cursor has expired throws CalendarSyncException so the caller can fall
      * back to a full window rather than losing events.
      *
+     * With `$onPage` given, the provider streams instead of accumulating:
+     * each fetched page is handed over as `$onPage($events, $deleted,
+     * $resumeCursor)` and the returned arrays stay empty. `$resumeCursor`,
+     * when non-null, is a token the NEXT run could pass back as `$cursor` to
+     * continue from after this page - so the caller can persist progress and
+     * a run killed mid-pull no longer loses the whole pass. A provider whose
+     * mid-pass tokens are not self-contained (Google's page tokens only work
+     * with their original query) passes null until the final page.
+     *
+     * @param  ?callable(array<int, array<string, mixed>>, array<int, string>, ?string): void  $onPage
      * @return array{events: array<int, array<string, mixed>>, deleted: array<int, string>, cursor: ?string}
      */
-    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array;
+    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart, ?callable $onPage = null): array;
 
     /**
      * Create an event on the provider, returning its new external id and etag.

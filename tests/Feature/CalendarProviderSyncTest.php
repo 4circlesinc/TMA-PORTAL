@@ -578,6 +578,38 @@ class CalendarProviderSyncTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_streamed_pages_persist_progress_as_they_arrive(): void
+    {
+        // A run killed mid-pull must resume from the last finished page, not
+        // lose the pass: each page's events land and the resumable cursor is
+        // on disk before the next page is fetched.
+        [, $calendar] = $this->connectedCalendar();
+
+        $provider = new FakeCalendarProvider;
+        $provider->pages = [
+            [[$this->remote('g-1', 'Board meeting', '2026-07-22T09:00:00+00:00', '2026-07-22T10:00:00+00:00')], [], 'resume-after-page-1'],
+            [[$this->remote('g-2', 'Design review', '2026-07-23T14:00:00+00:00', '2026-07-23T15:00:00+00:00')], [], 'final-delta-token'],
+        ];
+
+        $seen = [];
+        $provider->betweenPages = function () use ($calendar, &$seen) {
+            $seen[] = [
+                'cursor' => $calendar->fresh()->sync_cursor,
+                'events' => CalendarEvent::where('calendar_id', $calendar->id)->count(),
+            ];
+        };
+        $this->fakeProvider($provider);
+
+        (new CalendarSynchronizer($calendar))->run();
+
+        $this->assertSame('resume-after-page-1', $seen[0]['cursor']);
+        $this->assertSame(1, $seen[0]['events']);
+
+        $calendar->refresh();
+        $this->assertSame('final-delta-token', $calendar->sync_cursor);
+        $this->assertSame(2, CalendarEvent::where('calendar_id', $calendar->id)->count());
+    }
+
     private function connectedCalendar(array $overrides = [], ?User $user = null, ?ConnectedAccount $account = null): array
     {
         $user ??= $this->user();
@@ -679,6 +711,17 @@ class FakeCalendarProvider implements CalendarProvider
 
     public bool $expireCursorOnce = false;
 
+    /**
+     * Streaming path: pages of [events, deleted, resumeCursor] handed to
+     * $onPage one at a time, the way the real providers deliver them.
+     *
+     * @var array<int, array{0: array<int, array<string, mixed>>, 1: array<int, string>, 2: ?string}>
+     */
+    public array $pages = [];
+
+    /** Called after each streamed page, for asserting mid-pass state. */
+    public $betweenPages = null;
+
     public ?string $failWith = null;
 
     public ?string $failCreateWith = null;
@@ -705,7 +748,7 @@ class FakeCalendarProvider implements CalendarProvider
         return $this->calendars;
     }
 
-    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array
+    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart, ?callable $onPage = null): array
     {
         if ($this->failWith) {
             throw new CalendarSyncException($this->failWith);
@@ -716,6 +759,21 @@ class FakeCalendarProvider implements CalendarProvider
             throw new CalendarSyncException('expired', cursorExpired: true);
         }
 
+        if ($this->pages && $onPage) {
+            $final = null;
+            foreach ($this->pages as $i => [$pageEvents, $pageDeleted, $resumeCursor]) {
+                $onPage($pageEvents, $pageDeleted, $resumeCursor);
+                $final = $resumeCursor;
+                if ($this->betweenPages) {
+                    ($this->betweenPages)($i);
+                }
+            }
+
+            return ['events' => [], 'deleted' => [], 'cursor' => $final];
+        }
+
+        // Ignoring $onPage exercises the non-streaming path: the synchronizer
+        // must handle providers that return everything in the arrays.
         return ['events' => $this->events, 'deleted' => $this->deleted, 'cursor' => 'next-token'];
     }
 

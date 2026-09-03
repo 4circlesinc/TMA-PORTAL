@@ -155,8 +155,24 @@ class CalendarSynchronizer
     {
         $windowStart = ($this->calendar->sync_window_start ?? now()->subMonths(3))->toIso8601String();
 
+        /*
+         * Pages are applied and the cursor persisted as they arrive, so a
+         * run killed mid-pull (timeout, worker restart) resumes from the
+         * last page it finished instead of losing the whole pass - which on
+         * a big first import meant a run that could never finish. Providers
+         * that ignore the callback still return everything in the arrays,
+         * handled below; real providers return them empty when streaming.
+         */
+        $onPage = function (array $events, array $deleted, ?string $resumeCursor) use (&$stats): void {
+            $this->applyPage($events, $deleted, $stats);
+
+            if ($resumeCursor !== null) {
+                $this->calendar->forceFill(['sync_cursor' => $resumeCursor])->save();
+            }
+        };
+
         try {
-            $result = $provider->changedEvents($this->calendar->external_id, $this->calendar->sync_cursor, $windowStart);
+            $result = $provider->changedEvents($this->calendar->external_id, $this->calendar->sync_cursor, $windowStart, $onPage);
         } catch (CalendarSyncException $e) {
             if (! $e->cursorExpired) {
                 throw $e;
@@ -164,10 +180,24 @@ class CalendarSynchronizer
             // The token expired: drop it and re-pull the whole window. This is
             // why every apply is an idempotent upsert, a full re-pull must
             // not duplicate what is already here.
-            $result = $provider->changedEvents($this->calendar->external_id, null, $windowStart);
+            $result = $provider->changedEvents($this->calendar->external_id, null, $windowStart, $onPage);
         }
 
-        foreach ($result['events'] as $remote) {
+        $this->applyPage($result['events'], $result['deleted'], $stats);
+
+        if ($result['cursor'] !== null) {
+            $this->calendar->forceFill(['sync_cursor' => $result['cursor']])->save();
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $events
+     * @param  array<int, string>  $deleted
+     * @param  array<string, int>  $stats
+     */
+    private function applyPage(array $events, array $deleted, array &$stats): void
+    {
+        foreach ($events as $remote) {
             if (($remote['cancelled'] ?? false) && ! $this->calendar->sync_cancelled) {
                 // A cancellation we don't mirror is treated as a removal.
                 $this->applyDeletion($remote['externalId'], $stats);
@@ -178,11 +208,9 @@ class CalendarSynchronizer
             $this->applyRemote($remote, $stats);
         }
 
-        foreach ($result['deleted'] as $externalId) {
+        foreach ($deleted as $externalId) {
             $this->applyDeletion($externalId, $stats);
         }
-
-        $this->calendar->forceFill(['sync_cursor' => $result['cursor']])->save();
     }
 
     /**
@@ -344,11 +372,16 @@ class CalendarSynchronizer
          */
         $pending = CalendarEvent::where('calendar_id', $this->calendar->id)
             ->where(function ($q) {
+                // Strictly newer than the last push: with >=, every imported
+                // row whose two stamps landed in the same tick re-qualified
+                // on every run, and enough of those could crowd new local
+                // events out of the unordered limit for ever.
                 $q->whereNull('external_event_id')
-                    ->orWhereColumn('updated_at', '>=', 'external_synced_local_at')
+                    ->orWhereColumn('updated_at', '>', 'external_synced_local_at')
                     ->orWhereNull('external_synced_local_at');
             })
             ->whereNull('conflict_at')
+            ->orderBy('updated_at')
             ->limit(200)
             ->get();
 

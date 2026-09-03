@@ -47,7 +47,7 @@ class GoogleCalendarProvider implements CalendarProvider
             ->all();
     }
 
-    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array
+    public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart, ?callable $onPage = null): array
     {
         $query = ['singleEvents' => 'false', 'showDeleted' => 'true', 'maxResults' => 250];
 
@@ -80,6 +80,9 @@ class GoogleCalendarProvider implements CalendarProvider
 
             $this->assertOk($response, 'list events');
 
+            $pageEvents = [];
+            $pageDeleted = [];
+
             foreach ($response->json('items', []) as $item) {
                 if (($item['status'] ?? '') === 'cancelled') {
                     // A cancellation with no other data is a delete; a
@@ -87,7 +90,7 @@ class GoogleCalendarProvider implements CalendarProvider
                     // (cancelled-status) event, kept for calendars that mirror
                     // cancellations.
                     if (empty($item['summary']) && empty($item['start'])) {
-                        $deleted[] = $item['id'];
+                        $pageDeleted[] = $item['id'];
 
                         continue;
                     }
@@ -95,12 +98,22 @@ class GoogleCalendarProvider implements CalendarProvider
 
                 $mapped = $this->mapEvent($item);
                 if ($mapped) {
-                    $events[] = $mapped;
+                    $pageEvents[] = $mapped;
                 }
             }
 
             $pageToken = $response->json('nextPageToken');
             $nextCursor = $response->json('nextSyncToken') ?: $nextCursor;
+
+            if ($onPage) {
+                // A Google page token only works with its original query, so
+                // it is no cursor for a later run: pages stream with null and
+                // only the final page carries the persistable syncToken.
+                $onPage($pageEvents, $pageDeleted, $pageToken ? null : $nextCursor);
+            } else {
+                $events = array_merge($events, $pageEvents);
+                $deleted = array_merge($deleted, $pageDeleted);
+            }
         } while ($pageToken);
 
         return ['events' => $events, 'deleted' => $deleted, 'cursor' => $nextCursor];
