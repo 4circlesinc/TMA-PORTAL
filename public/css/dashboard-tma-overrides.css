@@ -287,8 +287,8 @@
     grid-template-rows: minmax(0, 1fr);
     --dash-mobile-gutter: var(--space-16);
     --dash-mobile-header-h: calc(44px + var(--space-12) + var(--space-12) + env(safe-area-inset-top, 0px));
-    /* Docked bar: 6px pads + 48px buttons (kept in step with dashboard.css). */
-    --dash-tabbar-block-h: calc(var(--space-6) + 48px + var(--space-6));
+    /* Docked bar: 8px pads + 52px buttons (kept in step with dashboard.css). */
+    --dash-tabbar-block-h: calc(var(--space-8) + 52px + var(--space-8));
     --dash-tabbar-clearance: calc(var(--dash-tabbar-block-h) + var(--space-8));
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;

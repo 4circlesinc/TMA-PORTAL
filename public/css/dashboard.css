@@ -3975,7 +3975,7 @@
   width: auto;
   max-width: none;
   transform: none;
-  padding: var(--space-6) var(--space-8) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-8) var(--space-8) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
   border-radius: var(--radius-20) var(--radius-20) 0 0;
   background: var(--color-white);
   border: none;
@@ -4006,7 +4006,7 @@
   background: transparent;
   flex: 1 1 0;
   min-width: 44px;
-  height: 48px;
+  height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4221,10 +4221,10 @@
     grid-template-rows: minmax(0, 1fr);
     --dash-mobile-gutter: var(--space-16);
     --dash-mobile-header-h: calc(44px + var(--space-12) + var(--space-12) + env(safe-area-inset-top, 0px));
-    /* Docked bar: 6px pads + 48px buttons, plus a breath for content above.
+    /* Docked bar: 8px pads + 52px buttons, plus a breath for content above.
        The bar adds the safe-area inset inside itself; consumers add env()
        on top of this var, so it stays a plain figure. */
-    --dash-tabbar-block-h: calc(var(--space-6) + 48px + var(--space-6));
+    --dash-tabbar-block-h: calc(var(--space-8) + 52px + var(--space-8));
     --dash-tabbar-clearance: calc(var(--dash-tabbar-block-h) + var(--space-8));
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
