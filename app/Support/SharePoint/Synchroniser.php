@@ -168,18 +168,38 @@ class Synchroniser
          * mid-sync: that leaves `syncing` set for ever and would block the
          * connection permanently. After the window, a new run takes over.
          */
-        if ($connection->status === SharePointConnection::STATUS_SYNCING) {
-            // Same verdict the toast uses: a heartbeat inside the window is a
-            // live run; anything older is a dead lock and must be taken over.
-            if ($connection->effectiveStatus() === SharePointConnection::STATUS_SYNCING) {
-                return ['skipped' => true, 'reason' => 'already running'];
-            }
+        $wasSyncing = $connection->status === SharePointConnection::STATUS_SYNCING;
 
+        /*
+         * The claim is one conditional UPDATE, not a read followed by a
+         * write: two workers reading "idle" a millisecond apart both used to
+         * pass the check, and two concurrent walks of one delta cursor is
+         * exactly how the library grew duplicate folders (each run's
+         * applyCreate made its own row, and the mapping's updateOrCreate
+         * orphaned the loser's). Only one claimant's UPDATE matches.
+         */
+        $claimed = SharePointConnection::query()
+            ->whereKey($connection->id)
+            ->where(function ($q) {
+                $q->where('status', '!=', SharePointConnection::STATUS_SYNCING)
+                    ->orWhereNull('last_synced_at')
+                    ->orWhere('last_synced_at', '<=', now()->subMinutes(self::LOCK_MINUTES));
+            })
+            ->update([
+                'status' => SharePointConnection::STATUS_SYNCING,
+                'last_synced_at' => now(),
+            ]);
+
+        if (! $claimed) {
+            return ['skipped' => true, 'reason' => 'already running'];
+        }
+
+        if ($wasSyncing) {
             self::log($connection, 'lock-recovered', 'warning', null,
                 'A previous run did not finish; taking over.');
         }
 
-        $connection->update(['status' => SharePointConnection::STATUS_SYNCING, 'last_synced_at' => now()]);
+        $connection->refresh();
 
         $stats = ['created' => 0, 'updated' => 0, 'deleted' => 0, 'failed' => 0, 'pages' => 0];
         $link = $connection->delta_link;
@@ -204,7 +224,21 @@ class Synchroniser
                     // One query for this page's mappings, then none per item.
                     self::primeMappings($connection, $batch['items']);
 
+                    $lastBeat = microtime(true);
+
                     foreach ($batch['items'] as $item) {
+                        /*
+                         * Heartbeat INSIDE the page, not just between pages.
+                         * A page of new files downloads each one from Graph,
+                         * which can far outlive the 5-minute staleness
+                         * window - and a "stale" lock on a live run is what
+                         * invited a second worker into the same delta walk.
+                         */
+                        if (microtime(true) - $lastBeat > 60) {
+                            $connection->update(['last_synced_at' => now()]);
+                            $lastBeat = microtime(true);
+                        }
+
                         // A deletion always changes its parent folder, so the
                         // folders delta reports are exactly the places worth
                         // re-checking for items that have gone.

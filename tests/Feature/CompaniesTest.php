@@ -153,6 +153,50 @@ class CompaniesTest extends TestCase
         $this->assertSoftDeleted('clients', ['id' => $referred->id]);
     }
 
+    public function test_a_new_provider_gets_a_folder_in_the_citizenship_library(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $root = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Citizenship Applications',
+            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'owner_id' => $staff->id, 'created_by' => $staff->id,
+        ]);
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $provider = \App\Support\Cip\Providers::syncCode($company, 'GAL');
+
+        $this->assertNotNull($provider->folder_id);
+        $folder = \App\Models\Folder::find($provider->folder_id);
+        $this->assertSame('Galaxy', $folder->name);
+        $this->assertSame($root->id, (int) $folder->parent_id);
+    }
+
+    public function test_a_provider_adopts_an_existing_library_folder_instead_of_duplicating(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $root = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Citizenship Applications',
+            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'owner_id' => $staff->id, 'created_by' => $staff->id,
+        ]);
+        // The sync imported the provider's folder first (names case-differ).
+        $existing = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'GALAXY', 'parent_id' => $root->id,
+            'owner_id' => $staff->id, 'created_by' => $staff->id, 'origin' => 'sharepoint',
+        ]);
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $provider = \App\Support\Cip\Providers::syncCode($company, 'GAL');
+
+        $this->assertSame($existing->id, (int) $provider->folder_id);
+        $this->assertSame(1, \App\Models\Folder::where('parent_id', $root->id)->count());
+    }
+
     public function test_a_provider_with_numbered_applications_cannot_be_deleted(): void
     {
         config(['services.cip.enabled' => true]);

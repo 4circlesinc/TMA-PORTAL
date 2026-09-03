@@ -4,6 +4,8 @@ namespace App\Support\Cip;
 
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\Folder;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -52,15 +54,65 @@ class Providers
 
         if ($provider) {
             $provider->forceFill(['code' => $code, 'name' => $company->name])->save();
+            self::ensureFolder($provider);
 
             return $provider;
         }
 
-        return CipProvider::create([
+        $provider = CipProvider::create([
             'name' => $company->name,
             'code' => $code,
             'company_id' => $company->id,
         ]);
+
+        self::ensureFolder($provider);
+
+        return $provider;
+    }
+
+    /**
+     * Every provider gets its folder in the Citizenship Applications library.
+     *
+     * Folders used to flow one way only - cip:providers-from-folders turns
+     * library folders into providers - so a provider born here, by a company
+     * being given a CIP code, had nowhere for its documents. A same-named
+     * folder already under the root is adopted rather than duplicated (the
+     * sync may have imported it first); a new one is created through the
+     * model on purpose, so the SharePoint observer pushes it out and the
+     * real library grows the folder too.
+     */
+    public static function ensureFolder(CipProvider $provider): void
+    {
+        if ($provider->folder_id && Folder::whereKey($provider->folder_id)->exists()) {
+            return;
+        }
+
+        $root = Folder::query()
+            ->where('folder_type', Folder::TYPE_ORGANIZATION)
+            ->whereRaw('LOWER(name) = ?', ['citizenship applications'])
+            ->first();
+
+        if (! $root) {
+            // No library (a fresh install, a test rig): the provider works
+            // without a folder, exactly as before.
+            return;
+        }
+
+        $folder = Folder::query()
+            ->where('parent_id', $root->id)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($provider->name)])
+            ->first();
+
+        $folder ??= Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $provider->name,
+            'parent_id' => $root->id,
+            'folder_type' => Folder::TYPE_USER,
+            'owner_id' => $root->owner_id,
+            'created_by' => $root->owner_id,
+        ]);
+
+        $provider->forceFill(['folder_id' => $folder->id])->save();
     }
 
     /** The company's CIP code, if it has one. */

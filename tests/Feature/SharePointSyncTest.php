@@ -1166,4 +1166,123 @@ class SharePointSyncTest extends TestCase
 
         $this->assertTrue(FileItem::withTrashed()->find($file->id)->trashed(), 'recycled, not purged');
     }
+
+    /* ── run lock ────────────────────────────────────────────── */
+
+    public function test_a_live_run_cannot_be_taken_over(): void
+    {
+        // The old check-then-act lock let two workers both read "idle" and
+        // both walk the same delta cursor - which is how the library grew
+        // duplicate folders. A heartbeat inside the window must refuse.
+        $this->connection->update([
+            'status' => \App\Models\SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now(),
+        ]);
+
+        $result = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertTrue($result['skipped'] ?? false);
+        $this->assertSame('already running', $result['reason'] ?? null);
+    }
+
+    public function test_a_stale_lock_is_reclaimed(): void
+    {
+        $this->fakeGraph([]);
+        $this->connection->update([
+            'status' => \App\Models\SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now()->subMinutes(10),
+        ]);
+
+        $result = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertArrayNotHasKey('skipped', $result);
+    }
+
+    /* ── duplicate-twin repair ───────────────────────────────── */
+
+    public function test_merge_duplicates_folds_orphaned_twins_into_the_mapped_folder(): void
+    {
+        $lib = $this->connection->folder;
+
+        // The real twins were born inside an inbound sync run, where the
+        // pusher is suspended - created here any other way, the observer
+        // would push them out and map them, dissolving the very orphanhood
+        // this test exists to repair.
+        \App\Support\SharePoint\Pusher::suspend(fn () => $this->buildTwinFixture($lib));
+
+        $this->artisan('sharepoint:merge-duplicates')->assertSuccessful();
+
+        [$canonical, $twin, $canonicalCopy, $mapped, $surplus, $userFile, $subfolder] = $this->twinFixture;
+
+        $this->assertTrue(Folder::withTrashed()->find($twin->id)->trashed(), 'the twin is recycled');
+        $this->assertSame($canonical->id, (int) $mapped->fresh()->folder_id, 'mapped file moved');
+        $this->assertSame($canonical->id, (int) $userFile->fresh()->folder_id, 'portal upload preserved');
+        $this->assertSame($canonical->id, (int) $subfolder->fresh()->parent_id, 'subfolder moved');
+        $this->assertTrue(FileItem::withTrashed()->find($surplus->id)->trashed(), 'surplus copy recycled');
+        $this->assertNull($canonicalCopy->fresh()->deleted_at, "canonical's own copy untouched");
+    }
+
+    private array $twinFixture = [];
+
+    private function buildTwinFixture(Folder $lib): void
+    {
+        $canonical = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'CERSEI PARTNERS', 'parent_id' => $lib->id,
+            'owner_id' => $this->owner->id, 'created_by' => $this->owner->id, 'origin' => 'sharepoint',
+        ]);
+        DB::table('sharepoint_items')->insert([
+            'connection_id' => $this->connection->id, 'graph_item_id' => 'g-canonical',
+            'item_type' => 'folder', 'folder_id' => $canonical->id, 'name' => $canonical->name,
+            'sync_status' => 'synced', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $twin = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'CERSEI PARTNERS', 'parent_id' => $lib->id,
+            'owner_id' => $this->owner->id, 'created_by' => $this->owner->id, 'origin' => 'sharepoint',
+        ]);
+
+        $mkFile = function (Folder $in, string $name, string $origin) {
+            return FileItem::create([
+                'uuid' => (string) Str::uuid(), 'folder_id' => $in->id, 'name' => $name,
+                'extension' => 'pdf', 'mime_type' => 'application/pdf', 'size' => 10,
+                'disk' => 'local', 'storage_path' => 'tests/'.Str::random(8),
+                'owner_id' => $this->owner->id, 'uploaded_by' => $this->owner->id, 'origin' => $origin,
+            ]);
+        };
+
+        $canonicalCopy = $mkFile($canonical, 'dup.pdf', 'sharepoint');
+
+        $mapped = $mkFile($twin, 'm.pdf', 'sharepoint');
+        DB::table('sharepoint_items')->insert([
+            'connection_id' => $this->connection->id, 'graph_item_id' => 'g-m',
+            'item_type' => 'file', 'file_id' => $mapped->id, 'name' => $mapped->name,
+            'sync_status' => 'synced', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $surplus = $mkFile($twin, 'dup.pdf', 'sharepoint');
+        $userFile = $mkFile($twin, 'user.pdf', 'portal');
+        $subfolder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Applicant X', 'parent_id' => $twin->id,
+            'owner_id' => $this->owner->id, 'created_by' => $this->owner->id, 'origin' => 'sharepoint',
+        ]);
+
+        $this->twinFixture = [$canonical, $twin, $canonicalCopy, $mapped, $surplus, $userFile, $subfolder];
+    }
+
+    public function test_merge_leaves_ambiguous_groups_alone(): void
+    {
+        $lib = $this->connection->folder;
+        // Two same-named siblings, NEITHER mapped: no safe canonical.
+        \App\Support\SharePoint\Pusher::suspend(function () use ($lib) {
+            foreach ([1, 2] as $i) {
+                Folder::create([
+                    'uuid' => (string) Str::uuid(), 'name' => 'MYSTERY', 'parent_id' => $lib->id,
+                    'owner_id' => $this->owner->id, 'created_by' => $this->owner->id, 'origin' => 'sharepoint',
+                ]);
+            }
+        });
+
+        $this->artisan('sharepoint:merge-duplicates')->assertSuccessful();
+
+        $this->assertSame(2, Folder::where('parent_id', $lib->id)->whereRaw("lower(name) = 'mystery'")->count());
+    }
 }
