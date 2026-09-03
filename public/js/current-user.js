@@ -358,7 +358,17 @@
   }
 
   function request() {
-    return api('GET', '/me').then(function (res) {
+    /*
+     * The shell fires /me from an inline <head> snippet so the request runs
+     * while the bundle is still parsing (window.__TMA_ME__). Adopt that
+     * response for the first load - a Response body is single-use, so the
+     * slot is cleared on take - and fetch fresh on every later call (the
+     * identity watcher depends on later calls asking the server again).
+     */
+    var early = window.__TMA_ME__ || null;
+    window.__TMA_ME__ = null;
+
+    return (early || api('GET', '/me')).then(function (res) {
       /*
        * A real answer that is not this person, signed out, suspended. The
        * remembered copy dies with it: falling back here would paint an

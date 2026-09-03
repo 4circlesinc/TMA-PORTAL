@@ -9,6 +9,19 @@
   <!-- tma-shell:2026-08-31-kpi-hover-arrow -->
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
+  <!-- Ask who is signed in before anything else. /me is the answer the whole
+       boot waits for, and the script that consumes it sits at the far end of
+       a 2.4 MB bundle parse - fired here, the request runs in parallel with
+       all of it. current-user.js adopts this exact response; the early catch
+       only silences the unhandled-rejection console noise, the consumer
+       attaches its own handling. -->
+  <script>
+    window.__TMA_ME__ = fetch('/me', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    window.__TMA_ME__.catch(function () {});
+  </script>
   <!-- Inter comes from a third-party origin, so the font file costs a DNS
        lookup + TCP + TLS handshake before it can even start downloading.
        Warming both origins here overlaps that with the stylesheet parse. -->
