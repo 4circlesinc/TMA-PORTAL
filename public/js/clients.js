@@ -3377,7 +3377,10 @@
       (a.cipNumber && a.internalNumber
         ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
         : '') + '</td>' +
-      '<td>' + applicantCell(a) + '</td>' +
+      // The inline copy of the status sits right after the name; CSS shows
+      // it only on touch widths, where the Status column's cell is hidden.
+      '<td>' + applicantCell(a) +
+      '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
       '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' +
@@ -3390,7 +3393,7 @@
       familyExpandButton(a, expanded, postApproval) +
       '<span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
       esc(a.familyLabel || '-') + '</span></span></td>' +
-      '<td>' + progressCell + '</td>' +
+      '<td class="tma-cip-table__status-cell">' + progressCell + '</td>' +
       '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
       '<td class="tma-portal-cell--menu">' +
       '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +

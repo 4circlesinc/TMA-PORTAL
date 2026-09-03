@@ -22732,9 +22732,8 @@ a.tma-dash__clients-edit-btn--accent:visited {
     line-height: 22px;
   }
 
-  .tma-dash--clients-detail .tma-dash__tabbar {
-    display: none;
-  }
+  /* The dock stays on the applicant detail page too — it is the portal's
+     primary navigation on a phone, not page furniture. */
 }
 
 @media (max-width: 1100px) {
@@ -36298,6 +36297,12 @@ span.tma-dash__messages-profile-avatar {
  */
 .tma-cip-table {
   min-width: 1148px;
+}
+
+/* Touch-width duplicate of the status, rendered beside the applicant's
+   name; only the responsive layer ever shows it. */
+.tma-cip-table__inline-status {
+  display: none;
 }
 
 /* Click-to-sort: the listing is server-paged, so the header asks the API

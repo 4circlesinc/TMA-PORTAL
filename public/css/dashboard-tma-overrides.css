@@ -1303,12 +1303,42 @@ body::-webkit-scrollbar,
   .tma-cip-table td:has(.tma-cip-table__applicant) {
     grid-column: 1 / -1;
     grid-row: 1;
-    padding-right: 44%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding-right: 40px;
     padding-bottom: var(--space-8);
     margin-bottom: var(--space-4);
     border-bottom: 1px solid var(--color-overlay-4);
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
+  }
+
+  .tma-cip-table td:has(.tma-cip-table__applicant) .tma-cip-table__applicant {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* The status rides right after the name; the Status column's own cell
+     stands down on touch widths. */
+  .tma-cip-table__inline-status {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50%;
+  }
+
+  .tma-cip-table__inline-status .tma-portal-status {
+    display: inline-block;
+    vertical-align: middle;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* A photo avatar earns a readable size and a quiet ring; an odd source
@@ -1324,27 +1354,7 @@ body::-webkit-scrollbar,
     display: none;
   }
 
-  .tma-cip-table td:has(.tma-portal-status) {
-    position: absolute;
-    top: 16px;
-    right: 38px;
-    width: auto;
-    max-width: 42%;
-  }
-
-  /* inline-block, not the pill's inline-flex: text inside a flex container
-     hard-clips mid-letter — ellipsis only works on a block container. */
-  .tma-cip-table td:has(.tma-portal-status) .tma-portal-status {
-    display: inline-block;
-    vertical-align: middle;
-    max-width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .tma-cip-table td:has(.tma-cip-status-chip)::before {
+  .tma-cip-table td.tma-cip-table__status-cell {
     display: none;
   }
 
@@ -1827,5 +1837,32 @@ body::-webkit-scrollbar,
     font-size: var(--text-size-12);
     line-height: var(--text-lh-12);
     white-space: nowrap;
+  }
+}
+
+/* ── CIP list header on touch widths: quieter tabs, tighter rows. ── */
+@media (max-width: 1024px) {
+  .tma-dash__main-head {
+    row-gap: var(--space-8);
+    margin-bottom: var(--space-16);
+  }
+
+  .tma-dash__head-tabs .tma-tab {
+    font-size: var(--text-size-14);
+  }
+
+  .tma-dash__head-tabs .tma-tab-group {
+    gap: var(--space-8) var(--space-14, 14px);
+    padding-bottom: 2px;
+  }
+
+  .tma-dash__head-tabs .tma-tab__count {
+    font-size: 11px;
+  }
+
+  .tma-dash__main-head-right .tma-dash__head-dropdown-btn {
+    min-height: 36px;
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
   }
 }
