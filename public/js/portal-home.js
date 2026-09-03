@@ -730,6 +730,8 @@
     // Keep inbox fresh while the home view is open (same cadence as Employees).
     if (!homeEmailTimer && !opts.skipTimer) {
       homeEmailTimer = setInterval(function () {
+        // Hidden tabs skip the poll; the visibilitychange below catches up.
+        if (document.visibilityState === 'hidden') return;
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
         if (homeEmailInflight) return;

@@ -282,6 +282,13 @@
   }
 
   function poll() {
+    // A hidden tab has nobody to show a toast to: keep the loop alive but
+    // skip the fetch until the tab is looked at again.
+    if (document.hidden) {
+      timer = setTimeout(poll, POLL_MS);
+      return;
+    }
+
     fetch(ENDPOINT, {
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },

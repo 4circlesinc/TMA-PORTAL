@@ -3062,6 +3062,8 @@
       : BASE + '/sync/status';
 
     function tick() {
+      // The progress panel is only worth refreshing while somebody watches.
+      if (document.hidden) return;
       net(url)
         .then(function (data) {
           if (!state.panel || state.panel.mode !== 'sync-progress') {

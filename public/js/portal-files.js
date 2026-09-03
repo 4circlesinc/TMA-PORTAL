@@ -2528,9 +2528,19 @@
       stopPresence();
       beat(f);
       // Comfortably inside the 45s staleness window, so a missed beat does not
-      // make someone flicker out of everyone else's stack.
-      presenceTimer = setInterval(function () { if (lb) beat(current()); }, 20000);
+      // make someone flicker out of everyone else's stack. A hidden tab is not
+      // viewing: its beats stop, staleness drops it from the stack, and the
+      // visibilitychange below re-announces the moment it is looked at again.
+      presenceTimer = setInterval(function () {
+        if (document.hidden) return;
+        if (lb) beat(current());
+      }, 20000);
     }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      if (lb && presenceTimer) beat(current());
+    });
 
     function stopPresence() {
       if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }

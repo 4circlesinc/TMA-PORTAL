@@ -170,14 +170,27 @@
       if (changed) paint();
     });
 
-    // Soft refresh while the tab stays open.
+    // Soft refresh while the tab stays open. This is the heaviest idle poll
+    // in the portal (per-staff presence queries), so a hidden tab sits it
+    // out and catches up once on its way back.
     var timer = setInterval(function () {
       if (!container.isConnected) {
         clearInterval(timer);
         return;
       }
+      if (document.visibilityState === 'hidden') return;
       reload();
     }, 45000);
+
+    function onVisible() {
+      if (!container.isConnected) {
+        document.removeEventListener('visibilitychange', onVisible);
+        return;
+      }
+      if (document.visibilityState !== 'visible') return;
+      reload();
+    }
+    document.addEventListener('visibilitychange', onVisible);
   }
 
   window.TMAOverviewEmployees = { mount: mount };
