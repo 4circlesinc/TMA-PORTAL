@@ -2270,10 +2270,18 @@
     if (rtPending) { rtPending.push(cb); return; }
     rtPending = [cb];
 
-    fetch((window.__TMA_SITE_ROOT || '') + '/me', {
-      headers: { Accept: 'application/json' }, credentials: 'same-origin',
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    // The shell already fetched /me; reuse its copy (or its in-flight
+    // request) rather than paying for the endpoint again per page.
+    var cu = window.TMACurrentUser;
+    var answer = cu && cu.get()
+      ? Promise.resolve(cu.get())
+      : cu && cu.load
+        ? cu.load()
+        : fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+            headers: { Accept: 'application/json' }, credentials: 'same-origin',
+          }).then(function (r) { return r.ok ? r.json() : null; });
+
+    answer
       .then(function (me) { settleRealtime((me && me.realtime) || false); })
       .catch(function () { settleRealtime(false); });
   }

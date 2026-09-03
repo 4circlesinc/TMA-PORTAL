@@ -4740,11 +4740,19 @@
    * sidebar's memory cannot be read until the account is known.
    */
   function loadViewer() {
-    return fetch((window.__TMA_SITE_ROOT || '') + '/me', {
-      headers: { Accept: 'application/json' },
-      credentials: 'same-origin',
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    // The shell already fetched /me; reuse its copy (or its in-flight
+    // request) rather than paying for the endpoint a second time.
+    var cu = window.TMACurrentUser;
+    var answer = cu && cu.get()
+      ? Promise.resolve(cu.get())
+      : cu && cu.load
+        ? cu.load()
+        : fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          }).then(function (r) { return r.ok ? r.json() : null; });
+
+    return answer
       .then(function (data) {
         if (!data) return;
         if (data.id) viewerId = data.id;

@@ -322,7 +322,26 @@
     try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch (e) { return null; }
   }
 
-  function load() {
+  /*
+   * One /me in flight at a time. Five modules used to fetch /me on boot
+   * independently (notifications, the feed, the file viewer, live identity,
+   * and this file), and /me is one of the portal's heaviest endpoints;
+   * concurrent callers now share the answer. Deliberately not a lasting
+   * cache: once settled, the next load() asks the server again — the
+   * identity watcher relies on that for a fresh capability set.
+   */
+  var loading = null;
+  /* When the *server's* answer (never the desktop's remembered copy) last
+     arrived. Lets a caller accept a just-fetched copy instead of paying for
+     the endpoint again seconds later. */
+  var settledAt = 0;
+
+  function load(opts) {
+    if (opts && opts.maxAgeMs && me && settledAt && Date.now() - settledAt < opts.maxAgeMs) {
+      return Promise.resolve(me);
+    }
+    if (loading) return loading;
+
     /*
      * The remembered answer paints first, the greeting, the sidebar profile
      * and the avatar are the most-looked-at pixels on the boot screen, and a
@@ -333,6 +352,12 @@
     var kept = recallMe();
     if (kept && kept.id != null && !me) applyMe(kept);
 
+    loading = request();
+    loading.then(function () { loading = null; }, function () { loading = null; });
+    return loading;
+  }
+
+  function request() {
     return api('GET', '/me').then(function (res) {
       /*
        * A real answer that is not this person, signed out, suspended. The
@@ -345,6 +370,7 @@
       }
       return res.json().then(function (j) {
         rememberMe(j);
+        settledAt = Date.now();
         return applyMe(j);
       });
     }).catch(function () {

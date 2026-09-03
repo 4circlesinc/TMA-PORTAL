@@ -277,11 +277,20 @@
    */
   function watchIdentity() {
     register(RESOURCES.IDENTITY, function () {
-      return fetch((window.__TMA_SITE_ROOT || '') + '/me', {
-        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        credentials: 'same-origin',
-      })
-        .then(function (r) { return r.ok ? r.json() : null; })
+      // Via the shared store: dedupes with any in-flight /me and repaints
+      // the shell with whatever changed. maxAgeMs exists for one caller,
+      // this one: the socket's first 'connected' runs refreshAll seconds
+      // after boot's own /me, and refusing that answer's twin would put a
+      // second copy of the portal's heaviest request in every boot. A real
+      // identity signal lands long after boot and always refetches.
+      var answer = window.TMACurrentUser && window.TMACurrentUser.load
+        ? window.TMACurrentUser.load({ maxAgeMs: 5000 })
+        : fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+          }).then(function (r) { return r.ok ? r.json() : null; });
+
+      return answer
         .then(function (me) {
           if (!me || !window.TMAPortalAccess) return;
 

@@ -36,34 +36,55 @@
 
   function start() {
     if (started) return;
+
+    /*
+     * Ride the shell's own /me instead of fetching a second copy. This file
+     * runs before current-user.js in the bundle, so the first call lands
+     * before TMACurrentUser exists; wait for DOMContentLoaded rather than
+     * giving up (and never gate the retry on readyState === 'loading' —
+     * deferred scripts run at 'interactive', see portal-live.js).
+     */
+    if (!window.TMACurrentUser || !window.TMACurrentUser.onChange) {
+      if (document.readyState === 'complete') setTimeout(start, 0);
+      else document.addEventListener('DOMContentLoaded', start, { once: true });
+      return;
+    }
+
     started = true;
 
-    fetch((window.__TMA_SITE_ROOT || '') + '/me', {
-      headers: { Accept: 'application/json' },
-      credentials: 'same-origin',
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (me) {
-        if (!me || !me.id) return;
-        var rt = window.TMAMessagingRealtime;
-        var cfg = me.realtime;
-        // No socket configured → rely on loads/polls, not this.
-        if (!rt || !cfg || !cfg.enabled) return;
-        if (!rt.start(cfg)) return;
+    /*
+     * onChange fires for the desktop's remembered copy first and the
+     * server's answer after; rt.start() no-ops on the same key and restarts
+     * on a changed one, so running it each time is what keeps a stale
+     * remembered socket key from sticking. The channel and the state
+     * handler bind once.
+     */
+    var boundUser = null;
+    var stateBound = false;
+    window.TMACurrentUser.onChange(function (me) {
+      if (!me || !me.id) return;
+      var rt = window.TMAMessagingRealtime;
+      var cfg = me.realtime;
+      // No socket configured → rely on loads/polls, not this.
+      if (!rt || !cfg || !cfg.enabled) return;
+      if (!rt.start(cfg)) return;
+      if (boundUser !== me.id) {
+        boundUser = me.id;
         bindChannel(rt, me.id);
+      }
 
-        // After a reconnect, re-listen is already covered by channel registry;
-        // still catch up HTTP so anything missed while the socket was dead
-        // surfaces as toasts / badge updates.
-        if (rt.onState) {
-          rt.onState(function (state) {
-            if (state === 'connected' && window.TMANotifications && window.TMANotifications.catchUp) {
-              window.TMANotifications.catchUp({ forceLoad: true });
-            }
-          });
-        }
-      })
-      .catch(function () {});
+      // After a reconnect, re-listen is already covered by channel registry;
+      // still catch up HTTP so anything missed while the socket was dead
+      // surfaces as toasts / badge updates.
+      if (!stateBound && rt.onState) {
+        stateBound = true;
+        rt.onState(function (state) {
+          if (state === 'connected' && window.TMANotifications && window.TMANotifications.catchUp) {
+            window.TMANotifications.catchUp({ forceLoad: true });
+          }
+        });
+      }
+    });
   }
 
   if (document.readyState !== 'loading') start();

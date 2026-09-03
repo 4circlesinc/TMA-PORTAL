@@ -9,6 +9,7 @@ use App\Models\UserStatusSchedule;
 use App\Support\Presence\AvailabilityService;
 use App\Support\Presence\AvailabilityStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AvailabilityStatusTest extends TestCase
@@ -116,6 +117,21 @@ class AvailabilityStatusTest extends TestCase
             ->getJson('/me')
             ->assertOk()
             ->assertJsonPath('availability.primary.status', AvailabilityStatus::AWAY);
+    }
+
+    public function test_me_runs_no_presence_deletes_for_stateless_users(): void
+    {
+        $user = $this->user();
+        $this->actingAs($user)->getJson('/me')->assertOk();
+
+        DB::enableQueryLog();
+        $this->getJson('/me')->assertOk();
+        $deletes = collect(DB::getQueryLog())->filter(
+            fn ($q) => str_starts_with(strtolower(trim($q['query'])), 'delete')
+                && str_contains($q['query'], 'user_presence_states')
+        );
+
+        $this->assertCount(0, $deletes, 'a user with no layered states must not pay presence purges on /me');
     }
 
     public function test_me_includes_availability_payload(): void

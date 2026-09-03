@@ -335,9 +335,17 @@ class AvailabilityService
     /** @return array<string, mixed> */
     public static function selfPayload(User $user): array
     {
+        /*
+         * /me calls this on every boot and poll. Priming answers "anything
+         * layered at all?" in one query, so the common no-states case skips
+         * purgeExpired's two unconditional DELETEs; anyone with states pays
+         * the same purge as before. No refresh() after recompute: syncPrimary
+         * force-fills and saves THIS instance, it is already current.
+         */
+        self::primeStates([$user]);
+
         $presence = UserPresence::firstOrCreate(['user_id' => $user->id]);
         self::recompute($user, $presence);
-        $presence->refresh();
 
         $states = UserPresenceState::where('user_id', $user->id)->get()->map(fn ($s) => [
             'status' => $s->status,
