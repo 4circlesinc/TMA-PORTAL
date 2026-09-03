@@ -47,6 +47,11 @@
 
   /* The square the crop is scaled into. */
   var PDF_THUMB = 256;
+
+  /* The wide variant, for banner-shaped slots (the workflow card's preview).
+     The whole width of the page, a band off the top: see bandOf. */
+  var PDF_BAND_W = 640;
+  var PDF_BAND_ASPECT = 2.6;
   /*
    * One at a time.
    *
@@ -109,6 +114,13 @@
   /* The URL page one is painted from: the preview route, and only when this
      reader is allowed to preview at all. A row they may not open must not
      quietly fetch the document to draw a picture of it. */
+  /* One document can be wanted in two shapes — the square row thumbnail and
+     the wide banner — so everything keyed by document (cache, inflight,
+     failed, the watched flag) is keyed by shape as well. */
+  function keyOf(url, wide) {
+    return wide ? url + '\u0000wide' : url;
+  }
+
   function pdfUrl(item) {
     if (!isPdf(item)) return '';
     if (item.permissions && item.permissions.preview === false) return '';
@@ -185,17 +197,21 @@
 
     var pdf = canRenderPdf() ? pdfUrl(item) : '';
     if (pdf) {
+      // A banner-shaped slot asks for the wide band instead of the square.
+      var wide = !!opts.wide;
+      var key = keyOf(pdf, wide);
+      var wideAttr = wide ? ' data-file-thumb-wide="1"' : '';
       // Already painted this session: put the picture in the markup. Leaving
       // the icon here and swapping later is what made every list blink — the
       // morph re-drew the icon, then the observer put the page back, forever.
-      if (cache[pdf]) {
+      if (cache[key]) {
         return '<img class="' + esc((cls + ' tma-file-thumb--doc').trim()) +
-          '" src="' + esc(cache[pdf]) + '"' + alt + (size ? box : '') + extra + '>';
+          '" src="' + esc(cache[key]) + '"' + alt + (size ? box : '') + extra + '>';
       }
       // The icon first, always. Page one replaces it if and when it renders,
       // so a document that can't be painted simply keeps its icon.
       return '<img class="' + esc(iconCls) + '" src="' + esc(icon) + '"' + alt + iconBox + extra +
-        ' data-file-thumb-pdf="' + esc(pdf) + '"' +
+        ' data-file-thumb-pdf="' + esc(pdf) + '"' + wideAttr +
         (sizeOf(item) ? ' data-file-thumb-bytes="' + sizeOf(item) + '"' : '') +
         ' data-file-thumb-cls="' + esc(cls + ' tma-file-thumb--doc') + '"' +
         (size ? ' data-file-thumb-size="' + size + '"' : '') +
@@ -211,6 +227,7 @@
     // that shows a 16px type mark shows a 24px thumbnail of the document.
     var size = img.getAttribute('data-file-thumb-size');
     img.removeAttribute('data-file-thumb-pdf');
+    img.removeAttribute('data-file-thumb-wide');
     img.removeAttribute('data-file-thumb-cls');
     img.removeAttribute('data-file-thumb-size');
     img.removeAttribute('data-file-thumb-icon-cls');
@@ -268,15 +285,15 @@
   /* Page one, painted onto a canvas and handed back as a data: URL. The page's
      own shape is kept (a portrait page stays portrait); the slot it lands in
      decides how it is cropped. */
-  function renderPdf(url, bytes) {
+  function renderPdf(url, bytes, wide) {
     // One document, read by range, once. A file this big is not worth reaching
     // into at all for a 28px picture.
     if (bytes && bytes > SKIP_ABOVE) throw new Error('too big to preview');
 
-    return paintPage(url);
+    return paintPage(url, wide);
   }
 
-  function paintPage(url) {
+  function paintPage(url, wide) {
     return global.TMAPortalLightbox.pdfDocument(url).then(function (pdf) {
       if (!pdf) throw new Error('no document');
 
@@ -295,7 +312,7 @@
           var ctx = canvas.getContext('2d');
           if (!ctx || !hasInk(canvas, ctx)) throw new Error('blank first page');
 
-          return cropOf(canvas).toDataURL('image/jpeg', 0.78);
+          return (wide ? bandOf(canvas) : cropOf(canvas)).toDataURL('image/jpeg', 0.78);
         });
       }).then(function (dataUrl) {
         try { pdf.destroy(); } catch (e) { /* already gone */ }
@@ -321,6 +338,33 @@
    * Anchored with a small inset so a page border does not become the picture,
    * and clamped so a landscape or square page cannot ask for more than exists.
    */
+  /*
+   * The top of the page, full width, for a slot that is wider than it is
+   * tall. cropOf's square is a left-hand crop: in a banner it shows the first
+   * two thirds of every line and cuts the rest off mid-word, which reads as a
+   * picture that is not centred. Here the whole width goes in and the page is
+   * cut at the bottom instead, where a document has least to say about itself.
+   */
+  function bandOf(canvas) {
+    var out = document.createElement('canvas');
+    out.width = PDF_BAND_W;
+    out.height = Math.round(PDF_BAND_W / PDF_BAND_ASPECT);
+
+    // The slice of the page that fills the band at the page's own scale.
+    var side = canvas.width;
+    var sh = Math.min(canvas.height, Math.round(side / PDF_BAND_ASPECT));
+    var inset = Math.round(canvas.height * 0.02);
+    var sy = Math.min(inset, Math.max(0, canvas.height - sh));
+
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, sy, side, sh, 0, 0, out.width, out.height);
+
+    return out;
+  }
+
   function cropOf(canvas) {
     var side = Math.max(1, Math.min(
       Math.round(canvas.width * PDF_CROP),
@@ -357,8 +401,9 @@
     // otherwise wearing an icon it does not need.
     if (viewerOpen() || document.hidden) {
       queue = queue.filter(function (job) {
-        if (!cache[job.url]) return true;
-        apply(job.img, cache[job.url]);
+        var cached = cache[keyOf(job.url, job.wide)];
+        if (!cached) return true;
+        apply(job.img, cached);
         return false;
       });
 
@@ -368,34 +413,42 @@
     while (running < MAX_PARALLEL && queue.length) {
       var job = queue.shift();
       var url = job.url;
+      var wide = !!job.wide;
+      var key = keyOf(url, wide);
 
-      if (cache[url]) { apply(job.img, cache[url]); continue; }
-      if (failed[url] || inflight[url]) { continue; }
+      if (cache[key]) { apply(job.img, cache[key]); continue; }
+      if (failed[key] || inflight[key]) { continue; }
 
-      inflight[url] = true;
+      inflight[key] = true;
       running += 1;
       /* eslint-disable no-loop-func */
-      (function (url, bytes) {
+      (function (url, bytes, wide, key) {
         Promise.resolve().then(function () {
-          return renderPdf(url, bytes);
+          return renderPdf(url, bytes, wide);
         }).then(function (dataUrl) {
-          cache[url] = dataUrl;
+          cache[key] = dataUrl;
           // Every row showing this file, not only the one that asked: a list
           // can hold the same document twice, and a repaint mid-render leaves
           // the original <img> detached.
           scan(document);
         }).catch(function () {
-          failed[url] = true;
+          failed[key] = true;
+          // Only the rows waiting for THIS shape give up; the other variant
+          // may still paint.
           document.querySelectorAll('[data-file-thumb-pdf="' + url.replace(/"/g, '\\"') + '"]')
-            .forEach(function (img) { img.removeAttribute('data-file-thumb-pdf'); });
+            .forEach(function (img) {
+              if (!!img.getAttribute('data-file-thumb-wide') !== wide) return;
+              img.removeAttribute('data-file-thumb-pdf');
+              img.removeAttribute('data-file-thumb-wide');
+            });
         }).then(function () {
-          delete inflight[url];
+          delete inflight[key];
           running -= 1;
           // A breath between documents. Fifty scans in a folder is fifty
           // requests, and the reader is waiting on the page, not on them.
           setTimeout(pump, 250);
         });
-      }(url, job.bytes));
+      }(url, job.bytes, wide, key));
       /* eslint-enable no-loop-func */
     }
   }
@@ -409,7 +462,12 @@
         io.unobserve(img);
         var url = img.getAttribute('data-file-thumb-pdf');
         if (!url) return;
-        queue.push({ img: img, url: url, bytes: bytesOf(img) });
+        queue.push({
+          img: img,
+          url: url,
+          bytes: bytesOf(img),
+          wide: !!img.getAttribute('data-file-thumb-wide'),
+        });
       });
       pump();
     }, { rootMargin: '200px' });
@@ -428,22 +486,28 @@
     Array.prototype.forEach.call(pending, function (img) {
       var url = img.getAttribute('data-file-thumb-pdf');
       if (!url) return;
+      var wide = !!img.getAttribute('data-file-thumb-wide');
+      var key = keyOf(url, wide);
 
       // Already painted once this session: apply it now, before the row is
       // ever seen empty.
-      if (cache[url]) { apply(img, cache[url]); return; }
-      if (failed[url]) { img.removeAttribute('data-file-thumb-pdf'); return; }
+      if (cache[key]) { apply(img, cache[key]); return; }
+      if (failed[key]) {
+        img.removeAttribute('data-file-thumb-pdf');
+        img.removeAttribute('data-file-thumb-wide');
+        return;
+      }
       // Keyed on the URL, not a boolean: the render layer reuses row nodes, so
       // the same <img> can come back describing a different document, and a
       // once-watched flag would leave that one with its icon for ever.
-      if (img.__fileThumbWatched === url) return;
-      img.__fileThumbWatched = url;
+      if (img.__fileThumbWatched === key) return;
+      img.__fileThumbWatched = key;
 
       if (watcher) {
         watcher.observe(img);
         return;
       }
-      queue.push({ img: img, url: url, bytes: bytesOf(img) });
+      queue.push({ img: img, url: url, bytes: bytesOf(img), wide: wide });
     });
 
     // Always: a job left in the queue by a viewer that was open has nothing

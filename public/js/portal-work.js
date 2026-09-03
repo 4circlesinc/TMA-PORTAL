@@ -532,6 +532,9 @@
           cls: 'tma-portal-wf-card__thumb-img',
           iconCls: 'tma-portal-wf-card__thumb-icon',
           icon: icon,
+          // The preview is a banner, not a row: ask for the page's full
+          // width off the top rather than the square left-hand crop.
+          wide: true,
         })
       : '<img class="tma-portal-wf-card__thumb-icon" src="' + esc(icon) + '" alt="" width="48" height="48">';
 
