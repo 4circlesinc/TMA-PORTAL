@@ -14,7 +14,6 @@
     --dash-icon-lg: 24px;
     --dash-mobile-header-h: 56px;
     --dash-mobile-gutter: var(--space-16);
-    --dash-tabbar-clearance: 72px;
 }
 
 /* nested (no icon) items: indent past the caret so labels line up under the
@@ -66,206 +65,24 @@
 }
 
 /* ─────────────────────────────────────────
- * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
+ * MOBILE - bottom tab bar (full-width dock)
+ * The bar's real styling lives in dashboard.css; this file only pins the
+ * pieces that must win the cascade: the retired sliding indicator stays
+ * gone, and legacy shells' text labels stay hidden.
  * ───────────────────────────────────────── */
 
-.tma-dash__tabbar {
-  display: none;
-  position: fixed;
-  left: 50%;
-  right: auto;
-  bottom: calc(var(--space-12) + env(safe-area-inset-bottom, 0px));
-  z-index: 45;
-  flex-direction: column;
-  width: fit-content;
-  max-width: calc(100% - 2 * var(--dash-mobile-gutter, var(--space-16)));
-  transform: translateX(-50%);
-  padding: var(--space-6) var(--space-14);
-  border-radius: var(--radius-20);
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.05);
-  -webkit-backdrop-filter: blur(20px) saturate(165%);
-  backdrop-filter: blur(20px) saturate(165%);
-  font-feature-settings: "ss01" 1, "cv01" 1;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.tma-dash__tabbar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.03) 40%,
-    rgba(255, 255, 255, 0.08) 100%
-  );
-  pointer-events: none;
-}
-
-.tma-dash__tabbar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
-  pointer-events: none;
-}
-.tma-dash__tabbar-row {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: var(--space-8);
-  isolation: isolate;
-}
-
 .tma-dash__tabbar-indicator {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  pointer-events: none;
-  will-change: transform, width, height, border-radius;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.12),
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -0.5px 0 rgba(255, 255, 255, 0.3);
-  -webkit-backdrop-filter: blur(18px) saturate(190%);
-  backdrop-filter: blur(18px) saturate(190%);
-  transition: opacity 180ms ease, visibility 180ms ease;
-}
-
-.tma-dash__tabbar-indicator::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    168deg,
-    rgba(255, 255, 255, 0.52) 0%,
-    rgba(255, 255, 255, 0.06) 42%,
-    rgba(255, 255, 255, 0.22) 100%
-  );
-  pointer-events: none;
-}
-
-.tma-dash__tabbar-indicator.is-hidden {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.tma-dash__tabbar-indicator[hidden] {
-  display: block !important;
-}
-
-.tma-dash__tab-btn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  min-width: 44px;
-  height: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-12);
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-  position: relative;
-  z-index: 1;
-}
-
-a.tma-dash__tab-btn,
-a.tma-dash__tab-btn:hover,
-a.tma-dash__tab-btn:focus,
-a.tma-dash__tab-btn:visited {
-  text-decoration: none;
-  color: inherit;
-}
-
-.tma-dash__tab-btn-icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  transform: scale(1);
-  opacity: 0.46;
-  transition:
-    transform 380ms cubic-bezier(0.34, 1.25, 0.64, 1),
-    opacity 320ms ease;
-}
-
-.tma-dash__tab-btn--active .tma-dash__tab-btn-icon {
-  transform: scale(1.08);
-  opacity: 1;
-}
-
-.tma-dash__tab-btn:hover .tma-dash__tab-btn-icon { opacity: 0.68; }
-.tma-dash__tab-btn--active:hover .tma-dash__tab-btn-icon { opacity: 1; }
-
-.tma-dash__tab-btn-icon img {
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-
-.tma-dash__tab-btn--profile .tma-dash__tab-btn-icon img {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-pill);
-  object-fit: cover;
+  display: none !important;
 }
 
 .tma-dash__tab-btn-label {
-  font-size: 9px;
-  line-height: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
+  display: none !important;
 }
 
-.tma-dash__tab-btn--active .tma-dash__tab-btn-label {
-  color: var(--color-text-primary);
+.tma-dash__tab-btn[hidden] {
+  display: none !important;
 }
 
-.tma-dash__tab-badge {
-  position: absolute;
-  top: -3px;
-  right: -6px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: var(--radius-pill);
-  font-size: 9px;
-  line-height: 14px;
-  font-weight: 500;
-  color: #fff;
-  text-align: center;
-  pointer-events: none;
-  box-sizing: border-box;
-}
-
-.tma-dash__tab-badge--alerts { background: #ff4747; }
-.tma-dash__tab-badge--email { background: var(--color-primary); }
-.tma-dash__tab-badge--messages { background: var(--color-primary); }
-.tma-dash__tab-badge[hidden] { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .tma-dash__tab-btn-icon,
@@ -383,44 +200,9 @@ a.tma-dash__tab-btn:visited {
 :root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
-  background: rgba(24, 24, 26, 0.48);
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.36),
-    0 2px 8px rgba(0, 0, 0, 0.2);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
-}
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::before,
-:root[data-theme="dark"] .tma-dash__tabbar::before {
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.02) 38%,
-    rgba(255, 255, 255, 0.05) 100%
-  );
-}
-.tma-dash[data-theme="dark"] .tma-dash__tabbar::after,
-:root[data-theme="dark"] .tma-dash__tabbar::after {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator,
-:root[data-theme="dark"] .tma-dash__tabbar-indicator {
-  background: rgba(40, 40, 42, 0.82);
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.32),
-    0 1px 3px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-.tma-dash[data-theme="dark"] .tma-dash__tabbar-indicator::before,
-:root[data-theme="dark"] .tma-dash__tabbar-indicator::before {
-  background: linear-gradient(
-    168deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.03) 42%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
+  /* Dock surface flips with --color-white; only the hairline needs help. */
+  border-top-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 :root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
@@ -505,10 +287,9 @@ a.tma-dash__tab-btn:visited {
     grid-template-rows: minmax(0, 1fr);
     --dash-mobile-gutter: var(--space-16);
     --dash-mobile-header-h: calc(44px + var(--space-12) + var(--space-12) + env(safe-area-inset-top, 0px));
-    --dash-tabbar-float-gap: var(--space-12);
-    --dash-tabbar-block-h: calc(var(--space-6) + 20px + var(--space-2) + 11px + var(--space-6));
-    /* Bottom tab bar retired (to be redesigned) — no clearance reserved. */
-    --dash-tabbar-clearance: 0px;
+    /* Docked bar: 6px pads + 48px buttons (kept in step with dashboard.css). */
+    --dash-tabbar-block-h: calc(var(--space-6) + 48px + var(--space-6));
+    --dash-tabbar-clearance: calc(var(--dash-tabbar-block-h) + var(--space-8));
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
     /* dashboard.css steps this down at =<560px, but this file's unconditional
@@ -988,8 +769,10 @@ a.tma-dash__tab-btn:visited {
     overflow: visible;
   }
 
-  /* Bottom tab bar retired (to be redesigned) — stays hidden on mobile too. */
-  .tma-dash__tabbar { display: none !important; }
+  .tma-dash__tabbar { display: flex; }
+
+  /* The desktop app's window carries its own chrome — no dock. */
+  .tma-dash--desktop-bar .tma-dash__tabbar { display: none; }
 }
 
 @media (min-width: 1025px) {

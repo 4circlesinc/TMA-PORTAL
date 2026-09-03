@@ -4896,6 +4896,46 @@ label.tma-portal-check-row:hover {
   .tma-portal-admin__nav { width: 100%; position: static; }
 }
 
+/* Desktop never sees the drill-down chrome. */
+.tma-portal-admin__back {
+  display: none;
+  appearance: none;
+  align-items: center;
+  gap: var(--space-4);
+  width: fit-content;
+  margin: 0 0 var(--space-12);
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-14);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-portal-admin__back:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+/* Touch widths: the section list and the section are two screens, like the
+   personal-settings drill-down — a picked section replaces the list, and the
+   back row returns to it. */
+@media (max-width: 1024px) {
+  .tma-portal-admin { flex-direction: column; }
+
+  .tma-portal-admin__nav {
+    width: 100%;
+    position: static;
+    border-right: 0;
+  }
+
+  .tma-portal-admin.is-admin-menu .tma-portal-admin__content { display: none; }
+  .tma-portal-admin.is-admin-detail .tma-portal-admin__nav { display: none; }
+  .tma-portal-admin.is-admin-detail .tma-portal-admin__back { display: inline-flex; }
+}
+
 /* ── inbox ────────────────────────────────────────── */
 .tma-portal-msg-row { cursor: pointer; }
 

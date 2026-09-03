@@ -97,10 +97,13 @@
   pointer-events: auto;
 }
 
-/* Bottom tab bar retired — toasts sit at the bottom edge on touch widths. */
+/* Touch widths: clear the bottom dock (60px tall — 6px pads + 48px buttons;
+   keep in step with --dash-tabbar-block-h in dashboard.css). The literal is
+   deliberate: these hosts mount on <body>, where .tma-dash's var is out of
+   reach and a var() fallback would silently take over. */
 @media (max-width: 1024px) {
   .tma-toast-floating-host {
-    bottom: calc(var(--space-16, 16px) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(60px + var(--space-12, 12px) + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -341,8 +344,8 @@
   .tma-notify-toast-host--bottom-left,
   .tma-notify-toast-host:not([class*="--"]) {
     top: auto;
-    /* Tab bar retired — no clearance above the bottom edge. */
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    /* Clears the 60px bottom dock (see .tma-toast-floating-host above). */
+    bottom: calc(60px + 12px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -752,10 +755,10 @@
   width: 140px;
 }
 
-/* Tab bar retired — the sync stack hugs the bottom edge on touch widths. */
+/* Clears the 60px bottom dock (see .tma-toast-floating-host above). */
 @media (max-width: 1024px) {
   .tma-sync-toast-host {
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(60px + 12px + env(safe-area-inset-bottom, 0px));
   }
 }
 

@@ -2410,13 +2410,16 @@
       syncNavBadges();
       syncHeaderIconBadges();
       if (!isMobileSidebar()) return;
-      var alertsBtn = root.querySelector('.tma-dash__tab-btn[data-tab="alerts"]');
       var emailBtn = root.querySelector('.tma-dash__tab-btn[data-tab="email"]');
       var messagesBtn = root.querySelector('.tma-dash__tab-btn[data-tab="messages"]');
-      var notifCount = getNotificationBadgeCount();
-      setTabBadge(alertsBtn, notifCount, 'alerts', 'Notifications');
       setTabBadge(emailBtn, getEmailBadgeCount(), 'email', 'Email');
       setTabBadge(messagesBtn, getMessagesBadgeCount(), 'messages', 'Messages');
+      // The CIP tab only exists for accounts whose sidebar kept the CIP
+      // entry — portal-access.js prunes [data-nav="clients"] for the rest.
+      var cipTab = root.querySelector('.tma-dash__tab-btn[data-tab="cip"]');
+      if (cipTab) {
+        cipTab.hidden = !root.querySelector('.tma-dash__nav-item[data-nav="clients"]');
+      }
       if (tabIndicator) {
         if (!isMobileSidebar()) {
           tabIndicator.hide();
@@ -2492,7 +2495,8 @@
       if (root._activityPopups && root._activityPopups.isOpen && root._activityPopups.isOpen()) return;
       if (viewName === 'email') setTab('email');
       else if (viewName === 'messages') setTab('messages');
-      else if (viewName === 'account') setTab('profile');
+      else if (viewName === 'clients') setTab('cip');
+      else if (viewName === 'account' || viewName === 'admin' || viewName === 'settings') setTab('profile');
       else if (viewName === 'dashboard') setTab('dashboard');
       else setTab('');
     }
@@ -2542,9 +2546,14 @@
         return;
       }
 
-      if (tab === 'alerts') {
-        setTab('alerts');
-        if (root._activityPopups) root._activityPopups.openNotifications(btn);
+      if (tab === 'cip') {
+        setTab('cip');
+        activate('clients', {
+          view: 'clients',
+          title: 'CIP Applications',
+          crumb: 'CIP Applications',
+          keepDrawer: true,
+        });
         return;
       }
 
@@ -2555,11 +2564,13 @@
       }
 
       if (tab === 'profile') {
+        // The avatar tab is the door to the user's own profile in Settings.
         setTab('profile');
-        activate('ac-overview', {
-          view: 'account',
-          title: 'Overview',
-          crumb: 'Account / Overview',
+        activate('account-settings', {
+          view: 'admin',
+          title: 'Settings',
+          crumb: 'Settings',
+          adminPage: 'profile',
           keepDrawer: true,
         });
       }

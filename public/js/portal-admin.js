@@ -4353,6 +4353,9 @@
     state.page = PAGES[pageId] ? pageId : 'profile';
     var group = groupForPage(state.page);
     if (group) state.expanded[group] = true;
+    // On touch widths the list and the page are two screens; picking a
+    // section moves to its page (the CSS ignores these classes on desktop).
+    state.screen = 'detail';
     render();
   }
 
@@ -4373,11 +4376,21 @@
     var navScroll = priorNav ? priorNav.scrollTop : 0;
 
     el.innerHTML =
-      '<div class="tma-portal-page"><div class="tma-portal-admin">' +
+      '<div class="tma-portal-page"><div class="tma-portal-admin ' +
+      (state.screen === 'detail' ? 'is-admin-detail' : 'is-admin-menu') + '">' +
       '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav(pageId) + '</nav>' +
       '<div class="tma-portal-admin__content">' +
+      '<button type="button" class="tma-portal-admin__back" data-admin-back>&lsaquo; Settings</button>' +
       page.render(s) +
       '</div></div></div>';
+
+    var backBtn = el.querySelector('[data-admin-back]');
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        state.screen = 'menu';
+        render();
+      });
+    }
 
     var nav = el.querySelector('.tma-portal-admin__nav');
     if (nav && navScroll) nav.scrollTop = navScroll;
@@ -4433,6 +4446,10 @@
       state.page = opts.adminPage;
       var group = groupForPage(state.page);
       if (group) state.expanded[group] = true;
+      // A deep link asked for THIS page — land on it, not the menu.
+      state.screen = 'detail';
+    } else if (!state.screen) {
+      state.screen = 'menu';
     }
     render();
   }
