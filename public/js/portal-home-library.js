@@ -667,9 +667,15 @@
       // Type pills are icon-only (the name rides as tooltip and accessible
       // name); the tab pills keep their words — "Recent" has no glyph.
       var iconOnly = o.iconOnly && o.icon;
+      /*
+       * Any pill with a mark carries its name whether or not the words are
+       * drawn: the touch layer hides the tab labels to fit the head on one
+       * line, and a button whose only name was the text it just stopped
+       * showing is a button screen readers cannot announce.
+       */
+      var named = o.icon ? ' aria-label="' + esc(o.label) + '" title="' + esc(o.label) + '"' : '';
       return '<button type="button" class="tma-portal-type-pill' + (iconOnly ? ' tma-portal-type-pill--icon' : '') + (o.on ? ' is-active' : '') + '"' +
-        ' ' + o.attr + '="' + esc(o.key) + '" aria-pressed="' + o.on + '"' +
-        (iconOnly ? ' aria-label="' + esc(o.label) + '" title="' + esc(o.label) + '"' : '') + '>' +
+        ' ' + o.attr + '="' + esc(o.key) + '" aria-pressed="' + o.on + '"' + named + '>' +
         (o.icon ? '<img class="' + cls + '" src="' + esc(o.icon) + '" alt="">' : '') +
         (iconOnly ? '' : '<span class="tma-portal-type-pill__label">' + esc(o.label) + '</span>') +
         '</button>';

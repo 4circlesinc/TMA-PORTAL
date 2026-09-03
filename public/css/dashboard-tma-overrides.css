@@ -2026,22 +2026,25 @@ body::-webkit-scrollbar,
   }
 }
 
-/* ── Home library type filters: one line that scrolls ─────────────────
+/* ── Home library head: tabs and type filters on one line ─────────────
  *
- * Nine icon pills at ~44px want 460px; a phone offers about 358. Wrapping
- * put eight on one line and left the ninth alone underneath, which reads as
- * a mistake rather than a row, and made the head twice as tall as the
- * control it holds.
+ * Two tabs with words plus nine icon pills is 700px of controls, and a phone
+ * offers about 358. The head wrapped into three lines — tabs, eight pills,
+ * and a ninth pill on its own — which was taller than the list it filters
+ * and read as a mistake rather than a row.
  *
- * Same treatment as every other pill row on a touch width (the CIP tabs, the
- * mailbox's folder strip, the File Library's own toolbar): one line, scrolled
- * sideways, with the right edge faded so a half-cut pill says "more this
- * way" instead of looking clipped.
+ * One line, scrolled sideways, with the right edge faded so a half-cut pill
+ * says "more this way" instead of looking clipped — what every other pill
+ * row does on a touch width (the CIP tabs, the mailbox's folder strip, the
+ * File Library's own toolbar). The tabs drop their words and become marks
+ * like the filters beside them; their names stay on the buttons, so nothing
+ * is lost to a reader who cannot see the glyph.
  */
 @media (max-width: 1024px) {
-  .tma-portal-home-library__types {
-    flex: 1 1 100%;
+  .tma-portal-home-library__head {
     flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-8);
     max-width: 100%;
     min-width: 0;
     overflow-x: auto;
@@ -2056,11 +2059,42 @@ body::-webkit-scrollbar,
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
   }
 
-  .tma-portal-home-library__types::-webkit-scrollbar {
+  .tma-portal-home-library__head::-webkit-scrollbar {
     display: none;
   }
 
+  /* The head is the scroller; the groups inside it just hold their width. */
+  .tma-portal-home-library__tabs,
+  .tma-portal-home-library__types {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    overflow: visible;
+  }
+
+  .tma-portal-home-library__tabs .tma-portal-type-pill,
   .tma-portal-home-library__types .tma-portal-type-pill {
     flex: 0 0 auto;
+  }
+
+  /* A tab becomes its mark: same 36px circle as the filters it now sits
+     beside. The label is only hidden — the button keeps the name. */
+  .tma-portal-home-library__tabs .tma-portal-type-pill__label {
+    display: none;
+  }
+
+  .tma-portal-home-library__tabs .tma-portal-type-pill {
+    padding: 6px 10px;
+  }
+
+  /*
+   * A hairline between the two groups.
+   *
+   * They are different kinds of control — the tabs are alternatives, you are
+   * on one of them; the filters are switches you press — and stripped to
+   * their marks they would otherwise read as one row of nine equal buttons.
+   */
+  .tma-portal-home-library__types {
+    border-left: 1px solid var(--color-border-soft);
+    padding-left: var(--space-8);
   }
 }
