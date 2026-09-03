@@ -1302,13 +1302,26 @@ body::-webkit-scrollbar,
   }
 
   /* The applicant heads the card; the status chip and the row menu sit as
-     one right-aligned cluster on the same line, flush to the card edge. */
+     one right-aligned cluster on the same line, flush to the card edge. A
+     hairline under the header row separates the identity from the facts. */
   .tma-cip-table td:has(.tma-cip-table__applicant) {
     grid-column: 1 / -1;
     grid-row: 1;
     padding-right: 44%;
+    padding-bottom: var(--space-8);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-overlay-4);
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
+  }
+
+  /* A photo avatar earns a readable size and a quiet ring; an odd source
+     crop still reads as a deliberate disc. */
+  .tma-cip-table td:has(.tma-cip-table__applicant) .tma-cip-table__applicant-face {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    box-shadow: inset 0 0 0 1px var(--color-overlay-4);
   }
 
   .tma-cip-table td:has(.tma-cip-table__applicant)::before {
@@ -1317,7 +1330,7 @@ body::-webkit-scrollbar,
 
   .tma-cip-table td:has(.tma-portal-status) {
     position: absolute;
-    top: var(--space-12);
+    top: 16px;
     right: 38px;
     width: auto;
     max-width: 42%;
@@ -1341,7 +1354,7 @@ body::-webkit-scrollbar,
 
   .tma-cip-table td.tma-portal-cell--menu {
     position: absolute;
-    top: var(--space-10, 10px);
+    top: 14px;
     right: var(--space-6, 6px);
     width: auto;
   }
