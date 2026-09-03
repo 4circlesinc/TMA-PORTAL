@@ -2025,3 +2025,42 @@ body::-webkit-scrollbar,
     gap: var(--space-16) var(--space-8);
   }
 }
+
+/* ── Home library type filters: one line that scrolls ─────────────────
+ *
+ * Nine icon pills at ~44px want 460px; a phone offers about 358. Wrapping
+ * put eight on one line and left the ninth alone underneath, which reads as
+ * a mistake rather than a row, and made the head twice as tall as the
+ * control it holds.
+ *
+ * Same treatment as every other pill row on a touch width (the CIP tabs, the
+ * mailbox's folder strip, the File Library's own toolbar): one line, scrolled
+ * sideways, with the right edge faded so a half-cut pill says "more this
+ * way" instead of looking clipped.
+ */
+@media (max-width: 1024px) {
+  .tma-portal-home-library__types {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Room for a pill's focus ring, which a scroller would otherwise clip. */
+    padding: 2px 0;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  }
+
+  .tma-portal-home-library__types::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tma-portal-home-library__types .tma-portal-type-pill {
+    flex: 0 0 auto;
+  }
+}
