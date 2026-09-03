@@ -141,7 +141,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=12';
+    link.href = (ROOT || '') + 'css/presence.css?v=13';
     document.head.appendChild(link);
   }
 

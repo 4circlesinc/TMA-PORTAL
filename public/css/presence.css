@@ -16,10 +16,6 @@
 /* Tablet/phone: the status is one icon in the header bubble, beside dark mode
    and the rightbar toggle. The label lives in the popover instead. */
 @media (max-width: 1024px) {
-  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-dash__header-presence {
-    border-right: 0.5px solid var(--color-overlay-4);
-  }
-
   .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__header-icons .tma-presence-pill {
     width: 44px;
     min-width: 44px;

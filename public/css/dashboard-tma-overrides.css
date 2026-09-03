@@ -721,10 +721,6 @@
     background: var(--color-hover);
   }
 
-  .tma-dash__header-icons [data-action="toggle-theme"] {
-    border-right: 0.5px solid var(--color-overlay-4);
-  }
-
   .tma-dash__header-right {
     grid-column: 3;
     justify-self: end;
@@ -1530,6 +1526,17 @@ body::-webkit-scrollbar,
 
   .tma-dash__clients-profile-name-row {
     flex: 1 1 auto;
+  }
+
+  /* Status pills shrink to caption size on touch widths — at 11px uppercase
+     with full padding they shouted over the names they annotate. Scoped to
+     the clients/CIP view so file-status pills elsewhere keep their size. */
+  .tma-dash__clients .tma-portal-status,
+  .tma-dash__clients-detail-head .tma-portal-status {
+    font-size: 10px;
+    line-height: 14px;
+    padding: 2px var(--space-8);
+    letter-spacing: 0.02em;
   }
 
   /* Same inline-block trade as the card chips: ellipsis needs a block

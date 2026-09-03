@@ -4957,10 +4957,6 @@
     background: var(--color-hover);
   }
 
-  .tma-dash__header-icons [data-action="toggle-theme"] {
-    border-right: 0.5px solid var(--color-overlay-4);
-  }
-
   .tma-dash__header-right {
     grid-column: 3;
     justify-self: end;
