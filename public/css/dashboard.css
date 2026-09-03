@@ -2966,6 +2966,11 @@
 :root[data-theme="dark"] .tma-dash__clients-search img,
 .tma-dash[data-theme="dark"] .tma-dash__email-search img,
 :root[data-theme="dark"] .tma-dash__email-search img,
+/* The drawer's search field was the one member of this family left out: its
+   magnifier is the same black line art, and on the drawer's dark pill it was
+   a smudge. */
+.tma-dash[data-theme="dark"] .tma-dash__sidebar-mobile-search img,
+:root[data-theme="dark"] .tma-dash__sidebar-mobile-search img,
 .tma-dash[data-theme="dark"] .tma-dash__cc--date img,
 :root[data-theme="dark"] .tma-dash__cc--date img,
 .tma-dash[data-theme="dark"] .tma-dash__users .tma-pagination__icon,

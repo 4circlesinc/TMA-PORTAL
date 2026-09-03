@@ -2139,3 +2139,17 @@ body::-webkit-scrollbar,
     padding-left: var(--space-2);
   }
 }
+
+
+/* ── The drawer's search field, in the dark ───────────────────────────
+ *
+ * Its magnifier now flips with the rest of that family (dashboard.css), and
+ * the word beside it needs the same help: the placeholder token is
+ * rgba(255,255,255,.25), which over the pill's #2a2a2c is 2.2:1 — a label you
+ * can see is there and cannot quite read. Secondary carries it to 3.6:1 and
+ * still reads as a prompt rather than as text somebody typed.
+ */
+.tma-dash[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text,
+:root[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
+  color: var(--color-text-secondary);
+}
