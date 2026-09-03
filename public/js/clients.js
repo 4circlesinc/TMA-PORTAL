@@ -169,13 +169,15 @@
    * that belongs to a service provider, the same rows the firm card used to
    * hide one company at a time.
    */
+  // shortLabel is the phone strip's copy: every long label repeats
+  // "Applications", and on a 390px screen that word is pure noise.
   var LIST_TABS = [
-    { id: 'all_applications', label: 'All Applications' },
-    { id: 'pre_approval', label: 'Pre-Approval Applications' },
-    { id: 'post_approval', label: 'Post-Approval Applications' },
+    { id: 'all_applications', label: 'All Applications', shortLabel: 'All' },
+    { id: 'pre_approval', label: 'Pre-Approval Applications', shortLabel: 'Pre-Approval' },
+    { id: 'post_approval', label: 'Post-Approval Applications', shortLabel: 'Post-Approval' },
     { id: 'closed', label: 'Closed' },
-    { id: 'providers', label: 'Service providers' },
-    { id: 'people', label: 'Provider contacts' },
+    { id: 'providers', label: 'Service providers', shortLabel: 'Providers' },
+    { id: 'people', label: 'Provider contacts', shortLabel: 'Contacts' },
   ];
 
   function listTabOf(state) {
@@ -2705,7 +2707,8 @@
           ' aria-selected="' + (active ? 'true' : 'false') + '"' +
           ' tabindex="' + (active ? '0' : '-1') + '"' +
           ' data-clients-list-tab="' + esc(tab.id) + '">' +
-          '<span class="tma-tab__label">' + esc(tab.label) +
+          '<span class="tma-tab__label">' +
+          esc(isClientsMobile() && tab.shortLabel ? tab.shortLabel : tab.label) +
           (count === null ? '' : tabCountChip(count)) + '</span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
           '</button>'
