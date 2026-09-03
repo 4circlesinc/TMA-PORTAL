@@ -3829,9 +3829,16 @@
 /* invert monochrome icons + avatars stay; flip black line/glyph icons to light.
    Masked icons opt out: they're painted by background-color (the accent, or
    currentColor which already follows the theme), so inverting would only shift
-   them to a wrong hue. This still catches <img> nav icons in the classic shell. */
-.tma-dash[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink),
-:root[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink),
+   them to a wrong hue. This still catches <img> nav icons in the classic shell.
+
+   Folder art opts out for the same reason it does everywhere else: a folder
+   is drawn in a colour the user picked, and inverting a yellow folder gives a
+   blue one — the wrong folder, not a dark-mode folder. Both shapes are named:
+   the bare <img class="tma-folder-icon__base"> a plain shortcut renders, and
+   the <span class="tma-folder-icon"> wrapper that carries a stamped icon (a
+   filter on the wrapper would repaint the art and the stamp alike). */
+.tma-dash[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink):not(.tma-folder-icon__base):not(.tma-folder-icon),
+:root[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink):not(.tma-folder-icon__base):not(.tma-folder-icon),
 .tma-dash[data-theme="dark"] .tma-dash__nav-dot,
 :root[data-theme="dark"] .tma-dash__nav-dot,
 .tma-dash[data-theme="dark"] .tma-dash__nav-caret svg,

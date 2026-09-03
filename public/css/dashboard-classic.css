@@ -2811,9 +2811,11 @@
 :root[data-theme="dark"] .tma-search-popup--standalone {
   background: rgba(255, 255, 255, 0.9);
 }
-/* invert monochrome icons + avatars stay; flip black line/glyph icons to light */
-.tma-dash[data-theme="dark"] .tma-dash__nav-icon,
-:root[data-theme="dark"] .tma-dash__nav-icon,
+/* invert monochrome icons + avatars stay; flip black line/glyph icons to light.
+   Folder art is exempt: a folder wears a colour the user picked, and inverting
+   a yellow one gives a blue one. */
+.tma-dash[data-theme="dark"] .tma-dash__nav-icon:not(.tma-folder-icon__base):not(.tma-folder-icon),
+:root[data-theme="dark"] .tma-dash__nav-icon:not(.tma-folder-icon__base):not(.tma-folder-icon),
 .tma-dash[data-theme="dark"] .tma-dash__nav-dot,
 :root[data-theme="dark"] .tma-dash__nav-dot,
 .tma-dash[data-theme="dark"] .tma-dash__nav-caret svg,
