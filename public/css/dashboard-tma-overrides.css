@@ -2098,3 +2098,28 @@ body::-webkit-scrollbar,
     padding-left: var(--space-8);
   }
 }
+
+
+/* ── Folder Shortcuts: the group label starts where its folders do ────
+ *
+ * The label sat flush against the rail's edge while every folder under it
+ * began 22px in, and the pair read as ragged rather than as a heading over a
+ * list.
+ *
+ * The rows are not what moves. Every nav item in the rail opens with a caret
+ * column — visible on the groups that expand, invisible but in flow on the
+ * ones that do not — and that column is what keeps every icon in the sidebar
+ * on one line, collapsed or expanded (dashboard.css says so, at length, and
+ * it is right: taking it out of these rows would slide their icons 20px left
+ * of every other icon the moment the rail collapsed or the reader switched
+ * back to the menu).
+ *
+ * So the heading moves to meet them, along the row's own measurements: the
+ * 2px it starts at, the caret column (1em of the rail's 14px rows, both
+ * hard-coded together in dashboard.css), and the 10px gap after it.
+ */
+@media (min-width: 1025px) {
+  .tma-dash__shortcuts .tma-dash__group-label {
+    padding-left: calc(var(--space-2) + 14px + var(--space-10));
+  }
+}
