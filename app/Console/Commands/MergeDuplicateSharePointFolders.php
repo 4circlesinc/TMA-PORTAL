@@ -13,26 +13,31 @@ use Illuminate\Support\Facades\DB;
  * each applyCreate made its own portal folder for the same SharePoint
  * folder, the mapping's updateOrCreate re-pointed at the newest one, and
  * the losers were orphaned - same name, same parent, no sharepoint_items
- * row, with imported children scattered across the twins.
+ * row, with imported children scattered across the twins. The race ran for
+ * days, so this is not ten folders: nine and a half thousand sibling groups.
  *
  * For every group of live same-named siblings with EXACTLY one mapped
  * member, that member is canonical: every child of the other twins is
  * re-parented into it, except an unmapped sharepoint-origin file whose name
  * canonical already holds - that is the surplus download, recycled. Emptied
  * twins are recycled too. Groups with zero or several mapped members are
- * reported and left alone. Runs to a fixpoint, because re-parenting can
+ * counted and left alone. Runs to a fixpoint, because re-parenting can
  * surface the same situation one level down.
  *
- * Every write goes through the query builder: no observers, no outbound
- * pushes (the canonical layout IS SharePoint's - "correcting" it outward
- * would patch the real library), no live doorbells; and everything removed
- * is soft-deleted, never purged.
+ * Everything is planned from a few bulk reads and written in CASE-batched
+ * statements - a per-group loop at this scale spent hours in round trips to
+ * the remote database. Every write goes through the query builder: no
+ * observers, no outbound pushes (the canonical layout IS SharePoint's -
+ * "correcting" it outward would patch the real library), no live doorbells;
+ * and everything removed is soft-deleted, never purged.
  */
 class MergeDuplicateSharePointFolders extends Command
 {
     protected $signature = 'sharepoint:merge-duplicates {--dry-run : Report what would happen without writing}';
 
     protected $description = 'Merge duplicate sibling folders left behind by overlapping sync runs';
+
+    private const CHUNK = 500;
 
     private bool $dry = false;
 
@@ -44,11 +49,8 @@ class MergeDuplicateSharePointFolders extends Command
 
         Pusher::suspend(function () {
             for ($pass = 1; $pass <= 12; $pass++) {
-                $acted = $this->mergeOnePass();
-                if (! $acted) {
-                    break;
-                }
-                if ($this->dry) {
+                $acted = $this->mergeOnePass($pass);
+                if (! $acted || $this->dry) {
                     // A dry pass writes nothing, so the same groups would
                     // simply be reported again for ever.
                     break;
@@ -67,7 +69,7 @@ class MergeDuplicateSharePointFolders extends Command
         return self::SUCCESS;
     }
 
-    private function mergeOnePass(): bool
+    private function mergeOnePass(int $pass): bool
     {
         $groups = DB::table('folders')
             ->whereNull('deleted_at')
@@ -77,95 +79,162 @@ class MergeDuplicateSharePointFolders extends Command
             ->havingRaw('count(*) > 1')
             ->get();
 
-        $acted = false;
+        if ($groups->isEmpty()) {
+            return false;
+        }
 
-        foreach ($groups as $group) {
-            $members = DB::table('folders')
-                ->whereNull('deleted_at')
-                ->where('parent_id', $group->parent_id)
-                ->whereRaw('lower(name) = ?', [$group->lname])
-                ->orderBy('id')
-                ->get(['id', 'name', 'origin']);
+        // Membership: every live folder under a duplicated parent, filtered
+        // to its (parent, name) group in PHP.
+        $wanted = [];
+        foreach ($groups as $g) {
+            $wanted[(int) $g->parent_id][$g->lname] = true;
+        }
 
-            $mappedIds = DB::table('sharepoint_items')
-                ->where('item_type', 'folder')
-                ->whereIn('folder_id', $members->pluck('id'))
-                ->pluck('folder_id')
-                ->map(fn ($id) => (int) $id);
+        // lname comes from the database on both sides: PHP's mb_strtolower
+        // and Postgres's lower() disagree on non-ASCII names (the library
+        // holds Chinese-named applicant folders), and a key mismatch here
+        // silently dissolves exactly those groups.
+        $members = collect();
+        foreach (array_chunk(array_keys($wanted), self::CHUNK) as $parentIds) {
+            $members = $members->merge(
+                DB::table('folders')->whereNull('deleted_at')
+                    ->whereIn('parent_id', $parentIds)
+                    ->selectRaw('id, parent_id, name, lower(name) as lname')
+                    ->get()
+                    ->filter(fn ($f) => isset($wanted[(int) $f->parent_id][$f->lname]))
+            );
+        }
 
-            if ($mappedIds->count() !== 1) {
+        $mappedFolder = $this->mappedIds('folder', 'folder_id', $members->pluck('id'));
+
+        // Resolve each group to canonical + twins.
+        $twinTo = [];      // twin folder id => canonical folder id
+        $canonicals = [];  // canonical folder id => true
+        $grouped = $members->groupBy(fn ($f) => $f->parent_id.'|'.$f->lname);
+
+        foreach ($grouped as $group) {
+            $mapped = $group->filter(fn ($f) => isset($mappedFolder[(int) $f->id]));
+
+            if ($mapped->count() !== 1) {
                 $this->totals['skipped']++;
-                $this->line(sprintf('skip "%s" under folder %d: %d of %d twins mapped',
-                    $members->first()->name, $group->parent_id, $mappedIds->count(), $members->count()));
 
                 continue;
             }
 
-            $canonicalId = $mappedIds->first();
+            $canonicalId = (int) $mapped->first()->id;
+            $canonicals[$canonicalId] = true;
             $this->totals['groups']++;
-            $acted = true;
 
-            foreach ($members as $twin) {
-                if ((int) $twin->id === $canonicalId) {
-                    continue;
+            foreach ($group as $f) {
+                if ((int) $f->id !== $canonicalId) {
+                    $twinTo[(int) $f->id] = $canonicalId;
                 }
-                $this->mergeTwin((int) $twin->id, $canonicalId, $twin->name);
             }
         }
 
-        return $acted;
-    }
+        if ($twinTo === []) {
+            return false;
+        }
 
-    private function mergeTwin(int $twinId, int $canonicalId, string $name): void
-    {
-        // Subfolders all move across; same-named collisions become their own
-        // duplicate group and are merged on the next pass.
-        $subfolders = DB::table('folders')->whereNull('deleted_at')->where('parent_id', $twinId)->pluck('id');
-        if ($subfolders->isNotEmpty()) {
-            $this->totals['movedFolders'] += $subfolders->count();
-            if (! $this->dry) {
-                DB::table('folders')->whereIn('id', $subfolders)->update(['parent_id' => $canonicalId]);
+        // The twins' children, in bulk.
+        $twinIds = array_keys($twinTo);
+        $moveFolder = [];   // subfolder id => new parent id
+        $moveFile = [];     // file id => new folder id
+        $recycleFile = [];  // surplus copies
+
+        foreach (array_chunk($twinIds, self::CHUNK) as $ids) {
+            foreach (DB::table('folders')->whereNull('deleted_at')->whereIn('parent_id', $ids)->get(['id', 'parent_id']) as $sub) {
+                $moveFolder[(int) $sub->id] = $twinTo[(int) $sub->parent_id];
             }
         }
 
-        $files = DB::table('files')->whereNull('deleted_at')->where('folder_id', $twinId)
-            ->get(['id', 'name', 'origin']);
-        $mappedFiles = DB::table('sharepoint_items')->where('item_type', 'file')
-            ->whereIn('file_id', $files->pluck('id'))->pluck('file_id')
-            ->map(fn ($id) => (int) $id)->flip();
-        $canonicalNames = DB::table('files')->whereNull('deleted_at')->where('folder_id', $canonicalId)
-            ->pluck('name')->map(fn ($n) => mb_strtolower($n))->flip();
+        // Canonical folders' live file names, for the surplus test.
+        $canonicalNames = [];
+        foreach (array_chunk(array_keys($canonicals), self::CHUNK) as $ids) {
+            foreach (DB::table('files')->whereNull('deleted_at')->whereIn('folder_id', $ids)->get(['folder_id', 'name']) as $f) {
+                $canonicalNames[(int) $f->folder_id][mb_strtolower($f->name)] = true;
+            }
+        }
 
-        foreach ($files as $file) {
+        $twinFiles = collect();
+        foreach (array_chunk($twinIds, self::CHUNK) as $ids) {
+            $twinFiles = $twinFiles->merge(
+                DB::table('files')->whereNull('deleted_at')->whereIn('folder_id', $ids)->get(['id', 'folder_id', 'name', 'origin'])
+            );
+        }
+        $mappedFile = $this->mappedIds('file', 'file_id', $twinFiles->pluck('id'));
+
+        foreach ($twinFiles as $file) {
+            $canonicalId = $twinTo[(int) $file->folder_id];
             $surplus = $file->origin === 'sharepoint'
-                && ! isset($mappedFiles[(int) $file->id])
-                && isset($canonicalNames[mb_strtolower($file->name)]);
+                && ! isset($mappedFile[(int) $file->id])
+                && isset($canonicalNames[$canonicalId][mb_strtolower($file->name)]);
 
             if ($surplus) {
                 // The same bytes were downloaded once per racing run; the
                 // mapped copy lives in canonical, this one goes to the bin.
-                $this->totals['recycledFiles']++;
-                if (! $this->dry) {
-                    DB::table('files')->where('id', $file->id)->update(['deleted_at' => now()]);
-                }
+                $recycleFile[] = (int) $file->id;
             } else {
-                $this->totals['movedFiles']++;
-                if (! $this->dry) {
-                    DB::table('files')->where('id', $file->id)->update(['folder_id' => $canonicalId]);
-                }
+                $moveFile[(int) $file->id] = $canonicalId;
             }
         }
 
-        $leftover = $this->dry ? 0
-            : DB::table('folders')->whereNull('deleted_at')->where('parent_id', $twinId)->count()
-                + DB::table('files')->whereNull('deleted_at')->where('folder_id', $twinId)->count();
+        $this->totals['movedFolders'] += count($moveFolder);
+        $this->totals['movedFiles'] += count($moveFile);
+        $this->totals['recycledFiles'] += count($recycleFile);
+        // Every child moves or recycles, so every twin ends the pass empty.
+        $this->totals['recycledFolders'] += count($twinIds);
 
-        if ($leftover === 0) {
-            $this->totals['recycledFolders']++;
-            if (! $this->dry) {
-                DB::table('folders')->where('id', $twinId)->update(['deleted_at' => now()]);
+        $this->line(sprintf('pass %d: %d twin(s) into %d canonical folder(s), %d folder move(s), %d file move(s), %d surplus recycle(s)',
+            $pass, count($twinIds), count($canonicals), count($moveFolder), count($moveFile), count($recycleFile)));
+
+        if ($this->dry) {
+            return true;
+        }
+
+        $this->caseUpdate('folders', 'parent_id', $moveFolder);
+        $this->caseUpdate('files', 'folder_id', $moveFile);
+
+        foreach (array_chunk($recycleFile, self::CHUNK) as $ids) {
+            DB::table('files')->whereIn('id', $ids)->update(['deleted_at' => now()]);
+        }
+        foreach (array_chunk($twinIds, self::CHUNK) as $ids) {
+            DB::table('folders')->whereIn('id', $ids)->update(['deleted_at' => now()]);
+        }
+
+        return true;
+    }
+
+    /** @return array<int, true> ids of rows a sharepoint_items row points at */
+    private function mappedIds(string $type, string $column, $ids): array
+    {
+        $out = [];
+        foreach ($ids->chunk(self::CHUNK) as $chunk) {
+            foreach (DB::table('sharepoint_items')->where('item_type', $type)->whereIn($column, $chunk)->pluck($column) as $id) {
+                $out[(int) $id] = true;
             }
-            $this->line(sprintf('merged twin %d of "%s" into %d', $twinId, $name, $canonicalId));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Batched `update ... set col = case id ... end` - ids and values are
+     * integers computed above, inlined because Postgres types an all-bound
+     * CASE as text and refuses the integer assignment.
+     *
+     * @param  array<int, int>  $plan  row id => new value
+     */
+    private function caseUpdate(string $table, string $column, array $plan): void
+    {
+        foreach (array_chunk(array_keys($plan), self::CHUNK) as $ids) {
+            $case = 'case id ';
+            foreach ($ids as $id) {
+                $case .= 'when '.(int) $id.' then '.(int) $plan[$id].' ';
+            }
+            $in = implode(',', array_map('intval', $ids));
+
+            DB::update("update {$table} set {$column} = {$case}end where id in ({$in})");
         }
     }
 }
