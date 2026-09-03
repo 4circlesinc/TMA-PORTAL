@@ -113,10 +113,26 @@ class CalendarEventController extends Controller
             ->limit(200)
             ->get();
 
-        $detached = CalendarEvent::query()
-            ->whereIn('calendar_id', $calendarIds)
-            ->whereNotNull('series_id')
-            ->get(['id', 'series_id', 'recurrence_starts_at']);
+        /*
+         * Detached occurrences exist here only to suppress their virtual
+         * twins, so only instants the expander could generate in this window
+         * matter: nothing at or past $to, nothing earlier than the window
+         * start minus the longest master's occurrence length. This query was
+         * unbounded once, and every detached row ever created rode along on
+         * every grid request.
+         */
+        $longestOccurrence = (int) ceil((float) $masters->max(
+            fn (CalendarEvent $m) => $m->starts_at->diffInSeconds($m->ends_at)
+        ));
+
+        $detached = $masters->isEmpty()
+            ? collect()
+            : CalendarEvent::query()
+                ->whereIn('calendar_id', $calendarIds)
+                ->whereNotNull('series_id')
+                ->where('recurrence_starts_at', '<', $to)
+                ->where('recurrence_starts_at', '>=', $from->subSeconds($longestOccurrence))
+                ->get(['id', 'series_id', 'recurrence_starts_at']);
 
         $events = $rows->map(fn (CalendarEvent $e) => $e->toRecord(
             $roles[$e->calendar_id],

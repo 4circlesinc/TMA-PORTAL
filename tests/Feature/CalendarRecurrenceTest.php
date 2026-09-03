@@ -384,6 +384,52 @@ class CalendarRecurrenceTest extends TestCase
 
     /* ── helpers ─────────────────────────────────────────────── */
 
+    public function test_an_old_daily_series_still_renders_a_current_window(): void
+    {
+        // Regression: the occurrence ceiling used to count from the series'
+        // first instance, so a daily series older than ~750 days exhausted
+        // it before reaching the requested window and silently rendered
+        // nothing. The pre-window skip must not charge the ceiling.
+        $user = $this->user();
+        $calendar = $this->makeCalendar($user);
+
+        $master = $this->makeEvent($calendar, [
+            'starts_at' => '2024-01-01T09:00:00+00:00',
+            'ends_at' => '2024-01-01T09:30:00+00:00',
+            'recurrence_rule' => 'FREQ=DAILY',
+        ]);
+
+        $occurrences = RecurrenceExpander::expand(
+            $master,
+            CarbonImmutable::parse('2026-09-07T00:00:00+00:00'),
+            CarbonImmutable::parse('2026-09-14T00:00:00+00:00'),
+        );
+
+        $this->assertCount(7, $occurrences);
+        $this->assertSame('2026-09-07T09:00:00+00:00',
+            $occurrences[0]['startsAt']->utc()->toIso8601String());
+    }
+
+    public function test_the_skip_respects_a_series_that_already_ended(): void
+    {
+        // COUNT lives at the start of the series; fast-forwarding must run
+        // the count down, not leap over it and invent occurrences.
+        $user = $this->user();
+        $calendar = $this->makeCalendar($user);
+
+        $master = $this->makeEvent($calendar, [
+            'starts_at' => '2024-01-01T09:00:00+00:00',
+            'ends_at' => '2024-01-01T09:30:00+00:00',
+            'recurrence_rule' => 'FREQ=DAILY;COUNT=10',
+        ]);
+
+        $this->assertSame([], RecurrenceExpander::expand(
+            $master,
+            CarbonImmutable::parse('2026-09-07T00:00:00+00:00'),
+            CarbonImmutable::parse('2026-09-14T00:00:00+00:00'),
+        ));
+    }
+
     private function makeCalendar(User $owner, array $overrides = []): Calendar
     {
         return Calendar::create(array_merge([

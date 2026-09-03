@@ -32,6 +32,15 @@ class RecurrenceExpander
     /** Hard ceiling per series per window, so a runaway rule can't hang a request. */
     private const MAX_OCCURRENCES = 750;
 
+    /**
+     * Ceiling on the pre-window skip. The iterator must walk from the
+     * series' own start (COUNT/UNTIL live there), and each step before the
+     * window is cheap date arithmetic - but a minutely rule years old would
+     * spin for millions of steps, so a series needing more than this many is
+     * abandoned rather than allowed to hang the grid request.
+     */
+    private const MAX_SKIP = 100000;
+
     public const ID_SEPARATOR = '@';
 
     /**
@@ -112,6 +121,26 @@ class RecurrenceExpander
             // An unparseable rule yields nothing rather than throwing: one bad
             // event should never blank a whole month's grid.
             return [];
+        }
+
+        /*
+         * Skip straight past everything before the window, WITHOUT charging
+         * it against MAX_OCCURRENCES. The ceiling used to count from the
+         * series' first instance, so a daily series older than ~750 days
+         * exhausted it before ever reaching the requested window and
+         * silently rendered nothing - and every request paid to walk the
+         * whole history besides. The floor is the window start minus one
+         * occurrence length, matching the overlap test below.
+         */
+        $windowFloor = $from->subSeconds((int) ceil($duration))->toDateTime();
+        $skipped = 0;
+
+        while ($iterator->valid() && $iterator->current() < $windowFloor) {
+            if (++$skipped > self::MAX_SKIP) {
+                return [];
+            }
+
+            $iterator->next();
         }
 
         $out = [];
