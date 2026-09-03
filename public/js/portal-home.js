@@ -3228,17 +3228,22 @@
     var me = window.TMACurrentUser ? window.TMACurrentUser.get() : null;
     var heroSrc = me ? window.TMACurrentUser.avatarSrc(me.avatar, me.name) : null;
 
+    var picLinkLabel = me && me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+    var picLinkShort = me && me.hasAvatar ? 'Change photo' : 'Add photo';
+
+    /* The face is the picture control too, not only the link beside it: the
+       phone layout drops the link's words for room, and current-user.js
+       delegates [data-home-add-picture] clicks to the picker, so stamping
+       the avatar keeps the photo changeable where the words are gone. */
     var heroAvatarHtml = heroSrc
-      ? '<img class="tma-portal-hello__avatar" src="' + ui().esc(heroSrc) + '" alt="" width="56" height="56">'
+      ? '<img class="tma-portal-hello__avatar" src="' + ui().esc(heroSrc) + '" alt="" width="56" height="56"' +
+        ' data-home-add-picture title="' + ui().esc(picLinkLabel) + '">'
       : '<img class="tma-portal-hello__avatar tma-skeleton tma-skeleton--avatar" width="56" height="56"' +
         ' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">';
 
     var heroTitleHtml = me
       ? '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(me.firstName) + '</h2>'
       : '<h2 class="tma-portal-hello__title tma-skeleton tma-skeleton--text"></h2>';
-
-    var picLinkLabel = me && me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
-    var picLinkShort = me && me.hasAvatar ? 'Change photo' : 'Add photo';
 
     var html =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
