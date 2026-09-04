@@ -662,6 +662,34 @@
   font-feature-settings: var(--font-features);
 }
 
+/*
+ * Dark: a panel over the page, not text printed on it.
+ *
+ * The menu's surface is --color-white, which flips to #1c1c1c — the same
+ * #1c1c1c the page behind it is painted in. Its only edge was a 12% hairline,
+ * and its shadow is black at 12%, which is nothing at all on a black ground:
+ * the menu read as a list that had appeared in the page rather than a sheet
+ * above it. The popup surface sits a step lighter than the page, and the
+ * shadow goes as deep as the ground it falls on.
+ */
+.tma-dash[data-theme="dark"] .tma-portal-context-menu,
+:root[data-theme="dark"] .tma-portal-context-menu {
+  /* Opaque, not glass: a list of actions with a card's text ghosting
+     through it is a list you have to read twice. */
+  background: #2c2c2e;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* The rule above lifts the sheet; these lift what sits on it, so a hover and
+   a divider still read against the lighter surface. */
+.tma-dash[data-theme="dark"] .tma-portal-context-menu .tma-portal-context-menu__item:hover,
+:root[data-theme="dark"] .tma-portal-context-menu .tma-portal-context-menu__item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .tma-portal-context-menu__item {
   display: block;
   width: max-content;
