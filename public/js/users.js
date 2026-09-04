@@ -1064,6 +1064,29 @@ if (state.filters.user) {
     container.addEventListener('click', function (e) {
       var sortHeadEl = e.target.closest('[data-sort-col]');
       if (sortHeadEl) { toggleSort(sortHeadEl.getAttribute('data-sort-col')); return; }
+
+      /*
+       * The row's own menu button.
+       *
+       * It has been drawn on every row of the Overview's list and wired to
+       * nothing: the actions lived on the right mouse button alone, which a
+       * phone does not have, so the dots were a control that could be pressed
+       * and never answered. Same menu, opened under the button it was pressed
+       * on.
+       */
+      var moreBtn = e.target.closest('[data-users-row-more]');
+      if (moreBtn && container.contains(moreBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        var moreRow = moreBtn.closest('.tma-dash__ctr--body') || moreBtn.closest('[data-row-index]');
+        var moreIndex = moreRow ? parseInt(moreRow.getAttribute('data-row-index'), 10) : -1;
+        var moreItem = moreIndex >= 0 ? applyPipeline(state)[moreIndex] : null;
+        if (moreItem) {
+          var box = moreBtn.getBoundingClientRect();
+          openUserContextMenu(moreItem, moreIndex, box.left, box.bottom + 4);
+        }
+        return;
+      }
       var statusBtn = e.target.closest('[data-users-status]');
       if (statusBtn) {
         e.preventDefault();
@@ -1071,10 +1094,7 @@ if (state.filters.user) {
         openStatusMenu(statusBtn);
         return;
       }
-      if (state.isOverview) {
-        if (e.target.closest('[data-users-row-more]') || e.target.closest('[data-users-check]')) return;
-        return;
-      }
+      if (state.isOverview) return;
       if (state.viewMode === 'grid') {
         var tile = e.target.closest('.tma-dash__uavatar-tile');
         if (!tile || !container.contains(tile)) return;
