@@ -1744,6 +1744,21 @@ body::-webkit-scrollbar,
 }
 
 @media (max-width: 767px) {
+  /*
+   * The toolbar's end slot takes its own line, and the search fills it.
+   *
+   * The search already asked for the whole width, but it asks it of the end
+   * slot rather than of the toolbar — so a list that wrapped its search in
+   * the slot (Users, Employees, Clients) got a full-width field on line two,
+   * and a list that did not (Overview → Files) got a 240px box floating
+   * mid-row. Same toolbar, two different shapes. The slot takes the line for
+   * all of them now.
+   */
+  .tma-dash__toolbar .tma-dash__toolbar-end {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
   .tma-dash__toolbar .tma-dash__toolbar-search {
     flex: 1 1 100%;
     width: 100%;

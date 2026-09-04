@@ -115,7 +115,14 @@
           '<span class="tma-dash__toolbar-selection" data-files-selection-count aria-live="polite">' + selectionLabel + '</span>' +
         '</div>' +
       '</div>' +
-      renderSearchBar(state) +
+      /*
+       * The search sits in the toolbar's end slot, the way it does in every
+       * other list — Users, Employees, Clients all wrap it in
+       * .tma-dash__toolbar-end, which is what pushes it to the right and what
+       * the touch rules size against. Without the wrapper this one toolbar
+       * laid itself out differently at every width.
+       */
+      '<div class="tma-dash__toolbar-end">' + renderSearchBar(state) + '</div>' +
     '</div>';
   }
 
