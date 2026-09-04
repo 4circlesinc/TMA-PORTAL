@@ -930,18 +930,65 @@
     });
   }
 
+  /*
+   * The path, on one line.
+   *
+   * A client's documents sit five or six folders down, and those folders are
+   * named by the people who file them: a case number, a full name, a date, a
+   * shouted "APPLICATION DOCUMENTS". Printed in full the trail wrapped to
+   * three lines of blue and pushed the files themselves off the screen, which
+   * is a strange price to pay for levels nobody was going to click.
+   *
+   * So it keeps the ends, which are the parts that answer something — where
+   * this is (the section it belongs to) and where you are (the folder and its
+   * parent) — and folds the middle behind a "…" that lists them. Nothing is
+   * lost: every hidden level is one press away, in order, and each one still
+   * opens its folder.
+   */
+  var CRUMB_TAIL = 2;
+
   function renderBreadcrumb() {
     if (!state.folder && !state.breadcrumb.length) return '';
-    var crumbs = '<button type="button" class="tma-portal-breadcrumb__item" data-files-crumb="">' +
+
+    var trail = state.breadcrumb || [];
+    var hidden = trail.length > CRUMB_TAIL ? trail.slice(0, trail.length - CRUMB_TAIL) : [];
+    var shown = hidden.length ? trail.slice(-CRUMB_TAIL) : trail;
+
+    var crumbs = '<button type="button" class="tma-portal-breadcrumb__item tma-portal-breadcrumb__item--root" data-files-crumb="">' +
       esc((SECTIONS[state.section] || SECTIONS.all).title) + '</button>';
-    state.breadcrumb.forEach(function (c, i) {
-      var last = i === state.breadcrumb.length - 1;
-      crumbs += '<span class="tma-portal-breadcrumb__sep">/</span>';
+
+    if (hidden.length) {
+      crumbs += '<span class="tma-portal-breadcrumb__sep" aria-hidden="true">/</span>';
+      crumbs += '<button type="button" class="tma-portal-breadcrumb__item tma-portal-breadcrumb__more"' +
+        ' data-files-crumb-more aria-label="' + esc(hidden.length + ' more folder' + (hidden.length === 1 ? '' : 's') + ' in this path') + '"' +
+        ' aria-haspopup="menu">&hellip;</button>';
+    }
+
+    shown.forEach(function (c, i) {
+      var last = i === shown.length - 1;
+      crumbs += '<span class="tma-portal-breadcrumb__sep" aria-hidden="true">/</span>';
       crumbs += last
-        ? '<span class="tma-portal-breadcrumb__item tma-portal-breadcrumb__item--current">' + esc(displayLibraryFolderName(c.name)) + '</span>'
-        : '<button type="button" class="tma-portal-breadcrumb__item" data-files-crumb="' + esc(c.id) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
+        ? '<span class="tma-portal-breadcrumb__item tma-portal-breadcrumb__item--current" title="' + esc(displayLibraryFolderName(c.name)) + '">' + esc(displayLibraryFolderName(c.name)) + '</span>'
+        : '<button type="button" class="tma-portal-breadcrumb__item" data-files-crumb="' + esc(c.id) + '" title="' + esc(displayLibraryFolderName(c.name)) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
     });
+
     return '<nav class="tma-portal-breadcrumb" aria-label="Folder path">' + crumbs + '</nav>';
+  }
+
+  /** The folded-away levels, in order, each still a way into its folder. */
+  function openCrumbMenu(btn) {
+    var trail = state.breadcrumb || [];
+    var hidden = trail.length > CRUMB_TAIL ? trail.slice(0, trail.length - CRUMB_TAIL) : [];
+    if (!hidden.length) return;
+
+    var box = btn.getBoundingClientRect();
+    openContextMenu(box.left, box.bottom + 4, null, hidden.map(function (c) {
+      return {
+        label: displayLibraryFolderName(c.name),
+        icon: 'FolderOpen',
+        fn: function () { openFolder(c.id); },
+      };
+    }));
   }
 
   // Documented flat toolbar icon button (same as the Users table): no pill,
@@ -1559,6 +1606,9 @@
     if (e.target.closest('[data-files-retry]')) { e.preventDefault(); load(); return; }
     var actionEl = e.target.closest('[data-files-action]');
     if (actionEl && !actionEl.disabled) { e.preventDefault(); handleAction(actionEl.getAttribute('data-files-action')); return; }
+
+    var crumbMore = e.target.closest('[data-files-crumb-more]');
+    if (crumbMore) { e.preventDefault(); e.stopPropagation(); openCrumbMenu(crumbMore); return; }
 
     var crumb = e.target.closest('[data-files-crumb]');
     if (crumb) { e.preventDefault(); openFolder(crumb.getAttribute('data-files-crumb') || null); return; }
