@@ -3951,6 +3951,12 @@
   filter: invert(1) brightness(1.6);
 }
 
+/* Row ⋯ menus are TMA glyphs (black circles), not phosphor, so the net
+   above misses them. Same lift, globally, wherever ThreeDots ships. */
+:where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) img[src*="ThreeDots"] {
+  filter: invert(1) brightness(1.6);
+}
+
 /* ── Dark: black <img> line-art that never got an invert ──
    Phosphor icons ship as black art; every one that sits on a dark surface
    needs the same lift the nav icons get. Grouped here, found by
@@ -3989,8 +3995,17 @@
 .tma-dash[data-theme="dark"] .tma-dash__messages-fab img,
 :root[data-theme="dark"] .tma-dash__messages-fab img,
 .tma-dash[data-theme="dark"] .tma-dash__messages-archived-reveal-btn img,
-:root[data-theme="dark"] .tma-dash__messages-archived-reveal-btn img {
+:root[data-theme="dark"] .tma-dash__messages-archived-reveal-btn img,
+.tma-dash[data-theme="dark"] .tma-dash__row-more img,
+:root[data-theme="dark"] .tma-dash__row-more img,
+.tma-dash[data-theme="dark"] .tma-dash__account-security-menu img,
+:root[data-theme="dark"] .tma-dash__account-security-menu img {
   filter: invert(1) brightness(1.6);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__row-more img,
+:root[data-theme="dark"] .tma-dash__row-more img {
+  opacity: 1;
 }
 
 /* Idle email chips: keep the monochrome treatment but in light ink. */
