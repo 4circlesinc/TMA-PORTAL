@@ -119,6 +119,24 @@
   background: none;
   object-fit: contain;
 }
+
+/*
+ * A folder mark is 24px wide in a name cell. Always.
+ *
+ * The art arrives as a bare <img class="tma-folder-icon__base"> or as that
+ * img inside a .tma-folder-icon wrapper, and the inner one is `width: 100%`
+ * — of the wrapper when there is one, and of whatever box it lands in when
+ * there is not. A mark that grew took the gap between itself and the name
+ * with it, so the folder's name sat against its own artwork while the file
+ * rows beside it kept their 8px. The outermost element is sized here, and
+ * the 100% inside it stays right.
+ */
+.tma-portal-avatar-cell > .tma-folder-icon,
+.tma-portal-avatar-cell > .tma-folder-icon__base {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
 .tma-portal-file-card__thumb-img { border-radius: 6px; }
 .tma-portal-check { width: 16px; height: 16px; accent-color: var(--color-accent); cursor: pointer; }
 /*
