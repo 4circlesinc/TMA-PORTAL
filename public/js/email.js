@@ -11554,6 +11554,7 @@
         if (mobile !== wasMobile) {
           wasMobile = mobile;
           if (!mobile && state.mobileNavOpen) state.mobileNavOpen = false;
+          if (!mobile && state.mobileSearchOpen) resetEmailSidebarSearch(root, state);
           if (!mobile && state.profileSidebarOpen) closeEmailProfileSidebar(state);
           render();
           return;
