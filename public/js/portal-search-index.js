@@ -436,22 +436,30 @@
   function fetchMail(q) {
     var a = api();
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
-    var url = root() + '/portal/mail/messages?q=' + encodeURIComponent(q) + '&perPage=8';
+    // `limit`, not `perPage`: the listing validator only accepts the inbox's
+    // own page sizes, and a search that asked for a page of 8 was refused
+    // outright, which is why mail never showed up in search.
+    var url = root() + '/portal/mail/messages?q=' + encodeURIComponent(q) + '&limit=8';
     return a.api(url).then(function (data) {
       var rows = (data && (data.messages || data.rows || data.items)) || [];
       return rows.slice(0, 8).map(function (m) {
         var subject = m.subject || m.title || '(No subject)';
-        var from = m.from || m.fromName || m.sender || '';
+        // Rows come in the list shape (MailMessage::toRow): `sender` is the
+        // display name with the address as its fallback.
+        var from = m.sender || m.fromName || m.from || m.email || '';
         return {
-          type: 'page',
+          type: 'mail',
           label: subject,
           title: subject,
-          subtitle: from ? ('Email · ' + from) : 'Email',
+          subtitle: from,
+          snippet: m.body || m.snippet || '',
+          sentAt: m.sentAt || '',
+          unread: !!m.unread,
           emailMessageId: m.id || m.messageId || null,
           navId: 'email',
           view: 'email',
           href: '/email',
-          keywords: [subject, from, 'email', 'mail', 'inbox'].filter(Boolean),
+          keywords: [subject, from, m.email, 'email', 'mail', 'inbox'].filter(Boolean),
         };
       });
     });

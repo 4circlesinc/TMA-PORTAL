@@ -68,6 +68,7 @@
     ChartPie: 'icons/phosphor/ChartPie.svg',
     Storefront: 'icons/phosphor/Storefront.svg',
     Folder: 'icons/phosphor/Folder.svg',
+    EnvelopeSimple: 'icons/phosphor/EnvelopeSimple.svg',
     SidebarSimple: 'icons/phosphor/SidebarSimple.svg',
     SquaresFour: 'icons/phosphor/SquaresFour.svg',
     Sun: 'icons/phosphor/Sun.svg',
@@ -140,11 +141,35 @@
       .replace(/"/g, '&quot;');
   }
 
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function highlightText(text, query) {
     const safe = escapeHtml(text);
     if (!query) return safe;
-    const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
+    const re = new RegExp(`(${escapeRegExp(query)})`, 'ig');
     return safe.replace(re, '<span class="tma-search-popup__highlight">$1</span>');
+  }
+
+  /* When a message arrived, the way the inbox list says it: a time today, a
+     day this year, otherwise the full date. In the reader's own zone. */
+  function mailDateLabel(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const now = new Date();
+    try {
+      if (d.toDateString() === now.toDateString()) {
+        return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
+      }
+      if (d.getFullYear() === now.getFullYear()) {
+        return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(d);
+      }
+      return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+    } catch (e) {
+      return '';
+    }
   }
 
   function splitHighlight(text, query) {
@@ -346,6 +371,8 @@
         : `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'query' || item.icon === 'search') {
       iconMarkup = `<img src="${iconUrl('Search16')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
+    } else if (item.type === 'mail') {
+      iconMarkup = `<img src="${iconUrl('EnvelopeSimple')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'page' || item.type === 'settings') {
       iconMarkup = `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'user') {
@@ -357,11 +384,19 @@
     const label = item.label || item.title || '';
     const mainTitle = item.title || item.label || '';
     let textHtml = '';
-    if (item.subtitle) {
+    let meta = '';
+    if (item.type === 'mail') {
+      // Subject over sender and preview, the keyword lit wherever it landed,
+      // and the arrival time on the right, the way the inbox list reads.
+      const sub = [item.subtitle, item.snippet].filter(Boolean).join(' · ');
+      const when = mailDateLabel(item.sentAt);
+      textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${splitHighlight(mainTitle, query)}</div>${sub ? `<div class="tma-search-popup__row-subtext">${splitHighlight(sub, query)}</div>` : ''}</div></div>`;
+      meta = when ? `<span class="tma-search-popup__row-meta">${escapeHtml(when)}</span>` : '';
+    } else if (item.subtitle) {
       const sub = item.subtitle;
       const match = query.toLowerCase();
       if (match && sub.toLowerCase().includes(match)) {
-        const parts = sub.split(new RegExp(`(${query})`, 'i'));
+        const parts = sub.split(new RegExp(`(${escapeRegExp(query)})`, 'i'));
         textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(mainTitle)}</div><div class="tma-search-popup__row-subtext">${parts.map(p => (p.toLowerCase() === match.toLowerCase() ? `<span class="tma-search-popup__highlight">${escapeHtml(p)}</span>` : escapeHtml(p))).join('')}</div></div></div>`;
       } else {
         textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(mainTitle)}</div><div class="tma-search-popup__row-subtext">${escapeHtml(sub)}</div></div></div>`;
@@ -374,10 +409,13 @@
       ? `<span class="tma-search-popup__row-hint">↩︎</span>`
       : '';
 
-    return `<${tag} class="tma-search-popup__row${selectedCls}${interactiveCls}"${attrs}>${textHtml}${hint}</${tag}>`;
+    return `<${tag} class="tma-search-popup__row${selectedCls}${interactiveCls}"${attrs}>${textHtml}${meta}${hint}</${tag}>`;
   }
 
   const RECENT_SEARCH_KEY = 'tma.search.recent';
+  /* The mailbox keeps its own list: a subject someone hunted for in mail is
+     not a suggestion for the site search, and a page name is not one for mail. */
+  const MAIL_RECENT_SEARCH_KEY = 'tma.search.mail.recent';
   const RECENT_VISIT_KEY = 'tma.search.visited';
 
   function readJsonStore(key, fallback) {
@@ -397,13 +435,13 @@
     } catch (e) { /* ignore quota / private mode */ }
   }
 
-  function pushRecentSearch(label) {
+  function pushRecentSearch(label, key = RECENT_SEARCH_KEY) {
     const text = String(label || '').trim();
     if (!text) return;
     const next = [{ type: 'query', label: text }]
-      .concat(readJsonStore(RECENT_SEARCH_KEY, []).filter((item) => item && item.label !== text))
+      .concat(readJsonStore(key, []).filter((item) => item && item.label !== text))
       .slice(0, 6);
-    writeJsonStore(RECENT_SEARCH_KEY, next);
+    writeJsonStore(key, next);
   }
 
   function pushRecentVisit(item) {
@@ -457,7 +495,7 @@
   }
 
   function mailInitialGroups() {
-    const recent = readJsonStore(RECENT_SEARCH_KEY, []).slice(0, 2);
+    const recent = readJsonStore(MAIL_RECENT_SEARCH_KEY, []).slice(0, 2);
     const visited = readJsonStore(RECENT_VISIT_KEY, [])
       .filter((row) => row && row.emailMessageId)
       .slice(0, 2);
@@ -540,7 +578,8 @@
 
   function renderResultsBody(query, items, options = {}) {
     const { interactive = false, selectedIndex = 0 } = options;
-    const countLabel = `<div class="tma-search-popup__group-label">${items.length} result${items.length === 1 ? '' : 's'}</div>`;
+    const count = items.filter((item) => item && !item.submit).length;
+    const countLabel = `<div class="tma-search-popup__group-label">${count} result${count === 1 ? '' : 's'}</div>`;
     const rows = items.map((item, i) => renderRow(item, {
       size: 'compact',
       query,
@@ -564,6 +603,7 @@
       selectedIndex = 0,
       loading = false,
       nodeId = '',
+      placeholder = 'Search',
     } = options;
 
     const sizeCls = variant === 'large' ? 'tma-search-popup--large' : 'tma-search-popup--compact';
@@ -591,7 +631,7 @@
     }
 
     if (!inputValue) {
-      inputAttrs += ' placeholder="Search"';
+      inputAttrs += ` placeholder="${escapeHtml(placeholder)}"`;
       if (state === 'initial' && !interactive) {
         caret = '<span class="tma-search-popup__caret" aria-hidden="true">|</span>';
       }
@@ -966,6 +1006,8 @@
        taken here would be the empty-handed version forever, and an
        administrator would never find their own admin pages. */
     const mailOnly = options.scope === 'mail';
+    const recentKey = mailOnly ? MAIL_RECENT_SEARCH_KEY : RECENT_SEARCH_KEY;
+    const placeholder = options.placeholder || (mailOnly ? 'Search in mail' : 'Search');
     const sourceIndex = () => {
       if (mailOnly) return Array.isArray(options.index) ? options.index : [];
       return DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);
@@ -993,6 +1035,9 @@
     }
 
     function close() {
+      clearTimeout(state._debounce);
+      // A fetch still in flight must not paint into the next opening.
+      state._searchSeq = (state._searchSeq || 0) + 1;
       state.open = false;
       state.query = '';
       state.selectedIndex = 0;
@@ -1003,8 +1048,32 @@
       if (typeof options.onClose === 'function') options.onClose();
     }
 
+    /* Hands the typed words to the page instead of to one result: the
+       mailbox filters its whole list by them. Only a caller that passed
+       onSubmit has this; the site search has nowhere to send a bare query. */
+    function submitQuery(query) {
+      const text = String(query || '').trim();
+      if (!text || typeof options.onSubmit !== 'function') return false;
+      pushRecentSearch(text, recentKey);
+      options.onSubmit(text);
+      close();
+      return true;
+    }
+
+    /* The "Search mail for …" row that heads a mail result list. */
+    function submitRow(query) {
+      return { type: 'query', submit: true, query, label: `Search mail for “${query}”` };
+    }
+
     function navigateResult(item, event) {
       if (!item) return;
+      if (item.submit) {
+        submitQuery(item.query);
+        return;
+      }
+      // A search is remembered once it led somewhere, not letter by letter.
+      const q = state.query.trim();
+      if (q) pushRecentSearch(q, recentKey);
       if (item.type !== 'query') pushRecentVisit(item);
       if (typeof options.onNavigate === 'function') {
         options.onNavigate(item, event);
@@ -1017,8 +1086,7 @@
     function handleInitialSelect(item) {
       if (!item) return;
       if (item.type === 'query') {
-        state.query = item.label;
-        runSearch(item.label);
+        runSearch(item.label, { setInput: true });
         return;
       }
       if (item.navId || item.clientId || item.href || item.emailMessageId) {
@@ -1026,7 +1094,7 @@
         return;
       }
       if (item.label) {
-        runSearch(item.label);
+        runSearch(item.label, { setInput: true });
       }
     }
 
@@ -1092,14 +1160,17 @@
     }
 
     function bindPopupEvents(popup) {
-      if (!popup) return;
+      if (!popup || popup._searchBound) return;
+      popup._searchBound = true;
       const input = popup.querySelector('[data-search-input]');
-      const dismiss = popup.querySelector('[data-search-dismiss]');
 
       input?.addEventListener('input', () => {
         clearTimeout(state._debounce);
         const query = input.value;
-        state.loading = query.length > 0;
+        // The field is the truth while someone is typing; state follows it so
+        // no later repaint can put an older value back over their letters.
+        state.query = query;
+        state.loading = query.trim().length > 0;
         updatePopupSearchTrailing(popup, { loading: state.loading, showClear: false });
         state._debounce = setTimeout(() => runSearch(query), 120);
       });
@@ -1108,11 +1179,12 @@
         if (e.target.closest('[data-search-clear]')) {
           e.preventDefault();
           clearTimeout(state._debounce);
+          state._searchSeq = (state._searchSeq || 0) + 1;
           state.query = '';
           state.results = [];
           state.selectedIndex = 0;
           state.loading = false;
-          renderLivePopup();
+          renderLivePopup({ setInput: true });
           return;
         }
         if (e.target.closest('[data-search-dismiss]')) {
@@ -1127,6 +1199,21 @@
           return;
         }
 
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // Enter inside the debounce window: the results on screen belong
+          // to an older query, so act on the words actually typed.
+          if (state._debounce && mailOnly) {
+            clearTimeout(state._debounce);
+            state._debounce = null;
+            submitQuery(input ? input.value : state.query);
+            return;
+          }
+          if (state.results.length) navigateResult(state.results[state.selectedIndex], e);
+          else submitQuery(state.query);
+          return;
+        }
+
         const count = state.results.length;
         if (!count) return;
 
@@ -1138,9 +1225,6 @@
           e.preventDefault();
           state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
           refreshInteractiveBody(popup, 'results', state.query.trim());
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          navigateResult(state.results[state.selectedIndex], e);
         }
       });
     }
@@ -1178,6 +1262,32 @@
       }
     }
 
+    /* The popup's frame and its field are built once per opening. */
+    function ensureShell() {
+      let popup = popupEl();
+      if (popup) return popup;
+      mount.innerHTML = renderPopup({
+        variant: 'compact',
+        state: 'initial',
+        query: '',
+        interactive: true,
+        standalone: !sidebarEmbed,
+        sidebarEmbed,
+        placeholder,
+        nodeId: sidebarEmbed ? '' : '33257:43316',
+      });
+      popup = popupEl();
+      bindPopupEvents(popup);
+      return popup;
+    }
+
+    /* Paints around a field that is never rebuilt. Replacing the whole popup
+       on every search (the old way) took the focused input with it: on a
+       phone the keyboard dropped after each letter, since a field focused
+       from a timer is not a field the user tapped, and on a desktop the
+       letters typed while a fetch was in flight were pasted over by the
+       older value. The field is only written to on an explicit request
+       (opening with a query, picking a recent search, Clear). */
     function renderLivePopup(renderOpts = {}) {
       const q = state.query.trim();
       let stateName = 'initial';
@@ -1185,30 +1295,22 @@
       else if (state.loading) stateName = 'empty';
       else if (q && state.results.length === 0 && q.length > 1) stateName = 'empty';
 
-      mount.innerHTML = renderPopup({
-        variant: 'compact',
-        state: stateName,
-        query: q,
-        interactive: true,
-        standalone: !sidebarEmbed,
-        sidebarEmbed,
-        selectedIndex: state.selectedIndex,
-        loading: state.loading,
-        nodeId: sidebarEmbed ? '' : '33257:43316',
-      });
-
-      const popup = popupEl();
+      const popup = ensureShell();
       const input = inputEl();
-      if (input && !renderOpts.skipFocus) {
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
+      if (input && renderOpts.setInput && input.value !== state.query) {
+        input.value = state.query;
       }
-
-      bindPopupEvents(popup);
+      updatePopupSearchTrailing(popup, { loading: state.loading, showClear: !!q && !state.loading });
+      if (input && !renderOpts.skipFocus && document.activeElement !== input) {
+        input.focus();
+        const len = input.value.length;
+        if (typeof input.setSelectionRange === 'function') input.setSelectionRange(len, len);
+      }
       refreshInteractiveBody(popup, stateName, q);
     }
 
     function runSearch(query, renderOpts = {}) {
+      state._debounce = null;
       state.query = query;
       state.loading = false;
       const q = query.trim();
@@ -1219,7 +1321,6 @@
         return;
       }
 
-      pushRecentSearch(query);
       const pageHits = mailOnly ? [] : filterIndex(sourceIndex(), q);
       const contactHits = mailOnly ? [] : filterIndex(state.contacts, q);
       state.results = mergeResults([pageHits, contactHits]);
@@ -1233,13 +1334,15 @@
         Promise.resolve(options.fetchLiveResults(q)).then((live) => {
           if (seq !== state._searchSeq || !state.open) return;
           state.loading = false;
-          state.results = mailOnly
+          const current = state.query.trim();
+          const hits = mailOnly
             ? mergeResults([live])
             : mergeResults([
-                filterIndex(sourceIndex(), state.query.trim()),
-                filterIndex(state.contacts, state.query.trim()),
+                filterIndex(sourceIndex(), current),
+                filterIndex(state.contacts, current),
                 live,
               ]);
+          state.results = mailOnly && hits.length ? [submitRow(current)].concat(hits) : hits;
           state.selectedIndex = 0;
           renderLivePopup(renderOpts);
         }).catch(() => {
@@ -1257,14 +1360,15 @@
       state.open = true;
       if (overlay) overlay.hidden = false;
       if (openOpts.query != null && String(openOpts.query).length) {
-        ensurePrefetch().then(() => runSearch(String(openOpts.query), openOpts));
+        ensureShell();
+        ensurePrefetch().then(() => runSearch(String(openOpts.query), Object.assign({ setInput: true }, openOpts)));
         return;
       }
       state.query = '';
       state.selectedIndex = 0;
       state.loading = false;
       state.results = [];
-      renderLivePopup(openOpts);
+      renderLivePopup(Object.assign({ setInput: true }, openOpts));
       ensurePrefetch().then(() => {
         if (state.open && !state.query.trim()) renderLivePopup(openOpts);
       });

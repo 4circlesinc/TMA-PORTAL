@@ -32,6 +32,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
@@ -51,6 +52,9 @@ class MailController extends Controller
 
     /** Page sizes the inbox's "per page" control offers. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, 200];
+
+    /** The most hits a search returns; also the cap on the `limit` parameter. */
+    public const SEARCH_LIMIT = 50;
 
     /**
      * Views that are a flag rather than a place. They read like folders to the
@@ -157,14 +161,20 @@ class MailController extends Controller
             'label' => ['sometimes', 'nullable', 'string', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'perPage' => ['sometimes', 'integer', 'in:'.implode(',', self::PER_PAGE_OPTIONS)],
+            // A search is capped by `limit`, not `perPage`: the sidebar and
+            // the global search ask for a handful of hits, and 8 is not a
+            // page size the inbox offers.
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:'.self::SEARCH_LIMIT],
         ]);
 
         $user = $request->user();
         $search = trim((string) ($data['q'] ?? ''));
 
         if ($search !== '') {
+            $limit = (int) ($data['limit'] ?? self::SEARCH_LIMIT);
+
             return response()->json([
-                'messages' => $this->withThreadCounts($this->search($request, $search), $user->id),
+                'messages' => $this->withThreadCounts($this->search($request, $search, $limit), $user->id),
             ]);
         }
 
@@ -2163,31 +2173,95 @@ class MailController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function search(Request $request, string $query): array
+    /**
+     * Two searches, one answer: the mirrored mailbox is matched here by
+     * subject, sender and preview text, and the provider is asked for its
+     * own full-text hits. The union is what comes back, newest first.
+     *
+     * The mirror goes first because it is always there. Provider search is
+     * a live call against a token that may have expired, a mailbox still
+     * backfilling, or a Graph tenant that rate-limits `$search`; when it
+     * fails the reader should still see the mail that is already here rather
+     * than "No results" for a subject that is sitting in their inbox. A
+     * provider hit that has never been synced has no uuid to open it by, so
+     * it is skipped rather than rendered as an unopenable row.
+     */
+    private function search(Request $request, string $query, int $limit = self::SEARCH_LIMIT): array
     {
         $account = Mailbox::requireAccountFor($request->user());
 
-        $hits = Mailbox::provider($account)->search($query);
-        $remoteIds = collect($hits)->pluck('remote_id')->filter()->all();
+        $local = $this->searchMirror($account, $query, $limit);
 
-        $local = MailMessage::query()
-            ->with('labels')
-            ->where('connected_account_id', $account->id)
-            ->whereIn('remote_id', $remoteIds)
-            ->get()
-            ->keyBy('remote_id');
+        try {
+            $hits = Mailbox::provider($account)->search($query, $limit);
+        } catch (\Throwable $e) {
+            Log::info('Provider mail search failed; answering from the mirror only.', [
+                'account' => $account->id,
+                'error' => $e->getMessage(),
+            ]);
+            $hits = [];
+        }
 
-        return collect($hits)
-            ->map(function (array $hit) use ($local): ?array {
-                $row = $local->get($hit['remote_id'] ?? '');
-
-                // A hit we have never synced has no uuid to address it by, so
-                // it is skipped rather than rendered as an unopenable row.
-                return $row?->toRow();
-            })
+        $remoteIds = collect($hits)
+            ->pluck('remote_id')
             ->filter()
+            ->reject(fn ($id) => $local->contains(fn (MailMessage $m) => $m->remote_id === $id))
             ->values()
             ->all();
+
+        $remote = $remoteIds === [] ? collect() : MailMessage::query()
+            ->with(['labels', 'attachments'])
+            ->where('connected_account_id', $account->id)
+            ->whereIn('remote_id', $remoteIds)
+            ->get();
+
+        $messages = $local->concat($remote)
+            ->unique('uuid')
+            ->sortByDesc(fn (MailMessage $m) => $m->sent_at?->getTimestamp() ?? 0)
+            ->take($limit)
+            ->values();
+
+        return $this->withAvatars($messages);
+    }
+
+    /**
+     * The mirror's side of a search. Every word must appear somewhere in the
+     * subject, the sender's name or address, or the preview text; the body is
+     * left to the provider, whose index is built for it. Spam and Trash are
+     * skipped, as Gmail's own search skips them.
+     *
+     * @return Collection<int, MailMessage>
+     */
+    private function searchMirror(ConnectedAccount $account, string $query, int $limit): Collection
+    {
+        $words = preg_split('/\s+/u', mb_strtolower(trim($query)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        if ($words === []) {
+            return collect();
+        }
+
+        $builder = MailMessage::query()
+            ->with(['labels', 'attachments'])
+            ->where('user_id', $account->user_id)
+            ->where('connected_account_id', $account->id)
+            ->whereNotIn('folder', ['spam', 'trash']);
+
+        foreach ($words as $word) {
+            // `\` is the escape character on both Postgres and SQLite once it
+            // is named, so a literal % or _ in the query matches itself.
+            $like = '%'.addcslashes($word, '%_\\').'%';
+
+            $builder->where(function (Builder $any) use ($like) {
+                foreach (['subject', 'from_name', 'from_email', 'snippet'] as $column) {
+                    $any->orWhereRaw("lower({$column}) like ? escape '\\'", [$like]);
+                }
+            });
+        }
+
+        return $builder
+            ->orderByDesc('sent_at')
+            ->limit($limit)
+            ->get();
     }
 
     private function findMessage(Request $request, string $uuid): MailMessage

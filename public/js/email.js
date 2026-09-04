@@ -334,6 +334,21 @@
         syncEmailMobileNav(root, state);
         if (id) openMailById(root, state, render, id);
       },
+      // Enter, or the "Search mail for …" row: the words go to the list the
+      // way the header's Search in mail field sends them, and the drawer
+      // gets out of the way so the matches are what is on screen.
+      onSubmit: function (q) {
+        if (state) {
+          state.mobileSearchOpen = false;
+          state.mobileNavOpen = false;
+        }
+        var liveSidebar = root.querySelector('.tma-dash__email-sidebar');
+        if (liveSidebar) liveSidebar.classList.remove('tma-dash__email-sidebar--mobile-search');
+        var livePanel = root.querySelector('[data-email-sidebar-search-panel]');
+        if (livePanel) livePanel.hidden = true;
+        syncEmailMobileNav(root, state);
+        applyEmailListSearch(root, state, render, q);
+      },
       onClose: function () {
         if (state) state.mobileSearchOpen = false;
         var liveSidebar = root.querySelector('.tma-dash__email-sidebar');
@@ -343,6 +358,22 @@
       },
     });
     return mount._emailSearch;
+  }
+
+  /* Filters the list by a query, exactly as typing it into the header's
+   * Search in mail field would: the search is part of the listing context,
+   * so reloadMessages starts a fresh page one. The header field is written
+   * directly because ensureEmailHeaderSearch leaves a focused field alone. */
+  function applyEmailListSearch(root, state, render, q) {
+    var text = String(q || '').trim();
+    if (!text) return;
+    state.search = text;
+    state.searchFocused = false;
+    state.searchLoading = false;
+    var dash = getEmailDashRoot(root);
+    var headerInput = dash && dash.querySelector('[data-email-search]');
+    if (headerInput && headerInput.value !== text) headerInput.value = text;
+    reloadMessages(root, state, render);
   }
 
   function openEmailSidebarSearch(root, state, render) {
@@ -378,9 +409,9 @@
   function renderEmailSidebarMobileSearch(state) {
     return (
       '<div class="tma-dash__sidebar-mobile-head" data-email-sidebar-mobile-head data-key="email-sidebar-search-head">' +
-        '<button type="button" class="tma-dash__sidebar-mobile-search" data-email-sidebar-search-toggle aria-label="Search">' +
+        '<button type="button" class="tma-dash__sidebar-mobile-search" data-email-sidebar-search-toggle aria-label="Search in mail">' +
           '<img src="images/icons/tma/Search-16.svg" alt="" aria-hidden="true">' +
-          '<span class="tma-dash__search-text">Search</span>' +
+          '<span class="tma-dash__search-text">Search in mail</span>' +
         '</button>' +
       '</div>' +
       '<div class="tma-dash__sidebar-search-panel" data-email-sidebar-search-panel data-key="email-sidebar-search-panel"' +

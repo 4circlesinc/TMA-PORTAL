@@ -843,6 +843,17 @@
   color: var(--color-text-secondary);
 }
 
+/* A mail row's arrival time, on the right like the inbox list's. */
+.tma-search-popup__row-meta {
+  margin-left: auto;
+  padding-left: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .tma-search-popup__highlight {
   color: var(--tma-global-search-highlight);
 }

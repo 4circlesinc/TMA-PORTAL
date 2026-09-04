@@ -424,6 +424,33 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/email-sidebar.mjs
   ```
+- **`mailbox-search.mjs`** — the mailbox drawer's search on a phone, and the
+  site search it shares a popup with. Three things had gone wrong at once: the
+  field lost every letter after the first (the popup was rebuilt, input
+  included, after each debounced search, so the focused field was thrown away
+  mid-word — and a field focused from a timer is not one the user tapped, so
+  the phone's keyboard went with it); nothing came back (the lookup asked for
+  `perPage=8`, which is not an inbox page size, so the validator refused every
+  request); and it read as the site search (its recent queries, page-style
+  rows, a "Search" placeholder).
+
+  So it types a word slower than the popup's debounce and asserts the input is
+  still the *same node*, still focused, holding the whole word; that the rows
+  are emails (envelope icon, sender under the subject, an arrival time, the
+  keyword lit) and none of them site pages; that a row opens its message; that
+  Enter filters the list the way the header's Search in mail field does and
+  that field shows the query; that recent searches are the mailbox's own and
+  never leak into the site's list; and that the site search on a desktop
+  viewport keeps its field just the same and shows the mail hit with the
+  envelope.
+
+  Uses the mailbox fixture (the connected account with its fake token and the
+  three inbox messages). The fake token means every search also tries the
+  provider and fails; the mirror answers alone, which is the path being pinned.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/mailbox-search.mjs
+  ```
 - **`people.mjs`** — the whole People section, which used to render from a
   localStorage store that was always empty. Checks each of the eight URLs is
   *served* on a cold load (they 404'd before, so a hard refresh dropped you on
