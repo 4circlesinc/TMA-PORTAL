@@ -119,28 +119,6 @@
     '</div>';
   }
 
-  function renderPagination(state, totalRows) {
-    var pageSize = state.pageSize;
-    var totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-    if (state.page > totalPages) state.page = totalPages;
-
-    var pages = '';
-    for (var p = 1; p <= 5; p++) {
-      var active = p === state.page;
-      var disabled = p > totalPages ? ' disabled' : '';
-      pages += '<button type="button" class="tma-pagination__button' + (active ? ' tma-pagination__button--active' : '') + '" aria-label="Page ' + p + '"' + (active ? ' aria-current="page"' : '') + ' data-page="' + p + '"' + disabled + '><span class="tma-pagination__label">' + p + '</span></button>';
-    }
-
-    var prevDisabled = state.page <= 1 ? ' disabled' : '';
-    var nextDisabled = state.page >= totalPages ? ' disabled' : '';
-
-    return '<div class="tma-pagination-bar tma-pagination-bar--overview" data-files-pagination>' +
-      '<nav class="tma-pagination tma-pagination--overview" aria-label="Pagination">' + pages +
-        '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev"' + prevDisabled + '><img src="' + ICONS.ArrowLineLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
-        '<button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page" data-direction="next"' + nextDisabled + '><img src="' + ICONS.ArrowLineRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
-      '</nav></div>';
-  }
-
   function avatarSrc(avatar, name) {
     if (window.TMACurrentUser && TMACurrentUser.avatarSrc) {
       return TMACurrentUser.avatarSrc(avatar, name);
@@ -432,7 +410,15 @@
       searchFocused: false,
       searchLoading: false,
       page: 1,
-      pageSize: 10,
+      /*
+       * One page of eighty, not eight pages of ten.
+       *
+       * This is a "what have I touched lately" list, and paging it made the
+       * reader click through five pages to find a file they opened this
+       * morning. The server is asked for the same eighty, so the count on
+       * screen is the count in hand — no page two to fetch.
+       */
+      pageSize: 80,
       selected: {},
       filterType: '',
       sort: 'uploaded',
@@ -532,8 +518,7 @@
                 return renderRow(row, globalIndex, !!state.selected[row.id]);
               }).join('') +
             '</div>' +
-          '</div>' +
-          renderPagination(state, filtered.length)
+          '</div>'
         )
         : ('<div class="tma-dash__files-empty" data-files-body>' + emptyHtml + '</div>');
 
@@ -630,21 +615,6 @@
         });
       }
 
-      var pagination = container.querySelector('[data-files-pagination]');
-      pagination?.querySelectorAll('[data-page]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          if (btn.disabled) return;
-          state.page = parseInt(btn.getAttribute('data-page'), 10) || 1;
-          render();
-        });
-      });
-      pagination?.querySelector('[data-direction="prev"]')?.addEventListener('click', function () {
-        if (state.page > 1) { state.page--; render(); }
-      });
-      pagination?.querySelector('[data-direction="next"]')?.addEventListener('click', function () {
-        var totalPages = Math.max(1, Math.ceil(filtered.length / state.pageSize));
-        if (state.page < totalPages) { state.page++; render(); }
-      });
 
       /*
        * Picking rows, the way a folder window picks them.
@@ -788,7 +758,7 @@
       var only = section === 'recent' ? '&only=files' : '';
       state.loading = true;
       state.loadError = false;
-      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50' + only + '&lean=1', {
+      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=80' + only + '&lean=1', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })
