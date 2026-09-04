@@ -11418,6 +11418,14 @@
   container-name: email-list;
 }
 
+.tma-dash__email-list-chrome {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--color-white);
+}
+
 .tma-dash__email-list-head {
   display: flex;
   align-items: center;
@@ -11431,6 +11439,10 @@
   overflow-x: auto;
   overflow-y: hidden;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-white);
 }
 
 /* Category pills sit in the list toolbar between select-all and filter. */
@@ -11789,6 +11801,7 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+  overflow-anchor: none;
 }
 
 /* Collapsible inbox sections (Pinned / Today / …). Open by default; closed
@@ -11797,6 +11810,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow-anchor: none;
 }
 
 .tma-dash__email-list-group-toggle {
@@ -12350,7 +12364,8 @@
   scrollbar-width: none;
 }
 
-.tma-dash__email-list > .tma-dash__email-categories {
+.tma-dash__email-list > .tma-dash__email-categories,
+.tma-dash__email-list-chrome .tma-dash__email-categories {
   padding: var(--space-6) var(--email-pad);
   border-bottom: 1px solid var(--color-overlay-4);
 }

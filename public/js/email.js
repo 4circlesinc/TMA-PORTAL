@@ -4373,9 +4373,14 @@
 
     return (
       '<div class="tma-dash__email-list">' +
-      renderListMobileHead(state) +
-      /* Mobile hides the list head, so the pills get their own strip there. */
-      (isEmailMobile() ? renderInboxCategories(state) : '') +
+      /* Title + mailbox tabs stay put above the scroller. Expanding Today
+         must grow the list downward, not slide this chrome off the top. */
+      (isEmailMobile()
+        ? '<div class="tma-dash__email-list-chrome">' +
+          renderListMobileHead(state) +
+          renderInboxCategories(state) +
+          '</div>'
+        : renderListMobileHead(state)) +
       '<div class="tma-dash__email-list-head">' +
       /* Desktop select-all lives in the page toolbar; keep it here on mobile
        * where that bar is hidden. */
@@ -10148,6 +10153,39 @@
     wireListRows(root, state, render);
   }
 
+  /* Keep a date-section header on the same screen Y after it opens or
+     closes. Overflow anchoring and focus-scroll otherwise walk it up the
+     pane and cover the mailbox tabs. */
+  function snapshotListGroupToggle(btn) {
+    return {
+      key: btn.getAttribute('data-email-list-group-toggle'),
+      top: btn.getBoundingClientRect().top,
+    };
+  }
+
+  function restoreListGroupToggle(root, snap) {
+    if (!snap || !snap.key) return;
+    var next = root.querySelector('[data-email-list-group-toggle="' + snap.key + '"]');
+    if (!next) return;
+    var delta = next.getBoundingClientRect().top - snap.top;
+    var node = next.parentElement;
+    while (node && delta) {
+      var oy = window.getComputedStyle(node).overflowY;
+      var canScroll = (oy === 'auto' || oy === 'scroll' || oy === 'overlay')
+        && node.scrollHeight > node.clientHeight + 1;
+      if (canScroll) {
+        var before = node.scrollTop;
+        node.scrollTop += delta;
+        delta -= (node.scrollTop - before);
+      }
+      node = node.parentElement;
+    }
+    if (delta && window.scrollBy) window.scrollBy(0, delta);
+    try {
+      next.focus({ preventScroll: true });
+    } catch (err) { /* ignore */ }
+  }
+
   function wireListRows(root, state, render) {
     MORPH.unwired(root, '[data-email-list-group-toggle]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
@@ -10155,12 +10193,17 @@
         event.stopPropagation();
         var key = btn.getAttribute('data-email-list-group-toggle');
         if (!key) return;
+        var snap = snapshotListGroupToggle(btn);
         state.listGroups = state.listGroups || {};
         // Open by default; first click closes and persists false forever
         // until they open it again.
         state.listGroups[key] = state.listGroups[key] === false;
         saveListGroups(state.listGroups);
         updateInboxList(root, state, render);
+        restoreListGroupToggle(root, snap);
+        window.requestAnimationFrame(function () {
+          restoreListGroupToggle(root, snap);
+        });
       });
     });
 
