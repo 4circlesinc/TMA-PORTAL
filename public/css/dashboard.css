@@ -4031,7 +4031,9 @@
    so the same glyphs read on the dark sidebar. Compose already inverts onto
    the blue fill — leave it. */
 .tma-dash[data-theme="dark"] .tma-dash__email-folder:not(.tma-dash__email-folder--compose) img,
-:root[data-theme="dark"] .tma-dash__email-folder:not(.tma-dash__email-folder--compose) img {
+:root[data-theme="dark"] .tma-dash__email-folder:not(.tma-dash__email-folder--compose) img,
+.tma-dash[data-theme="dark"] .tma-dash__email-labels-create img,
+:root[data-theme="dark"] .tma-dash__email-labels-create img {
   filter: brightness(0) invert(1);
 }
 
@@ -10362,13 +10364,62 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-6);
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
   /* The card's own padding does this job now. */
   padding: 0;
+}
+
+/* Same Menu / Folders chrome as the main rail: two tabs, then one list. */
+.tma-dash__email-sidebar-tabs {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.tma-dash__email-sidebar .tma-dash__tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* The main rail's tab inset is for its caret column. This card's rows
+     start at the card padding, so the tabs sit there too. */
+  margin-left: 0;
+}
+
+.tma-dash__email-sidebar-tabs .tma-dash__email-labels-create {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Matches the main drawer's in-flow caret so mailbox icons sit on the
+   same column as Dashboard / Email. Hidden in the 180px card. */
+.tma-dash__email-nav-gutter {
+  display: none;
+  flex: 0 0 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__email-nav-gutter {
+  display: none;
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__tab:not(.tma-dash__tab--active) {
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__tabs {
+  margin-left: var(--space-8);
+  justify-content: center;
+  gap: 0;
 }
 
 /* ── Sidebar groups ──────────────────────────────────────
@@ -14174,7 +14225,39 @@
     min-height: 0;
     overflow: auto;
     padding: var(--space-4) var(--sidebar-mobile-nav-pad-x) var(--space-8);
+    gap: var(--space-6);
+  }
+
+  .tma-dash__email-sidebar .tma-dash__nav-section {
     gap: var(--space-2);
+    padding-bottom: var(--space-8);
+  }
+
+  .tma-dash__email-sidebar-tabs {
+    padding-bottom: var(--space-4);
+  }
+
+  .tma-dash__email-sidebar .tma-dash__tabs {
+    /* Same nudge as the main drawer so tab text lines up with its icons. */
+    margin-left: calc(var(--dash-nav-icon-real-inset) - var(--space-6));
+  }
+
+  .tma-dash__email-nav-gutter {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+  }
+
+  .tma-dash__email-sidebar-tabs .tma-dash__email-labels-create {
+    width: 24px;
+    height: 24px;
+    margin-right: var(--sidebar-mobile-nav-pad-x);
+  }
+
+  .tma-dash__email-sidebar-tabs .tma-dash__email-labels-create img {
+    width: 16px;
+    height: 16px;
   }
 
   .tma-dash__email-folders,

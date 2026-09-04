@@ -402,8 +402,8 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```
 
 - **`email-sidebar.mjs`** — the mailbox sidebar after it was restyled to match
-  the Feed's: a card at 180px with collapsible Mailboxes and Labels groups,
-  rather than the bare 72px icon rail that sat flush against the main menu.
+  the main menu: a 180px card with Mailboxes / Labels tabs (the same chrome as
+  Menu / Folders), rather than stacked collapsible groups.
 
   It asserts **computed** style, not markup, because every bug in this area has
   been a specificity bug that is invisible from the rule that looks like it
@@ -411,8 +411,8 @@ field placement and drawing, and computed CSS only exist in a browser.
   last) and a hardcoded `168px` inside a `min-width: 861px` media query each
   silently beat the sidebar's own width. It also checks the unread pill and a
   plain total are styled differently (a total drawn as the filled pill made "27
-  templates" read as 27 unread), that the collapsed rail still collapses, that a
-  closed group survives a reload, that dark mode does not leave the card white,
+  templates" read as 27 unread), that the collapsed rail still collapses, that
+  the chosen tab survives a reload, that dark mode does not leave the card white,
   and that mobile is untouched.
 
   One harness note: park the mouse away from the main rail before clicking in

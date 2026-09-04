@@ -231,6 +231,7 @@
    * the next visit rather than springing back open.
    */
   var SIDEBAR_GROUPS_KEY = 'tma.email.sidebarGroups';
+  var SIDEBAR_LIST_KEY = 'tma.email.sidebarList';
   var LIST_GROUPS_KEY = 'tma.email.listGroups';
 
   /* Inbox list sections, open by default; closing sticks until reopened. */
@@ -257,6 +258,28 @@
     try {
       localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(groups || {}));
     } catch (e) { /* ignore */ }
+  }
+
+  function loadSidebarList() {
+    try {
+      var saved = localStorage.getItem(SIDEBAR_LIST_KEY);
+      if (saved === 'labels' || saved === 'folders') return saved;
+    } catch (e) { /* ignore */ }
+    return 'folders';
+  }
+
+  function saveSidebarList(name) {
+    try {
+      localStorage.setItem(SIDEBAR_LIST_KEY, name);
+    } catch (e) { /* ignore */ }
+  }
+
+  function emailSidebarList(state) {
+    return state.sidebarList === 'labels' ? 'labels' : 'folders';
+  }
+
+  function emailNavGutter() {
+    return '<span class="tma-dash__email-nav-gutter" aria-hidden="true"></span>';
   }
 
   /* A group is open unless it was explicitly closed. On a phone the drawer
@@ -1491,19 +1514,23 @@
     );
   }
 
-  function renderEmailLabelsSection(state) {
-    // The "+" rides in the group header, the way the Feed's new-channel
-    // button sits beside its sidebar title.
+  function renderEmailSidebarTabs(state) {
+    var list = emailSidebarList(state);
+    var foldersOn = list === 'folders';
     var create =
       '<button type="button" class="tma-dash__email-labels-create" data-email-label-create' +
       ' aria-label="Create label" title="Create label">' +
       '<img src="' + ICONS.Plus + '" alt="">' +
       '</button>';
-
     return (
-      '<div class="tma-dash__email-labels-section">' +
-      renderEmailSidebarGroup(state, 'labels', 'Labels', renderEmailLabelsNav(state), create) +
-      renderEmailLabelEditor(state) +
+      '<div class="tma-dash__nav-section tma-dash__nav-section--tabs tma-dash__email-sidebar-tabs">' +
+      '<div class="tma-dash__tabs" role="tablist" aria-label="Mailbox sections">' +
+      '<button type="button" class="tma-dash__tab' + (foldersOn ? ' tma-dash__tab--active' : '') + '"' +
+      ' data-email-list-tab="folders" role="tab" aria-selected="' + String(foldersOn) + '">Mailboxes</button>' +
+      '<button type="button" class="tma-dash__tab' + (foldersOn ? '' : ' tma-dash__tab--active') + '"' +
+      ' data-email-list-tab="labels" role="tab" aria-selected="' + String(!foldersOn) + '">Labels</button>' +
+      '</div>' +
+      (foldersOn ? '' : create) +
       '</div>'
     );
   }
@@ -1520,6 +1547,7 @@
           '<div class="tma-dash__email-label-row' + (active ? ' tma-dash__email-label-row--active' : '') + '">' +
           '<button type="button" class="' + cls + '" data-email-sidebar-label="' + esc(label.id) + '"' +
           ' title="' + esc(label.name) + '" aria-label="' + esc(label.name) + '">' +
+          emailNavGutter() +
           renderLabelTag(label.tone) +
           '<span class="tma-dash__email-label-item-name">' + esc(label.name) + '</span>' +
           (count ? '<span class="tma-dash__email-label-item-count">' + count + '</span>' : '') +
@@ -4200,9 +4228,16 @@
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
           '</div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
-      // New Mail lives in the page toolbar, keep this rail to folders/labels.
-      renderEmailSidebarGroup(state, 'folders', 'Mailboxes', renderFolders(state)) +
-      renderEmailLabelsSection(state) +
+      renderEmailSidebarTabs(state) +
+      '<div class="tma-dash__nav-section tma-dash__email-sidebar-list" data-email-list="folders"' +
+      (emailSidebarList(state) === 'folders' ? '' : ' hidden') + '>' +
+      renderFolders(state) +
+      '</div>' +
+      '<div class="tma-dash__nav-section tma-dash__email-sidebar-list" data-email-list="labels"' +
+      (emailSidebarList(state) === 'labels' ? '' : ' hidden') + '>' +
+      renderEmailLabelsNav(state) +
+      '</div>' +
+      renderEmailLabelEditor(state) +
       '</div>' +
       '</div>'
     );
@@ -4263,6 +4298,7 @@
         return (
           '<button type="button" class="' + cls + '" data-email-folder="' + esc(folder.id) + '"' +
           ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
+          emailNavGutter() +
           '<img src="' + esc(ICONS[folder.icon]) + '" alt="">' +
           '<span class="tma-dash__email-folder-label">' + esc(folder.label) + '</span>' +
           countHtml +
@@ -10444,6 +10480,8 @@
         if (state.activeLabelId === labelId) state.activeLabelId = null;
         else state.activeLabelId = labelId;
         state.folder = 'inbox';
+        state.sidebarList = 'labels';
+        saveSidebarList('labels');
         state.reading = false;
         state.mobileNavOpen = false;
         syncEmailUrl('inbox');
@@ -11043,6 +11081,16 @@
       }
     }
 
+    MORPH.unwired(root, '[data-email-list-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var name = btn.getAttribute('data-email-list-tab');
+        if (name !== 'folders' && name !== 'labels') return;
+        state.sidebarList = name;
+        saveSidebarList(name);
+        render();
+      });
+    });
+
     MORPH.unwired(root, '[data-email-group-toggle]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.getAttribute('data-email-group-toggle');
@@ -11149,6 +11197,8 @@
         }
         state.folder = folder;
         state.activeLabelId = null;
+        state.sidebarList = 'folders';
+        saveSidebarList('folders');
         state.listFilter = 'all';
         state.filterMenuOpen = false;
         state.reading = false;
@@ -11570,6 +11620,9 @@
       if (typeof root._emailState.sidebarCollapsed !== 'boolean') {
         root._emailState.sidebarCollapsed = loadSidebarCollapsed();
       }
+      if (root._emailState.sidebarList !== 'labels' && root._emailState.sidebarList !== 'folders') {
+        root._emailState.sidebarList = loadSidebarList();
+      }
       if (!root._emailState.sidebarGroups) {
         root._emailState.sidebarGroups = loadSidebarGroups();
       }
@@ -11676,6 +11729,7 @@
       splitListRatio: loadSplitListRatio(),
       sidebarCollapsed: loadSidebarCollapsed(),
       sidebarMode: loadSidebarMode(),
+      sidebarList: loadSidebarList(),
       sidebarGroups: loadSidebarGroups(),
       listGroups: loadListGroups(),
       /* Which conversations the reader has opened in the list, and the

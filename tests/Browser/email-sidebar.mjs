@@ -1,18 +1,11 @@
 import { chromium } from 'playwright';
 
 /*
- * The mailbox sidebar, after it was restyled to match the Feed's.
+ * The mailbox sidebar, after it was restyled to match the main menu.
  *
- * It used to be a bare 72px icon rail sitting flush against the main menu,
- * which read as a second strip of the same rail. It is a card now — same
- * border, radius, background and row metrics as .tma-dash__feed-sidebar — with
- * collapsible Mailboxes and Labels groups.
- *
- * Most of what is checked here is *computed* style rather than markup, because
- * the bugs in this area have all been specificity bugs: a blanket width in
- * dashboard-tma-overrides.css (which loads last) and a hardcoded width in a
- * min-width media query both silently beat the sidebar's own rule, and neither
- * is visible from the rule that looks like it should win.
+ * Tabs are Mailboxes / Labels (same chrome as Menu / Folders). The open card
+ * is still 180px. Most of what is checked here is *computed* style rather than
+ * markup, because the bugs in this area have all been specificity bugs.
  *
  * See README.md for setup. Needs a staff account.
  */
@@ -77,6 +70,7 @@ try {
     try {
       localStorage.removeItem('tma.email.sidebarCollapsed.v2');
       localStorage.removeItem('tma.email.sidebarGroups');
+      localStorage.removeItem('tma.email.sidebarList');
     } catch (e) { /* ignore */ }
   });
   await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
@@ -93,12 +87,16 @@ try {
   step(2, 'It opens expanded, showing folder names');
   check(await page.locator('.tma-dash__email-folder-label').first().isVisible(),
     'folder labels are visible by default (not a bare icon rail)');
-  check(await page.locator('[data-email-group-toggle="folders"]').count() === 1,
-    'the Mailboxes group has a header');
-  check(await page.locator('[data-email-group-toggle="labels"]').count() === 1,
-    'the Labels group has a header');
-  check(await page.locator('.tma-dash__email-sidebar-nav > .tma-dash__email-folder--compose').count() === 1,
-    'New Email sits above the groups, so collapsing Mailboxes cannot hide it');
+  check(await page.locator('[data-email-list-tab="folders"]').count() === 1,
+    'the Mailboxes tab is there');
+  check(await page.locator('[data-email-list-tab="labels"]').count() === 1,
+    'the Labels tab is there');
+  check(await page.locator('[data-email-list-tab="folders"]').getAttribute('aria-selected') === 'true',
+    'Mailboxes is the default tab');
+  check(await page.locator('[data-email-list="folders"]').isVisible(),
+    'the mailbox list is showing');
+  check(await page.locator('[data-email-list="labels"]').isHidden(),
+    'the labels list is parked until that tab is opened');
 
   step(3, 'Counts are small plain numbers, not coloured badges');
   /*
@@ -136,11 +134,15 @@ try {
       `unread still reads first, by weight (${badges.unread.weight} vs ${badges.plain.weight})`);
   }
 
-  step(4, 'Groups collapse, and stay collapsed across a reload');
-  await page.click('[data-email-group-toggle="labels"]');
+  step(4, 'Tabs switch, and stay on the chosen tab across a reload');
+  await page.click('[data-email-list-tab="labels"]');
   await page.waitForTimeout(400);
-  check(await page.locator('[data-email-group-toggle="labels"]').getAttribute('aria-expanded') === 'false',
-    'the Labels group closes');
+  check(await page.locator('[data-email-list-tab="labels"]').getAttribute('aria-selected') === 'true',
+    'the Labels tab is selected');
+  check(await page.locator('[data-email-list="labels"]').isVisible(),
+    'the labels list is showing');
+  check(await page.locator('[data-email-list="folders"]').isHidden(),
+    'the mailbox list is hidden');
 
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(2400);
@@ -149,9 +151,9 @@ try {
   // the click. That is the rail's normal behaviour, not an overlap bug.
   await page.mouse.move(1200, 600);
   await page.waitForTimeout(400);
-  check(await page.locator('[data-email-group-toggle="labels"]').getAttribute('aria-expanded') === 'false',
-    'it is still closed after a reload');
-  await page.click('[data-email-group-toggle="labels"]');
+  check(await page.locator('[data-email-list-tab="labels"]').getAttribute('aria-selected') === 'true',
+    'Labels is still selected after a reload');
+  await page.click('[data-email-list-tab="folders"]');
   await page.waitForTimeout(300);
 
   step(5, 'The collapsed icon rail still works');
@@ -160,8 +162,8 @@ try {
 
   const rail = await styleOf(page, '.tma-dash__email-sidebar');
   check(rail.width === '72px', `collapsing gives a 72px rail (got ${rail.width})`);
-  check(await page.locator('.tma-dash__email-group-head').count() === 0,
-    'group headers are not rendered in the rail — there is no room to label them');
+  check(await page.locator('[data-email-list-tab]').count() === 2,
+    'the Mailboxes / Labels tabs stay in the rail');
   check(await page.locator('.tma-dash__email-folder').count() > 0,
     'the folder icons are still there');
 
