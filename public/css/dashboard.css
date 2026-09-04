@@ -2528,19 +2528,30 @@
     display: none;
   }
 
+  /*
+   * One header line: who it is, what state they are in, and the menu.
+   *
+   * The name used to have the row to itself with the status beside it and the
+   * menu floating over the corner, so "iGraphix Marketing & Co." came down in
+   * three lines and pushed the card to twice its height. Three columns now —
+   * the name takes what is left and ellipsises, the way a name in a column
+   * does everywhere else in the portal.
+   */
   .tma-dash__ctable:not(.tma-dash__ctable--overview) .tma-dash__ctr--body {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "user status"
-      "serial serial"
-      "project project"
-      "address address"
-      "date date";
-    gap: var(--space-8) var(--space-16);
+      "user status actions"
+      "serial serial serial"
+      "project project project"
+      "address address address"
+      "date date date";
+    gap: var(--space-8) var(--space-12);
     padding: var(--space-16) var(--space-24);
-    padding-inline-end: calc(var(--space-24) + 28px);
+    /* The tick sits in the top-left corner, so the card starts past it: the
+       16px box, and 8px of air after it. */
+    padding-inline-start: calc(var(--space-16) + 24px);
     border-radius: var(--radius-20);
     background: var(--dash-row-card-bg);
     border: var(--dash-row-card-border);
@@ -2551,26 +2562,26 @@
 
   .tma-dash__ctable .tma-dash__ctr--body:not(:has(.tma-dash__cc--status)):has(.tma-dash__cc--actions):not(:has(.tma-dash__cc--uploader)) {
     grid-template-areas:
-      "user actions"
-      "email email"
-      "date date";
+      "user user actions"
+      "email email email"
+      "date date date";
   }
 
   .tma-dash__ctable .tma-dash__ctr--body:not(:has(.tma-dash__cc--status)):has(.tma-dash__cc--id) {
     grid-template-areas:
-      "user user"
-      "serial serial"
-      "email email"
-      "address address"
-      "date date";
+      "user user actions"
+      "serial serial serial"
+      "email email email"
+      "address address address"
+      "date date date";
   }
 
   .tma-dash__ctable .tma-dash__ctr--body:not(:has(.tma-dash__cc--address)):has(.tma-dash__cc--id):has(.tma-dash__cc--status) {
     grid-template-areas:
-      "user status"
-      "serial serial"
-      "email email"
-      "date date";
+      "user status actions"
+      "serial serial serial"
+      "email email email"
+      "date date date";
   }
 
   .tma-dash__ctable .tma-dash__ctr--body:hover,
@@ -2586,7 +2597,8 @@
   .tma-dash__ctable .tma-dash__cc--check {
     position: absolute;
     top: var(--space-16);
-    right: var(--space-24);
+    inset-inline-start: var(--space-16);
+    inset-inline-end: auto;
     flex: none;
   }
 
@@ -2601,23 +2613,27 @@
     flex: 0 0 40px;
   }
 
+  /* The name shares its line now, so it gives way with an ellipsis rather
+     than stacking a word per line. */
   .tma-dash__ctable .tma-dash__cc--user span {
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
     font-weight: 600;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .tma-dash__ctable .tma-dash__cc--status {
+  .tma-dash__ctable .tma-dash__cc--status,
+  .tma-dash__ctable .tma-dash__cc--actions {
     grid-area: status;
     justify-self: end;
+    align-self: center;
   }
 
   .tma-dash__ctable .tma-dash__cc--actions {
     grid-area: actions;
-    justify-self: end;
   }
 
   .tma-dash__ctable .tma-dash__cc--id {
@@ -7014,7 +7030,9 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-8) var(--space-16);
     padding: var(--space-16) var(--space-24);
-    padding-inline-end: calc(var(--space-24) + 28px);
+    /* The corner the tick sits in is the one the card leaves room for: the
+       16px box, and 8px of air after it. */
+    padding-inline-start: calc(var(--space-16) + 24px);
     border-radius: var(--radius-20);
     background: var(--dash-row-card-bg);
     border: var(--dash-row-card-border);
@@ -7047,11 +7065,16 @@
     min-width: 0;
   }
 
-  .tma-dash__users--overview .tma-dash__cc--check,
-  .tma-dash__activity--overview .tma-dash__cc--check {
+  /* The tick belongs in the corner the card starts at. */
+  /* Three classes deep, to outrank the desktop rule that keeps the tick
+     hidden until the row is hovered — nothing hovers on a phone. */
+  .tma-dash__users--overview .tma-dash__ctr--body .tma-dash__cc--check,
+  .tma-dash__activity--overview .tma-dash__ctr--body .tma-dash__cc--check {
     position: absolute;
     top: var(--space-16);
-    right: var(--space-24);
+    inset-inline-start: var(--space-16);
+    inset-inline-end: auto;
+    width: auto;
     opacity: 1;
   }
 
@@ -7079,9 +7102,29 @@
       "date date";
   }
 
+  /*
+   * One header line: the name, the state it is in, and the menu.
+   *
+   * The name had the line to itself and came down a word at a time —
+   * "iGraphix / Marketing / & Co." — with the pill and the dots stranded
+   * beside the second word. They share the line now and the name gives way
+   * with an ellipsis, which is what its own .tma-dash__cc-truncate class was
+   * always for.
+   */
   .tma-dash__users--overview .tma-dash__cc--user {
     grid-area: user;
-    gap: var(--space-16);
+    gap: var(--space-12);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .tma-dash__users--overview .tma-dash__cc-user-stack {
+    min-width: 0;
+  }
+
+  .tma-dash__users--overview .tma-dash__cc--user .tma-dash__pill,
+  .tma-dash__users--overview .tma-dash__cc--user .tma-dash__chip {
+    flex: 0 0 auto;
   }
 
   .tma-dash__users--overview .tma-dash__cc--user img {
@@ -7094,14 +7137,16 @@
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
     font-weight: 600;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tma-dash__users--overview .tma-dash__cc--actions {
     grid-area: actions;
     justify-self: end;
+    align-self: center;
   }
 
   .tma-dash__users--overview .tma-dash__cc--email,
@@ -7373,7 +7418,9 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-8) var(--space-16);
     padding: var(--space-16) var(--space-24);
-    padding-inline-end: calc(var(--space-24) + 28px);
+    /* The corner the tick sits in is the one the card leaves room for: the
+       16px box, and 8px of air after it. */
+    padding-inline-start: calc(var(--space-16) + 24px);
     border-radius: var(--radius-20);
     background: var(--dash-row-card-bg);
     border: var(--dash-row-card-border);
@@ -7392,9 +7439,16 @@
       "date date";
   }
 
+  /* Name, state and menu share the header line; the name gives way. */
   .tma-dash__users--overview .tma-dash__cc--user {
     grid-area: user;
-    gap: var(--space-16);
+    gap: var(--space-12);
+    align-items: center;
+    min-width: 0;
+  }
+
+  .tma-dash__users--overview .tma-dash__cc-user-stack {
+    min-width: 0;
   }
 
   .tma-dash__users--overview .tma-dash__cc--actions {
@@ -7429,11 +7483,16 @@
     color: var(--color-text-secondary);
   }
 
-  .tma-dash__users--overview .tma-dash__cc--check,
-  .tma-dash__activity--overview .tma-dash__cc--check {
+  /* The tick belongs in the corner the card starts at. */
+  /* Three classes deep, to outrank the desktop rule that keeps the tick
+     hidden until the row is hovered — nothing hovers on a phone. */
+  .tma-dash__users--overview .tma-dash__ctr--body .tma-dash__cc--check,
+  .tma-dash__activity--overview .tma-dash__ctr--body .tma-dash__cc--check {
     position: absolute;
     top: var(--space-16);
-    right: var(--space-24);
+    inset-inline-start: var(--space-16);
+    inset-inline-end: auto;
+    width: auto;
     opacity: 1;
   }
 
