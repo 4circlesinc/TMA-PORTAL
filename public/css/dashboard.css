@@ -3786,9 +3786,12 @@
   --color-white: #1c1c1c;
   --color-black: #ffffff;
   --color-text-primary: rgba(255, 255, 255, 0.9);
-  --color-text-secondary: rgba(255, 255, 255, 0.4);
+  --color-text-secondary: rgba(255, 255, 255, 0.62);
   --color-text-muted: rgba(255, 255, 255, 0.55);
+  --color-text-hint: var(--color-primary);
   --color-text-placeholder: rgba(255, 255, 255, 0.25);
+  --text-color-primary: var(--color-text-primary);
+  --text-color-secondary: var(--color-text-secondary);
   --color-border-soft: rgba(255, 255, 255, 0.12);
   --color-border-medium: rgba(255, 255, 255, 0.28);
   --color-border-strong: rgba(255, 255, 255, 0.45);
@@ -4029,8 +4032,58 @@
 .tma-dash[data-theme="dark"] .tma-dash__email-list-group-toggle,
 :root[data-theme="dark"] .tma-dash__email-list-group-toggle,
 .tma-dash[data-theme="dark"] .tma-dash__email-list-group-label,
-:root[data-theme="dark"] .tma-dash__email-list-group-label {
+:root[data-theme="dark"] .tma-dash__email-list-group-label,
+.tma-dash[data-theme="dark"] .tma-dash__email-list-group-caret,
+:root[data-theme="dark"] .tma-dash__email-list-group-caret {
   color: var(--color-text-primary);
+}
+
+/* Rows under Today / Pinned / Older, plus the menus those carets open.
+   Secondary at 40% white and unread's --color-primary-dark (#136da0) both
+   sit on the dark list and read as missing text. */
+.tma-dash[data-theme="dark"] .tma-dash__email-row-sender,
+:root[data-theme="dark"] .tma-dash__email-row-sender,
+.tma-dash[data-theme="dark"] .tma-dash__email-row-subject,
+:root[data-theme="dark"] .tma-dash__email-row-subject,
+.tma-dash[data-theme="dark"] .tma-dash__menu-item,
+:root[data-theme="dark"] .tma-dash__menu-item {
+  color: var(--color-text-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__email-row-snippet,
+:root[data-theme="dark"] .tma-dash__email-row-snippet,
+.tma-dash[data-theme="dark"] .tma-dash__email-row-time,
+:root[data-theme="dark"] .tma-dash__email-row-time,
+.tma-dash[data-theme="dark"] .tma-dash__email-row-preview,
+:root[data-theme="dark"] .tma-dash__email-row-preview,
+.tma-dash[data-theme="dark"] .tma-dash__email-row-body,
+:root[data-theme="dark"] .tma-dash__email-row-body {
+  color: var(--color-text-muted);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__email-row--unread .tma-dash__email-row-subject-text,
+:root[data-theme="dark"] .tma-dash__email-row--unread .tma-dash__email-row-subject-text,
+.tma-dash[data-theme="dark"] .tma-dash__email-row--unread .tma-dash__email-row-time,
+:root[data-theme="dark"] .tma-dash__email-row--unread .tma-dash__email-row-time {
+  color: var(--color-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__email-row-thread-toggle img,
+:root[data-theme="dark"] .tma-dash__email-row-thread-toggle img {
+  filter: invert(1) brightness(1.6);
+}
+
+.tma-dash[data-theme="dark"] select,
+:root[data-theme="dark"] select {
+  color-scheme: dark;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-input);
+}
+
+.tma-dash[data-theme="dark"] option,
+:root[data-theme="dark"] option {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-popup);
 }
 
 /* Primary buttons flip to white in dark, so their forced-white glyphs must
