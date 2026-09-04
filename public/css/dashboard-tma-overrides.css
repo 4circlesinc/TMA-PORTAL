@@ -2340,3 +2340,39 @@ body::-webkit-scrollbar,
 :root[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
   color: var(--color-text-secondary);
 }
+
+/* ── The Users table between a phone and a desktop ────────────────────
+ *
+ * Its cards arrive at 767px, but the portal is a touch layout to 1024 — so
+ * a tablet got the desktop table in 800px: six columns, the name cut to
+ * "iGra…" with "In office" wrapping under it, and the address cut mid-word.
+ *
+ * The two columns that go are the two nobody scans a directory by. The
+ * serial is a reference you use once you have found the person, and the
+ * account type is on their profile — the name, what they are doing, their
+ * email and when they joined are what the list is read for. Both come back
+ * at 1025, and the phone's card at 767 shows all of them anyway.
+ */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .tma-dash__users .tma-dash__ctable .tma-dash__cc--id,
+  .tma-dash__users .tma-dash__ctable .tma-dash__cc--address {
+    display: none;
+  }
+
+  /* The row is a fixed grid, so dropping cells means restating the columns:
+     tick, user, email, joined, and the menu's slot. */
+  .tma-dash__users .tma-dash__ctable .tma-dash__ctr--head,
+  .tma-dash__users .tma-dash__ctable .tma-dash__ctr--body {
+    grid-template-columns: 40px minmax(0, 1.4fr) minmax(0, 1.6fr) 150px;
+  }
+
+  /* The name and its work status side by side, not stacked into two lines
+     by a column too narrow to hold them. */
+  .tma-dash__users .tma-dash__ctable .tma-dash__cc--user {
+    min-width: 0;
+  }
+
+  .tma-dash__users .tma-dash__ctable .tma-dash__cc--user .tma-dash__cc-user-stack {
+    min-width: 0;
+  }
+}
