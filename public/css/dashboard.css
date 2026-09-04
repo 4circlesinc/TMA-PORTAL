@@ -4027,6 +4027,14 @@
   filter: brightness(0) invert(1);
 }
 
+/* Mailbox rail: brightness(0) flattens StarFilled / FlagFill, then invert
+   so the same glyphs read on the dark sidebar. Compose already inverts onto
+   the blue fill — leave it. */
+.tma-dash[data-theme="dark"] .tma-dash__email-folder:not(.tma-dash__email-folder--compose) img,
+:root[data-theme="dark"] .tma-dash__email-folder:not(.tma-dash__email-folder--compose) img {
+  filter: brightness(0) invert(1);
+}
+
 .tma-dash[data-theme="dark"] .tma-dash__email-list-mobile-title,
 :root[data-theme="dark"] .tma-dash__email-list-mobile-title,
 .tma-dash[data-theme="dark"] .tma-dash__email-list-group-toggle,
@@ -14130,19 +14138,27 @@
   }
 
   .tma-dash__email-sidebar {
-    --email-mobile-nav-pad-x: var(--dash-mobile-gutter, var(--space-16));
+    /* Same drawer metrics as .tma-dash__sidebar — width, pad, type, icons. */
+    --sidebar-mobile-nav-pad-x: var(--space-4);
+    --email-mobile-nav-pad-x: var(--sidebar-mobile-nav-pad-x);
+    --dash-icon-md: 24px;
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
     z-index: 100;
+    flex: none;
     width: var(--dash-mobile-drawer-w);
     max-width: var(--dash-mobile-drawer-w);
+    min-width: 0;
+    gap: 0;
     padding: 0;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--color-white);
+    border: 0;
     border-right: 0.5px solid var(--dash-border);
+    border-radius: 0;
     box-shadow: none;
     transform: translateX(-100%);
     transition: transform var(--transition-base), width var(--transition-base), max-width var(--transition-base);
@@ -14157,20 +14173,25 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: var(--space-12) var(--email-mobile-nav-pad-x) var(--space-8);
-    gap: 0;
+    padding: var(--space-4) var(--sidebar-mobile-nav-pad-x) var(--space-8);
+    gap: var(--space-2);
   }
 
-  .tma-dash__email-folders {
+  .tma-dash__email-folders,
+  .tma-dash__email-group-body {
     gap: var(--space-2);
     padding: 0;
+    margin-top: 0;
   }
 
-  /* Rows read exactly like the main menu drawer's nav items: same box,
-     same regular weight, full-ink icons, quiet secondary counts. */
+  .tma-dash__email-group {
+    padding-bottom: var(--space-8);
+  }
+
+  /* Same row box as .tma-dash__sidebar .tma-dash__nav-item */
   .tma-dash__email-folder {
     gap: var(--space-12);
-    padding: var(--space-12);
+    padding: var(--space-12) var(--sidebar-mobile-nav-pad-x);
     min-height: 52px;
     font-size: var(--text-size-16);
     line-height: var(--text-lh-16);
@@ -14179,8 +14200,13 @@
   }
 
   .tma-dash__email-folder--active {
-    background: var(--color-hover);
+    background: transparent;
     font-weight: 600;
+  }
+
+  .tma-dash__email-folder:hover,
+  .tma-dash__email-folder--active:hover {
+    background: var(--color-hover);
   }
 
   .tma-dash__email-folder img {
@@ -14200,21 +14226,33 @@
 
   .tma-dash__email-labels-section {
     flex: 1 1 auto;
-    margin-top: var(--space-8);
-    padding-top: var(--space-8);
-    border-top: 0.5px solid var(--dash-border);
-    gap: var(--space-4);
+    margin-top: var(--space-10);
+    padding-top: var(--space-4);
+    border-top: 0;
+    gap: var(--space-2);
   }
 
   .tma-dash__email-group-head {
-    padding: 0 0 var(--space-4);
+    padding: 0;
   }
 
   .tma-dash__email-group-title {
+    gap: var(--space-12);
+    padding: var(--space-8) var(--sidebar-mobile-nav-pad-x) var(--space-4);
     font-size: var(--text-size-12);
     line-height: var(--text-lh-12);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
+  }
+
+  .tma-dash__email-group-caret {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tma-dash__email-group-caret svg {
+    width: 20px;
+    height: 20px;
   }
 
   .tma-dash__email-labels {
@@ -14224,7 +14262,7 @@
 
   .tma-dash__email-label-item {
     gap: var(--space-12);
-    padding: var(--space-12);
+    padding: var(--space-12) var(--sidebar-mobile-nav-pad-x);
     min-height: 52px;
     font-size: var(--text-size-16);
     line-height: var(--text-lh-16);
