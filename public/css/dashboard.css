@@ -7927,12 +7927,36 @@
   gap: var(--space-16);
 }
 
+/*
+ * The label takes what it needs; the value takes the rest.
+ *
+ * Two equal columns split a phone's card down the middle and left an email
+ * about 190px — so it broke across two lines while the label beside it used
+ * half the row to say "Email". The labels here are two words at most.
+ */
 .tma-dash__account-detail-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1fr);
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
   gap: var(--space-8);
   align-items: center;
   max-width: 420px;
+}
+
+/*
+ * Nothing in this row may push past the card.
+ *
+ * An email is one long word, and a grid item's automatic minimum is its
+ * longest word — so "vfrancis@tmantoinelaw.com" set the column's width and
+ * the value ran off the card's right edge, under the rounded corner and out
+ * into the page. min-width lets the column take its share instead, and the
+ * address breaks inside it rather than deciding how wide it is.
+ */
+.tma-dash__account-detail-label,
+.tma-dash__account-detail-value,
+.tma-dash__account-detail-label-wrap,
+.tma-dash__account-detail-value-wrap {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tma-dash__account-detail-label {
