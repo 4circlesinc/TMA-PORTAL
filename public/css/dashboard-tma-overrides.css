@@ -1897,7 +1897,7 @@ body::-webkit-scrollbar,
   }
 }
 
-/* ── Overview → Files on touch widths: the File Library's own row ────
+/* ── Overview → Files and the recycle bin: the File Library's own row ──
  *
  * This list is a Users-shaped table (.tma-dash__ctable), so on a phone it
  * took the Users card layout with it: the type and the sharing squeezed to
@@ -1909,12 +1909,13 @@ body::-webkit-scrollbar,
  * row menu top-right, and the columns that do not earn phone room stepping
  * aside. Placed after the ctable card layer so these win the tie.
  *
- * Scoped to the files list by its own container: .tma-dash__ctable--overview
- * is the shape Users, Activity and the recycle bin are drawn in too, and they
- * are records, not files — their cards want their captions.
+ * Scoped by the files container, which the recycle bin carries too — it is
+ * the same list of files, one state later, and it reads the same way. Users
+ * and Activity share the ctable shape and are deliberately left out here:
+ * they are records, not files.
  */
 @media (max-width: 1024px) {
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview {
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1930,11 +1931,11 @@ body::-webkit-scrollbar,
     margin: 0;
   }
 
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview:last-child {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview:last-child {
     border-bottom: 0;
   }
 
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc {
     display: block;
     padding: 0;
     min-height: 0;
@@ -1945,44 +1946,45 @@ body::-webkit-scrollbar,
   }
 
   /* No captions: this is a row, not a record card. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc::before {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc::before {
     content: none !important;
   }
 
   /* What a phone does not have room to say. The folder is the one loss worth
      naming, and the row still opens into it. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--type,
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--folder,
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--uploader,
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--shared,
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--check,
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--file-time {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--type,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--folder,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--uploader,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--shared,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--check,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--file-time {
     display: none;
   }
 
   /* Line 1: the name, the row menu at the far right. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--filename {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--filename {
     grid-column: 1;
     grid-row: 1;
     min-width: 0;
   }
 
   /* The mark stands beside both lines rather than on top of the first. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-file-icon {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-file-icon {
     position: absolute;
     left: var(--space-4);
     top: 50%;
     transform: translateY(-50%);
   }
 
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--actions {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--actions {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
   }
 
   /* Line 2: modified under the name, size pinned right. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--file-modified {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--file-modified,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--date:not(.tma-dash__cc--file-time) {
     grid-column: 1;
     grid-row: 2;
     font-size: var(--text-size-12);
@@ -1990,7 +1992,7 @@ body::-webkit-scrollbar,
     color: var(--color-text-secondary);
   }
 
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--size {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--size {
     grid-column: 2;
     grid-row: 2;
     justify-self: end;
@@ -2001,14 +2003,99 @@ body::-webkit-scrollbar,
   }
 
   /* The head row is a table's, and there is no table here any more. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__ctable--overview .tma-dash__ctr--head {
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--head {
     display: none;
   }
 
   /* The row menu waits for a hover that never comes on a phone. Users and
      Activity already opt out of that at this width; the files list was left
      behind, so its dots were a control you could press and not see. */
-  .tma-dash__files--overview:not(.tma-dash__recycle--overview) .tma-dash__row-more {
+  .tma-dash__files--overview .tma-dash__row-more {
+    opacity: 1;
+  }
+}
+
+
+/* ── Overview → Activity on touch widths: a list, not a stack of cards ──
+ *
+ * The ctable card layout turned every entry into a panel: the heading, then
+ * "User" over an avatar over a name, then "Date" over a time, then the module
+ * tag — five captioned rows and 300px of height to say "Vernon Francis signed
+ * in, 24 minutes ago". Twenty of those is a scroll, not a log.
+ *
+ * The line already says who did it, so the entry needs two: what happened,
+ * and when. The avatar and the module tag step aside — the icon at the head
+ * of the line already carries the kind — and the row menu keeps its corner.
+ */
+@media (max-width: 1024px) {
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0 var(--space-12);
+    align-items: center;
+    padding: var(--space-10) var(--space-4);
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--color-overlay-4);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview:last-child {
+    border-bottom: 0;
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc {
+    display: block;
+    padding: 0;
+    min-height: 0;
+    background: transparent;
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc::before {
+    content: none !important;
+  }
+
+  /* Line 1: what happened, with the row menu at the far right. */
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--activity {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  /* Line 2: when, under it. */
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--date {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: var(--text-size-12);
+    line-height: var(--text-lh-12);
+    color: var(--color-text-secondary);
+    padding-left: calc(24px + var(--space-8));
+  }
+
+  /* The line names the person, and the icon says what kind of event it is. */
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--user,
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--module {
+    display: none;
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--head {
+    display: none;
+  }
+
+  /* Nothing waits for a hover on a phone. */
+  .tma-dash__activity--overview .tma-dash__row-more {
     opacity: 1;
   }
 }
