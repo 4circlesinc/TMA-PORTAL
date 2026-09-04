@@ -332,9 +332,13 @@
       var byName = by.name || '-';
       var byAvatar = avatarSrc(by.avatar, byName);
       var sizeLabel = (item.meta && item.meta.sizeLabel) || '-';
-      var iconWrap = visual.tone
-        ? '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + esc(visual.tone) + '">' + visual.html + '</span>'
-        : '<span class="tma-dash__overview-recycle-visual">' + visual.html + '</span>';
+      /* Folders, people and other kinds used to skip .tma-dash__overview-file-icon.
+         On a phone that class is what lifts the mark into the gutter beside
+         the name; without it the yellow folder stayed in the text and sat
+         on top of the first letters. Same box for every kind. */
+      var iconWrap = '<span class="tma-dash__overview-file-icon'
+        + (visual.tone ? ' tma-dash__overview-file-icon--' + esc(visual.tone) : '')
+        + ' tma-dash__overview-recycle-visual">' + visual.html + '</span>';
 
       /* Picked the way a folder window picks things — click, Shift-click,
          Ctrl-click — with the actions on the right button. See TMAFileSelect. */

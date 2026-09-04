@@ -1903,7 +1903,25 @@ body::-webkit-scrollbar,
      */
     width: 24px;
     height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+    min-width: 0;
+    min-height: 0;
     flex: 0 0 24px;
+    object-fit: contain;
+    overflow: hidden;
+  }
+
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name
+    .tma-portal-avatar-cell .tma-folder-icon,
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name
+    .tma-portal-avatar-cell .tma-folder-icon__base,
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name
+    .tma-portal-avatar-cell img {
+    width: 24px;
+    height: 24px;
+    max-width: 24px;
+    max-height: 24px;
     object-fit: contain;
   }
 
@@ -2001,14 +2019,38 @@ body::-webkit-scrollbar,
     grid-column: 1;
     grid-row: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
   }
 
-  /* The mark stands beside both lines rather than on top of the first. */
-  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-file-icon {
+  /* The mark stands beside both lines rather than on top of the first.
+     Recycle Bin folders/people use .tma-dash__overview-recycle-visual (a PDF
+     uses .tma-dash__overview-file-icon); both have to live in this gutter or
+     the yellow folder sits on the name. */
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-file-icon,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-recycle-visual {
     position: absolute;
     left: var(--space-4);
     top: 50%;
     transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    overflow: hidden;
+  }
+
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-file-icon img,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-recycle-visual img,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-recycle-visual .tma-folder-icon,
+  .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__overview-recycle-visual .tma-folder-icon__base {
+    width: 24px;
+    height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+    min-width: 0;
+    min-height: 0;
+    flex: 0 0 24px;
+    object-fit: contain;
   }
 
   .tma-dash__files--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--actions {
