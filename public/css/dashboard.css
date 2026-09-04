@@ -4031,6 +4031,21 @@
   color: var(--color-text-primary);
 }
 
+/* Client toolbar Message / Open folder / Invite: same token flip. The fill
+   went white and the glyphs were already forced white, so the 36px icon
+   buttons on a phone were blank squares. Sit them on the dark overlay the
+   Edit chip already uses; the invert on the img still paints the glyph. */
+.tma-dash[data-theme="dark"] .tma-dash__clients-message-btn,
+:root[data-theme="dark"] .tma-dash__clients-message-btn {
+  background: var(--color-overlay-10);
+  color: var(--color-text-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__clients-message-btn:hover,
+:root[data-theme="dark"] .tma-dash__clients-message-btn:hover {
+  background: var(--color-hover-deep);
+}
+
 /* ─────────────────────────────────────────
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */
