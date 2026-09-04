@@ -1890,6 +1890,26 @@ body::-webkit-scrollbar,
     left: var(--space-4);
     top: 50%;
     transform: translateY(-50%);
+    /*
+     * And it is a 24px box, whatever shape the mark arrives in.
+     *
+     * A folder is drawn three ways — a bare <img class="tma-folder-icon__base">,
+     * that img inside a sized .tma-folder-icon wrapper when it carries a
+     * stamp, or a plain type glyph — and the bare one is `width: 100%`, which
+     * is right inside a sized wrapper and ruinous outside one. Out of flow it
+     * has no width to be 100% of but the row, so it is told the size here
+     * rather than left to inherit an answer that depends on which of the
+     * three it happens to be.
+     */
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    object-fit: contain;
+  }
+
+  /* Whatever the mark did, the name stops at the row's edge. */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name .tma-portal-avatar-cell {
+    max-width: 100%;
   }
 
   /* Line 2: the modified date under the name, the size on the same line
