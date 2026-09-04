@@ -14314,6 +14314,21 @@
     opacity: 0.85;
   }
 
+  /* Light pastel + navy ink is a daylight chip. In dark mode use the same
+     primary fill and white glyph as the mailbox Compose row. */
+  .tma-dash[data-theme="dark"] .tma-dash__email-mobile-fab,
+  :root[data-theme="dark"] .tma-dash__email-mobile-fab {
+    background: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+
+  .tma-dash[data-theme="dark"] .tma-dash__email-mobile-fab img,
+  :root[data-theme="dark"] .tma-dash__email-mobile-fab img {
+    filter: brightness(0) invert(1);
+    opacity: 1;
+  }
+
   .tma-dash__email-header-profile-btn {
     display: inline-flex;
     align-items: center;
