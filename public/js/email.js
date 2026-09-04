@@ -278,8 +278,52 @@
     return state.sidebarList === 'labels' ? 'labels' : 'folders';
   }
 
-  function emailNavGutter() {
-    return '<span class="tma-dash__email-nav-gutter" aria-hidden="true"></span>';
+  function emailNavCaret() {
+    return '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>';
+  }
+
+  function syncEmailMobileNav(root, state) {
+    var sidebar = root.querySelector('.tma-dash__email-sidebar');
+    if (sidebar) {
+      sidebar.classList.toggle('tma-dash__email-sidebar--open', !!state.mobileNavOpen);
+    }
+    var page = root.querySelector('.tma-dash__email-page');
+    if (page) {
+      page.classList.toggle('tma-dash__email-page--nav-open', !!state.mobileNavOpen);
+    }
+  }
+
+  function applyEmailSidebarList(root, state) {
+    var list = emailSidebarList(state);
+    root.querySelectorAll('[data-email-list-tab]').forEach(function (tab) {
+      var on = tab.getAttribute('data-email-list-tab') === list;
+      tab.classList.toggle('tma-dash__tab--active', on);
+      tab.setAttribute('aria-selected', String(on));
+    });
+    root.querySelectorAll('[data-email-list]').forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-email-list') !== list;
+    });
+  }
+
+  function toggleEmailMobileNav(root, state) {
+    closeEmailProfileSidebar(state);
+    state.mobileNavOpen = !state.mobileNavOpen;
+    syncEmailMobileNav(root, state);
+    var popup = root.querySelector('[data-email-profile-popup-card]');
+    if (popup) popup.hidden = true;
+    var dash = getEmailDashRoot(root);
+    if (dash) dash.classList.remove('tma-dash--email-profile-sidebar-open');
+  }
+
+  function closeEmailMobileNav(root, state) {
+    if (!state.mobileNavOpen && !state.profileSidebarOpen) return;
+    state.mobileNavOpen = false;
+    closeEmailProfileSidebar(state);
+    syncEmailMobileNav(root, state);
+    var popup = root.querySelector('[data-email-profile-popup-card]');
+    if (popup) popup.hidden = true;
+    var dash = getEmailDashRoot(root);
+    if (dash) dash.classList.remove('tma-dash--email-profile-sidebar-open');
   }
 
   /* A group is open unless it was explicitly closed. On a phone the drawer
@@ -1517,27 +1561,27 @@
   function renderEmailSidebarTabs(state) {
     var list = emailSidebarList(state);
     var foldersOn = list === 'folders';
-    var create =
-      '<button type="button" class="tma-dash__email-labels-create" data-email-label-create' +
-      ' aria-label="Create label" title="Create label">' +
-      '<img src="' + ICONS.Plus + '" alt="">' +
-      '</button>';
     return (
-      '<div class="tma-dash__nav-section tma-dash__nav-section--tabs tma-dash__email-sidebar-tabs">' +
+      '<div class="tma-dash__nav-section tma-dash__nav-section--tabs">' +
       '<div class="tma-dash__tabs" role="tablist" aria-label="Mailbox sections">' +
       '<button type="button" class="tma-dash__tab' + (foldersOn ? ' tma-dash__tab--active' : '') + '"' +
       ' data-email-list-tab="folders" role="tab" aria-selected="' + String(foldersOn) + '">Mailboxes</button>' +
       '<button type="button" class="tma-dash__tab' + (foldersOn ? '' : ' tma-dash__tab--active') + '"' +
       ' data-email-list-tab="labels" role="tab" aria-selected="' + String(!foldersOn) + '">Labels</button>' +
       '</div>' +
-      (foldersOn ? '' : create) +
       '</div>'
     );
   }
 
   function renderEmailLabelsNav(state) {
+    var create =
+      '<button type="button" class="tma-dash__email-labels-create" data-email-label-create' +
+      ' aria-label="Create label" title="Create label">' +
+      '<img src="' + ICONS.Plus + '" alt="">' +
+      '</button>';
     return (
       '<nav class="tma-dash__email-labels" aria-label="Labels">' +
+      create +
       emailLabels(state).map(function (label) {
         var active = state.activeLabelId === label.id;
         var count = labelMessageCount(label.id, state);
@@ -1547,7 +1591,7 @@
           '<div class="tma-dash__email-label-row' + (active ? ' tma-dash__email-label-row--active' : '') + '">' +
           '<button type="button" class="' + cls + '" data-email-sidebar-label="' + esc(label.id) + '"' +
           ' title="' + esc(label.name) + '" aria-label="' + esc(label.name) + '">' +
-          emailNavGutter() +
+          emailNavCaret() +
           renderLabelTag(label.tone) +
           '<span class="tma-dash__email-label-item-name">' + esc(label.name) + '</span>' +
           (count ? '<span class="tma-dash__email-label-item-count">' + count + '</span>' : '') +
@@ -4298,7 +4342,7 @@
         return (
           '<button type="button" class="' + cls + '" data-email-folder="' + esc(folder.id) + '"' +
           ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
-          emailNavGutter() +
+          emailNavCaret() +
           '<img src="' + esc(ICONS[folder.icon]) + '" alt="">' +
           '<span class="tma-dash__email-folder-label">' + esc(folder.label) + '</span>' +
           countHtml +
@@ -8828,7 +8872,7 @@
 
   function renderEmailMobileChrome(state) {
     var html = '';
-    if (state.mobileNavOpen || state.profileSidebarOpen) {
+    if (isEmailMobile()) {
       html += '<button type="button" class="tma-dash__email-mobile-scrim" data-email-mobile-scrim aria-label="Close menu"></button>';
     }
     if (isEmailMobile() && !isSingleReading(state)) {
@@ -11087,7 +11131,7 @@
         if (name !== 'folders' && name !== 'labels') return;
         state.sidebarList = name;
         saveSidebarList(name);
-        render();
+        applyEmailSidebarList(root, state);
       });
     });
 
@@ -11361,9 +11405,7 @@
 
     MORPH.unwired(root, '[data-email-mobile-scrim]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.mobileNavOpen = false;
-        closeEmailProfileSidebar(state);
-        render();
+        closeEmailMobileNav(root, state);
       });
     });
 
@@ -11636,16 +11678,10 @@
         root._emailState.filterMenuOpen = false;
       }
       root._emailToggleMobileNav = function () {
-        closeEmailProfileSidebar(root._emailState);
-        root._emailState.mobileNavOpen = !root._emailState.mobileNavOpen;
-        root._emailRender();
+        toggleEmailMobileNav(root, root._emailState);
       };
       root._emailCloseMobileNav = function () {
-        var state = root._emailState;
-        if (!state.mobileNavOpen && !state.profileSidebarOpen) return;
-        state.mobileNavOpen = false;
-        closeEmailProfileSidebar(state);
-        root._emailRender();
+        closeEmailMobileNav(root, root._emailState);
       };
       if (pendingMessageId) {
         openMailById(root, root._emailState, root._emailRender, pendingMessageId);
@@ -11760,7 +11796,7 @@
       syncEmailHeaderSearch(root, state);
       ensureEmailMobileHeader(root, state);
       MORPH.patch(root,
-        '<div class="tma-dash__email-page">' +
+        '<div class="tma-dash__email-page' + (state.mobileNavOpen ? ' tma-dash__email-page--nav-open' : '') + '">' +
         renderEmailMobileChrome(state) +
         renderEmailProfilePopup(state) +
         '<div class="tma-dash__email-fit">' +
@@ -11831,15 +11867,10 @@
     state.reload = function () { reloadMessages(root, state, render); };
 
     root._emailToggleMobileNav = function () {
-      closeEmailProfileSidebar(state);
-      state.mobileNavOpen = !state.mobileNavOpen;
-      render();
+      toggleEmailMobileNav(root, state);
     };
     root._emailCloseMobileNav = function () {
-      if (!state.mobileNavOpen && !state.profileSidebarOpen) return;
-      state.mobileNavOpen = false;
-      closeEmailProfileSidebar(state);
-      render();
+      closeEmailMobileNav(root, state);
     };
 
     // Paint what the last visit ended on before touching the network, so a
