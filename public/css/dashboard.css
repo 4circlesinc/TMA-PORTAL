@@ -2625,11 +2625,19 @@
     text-overflow: ellipsis;
   }
 
+  /*
+   * On the name's line, not floating between it and the line under it.
+   *
+   * The user cell is a name with a work status stacked beneath it, so
+   * centring the pill against the pair parked it in the gap — level with
+   * neither. Aligned to the top it sits on the name, which is the line it is
+   * about.
+   */
   .tma-dash__ctable .tma-dash__cc--status,
   .tma-dash__ctable .tma-dash__cc--actions {
     grid-area: status;
     justify-self: end;
-    align-self: center;
+    align-self: start;
   }
 
   .tma-dash__ctable .tma-dash__cc--actions {
@@ -7114,7 +7122,8 @@
   .tma-dash__users--overview .tma-dash__cc--user {
     grid-area: user;
     gap: var(--space-12);
-    align-items: center;
+    /* The pill rides the name's line; see the note on --status above. */
+    align-items: start;
     min-width: 0;
   }
 
@@ -7146,7 +7155,7 @@
   .tma-dash__users--overview .tma-dash__cc--actions {
     grid-area: actions;
     justify-self: end;
-    align-self: center;
+    align-self: start;
   }
 
   .tma-dash__users--overview .tma-dash__cc--email,
@@ -7443,7 +7452,8 @@
   .tma-dash__users--overview .tma-dash__cc--user {
     grid-area: user;
     gap: var(--space-12);
-    align-items: center;
+    /* The pill rides the name's line; see the note on --status above. */
+    align-items: start;
     min-width: 0;
   }
 
