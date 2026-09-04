@@ -656,6 +656,7 @@
     fetchContacts: fetchContacts,
     fetchLatestClients: fetchLatestClients,
     fetchLatestFiles: fetchLatestFiles,
+    fetchMail: fetchMail,
     fetchLiveResults: fetchLiveResults,
     resultKey: resultKey,
     forgetCipRequirements: function () {

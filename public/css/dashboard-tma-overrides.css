@@ -330,7 +330,8 @@
     overflow: hidden;
   }
 
-  .tma-dash__sidebar.tma-dash__sidebar--mobile-search {
+  .tma-dash__sidebar.tma-dash__sidebar--mobile-search,
+  .tma-dash__email-sidebar.tma-dash__email-sidebar--mobile-search {
     width: 100%;
     max-width: 100%;
     border-right: none;
@@ -369,7 +370,8 @@
     z-index: 2;
   }
 
-  .tma-dash__sidebar .tma-dash__sidebar-mobile-search {
+  .tma-dash__sidebar .tma-dash__sidebar-mobile-search,
+  .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search {
     appearance: none;
     display: flex;
     align-items: center;
@@ -392,11 +394,13 @@
     line-height: 1;
   }
 
-  .tma-dash__sidebar .tma-dash__sidebar-mobile-search:hover {
+  .tma-dash__sidebar .tma-dash__sidebar-mobile-search:hover,
+  .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search:hover {
     background: var(--color-hover);
   }
 
-  .tma-dash__sidebar .tma-dash__sidebar-mobile-search img {
+  .tma-dash__sidebar .tma-dash__sidebar-mobile-search img,
+  .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search img {
     width: 16px;
     height: 16px;
     opacity: 0.55;
@@ -404,7 +408,8 @@
     display: block;
   }
 
-  .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
+  .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text,
+  .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -532,11 +537,14 @@
   .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-nav,
   .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__profile,
   .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-mobile-head,
-  .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-logo {
+  .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-logo,
+  .tma-dash__email-sidebar.tma-dash__email-sidebar--mobile-search .tma-dash__email-sidebar-nav,
+  .tma-dash__email-sidebar.tma-dash__email-sidebar--mobile-search .tma-dash__sidebar-mobile-head {
     display: none !important;
   }
 
-  .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-search-panel {
+  .tma-dash__sidebar.tma-dash__sidebar--mobile-search .tma-dash__sidebar-search-panel,
+  .tma-dash__email-sidebar.tma-dash__email-sidebar--mobile-search .tma-dash__sidebar-search-panel {
     display: flex !important;
   }
 
@@ -2414,7 +2422,9 @@ body::-webkit-scrollbar,
  * still reads as a prompt rather than as text somebody typed.
  */
 .tma-dash[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text,
-:root[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
+:root[data-theme="dark"] .tma-dash__sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text,
+.tma-dash[data-theme="dark"] .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text,
+:root[data-theme="dark"] .tma-dash__email-sidebar .tma-dash__sidebar-mobile-search .tma-dash__search-text {
   color: var(--color-text-secondary);
 }
 

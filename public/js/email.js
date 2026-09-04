@@ -282,10 +282,119 @@
     return '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>';
   }
 
+  function fetchEmailSidebarSearchResults(q) {
+    if (window.TMAPortalSearchIndex && typeof window.TMAPortalSearchIndex.fetchMail === 'function') {
+      return window.TMAPortalSearchIndex.fetchMail(q);
+    }
+    return Promise.resolve([]);
+  }
+
+  function emailSidebarSearchMount(root) {
+    return root.querySelector('[data-email-sidebar-search-mount]');
+  }
+
+  function resetEmailSidebarSearch(root, state) {
+    if (state) state.mobileSearchOpen = false;
+    var sidebar = root.querySelector('.tma-dash__email-sidebar');
+    if (sidebar) sidebar.classList.remove('tma-dash__email-sidebar--mobile-search');
+    var panel = root.querySelector('[data-email-sidebar-search-panel]');
+    if (panel) panel.hidden = true;
+    var mount = emailSidebarSearchMount(root);
+    if (mount && mount._emailSearch && mount._emailSearch.isOpen && mount._emailSearch.isOpen()) {
+      mount._emailSearch.close();
+    }
+  }
+
+  function ensureEmailSidebarSearch(root, state, render) {
+    var mount = emailSidebarSearchMount(root);
+    if (!mount) return null;
+    if (mount._emailSearch) return mount._emailSearch;
+    if (!window.TMAGlobalSearch || typeof window.TMAGlobalSearch.mountSidebarSearch !== 'function') {
+      return null;
+    }
+
+    mount._emailSearch = window.TMAGlobalSearch.mountSidebarSearch(mount, {
+      index: [],
+      scope: 'mail',
+      fetchLiveResults: function (q) {
+        return fetchEmailSidebarSearchResults(q).then(function (list) {
+          return (list || []).filter(function (item) { return item && item.emailMessageId; });
+        });
+      },
+      onNavigate: function (item) {
+        var id = item && item.emailMessageId;
+        if (state) {
+          state.mobileSearchOpen = false;
+          state.mobileNavOpen = false;
+        }
+        var liveSidebar = root.querySelector('.tma-dash__email-sidebar');
+        if (liveSidebar) liveSidebar.classList.remove('tma-dash__email-sidebar--mobile-search');
+        var livePanel = root.querySelector('[data-email-sidebar-search-panel]');
+        if (livePanel) livePanel.hidden = true;
+        syncEmailMobileNav(root, state);
+        if (id) openMailById(root, state, render, id);
+      },
+      onClose: function () {
+        if (state) state.mobileSearchOpen = false;
+        var liveSidebar = root.querySelector('.tma-dash__email-sidebar');
+        if (liveSidebar) liveSidebar.classList.remove('tma-dash__email-sidebar--mobile-search');
+        var livePanel = root.querySelector('[data-email-sidebar-search-panel]');
+        if (livePanel) livePanel.hidden = true;
+      },
+    });
+    return mount._emailSearch;
+  }
+
+  function openEmailSidebarSearch(root, state, render) {
+    var sidebar = root.querySelector('.tma-dash__email-sidebar');
+    var panel = root.querySelector('[data-email-sidebar-search-panel]');
+    if (!sidebar || !panel) return;
+    var search = ensureEmailSidebarSearch(root, state, render);
+    state.mobileSearchOpen = true;
+    sidebar.classList.add('tma-dash__email-sidebar--mobile-search');
+    panel.hidden = false;
+    if (search) search.open();
+  }
+
+  function wireEmailSidebarSearch(root, state, render) {
+    ensureEmailSidebarSearch(root, state, render);
+    if (root._emailSidebarSearchBound) return;
+    root._emailSidebarSearchBound = true;
+    root.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-email-sidebar-search-toggle]');
+      if (!btn || !root.contains(btn)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      var sidebar = root.querySelector('.tma-dash__email-sidebar');
+      if (!sidebar) return;
+      if (sidebar.classList.contains('tma-dash__email-sidebar--mobile-search')) {
+        resetEmailSidebarSearch(root, state);
+        return;
+      }
+      openEmailSidebarSearch(root, state, render);
+    });
+  }
+
+  function renderEmailSidebarMobileSearch(state) {
+    return (
+      '<div class="tma-dash__sidebar-mobile-head" data-email-sidebar-mobile-head data-key="email-sidebar-search-head">' +
+        '<button type="button" class="tma-dash__sidebar-mobile-search" data-email-sidebar-search-toggle aria-label="Search">' +
+          '<img src="images/icons/tma/Search-16.svg" alt="" aria-hidden="true">' +
+          '<span class="tma-dash__search-text">Search</span>' +
+        '</button>' +
+      '</div>' +
+      '<div class="tma-dash__sidebar-search-panel" data-email-sidebar-search-panel data-key="email-sidebar-search-panel"' +
+      (state.mobileSearchOpen ? '' : ' hidden') + '>' +
+        '<div class="tma-dash__sidebar-search-mount" data-email-sidebar-search-mount data-key="email-sidebar-search" data-morph-skip></div>' +
+      '</div>'
+    );
+  }
+
   function syncEmailMobileNav(root, state) {
     var sidebar = root.querySelector('.tma-dash__email-sidebar');
     if (sidebar) {
       sidebar.classList.toggle('tma-dash__email-sidebar--open', !!state.mobileNavOpen);
+      sidebar.classList.toggle('tma-dash__email-sidebar--mobile-search', !!state.mobileSearchOpen);
     }
     var page = root.querySelector('.tma-dash__email-page');
     if (page) {
@@ -307,6 +416,7 @@
 
   function toggleEmailMobileNav(root, state) {
     closeEmailProfileSidebar(state);
+    if (state.mobileNavOpen) resetEmailSidebarSearch(root, state);
     state.mobileNavOpen = !state.mobileNavOpen;
     syncEmailMobileNav(root, state);
     var popup = root.querySelector('[data-email-profile-popup-card]');
@@ -316,7 +426,8 @@
   }
 
   function closeEmailMobileNav(root, state) {
-    if (!state.mobileNavOpen && !state.profileSidebarOpen) return;
+    if (!state.mobileNavOpen && !state.profileSidebarOpen && !state.mobileSearchOpen) return;
+    resetEmailSidebarSearch(root, state);
     state.mobileNavOpen = false;
     closeEmailProfileSidebar(state);
     syncEmailMobileNav(root, state);
@@ -4260,6 +4371,7 @@
     var mode = effectiveSidebarMode(state);
     var sidebarCls = 'tma-dash__email-sidebar';
     if (state.mobileNavOpen) sidebarCls += ' tma-dash__email-sidebar--open';
+    if (state.mobileSearchOpen) sidebarCls += ' tma-dash__email-sidebar--mobile-search';
     if (mode === 'icons') sidebarCls += ' tma-dash__email-sidebar--collapsed';
     // Hidden still renders (the DOM patch is cheaper than tearing the subtree
     // out and rebuilding it) but takes up no space and is out of the tab order.
@@ -4267,7 +4379,7 @@
     return (
       '<div class="' + sidebarCls + '"' + (mode === 'hidden' ? ' hidden' : '') + '>' +
       (isEmailMobile()
-        ? ''
+        ? renderEmailSidebarMobileSearch(state)
         : '<div class="tma-dash__email-sidebar-chrome">' +
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
           '</div>') +
@@ -10774,6 +10886,7 @@
     sizeMessageFrames(root);
     wireAttachmentPreviews(root);
     wireAttachmentPdfPreviews(root);
+    wireEmailSidebarSearch(root, state, render);
 
     // Pager: step pages, or change how many messages a page holds. Both refetch
     // from the server, the mailbox is far too large to page in memory.
@@ -11677,6 +11790,9 @@
       if (typeof root._emailState.filterMenuOpen !== 'boolean') {
         root._emailState.filterMenuOpen = false;
       }
+      if (typeof root._emailState.mobileSearchOpen !== 'boolean') {
+        root._emailState.mobileSearchOpen = false;
+      }
       root._emailToggleMobileNav = function () {
         toggleEmailMobileNav(root, root._emailState);
       };
@@ -11781,6 +11897,7 @@
       reading: false,
       inlineCompose: null,
       mobileNavOpen: false,
+      mobileSearchOpen: false,
       profileSidebarOpen: false,
       _pendingMessageId: pendingMessageId || null,
     };
@@ -11793,6 +11910,7 @@
       // A menu anchored to a row that is about to be replaced would be left
       // floating over nothing.
       closeEmailPointerMenu();
+      if (!isEmailMobile()) state.mobileSearchOpen = false;
       syncEmailHeaderSearch(root, state);
       ensureEmailMobileHeader(root, state);
       MORPH.patch(root,

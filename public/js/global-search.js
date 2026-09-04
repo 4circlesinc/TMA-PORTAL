@@ -418,13 +418,14 @@
       clientId: item.clientId || '',
       fileId: item.fileId || '',
       folderId: item.folderId || '',
+      emailMessageId: item.emailMessageId || '',
       avatar: item.avatar || '',
       avatarUrl: item.avatarUrl || '',
     };
-    const key = entry.clientId || entry.fileId || entry.folderId || entry.navId || entry.label;
+    const key = entry.emailMessageId || entry.clientId || entry.fileId || entry.folderId || entry.navId || entry.label;
     const next = [entry]
       .concat(readJsonStore(RECENT_VISIT_KEY, []).filter((row) => {
-        const rowKey = (row && (row.clientId || row.fileId || row.folderId || row.navId || row.label)) || '';
+        const rowKey = (row && (row.emailMessageId || row.clientId || row.fileId || row.folderId || row.navId || row.label)) || '';
         return rowKey !== key;
       }))
       .slice(0, 6);
@@ -453,6 +454,22 @@
         { type: 'file', label: 'Passport scan.jpg' },
       ] },
     ];
+  }
+
+  function mailInitialGroups() {
+    const recent = readJsonStore(RECENT_SEARCH_KEY, []).slice(0, 2);
+    const visited = readJsonStore(RECENT_VISIT_KEY, [])
+      .filter((row) => row && row.emailMessageId)
+      .slice(0, 2);
+    const groups = [
+      { title: 'Recent search', items: recent },
+      { title: 'Recently visited', items: visited },
+    ];
+    const first = groups.find((g) => g.items.length);
+    if (first && first.items[0] && !first.items.some((i) => i.selected)) {
+      first.items[0] = Object.assign({}, first.items[0], { selected: true });
+    }
+    return groups;
   }
 
   function portalInitialGroups(index, contacts, files) {
@@ -948,7 +965,11 @@
        are appended to it a beat later (portal-search-index.js), a snapshot
        taken here would be the empty-handed version forever, and an
        administrator would never find their own admin pages. */
-    const sourceIndex = () => DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);
+    const mailOnly = options.scope === 'mail';
+    const sourceIndex = () => {
+      if (mailOnly) return Array.isArray(options.index) ? options.index : [];
+      return DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);
+    };
     if (!mount) return null;
 
     const state = {
@@ -1000,7 +1021,7 @@
         runSearch(item.label);
         return;
       }
-      if (item.navId || item.clientId || item.href) {
+      if (item.navId || item.clientId || item.href || item.emailMessageId) {
         navigateResult(item);
         return;
       }
@@ -1066,6 +1087,7 @@
     }
 
     function portalGroups() {
+      if (mailOnly) return mailInitialGroups();
       return portalInitialGroups(sourceIndex(), state.contacts, state.files);
     }
 
@@ -1198,8 +1220,8 @@
       }
 
       pushRecentSearch(query);
-      const pageHits = filterIndex(sourceIndex(), q);
-      const contactHits = filterIndex(state.contacts, q);
+      const pageHits = mailOnly ? [] : filterIndex(sourceIndex(), q);
+      const contactHits = mailOnly ? [] : filterIndex(state.contacts, q);
       state.results = mergeResults([pageHits, contactHits]);
       state.selectedIndex = 0;
 
@@ -1211,11 +1233,13 @@
         Promise.resolve(options.fetchLiveResults(q)).then((live) => {
           if (seq !== state._searchSeq || !state.open) return;
           state.loading = false;
-          state.results = mergeResults([
-            filterIndex(sourceIndex(), state.query.trim()),
-            filterIndex(state.contacts, state.query.trim()),
-            live,
-          ]);
+          state.results = mailOnly
+            ? mergeResults([live])
+            : mergeResults([
+                filterIndex(sourceIndex(), state.query.trim()),
+                filterIndex(state.contacts, state.query.trim()),
+                live,
+              ]);
           state.selectedIndex = 0;
           renderLivePopup(renderOpts);
         }).catch(() => {
