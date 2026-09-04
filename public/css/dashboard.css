@@ -2440,6 +2440,7 @@
 }
 .tma-dash__cc--head { color: var(--color-text-secondary); }
 .tma-dash__cc--check { flex: 0 0 40px; justify-content: center; padding: var(--space-8); }
+
 .tma-dash__cc--id { flex: 0 0 96px; }
 .tma-dash__cc--user { flex: 1 1 0; min-width: 150px; }
 .tma-dash__cc--project { flex: 1 1 0; min-width: 120px; }
@@ -2479,6 +2480,25 @@
 .tma-dash__check:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/*
+ * Dark: an unticked box is a hole in the card, not a white tile on it.
+ *
+ * The light rule paints #fff with a dark hairline — right on paper, and on a
+ * dark row it was the brightest thing in sight, brighter than the name beside
+ * it. Ticked keeps its own glyph: that one is drawn to be seen.
+ */
+.tma-dash[data-theme="dark"] .tma-dash__check:not(:checked):not(:indeterminate),
+:root[data-theme="dark"] .tma-dash__check:not(:checked):not(:indeterminate) {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__check:not(:checked):not(:indeterminate):hover,
+:root[data-theme="dark"] .tma-dash__check:not(:checked):not(:indeterminate):hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 /* ── Responsive tables → projects-style row cards (≤767px) ──────────── */
@@ -3927,8 +3947,11 @@
 :root[data-theme="dark"] .tma-dash__overview-btn:not(.tma-dash__overview-btn--solid) img,
 .tma-dash[data-theme="dark"] .tma-dash__overview-week-nav img,
 :root[data-theme="dark"] .tma-dash__overview-week-nav img,
-.tma-dash[data-theme="dark"] .tma-dash__overview-file-icon img,
-:root[data-theme="dark"] .tma-dash__overview-file-icon img,
+/* Overview's file marks: only the ink ones (.is-mono, stamped by
+   file-thumbs.js). This took every mark, which turned Acrobat's red cyan and
+   the image mark's green pink — an inverted brand mark is the wrong logo. */
+.tma-dash[data-theme="dark"] .tma-dash__overview-file-icon img.is-mono,
+:root[data-theme="dark"] .tma-dash__overview-file-icon img.is-mono,
 .tma-dash[data-theme="dark"] .tma-dash__clients-icon-btn img,
 :root[data-theme="dark"] .tma-dash__clients-icon-btn img,
 .tma-dash[data-theme="dark"] .tma-dash__toolbar-divider,
