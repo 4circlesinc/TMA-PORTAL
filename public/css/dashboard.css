@@ -13227,13 +13227,13 @@ html.tma-dash.tma-dash--mail-window body {
   justify-content: center;
 }
 
-/* Outlook-style tools on the open message: icon above a short label. */
+/* Message tools: icon beside the label, one compact row. */
 .tma-dash__email-detail-tools {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   flex-shrink: 0;
-  gap: 2px;
-  padding: var(--space-4) var(--email-pad);
+  gap: 0;
+  padding: 2px 8px;
   border-bottom: 1px solid var(--color-overlay-4);
   background: var(--color-white);
   overflow-x: auto;
@@ -13243,26 +13243,27 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash__email-detail-tool {
   appearance: none;
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  min-width: 56px;
-  padding: 8px 10px 6px;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 10px;
   border: 0;
   border-radius: var(--radius-8);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 14px;
+  line-height: 16px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .tma-dash__email-detail-tool > img {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   opacity: 0.72;
   flex: 0 0 auto;
 }
@@ -13270,10 +13271,9 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash__email-detail-tool-label {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 2px;
-  text-align: center;
-  max-width: 4.75rem;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .tma-dash__email-detail-tool-caret {
