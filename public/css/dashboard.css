@@ -15822,6 +15822,7 @@
 }
 
 .tma-dash__email-suggest-avatar {
+  display: block;
   width: 28px;
   height: 28px;
   min-width: 28px;
@@ -15832,6 +15833,7 @@
   object-position: center;
   flex-shrink: 0;
   overflow: hidden;
+  background: #e8f1fb;
 }
 
 .tma-dash__email-suggest-avatar--initial {

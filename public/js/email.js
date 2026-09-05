@@ -6617,6 +6617,7 @@
       // overrode the HTML hidden attribute.)
       var avatar = item.avatarUrl
         ? '<img class="tma-dash__email-suggest-avatar" src="' + esc(item.avatarUrl) + '" alt=""' +
+          ' referrerpolicy="no-referrer" decoding="async"' +
           ' data-email-suggest-initial="' + initial + '"' +
           (item.initialColor ? ' data-email-suggest-color="' + esc(item.initialColor) + '"' : '') +
           ' onerror="window.TMAEmail && window.TMAEmail._suggestPhotoFallback && window.TMAEmail._suggestPhotoFallback(this)">'

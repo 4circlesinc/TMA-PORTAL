@@ -54,8 +54,7 @@ class MailRecipientSuggestTest extends TestCase
         $this->assertSame('dana@example.com', $items[0]['email']);
         $this->assertSame('staff', $items[0]['source']);
         $this->assertSame('Organization', $items[0]['sourceLabel']);
-        // Portal uploads are never used — email-provider / Gravatar photos only.
-        $this->assertNull($items[0]['avatarUrl']);
+        $this->assertSame('/images/avatars/Avatar3d01.png', $items[0]['avatarUrl']);
     }
 
     public function test_suggests_clients_for_staff_and_hides_them_from_client_accounts(): void
@@ -66,6 +65,7 @@ class MailRecipientSuggestTest extends TestCase
             'name' => 'Acme Corp',
             'company' => 'Acme',
             'email' => 'hello@acme.test',
+            'photo_url' => '/storage/clients/acme.jpg',
             'data' => [],
             'created_by' => $staff->id,
         ]);
@@ -76,6 +76,8 @@ class MailRecipientSuggestTest extends TestCase
             ->json('suggestions');
 
         $this->assertTrue(collect($staffHits)->contains(fn ($s) => ($s['email'] ?? null) === 'hello@acme.test' && $s['source'] === 'client'));
+        $acme = collect($staffHits)->firstWhere('email', 'hello@acme.test');
+        $this->assertSame('/storage/clients/acme.jpg', $acme['avatarUrl']);
 
         $clientUser = $this->staff([
             'account_type' => 'Client',
