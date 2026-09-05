@@ -8035,7 +8035,7 @@
    * onto a second row instead of hiding tools behind More. */
   function renderComposeToolbar(opts) {
     opts = opts || {};
-    var showExpand = opts.expand !== false;
+    var showExpand = !!opts.expand;
     var extra = [];
     if (opts.insertImage) {
       extra.push({ icon: 'Image', label: 'Insert image', image: true });
@@ -8283,7 +8283,7 @@
         : '') +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
-      renderComposeToolbar({ attach: draft.id }) +
+      renderComposeToolbar({ expand: false, attach: draft.id }) +
       '<div class="tma-dash__email-image-stage tma-dash__email-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
       ' aria-multiline="true" aria-label="Message body"' +
