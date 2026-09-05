@@ -565,8 +565,6 @@ class MailboxTest extends TestCase
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
-            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
@@ -600,8 +598,10 @@ class MailboxTest extends TestCase
                 .'<div id="Signature"><p>Office hours only</p></div>',
         ]);
 
-        $draftBody = '<div></div><div id="appendonsend"></div>'
-            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+        // The signature saved in Outlook lives in a hidden mailbox folder:
+        // message root → mailbox root → ApplicationDataRoot → store → one
+        // folder per signature → the item whose body is the signature.
+        $savedBody = '<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
             .'<p>Managing Director</p></div>';
 
         Http::fake([
@@ -609,25 +609,35 @@ class MailboxTest extends TestCase
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
-            'graph.microsoft.com/*/createReply' => Http::response(['id' => 'draft-sig-1']),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/v1.0/me/messages/draft-sig-1*' => Http::response([
-                'id' => 'draft-sig-1',
-                'conversationId' => 'c-draft',
-                'subject' => 'Re: Hello',
-                'bodyPreview' => 'Kind Regards',
-                'from' => ['emailAddress' => ['name' => 'Vernon Francis', 'address' => 'user@example.com']],
-                'body' => [
-                    'contentType' => 'html',
-                    'content' => $draftBody,
-                ],
+            'graph.microsoft.com/v1.0/me/mailFolders/msgfolderroot*' => Http::response([
+                'id' => 'msgroot-1',
+                'parentFolderId' => 'root-1',
             ]),
-            'graph.microsoft.com/*' => Http::response(['value' => []]),
+            'graph.microsoft.com/v1.0/me/mailFolders/root-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'appdata-1', 'displayName' => 'ApplicationDataRoot'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/mailFolders/appdata-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'sigstore-1', 'displayName' => '49499048-0129-47f5-b95e-f9d315b861a6'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/mailFolders/sigstore-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'sigfolder-1', 'displayName' => 'Work'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/mailFolders/sigstore-1/messages*' => Http::response(['value' => []]),
+            'graph.microsoft.com/v1.0/me/mailFolders/sigfolder-1/messages*' => Http::response(['value' => [
+                ['id' => 'sigitem-1', 'subject' => 'Work'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/messages/sigitem-1*' => Http::response([
+                'id' => 'sigitem-1',
+                'subject' => 'Work',
+                'body' => ['contentType' => 'html', 'content' => $savedBody],
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
         $preview = $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('reconnect', false);
 
         $choices = $preview->json('choices');
         $this->assertIsArray($choices);
@@ -635,10 +645,10 @@ class MailboxTest extends TestCase
         $this->assertNull(data_get($user->fresh()->preferences, 'mail.signature'));
 
         $names = collect($choices)->pluck('name');
-        $this->assertTrue($names->contains('Outlook · replies'));
+        $this->assertTrue($names->contains('Saved in Outlook · Work'));
         $this->assertTrue($names->contains(fn ($name) => is_string($name) && str_starts_with($name, 'From sent mail')));
 
-        $picked = collect($choices)->firstWhere('name', 'Outlook · replies');
+        $picked = collect($choices)->firstWhere('name', 'Saved in Outlook · Work');
         $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature/apply', [
                 'html' => $picked['html'],
@@ -650,7 +660,11 @@ class MailboxTest extends TestCase
         $this->assertStringContainsString('Vernon Francis', $html);
         $this->assertStringContainsString('Kind Regards', $html);
         $this->assertStringNotContainsString('Office hours only', $html);
-        $this->assertSame('Outlook · replies', data_get($user->fresh()->preferences, 'mail.signatures.0.name'));
+        $this->assertSame('Saved in Outlook · Work', data_get($user->fresh()->preferences, 'mail.signatures.0.name'));
+
+        // Reading the store never creates a draft or deletes anything.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'graph.microsoft.com')
+            && in_array($request->method(), ['POST', 'DELETE', 'PATCH'], true));
     }
 
     public function test_import_signature_reads_outlook_mail_that_uses_appendonsend(): void
@@ -677,8 +691,6 @@ class MailboxTest extends TestCase
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
-            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
@@ -692,14 +704,60 @@ class MailboxTest extends TestCase
     public function test_import_signature_explains_when_nothing_is_found(): void
     {
         $user = $this->user();
-        $this->account($user);
+        $account = $this->account($user, [
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+            'scopes' => ['Mail.ReadWrite'],
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
+        ]);
 
         $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
             ->assertStatus(422)
             ->assertJsonPath('choices', [])
             ->assertJsonPath('signature', null)
+            ->assertJsonPath('reconnect', false)
             ->assertJsonStructure(['message']);
+    }
+
+    /**
+     * Gmail only shares the saved signature under gmail.settings.basic.
+     * A connection made before that scope was requested still gets the
+     * sent-mail guesses, but the response says a reconnect would do better.
+     */
+    public function test_import_signature_asks_gmail_users_to_reconnect_for_the_saved_signature(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertStatus(422)
+            ->assertJsonPath('reconnect', true)
+            ->assertJsonPath('message', 'Reconnect Gmail to import the signature saved in Gmail.');
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-1',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<div>Hi</div><div class="gmail_signature" data-smartmail="gmail_signature">'
+                .'<div><b>Test User</b></div></div>',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk()
+            ->assertJsonPath('reconnect', true)
+            ->assertJsonPath('choices.0.name', 'Default From Gmail');
     }
 
     public function test_import_signature_requires_a_connected_mailbox(): void

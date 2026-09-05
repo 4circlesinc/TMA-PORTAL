@@ -483,43 +483,144 @@ class GraphProvider implements MailProvider
         $this->json($response);
     }
 
+    /** Hidden mailbox folder Outlook keeps its saved (roaming) signatures under. */
+    private const ROAMING_SIGNATURES_FOLDER = '49499048-0129-47f5-b95e-f9d315b861a6';
+
     /**
-     * Outlook has no signature-read API. createReply / createForward run the
-     * Outlook compose pipeline, so the draft already carries the roaming
-     * signature for that action. The caller must delete the draft; this never
-     * sends it.
+     * The signatures saved in Outlook itself ("roaming signatures").
+     *
+     * Graph has no signature endpoint, and createReply never stamps one: the
+     * Outlook client applies signatures, the server does not. What the
+     * mailbox does hold is the roaming-signature store, a hidden folder in
+     * the non-IPM subtree (ApplicationDataRoot/{guid}) with one sub-folder
+     * per signature whose item body is the signature HTML. mailFolders has
+     * no well-known name for that subtree, but the message root's parent is
+     * the mailbox root and Graph serves any folder by id from there.
+     *
+     * Items come back in the getMessage() shape (body_html plus attachments)
+     * so inline logos resolve the same way sent mail does, with the saved
+     * name under `signature_name`. Empty when the store is missing or the
+     * walk 404s; auth failures still throw so the caller can ask for a
+     * reconnect.
+     *
+     * @return list<array<string, mixed>>
      */
-    public function createReplyDraft(string $remoteId): ?string
+    public function roamingSignatures(): array
     {
-        return $this->createOutlookActionDraft($remoteId, 'createReply');
-    }
-
-    public function createForwardDraft(string $remoteId): ?string
-    {
-        return $this->createOutlookActionDraft($remoteId, 'createForward');
-    }
-
-    private function createOutlookActionDraft(string $remoteId, string $action): ?string
-    {
-        if (! in_array($action, ['createReply', 'createForward'], true)) {
-            return null;
+        $messageRoot = $this->getOrNull(self::BASE.'/mailFolders/msgfolderroot', [
+            '$select' => 'id,parentFolderId',
+        ]);
+        $rootId = (string) ($messageRoot['parentFolderId'] ?? '');
+        if ($rootId === '') {
+            return [];
         }
 
+        $appData = $this->childFolderNamed($rootId, 'ApplicationDataRoot');
+        if ($appData === null) {
+            return [];
+        }
+
+        $store = $this->childFolderNamed($appData, self::ROAMING_SIGNATURES_FOLDER);
+        if ($store === null) {
+            return [];
+        }
+
+        $folders = [['id' => $store, 'displayName' => '']];
+        foreach ($this->childFolders($store) as $folder) {
+            $folders[] = $folder;
+        }
+
+        $out = [];
+        foreach ($folders as $folder) {
+            $listed = $this->getOrNull(self::BASE.'/mailFolders/'.$folder['id'].'/messages', [
+                '$top' => 5,
+                '$select' => 'id,subject',
+            ]);
+
+            foreach ($listed['value'] ?? [] as $row) {
+                $id = (string) ($row['id'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+
+                try {
+                    $full = $this->getMessage($id);
+                } catch (MailAuthException $e) {
+                    throw $e;
+                } catch (RuntimeException) {
+                    continue;
+                }
+
+                if (trim((string) ($full['body_html'] ?? '')) === '') {
+                    continue;
+                }
+
+                $name = trim((string) ($row['subject'] ?? '')) ?: trim((string) $folder['displayName']);
+                $full['signature_name'] = self::looksLikeGuid($name) ? '' : $name;
+                $out[] = $full;
+
+                if (count($out) >= 8) {
+                    return $out;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return list<array{id: string, displayName: string}> */
+    private function childFolders(string $folderId): array
+    {
+        $listed = $this->getOrNull(self::BASE.'/mailFolders/'.$folderId.'/childFolders', [
+            'includeHiddenFolders' => 'true',
+            '$top' => 250,
+            '$select' => 'id,displayName',
+        ]);
+
+        $out = [];
+        foreach ($listed['value'] ?? [] as $row) {
+            $id = (string) ($row['id'] ?? '');
+            if ($id !== '') {
+                $out[] = ['id' => $id, 'displayName' => (string) ($row['displayName'] ?? '')];
+            }
+        }
+
+        return $out;
+    }
+
+    private function childFolderNamed(string $folderId, string $name): ?string
+    {
+        foreach ($this->childFolders($folderId) as $folder) {
+            if (strcasecmp($folder['displayName'], $name) === 0) {
+                return $folder['id'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A GET whose failure means "not there" rather than "broken": the hidden
+     * folders above simply do not exist on some mailboxes. Auth failures
+     * still throw.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>|null
+     */
+    private function getOrNull(string $url, array $query): ?array
+    {
         try {
-            $created = $this->json($this->request()->post(
-                self::BASE.'/messages/'.$remoteId.'/'.$action,
-                new \stdClass
-            ));
-        } catch (\Throwable) {
+            return $this->json($this->request()->get($url, $query));
+        } catch (MailAuthException $e) {
+            throw $e;
+        } catch (RuntimeException) {
             return null;
         }
+    }
 
-        $id = (string) ($created['id'] ?? '');
-        if ($id === '' || $id === $remoteId) {
-            return null;
-        }
-
-        return $id;
+    private static function looksLikeGuid(string $value): bool
+    {
+        return (bool) preg_match('/^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i', $value);
     }
 
     private static function isConsumedDraftResponse(Response $response): bool

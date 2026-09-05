@@ -8853,6 +8853,9 @@
       '<h3 id="tma-mail-sig-import-title" class="tma-dash__email-sig-import-title">Which signature should we use?</h3>' +
       '<p class="tma-dash__email-sig-import-lead">' +
       esc(provider) + ' can keep more than one — new mail, replies, and older sends often differ. Pick the one that matches yours.</p>' +
+      (state.signatureImportReconnect
+        ? '<p class="tma-dash__email-sig-import-notice"><a href="' + esc(api().connectUrl('google')) + '">Reconnect Gmail</a> to import the signature saved in Gmail.</p>'
+        : '') +
       '<div class="tma-dash__email-sig-import-list" role="listbox" aria-label="Signature choices">' +
       choices.map(function (choice, index) {
         var on = index === selected;
@@ -9489,6 +9492,7 @@
           }
           state.signatureImportChoices = choices;
           state.signatureImportSelected = 0;
+          state.signatureImportReconnect = !!(data && data.reconnect);
           state.settingsTab = 'sending';
           render();
         }).catch(function (err) {

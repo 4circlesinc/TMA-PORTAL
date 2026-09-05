@@ -30943,6 +30943,18 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-secondary);
 }
 
+.tma-dash__email-sig-import-notice {
+  margin: 0;
+  font-size: var(--text-size-13);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-danger, #b42318);
+}
+
+.tma-dash__email-sig-import-notice a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .tma-dash__email-sig-import-list {
   display: flex;
   flex-direction: column;

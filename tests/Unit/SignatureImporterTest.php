@@ -57,18 +57,79 @@ class SignatureImporterTest extends TestCase
         ]);
     }
 
-    /** Sent-mail tests must not hit Graph createReply. */
-    private function fakeOutlookReplyDraftUnavailable(): void
+    /** A mailbox without Outlook's saved-signature store: every Graph read 404s. */
+    private function fakeOutlookSavedSignaturesUnavailable(): void
     {
         Http::fake([
             'login.microsoftonline.com/*' => Http::response([
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
-            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
+    }
+
+    /**
+     * The hidden-folder walk Graph needs for Outlook's saved signatures:
+     * message root → mailbox root → ApplicationDataRoot → the store → one
+     * sub-folder per signature → an item whose body is the signature.
+     *
+     * @param  array<string, string>  $signatures  saved name => body HTML
+     * @param  array<string, mixed>  $extra  fakes that must win over the item fakes (attachment bytes)
+     * @return array<string, mixed>
+     */
+    private function outlookSavedSignatureFakes(array $signatures, array $extra = []): array
+    {
+        $fakes = [
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/mailFolders/msgfolderroot*' => Http::response([
+                'id' => 'msgroot-1',
+                'parentFolderId' => 'root-1',
+            ]),
+            'graph.microsoft.com/v1.0/me/mailFolders/root-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'common-views', 'displayName' => 'Common Views'],
+                ['id' => 'appdata-1', 'displayName' => 'ApplicationDataRoot'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/mailFolders/appdata-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'other-app', 'displayName' => '00000000-0000-0000-0000-000000000000'],
+                ['id' => 'sigstore-1', 'displayName' => '49499048-0129-47f5-b95e-f9d315b861a6'],
+            ]]),
+            'graph.microsoft.com/v1.0/me/mailFolders/sigstore-1/messages*' => Http::response(['value' => []]),
+        ];
+
+        $folders = [];
+        $i = 0;
+        foreach ($signatures as $name => $body) {
+            $i++;
+            $folders[] = ['id' => 'sigfolder-'.$i, 'displayName' => (string) Str::uuid()];
+            $fakes['graph.microsoft.com/v1.0/me/mailFolders/sigfolder-'.$i.'/messages*'] = Http::response(['value' => [
+                ['id' => 'sigitem-'.$i, 'subject' => $name],
+            ]]);
+        }
+        $fakes['graph.microsoft.com/v1.0/me/mailFolders/sigstore-1/childFolders*'] = Http::response(['value' => $folders]);
+
+        foreach ($extra as $url => $response) {
+            $fakes[$url] = $response;
+        }
+
+        $i = 0;
+        foreach ($signatures as $name => $body) {
+            $i++;
+            $fakes['graph.microsoft.com/v1.0/me/messages/sigitem-'.$i.'*'] = is_array($body)
+                ? Http::response($body + ['id' => 'sigitem-'.$i, 'subject' => $name])
+                : Http::response([
+                    'id' => 'sigitem-'.$i,
+                    'subject' => $name,
+                    'body' => ['contentType' => 'html', 'content' => $body],
+                ]);
+        }
+
+        $fakes['graph.microsoft.com/*'] = Http::response(['value' => []], 404);
+
+        return $fakes;
     }
 
     public function test_it_lifts_a_gmail_signature_block_from_sent_mail(): void
@@ -364,7 +425,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $disclaimer = str_repeat('This Electronic Mail and any attached files may contain confidential information. ', 12);
 
@@ -394,7 +455,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $this->sent(
             $account,
@@ -419,7 +480,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $this->sent(
             $account,
@@ -448,7 +509,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $disclaimer = 'This Electronic Mail and any attached files may contain confidential '
             .'and/or privileged material for the sole use of the intended recipient. '
@@ -494,7 +555,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $this->sent(
             $account,
@@ -529,8 +590,6 @@ class SignatureImporterTest extends TestCase
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
-            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/v1.0/me/messages/sent-empty*' => Http::response([
                 'id' => 'sent-empty',
                 'conversationId' => 'c-sent-empty',
@@ -542,6 +601,7 @@ class SignatureImporterTest extends TestCase
                     'content' => '<p>Hi there</p><div id="Signature"><p><b>Outlook User</b></p><p>Advisor</p></div>',
                 ],
             ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
         $signature = SignatureImporter::for($account)->import();
@@ -563,7 +623,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $quoted = '<div id="divRplyFwdMsg"><hr><b>From:</b> Dana Reed<br>'
             .'<div id="Signature"><p>Dana Reed</p><p>Client Corp</p></div></div>';
@@ -612,7 +672,7 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('Other Co', $signature);
     }
 
-    public function test_outlook_import_uses_the_signature_outlook_puts_on_a_reply_draft(): void
+    public function test_outlook_import_reads_the_signature_saved_in_the_mailbox(): void
     {
         $account = $this->account();
         $account->forceFill([
@@ -630,34 +690,10 @@ class SignatureImporterTest extends TestCase
             'seed-1'
         );
 
-        $draftBody = '<div></div><div id="appendonsend"></div>'
-            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
-            .'<p>Managing Director</p></div>'
-            .'<div id="divRplyFwdMsg"><b>From:</b> Dana Reed'
-            .'<div id="Signature"><p>Dana Reed</p><p>Client Corp</p></div></div>';
-
-        Http::fake([
-            'login.microsoftonline.com/*' => Http::response([
-                'access_token' => 'access-token',
-                'expires_in' => 3600,
-            ]),
-            'graph.microsoft.com/v1.0/me/messages/seed-1/createReply' => Http::response([
-                'id' => 'draft-sig-1',
-            ]),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/v1.0/me/messages/draft-sig-1*' => Http::response([
-                'id' => 'draft-sig-1',
-                'conversationId' => 'c-draft',
-                'subject' => 'Re: Hello',
-                'bodyPreview' => 'Kind Regards',
-                'from' => ['emailAddress' => ['name' => 'Vernon Francis', 'address' => 'user@example.com']],
-                'body' => [
-                    'contentType' => 'html',
-                    'content' => $draftBody,
-                ],
-            ]),
-            'graph.microsoft.com/*' => Http::response(['value' => []]),
-        ]);
+        Http::fake($this->outlookSavedSignatureFakes([
+            'Work' => '<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+                .'<p>Managing Director</p></div>',
+        ]));
 
         $signature = SignatureImporter::for($account)->import();
 
@@ -667,10 +703,113 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('Dana Reed', $signature);
         $this->assertStringNotContainsString('Wrong leftover', $signature);
 
-        Http::assertSent(fn ($request) => $request->method() === 'POST'
-            && str_contains($request->url(), 'messages/seed-1/createReply'));
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_contains($request->url(), 'messages/draft-sig-1'));
+        // Reading the store must leave the mailbox alone: no draft created,
+        // nothing deleted or changed.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'graph.microsoft.com')
+            && in_array($request->method(), ['POST', 'DELETE', 'PATCH'], true));
+    }
+
+    public function test_outlook_saved_signature_logos_become_data_uris(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        // Minimal valid 1x1 PNG.
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        Http::fake($this->outlookSavedSignatureFakes([
+            'Work' => [
+                'hasAttachments' => false,
+                'body' => [
+                    'contentType' => 'html',
+                    'content' => '<div id="Signature"><p><b>Vernon Francis</b></p>'
+                        .'<img src="cid:logo001" width="120" height="40" alt="Logo"></div>',
+                ],
+                'attachments' => [[
+                    'id' => 'att-logo',
+                    'name' => 'logo.png',
+                    'contentType' => 'image/png',
+                    'size' => strlen($png),
+                    'isInline' => true,
+                    'contentId' => 'logo001',
+                ]],
+            ],
+        ], [
+            'graph.microsoft.com/v1.0/me/messages/sigitem-1/attachments/att-logo*' => Http::response($png, 200, [
+                'Content-Type' => 'image/png',
+            ]),
+        ]));
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringContainsString('data:image/png;base64,', $signature);
+        $this->assertStringNotContainsString('cid:logo001', $signature);
+    }
+
+    public function test_outlook_import_falls_back_to_sent_mail_when_the_store_is_missing(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->sent(
+            $account,
+            '<p>Thanks.</p><div id="appendonsend"></div>'
+            .'<div id="Signature"><p><b>Outlook User</b></p><p>Advisor</p></div>'
+        );
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/mailFolders/msgfolderroot*' => Http::response([
+                'id' => 'msgroot-1',
+                'parentFolderId' => 'root-1',
+            ]),
+            'graph.microsoft.com/v1.0/me/mailFolders/root-1/childFolders*' => Http::response(['value' => [
+                ['id' => 'common-views', 'displayName' => 'Common Views'],
+            ]]),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
+        ]);
+
+        $choices = SignatureImporter::for($account)->choices();
+
+        $this->assertCount(1, $choices);
+        $this->assertStringStartsWith('From sent mail', $choices[0]['name']);
+        $this->assertStringContainsString('Outlook User', $choices[0]['html']);
+    }
+
+    public function test_gmail_import_asks_for_a_reconnect_until_the_settings_scope_is_granted(): void
+    {
+        $account = $this->account();
+
+        $this->assertSame(
+            'Reconnect Gmail to import the signature saved in Gmail.',
+            SignatureImporter::for($account)->reconnectHint()
+        );
+
+        $account->forceFill(['scopes' => [
+            'https://www.googleapis.com/auth/gmail.modify',
+            'https://www.googleapis.com/auth/gmail.settings.basic',
+        ]])->save();
+        $this->assertNull(SignatureImporter::for($account->fresh())->reconnectHint());
+
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+        $this->assertNull(SignatureImporter::for($account->fresh())->reconnectHint());
     }
 
     public function test_it_keeps_an_outlook_logo_hidden_in_word_vml_comments(): void
@@ -682,7 +821,7 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
-        $this->fakeOutlookReplyDraftUnavailable();
+        $this->fakeOutlookSavedSignaturesUnavailable();
 
         $this->sent(
             $account,
@@ -703,7 +842,7 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('See you Thursday', $signature);
     }
 
-    public function test_outlook_lists_the_reply_signature_and_sent_mail_as_separate_choices(): void
+    public function test_outlook_lists_the_saved_signature_and_sent_mail_as_separate_choices(): void
     {
         $account = $this->account();
         $account->forceFill([
@@ -720,41 +859,21 @@ class SignatureImporterTest extends TestCase
             'seed-1'
         );
 
-        $draftBody = '<div></div><div id="appendonsend"></div>'
-            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
-            .'<p>Managing Director</p></div>';
-
-        Http::fake([
-            'login.microsoftonline.com/*' => Http::response([
-                'access_token' => 'access-token',
-                'expires_in' => 3600,
-            ]),
-            'graph.microsoft.com/v1.0/me/messages/seed-1/createReply' => Http::response([
-                'id' => 'draft-sig-1',
-            ]),
-            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
-            'graph.microsoft.com/v1.0/me/messages/draft-sig-1*' => Http::response([
-                'id' => 'draft-sig-1',
-                'conversationId' => 'c-draft',
-                'subject' => 'Re: Hello',
-                'bodyPreview' => 'Kind Regards',
-                'from' => ['emailAddress' => ['name' => 'Vernon Francis', 'address' => 'user@example.com']],
-                'body' => [
-                    'contentType' => 'html',
-                    'content' => $draftBody,
-                ],
-            ]),
-            'graph.microsoft.com/*' => Http::response(['value' => []]),
-        ]);
+        Http::fake($this->outlookSavedSignatureFakes([
+            'Work' => '<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+                .'<p>Managing Director</p></div>',
+            'Short' => '<p>Vernon</p>',
+        ]));
 
         $choices = SignatureImporter::for($account)->choices();
         $names = collect($choices)->pluck('name')->all();
 
-        $this->assertContains('Outlook · replies', $names);
+        $this->assertSame('Saved in Outlook · Work', $names[0]);
+        $this->assertContains('Saved in Outlook · Short', $names);
         $this->assertTrue(collect($names)->contains(fn (string $name): bool => str_starts_with($name, 'From sent mail')));
         $this->assertStringContainsString(
             'Vernon Francis',
-            (string) collect($choices)->firstWhere('name', 'Outlook · replies')['html']
+            (string) collect($choices)->firstWhere('name', 'Saved in Outlook · Work')['html']
         );
         $this->assertStringContainsString(
             'Office hours only',

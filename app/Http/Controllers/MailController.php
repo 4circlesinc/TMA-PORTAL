@@ -2123,11 +2123,14 @@ class MailController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $choices = SignatureImporter::for($account)->choices();
+        $importer = SignatureImporter::for($account);
+        $choices = $importer->choices();
+        $hint = $importer->reconnectHint();
 
         if ($choices === []) {
             return response()->json([
-                'message' => 'No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.',
+                'message' => $hint ?? 'No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.',
+                'reconnect' => $hint !== null,
                 'choices' => [],
                 'signature' => null,
                 'preferences' => $this->mailPreferences($user->preferences ?? []),
@@ -2136,6 +2139,9 @@ class MailController extends Controller
 
         return response()->json([
             'choices' => $choices,
+            // Sent-mail guesses are on offer, but the signature saved in the
+            // mailbox itself needs a broader grant; the chooser says so.
+            'reconnect' => $hint !== null,
             'preferences' => $this->mailPreferences($user->preferences ?? []),
         ]);
     }

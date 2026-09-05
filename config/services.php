@@ -46,7 +46,13 @@ return [
         // photos for people in the firm, saved contacts, or people you've
         // emailed — without them every face is initials. Existing mail
         // connections must reconnect once to pick these up.
-        'scope_email' => 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/directory.readonly https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly',
+        //
+        // gmail.settings.basic lets signature import read the signature saved
+        // in Gmail (settings/sendAs) instead of guessing from Sent mail. It is
+        // a SENSITIVE scope, so it does not raise the tier of review above
+        // what gmail.modify already needs. Connections made before it was
+        // added lack it; the import chooser asks for a reconnect.
+        'scope_email' => 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/directory.readonly https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly',
         // Two-way calendar sync. `calendar.events` is read+write on events and
         // is a SENSITIVE scope: production use by anyone outside the test-user
         // list needs Google's app-verification (not the heavier CASA the Gmail
