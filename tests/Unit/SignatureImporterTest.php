@@ -253,6 +253,75 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('cid:logo001', $signature);
     }
 
+    public function test_imported_signature_images_keep_their_source_resolution(): void
+    {
+        if (! function_exists('imagecreatetruecolor') || ! function_exists('getimagesizefromstring')) {
+            $this->markTestSkipped('GD is required to assert image dimensions.');
+        }
+
+        $png = $this->noisyPng(640, 320);
+        $this->assertGreaterThan(80_000, strlen($png), 'the fixture must be large enough that the old importer would have crushed it');
+
+        $account = $this->account();
+        $message = $this->sent(
+            $account,
+            '<div class="gmail_signature" data-smartmail="gmail_signature">'
+            .'<div>Jane Doe</div>'
+            .'<img src="cid:logo-hires" width="160" height="80" alt="Logo">'
+            .'</div>'
+        );
+
+        MailAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $message->id,
+            'remote_id' => 'att-hires',
+            'filename' => 'logo.png',
+            'mime_type' => 'image/png',
+            'size' => strlen($png),
+            'is_inline' => true,
+            'content_id' => 'logo-hires',
+        ]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/*/messages/sent-1/attachments/att-hires*' => Http::response([
+                'data' => rtrim(strtr(base64_encode($png), '+/', '-_'), '='),
+            ]),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertMatchesRegularExpression('/data:image\/png;base64,([A-Za-z0-9+\/=]+)/', $signature);
+        preg_match('/data:image\/png;base64,([A-Za-z0-9+\/=]+)/', $signature, $match);
+        $decoded = base64_decode($match[1], true);
+        $this->assertNotFalse($decoded);
+        $info = getimagesizefromstring($decoded);
+        $this->assertIsArray($info);
+        $this->assertSame(640, $info[0]);
+        $this->assertSame(320, $info[1]);
+    }
+
+    /** Uncompressible noise so PNG size stays above the old 80 KB crush threshold. */
+    private function noisyPng(int $width, int $height): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        for ($y = 0; $y < $height; $y += 2) {
+            for ($x = 0; $x < $width; $x += 2) {
+                $color = imagecolorallocate($image, ($x * 13) % 256, ($y * 7) % 256, ($x + $y) % 256);
+                imagefilledrectangle($image, $x, $y, $x + 1, $y + 1, $color);
+            }
+        }
+        ob_start();
+        imagepng($image, null, 0);
+        imagedestroy($image);
+
+        return ob_get_clean() ?: '';
+    }
+
     public function test_it_lifts_an_outlook_signature_after_appendonsend(): void
     {
         $account = $this->account();

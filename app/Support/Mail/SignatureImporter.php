@@ -25,7 +25,7 @@ use Throwable;
  */
 class SignatureImporter
 {
-    public const MAX_LENGTH = 100000;
+    public const MAX_LENGTH = 2_000_000;
 
     private const ALLOWED_TAGS = [
         'a', 'b', 'br', 'div', 'em', 'font', 'h1', 'h2', 'h3', 'h4', 'hr',
@@ -588,19 +588,36 @@ class SignatureImporter
 
     private function toDataUri(string $bytes, string $mime): ?string
     {
-        // Keep signature prefs bounded: downscale large logos before embedding.
-        if (strlen($bytes) > 80_000) {
+        // Keep the source pixels. Outlook logos are often 2× the CSS size;
+        // crushing them to 320px was what made imported signatures look
+        // muddy. Re-encode only when the file is enormous or the long edge
+        // is past a retina-wide cap.
+        if (strlen($bytes) > 500_000 || $this->imageMaxEdge($bytes) > 1600) {
             $compressed = $this->compressImage($bytes, $mime);
             if ($compressed !== null) {
                 [$bytes, $mime] = $compressed;
             }
         }
 
-        if (strlen($bytes) > 220_000) {
+        if (strlen($bytes) > 900_000) {
             return null;
         }
 
         return 'data:'.$mime.';base64,'.base64_encode($bytes);
+    }
+
+    private function imageMaxEdge(string $bytes): int
+    {
+        if (! function_exists('getimagesizefromstring')) {
+            return 0;
+        }
+
+        $info = @getimagesizefromstring($bytes);
+        if (! is_array($info)) {
+            return 0;
+        }
+
+        return max((int) $info[0], (int) $info[1]);
     }
 
     /**
@@ -625,7 +642,7 @@ class SignatureImporter
             return null;
         }
 
-        $max = 320;
+        $max = 1600;
         $scale = min(1, $max / max($width, $height));
         $targetW = max(1, (int) round($width * $scale));
         $targetH = max(1, (int) round($height * $scale));
@@ -642,7 +659,7 @@ class SignatureImporter
             imagepng($canvas, null, 6);
             $outMime = 'image/png';
         } else {
-            imagejpeg($canvas, null, 82);
+            imagejpeg($canvas, null, 92);
             $outMime = 'image/jpeg';
         }
         $out = ob_get_clean() ?: '';
