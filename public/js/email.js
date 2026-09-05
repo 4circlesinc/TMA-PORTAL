@@ -2371,7 +2371,13 @@
         page: 1,
         perPage: loadMailPerPage(),
       })),
+      suggest: hold(window.TMAEmailAPI.suggest('')),
     };
+    warmBoot.suggest.then(function (result) {
+      if (result.data && Array.isArray(result.data.suggestions)) {
+        suggestCache[''] = result.data.suggestions;
+      }
+    });
   }
 
   /* Hand a prefetched response to the caller once, if it is still current. */
@@ -6071,13 +6077,15 @@
     });
   }
 
-  /* ── Recipient typeahead (Phase 1) ───────────────────────────────
-   * Portal users, clients, groups, and prior-mail addresses. The dropdown
-   * is a body-level popup so compose re-renders / overflow never clip it,
-   * and picks write straight into the input without a full re-render. */
+  /* ── Recipient typeahead ─────────────────────────────────────────
+   * Portal users, clients, groups, and everyone this mailbox has written
+   * to or heard from. The dropdown is a body-level popup so compose
+   * re-renders / overflow never clip it, and picks write straight into the
+   * input without a full re-render. */
 
-  var SUGGEST_DEBOUNCE_MS = 200;
+  var SUGGEST_DEBOUNCE_MS = 50;
   var suggestCache = {};
+  var suggestPrefetching = false;
   var suggestActive = null;
 
   function closeRecipientSuggest() {
@@ -6213,6 +6221,39 @@
     };
   }
 
+  function suggestionMatches(item, q) {
+    if (!q) return true;
+    var email = String(item.email || '').toLowerCase();
+    var name = String(item.name || '').toLowerCase();
+    if (item.source === 'group') {
+      return name.indexOf(q) !== -1 || String(item.sourceLabel || '').toLowerCase().indexOf(q) !== -1;
+    }
+    return email.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+  }
+
+  function cachedSuggestions(q) {
+    var key = String(q || '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(suggestCache, key)) return suggestCache[key];
+    for (var len = key.length - 1; len >= 0; len--) {
+      var parentKey = key.slice(0, len);
+      if (!Object.prototype.hasOwnProperty.call(suggestCache, parentKey)) continue;
+      return suggestCache[parentKey].filter(function (item) {
+        return suggestionMatches(item, key);
+      });
+    }
+    return null;
+  }
+
+  function prefetchRecipientSuggest() {
+    if (Object.prototype.hasOwnProperty.call(suggestCache, '') || suggestPrefetching) return;
+    suggestPrefetching = true;
+    api().suggest('').then(function (data) {
+      suggestCache[''] = (data && data.suggestions) || [];
+    }).catch(function () { /* typeahead still works on demand */ }).then(function () {
+      suggestPrefetching = false;
+    });
+  }
+
   function requestRecipientSuggest(input) {
     var token = currentAddressToken(input.value, input.selectionStart).text;
     // Skip when the token already looks like a finished address.
@@ -6223,9 +6264,10 @@
 
     var q = token;
     var cacheKey = q.toLowerCase();
-    if (suggestCache[cacheKey]) {
-      openRecipientSuggest(input, suggestCache[cacheKey]);
-      return;
+    var cached = cachedSuggestions(q);
+    if (cached && cached.length) {
+      openRecipientSuggest(input, cached);
+      if (Object.prototype.hasOwnProperty.call(suggestCache, cacheKey)) return;
     }
 
     var seq = (input._suggestSeq = (input._suggestSeq || 0) + 1);
@@ -6249,10 +6291,16 @@
 
     var timer = null;
     input.addEventListener('input', function () {
+      var q = currentAddressToken(input.value, input.selectionStart).text;
+      var cached = cachedSuggestions(q);
+      if (cached && cached.length) openRecipientSuggest(input, cached);
       clearTimeout(timer);
       timer = setTimeout(function () { requestRecipientSuggest(input); }, SUGGEST_DEBOUNCE_MS);
     });
     input.addEventListener('focus', function () {
+      prefetchRecipientSuggest();
+      var cached = cachedSuggestions(currentAddressToken(input.value, input.selectionStart).text);
+      if (cached && cached.length) openRecipientSuggest(input, cached);
       clearTimeout(timer);
       timer = setTimeout(function () { requestRecipientSuggest(input); }, SUGGEST_DEBOUNCE_MS);
     });
@@ -6271,7 +6319,7 @@
    * so the caret stays put. Picking inserts a mailto mention and, when a
    * To field is editable, also adds them as a recipient. */
 
-  var MENTION_DEBOUNCE_MS = 200;
+  var MENTION_DEBOUNCE_MS = 50;
   var mentionActive = null;
 
   function closeComposeMention() {
@@ -6468,9 +6516,10 @@
 
     var q = match[2] || '';
     var cacheKey = q.toLowerCase();
-    if (suggestCache[cacheKey]) {
-      openComposeMentionMenu(editor, suggestCache[cacheKey]);
-      return;
+    var cached = cachedSuggestions(q);
+    if (cached && cached.length) {
+      openComposeMentionMenu(editor, cached);
+      if (Object.prototype.hasOwnProperty.call(suggestCache, cacheKey)) return;
     }
 
     var seq = (editor._mentionSeq = (editor._mentionSeq || 0) + 1);
@@ -6541,6 +6590,10 @@
     }
     state.composeDrafts.push(draft);
     state.focusedComposeId = draft.id;
+    prefetchRecipientSuggest();
+    // Outlook (and Gmail) get a Drafts-folder copy from the first moment
+    // the window exists, not after the user has already typed a while.
+    saveComposeDraft(state, draft).catch(function () {});
     return draft;
   }
 
@@ -6557,7 +6610,12 @@
     state.focusedComposeId = id;
   }
 
-  function closeCompose(state, id) {
+  function closeCompose(state, id, persist) {
+    var draft = findComposeDraft(state, id);
+    if (persist !== false && draft && !draft.sending) {
+      window.clearTimeout(draft._saveTimer);
+      if (draft._dirty) saveComposeDraft(state, draft).catch(function () {});
+    }
     state.composeDrafts = state.composeDrafts.filter(function (draft) {
       return draft.id !== id;
     });
@@ -6894,7 +6952,7 @@
           api().deleteDraft(draft.serverId).catch(function () {});
         }
 
-        closeCompose(state, id);
+        closeCompose(state, id, false);
         render();
       });
     });
@@ -6979,15 +7037,17 @@
     });
   }
 
-  /* Autosave, debounced so a burst of typing is one write. */
+  /* Autosave, debounced so a burst of typing is one write. The first save
+   * already happened when the window opened; this keeps Outlook in step. */
   function scheduleDraftSave(state, draft) {
+    draft._dirty = true;
     window.clearTimeout(draft._saveTimer);
     draft._saveTimer = window.setTimeout(function () {
       saveComposeDraft(state, draft).catch(function () {
         // Autosave is best-effort; Send is what the user is judged on, and
         // it sends the live field values rather than the saved copy.
       });
-    }, 1200);
+    }, 800);
   }
 
   /* Pull the compose body's HTML from the live editor when it is on screen.
@@ -7014,6 +7074,7 @@
       inReplyTo: draft.inReplyTo,
     }).then(function (data) {
       if (data && data.draft) draft.serverId = data.draft.id;
+      draft._dirty = false;
       return data;
     });
   }
@@ -7045,7 +7106,7 @@
       mode: draft.mode || 'new',
       inReplyTo: draft.inReplyTo,
     }).then(function () {
-      closeCompose(state, id);
+      closeCompose(state, id, false);
       showEmailToast(root, 'Message sent');
 
       // Sent mail only shows up locally after a sync, so refresh the folder

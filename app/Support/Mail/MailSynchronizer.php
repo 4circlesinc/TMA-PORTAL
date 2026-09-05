@@ -255,8 +255,11 @@ class MailSynchronizer
         $created = [];
 
         foreach ($changes['messages'] as $message) {
-            if ($this->upsert($message) && ! empty($message['remote_id'])) {
-                $created[] = (string) $message['remote_id'];
+            if ($this->upsert($message)) {
+                if (! empty($message['remote_id'])) {
+                    $created[] = (string) $message['remote_id'];
+                }
+                rescue(fn () => MailCorrespondents::record($this->account, [$message]), report: false);
             }
             $written++;
         }
@@ -286,16 +289,6 @@ class MailSynchronizer
     }
 
     /**
-     * Write a whole page of list rows in one statement.
-     *
-     * Used by the backfill, where volume matters more than the extras: these
-     * rows come from a listing, so they carry no body and no attachments, and
-     * categories are left to the regular sync. Existing rows are refreshed
-     * without disturbing their uuid or the body already cached against them.
-     *
-     * @param  array<int, array<string, mixed>>  $messages
-     */
-    /**
      * Fit a provider value into its column. Real mail carries display names,
      * subjects and thread ids far longer than the schema allows, and one
      * oversized row would otherwise abort the whole page's insert.
@@ -311,21 +304,35 @@ class MailSynchronizer
         return mb_strlen($value) > $limit ? mb_substr($value, 0, $limit) : $value;
     }
 
+    /**
+     * Write a whole page of list rows in one statement.
+     *
+     * Used by the backfill, where volume matters more than the extras: these
+     * rows come from a listing, so they carry no body and no attachments, and
+     * categories are left to the regular sync. Existing rows are refreshed
+     * without disturbing their uuid or the body already cached against them.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     */
     private function bulkUpsert(array $messages): int
     {
         $now = now();
         $rows = [];
+        $incoming = [];
 
         foreach ($messages as $m) {
             if (empty($m['remote_id'])) {
                 continue;
             }
 
+            $remoteId = self::clamp($m['remote_id'], 255);
+            $incoming[] = $remoteId;
+
             $rows[] = [
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $this->account->user_id,
                 'connected_account_id' => $this->account->id,
-                'remote_id' => self::clamp($m['remote_id'], 255),
+                'remote_id' => $remoteId,
                 'thread_id' => self::clamp($m['thread_id'] ?? null, 255),
                 'folder' => self::clamp($m['folder'] ?? 'inbox', 20),
                 'subject' => self::clamp($m['subject'] ?? null, 998),
@@ -352,6 +359,13 @@ class MailSynchronizer
             return 0;
         }
 
+        $known = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->whereIn('remote_id', $incoming)
+            ->pluck('remote_id')
+            ->all();
+        $knownSet = array_flip($known);
+
         MailMessage::upsert(
             $rows,
             ['connected_account_id', 'remote_id'],
@@ -361,6 +375,17 @@ class MailSynchronizer
                 'has_attachments', 'sent_at', 'updated_at',
             ]
         );
+
+        $fresh = [];
+        foreach ($messages as $m) {
+            $id = self::clamp($m['remote_id'] ?? null, 255);
+            if ($id && ! isset($knownSet[$id])) {
+                $fresh[] = $m;
+            }
+        }
+        if ($fresh !== []) {
+            rescue(fn () => MailCorrespondents::record($this->account, $fresh), report: false);
+        }
 
         return count($rows);
     }

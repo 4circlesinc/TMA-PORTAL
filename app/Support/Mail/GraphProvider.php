@@ -379,6 +379,7 @@ class GraphProvider implements MailProvider
     {
         $mode = $message['mode'] ?? 'new';
         $replyToId = $message['inReplyToRemoteId'] ?? null;
+        $remoteDraftId = $message['remoteDraftId'] ?? null;
 
         // createReply / createReplyAll / createForward is what Outlook itself
         // uses: it stamps conversationId, conversationIndex, In-Reply-To and
@@ -389,8 +390,12 @@ class GraphProvider implements MailProvider
         }
 
         // Create-then-send rather than /sendMail, because /sendMail returns no
-        // id and the sent message has to be findable afterwards.
-        $draftId = $this->saveDraft($message);
+        // id and the sent message has to be findable afterwards. An autosaved
+        // Outlook draft is already that message — patch it and send, do not
+        // mint a second one.
+        $draftId = $remoteDraftId
+            ? $this->saveDraft($message, $remoteDraftId)
+            : $this->saveDraft($message);
 
         $this->json($this->request()->post(self::BASE."/messages/{$draftId}/send"));
 
@@ -464,17 +469,49 @@ class GraphProvider implements MailProvider
             : $this->request()->post(self::BASE.'/messages', $payload);
 
         $id = (string) ($this->json($response)['id'] ?? '');
+        if ($id === '') {
+            $id = (string) ($remoteId ?? '');
+        }
 
-        if ($remoteId !== null && $inline !== []) {
-            foreach ($inline as $part) {
-                $this->json($this->request()->post(
-                    self::BASE.'/messages/'.$remoteId.'/attachments',
-                    self::inlineAttachment($part),
-                ));
-            }
+        // Autosave already attached inline images on create. Re-POSTing them
+        // on every PATCH would duplicate the signature in Outlook. Send and
+        // createReply overlays still sync missing parts.
+        if ($remoteId !== null && $inline !== [] && empty($draft['skipInlineAttach'])) {
+            $this->attachMissingInline($remoteId, $inline);
         }
 
         return $id;
+    }
+
+    /**
+     * @param  list<array{cid: string, mime: string, name: string, bytes: string}>  $inline
+     */
+    private function attachMissingInline(string $remoteId, array $inline): void
+    {
+        $existing = [];
+        try {
+            $data = $this->json($this->request()->get(
+                self::BASE.'/messages/'.$remoteId.'/attachments'
+            ));
+            foreach ($data['value'] ?? [] as $att) {
+                $cid = trim((string) ($att['contentId'] ?? ''), '<>');
+                if ($cid !== '') {
+                    $existing[$cid] = true;
+                }
+            }
+        } catch (\Throwable) {
+            // Listing failed; posting everything still sends a readable message.
+        }
+
+        foreach ($inline as $part) {
+            if (isset($existing[$part['cid']])) {
+                continue;
+            }
+            $this->json($this->request()->post(
+                self::BASE.'/messages/'.$remoteId.'/attachments',
+                self::inlineAttachment($part),
+            ));
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ResolveSenderPhoto;
 use App\Models\Client;
 use App\Models\ConnectedAccount;
 use App\Models\Group;
@@ -10,6 +11,8 @@ use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -244,5 +247,104 @@ class MailRecipientSuggestTest extends TestCase
             ->getJson('/portal/mail/suggest')
             ->assertOk()
             ->assertJsonStructure(['suggestions']);
+    }
+
+    public function test_suggests_addresses_from_the_full_mailbox_not_only_recent_messages(): void
+    {
+        $me = $this->staff(['email' => 'me@example.com']);
+        $account = ConnectedAccount::create([
+            'user_id' => $me->id,
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$me->id,
+            'email' => 'me@example.com',
+            'name' => 'Me',
+            'token' => 'refresh',
+            'scopes' => ['Mail.ReadWrite'],
+            'sync_email' => true,
+        ]);
+
+        Queue::fake([ResolveSenderPhoto::class]);
+
+        for ($i = 0; $i < 200; $i++) {
+            MailMessage::create([
+                'uuid' => (string) Str::uuid(),
+                'user_id' => $me->id,
+                'connected_account_id' => $account->id,
+                'remote_id' => 'm-recent-'.$i,
+                'thread_id' => 't-recent-'.$i,
+                'folder' => 'inbox',
+                'subject' => 'Recent '.$i,
+                'from_name' => 'Recent '.$i,
+                'from_email' => 'recent'.$i.'@example.com',
+                'to' => [['email' => 'me@example.com']],
+                'is_read' => true,
+                'sent_at' => now()->subMinutes($i),
+            ]);
+        }
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $me->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'm-old',
+            'thread_id' => 't-old',
+            'folder' => 'sent',
+            'subject' => 'Long ago',
+            'from_name' => 'Me',
+            'from_email' => 'me@example.com',
+            'to' => [['name' => 'Old Friend', 'email' => 'old.friend@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subYear(),
+        ]);
+
+        $items = $this->actingAs($me)
+            ->getJson('/portal/mail/suggest?q=old.friend')
+            ->assertOk()
+            ->json('suggestions');
+
+        $this->assertTrue(
+            collect($items)->contains(fn ($s) => ($s['email'] ?? null) === 'old.friend@example.com'),
+            'People mailed years ago must still appear in the To field.'
+        );
+    }
+
+    public function test_suggest_does_not_call_the_mail_provider_for_photos(): void
+    {
+        $me = $this->staff(['email' => 'me@example.com']);
+        $account = ConnectedAccount::create([
+            'user_id' => $me->id,
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$me->id,
+            'email' => 'me@example.com',
+            'name' => 'Me',
+            'token' => 'refresh',
+            'scopes' => ['Mail.ReadWrite'],
+            'sync_email' => true,
+        ]);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $me->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'm-photo-live',
+            'thread_id' => 't-photo-live',
+            'folder' => 'inbox',
+            'subject' => 'Hi',
+            'from_name' => 'Pat Partner',
+            'from_email' => 'pat.partner@example.com',
+            'to' => [['email' => 'me@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subHour(),
+        ]);
+
+        Http::fake();
+        Queue::fake();
+
+        $this->actingAs($me)
+            ->getJson('/portal/mail/suggest?q=partner')
+            ->assertOk();
+
+        Http::assertNothingSent();
+        Queue::assertPushed(ResolveSenderPhoto::class);
     }
 }

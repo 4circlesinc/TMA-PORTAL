@@ -90,8 +90,8 @@
       }));
     },
 
-    /* Recipient typeahead for To/Cc/Bcc, portal people, clients, groups,
-     * and addresses from previous conversations. No provider OAuth. */
+    /* Recipient typeahead for To/Cc/Bcc: portal people, clients, groups,
+     * and everyone this mailbox has written to or heard from. */
     suggest: function (q) {
       return mailFetch(BASE + '/suggest' + query({ q: q || '' }));
     },

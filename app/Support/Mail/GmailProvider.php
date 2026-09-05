@@ -159,6 +159,16 @@ class GmailProvider implements MailProvider
 
     public function send(array $message): string
     {
+        if (! empty($message['remoteDraftId'])) {
+            $this->saveDraft($message, $message['remoteDraftId']);
+            $response = $this->request()->post(self::BASE.'/drafts/send', [
+                'id' => $message['remoteDraftId'],
+            ]);
+            $sent = $this->json($response);
+
+            return (string) ($sent['id'] ?? $sent['message']['id'] ?? '');
+        }
+
         $message = $this->withThreading($message);
         $payload = ['raw' => MimeBuilder::encode(MimeBuilder::build($message))];
 

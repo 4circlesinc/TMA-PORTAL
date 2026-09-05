@@ -18,12 +18,12 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
+use App\Support\Mail\MailCorrespondents;
 use App\Support\Mail\MailSynchronizer;
 use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
 use App\Support\Microsoft\ChangeNotifications;
-use Illuminate\Support\Facades\Cache;
 use App\Support\Templates\ComposeTemplates;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -1455,10 +1456,10 @@ class MailController extends Controller
     }
 
     /**
-     * Recipient typeahead for To / Cc / Bcc (Phase 1, no provider contacts).
+     * Recipient typeahead for To / Cc / Bcc.
      *
      * Merges portal users, clients (staff only), expandable groups, and
-     * addresses mined from the viewer's mirrored mailbox.
+     * everyone this mailbox has written to or heard from.
      */
     public function suggest(Request $request): JsonResponse
     {
@@ -1503,6 +1504,13 @@ class MailController extends Controller
             $mode = 'reply';
         }
 
+        $draft = null;
+        if ($draftUuid = $data['draftId'] ?? null) {
+            $draft = MailDraft::where('user_id', $request->user()->id)
+                ->where('uuid', $draftUuid)
+                ->first();
+        }
+
         $payload = [
             'to' => $data['to'],
             'cc' => $data['cc'] ?? [],
@@ -1524,24 +1532,30 @@ class MailController extends Controller
             if (in_array($mode, ['reply', 'reply-all'], true)) {
                 $payload['threadId'] = $original->thread_id;
             }
+        } elseif ($draft?->remote_id) {
+            $payload['remoteDraftId'] = $draft->remote_id;
         }
 
         $provider->send($payload);
 
-        if ($draftUuid = $data['draftId'] ?? null) {
-            $draft = MailDraft::where('user_id', $request->user()->id)
-                ->where('uuid', $draftUuid)
-                ->first();
+        rescue(fn () => MailCorrespondents::record($account, [[
+            'from_email' => $account->email,
+            'from_name' => $account->name,
+            'to' => $data['to'],
+            'cc' => $data['cc'] ?? [],
+            'bcc' => $data['bcc'] ?? [],
+            'sent_at' => now(),
+        ]]), report: false);
 
-            if ($draft) {
-                // The provider turned the draft into a sent message; drop the
-                // local copy so it stops showing in Drafts.
-                if ($draft->remote_id && $account->provider === 'google') {
-                    rescue(fn () => $provider->deleteDraft($draft->remote_id), report: false);
-                }
-
-                $draft->delete();
+        if ($draft) {
+            // A reply/forward mints a conversation draft at send time; the
+            // autosaved standalone copy would otherwise linger in Outlook.
+            $consumed = $payload['remoteDraftId'] ?? null;
+            if ($draft->remote_id && $draft->remote_id !== $consumed) {
+                rescue(fn () => $provider->deleteDraft($draft->remote_id), report: false);
             }
+
+            $draft->delete();
         }
 
         SyncMailbox::dispatch($account);
@@ -1619,6 +1633,30 @@ class MailController extends Controller
         }
 
         $draft->save();
+
+        try {
+            $existingRemote = $draft->remote_id;
+            $remoteId = Mailbox::provider($account)->saveDraft([
+                'to' => $draft->to ?? [],
+                'cc' => $draft->cc ?? [],
+                'bcc' => $draft->bcc ?? [],
+                'subject' => $draft->subject ?? '',
+                'bodyHtml' => $draft->body_html ?? '',
+                'mode' => $draft->mode ?? 'new',
+                'threadId' => $draft->thread_id,
+                'skipInlineAttach' => filled($existingRemote),
+            ], $existingRemote ?: null);
+
+            if ($remoteId !== '' && $remoteId !== $existingRemote) {
+                $draft->remote_id = $remoteId;
+                $draft->save();
+            }
+        } catch (\Throwable $e) {
+            logger()->warning('mail: provider draft save failed', [
+                'draft' => $draft->uuid,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json(['draft' => $draft->toRecord()]);
     }

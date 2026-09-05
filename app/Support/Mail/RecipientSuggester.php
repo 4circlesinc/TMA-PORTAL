@@ -3,26 +3,27 @@
 namespace App\Support\Mail;
 
 use App\Jobs\ResolveSenderPhoto;
-use App\Models\Client;
 use App\Models\Group;
+use App\Models\MailCorrespondent;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
+use Illuminate\Support\Collection;
 
 /**
- * Phase-1 recipient suggestions for compose To/Cc/Bcc, no provider OAuth.
+ * Recipient suggestions for compose To/Cc/Bcc, no provider OAuth.
  *
  * Sources, in merge priority when the same email appears twice:
  *   1. portal users (staff / approved accounts)
  *   2. clients (staff viewers only)
- *   3. prior mail addresses from this user's mirrored mailbox
+ *   3. prior mail addresses from this user's compose address book
+ *      (everyone they have written to or heard from, indexed)
  * Groups are returned as expandable rows (all member emails) rather than a
  * single address, because portal groups have no mailbox of their own.
  *
- * Profile pictures reuse the same rule as the inbox: a portal avatar when the
- * person has an account, otherwise a cached sender photo (directory / Gravatar / brand)
+ * Profile pictures reuse the same rule as the inbox: a cached sender photo
  * via /portal/mail/sender-photo/{hash}. Never a live provider call here —
  * uncached addresses get a background ResolveSenderPhoto job instead.
  */
@@ -30,6 +31,7 @@ final class RecipientSuggester
 {
     private const LIMIT = 12;
 
+    /** Fallback scan only when the address book has not been built yet. */
     private const PRIOR_SCAN = 200;
 
     /**
@@ -40,6 +42,8 @@ final class RecipientSuggester
         $term = mb_strtolower(trim($query));
         $byEmail = [];
         $groups = [];
+
+        MailCorrespondents::ensureBuilt($viewer, Mailbox::accountFor($viewer));
 
         foreach (self::portalUsers($viewer, $term) as $row) {
             self::put($byEmail, $row);
@@ -54,7 +58,7 @@ final class RecipientSuggester
             }
         }
 
-        foreach (self::priorMail($viewer, $term) as $row) {
+        foreach (self::priorCorrespondents($viewer, $term) as $row) {
             self::put($byEmail, $row);
         }
 
@@ -86,8 +90,8 @@ final class RecipientSuggester
      *
      * Portal avatars are ignored on purpose: compose should show the face from
      * the mail provider (org directory, Google other-contacts, Gravatar), not
-     * whatever someone uploaded on this site. Uncached addresses are resolved
-     * inline (capped) so the first typeahead can show a real face.
+     * whatever someone uploaded on this site. Uncached addresses get a
+     * background ResolveSenderPhoto job — never a live provider call here.
      *
      * @param  list<array<string, mixed>>  $rows
      * @return list<array<string, mixed>>
@@ -122,36 +126,14 @@ final class RecipientSuggester
             ->keyBy(fn (MailSenderPhoto $p) => mb_strtolower((string) $p->email));
 
         if ($account) {
-            $resolved = 0;
             foreach ($candidates as $email) {
                 $row = $cached->get($email);
-                // A fresh *hit* is done; a fresh *miss* is retried here because
-                // earlier misses were often "queue never ran" or missing scopes,
-                // not a real absence of a Microsoft/Google photo.
                 if ($row && $row->isFresh() && $row->has_photo) {
                     continue;
                 }
-                if ($resolved >= 6) {
-                    ResolveSenderPhoto::dispatch($account, $email);
-                    continue;
-                }
-                try {
-                    // Bust a stale miss so resolve() actually calls the provider.
-                    if ($row && ! $row->has_photo) {
-                        $row->forceFill(['checked_at' => now()->subDays(30)])->save();
-                    }
-                    MailSenderPhoto::resolve($account, $email);
-                    $resolved++;
-                } catch (\Throwable) {
+                if (MailSenderPhoto::needsBackgroundResolve($email)) {
                     ResolveSenderPhoto::dispatch($account, $email);
                 }
-            }
-
-            if ($resolved > 0) {
-                $cached = MailSenderPhoto::query()
-                    ->whereIn('hash', $candidates->map(fn ($e) => MailSenderPhoto::hashFor($e)))
-                    ->get()
-                    ->keyBy(fn (MailSenderPhoto $p) => mb_strtolower((string) $p->email));
             }
         }
 
@@ -165,6 +147,7 @@ final class RecipientSuggester
                         break;
                     }
                 }
+
                 continue;
             }
 
@@ -177,7 +160,7 @@ final class RecipientSuggester
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, MailSenderPhoto>  $cached
+     * @param  Collection<string, MailSenderPhoto>  $cached
      */
     private static function directoryPhotoUrl(string $email, $cached): ?string
     {
@@ -317,6 +300,28 @@ final class RecipientSuggester
         }
 
         return $out;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function priorCorrespondents(User $viewer, string $term): array
+    {
+        $hits = MailCorrespondents::search($viewer, $term, self::LIMIT);
+        if ($hits->isEmpty() && ! MailCorrespondents::hasAny($viewer)) {
+            return self::priorMail($viewer, $term);
+        }
+
+        return $hits->map(fn (MailCorrespondent $row) => [
+            'email' => $row->email,
+            'name' => $row->name,
+            'source' => 'prior',
+            'sourceLabel' => 'Previous email',
+            'avatarUrl' => null,
+            'initial' => mb_strtoupper(mb_substr($row->name ?: $row->email, 0, 1)),
+            'initialColor' => null,
+            'emails' => null,
+        ])->all();
     }
 
     /**
