@@ -132,7 +132,7 @@ class MailDraftSaveTest extends TestCase
     public function test_sending_reuses_the_outlook_draft_instead_of_creating_another(): void
     {
         $user = $this->user();
-        $this->microsoftAccount($user);
+        $account = $this->microsoftAccount($user);
 
         Queue::fake([SyncMailbox::class]);
 
@@ -154,6 +154,19 @@ class MailDraftSaveTest extends TestCase
                 'bodyHtml' => '<p>Ready</p>',
             ])
             ->json('draft.id');
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'outlook-draft-1',
+            'thread_id' => 'thread-draft-1',
+            'folder' => 'draft',
+            'subject' => 'Hello',
+            'to' => [['email' => 'dana@example.com']],
+            'is_read' => true,
+            'sent_at' => now(),
+        ]);
 
         $this->actingAs($user)
             ->postJson('/portal/mail/send', [
@@ -177,6 +190,10 @@ class MailDraftSaveTest extends TestCase
             && str_ends_with(parse_url($request->url(), PHP_URL_PATH) ?: '', '/messages/outlook-draft-1/send'));
 
         $this->assertDatabaseMissing('mail_drafts', ['uuid' => $uuid]);
+        $this->assertDatabaseMissing('mail_messages', [
+            'remote_id' => 'outlook-draft-1',
+            'folder' => 'draft',
+        ]);
         $this->assertTrue(
             MailCorrespondent::query()
                 ->where('user_id', $user->id)
@@ -529,7 +546,7 @@ class MailDraftSaveTest extends TestCase
                     return Http::response(['value' => [[
                         'id' => 'att-file',
                         'name' => 'invoice.pdf',
-                        'size' => strlen('%PDF-1.4 fake'),
+                        'size' => 4096,
                         'isInline' => false,
                     ]]]);
                 }
@@ -564,6 +581,68 @@ class MailDraftSaveTest extends TestCase
             ->assertOk();
 
         $this->assertSame(1, $posts);
+    }
+
+    public function test_sending_a_draft_outlook_already_delivered_is_treated_as_success(): void
+    {
+        $user = $this->user();
+        $account = $this->microsoftAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/outlook-draft-1' => Http::response([
+                'error' => [
+                    'code' => 'ErrorItemNotFound',
+                    'message' => 'The specified object was not found in the store.',
+                ],
+            ], 404),
+        ]);
+
+        $uuid = (string) Str::uuid();
+        MailDraft::query()->create([
+            'uuid' => $uuid,
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'outlook-draft-1',
+            'to' => [['email' => 'dana@example.com']],
+            'subject' => 'Hello',
+            'body_html' => '<p>Ready</p>',
+            'mode' => 'new',
+        ]);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'outlook-draft-1',
+            'thread_id' => 'thread-draft-1',
+            'folder' => 'draft',
+            'subject' => 'Hello',
+            'to' => [['email' => 'dana@example.com']],
+            'is_read' => true,
+            'sent_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Hello',
+                'bodyHtml' => '<p>Ready</p>',
+                'draftId' => $uuid,
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        $this->assertDatabaseMissing('mail_drafts', ['uuid' => $uuid]);
+        $this->assertDatabaseMissing('mail_messages', [
+            'remote_id' => 'outlook-draft-1',
+            'folder' => 'draft',
+        ]);
     }
 
     public function test_continuing_a_draft_restores_file_attachments(): void

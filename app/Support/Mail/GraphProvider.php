@@ -393,11 +393,22 @@ class GraphProvider implements MailProvider
         // id and the sent message has to be findable afterwards. An autosaved
         // Outlook draft is already that message — patch it and send, do not
         // mint a second one.
-        $draftId = $remoteDraftId
-            ? $this->saveDraft($message, $remoteDraftId)
-            : $this->saveDraft($message);
+        try {
+            $draftId = $remoteDraftId
+                ? $this->saveDraft($message, $remoteDraftId)
+                : $this->saveDraft($message);
+        } catch (RuntimeException $e) {
+            // Outlook reassigns or drops the draft id as soon as send
+            // succeeds. A concurrent autosave then PATCHes a ghost, which
+            // looks like a send failure even though the mail already left.
+            if ($remoteDraftId && self::isConsumedDraftError($e->getMessage())) {
+                return $remoteDraftId;
+            }
 
-        $this->json($this->request()->post(self::BASE."/messages/{$draftId}/send"));
+            throw $e;
+        }
+
+        $this->sendDraft($draftId);
 
         return $draftId;
     }
@@ -433,9 +444,44 @@ class GraphProvider implements MailProvider
         // copy of Outlook's default quote.
         $this->saveDraft($message, $draftId);
 
-        $this->json($this->request()->post(self::BASE."/messages/{$draftId}/send"));
+        $this->sendDraft($draftId);
 
         return $draftId;
+    }
+
+    /** POST /send once — a retry would 400 because the item is no longer a draft. */
+    private function sendDraft(string $draftId): void
+    {
+        $response = $this->request(timeout: 60, tries: 1)
+            ->post(self::BASE."/messages/{$draftId}/send");
+
+        if (self::isConsumedDraftResponse($response)) {
+            return;
+        }
+
+        $this->json($response);
+    }
+
+    private static function isConsumedDraftResponse(Response $response): bool
+    {
+        if ($response->successful()) {
+            return false;
+        }
+
+        return self::isConsumedDraftError(
+            (string) $response->json('error.code', '').' '.$response->json('error.message', '')
+        );
+    }
+
+    private static function isConsumedDraftError(string $detail): bool
+    {
+        $detail = strtolower($detail);
+
+        return str_contains($detail, 'erroritemnotfound')
+            || str_contains($detail, 'errormessagenolongeradraft')
+            || str_contains($detail, 'no longer a draft')
+            || str_contains($detail, 'not found in the store')
+            || str_contains($detail, 'is not a draft');
     }
 
     public function saveDraft(array $draft, ?string $remoteId = null): string
@@ -504,7 +550,7 @@ class GraphProvider implements MailProvider
                 continue;
             }
             $name = OutboundFiles::safeFilename((string) ($file['name'] ?? 'attachment'));
-            $wanted[$name."\0".strlen($file['bytes'])] = $file + ['_name' => $name];
+            $wanted[$name] = $file + ['_name' => $name];
         }
 
         $existing = [];
@@ -516,28 +562,40 @@ class GraphProvider implements MailProvider
                 if (! is_array($att) || ! empty($att['isInline'])) {
                     continue;
                 }
-                $key = OutboundFiles::safeFilename((string) ($att['name'] ?? ''))."\0".((int) ($att['size'] ?? 0));
-                $existing[$key] = (string) ($att['id'] ?? '');
+                $attachmentId = (string) ($att['id'] ?? '');
+                if ($attachmentId === '') {
+                    continue;
+                }
+                // Graph's `size` is often the MIME wrapper, not strlen(bytes),
+                // so matching on size re-uploaded the same PDF on every save
+                // and then /send failed under the duplicates.
+                $name = OutboundFiles::safeFilename((string) ($att['name'] ?? ''));
+                $existing[$name][] = $attachmentId;
             }
         } catch (\Throwable) {
             $existing = [];
         }
 
-        foreach ($existing as $key => $attachmentId) {
-            if ($attachmentId === '' || isset($wanted[$key])) {
-                continue;
+        foreach ($existing as $name => $attachmentIds) {
+            // Same filename as compose: keep one copy. Graph size mismatches
+            // used to look like a new file and stack duplicates until send
+            // failed. Anything compose no longer has is removed.
+            if (isset($wanted[$name])) {
+                array_shift($attachmentIds);
             }
-            try {
-                $this->json($this->request()->delete(
-                    self::BASE.'/messages/'.$remoteId.'/attachments/'.$attachmentId
-                ));
-            } catch (\Throwable) {
-                // A leftover file is worse than a missing one on the next save.
+            foreach ($attachmentIds as $attachmentId) {
+                try {
+                    $this->json($this->request()->delete(
+                        self::BASE.'/messages/'.$remoteId.'/attachments/'.$attachmentId
+                    ));
+                } catch (\Throwable) {
+                    // A leftover file is worse than a missing one on the next save.
+                }
             }
         }
 
-        foreach ($wanted as $key => $file) {
-            if (isset($existing[$key])) {
+        foreach ($wanted as $name => $file) {
+            if (! empty($existing[$name])) {
                 continue;
             }
             $this->attachOneFile($remoteId, [
@@ -949,9 +1007,9 @@ class GraphProvider implements MailProvider
             );
         }
 
-        // DELETE and some PATCH calls answer 204 with an empty body.
-        if ($response->status() === 204) {
-            return [];
+        // DELETE answers 204; POST /send answers 202. Both may have no body.
+        if (in_array($response->status(), [202, 204], true)) {
+            return $response->json() ?? [];
         }
 
         if (! $response->successful()) {

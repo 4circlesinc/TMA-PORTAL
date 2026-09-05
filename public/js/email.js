@@ -6912,7 +6912,7 @@
 
   function closeCompose(state, id, persist) {
     var draft = findComposeDraft(state, id);
-    if (persist !== false && draft && !draft.sending) {
+    if (persist !== false && draft && !draft.sending && !draft._sendRequested) {
       window.clearTimeout(draft._saveTimer);
       if (draft._dirty && (draft.serverId || draftHasSubstance(draft))) {
         saveComposeDraft(state, draft).catch(function () {});
@@ -7392,9 +7392,11 @@
    * waits until the draft has real content so Outlook is not filled with
    * signature-only husks. */
   function scheduleDraftSave(state, draft) {
+    if (draft.sending || draft._sendRequested) return;
     draft._dirty = true;
     window.clearTimeout(draft._saveTimer);
     draft._saveTimer = window.setTimeout(function () {
+      if (draft.sending || draft._sendRequested) return;
       if (!draft.serverId && !draftHasSubstance(draft)) return;
       saveComposeDraft(state, draft).catch(function () {
         // Autosave is best-effort; Send is what the user is judged on, and
@@ -7444,29 +7446,45 @@
   }
 
   function saveComposeDraft(state, draft) {
+    if (draft.sending || draft._sendRequested) {
+      return draft._savePromise || Promise.resolve();
+    }
     var win = document.querySelector('[data-email-compose-window="' + draft.id + '"]');
     commitRecipientFields(win);
     syncComposeBodyFromEditor(draft);
-    return api().saveDraft({
-      id: draft.serverId,
-      to: parseAddresses(draft.to),
-      cc: parseAddresses(draft.cc),
-      bcc: parseAddresses(draft.bcc),
-      subject: draft.subject || '',
-      bodyHtml: draft.bodyHtml,
-      mode: draft.mode,
-      inReplyTo: draft.inReplyTo,
-      attachments: composeFilePayload(draft),
-    }).then(function (data) {
-      if (data && data.draft) draft.serverId = data.draft.id;
-      draft._dirty = false;
-      return data;
-    });
+
+    var exec = function () {
+      if (draft.sending || draft._sendRequested) return Promise.resolve();
+      return api().saveDraft({
+        id: draft.serverId,
+        to: parseAddresses(draft.to),
+        cc: parseAddresses(draft.cc),
+        bcc: parseAddresses(draft.bcc),
+        subject: draft.subject || '',
+        bodyHtml: draft.bodyHtml,
+        mode: draft.mode,
+        inReplyTo: draft.inReplyTo,
+        attachments: composeFilePayload(draft),
+      }).then(function (data) {
+        // Send is in flight: keep the id we already posted, do not resurrect
+        // a Graph/Gmail draft the send just consumed.
+        if (draft.sending) return data;
+        if (data && data.draft) draft.serverId = data.draft.id;
+        draft._dirty = false;
+        return data;
+      });
+    };
+
+    draft._savePromise = (draft._savePromise || Promise.resolve())
+      .catch(function () {})
+      .then(exec);
+
+    return draft._savePromise;
   }
 
   function sendCompose(root, state, render, id) {
     var draft = findComposeDraft(state, id);
-    if (!draft || draft.sending) return;
+    if (!draft || draft.sending || draft._sendRequested) return;
 
     var win = document.querySelector('[data-email-compose-window="' + id + '"]');
     commitRecipientFields(win);
@@ -7478,31 +7496,43 @@
     }
 
     window.clearTimeout(draft._saveTimer);
-    draft.sending = true;
-    render();
+    // Block new autosaves immediately, but let the in-flight one finish so
+    // Send and PATCH are not racing the same Outlook/Gmail draft.
+    draft._sendRequested = true;
 
-    api().send({
-      to: to,
-      cc: parseAddresses(draft.cc),
-      bcc: parseAddresses(draft.bcc),
-      subject: draft.subject || '',
-      bodyHtml: draft.bodyHtml || '',
-      draftId: draft.serverId,
-      mode: draft.mode || 'new',
-      inReplyTo: draft.inReplyTo,
-      attachments: composeFilePayload(draft),
-    }).then(function () {
-      closeCompose(state, id, false);
-      showEmailToast(root, 'Message sent');
-
-      // Sent mail only shows up locally after a sync, so refresh the folder
-      // the user is looking at.
-      reloadMessages(root, state, render);
-    }).catch(function (err) {
-      draft.sending = false;
-      reportMailError(state, err);
+    var beginSend = function () {
+      if (!findComposeDraft(state, id) || draft.sending) return;
+      draft.sending = true;
       render();
-    });
+
+      api().send({
+        to: to,
+        cc: parseAddresses(draft.cc),
+        bcc: parseAddresses(draft.bcc),
+        subject: draft.subject || '',
+        bodyHtml: draft.bodyHtml || '',
+        draftId: draft.serverId,
+        mode: draft.mode || 'new',
+        inReplyTo: draft.inReplyTo,
+        attachments: composeFilePayload(draft),
+      }).then(function () {
+        closeCompose(state, id, false);
+        showEmailToast(root, 'Message sent');
+
+        // Sent mail only shows up locally after a sync, so refresh the folder
+        // the user is looking at.
+        reloadMessages(root, state, render);
+      }).catch(function (err) {
+        draft.sending = false;
+        draft._sendRequested = false;
+        reportMailError(state, err);
+        render();
+      });
+    };
+
+    var pending = draft._savePromise;
+    if (pending) pending.catch(function () {}).then(beginSend);
+    else beginSend();
   }
 
   /* Font sizes the "Text style" menu offers, as execCommand's 1–7 scale. */

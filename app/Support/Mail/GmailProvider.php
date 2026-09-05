@@ -160,13 +160,16 @@ class GmailProvider implements MailProvider
     public function send(array $message): string
     {
         if (! empty($message['remoteDraftId'])) {
-            $this->saveDraft($message, $message['remoteDraftId']);
-            $response = $this->request()->post(self::BASE.'/drafts/send', [
-                'id' => $message['remoteDraftId'],
-            ]);
-            $sent = $this->json($response);
+            $draftId = $this->resolveDraftId((string) $message['remoteDraftId']);
+            if ($draftId) {
+                $this->saveDraft($message, $draftId);
+                $response = $this->request()->post(self::BASE.'/drafts/send', [
+                    'id' => $draftId,
+                ]);
+                $sent = $this->json($response);
 
-            return (string) ($sent['id'] ?? $sent['message']['id'] ?? '');
+                return (string) ($sent['id'] ?? $sent['message']['id'] ?? $draftId);
+            }
         }
 
         $message = $this->withThreading($message);
@@ -194,16 +197,69 @@ class GmailProvider implements MailProvider
             $payload['message']['threadId'] = $draft['threadId'];
         }
 
-        $response = $remoteId
-            ? $this->request()->put(self::BASE.'/drafts/'.$remoteId, $payload)
+        // A continued Drafts-folder row stores the message id, not the draft
+        // resource id. Resolve when we can; otherwise PUT the id we were given
+        // rather than minting a second Gmail draft.
+        $draftId = $remoteId ? ($this->resolveDraftId($remoteId) ?: $remoteId) : null;
+
+        $response = $draftId
+            ? $this->request()->put(self::BASE.'/drafts/'.$draftId, $payload)
             : $this->request()->post(self::BASE.'/drafts', $payload);
 
-        return (string) ($this->json($response)['id'] ?? '');
+        return (string) ($this->json($response)['id'] ?? $draftId ?? '');
     }
 
     public function deleteDraft(string $remoteId): void
     {
-        $this->json($this->request()->delete(self::BASE.'/drafts/'.$remoteId));
+        $draftId = $this->resolveDraftId($remoteId) ?? $remoteId;
+        $response = $this->request()->delete(self::BASE.'/drafts/'.$draftId);
+        if ($response->successful() || $response->status() === 404) {
+            return;
+        }
+
+        $this->json($response);
+    }
+
+    /**
+     * Autosave stores Gmail's draft resource id. The Drafts folder listing
+     * stores the message id. Continuing a list row then PUT /drafts/{messageId}
+     * 404s, so send has to resolve one to the other.
+     */
+    private function resolveDraftId(string $id): ?string
+    {
+        $direct = $this->request()->get(self::BASE.'/drafts/'.$id);
+        if ($direct->successful()) {
+            return $id;
+        }
+
+        $pageToken = null;
+        for ($page = 0; $page < 10; $page++) {
+            $query = ['maxResults' => 100];
+            if ($pageToken) {
+                $query['pageToken'] = $pageToken;
+            }
+            $response = $this->request()->get(self::BASE.'/drafts', $query);
+            if (! $response->successful()) {
+                return null;
+            }
+            $data = $this->json($response);
+            foreach ($data['drafts'] ?? [] as $draft) {
+                if (! is_array($draft)) {
+                    continue;
+                }
+                if ((string) ($draft['message']['id'] ?? '') === $id) {
+                    $found = (string) ($draft['id'] ?? '');
+
+                    return $found !== '' ? $found : null;
+                }
+            }
+            $pageToken = $data['nextPageToken'] ?? null;
+            if (! $pageToken) {
+                break;
+            }
+        }
+
+        return null;
     }
 
     public function markRead(string $remoteId, bool $read): void

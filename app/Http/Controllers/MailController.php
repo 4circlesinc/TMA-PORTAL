@@ -1546,7 +1546,22 @@ class MailController extends Controller
             $payload['remoteDraftId'] = $draft->remote_id;
         }
 
-        $provider->send($payload);
+        try {
+            $sentId = $provider->send($payload);
+        } catch (MailAuthException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            logger()->warning('mail: send failed', [
+                'user' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => $e->getMessage() !== ''
+                    ? $e->getMessage()
+                    : 'This message could not be sent.',
+            ], 502);
+        }
 
         rescue(fn () => MailCorrespondents::record($account, [[
             'from_email' => $account->email,
@@ -1557,15 +1572,31 @@ class MailController extends Controller
             'sent_at' => now(),
         ]]), report: false);
 
+        $draftRemoteId = $draft?->remote_id;
         if ($draft) {
             // A reply/forward mints a conversation draft at send time; the
             // autosaved standalone copy would otherwise linger in Outlook.
             $consumed = $payload['remoteDraftId'] ?? null;
-            if ($draft->remote_id && $draft->remote_id !== $consumed) {
-                rescue(fn () => $provider->deleteDraft($draft->remote_id), report: false);
+            if ($draftRemoteId && $draftRemoteId !== $consumed) {
+                rescue(fn () => $provider->deleteDraft($draftRemoteId), report: false);
             }
 
             $draft->delete();
+        }
+
+        $dropRemoteIds = array_values(array_unique(array_filter([
+            $sentId,
+            $payload['remoteDraftId'] ?? null,
+            $draftRemoteId,
+        ], fn ($id) => is_string($id) && $id !== '')));
+
+        if ($dropRemoteIds !== []) {
+            MailMessage::query()
+                ->where('user_id', $request->user()->id)
+                ->where('connected_account_id', $account->id)
+                ->where('folder', 'draft')
+                ->whereIn('remote_id', $dropRemoteIds)
+                ->delete();
         }
 
         SyncMailbox::dispatch($account);

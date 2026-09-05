@@ -638,4 +638,75 @@ class MailSendTest extends TestCase
         Http::assertSent(fn ($request) => $request->method() === 'POST'
             && str_contains($request->url(), '/createForward'));
     }
+
+    public function test_sending_a_continued_gmail_draft_uses_the_draft_resource_id(): void
+    {
+        $user = $this->user();
+        $account = $this->googleAccount($user);
+        $message = $this->message($user, $account, [
+            'remote_id' => 'gmail-msg-1',
+            'folder' => 'draft',
+            'subject' => 'Hello',
+            'body_html' => '<p>Ready</p>',
+            'to' => [['email' => 'dana@example.com']],
+        ]);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/drafts/send' => Http::response([
+                'id' => 'gmail-msg-1',
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/drafts/gmail-msg-1' => Http::response([
+                'error' => ['message' => 'Requested entity was not found.'],
+            ], 404),
+            'gmail.googleapis.com/gmail/v1/users/me/drafts/r-draft-1' => Http::response([
+                'id' => 'r-draft-1',
+                'message' => ['id' => 'gmail-msg-1'],
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/drafts*' => Http::response([
+                'drafts' => [[
+                    'id' => 'r-draft-1',
+                    'message' => ['id' => 'gmail-msg-1'],
+                ]],
+            ]),
+        ]);
+
+        $uuid = $this->actingAs($user)
+            ->postJson('/portal/mail/messages/'.$message->uuid.'/continue')
+            ->assertOk()
+            ->json('draft.id');
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Hello',
+                'bodyHtml' => '<p>Ready</p>',
+                'draftId' => $uuid,
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(fn ($request) => $request->method() === 'PUT'
+            && str_contains($request->url(), '/drafts/r-draft-1'));
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST' || ! str_contains($request->url(), '/drafts/send')) {
+                return false;
+            }
+
+            $this->assertSame('r-draft-1', $request['id'] ?? null);
+
+            return true;
+        });
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/messages/send'));
+
+        $this->assertDatabaseMissing('mail_messages', [
+            'remote_id' => 'gmail-msg-1',
+            'folder' => 'draft',
+        ]);
+    }
 }
