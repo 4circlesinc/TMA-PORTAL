@@ -14808,9 +14808,10 @@
     min-height: 48px;
     padding-top: var(--space-8);
     padding-bottom: var(--space-8);
-    /* Under the parent's content: padding + caret column + gap + avatar + gap. */
+    /* Under the parent's content: padding + caret column + gap + avatar +
+       gap, less the unread-dot slot and its gap that lead a child row. */
     padding-left: calc(
-      max(var(--space-6), env(safe-area-inset-left, 0px)) + 22px + var(--space-12) + 40px + var(--space-12)
+      max(var(--space-6), env(safe-area-inset-left, 0px)) + 22px + var(--space-12) + 40px + var(--space-12) - 16px
     );
   }
 

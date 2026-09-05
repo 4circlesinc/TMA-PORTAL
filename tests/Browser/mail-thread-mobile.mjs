@@ -253,6 +253,15 @@ async function runAt(label, viewport) {
   // The arrow must open the drop only: a tap on it used to open the message
   // too, and the pane hid the drop it had just opened.
   check(!(await page.$('.tma-dash--email-mobile-reading')), 'the conversation arrow opens the drop without opening the message');
+  const drop = await page.evaluate(() => {
+    const child = document.querySelector('.tma-dash__email-row--child');
+    const parent = child && child.closest('.tma-dash__email-thread-children') && child.closest('.tma-dash__email-thread-children').previousElementSibling
+      ? child.closest('.tma-dash__email-thread-children').parentElement.querySelector('.tma-dash__email-row:not(.tma-dash__email-row--child) .tma-dash__email-row-content')
+      : null;
+    const cc = child && child.querySelector('.tma-dash__email-row-content');
+    return parent && cc ? { parent: Math.round(parent.getBoundingClientRect().left), child: Math.round(cc.getBoundingClientRect().left) } : null;
+  });
+  check(!!drop && Math.abs(drop.parent - drop.child) <= 1, `the drop's messages line up under the parent's text (${drop && drop.parent}px vs ${drop && drop.child}px)`);
   await page.click(`${LIST_ROW}:has-text("Hiroshi Mabuchi")`);
   await page.waitForSelector('.tma-dash--email-mobile-reading', { timeout: 10000 });
   await page.waitForSelector('[data-email-thread-quote]', { timeout: 10000 }).catch(() => {});
