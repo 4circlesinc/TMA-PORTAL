@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
+use App\Models\MailAttachment;
 use App\Models\MailCorrespondent;
 use App\Models\MailDraft;
 use App\Models\MailMessage;
@@ -17,8 +18,9 @@ use Tests\TestCase;
 
 /**
  * Compose autosave writes the portal row immediately, but only mirrors a
- * draft into Outlook/Gmail once the user has typed a recipient, subject, or
- * a body beyond the signature. Send still reuses that remote draft.
+ * draft into Outlook/Gmail once the user has typed a recipient, subject,
+ * a body beyond the signature, or attached a file. Send still reuses that
+ * remote draft.
  */
 class MailDraftSaveTest extends TestCase
 {
@@ -447,5 +449,169 @@ class MailDraftSaveTest extends TestCase
         new MailSynchronizer($account)->sync();
 
         $this->assertDatabaseMissing('mail_messages', ['remote_id' => 'husk-draft']);
+    }
+
+    public function test_autosave_sends_recipients_subject_and_files_to_outlook(): void
+    {
+        $user = $this->user();
+        $this->microsoftAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/outlook-draft-1/attachments' => function ($request) {
+                if ($request->method() === 'GET') {
+                    return Http::response(['value' => []]);
+                }
+
+                return Http::response(['id' => 'att-file']);
+            },
+            'graph.microsoft.com/v1.0/me/messages' => Http::response(['id' => 'outlook-draft-1']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/drafts', [
+                'to' => [['email' => 'dana@example.com', 'name' => 'Dana']],
+                'subject' => 'Invoice attached',
+                'bodyHtml' => '<p>Please find it enclosed.</p>',
+                'attachments' => [[
+                    'name' => 'invoice.pdf',
+                    'mime' => 'application/pdf',
+                    'content' => base64_encode('%PDF-1.4 fake'),
+                ]],
+            ])
+            ->assertOk();
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && preg_match('#/me/messages$#', parse_url($request->url(), PHP_URL_PATH) ?: '')
+            && ($request['subject'] ?? null) === 'Invoice attached'
+            && collect($request['toRecipients'] ?? [])->pluck('emailAddress.address')->contains('dana@example.com'));
+
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST'
+                || ! str_ends_with(parse_url($request->url(), PHP_URL_PATH) ?: '', '/messages/outlook-draft-1/attachments')) {
+                return false;
+            }
+
+            $this->assertSame('invoice.pdf', $request['name'] ?? null);
+            $this->assertFalse($request['isInline'] ?? true);
+
+            return true;
+        });
+    }
+
+    public function test_a_second_autosave_does_not_duplicate_outlook_file_attachments(): void
+    {
+        $user = $this->user();
+        $this->microsoftAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        $gets = 0;
+        $posts = 0;
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/outlook-draft-1/attachments' => function ($request) use (&$gets, &$posts) {
+                if ($request->method() === 'GET') {
+                    $gets++;
+                    if ($gets === 1) {
+                        return Http::response(['value' => []]);
+                    }
+
+                    return Http::response(['value' => [[
+                        'id' => 'att-file',
+                        'name' => 'invoice.pdf',
+                        'size' => strlen('%PDF-1.4 fake'),
+                        'isInline' => false,
+                    ]]]);
+                }
+                if ($request->method() === 'POST') {
+                    $posts++;
+                }
+
+                return Http::response(['id' => 'att-file']);
+            },
+            'graph.microsoft.com/v1.0/me/messages/outlook-draft-1' => Http::response(['id' => 'outlook-draft-1']),
+            'graph.microsoft.com/v1.0/me/messages' => Http::response(['id' => 'outlook-draft-1']),
+        ]);
+
+        $payload = [
+            'to' => [['email' => 'dana@example.com']],
+            'subject' => 'Invoice attached',
+            'bodyHtml' => '<p>Please find it enclosed.</p>',
+            'attachments' => [[
+                'name' => 'invoice.pdf',
+                'mime' => 'application/pdf',
+                'content' => base64_encode('%PDF-1.4 fake'),
+            ]],
+        ];
+
+        $uuid = $this->actingAs($user)
+            ->postJson('/portal/mail/drafts', $payload)
+            ->assertOk()
+            ->json('draft.id');
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/drafts', $payload + ['id' => $uuid, 'subject' => 'Invoice attached, v2'])
+            ->assertOk();
+
+        $this->assertSame(1, $posts);
+    }
+
+    public function test_continuing_a_draft_restores_file_attachments(): void
+    {
+        $user = $this->user();
+        $account = $this->microsoftAccount($user);
+
+        $message = MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'outlook-draft-1',
+            'thread_id' => 'thread-1',
+            'folder' => 'draft',
+            'subject' => 'Invoice attached',
+            'body_html' => '<p>Please find it enclosed.</p>',
+            'to' => [['email' => 'dana@example.com']],
+            'has_attachments' => true,
+            'is_read' => true,
+            'sent_at' => now(),
+        ]);
+
+        MailAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $message->id,
+            'remote_id' => 'att-file',
+            'filename' => 'invoice.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => strlen('%PDF-1.4 fake'),
+            'is_inline' => false,
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/outlook-draft-1/attachments/att-file/$value' => Http::response('%PDF-1.4 fake', 200, [
+                'Content-Type' => 'application/pdf',
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/messages/'.$message->uuid.'/continue')
+            ->assertOk()
+            ->assertJsonPath('draft.subject', 'Invoice attached')
+            ->assertJsonPath('draft.to.0.email', 'dana@example.com')
+            ->assertJsonPath('draft.attachments.0.name', 'invoice.pdf')
+            ->assertJsonPath('draft.attachments.0.content', base64_encode('%PDF-1.4 fake'));
     }
 }

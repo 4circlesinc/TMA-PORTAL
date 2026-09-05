@@ -45,6 +45,20 @@ class DraftContentTest extends TestCase
         ], 'Kind Regards'));
     }
 
+    public function test_a_file_attachment_makes_a_draft_worth_saving(): void
+    {
+        $this->assertFalse(DraftContent::isBlank([
+            'to' => [],
+            'subject' => '',
+            'bodyHtml' => '<div data-email-signature>Kind Regards</div>',
+            'attachments' => [[
+                'name' => 'invoice.pdf',
+                'mime' => 'application/pdf',
+                'bytes' => '%PDF-1.4 fake',
+            ]],
+        ], 'Kind Regards'));
+    }
+
     public function test_a_disclaimer_preview_is_a_husk(): void
     {
         $this->assertTrue(DraftContent::isHusk([

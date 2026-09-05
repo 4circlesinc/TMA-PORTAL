@@ -480,12 +480,72 @@ class GraphProvider implements MailProvider
             $this->attachMissingInline($remoteId, $inline);
         }
 
-        $files = $draft['attachments'] ?? [];
-        if ($id !== '' && is_array($files) && $files !== []) {
-            $this->attachFiles($id, $files);
+        $files = $draft['attachments'] ?? null;
+        if ($id !== '' && is_array($files)) {
+            $this->syncFileAttachments($id, $files);
         }
 
         return $id;
+    }
+
+    /**
+     * Keep the draft's ordinary file attachments in step with compose.
+     * Graph's PATCH cannot carry files, and posting the same PDF on every
+     * autosave would duplicate it, so this diffs against what is already
+     * on the message (inline signature images are left alone).
+     *
+     * @param  list<array{name: string, mime: string, bytes: string}>  $files
+     */
+    private function syncFileAttachments(string $remoteId, array $files): void
+    {
+        $wanted = [];
+        foreach ($files as $file) {
+            if (! is_array($file) || ! is_string($file['bytes'] ?? null) || $file['bytes'] === '') {
+                continue;
+            }
+            $name = OutboundFiles::safeFilename((string) ($file['name'] ?? 'attachment'));
+            $wanted[$name."\0".strlen($file['bytes'])] = $file + ['_name' => $name];
+        }
+
+        $existing = [];
+        try {
+            $data = $this->json($this->request()->get(
+                self::BASE.'/messages/'.$remoteId.'/attachments'
+            ));
+            foreach ($data['value'] ?? [] as $att) {
+                if (! is_array($att) || ! empty($att['isInline'])) {
+                    continue;
+                }
+                $key = OutboundFiles::safeFilename((string) ($att['name'] ?? ''))."\0".((int) ($att['size'] ?? 0));
+                $existing[$key] = (string) ($att['id'] ?? '');
+            }
+        } catch (\Throwable) {
+            $existing = [];
+        }
+
+        foreach ($existing as $key => $attachmentId) {
+            if ($attachmentId === '' || isset($wanted[$key])) {
+                continue;
+            }
+            try {
+                $this->json($this->request()->delete(
+                    self::BASE.'/messages/'.$remoteId.'/attachments/'.$attachmentId
+                ));
+            } catch (\Throwable) {
+                // A leftover file is worse than a missing one on the next save.
+            }
+        }
+
+        foreach ($wanted as $key => $file) {
+            if (isset($existing[$key])) {
+                continue;
+            }
+            $this->attachOneFile($remoteId, [
+                'name' => $file['_name'],
+                'mime' => $file['mime'] ?? 'application/octet-stream',
+                'bytes' => $file['bytes'],
+            ]);
+        }
     }
 
     /**
@@ -493,41 +553,35 @@ class GraphProvider implements MailProvider
      * cid: signature images. Graph's JSON create only accepts ~3 MB in-line;
      * anything larger uses an upload session.
      *
-     * @param  list<array{name: string, mime: string, bytes: string}>  $files
+     * @param  array{name: string, mime: string, bytes: string}  $file
      */
-    private function attachFiles(string $remoteId, array $files): void
+    private function attachOneFile(string $remoteId, array $file): void
     {
-        foreach ($files as $file) {
-            if (! is_array($file) || ! is_string($file['bytes'] ?? null) || $file['bytes'] === '') {
-                continue;
-            }
-            $name = OutboundFiles::safeFilename((string) ($file['name'] ?? 'attachment'));
-            $mime = trim((string) ($file['mime'] ?? ''));
-            if ($mime === '' || ! str_contains($mime, '/')) {
-                $mime = 'application/octet-stream';
-            }
-            $bytes = $file['bytes'];
-            if (strlen($bytes) <= 3 * 1024 * 1024) {
-                $this->json($this->request()->post(
-                    self::BASE.'/messages/'.$remoteId.'/attachments',
-                    [
-                        '@odata.type' => '#microsoft.graph.fileAttachment',
-                        'name' => $name,
-                        'contentType' => $mime,
-                        'contentBytes' => base64_encode($bytes),
-                        'isInline' => false,
-                    ],
-                ));
-
-                continue;
-            }
-
-            $this->uploadLargeFile($remoteId, [
-                'name' => $name,
-                'mime' => $mime,
-                'bytes' => $bytes,
-            ]);
+        $mime = trim((string) ($file['mime'] ?? ''));
+        if ($mime === '' || ! str_contains($mime, '/')) {
+            $mime = 'application/octet-stream';
         }
+        $bytes = $file['bytes'];
+        if (strlen($bytes) <= 3 * 1024 * 1024) {
+            $this->json($this->request()->post(
+                self::BASE.'/messages/'.$remoteId.'/attachments',
+                [
+                    '@odata.type' => '#microsoft.graph.fileAttachment',
+                    'name' => $file['name'],
+                    'contentType' => $mime,
+                    'contentBytes' => base64_encode($bytes),
+                    'isInline' => false,
+                ],
+            ));
+
+            return;
+        }
+
+        $this->uploadLargeFile($remoteId, [
+            'name' => $file['name'],
+            'mime' => $mime,
+            'bytes' => $bytes,
+        ]);
     }
 
     /**

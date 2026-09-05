@@ -3136,6 +3136,7 @@
         inReplyTo: rec.inReplyTo,
         serverId: rec.id,
         showCc: !!cc,
+        attachments: composeAttachmentsFromRecord(rec.attachments),
       });
       render();
     }).catch(function (err) {
@@ -5416,6 +5417,18 @@
     });
   }
 
+  function composeAttachmentsFromRecord(items) {
+    return (items || []).map(function (item) {
+      return {
+        id: item.id || ('att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)),
+        name: item.name || 'attachment',
+        mime: item.mime || 'application/octet-stream',
+        size: item.size || 0,
+        content: item.content || '',
+      };
+    }).filter(function (item) { return item.content; });
+  }
+
   function renderComposeFileChips(holder) {
     var items = composeFilesOf(holder);
     if (!items.length) return '';
@@ -6113,7 +6126,7 @@
       serverId: opts.serverId || null,
       mode: opts.mode || 'new',
       inReplyTo: opts.inReplyTo || null,
-      attachments: [],
+      attachments: opts.attachments ? opts.attachments.slice() : [],
     };
   }
 
@@ -7150,6 +7163,7 @@
         if (!draft) return;
         addComposeFiles(root, draft, files, function () {
           paintComposeFileChips(windowEl, draft);
+          scheduleDraftSave(state, draft);
         });
       });
     });
@@ -7259,6 +7273,7 @@
         openComposeFilePicker(function (files) {
           addComposeFiles(root, draft, files, function () {
             paintComposeFileChips(btn.closest('[data-email-compose-window]'), draft);
+            scheduleDraftSave(state, draft);
           });
         });
       });
@@ -7278,6 +7293,7 @@
         var id = btn.getAttribute('data-email-compose-file-remove');
         holder.attachments = composeFilesOf(holder).filter(function (item) { return item.id !== id; });
         paintComposeFileChips(win || panel, holder);
+        if (win) scheduleDraftSave(state, holder);
       });
     });
 
@@ -7338,6 +7354,7 @@
 
   function draftHasSubstance(draft) {
     if (!draft) return false;
+    if (composeFilesOf(draft).length) return true;
     if (parseAddresses(draft.to).length || parseAddresses(draft.cc).length || parseAddresses(draft.bcc).length) {
       return true;
     }
@@ -7367,16 +7384,19 @@
   }
 
   function saveComposeDraft(state, draft) {
+    var win = document.querySelector('[data-email-compose-window="' + draft.id + '"]');
+    commitRecipientFields(win);
     syncComposeBodyFromEditor(draft);
     return api().saveDraft({
       id: draft.serverId,
       to: parseAddresses(draft.to),
       cc: parseAddresses(draft.cc),
       bcc: parseAddresses(draft.bcc),
-      subject: draft.subject,
+      subject: draft.subject || '',
       bodyHtml: draft.bodyHtml,
       mode: draft.mode,
       inReplyTo: draft.inReplyTo,
+      attachments: composeFilePayload(draft),
     }).then(function (data) {
       if (data && data.draft) draft.serverId = data.draft.id;
       draft._dirty = false;

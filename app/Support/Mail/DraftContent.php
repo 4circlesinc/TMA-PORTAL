@@ -29,6 +29,10 @@ final class DraftContent
             return false;
         }
 
+        if (self::hasFileAttachments($draft['attachments'] ?? null)) {
+            return false;
+        }
+
         $html = (string) ($draft['bodyHtml'] ?? $draft['body_html'] ?? '');
         $fallback = (string) ($draft['snippet'] ?? $draft['body_text'] ?? '');
 
@@ -156,6 +160,29 @@ final class DraftContent
         }
 
         return array_values(array_filter($signatures, fn (mixed $s): bool => is_string($s) && $s !== ''));
+    }
+
+    /** Paperclip / drag-and-drop files, not cid: signature images. */
+    private static function hasFileAttachments(mixed $attachments): bool
+    {
+        if (! is_array($attachments) || $attachments === []) {
+            return false;
+        }
+
+        foreach ($attachments as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            if (! empty($item['is_inline']) || ! empty($item['inline'])) {
+                continue;
+            }
+            if ((isset($item['bytes']) && is_string($item['bytes']) && $item['bytes'] !== '')
+                || (isset($item['content']) && is_string($item['content']) && $item['content'] !== '')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function hasRecipients(mixed $list): bool

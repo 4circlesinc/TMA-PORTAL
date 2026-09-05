@@ -948,7 +948,10 @@ class MailController extends Controller
                 $message->forceFill([
                     'body_html' => $full['body_html'] ?? $message->body_html,
                     'body_text' => $full['body_text'] ?? $message->body_text,
+                    'subject' => $full['subject'] ?? $message->subject,
+                    'to' => $full['to'] ?? $message->to,
                     'cc' => $full['cc'] ?? $message->cc,
+                    'bcc' => $full['bcc'] ?? $message->bcc,
                     'reply_to' => $full['reply_to'] ?? $message->reply_to,
                     'has_attachments' => ! empty($full['attachments']),
                 ])->save();
@@ -1614,6 +1617,10 @@ class MailController extends Controller
             'mode' => ['sometimes', 'string', 'in:new,reply,reply-all,forward'],
             'inReplyTo' => ['sometimes', 'nullable', 'string'],
             'threadId' => ['sometimes', 'nullable', 'string'],
+            'attachments' => ['sometimes', 'array', 'max:'.OutboundFiles::MAX_COUNT],
+            'attachments.*.name' => ['required_with:attachments', 'string', 'max:255'],
+            'attachments.*.mime' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'attachments.*.content' => ['required_with:attachments', 'string'],
         ]);
 
         $account = Mailbox::requireAccountFor($request->user());
@@ -1642,6 +1649,7 @@ class MailController extends Controller
         $draft->save();
 
         $signatures = DraftContent::signaturesFromPreferences($request->user()->preferences ?? []);
+        $files = OutboundFiles::fromRequest($data['attachments'] ?? []);
         $payload = [
             'to' => $draft->to ?? [],
             'cc' => $draft->cc ?? [],
@@ -1650,6 +1658,7 @@ class MailController extends Controller
             'bodyHtml' => $draft->body_html ?? '',
             'mode' => $draft->mode ?? 'new',
             'threadId' => $draft->thread_id,
+            'attachments' => $files,
         ];
 
         // A blank window (signature only) must not become an Outlook/Gmail
@@ -1695,6 +1704,15 @@ class MailController extends Controller
             ->where('remote_id', $message->remote_id)
             ->first();
 
+        $fromMessage = [
+            'to' => $message->to ?? [],
+            'cc' => $message->cc ?? [],
+            'bcc' => $message->bcc ?? [],
+            'subject' => $message->subject,
+            'body_html' => $message->body_html ?: $message->body_text,
+            'thread_id' => $message->thread_id,
+        ];
+
         if (! $draft) {
             $draft = new MailDraft([
                 'uuid' => (string) Str::uuid(),
@@ -1703,19 +1721,67 @@ class MailController extends Controller
                 'remote_id' => $message->remote_id,
                 'mode' => 'new',
             ]);
+            $draft->fill($fromMessage);
+        } else {
+            // Autosave is newer than the last sync; only fill blanks from the
+            // mirrored row so a lagging listing cannot wipe To / subject.
+            $draft->fill([
+                'to' => ($draft->to ?: []) !== [] ? $draft->to : $fromMessage['to'],
+                'cc' => ($draft->cc ?: []) !== [] ? $draft->cc : $fromMessage['cc'],
+                'bcc' => ($draft->bcc ?: []) !== [] ? $draft->bcc : $fromMessage['bcc'],
+                'subject' => filled($draft->subject) ? $draft->subject : $fromMessage['subject'],
+                'body_html' => filled($draft->body_html) ? $draft->body_html : $fromMessage['body_html'],
+                'thread_id' => $draft->thread_id ?: $fromMessage['thread_id'],
+            ]);
         }
-
-        $draft->fill([
-            'to' => $message->to ?? [],
-            'cc' => $message->cc ?? [],
-            'bcc' => $message->bcc ?? [],
-            'subject' => $message->subject,
-            'body_html' => $message->body_html ?: $message->body_text,
-            'thread_id' => $message->thread_id,
-        ]);
         $draft->save();
 
-        return response()->json(['draft' => $draft->toRecord()]);
+        return response()->json([
+            'draft' => $draft->toRecord() + [
+                'attachments' => $this->draftFilePayload($message),
+            ],
+        ]);
+    }
+
+    /**
+     * Non-inline files on a Drafts-folder message, as the composer posts them.
+     *
+     * @return list<array{name: string, mime: string, content: string, size: int}>
+     */
+    private function draftFilePayload(MailMessage $message): array
+    {
+        if (! $message->relationLoaded('attachments')) {
+            $message->load('attachments');
+        }
+
+        $out = [];
+        foreach ($message->attachments as $attachment) {
+            if ($attachment->is_inline || ! $attachment->remote_id) {
+                continue;
+            }
+            try {
+                $bytes = Mailbox::provider($message->account)
+                    ->getAttachment($message->remote_id, $attachment->remote_id);
+            } catch (\Throwable $e) {
+                logger()->warning('mail: draft attachment download failed', [
+                    'attachment_uuid' => $attachment->uuid,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
+            if ($bytes === '') {
+                continue;
+            }
+            $out[] = [
+                'name' => $attachment->filename,
+                'mime' => $attachment->mime_type ?: 'application/octet-stream',
+                'content' => base64_encode($bytes),
+                'size' => strlen($bytes),
+            ];
+        }
+
+        return $out;
     }
 
     public function deleteDraft(Request $request, string $uuid): JsonResponse
