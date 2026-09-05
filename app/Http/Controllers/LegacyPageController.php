@@ -39,6 +39,8 @@ class LegacyPageController extends Controller
         'clients',
         'email',
         'email/templates',
+        // Compose popped into its own window (desktop app or a portal popup).
+        'email/compose',
         // The File Library, screen by screen. The sidebar links straight to
         // these, so anything the SPA can push must also be servable, a hard
         // refresh on /folders/all used to 404.

@@ -333,6 +333,7 @@ class Role
         'citizenship-applications' => 'clients.view',
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
+        'email/compose' => 'mail.use',
         // The File Library. Shared Folders stays staff-only. All Files is
         // also served to CIP-reach accounts (provider contacts / private
         // clients), scoped to the Clients folder, see LegacyPageController.

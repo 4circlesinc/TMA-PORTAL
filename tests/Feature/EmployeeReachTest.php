@@ -98,7 +98,7 @@ class EmployeeReachTest extends TestCase
             'account', 'account-info', 'account-settings', 'billing-details',
             'billing-details/card', 'calendar', 'call-recordings',
             'choose-account-type',
-            'citizenship-applications', 'classic', 'email', 'email/templates', 'folders/all',
+            'citizenship-applications', 'classic', 'email', 'email/compose', 'email/templates', 'folders/all',
             'folders/clients', 'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',
             'folders/shared-with-me', 'overview',

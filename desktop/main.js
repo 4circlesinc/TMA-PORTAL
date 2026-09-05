@@ -26,6 +26,7 @@ const HOST_BRIDGE = require('./host-bridge');
 const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
+const composeWindow = require('./compose-window');
 const titlebar = require('./titlebar');
 const tray = require('./tray');
 const badge = require('./badge');
@@ -287,8 +288,9 @@ function revealWindow({ steal }) {
   }
 }
 
-function attachNavigationRules(win) {
+function attachNavigationRules(win, opts = {}) {
   const { webContents } = win;
+  const chrome = opts.chrome !== false;
 
   webContents.setWindowOpenHandler(({ url, disposition }) => {
     // A call popping out into its own floating window (see call-window.js).
@@ -335,7 +337,22 @@ function attachNavigationRules(win) {
       return { action: 'deny' };
     }
 
+    // Compose popped out of the reading pane: a real app window, never Safari.
+    if (composeWindow.isComposePopoutUrl(url, PORTAL_ORIGIN)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: composeWindow.windowOptions(
+          path.join(__dirname, 'preload.js'),
+        ),
+      };
+    }
+
     return { action: 'allow' };
+  });
+
+  webContents.on('did-create-window', (child) => {
+    contextMenu.install(child.webContents);
+    attachNavigationRules(child, { chrome: false });
   });
 
   webContents.on('will-navigate', (event, url) => {
@@ -359,6 +376,11 @@ function attachNavigationRules(win) {
     event.preventDefault();
     shell.openExternal(url);
   });
+
+  // Child windows (compose pop-out, mail reader) keep the open/navigate
+  // policy so links stay in-app or go to the system browser. They do not
+  // get the main window's splash, brand title bar, or load-error overlay.
+  if (!chrome) return;
 
   /*
    * A reload has the same problem as a cold start, so the layer returns for

@@ -32,7 +32,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/components.css?v=4">
   <link rel="stylesheet" href="css/pagination.css?v=3">
-  <link rel="stylesheet" href="css/dashboard.css?v=283">
+  <link rel="stylesheet" href="css/dashboard.css?v=284">
   <link rel="stylesheet" href="css/global-search.css?v=5">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css?v=6">
@@ -61,6 +61,11 @@
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
   <script src="js/portal-access.js?v=19"></script>
+  <script>
+    if (/\/email\/compose\/?$/.test(location.pathname)) {
+      document.documentElement.classList.add('tma-dash--compose-popout');
+    }
+  </script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -632,7 +637,7 @@
   <script src="js/portal-store.js?v=3" defer></script>
   <script src="js/portal-queue.js?v=1" defer></script>
   <script src="js/portal-sync-status.js?v=2" defer></script>
-  <script src="js/email.js?v=121" defer></script>
+  <script src="js/email.js?v=122" defer></script>
   <script src="js/portal-lightbox.js?v=8" defer></script>
   <script src="js/emoji-data.js" defer></script>
   <script src="js/messaging-recorder.js" defer></script>
@@ -693,7 +698,7 @@
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=27" defer></script>
   <script src="js/portal-home.js?v=56" defer></script>
-  <script src="js/dashboard.js?v=50" defer></script>
+  <script src="js/dashboard.js?v=51" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>
   <script src="js/presence-status.js?v=13" defer></script>

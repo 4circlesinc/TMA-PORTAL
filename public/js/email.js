@@ -613,7 +613,22 @@
    * (dashboard.js); a row's own swipe never starts there. */
   var DRAWER_EDGE_PX = 24;
 
+  function isComposePopoutPath() {
+    try {
+      var p = String(window.location.pathname || '');
+      var root = window.__TMA_SITE_ROOT || '';
+      if (root && p.indexOf(root) === 0) p = p.slice(root.length) || '/';
+      if (p.length > 1 && p.charAt(p.length - 1) === '/') p = p.slice(0, -1);
+      return p === '/email/compose';
+    } catch (e) {
+      return false;
+    }
+  }
+
   function isEmailMobile() {
+    // A popped-out composer is a small app window (~760px). Treat it as
+    // desktop compose, not the phone mailbox, or the chrome collapses.
+    if (isComposePopoutPath()) return false;
     return window.matchMedia(EMAIL_MOBILE_MQ).matches;
   }
 
@@ -647,6 +662,17 @@
   function afterComposeClosed(state) {
     if (isComposingInPane(state)) return;
     if (!state.selectedId && state.folder !== 'templates') state.reading = false;
+    maybeCloseComposePopoutWindow(state);
+  }
+
+  function maybeCloseComposePopoutWindow(state) {
+    if (!state || !state.composePopout) return;
+    if (isComposingInPane(state)) return;
+    if (undoSendJob) return;
+    window.setTimeout(function () {
+      if (isComposingInPane(state) || undoSendJob) return;
+      try { window.close(); } catch (e) { /* the OS close button already did */ }
+    }, 0);
   }
 
   function leaveComposeView(state) {
@@ -657,7 +683,8 @@
 
   function wrapComposeOverlay(state, inner) {
     var cls = 'tma-dash__email-compose-overlay tma-dash__email-detail--compose';
-    if (state._composeDismissing) cls += ' is-open is-leaving';
+    if (state.composePopout) cls += ' is-open';
+    else if (state._composeDismissing) cls += ' is-open is-leaving';
     else if (!state._composeEnter) cls += ' is-open';
     return (
       '<div class="' + cls + '" data-email-compose-overlay data-key="email-compose-overlay">' +
@@ -675,6 +702,11 @@
    * the wait when nothing is on screen, motion is reduced, or a leave is
    * already playing. */
   function dismissComposePane(root, state, render, mutate) {
+    if (state.composePopout) {
+      mutate();
+      render();
+      return;
+    }
     if (state._composeDismissing) return;
     var overlay = root && root.querySelector('[data-email-compose-overlay]');
     var play = overlay
@@ -1204,12 +1236,17 @@
     var metaDate = formatMessageDate(row);
     var ic = state.inlineCompose;
     var mobile = isEmailMobile();
+    var popoutBtn = (!mobile && !state.composePopout)
+      ? '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-popout="inline" aria-label="Open in new window">' +
+        '<img src="' + ICONS.ArrowSquareOut + '" alt=""></button>'
+      : '';
     return (
       '<div class="tma-dash__email-compose-window-head">' +
-      (!mobile ? renderDetailBack(state, true) : '') +
+      (!mobile && !state.composePopout ? renderDetailBack(state, true) : '') +
       '<span class="tma-dash__email-compose-window-title">' +
       esc(inlineComposeTitle(ic.mode, subject)) + '</span>' +
       '<div class="tma-dash__email-compose-window-actions">' +
+      popoutBtn +
       '<button type="button" class="tma-dash__email-compose-window-btn" data-email-inline-compose-close aria-label="Close">' +
       '<img src="' + ICONS.X + '" alt=""></button>' +
       '</div></div>' +
@@ -1225,7 +1262,8 @@
       ' data-key="email-compose-window-' + esc(draft.id) + '">' +
       renderComposeWindowHead(draft, {
         pane: true,
-        backHtml: !mobile ? renderDetailBack(state, true) : '',
+        popout: !!state.composePopout,
+        backHtml: (!mobile && !state.composePopout) ? renderDetailBack(state, true) : '',
       }) +
       '<div class="tma-dash__email-compose-window-body">' +
       renderComposeContent(draft) +
@@ -2456,6 +2494,7 @@
   }
 
   function writeMailCache(state) {
+    if (state.composePopout) return;
     // Only the plain first page of a folder is worth keeping: a search, a page
     // deep into history or a label filter is a place the reader navigated to,
     // not the one they will land on next time.
@@ -3180,7 +3219,7 @@
         openMailMessage(root, state, render, msg.id);
 
         // Arrived from the standalone window's Reply / Forward buttons.
-        if (state._pendingCompose) {
+        if (state._pendingCompose && !state.composePopout) {
           var mode = state._pendingCompose;
           state._pendingCompose = null;
           openInlineCompose(state, mode);
@@ -6304,6 +6343,12 @@
   }
 
   function renderDetail(state) {
+    if (state.composePopout) {
+      var popped = paneComposeDraft(state);
+      if (popped) return wrapComposeOverlay(state, renderDetailComposeDraft(state, popped));
+      return '<div class="tma-dash__email-detail tma-dash__email-detail--empty" data-key="email-detail"></div>';
+    }
+
     if (state.folder === 'templates') return renderTemplateDetail(state);
 
     var draft = paneComposeDraft(state);
@@ -7156,6 +7201,7 @@
         saveComposeDraft(state, draft).catch(function () {});
       }
     }
+    if (state.composePopout && id) clearComposePopoutSnapshot(id);
     state.composeDrafts = state.composeDrafts.filter(function (draft) {
       return draft.id !== id;
     });
@@ -7164,6 +7210,174 @@
       state.focusedComposeId = open.length ? open[open.length - 1].id : null;
     }
     afterComposeClosed(state);
+  }
+
+  var COMPOSE_POPOUT_STORE = 'tma.mail.compose-popout.';
+
+  function composePopoutKey(id) {
+    return COMPOSE_POPOUT_STORE + id;
+  }
+
+  function composePopoutUrl(draftId) {
+    return (window.__TMA_SITE_ROOT || '') + '/email/compose?draft=' + encodeURIComponent(draftId);
+  }
+
+  function snapshotComposeDraft(draft) {
+    return {
+      id: draft.id,
+      to: draft.to || '',
+      cc: draft.cc || '',
+      bcc: draft.bcc || '',
+      subject: draft.subject || '',
+      bodyHtml: draft.bodyHtml || '',
+      showCc: !!draft.showCc,
+      serverId: draft.serverId || null,
+      mode: draft.mode || 'new',
+      inReplyTo: draft.inReplyTo || null,
+      attachments: (draft.attachments || []).map(function (item) {
+        return {
+          id: item.id,
+          name: item.name,
+          mime: item.mime,
+          size: item.size,
+          content: item.content,
+        };
+      }),
+      signatureId: draft.signatureId || '',
+      _typing: draft._typing || {},
+    };
+  }
+
+  function storeComposePopoutSnapshot(snapshot) {
+    window.sessionStorage.setItem(composePopoutKey(snapshot.id), JSON.stringify(snapshot));
+  }
+
+  function readComposePopoutSnapshot(id) {
+    if (!id) return null;
+    try {
+      var raw = window.sessionStorage.getItem(composePopoutKey(id));
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearComposePopoutSnapshot(id) {
+    try { window.sessionStorage.removeItem(composePopoutKey(id)); } catch (e) { /* ignore */ }
+  }
+
+  function openComposePopoutWindow(root, snapshot) {
+    try {
+      storeComposePopoutSnapshot(snapshot);
+    } catch (e) {
+      showEmailToast(root, 'This draft is too large to open in a new window');
+      return null;
+    }
+    var opened = window.open(
+      composePopoutUrl(snapshot.id),
+      'tma-compose-' + snapshot.id,
+      'popup=yes,width=760,height=820,menubar=no,toolbar=no,location=no,status=no'
+    );
+    if (!opened) {
+      clearComposePopoutSnapshot(snapshot.id);
+      showEmailToast(root, 'Allow pop-ups to open the composer in its own window');
+      return null;
+    }
+    try { opened.focus(); } catch (e) { /* ignore */ }
+    return opened;
+  }
+
+  function popOutCompose(root, state, render, draftId) {
+    if (state.composePopout) return;
+    var draft = findComposeDraft(state, draftId);
+    if (!draft) return;
+    var win = document.querySelector('[data-email-compose-window="' + draft.id + '"]');
+    commitRecipientFields(win);
+    syncComposeBodyFromEditor(draft);
+    var opened = openComposePopoutWindow(root, snapshotComposeDraft(draft));
+    if (!opened) return;
+    dismissComposePane(root, state, render, function () {
+      closeCompose(state, draft.id, false);
+    });
+  }
+
+  function popOutInlineCompose(root, state, render) {
+    if (state.composePopout) return;
+    var ic = state.inlineCompose;
+    if (!ic) return;
+    var panel = root.querySelector('[data-email-inline-compose-panel]');
+    commitRecipientFields(panel);
+    var editor = panel && panel.querySelector('[data-email-inline-compose-editor]');
+    var quote = panel && panel.querySelector('.tma-dash__email-inline-quote');
+    var bodyHtml = (editor ? editor.innerHTML : ic.bodyHtml || '') + (quote ? quote.outerHTML : '');
+    var row = threadMessage(state, ic.messageId) || findAnyRow(state, ic.messageId);
+    var subject = '';
+    if (row) {
+      subject = ic.mode === 'forward' ? getForwardSubject(row.subject) : getReplySubject(row.subject);
+    }
+    var snapshot = {
+      id: 'compose-' + state.nextComposeId++,
+      to: ic.to || '',
+      cc: ic.cc || '',
+      bcc: '',
+      subject: subject,
+      bodyHtml: bodyHtml,
+      showCc: !!ic.cc,
+      serverId: null,
+      mode: ic.mode || 'reply',
+      inReplyTo: ic.mode === 'new' ? null : ic.messageId,
+      attachments: (ic.attachments || []).map(function (item) {
+        return {
+          id: item.id,
+          name: item.name,
+          mime: item.mime,
+          size: item.size,
+          content: item.content,
+        };
+      }),
+      signatureId: ic.signatureId || '',
+      _typing: ic._typing || {},
+    };
+    var opened = openComposePopoutWindow(root, snapshot);
+    if (!opened) return;
+    dismissComposePane(root, state, render, function () {
+      closeInlineCompose(state);
+    });
+  }
+
+  function adoptComposePopoutDraft(state) {
+    var draftId = '';
+    try { draftId = new URLSearchParams(window.location.search).get('draft') || ''; } catch (e) {}
+    var snapshot = readComposePopoutSnapshot(draftId);
+    if (!snapshot) {
+      openCompose(state, {});
+      state._composeEnter = false;
+      return;
+    }
+    var draft = createComposeDraft(state, {
+      to: snapshot.to,
+      cc: snapshot.cc,
+      bcc: snapshot.bcc,
+      subject: snapshot.subject,
+      bodyHtml: snapshot.bodyHtml,
+      showCc: snapshot.showCc,
+      serverId: snapshot.serverId,
+      mode: snapshot.mode,
+      inReplyTo: snapshot.inReplyTo,
+      attachments: snapshot.attachments,
+      signatureId: snapshot.signatureId,
+    });
+    if (snapshot.id) draft.id = snapshot.id;
+    draft._typing = snapshot._typing || {};
+    state.composeDrafts.push(draft);
+    state.focusedComposeId = draft.id;
+    enterComposeView(state);
+    state._focusCompose = draft.id;
+    state._composeEnter = false;
+    prefetchRecipientSuggest();
+    if (draft.subject) {
+      try { document.title = draft.subject; } catch (e) { /* ignore */ }
+    }
   }
 
   function toggleComposeExpand(state, id) {
@@ -7180,9 +7394,17 @@
   function renderComposeWindowHead(draft, opts) {
     opts = opts || {};
     var title = getComposeSubject(draft) || 'New Email';
-    var actions =
-      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-minimize="' + esc(draft.id) + '" aria-label="Minimize">' +
-      '<img src="' + ICONS.Minus + '" alt=""></button>';
+    var actions = '';
+    if (!opts.popout) {
+      actions +=
+        '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-minimize="' + esc(draft.id) + '" aria-label="Minimize">' +
+        '<img src="' + ICONS.Minus + '" alt=""></button>';
+    }
+    if (opts.pane && !opts.popout) {
+      actions +=
+        '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-popout="' + esc(draft.id) + '" aria-label="Open in new window">' +
+        '<img src="' + ICONS.ArrowSquareOut + '" alt=""></button>';
+    }
     if (!opts.pane) {
       var expandLabel = draft.fullscreen ? 'Exit full screen' : 'Full screen';
       actions +=
@@ -7558,6 +7780,15 @@
       });
     });
 
+    MORPH.unwired(root, '[data-email-compose-popout]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var id = btn.getAttribute('data-email-compose-popout');
+        if (id === 'inline') popOutInlineCompose(root, state, render);
+        else popOutCompose(root, state, render, id);
+      });
+    });
+
     MORPH.unwired(root, '[data-email-compose-expand]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
@@ -7856,14 +8087,14 @@
       state.focusedComposeId = job.draft.id;
       enterComposeView(state);
       cancelComposePaneDismiss(state);
-      state._composeEnter = true;
+      state._composeEnter = !state.composePopout;
     } else if (job.kind === 'inline' && job.inline) {
       job.inline.sending = false;
       job.inline._sendRequested = false;
       state.inlineCompose = job.inline;
       enterComposeView(state);
       cancelComposePaneDismiss(state);
-      state._composeEnter = true;
+      state._composeEnter = !state.composePopout;
     }
     if (render) render();
   }
@@ -7888,6 +8119,11 @@
       }
       showEmailToast(root, 'Message sent');
       reloadMessages(root, state, render);
+      if (state.composePopout) {
+        window.setTimeout(function () {
+          maybeCloseComposePopoutWindow(state);
+        }, 700);
+      }
     }).catch(function (err) {
       if (job.kind === 'compose' && job.draft) {
         job.draft.sending = false;
@@ -13202,6 +13438,7 @@
 
     var state = {
       folder: initialFolder,
+      composePopout: !!(opts.composePopout || isComposePopoutPath()),
       // Nothing is selected until the first page of real mail arrives.
       selectedId: null,
       selectedTemplateId: null,
@@ -13290,26 +13527,36 @@
       // floating over nothing.
       closeEmailPointerMenu();
       if (!isEmailMobile()) state.mobileSearchOpen = false;
-      syncEmailHeaderSearch(root, state);
-      ensureEmailMobileHeader(root, state);
+      if (!state.composePopout) {
+        syncEmailHeaderSearch(root, state);
+        ensureEmailMobileHeader(root, state);
+      }
       MORPH.patch(root,
-        '<div class="tma-dash__email-page' + (state.mobileNavOpen ? ' tma-dash__email-page--nav-open' : '') + '">' +
-        renderEmailMobileChrome(state) +
-        renderEmailProfilePopup(state) +
-        '<div class="tma-dash__email-fit">' +
-        renderEmailToolbar(state) +
-        '<div class="tma-dash__email-layout">' +
-        renderEmailSidebar(state) +
-        renderEmailPanel(state) +
-        '</div>' +
-        '</div>' +
-        renderComposeWindows(state) +
-        renderComposeDock(state) +
-        renderEmailSettings(state) +
-        '</div>');
-      ensureEmailShellWatch(root);
-      lockEmailShellSpacing(root);
-      window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+        state.composePopout
+          ? ('<div class="tma-dash__email-page tma-dash__email-page--popout">' +
+            '<div class="tma-dash__email-fit">' +
+            '<div class="tma-dash__email-layout">' +
+            renderDetail(state) +
+            '</div></div></div>')
+          : ('<div class="tma-dash__email-page' + (state.mobileNavOpen ? ' tma-dash__email-page--nav-open' : '') + '">' +
+            renderEmailMobileChrome(state) +
+            renderEmailProfilePopup(state) +
+            '<div class="tma-dash__email-fit">' +
+            renderEmailToolbar(state) +
+            '<div class="tma-dash__email-layout">' +
+            renderEmailSidebar(state) +
+            renderEmailPanel(state) +
+            '</div>' +
+            '</div>' +
+            renderComposeWindows(state) +
+            renderComposeDock(state) +
+            renderEmailSettings(state) +
+            '</div>'));
+      if (!state.composePopout) {
+        ensureEmailShellWatch(root);
+        lockEmailShellSpacing(root);
+        window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+      }
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);
@@ -13324,19 +13571,23 @@
       if (state._focusCompose) {
         var focusId = state._focusCompose;
         state._focusCompose = null;
-        var wait = (state._composeEnter && !emailReduceMotion()) ? COMPOSE_PANE_MS : 0;
+        var wait = (state._composeEnter && !emailReduceMotion() && !state.composePopout) ? COMPOSE_PANE_MS : 0;
         window.setTimeout(function () {
           focusPaneCompose(root, focusId);
         }, wait);
       }
       if (state._composeEnter) {
-        window.requestAnimationFrame(function () {
+        if (state.composePopout) {
+          state._composeEnter = false;
+        } else {
           window.requestAnimationFrame(function () {
-            var overlay = root.querySelector('[data-email-compose-overlay]');
-            state._composeEnter = false;
-            if (overlay) overlay.classList.add('is-open');
+            window.requestAnimationFrame(function () {
+              var overlay = root.querySelector('[data-email-compose-overlay]');
+              state._composeEnter = false;
+              if (overlay) overlay.classList.add('is-open');
+            });
           });
-        });
+        }
       }
       if (state.profileMenuOpen) {
         var profileToggle = root.querySelector('.tma-dash__email-profile-wrap--sidebar [data-email-profile-toggle]');
@@ -13394,6 +13645,14 @@
     // is trusted: the bootstrap below overwrites all of it either way.
     hydrateFromCache(state);
 
+    if (state.composePopout) {
+      var dashPop = getEmailDashRoot(root);
+      if (dashPop) dashPop.classList.add('tma-dash--compose-popout');
+      document.documentElement.classList.add('tma-dash--compose-popout');
+      try { document.title = 'New Email'; } catch (e) { /* ignore */ }
+      adoptComposePopoutDraft(state);
+    }
+
     // Paint the shell first (sidebar, chrome, whatever the cache had), then
     // fill it from the server, the page should never look blank while it
     // waits.
@@ -13415,11 +13674,13 @@
       // Reply / Reply all / Forward in the standalone conversation window come
       // back here as ?compose=, since composing belongs in the mailbox.
       var mailCompose = mailParams.get('compose');
-      if (mailCompose === 'reply' || mailCompose === 'reply-all' || mailCompose === 'forward') {
+      if (!state.composePopout && (mailCompose === 'reply' || mailCompose === 'reply-all' || mailCompose === 'forward')) {
         state._pendingCompose = mailCompose;
       }
-      if (mailMessage) state._pendingMessageId = mailMessage;
-      else if (pendingMessageId) state._pendingMessageId = pendingMessageId;
+      if (!state.composePopout) {
+        if (mailMessage) state._pendingMessageId = mailMessage;
+        else if (pendingMessageId) state._pendingMessageId = pendingMessageId;
+      }
       if (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage) {
         var mailReason = mailParams.get('reason');
         mailParams.delete('notice');

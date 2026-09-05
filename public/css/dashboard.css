@@ -13017,6 +13017,116 @@
   }
 }
 
+/* Compose in its own app window: fill the viewport, hide mailbox chrome. */
+html.tma-dash--compose-popout,
+html.tma-dash--compose-popout body {
+  overflow: hidden;
+}
+
+.tma-dash.tma-dash--compose-popout {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.tma-dash--compose-popout .tma-dash__sidebar,
+.tma-dash--compose-popout .tma-dash__header,
+.tma-dash--compose-popout .tma-dash__header-popups,
+.tma-dash--compose-popout .tma-dash__tabbar,
+.tma-dash--compose-popout .tma-dash__rightbar,
+.tma-dash--compose-popout .tma-dash__footer,
+.tma-dash--compose-popout [data-dash-scrim],
+.tma-dash--compose-popout .tma-dash__email-toolbar,
+.tma-dash--compose-popout .tma-dash__email-sidebar,
+.tma-dash--compose-popout .tma-dash__email-list,
+.tma-dash--compose-popout .tma-dash__email-split-resizer,
+.tma-dash--compose-popout .tma-dash__email-compose-dock,
+.tma-dash--compose-popout .tma-dash__email-mobile-fab,
+.tma-dash--compose-popout .tma-dash__email-mobile-scrim,
+.tma-dash--compose-popout [data-email-compose-popout],
+.tma-dash--compose-popout [data-email-compose-minimize],
+.tma-dash--compose-popout .tma-dash__email-detail-back {
+  display: none !important;
+}
+
+.tma-dash--compose-popout .tma-dash__main {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+}
+
+.tma-dash--compose-popout .tma-dash__view[data-view="email"],
+.tma-dash--compose-popout .tma-dash__email,
+.tma-dash--compose-popout .tma-dash__email-page,
+.tma-dash--compose-popout .tma-dash__email-fit,
+.tma-dash--compose-popout .tma-dash__email-layout,
+.tma-dash--compose-popout .tma-dash__email-panel-fit,
+.tma-dash--compose-popout .tma-dash__email-panel,
+.tma-dash--compose-popout .tma-dash__email-detail,
+.tma-dash--compose-popout .tma-dash__email-compose-overlay,
+.tma-dash--compose-popout .tma-dash__email-compose-window--pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--color-white);
+}
+
+.tma-dash--compose-popout .tma-dash__email-detail--composing > :not([data-email-compose-overlay]) {
+  display: none !important;
+}
+
+.tma-dash--compose-popout .tma-dash__email-compose-overlay,
+.tma-dash--compose-popout .tma-dash__email-compose-overlay.is-open,
+.tma-dash--compose-popout .tma-dash__email-compose-overlay.is-leaving {
+  position: relative;
+  inset: auto;
+  transform: none !important;
+  transition: none !important;
+  will-change: auto;
+}
+
+.tma-dash--compose-popout .tma-dash__email-compose-window-head {
+  -webkit-app-region: drag;
+}
+
+.tma-dash--compose-popout .tma-dash__email-compose-window-btn {
+  -webkit-app-region: no-drag;
+}
+
+.tma-dash--email.tma-dash--compose-popout .tma-dash__email-fit,
+.tma-dash--email.tma-dash--compose-popout .tma-dash__email-layout,
+.tma-dash--email.tma-dash--compose-popout .tma-dash__email-panel,
+.tma-dash--email.tma-dash--compose-popout .tma-dash__main {
+  gap: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.tma-dash--compose-popout .tma-dash__email-page--popout,
+.tma-dash--compose-popout .tma-dash__email-page--popout .tma-dash__email-fit,
+.tma-dash--compose-popout .tma-dash__email-page--popout .tma-dash__email-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+}
+
 .tma-dash__email-detail--compose > .tma-dash__email-compose-window-head {
   flex-shrink: 0;
   background: transparent;
@@ -15570,7 +15680,8 @@
   }
 
   .tma-dash--email-mobile [data-email-compose-minimize],
-  .tma-dash--email-mobile [data-email-compose-expand] {
+  .tma-dash--email-mobile [data-email-compose-expand],
+  .tma-dash--email-mobile [data-email-compose-popout] {
     display: none;
   }
 

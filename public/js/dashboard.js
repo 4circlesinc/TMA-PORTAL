@@ -386,6 +386,15 @@
           crumb: 'Email',
         };
       }
+      if (p === '/email/compose') {
+        return {
+          navId: 'email',
+          view: 'email',
+          title: 'New Email',
+          crumb: 'Email',
+          composePopout: true,
+        };
+      }
       if (p === '/email/templates') {
         return {
           navId: 'email',
@@ -555,6 +564,7 @@
       }
       if (view === 'account' || navId === 'ac-overview' || navId === 'ac-security' || navId === 'ac-billing' || navId === 'ac-statements' || navId === 'ac-referrals' || navId === 'ac-api-keys' || navId === 'ac-logs') return '/account';
       if (view === 'email' || navId === 'email') {
+        if (normalizePath(window.location.pathname) === '/email/compose') return '/email/compose';
         if (normalizePath(window.location.pathname) === '/email/templates') return '/email/templates';
         return '/email';
       }
@@ -981,6 +991,10 @@
       }
       root.classList.toggle('tma-dash--settings', name === 'settings');
       root.classList.toggle('tma-dash--email', name === 'email');
+      var composePopout = name === 'email'
+        && normalizePath(window.location.pathname) === '/email/compose';
+      root.classList.toggle('tma-dash--compose-popout', composePopout);
+      document.documentElement.classList.toggle('tma-dash--compose-popout', composePopout);
       root.classList.toggle('tma-dash--messages', name === 'messages');
       root.classList.toggle('tma-dash--feed', name === 'feed');
       root.classList.toggle('tma-dash--calendar', name === 'calendar');
@@ -1334,6 +1348,7 @@
           window.TMAEmail.mount(emailMount, {
             folder: emailFolder,
             messageId: opts.emailMessageId || null,
+            composePopout: !!opts.composePopout || emailPath === '/email/compose',
           });
         }
       }
@@ -1467,10 +1482,11 @@
         if (root.querySelector('.tma-dash__view[data-view="email"]')) {
           activate('email', {
             view: 'email',
-            title: 'Email',
+            title: base === '/email/compose' ? 'New Email' : 'Email',
             crumb: 'Email',
             emailFolder: base === '/email/templates' ? 'templates' : 'inbox',
             emailMessageId: params.message || null,
+            composePopout: base === '/email/compose',
           });
           return true;
         }
@@ -3391,6 +3407,7 @@
         title: bootRoute.title,
         crumb: bootRoute.crumb,
         emailFolder: bootRoute.emailFolder,
+        composePopout: bootRoute.composePopout,
         openChangeEmail: bootRoute.openChangeEmail,
         settingsNav: bootRoute.settingsNav,
         paymentAdded: bootRoute.paymentAdded,
