@@ -350,6 +350,77 @@ class MailSearchTest extends TestCase
         );
     }
 
+    public function test_a_typeahead_asks_the_mirror_only(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $mail = $this->inbox($user, $account);
+
+        // The provider would hand back the invoice for anything; live=0 must
+        // never ask it.
+        $this->fakeProvider([
+            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::response([
+                'messages' => [['id' => 'gmail-2']],
+            ]),
+        ]);
+
+        $this->assertSame(
+            [$mail['review']->uuid],
+            $this->ids($this->actingAs($user)->getJson('/portal/mail/messages?q=review&limit=8&live=0')->assertOk()->json()),
+        );
+
+        // No provider search (sender-photo lookups are a different job).
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/messages'));
+    }
+
+    public function test_conversation_view_folds_a_thread_to_its_newest_match(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->inbox($user, $account);
+        $older = $this->message($user, $account, [
+            'remote_id' => 'gmail-10', 'thread_id' => 'thread-x', 'subject' => 'Budget review',
+            'sent_at' => now()->subDays(2),
+        ]);
+        $newer = $this->message($user, $account, [
+            'remote_id' => 'gmail-11', 'thread_id' => 'thread-x', 'subject' => 'Re: Budget review',
+            'sent_at' => now()->subDay(),
+        ]);
+        $this->fakeProvider();
+
+        // Conversation view is the default, so the thread is one row: its newest.
+        $this->assertSame(
+            [$newer->uuid],
+            $this->ids($this->actingAs($user)->getJson('/portal/mail/messages?q=budget+review')->assertOk()->json()),
+        );
+
+        $user->forceFill(['preferences' => ['mail' => ['conversationView' => false]]])->save();
+
+        $this->assertSame(
+            [$newer->uuid, $older->uuid],
+            $this->ids($this->actingAs($user->fresh())->getJson('/portal/mail/messages?q=budget+review')->assertOk()->json()),
+        );
+    }
+
+    public function test_a_provider_hit_in_trash_stays_out(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->inbox($user, $account);
+        $this->message($user, $account, ['remote_id' => 'gmail-6', 'subject' => 'Trashed numbers', 'folder' => 'trash']);
+
+        $this->fakeProvider([
+            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::response([
+                'messages' => [['id' => 'gmail-6']],
+            ]),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/portal/mail/messages?q=numbers')
+            ->assertOk()
+            ->assertJsonCount(0, 'messages');
+    }
+
     public function test_a_search_without_a_connected_mailbox_says_so(): void
     {
         $this->actingAs($this->user())

@@ -165,6 +165,7 @@ class MailController extends Controller
             // the global search ask for a handful of hits, and 8 is not a
             // page size the inbox offers.
             'limit' => ['sometimes', 'integer', 'min:1', 'max:'.self::SEARCH_LIMIT],
+            'live' => ['sometimes', 'boolean'],
         ]);
 
         $user = $request->user();
@@ -172,9 +173,15 @@ class MailController extends Controller
 
         if ($search !== '') {
             $limit = (int) ($data['limit'] ?? self::SEARCH_LIMIT);
+            // A typeahead (the mail drawer, the site search) sends live=0 and
+            // is answered from the mirror alone: it asks on every pause in
+            // typing, and a provider round trip per keystroke is exactly what
+            // Graph throttles. Enter and the header field ask without it and
+            // get the provider's full-text hits as well.
+            $live = filter_var($data['live'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
             return response()->json([
-                'messages' => $this->withThreadCounts($this->search($request, $search, $limit), $user->id),
+                'messages' => $this->withThreadCounts($this->search($request, $search, $limit, $live), $user->id),
             ]);
         }
 
@@ -2186,20 +2193,22 @@ class MailController extends Controller
      * provider hit that has never been synced has no uuid to open it by, so
      * it is skipped rather than rendered as an unopenable row.
      */
-    private function search(Request $request, string $query, int $limit = self::SEARCH_LIMIT): array
+    private function search(Request $request, string $query, int $limit = self::SEARCH_LIMIT, bool $live = true): array
     {
         $account = Mailbox::requireAccountFor($request->user());
 
         $local = $this->searchMirror($account, $query, $limit);
 
-        try {
-            $hits = Mailbox::provider($account)->search($query, $limit);
-        } catch (\Throwable $e) {
-            Log::info('Provider mail search failed; answering from the mirror only.', [
-                'account' => $account->id,
-                'error' => $e->getMessage(),
-            ]);
-            $hits = [];
+        $hits = [];
+        if ($live) {
+            try {
+                $hits = Mailbox::provider($account)->search($query, $limit);
+            } catch (\Throwable $e) {
+                Log::info('Provider mail search failed; answering from the mirror only.', [
+                    'account' => $account->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $remoteIds = collect($hits)
@@ -2209,26 +2218,38 @@ class MailController extends Controller
             ->values()
             ->all();
 
+        // Graph's $search spans Deleted Items and Junk; the mirror's half
+        // skips them, so the provider's half does too.
         $remote = $remoteIds === [] ? collect() : MailMessage::query()
             ->with(['labels', 'attachments'])
             ->where('connected_account_id', $account->id)
             ->whereIn('remote_id', $remoteIds)
+            ->whereNotIn('folder', ['spam', 'trash'])
             ->get();
 
         $messages = $local->concat($remote)
             ->unique('uuid')
             ->sortByDesc(fn (MailMessage $m) => $m->sent_at?->getTimestamp() ?? 0)
-            ->take($limit)
             ->values();
 
-        return $this->withAvatars($messages);
+        // Conversation view folds a thread to its newest match, as the
+        // listing folds a folder; otherwise every "Re:" is its own row with
+        // the same expand arrow onto the same siblings.
+        if ($this->mailPreferences($request->user()->preferences ?? [])['conversationView']) {
+            $messages = $messages
+                ->unique(fn (MailMessage $m) => $m->thread_id ?: 'msg:'.$m->id)
+                ->values();
+        }
+
+        return $this->withAvatars($messages->take($limit)->values());
     }
 
     /**
      * The mirror's side of a search. Every word must appear somewhere in the
      * subject, the sender's name or address, or the preview text; the body is
      * left to the provider, whose index is built for it. Spam and Trash are
-     * skipped, as Gmail's own search skips them.
+     * skipped, as Gmail's own search skips them. Scoped to the user, as the
+     * listing is, so someone with two mailboxes connected searches both.
      *
      * @return Collection<int, MailMessage>
      */
@@ -2243,7 +2264,6 @@ class MailController extends Controller
         $builder = MailMessage::query()
             ->with(['labels', 'attachments'])
             ->where('user_id', $account->user_id)
-            ->where('connected_account_id', $account->id)
             ->whereNotIn('folder', ['spam', 'trash']);
 
         foreach ($words as $word) {

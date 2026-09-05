@@ -155,21 +155,33 @@
   /* When a message arrived, the way the inbox list says it: a time today, a
      day this year, otherwise the full date. In the reader's own zone. */
   function mailDateLabel(iso) {
+    // The mailbox owns this rule (email.js emailTimeLabel); the fallback is
+    // the same rule for a page where email.js has not loaded.
+    if (window.TMAEmail && typeof window.TMAEmail.timeLabel === 'function') {
+      return window.TMAEmail.timeLabel(iso, '');
+    }
     if (!iso) return '';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
     const now = new Date();
-    try {
-      if (d.toDateString() === now.toDateString()) {
-        return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
-      }
-      if (d.getFullYear() === now.getFullYear()) {
-        return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(d);
-      }
-      return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-    } catch (e) {
-      return '';
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     }
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  /* Lights every word of the query wherever it lands — the server matches
+     words independently across subject, sender and preview, so "quarterly
+     dana" has one word in each. */
+  function lightWords(text, query) {
+    const words = String(query || '').trim().split(/\s+/).filter(Boolean);
+    const safe = escapeHtml(text);
+    if (!words.length) return safe;
+    const re = new RegExp(`(${words.map(escapeRegExp).join('|')})(?![^<]*>)`, 'ig');
+    return safe.replace(re, '<span class="tma-search-popup__highlight">$1</span>');
   }
 
   function splitHighlight(text, query) {
@@ -390,7 +402,7 @@
       // and the arrival time on the right, the way the inbox list reads.
       const sub = [item.subtitle, item.snippet].filter(Boolean).join(' · ');
       const when = mailDateLabel(item.sentAt);
-      textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${splitHighlight(mainTitle, query)}</div>${sub ? `<div class="tma-search-popup__row-subtext">${splitHighlight(sub, query)}</div>` : ''}</div></div>`;
+      textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${lightWords(mainTitle, query)}</div>${sub ? `<div class="tma-search-popup__row-subtext">${lightWords(sub, query)}</div>` : ''}</div></div>`;
       meta = when ? `<span class="tma-search-popup__row-meta">${escapeHtml(when)}</span>` : '';
     } else if (item.subtitle) {
       const sub = item.subtitle;
@@ -1166,6 +1178,9 @@
 
       input?.addEventListener('input', () => {
         clearTimeout(state._debounce);
+        // An answer still in flight belongs to words the reader has moved
+        // past; it must not paint over the spinner for the newer ones.
+        state._searchSeq = (state._searchSeq || 0) + 1;
         const query = input.value;
         // The field is the truth while someone is typing; state follows it so
         // no later repaint can put an older value back over their letters.
@@ -1200,13 +1215,18 @@
         }
 
         if (e.key === 'Enter') {
+          // Buttons (Clear, the drawer's X, a result row) keep their own
+          // Enter; only the field's Enter means "go".
+          if (e.target !== input) return;
           e.preventDefault();
           // Enter inside the debounce window: the results on screen belong
           // to an older query, so act on the words actually typed.
-          if (state._debounce && mailOnly) {
+          if (state._debounce) {
             clearTimeout(state._debounce);
             state._debounce = null;
-            submitQuery(input ? input.value : state.query);
+            const typed = input ? input.value : state.query;
+            if (mailOnly && typed.trim() && submitQuery(typed)) return;
+            runSearch(typed);
             return;
           }
           if (state.results.length) navigateResult(state.results[state.selectedIndex], e);
@@ -1245,8 +1265,11 @@
         return;
       }
 
-      if (stateName === 'empty' && !state.loading) {
-        body.innerHTML = '<div class="tma-search-popup__empty">No results</div>';
+      if (stateName === 'empty') {
+        // While an answer is on its way the body is blank: rows from the
+        // previous query would read as targets while state.results, which
+        // their handlers read, is already empty.
+        body.innerHTML = state.loading ? '' : '<div class="tma-search-popup__empty">No results</div>';
         return;
       }
 
@@ -1278,6 +1301,12 @@
       });
       popup = popupEl();
       bindPopupEvents(popup);
+      // Enter runs the mailbox search from this field, so the phone keyboard
+      // should say so on its action key.
+      if (typeof options.onSubmit === 'function') {
+        const field = popup && popup.querySelector('[data-search-input]');
+        if (field) field.setAttribute('enterkeyhint', 'search');
+      }
       return popup;
     }
 
@@ -1344,11 +1373,13 @@
               ]);
           state.results = mailOnly && hits.length ? [submitRow(current)].concat(hits) : hits;
           state.selectedIndex = 0;
-          renderLivePopup(renderOpts);
+          // An answer arriving is not a gesture: if the reader has moved on
+          // (tapped a row, put the keyboard away) it must not pull them back.
+          renderLivePopup(Object.assign({}, renderOpts, { skipFocus: true }));
         }).catch(() => {
           if (seq !== state._searchSeq || !state.open) return;
           state.loading = false;
-          renderLivePopup(renderOpts);
+          renderLivePopup(Object.assign({}, renderOpts, { skipFocus: true }));
         });
         return;
       }

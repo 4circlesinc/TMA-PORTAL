@@ -439,7 +439,9 @@
     // `limit`, not `perPage`: the listing validator only accepts the inbox's
     // own page sizes, and a search that asked for a page of 8 was refused
     // outright, which is why mail never showed up in search.
-    var url = root() + '/portal/mail/messages?q=' + encodeURIComponent(q) + '&limit=8';
+    // live=0: a typeahead is answered from the mirror alone. The provider's
+    // full-text hits come with Enter, which asks without it.
+    var url = root() + '/portal/mail/messages?q=' + encodeURIComponent(q) + '&limit=8&live=0';
     return a.api(url).then(function (data) {
       var rows = (data && (data.messages || data.rows || data.items)) || [];
       return rows.slice(0, 8).map(function (m) {

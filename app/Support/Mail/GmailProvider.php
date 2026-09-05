@@ -288,7 +288,15 @@ class GmailProvider implements MailProvider
             'maxResults' => $limit,
         ]));
 
-        return $this->hydrateList(collect($data['messages'] ?? [])->pluck('id')->all(), null);
+        // Ids only. The caller re-reads every hit from the mirror by
+        // remote_id, so hydrating fifty metadata records per search was
+        // fifty provider calls, on every pause in typing, for nothing.
+        return collect($data['messages'] ?? [])
+            ->pluck('id')
+            ->filter()
+            ->map(fn (string $id): array => ['remote_id' => $id])
+            ->values()
+            ->all();
     }
 
     /**

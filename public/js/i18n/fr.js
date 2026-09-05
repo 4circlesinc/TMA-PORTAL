@@ -10,6 +10,7 @@ window.TMAI18nDict = {
     "File Library": "Bibliothèque de fichiers", "Signatures": "Signatures", "Signature": "Signature",
     "Templates": "Modèles", "Workflows": "Flux de travail", "Settings": "Paramètres",
     "Search": "Rechercher", "Profile": "Profil", "Today": "Aujourd'hui", "Alerts": "Alertes",
+    "Search in mail": "Rechercher dans le courrier",
     "Notifications": "Notifications", "Account": "Compte", "Mailbox": "Boîte aux lettres",
     "Calls": "Appels", "Team channels": "Canaux d'équipe", "More": "Plus",
 
@@ -195,6 +196,7 @@ window.TMAI18nDict = {
     "Applications by Investment Type": "Demandes par type d'investissement",
   },
   patterns: [
+    ["^Search mail for “(.+)”$", "Rechercher “$1” dans le courrier"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) messages$", "$1 sur $2 messages"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) items$", "$1 sur $2 éléments"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) calendars$", "$1 sur $2 calendriers"],

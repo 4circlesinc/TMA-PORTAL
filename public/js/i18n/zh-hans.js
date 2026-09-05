@@ -10,6 +10,7 @@ window.TMAI18nDict = {
     "File Library": "文件库", "Signatures": "签名", "Signature": "签名",
     "Templates": "模板", "Workflows": "工作流", "Settings": "设置",
     "Search": "搜索", "Profile": "个人资料", "Today": "今天", "Alerts": "提醒",
+    "Search in mail": "搜索邮件",
     "Notifications": "通知", "Account": "账户", "Mailbox": "邮箱",
     "Calls": "通话", "Team channels": "团队频道", "More": "更多",
 
@@ -182,6 +183,7 @@ window.TMAI18nDict = {
     "Connect Google or Microsoft": "连接 Google 或 Microsoft",
   },
   patterns: [
+    ["^Search mail for “(.+)”$", "在邮件中搜索“$1”"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) messages$", "$1 / $2 封邮件"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) items$", "$1 / $2 项"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) calendars$", "$1 / $2 个日历"],

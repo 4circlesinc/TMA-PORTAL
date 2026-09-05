@@ -116,7 +116,8 @@ interface MailProvider
 
     /**
      * Provider-side search, so results cover the whole mailbox rather than
-     * only what has been synced locally.
+     * only what has been synced locally. Each hit carries at least
+     * `remote_id`; the caller reads the row itself from the mirror.
      *
      * @return array<int, array<string, mixed>>
      */

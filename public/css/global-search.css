@@ -980,6 +980,14 @@
   border-bottom-color: var(--color-border-soft);
 }
 
+/* Row glyphs are black Phosphor files; the same inversion the header's icon
+   buttons get, so they read on the dark popup. Thumbnails and avatars keep
+   their own classes and their own colours. */
+.tma-dash[data-theme="dark"] .tma-search-popup__row-icon,
+:root[data-theme="dark"] .tma-search-popup__row-icon {
+  filter: invert(1) brightness(1.6);
+}
+
 .tma-global-search-guidance__footer {
   display: flex;
   align-items: flex-start;
