@@ -4195,6 +4195,20 @@
     };
   }
 
+  function recipientVisibleName(entry) {
+    if (!entry) return '';
+    if (!entry.name || entry.name === entry.email) return entry.email || '';
+    return entry.name;
+  }
+
+  /* Desktop reading pane: every To name, the way Outlook lays the envelope out. */
+  function getMessageToLine(row) {
+    var to = addressList(row && row.to);
+    if (!to.length) return 'To: me';
+
+    return 'To: ' + to.map(recipientVisibleName).filter(Boolean).join('; ');
+  }
+
   /*
    * Everyone the message went to, not just the first name on the envelope.
    *
@@ -4244,6 +4258,11 @@
     // phone layout unused, so a 390px screen got the desktop row.
     var mobile = isEmailMobile();
     var recipient = getMessageRecipient(row);
+    var toLine = mobile ? 'to ' + recipient.label : getMessageToLine(row);
+    var senderName = displaySender(row);
+    var senderEmail = !mobile && metaEmail && metaEmail !== senderName
+      ? '<span class="tma-dash__email-message-head-email">&lt;' + esc(metaEmail) + '&gt;</span>'
+      : '';
     var messageActions = mobile ? DETAIL_MESSAGE_ACTIONS_MOBILE : DETAIL_MESSAGE_ACTIONS;
     var headCls = 'tma-dash__email-message-head' + (mobile ? ' tma-dash__email-message-head--mobile' : '');
     return (
@@ -4252,11 +4271,12 @@
       messageHeadIcon(row) +
       '<div class="tma-dash__email-message-head-identity">' +
       '<div class="tma-dash__email-message-head-line">' +
-      '<span class="tma-dash__email-message-head-name">' + esc(displaySender(row)) + '</span>' +
+      '<span class="tma-dash__email-message-head-name">' + esc(senderName) + '</span>' +
+      senderEmail +
       '</div>' +
       '<div class="tma-dash__email-message-head-recipient">' +
       '<button type="button" class="tma-dash__email-message-head-to" data-email-header-details-toggle aria-expanded="false">' +
-      '<span class="tma-dash__email-message-head-to-label">to ' + esc(recipient.label) + '</span>' +
+      '<span class="tma-dash__email-message-head-to-label">' + esc(toLine) + '</span>' +
       '<span class="tma-dash__email-message-head-to-caret-wrap" aria-hidden="true">' +
       '<img src="' + ICONS.CaretDown + '" alt="" class="tma-dash__email-message-head-to-caret">' +
       '</span>' +
@@ -6102,9 +6122,9 @@
       ':where(html){margin:0;padding:0;}' +
       // Reading-pane gutter so plain HTML (no own margins) is not flush to
       // the frame edges. Senders that set their own body padding still win.
-      // A phone's gutter is the pane's own 16px; the pane adds none of its
-      // own there, so the text lines up with the head above it.
-      ':where(body){margin:0;padding:' + (isEmailMobile() ? '16px 16px 12px' : '20px 24px 12px') + ';box-sizing:border-box;' +
+      // A phone's gutter is the pane's own 16px; desktop stays tight so the
+      // header chrome does not stack another 20px of empty canvas.
+      ':where(body){margin:0;padding:' + (isEmailMobile() ? '16px 16px 12px' : '12px 16px 8px') + ';box-sizing:border-box;' +
       'font-family:Inter,system-ui,sans-serif;font-size:14px;' +
       // A white canvas in BOTH themes: mail is authored against white, and on
       // the dark theme a transparent body would show the dark frame through

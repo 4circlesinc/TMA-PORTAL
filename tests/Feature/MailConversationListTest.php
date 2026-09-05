@@ -287,7 +287,10 @@ class MailConversationListTest extends TestCase
         $message = $this->message($user, $account, [
             'subject' => 'Quarterly review',
             'body_html' => '<p>The numbers are attached.</p>',
-            'to' => [['name' => 'Test User', 'email' => 'user@example.com']],
+            'to' => [
+                ['name' => 'Test User', 'email' => 'user@example.com'],
+                ['name' => 'Alex Kim', 'email' => 'alex@example.com'],
+            ],
             'cc' => [['name' => 'Sam Cole', 'email' => 'sam@example.com']],
         ]);
 
@@ -315,7 +318,9 @@ class MailConversationListTest extends TestCase
         $response->assertSee('tma-dash__email-detail', false);
         $response->assertSee('tma-dash__email-message-head-name', false);
         $response->assertSee('tma-dash__email-thread-btn', false);
-        $response->assertSee('to Test User', false);
+        $response->assertSee('To: Test User; Alex Kim', false);
+        $response->assertSee('tma-dash__email-message-head-email', false);
+        $response->assertSee('dana@example.com');
         $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=reply"', false);
         $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=reply-all"', false);
         $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=forward"', false);
