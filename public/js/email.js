@@ -59,6 +59,7 @@
     ArrowCounterClockwise: ICON + 'ArrowCounterClockwise.svg',
     TextT: ICON + 'TextT.svg',
     TextAa: ICON + 'TextAa.svg',
+    HighlighterCircle: ICON + 'HighlighterCircle.svg',
     TextB: ICON + 'TextB.svg',
     TextItalic: ICON + 'TextItalic.svg',
     TextUnderline: ICON + 'TextUnderline.svg',
@@ -616,13 +617,47 @@
     return window.matchMedia(EMAIL_MOBILE_MQ).matches;
   }
 
+  /* New Mail / reply occupy the reading pane instead of a floating window.
+   * Only one composer is on screen; extra drafts sit minimized in the dock. */
+  function paneComposeDraft(state) {
+    var open = (state.composeDrafts || []).filter(function (draft) { return !draft.minimized; });
+    if (!open.length) return null;
+    var focused = open.filter(function (draft) { return draft.id === state.focusedComposeId; })[0];
+    return focused || open[open.length - 1];
+  }
+
+  function isComposingInPane(state) {
+    return !!(state && (state.inlineCompose || paneComposeDraft(state)));
+  }
+
+  function enterComposeView(state) {
+    if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
+  }
+
+  function minimizeOpenComposeDrafts(state) {
+    (state.composeDrafts || []).forEach(function (draft) { draft.minimized = true; });
+  }
+
+  function afterComposeClosed(state) {
+    if (isComposingInPane(state)) return;
+    if (!state.selectedId && state.folder !== 'templates') state.reading = false;
+  }
+
+  function leaveComposeView(state) {
+    if (state.inlineCompose) closeInlineCompose(state);
+    var draft = paneComposeDraft(state);
+    if (draft) closeCompose(state, draft.id);
+  }
+
   function isSingleReading(state) {
     if (isEmailMobile()) {
       if (!state.reading) return false;
+      if (isComposingInPane(state)) return true;
       if (state.folder === 'templates') return !!state.selectedTemplateId;
       return !!state.selectedId;
     }
     if (state.layoutStyle !== 'single' || !state.reading) return false;
+    if (isComposingInPane(state)) return true;
     if (state.folder === 'templates') return !!state.selectedTemplateId;
     return !!state.selectedId;
   }
@@ -762,7 +797,7 @@
 
   function syncInlineCompose(state) {
     if (state.inlineCompose && state.inlineCompose.messageId !== state.selectedId) {
-      state.inlineCompose = null;
+      closeInlineCompose(state);
     }
   }
 
@@ -989,8 +1024,8 @@
       : '';
 
     return (
-      '<div class="tma-dash__email-thread-actions">' +
-      '<div class="tma-dash__email-inline-compose" data-email-inline-compose-panel>' +
+      '<div class="tma-dash__email-thread-actions tma-dash__email-thread-actions--compose">' +
+      '<div class="tma-dash__email-inline-compose tma-dash__email-inline-compose--pane" data-email-inline-compose-panel data-key="email-inline-compose">' +
       '<div class="tma-dash__email-inline-compose-head">' +
       renderInlineComposeAvatar() +
       '<div class="tma-dash__email-inline-compose-fields">' +
@@ -1031,10 +1066,6 @@
   }
 
   function renderDetailThreadActions(state, row, metaEmail, metaDate, subject, bodyText) {
-    var active = state.inlineCompose && state.inlineCompose.messageId === row.id;
-    if (active) {
-      return renderInlineCompose(state, row, state.inlineCompose.mode, metaEmail, metaDate, subject, bodyText);
-    }
     var mobile = isEmailMobile();
     return (
       '<div class="tma-dash__email-thread-actions' + (mobile ? ' tma-dash__email-thread-actions--mobile' : '') + '">' +
@@ -1070,6 +1101,7 @@
     // Same as new compose: seed the signature into the draft so it paints and
     // leaves with the reply even if the user never types in the body. Blank
     // blocks sit above it so a tall signature image cannot eat the typing area.
+    minimizeOpenComposeDrafts(state);
     state.inlineCompose = {
       mode: mode,
       messageId: state.selectedId,
@@ -1079,6 +1111,8 @@
       sending: false,
       attachments: [],
     };
+    enterComposeView(state);
+    state._focusInlineCompose = true;
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc
@@ -1091,6 +1125,56 @@
 
   function closeInlineCompose(state) {
     state.inlineCompose = null;
+    afterComposeClosed(state);
+  }
+
+  function inlineComposeTitle(mode, subject) {
+    var kind = mode === 'forward' ? 'Forward' : (mode === 'reply-all' ? 'Reply all' : 'Reply');
+    var titled = mode === 'forward' ? getForwardSubject(subject) : getReplySubject(subject);
+    return titled ? kind + ' \u00b7 ' + titled : kind;
+  }
+
+  function renderDetailInlineCompose(state, row) {
+    var lines = rowListLines(row);
+    var subject = (state.thread && state.thread.subject) || lines.subject;
+    var metaEmail = row.email || '';
+    var metaDate = formatMessageDate(row);
+    var ic = state.inlineCompose;
+    var mobile = isEmailMobile();
+    return (
+      '<div class="tma-dash__email-detail tma-dash__email-detail--compose' +
+      (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
+      '<div class="tma-dash__email-compose-window-head">' +
+      (!mobile ? renderDetailBack(state, true) : '') +
+      '<span class="tma-dash__email-compose-window-title">' +
+      esc(inlineComposeTitle(ic.mode, subject)) + '</span>' +
+      '<div class="tma-dash__email-compose-window-actions">' +
+      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-inline-compose-close aria-label="Close">' +
+      '<img src="' + ICONS.X + '" alt=""></button>' +
+      '</div></div>' +
+      renderInlineCompose(state, row, ic.mode, metaEmail, metaDate, subject, lines.body) +
+      '</div>'
+    );
+  }
+
+  function renderDetailComposeDraft(state, draft) {
+    var mobile = isEmailMobile();
+    return (
+      '<div class="tma-dash__email-detail tma-dash__email-detail--compose' +
+      (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
+      '<div class="tma-dash__email-compose-window tma-dash__email-compose-window--pane' +
+      ' tma-dash__email-compose-window--focused" data-email-compose-window="' + esc(draft.id) + '"' +
+      ' data-key="email-compose-window-' + esc(draft.id) + '">' +
+      renderComposeWindowHead(draft, {
+        pane: true,
+        backHtml: !mobile ? renderDetailBack(state, true) : '',
+      }) +
+      '<div class="tma-dash__email-compose-window-body">' +
+      renderComposeContent(draft) +
+      '</div>' +
+      '<div class="tma-dash__email-compose-drop" data-email-compose-drop aria-hidden="true">Drop files to attach</div>' +
+      '</div></div>'
+    );
   }
 
   function focusInlineComposeEditor(root) {
@@ -1107,6 +1191,16 @@
         selection.addRange(range);
       }
     }
+  }
+
+  function focusPaneCompose(root, draftId) {
+    var win = root.querySelector('[data-email-compose-window="' + draftId + '"]');
+    if (!win) return;
+    var to = win.querySelector('[data-email-compose-field="to"]');
+    var body = win.querySelector('[data-email-compose-body]');
+    var hasPills = !!(win.querySelector('[data-email-recipient]'));
+    var target = (to && !to.value && !hasPills) ? to : body;
+    if (target) target.focus();
   }
 
   /* Field edits and the editor body write straight to state.inlineCompose —
@@ -1256,6 +1350,7 @@
   }
 
   function renderEmailHeaderReadingTools(state) {
+    if (isComposingInPane(state)) return '';
     var topbarActions = detailTopbarActions(state).filter(function (action) { return action.id !== 'spam'; });
     var actions = topbarActions.map(renderDetailTopbarBtn).join('');
     if (!actions) return '';
@@ -3056,6 +3151,9 @@
       continueDraftMessage(root, state, render, row);
       return;
     }
+
+    if (paneComposeDraft(state)) minimizeOpenComposeDrafts(state);
+    if (id !== state.selectedId) closeInlineCompose(state);
 
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
@@ -6114,10 +6212,17 @@
 
   function renderDetail(state) {
     if (state.folder === 'templates') return renderTemplateDetail(state);
+
+    var draft = paneComposeDraft(state);
+    if (draft) return renderDetailComposeDraft(state, draft);
+
     syncInlineCompose(state);
     // findAnyRow: the open message may be one the reader picked out of a
     // conversation dropdown, which is not a row on the page.
     var row = findAnyRow(state, state.selectedId);
+    if (state.inlineCompose && row) {
+      return renderDetailInlineCompose(state, row);
+    }
     if (!row) {
       return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>Select a message</p></div>';
     }
@@ -6131,8 +6236,6 @@
     var metaDate = formatMessageDate(row);
     var mobile = isEmailMobile();
     var threadActions = renderDetailThreadActions(state, row, metaEmail, metaDate, subject, lines.body);
-    // Reply / forward (and the inline composer) sit outside the scroll so they
-    // stay pinned to the bottom of the reading pane.
     var body = renderEmailThread(state, null);
 
     return (
@@ -6883,6 +6986,18 @@
 
   function openCompose(state, opts) {
     opts = opts || {};
+    closeInlineCompose(state);
+    if (!opts.serverId && !opts.to && !opts.subject && !opts.bodyHtml && (!opts.mode || opts.mode === 'new')) {
+      var existing = paneComposeDraft(state);
+      if (existing && existing.mode === 'new' && !draftHasSubstance(existing)) {
+        state.focusedComposeId = existing.id;
+        enterComposeView(state);
+        state._focusCompose = existing.id;
+        prefetchRecipientSuggest();
+        return existing;
+      }
+    }
+    minimizeOpenComposeDrafts(state);
     var draft = createComposeDraft(state, opts);
     // Seed the body with the signature (or template) the window will paint.
     // Otherwise draft.bodyHtml stays '' until the user types, and Send goes
@@ -6892,6 +7007,8 @@
     }
     state.composeDrafts.push(draft);
     state.focusedComposeId = draft.id;
+    enterComposeView(state);
+    state._focusCompose = draft.id;
     prefetchRecipientSuggest();
     // Outlook (and Gmail) get a Drafts-folder copy once the user has
     // addressed, titled, or written something beyond the signature — not
@@ -6906,13 +7023,17 @@
     state.composeDrafts.forEach(function (draft) {
       if (draft.id === id) draft.minimized = true;
     });
+    afterComposeClosed(state);
   }
 
   function restoreCompose(state, id) {
+    closeInlineCompose(state);
     state.composeDrafts.forEach(function (draft) {
-      if (draft.id === id) draft.minimized = false;
+      draft.minimized = draft.id !== id;
     });
     state.focusedComposeId = id;
+    enterComposeView(state);
+    state._focusCompose = id;
   }
 
   function closeCompose(state, id, persist) {
@@ -6930,6 +7051,7 @@
       var open = state.composeDrafts.filter(function (draft) { return !draft.minimized; });
       state.focusedComposeId = open.length ? open[open.length - 1].id : null;
     }
+    afterComposeClosed(state);
   }
 
   function toggleComposeExpand(state, id) {
@@ -6943,49 +7065,34 @@
     state.focusedComposeId = id;
   }
 
-  function renderComposeWindowHead(draft) {
+  function renderComposeWindowHead(draft, opts) {
+    opts = opts || {};
     var title = getComposeSubject(draft) || 'New Email';
-    var expandLabel = draft.fullscreen ? 'Exit full screen' : 'Full screen';
+    var actions =
+      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-minimize="' + esc(draft.id) + '" aria-label="Minimize">' +
+      '<img src="' + ICONS.Minus + '" alt=""></button>';
+    if (!opts.pane) {
+      var expandLabel = draft.fullscreen ? 'Exit full screen' : 'Full screen';
+      actions +=
+        '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-expand="' + esc(draft.id) + '" aria-label="' + esc(expandLabel) + '">' +
+        '<img src="' + (draft.fullscreen ? ICONS.CornersIn : ICONS.ArrowsOutSimple) + '" alt=""></button>';
+    }
+    actions +=
+      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-close="' + esc(draft.id) + '" aria-label="Close">' +
+      '<img src="' + ICONS.X + '" alt=""></button>';
     return (
       '<div class="tma-dash__email-compose-window-head">' +
+      (opts.backHtml || '') +
       '<span class="tma-dash__email-compose-window-title">' + esc(title) + '</span>' +
       '<div class="tma-dash__email-compose-window-actions">' +
-      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-minimize="' + esc(draft.id) + '" aria-label="Minimize">' +
-      '<img src="' + ICONS.Minus + '" alt=""></button>' +
-      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-expand="' + esc(draft.id) + '" aria-label="' + esc(expandLabel) + '">' +
-      '<img src="' + (draft.fullscreen ? ICONS.CornersIn : ICONS.ArrowsOutSimple) + '" alt=""></button>' +
-      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-close="' + esc(draft.id) + '" aria-label="Close">' +
-      '<img src="' + ICONS.X + '" alt=""></button>' +
+      actions +
       '</div></div>'
     );
   }
 
+  /* Open drafts live in the reading pane now. Minimized ones stay in the dock. */
   function renderComposeWindows(state) {
-    var open = state.composeDrafts.filter(function (draft) { return !draft.minimized; });
-    if (!open.length) return '';
-
-    return (
-      '<div class="tma-dash__email-compose-stack">' +
-      open
-        .map(function (draft, index) {
-          var cls = 'tma-dash__email-compose-window tma-dash__email-compose-window--large';
-          if (draft.fullscreen) cls += ' tma-dash__email-compose-window--fullscreen';
-          else if (draft.expanded) cls += ' tma-dash__email-compose-window--expanded';
-          if (draft.id === state.focusedComposeId) cls += ' tma-dash__email-compose-window--focused';
-          var stackIndex = open.length - 1 - index;
-          return (
-            '<div class="' + cls + '" data-email-compose-window="' + esc(draft.id) + '" style="--compose-stack:' + stackIndex + '">' +
-            renderComposeWindowHead(draft) +
-            '<div class="tma-dash__email-compose-window-body">' +
-            renderComposeContent(draft) +
-            '</div>' +
-            '<div class="tma-dash__email-compose-drop" data-email-compose-drop aria-hidden="true">Drop files to attach</div>' +
-            '</div>'
-          );
-        })
-        .join('') +
-      '</div>'
-    );
+    return '';
   }
 
   function renderComposeDock(state) {
@@ -7009,15 +7116,20 @@
   }
 
   /* ── compose toolbar menus ───────────────────────────────────────
-   * The caret buttons (Text style, Text colour) and More open a small popup
-   * built here rather than in the main render, so opening one does not
-   * re-render the compose window and throw away the selection the command is
-   * about to be applied to.
+   * Text style, text colour and highlight open a small popup built here
+   * rather than in the main render, so opening one does not re-render the
+   * compose window and throw away the selection the command is about to
+   * be applied to.
    */
 
   var composeMenuEl = null;
+  var composeMenuBtn = null;
 
   function closeComposeMenu() {
+    if (composeMenuBtn) {
+      composeMenuBtn.setAttribute('aria-expanded', 'false');
+      composeMenuBtn = null;
+    }
     if (!composeMenuEl) return;
     composeMenuEl.remove();
     composeMenuEl = null;
@@ -7032,56 +7144,119 @@
 
     if (kind === 'color') {
       return COMPOSE_COLORS.map(function (color) {
-        return { label: color.label, cmd: 'foreColor', value: color.value, swatch: color.value };
-      }).concat(
-        [{ separator: true, label: 'Highlight' }],
-        COMPOSE_HIGHLIGHTS.map(function (color) {
-          // hiliteColor is the standards name; backColor is what older engines
-          // answer to. Both are attempted when the command runs.
-          return { label: color.label, cmd: 'hiliteColor', value: color.value, swatch: color.value };
-        })
-      );
+        return {
+          label: color.label,
+          cmd: 'foreColor',
+          value: color.value,
+          swatch: color.value,
+          swatchOnly: true,
+        };
+      });
     }
 
-    return COMPOSE_MORE_TOOLS;
+    if (kind === 'highlight') {
+      return COMPOSE_HIGHLIGHTS.map(function (color) {
+        // hiliteColor is the standards name; backColor is what older engines
+        // answer to. Both are attempted when the command runs.
+        return {
+          label: color.label,
+          cmd: 'hiliteColor',
+          value: color.value,
+          swatch: color.value,
+          swatchOnly: true,
+          none: color.value === 'transparent',
+        };
+      });
+    }
+
+    return [];
+  }
+
+  function renderComposeMenuItem(item) {
+    if (item.separator) {
+      return '<div class="tma-dash__email-compose-menu-sep">' + esc(item.label) + '</div>';
+    }
+
+    var cls = 'tma-dash__email-compose-menu-item';
+    if (item.swatchOnly) cls += ' tma-dash__email-compose-menu-item--swatch';
+
+    var swatchCls = 'tma-dash__email-compose-menu-swatch';
+    if (item.none) swatchCls += ' tma-dash__email-compose-menu-swatch--none';
+
+    return (
+      '<button type="button" class="' + cls + '" role="menuitem"' +
+      ' data-email-compose-menu-cmd="' + esc(item.cmd) + '"' +
+      (item.value ? ' data-email-compose-menu-value="' + esc(item.value) + '"' : '') +
+      ' aria-label="' + esc(item.label) + '" title="' + esc(item.label) + '">' +
+      (item.swatch
+        ? '<span class="' + swatchCls + '"' +
+          (item.none ? '' : ' style="background:' + esc(item.swatch) + '"') + '></span>'
+        : '') +
+      (item.icon
+        ? '<img class="tma-dash__email-compose-menu-icon" src="' + esc(ICON + item.icon + '.svg') + '" alt="">'
+        : '') +
+      (item.swatchOnly ? '' : esc(item.label)) +
+      '</button>'
+    );
+  }
+
+  function positionComposeMenu(menu, button) {
+    var rect = button.getBoundingClientRect();
+    var gap = 4;
+    var pad = 8;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var mw = menu.offsetWidth;
+    var mh = menu.offsetHeight;
+    var spaceBelow = vh - rect.bottom - pad;
+    var spaceAbove = rect.top - pad;
+    var openUp = mh > spaceBelow && spaceAbove > spaceBelow;
+
+    var top = openUp ? Math.max(pad, rect.top - gap - mh) : rect.bottom + gap;
+    var maxH = openUp ? (rect.top - gap - pad) : (vh - top - pad);
+    if (mh > maxH) {
+      menu.style.maxHeight = Math.max(96, maxH) + 'px';
+      menu.style.overflowY = 'auto';
+      mh = menu.offsetHeight;
+      if (openUp) top = Math.max(pad, rect.top - gap - mh);
+    }
+
+    var left = rect.left;
+    if (left + mw > vw - pad) left = vw - mw - pad;
+    if (left < pad) left = pad;
+
+    menu.style.position = 'fixed';
+    menu.style.top = top + 'px';
+    menu.style.left = left + 'px';
   }
 
   function openComposeMenu(button, kind) {
     closeComposeMenu();
 
     var items = composeMenuItems(kind);
+    if (!items.length) return;
 
+    var palette = kind === 'color' || kind === 'highlight';
     var menu = document.createElement('div');
-    menu.className = 'tma-dash__email-compose-menu';
+    menu.className = 'tma-dash__email-compose-menu' + (palette ? ' tma-dash__email-compose-menu--palette' : '');
     menu.setAttribute('role', 'menu');
-    menu.innerHTML = items.map(function (item) {
-      if (item.separator) {
-        return '<div class="tma-dash__email-compose-menu-sep">' + esc(item.label) + '</div>';
-      }
-
-      return (
-        '<button type="button" class="tma-dash__email-compose-menu-item" role="menuitem"' +
-        ' data-email-compose-menu-cmd="' + esc(item.cmd) + '"' +
-        (item.value ? ' data-email-compose-menu-value="' + esc(item.value) + '"' : '') + '>' +
-        (item.swatch
-          ? '<span class="tma-dash__email-compose-menu-swatch" style="background:' + esc(item.swatch) + '"></span>'
-          : '') +
-        (item.icon
-          ? '<img class="tma-dash__email-compose-menu-icon" src="' + esc(ICON + item.icon + '.svg') + '" alt="">'
-          : '') +
-        esc(item.label) +
-        '</button>'
-      );
-    }).join('');
+    if (palette) {
+      menu.innerHTML =
+        '<div class="tma-dash__email-compose-menu-sep">' +
+        esc(kind === 'color' ? 'Text colour' : 'Highlight') +
+        '</div>' +
+        '<div class="tma-dash__email-compose-menu-swatches">' +
+        items.map(renderComposeMenuItem).join('') +
+        '</div>';
+    } else {
+      menu.innerHTML = items.map(renderComposeMenuItem).join('');
+    }
 
     document.body.appendChild(menu);
     composeMenuEl = menu;
-
-    var rect = button.getBoundingClientRect();
-    menu.style.position = 'fixed';
-    menu.style.top = (rect.bottom + 4) + 'px';
-    // Kept on screen when the button sits near the right edge.
-    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+    composeMenuBtn = button;
+    button.setAttribute('aria-expanded', 'true');
+    positionComposeMenu(menu, button);
   }
 
   /* Runs a formatting command against the editor that owns the selection.
@@ -7097,6 +7272,8 @@
       return;
     }
 
+    try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* optional */ }
+
     if (cmd === 'hiliteColor') {
       // Not universally supported under that name; fall back to backColor.
       if (!document.execCommand('hiliteColor', false, value)) {
@@ -7105,7 +7282,21 @@
       return;
     }
 
+    if (cmd === 'foreColor') {
+      document.execCommand('foreColor', false, value);
+      return;
+    }
+
     document.execCommand(cmd, false, value === undefined ? null : value);
+  }
+
+  function cssColorOrEmpty(value, ignorePaper) {
+    if (!value) return '';
+    var v = String(value).replace(/\s+/g, '').toLowerCase();
+    if (!v || v === 'transparent' || v === 'rgba(0,0,0,0)' || v === 'inherit') return '';
+    if (ignorePaper && (v === '#fff' || v === '#ffffff' || v === 'white' ||
+        v === 'rgb(255,255,255)' || v === 'rgba(255,255,255,1)')) return '';
+    return value;
   }
 
   /* Reflects the formatting at the cursor back onto the toolbar, so Bold looks
@@ -7121,6 +7312,18 @@
 
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
       btn.classList.toggle('tma-dash__email-compose-tool--active', on);
+    });
+
+    root.querySelectorAll('[data-email-compose-tool-menu="color"] .tma-dash__email-compose-tool-mark').forEach(function (mark) {
+      var value = '';
+      try { value = document.queryCommandValue('foreColor'); } catch (e) { /* leave the default bar */ }
+      mark.style.background = cssColorOrEmpty(value) || '';
+    });
+
+    root.querySelectorAll('[data-email-compose-tool-menu="highlight"] .tma-dash__email-compose-tool-mark').forEach(function (mark) {
+      var value = '';
+      try { value = document.queryCommandValue('backColor') || document.queryCommandValue('hiliteColor'); } catch (e) { /* leave the default bar */ }
+      mark.style.background = cssColorOrEmpty(value, true) || '';
     });
   }
 
@@ -7153,6 +7356,12 @@
         closeComposeMenu();
       }
     });
+
+    window.addEventListener('resize', closeComposeMenu);
+    window.addEventListener('scroll', function (event) {
+      if (composeMenuEl && composeMenuEl.contains(event.target)) return;
+      closeComposeMenu();
+    }, true);
   }
 
   /*
@@ -7685,32 +7894,21 @@
     { label: 'Green', value: '#d3f8df' },
     { label: 'Blue', value: '#d1e9ff' },
     { label: 'Pink', value: '#fce7f6' },
-  ];
-
-  /* The tools behind the "More" button: the formatting that does not earn a
-   * permanent slot on a narrow toolbar but still has to work. */
-  var COMPOSE_MORE_TOOLS = [
-    { label: 'Numbered list', cmd: 'insertOrderedList', icon: 'ListNumbers' },
-    { label: 'Indent', cmd: 'indent', icon: 'TextIndent' },
-    { label: 'Outdent', cmd: 'outdent', icon: 'TextOutdent' },
-    { label: 'Align left', cmd: 'justifyLeft', icon: 'TextAlignLeft' },
-    { label: 'Align centre', cmd: 'justifyCenter', icon: 'TextAlignCenter' },
-    { label: 'Align right', cmd: 'justifyRight', icon: 'TextAlignRight' },
-    { label: 'Remove link', cmd: 'unlink', icon: 'LinkBreak' },
-    { label: 'Clear formatting', cmd: 'removeFormat', icon: 'Eraser' },
+    { label: 'Orange', value: '#ffead5' },
+    { label: 'Grey', value: '#e5e7eb' },
   ];
 
   /* opts.expand: compose windows get the expand control; the signature editor
    * and inline reply/forward do not, there is nowhere for them to expand into.
    * opts.attach: paperclip (compose draft id, or true for inline reply).
    * opts.insertImage: signature logo insert + transform dialog.
-   * opts.full: every tool on the toolbar itself, no More menu — for wide
-   * hosts (the template and letter editors); a compose window is too narrow
-   * and keeps the three-dots menu. */
+   *
+   * New mail, reply, reply-all, forward and the template editors all share
+   * this bar. Alignment, colour and highlight sit on it; a narrow host wraps
+   * onto a second row instead of hiding tools behind More. */
   function renderComposeToolbar(opts) {
     opts = opts || {};
     var showExpand = opts.expand !== false;
-    var full = !!opts.full;
     var extra = [];
     if (opts.insertImage) {
       extra.push({ icon: 'Image', label: 'Insert image', image: true });
@@ -7725,30 +7923,34 @@
       ],
       [
         { icon: 'TextT', label: 'Text style', caret: true, menu: 'style' },
-        { icon: 'TextAa', label: 'Text colour', caret: true, menu: 'color' },
       ],
       [
         { icon: 'TextB', label: 'Bold', cmd: 'bold', state: 'bold' },
         { icon: 'TextItalic', label: 'Italic', cmd: 'italic', state: 'italic' },
         { icon: 'TextUnderline', label: 'Underline', cmd: 'underline', state: 'underline' },
         { icon: 'TextStrikethrough', label: 'Strikethrough', cmd: 'strikeThrough', state: 'strikeThrough' },
+      ],
+      [
+        { icon: 'TextAa', label: 'Text colour', menu: 'color', mark: 'color' },
+        { icon: 'HighlighterCircle', label: 'Highlight', menu: 'highlight', mark: 'highlight' },
+      ],
+      [
+        { icon: 'TextAlignLeft', label: 'Align left', cmd: 'justifyLeft', state: 'justifyLeft' },
+        { icon: 'TextAlignCenter', label: 'Align centre', cmd: 'justifyCenter', state: 'justifyCenter' },
+        { icon: 'TextAlignRight', label: 'Align right', cmd: 'justifyRight', state: 'justifyRight' },
+      ],
+      [
         { icon: 'ListBullets', label: 'Bulleted list', cmd: 'insertUnorderedList', state: 'insertUnorderedList' },
-      ].concat(full
-        ? [{ icon: 'ListNumbers', label: 'Numbered list', cmd: 'insertOrderedList', state: 'insertOrderedList' }]
-        : []),
+        { icon: 'ListNumbers', label: 'Numbered list', cmd: 'insertOrderedList', state: 'insertOrderedList' },
+        { icon: 'TextIndent', label: 'Increase indent', cmd: 'indent' },
+        { icon: 'TextOutdent', label: 'Decrease indent', cmd: 'outdent' },
+      ],
       [
         { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
-      ].concat(
-        extra,
-        full ? [] : [{ icon: 'DotsThree', label: 'More', menu: 'more' }]
-      ),
+        { icon: 'LinkBreak', label: 'Remove link', cmd: 'unlink' },
+        { icon: 'Eraser', label: 'Clear formatting', cmd: 'removeFormat' },
+      ].concat(extra),
     ];
-
-    if (full) {
-      groups.push(COMPOSE_MORE_TOOLS
-        .filter(function (t) { return t.cmd !== 'insertOrderedList'; })
-        .map(function (t) { return { icon: t.icon, label: t.label, cmd: t.cmd }; }));
-    }
 
     return (
       '<div class="tma-dash__email-compose-toolbar">' +
@@ -7759,18 +7961,22 @@
             '<div class="tma-dash__email-compose-toolbar-group">' +
             group
               .map(function (item) {
+                var cls = 'tma-dash__email-compose-tool';
+                if (item.caret) cls += ' tma-dash__email-compose-tool--caret';
+                if (item.mark) cls += ' tma-dash__email-compose-tool--mark tma-dash__email-compose-tool--' + item.mark;
                 return (
-                  '<button type="button" class="tma-dash__email-compose-tool' + (item.caret ? ' tma-dash__email-compose-tool--caret' : '') + '"' +
+                  '<button type="button" class="' + cls + '"' +
                   (item.cmd ? ' data-email-compose-tool-cmd="' + esc(item.cmd) + '"' : '') +
-                  (item.menu ? ' data-email-compose-tool-menu="' + esc(item.menu) + '"' : '') +
+                  (item.menu ? ' data-email-compose-tool-menu="' + esc(item.menu) + '" aria-haspopup="menu" aria-expanded="false"' : '') +
                   (item.image ? ' data-email-insert-image' : '') +
                   (item.attach === true ? ' data-email-inline-compose-attach' : '') +
                   (item.attach && item.attach !== true ? ' data-email-compose-attach="' + esc(item.attach) + '"' : '') +
                   // Marks the buttons whose pressed state tracks the cursor,
                   // so the toolbar shows what the text under it actually is.
                   (item.state ? ' data-email-compose-tool-state="' + esc(item.state) + '" aria-pressed="false"' : '') +
-                  ' aria-label="' + esc(item.label) + '">' +
+                  ' aria-label="' + esc(item.label) + '" title="' + esc(item.label) + '">' +
                   '<img src="' + esc(ICONS[item.icon]) + '" alt="">' +
+                  (item.mark ? '<span class="tma-dash__email-compose-tool-mark" aria-hidden="true"></span>' : '') +
                   (item.caret ? '<img class="tma-dash__email-compose-tool-caret" src="' + ICONS.CaretDown + '" alt="">' : '') +
                   '</button>'
                 );
@@ -7785,7 +7991,7 @@
         .join('') +
       '</div>' +
       (showExpand
-        ? '<button type="button" class="tma-dash__email-compose-tool tma-dash__email-compose-tool--expand" aria-label="Expand editor">' +
+        ? '<button type="button" class="tma-dash__email-compose-tool tma-dash__email-compose-tool--expand" aria-label="Expand editor" title="Expand editor">' +
           '<img src="' + ICONS.ArrowsOutSimple + '" alt="">' +
           '</button>'
         : '') +
@@ -9941,10 +10147,7 @@
     dash.classList.toggle('tma-dash--email-mobile-reading', reading);
     dash.classList.toggle('tma-dash--email-mobile-bulk', bulkActive);
     dash.classList.toggle('tma-dash--email-profile-sidebar-open', !!state.profileSidebarOpen);
-    dash.classList.toggle(
-      'tma-dash--email-compose-open',
-      mobile && state.composeDrafts.some(function (draft) { return !draft.minimized; })
-    );
+    dash.classList.toggle('tma-dash--email-compose-open', false);
 
     var headerLeft = dash.querySelector('.tma-dash__header-left');
     if (headerLeft) {
@@ -12640,6 +12843,7 @@
 
     eventRoot.querySelectorAll('[data-email-back]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        leaveComposeView(state);
         state.reading = false;
         render();
       });
@@ -12977,9 +13181,17 @@
       wireInlineComposeEvents(root, state, render);
       wireEditableImageTransforms(root, state);
       wireEmailSettings(root, state, render);
-      if (state.inlineCompose) {
+      if (state._focusInlineCompose) {
+        state._focusInlineCompose = false;
         window.requestAnimationFrame(function () {
           focusInlineComposeEditor(root);
+        });
+      }
+      if (state._focusCompose) {
+        var focusId = state._focusCompose;
+        state._focusCompose = null;
+        window.requestAnimationFrame(function () {
+          focusPaneCompose(root, focusId);
         });
       }
       if (state.profileMenuOpen) {

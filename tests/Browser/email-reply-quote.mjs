@@ -98,6 +98,23 @@ try {
   check(!quote.includes('&lt;b&gt;'), 'the markup is real HTML, not escaped text');
   check(!quote.includes('Preview for'), 'the quote is the body, not the snippet');
 
+  check(
+    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-cmd="justifyLeft"]')),
+    'align left is on the reply toolbar'
+  );
+  check(
+    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="color"]')),
+    'text colour is on the reply toolbar'
+  );
+  check(
+    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="highlight"]')),
+    'highlight is on the reply toolbar'
+  );
+  check(
+    !(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="more"]')),
+    'reply has no More overflow menu'
+  );
+
   const lead = await page.evaluate(
     () => document.querySelector('.tma-dash__email-inline-quote-lead')?.textContent || ''
   );

@@ -195,11 +195,37 @@ await page.waitForTimeout(300);
 const html = await editor.innerHTML();
 check(/<b>|<strong>|font-weight/i.test(html), `bold applied to the selection (got ${html.slice(0, 80)})`);
 
-step(9, 'The More menu exposes the rest of the formatting');
-await page.locator('[data-email-compose-tool-menu="more"]').first().click();
-await page.waitForTimeout(300);
-const menuItems = await page.locator('[data-email-compose-menu-cmd]').count();
-check(menuItems > 0, `More opens a menu of commands (got ${menuItems})`);
+step(9, 'Colour, highlight and alignment sit on the toolbar');
+await page.locator('[data-email-compose-tool-menu="color"]').first().click();
+await page.waitForTimeout(200);
+const colorItems = await page.locator('[data-email-compose-menu-cmd="foreColor"]').count();
+check(colorItems > 0, `text colour opens a palette (got ${colorItems})`);
+check(
+  !!(await page.$('[data-email-compose-tool-menu="highlight"]')),
+  'highlight is on the toolbar'
+);
+check(
+  !!(await page.$('[data-email-compose-tool-cmd="justifyLeft"]')),
+  'align left is on the toolbar'
+);
+check(
+  !!(await page.$('[data-email-compose-tool-cmd="insertOrderedList"]')),
+  'numbered list is on the toolbar'
+);
+check(
+  !(await page.$('[data-email-compose-tool-menu="more"]')),
+  'there is no More overflow menu'
+);
+
+const menuBox = await page.locator('.tma-dash__email-compose-menu').boundingBox();
+const viewport = page.viewportSize();
+check(!!menuBox, 'the colour menu is visible');
+if (menuBox && viewport) {
+  check(
+    menuBox.y >= 0 && menuBox.y + menuBox.height <= viewport.height + 1,
+    `the colour menu stays in the viewport (top=${Math.round(menuBox.y)} h=${Math.round(menuBox.height)} vh=${viewport.height})`
+  );
+}
 
 log('\n' + '='.repeat(60));
 if (errors.length) {
