@@ -165,8 +165,8 @@ try {
   check(!!editorBox && editorBox.wrapHeight >= 160,
     `reply editor is tall enough to type (saw ${editorBox && Math.round(editorBox.wrapHeight)})`);
   if (editorBox && editorBox.spaceAboveSig !== null) {
-    check(editorBox.spaceAboveSig >= 160,
-      `several lines of room above the signature (saw ${Math.round(editorBox.spaceAboveSig)}px)`);
+    check(editorBox.spaceAboveSig >= 24,
+      `room to type above the signature (saw ${Math.round(editorBox.spaceAboveSig)}px)`);
   }
 
   step(3, 'The sent payload carries the typed reply plus the exact quote');

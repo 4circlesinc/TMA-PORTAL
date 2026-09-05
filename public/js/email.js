@@ -1052,7 +1052,7 @@
     var block = quoteBodyBlock(bodyHtml, bodyText);
     if (!block) return '';
     return (
-      '<div class="tma-dash__email-inline-quote">' +
+      '<div class="tma-dash__email-inline-quote" contenteditable="false">' +
       '<p class="tma-dash__email-inline-quote-lead">On ' + esc(metaDate) + ', ' + esc(row.sender) +
       ' &lt;' + esc(metaEmail) + '&gt; wrote:</p>' +
       block +
@@ -1064,7 +1064,7 @@
     var block = quoteBodyBlock(bodyHtml, bodyText);
     var originalTo = formatAddressList(addressList(row && row.to)) || mailboxAddress();
     return (
-      '<div class="tma-dash__email-inline-quote tma-dash__email-inline-quote--forward">' +
+      '<div class="tma-dash__email-inline-quote tma-dash__email-inline-quote--forward" contenteditable="false">' +
       '<p class="tma-dash__email-inline-quote-lead">---------- Forwarded message ---------</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>From:</strong> ' + esc(row.sender) + ' &lt;' + esc(metaEmail) + '&gt;</p>' +
       '<p class="tma-dash__email-inline-quote-meta"><strong>Date:</strong> ' + esc(metaDate) + '</p>' +

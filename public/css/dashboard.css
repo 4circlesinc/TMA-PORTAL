@@ -14120,12 +14120,21 @@ html.tma-dash--compose-popout body {
 .tma-dash__email-compose-body .tma-dash__email-inline-quote {
   padding-left: 0;
   padding-right: 0;
+  margin-top: var(--space-16);
+  white-space: normal;
 }
 
-/* Same typing room the mini-reply used: a tall signature must not sit on
-   the first caret line. New Mail has no quote, so it stays compact. */
-.tma-dash__email-compose-body:has(.tma-dash__email-inline-quote) [data-email-signature] {
-  margin-top: 8.75rem;
+.tma-dash__email-compose-body [data-email-signature] {
+  white-space: normal;
+}
+
+.tma-dash__email-compose-body .tma-dash__email-inline-quote p {
+  margin: 0 0 0.4em;
+}
+
+.tma-dash__email-compose-body .tma-dash__email-inline-quote img {
+  min-width: 0;
+  min-height: 0;
 }
 
 .tma-dash__email-inline-quote-lead,
@@ -16165,6 +16174,10 @@ html.tma-dash--compose-popout body {
   max-width: 100%;
   min-width: 0;
   padding: var(--space-16) var(--space-24);
+  font-size: var(--text-size-14, 14px);
+  line-height: 20px;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
