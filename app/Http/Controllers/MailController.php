@@ -16,6 +16,7 @@ use App\Models\MailSyncProgress;
 use App\Models\Template;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Mail\DraftContent;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailCorrespondents;
@@ -551,7 +552,7 @@ class MailController extends Controller
     private function withAvatars(Collection $messages): array
     {
         $emails = $messages
-            ->pluck('from_email')
+            ->map(fn (MailMessage $m) => $m->avatarAddress())
             ->filter()
             ->map(fn ($e) => mb_strtolower((string) $e))
             ->unique()
@@ -798,7 +799,7 @@ class MailController extends Controller
      */
     private static function avatarFor(MailMessage $m, array $avatars, array $cached): ?string
     {
-        $email = mb_strtolower((string) $m->from_email);
+        $email = mb_strtolower((string) ($m->avatarAddress() ?? ''));
 
         if ($url = $avatars[$email] ?? null) {
             return $url;
@@ -1640,29 +1641,79 @@ class MailController extends Controller
 
         $draft->save();
 
-        try {
-            $existingRemote = $draft->remote_id;
-            $remoteId = Mailbox::provider($account)->saveDraft([
-                'to' => $draft->to ?? [],
-                'cc' => $draft->cc ?? [],
-                'bcc' => $draft->bcc ?? [],
-                'subject' => $draft->subject ?? '',
-                'bodyHtml' => $draft->body_html ?? '',
-                'mode' => $draft->mode ?? 'new',
-                'threadId' => $draft->thread_id,
-                'skipInlineAttach' => filled($existingRemote),
-            ], $existingRemote ?: null);
+        $signatures = DraftContent::signaturesFromPreferences($request->user()->preferences ?? []);
+        $payload = [
+            'to' => $draft->to ?? [],
+            'cc' => $draft->cc ?? [],
+            'bcc' => $draft->bcc ?? [],
+            'subject' => $draft->subject ?? '',
+            'bodyHtml' => $draft->body_html ?? '',
+            'mode' => $draft->mode ?? 'new',
+            'threadId' => $draft->thread_id,
+        ];
 
-            if ($remoteId !== '' && $remoteId !== $existingRemote) {
-                $draft->remote_id = $remoteId;
-                $draft->save();
+        // A blank window (signature only) must not become an Outlook/Gmail
+        // Drafts-folder message — those sync back as sender-less list rows.
+        // Once the user has typed a recipient, subject, or real body, or a
+        // remote draft already exists, keep the provider in step.
+        if ($draft->remote_id || ! DraftContent::isBlank($payload, $signatures)) {
+            try {
+                $existingRemote = $draft->remote_id;
+                $remoteId = Mailbox::provider($account)->saveDraft(
+                    $payload + ['skipInlineAttach' => filled($existingRemote)],
+                    $existingRemote ?: null,
+                );
+
+                if ($remoteId !== '' && $remoteId !== $existingRemote) {
+                    $draft->remote_id = $remoteId;
+                    $draft->save();
+                }
+            } catch (\Throwable $e) {
+                logger()->warning('mail: provider draft save failed', [
+                    'draft' => $draft->uuid,
+                    'error' => $e->getMessage(),
+                ]);
             }
-        } catch (\Throwable $e) {
-            logger()->warning('mail: provider draft save failed', [
-                'draft' => $draft->uuid,
-                'error' => $e->getMessage(),
+        }
+
+        return response()->json(['draft' => $draft->toRecord()]);
+    }
+
+    /**
+     * Open a Drafts-folder message in compose, reusing the Outlook/Gmail
+     * draft so a later send does not mint a second copy.
+     */
+    public function continueDraft(Request $request, string $uuid): JsonResponse
+    {
+        $message = $this->findMessage($request, $uuid);
+        abort_unless($message->folder === 'draft', 422, 'Only drafts can be continued.');
+
+        $this->hydrate($message);
+
+        $draft = MailDraft::query()
+            ->where('user_id', $request->user()->id)
+            ->where('remote_id', $message->remote_id)
+            ->first();
+
+        if (! $draft) {
+            $draft = new MailDraft([
+                'uuid' => (string) Str::uuid(),
+                'user_id' => $request->user()->id,
+                'connected_account_id' => $message->connected_account_id,
+                'remote_id' => $message->remote_id,
+                'mode' => 'new',
             ]);
         }
+
+        $draft->fill([
+            'to' => $message->to ?? [],
+            'cc' => $message->cc ?? [],
+            'bcc' => $message->bcc ?? [],
+            'subject' => $message->subject,
+            'body_html' => $message->body_html ?: $message->body_text,
+            'thread_id' => $message->thread_id,
+        ]);
+        $draft->save();
 
         return response()->json(['draft' => $draft->toRecord()]);
     }

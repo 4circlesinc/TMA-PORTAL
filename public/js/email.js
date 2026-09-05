@@ -857,7 +857,7 @@
   }
 
   function rowSenderEmail(row) {
-    return row.email || (row.sender.toLowerCase().replace(/\s+/g, '') + '@example.com');
+    return row.email || '';
   }
 
   function renderInlineComposeAvatar() {
@@ -3043,6 +3043,11 @@
     var row = findAnyRow(state, id);
     if (!row) return;
 
+    if (row.folder === 'draft') {
+      continueDraftMessage(root, state, render, row);
+      return;
+    }
+
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
 
@@ -3097,6 +3102,44 @@
       // not raise the mailbox-wide banner.
       reportMailError(state, err, { reconnectBanner: false });
       render();
+    });
+  }
+
+  function continueDraftMessage(root, state, render, row) {
+    var already = state.composeDrafts.filter(function (draft) {
+      return draft.serverId && row._draftServerId && draft.serverId === row._draftServerId;
+    })[0];
+    if (already) {
+      restoreCompose(state, already.id);
+      render();
+      return;
+    }
+
+    api().continueDraft(row.id).then(function (data) {
+      var rec = data && data.draft;
+      if (!rec) return;
+      row._draftServerId = rec.id;
+      var existing = state.composeDrafts.filter(function (draft) { return draft.serverId === rec.id; })[0];
+      if (existing) {
+        restoreCompose(state, existing.id);
+        render();
+        return;
+      }
+      var cc = formatAddressList(rec.cc);
+      openCompose(state, {
+        to: formatAddressList(rec.to),
+        cc: cc,
+        bcc: formatAddressList(rec.bcc),
+        subject: rec.subject || '',
+        bodyHtml: rec.bodyHtml || composeSignatureHtml(),
+        mode: rec.mode || 'new',
+        inReplyTo: rec.inReplyTo,
+        serverId: rec.id,
+        showCc: !!cc,
+      });
+      render();
+    }).catch(function (err) {
+      reportMailError(state, err);
     });
   }
 
@@ -3694,9 +3737,22 @@
   }
 
   function esc(s) {
+    if (s == null || s === '') return '';
+    if (s === 'null' || s === 'undefined') return '';
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
+  }
+
+  function displaySender(row) {
+    var name = row && row.sender;
+    if (name && name !== 'null' && name !== 'undefined') return name;
+    if (row && row.folder === 'draft') {
+      var to = addressList(row.to);
+      if (to.length) return addressLabel(to[0]) || 'Draft';
+      return 'Draft';
+    }
+    return (row && row.email) || '';
   }
 
   function brandSrc(name) {
@@ -3820,7 +3876,7 @@
       '<dl class="tma-dash__email-header-details-list">' +
       '<div class="tma-dash__email-header-details-row">' +
       '<dt>from:</dt>' +
-      '<dd><strong>' + esc(row.sender) + '</strong>' +
+      '<dd><strong>' + esc(displaySender(row)) + '</strong>' +
       (metaEmail ? ' &lt;' + esc(metaEmail) + '&gt;' : '') + '</dd>' +
       '</div>' +
       detailRow('reply-to', replyTo && replyTo !== metaEmail ? replyTo : '') +
@@ -3849,7 +3905,7 @@
       messageHeadIcon(row) +
       '<div class="tma-dash__email-message-head-identity">' +
       '<div class="tma-dash__email-message-head-line">' +
-      '<span class="tma-dash__email-message-head-name">' + esc(row.sender) + '</span>' +
+      '<span class="tma-dash__email-message-head-name">' + esc(displaySender(row)) + '</span>' +
       '</div>' +
       '<div class="tma-dash__email-message-head-recipient">' +
       '<button type="button" class="tma-dash__email-message-head-to" data-email-header-details-toggle aria-expanded="false">' +
@@ -6042,11 +6098,11 @@
       // and write back; what is still being typed rides in _typing so a
       // re-render never destroys a half-typed address.
       to: opts.to || '',
-      cc: '',
-      bcc: '',
+      cc: opts.cc || '',
+      bcc: opts.bcc || '',
       subject: opts.subject || '',
       bodyHtml: opts.bodyHtml || '',
-      showCc: false,
+      showCc: !!opts.showCc,
       minimized: false,
       // Large compose is the default; expand toggles almost-fullscreen.
       expanded: true,
@@ -6054,7 +6110,7 @@
       sending: false,
       // Set once the draft has been saved server-side, so autosave updates
       // the same record instead of creating a new one each keystroke.
-      serverId: null,
+      serverId: opts.serverId || null,
       mode: opts.mode || 'new',
       inReplyTo: opts.inReplyTo || null,
       attachments: [],
@@ -6754,6 +6810,7 @@
   }
 
   function openCompose(state, opts) {
+    opts = opts || {};
     var draft = createComposeDraft(state, opts);
     // Seed the body with the signature (or template) the window will paint.
     // Otherwise draft.bodyHtml stays '' until the user types, and Send goes
@@ -6764,9 +6821,12 @@
     state.composeDrafts.push(draft);
     state.focusedComposeId = draft.id;
     prefetchRecipientSuggest();
-    // Outlook (and Gmail) get a Drafts-folder copy from the first moment
-    // the window exists, not after the user has already typed a while.
-    saveComposeDraft(state, draft).catch(function () {});
+    // Outlook (and Gmail) get a Drafts-folder copy once the user has
+    // addressed, titled, or written something beyond the signature — not
+    // the moment an empty window opens.
+    if (!opts.serverId && draftHasSubstance(draft)) {
+      saveComposeDraft(state, draft).catch(function () {});
+    }
     return draft;
   }
 
@@ -6787,7 +6847,9 @@
     var draft = findComposeDraft(state, id);
     if (persist !== false && draft && !draft.sending) {
       window.clearTimeout(draft._saveTimer);
-      if (draft._dirty) saveComposeDraft(state, draft).catch(function () {});
+      if (draft._dirty && (draft.serverId || draftHasSubstance(draft))) {
+        saveComposeDraft(state, draft).catch(function () {});
+      }
     }
     state.composeDrafts = state.composeDrafts.filter(function (draft) {
       return draft.id !== id;
@@ -7251,16 +7313,46 @@
   }
 
   /* Autosave, debounced so a burst of typing is one write. The first save
-   * already happened when the window opened; this keeps Outlook in step. */
+   * waits until the draft has real content so Outlook is not filled with
+   * signature-only husks. */
   function scheduleDraftSave(state, draft) {
     draft._dirty = true;
     window.clearTimeout(draft._saveTimer);
     draft._saveTimer = window.setTimeout(function () {
+      if (!draft.serverId && !draftHasSubstance(draft)) return;
       saveComposeDraft(state, draft).catch(function () {
         // Autosave is best-effort; Send is what the user is judged on, and
         // it sends the live field values rather than the saved copy.
       });
     }, 800);
+  }
+
+  function htmlToPlainForDraft(html) {
+    if (!html) return '';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var sigs = tmp.querySelectorAll('[data-email-signature], .gmail_signature, #Signature');
+    for (var i = 0; i < sigs.length; i++) sigs[i].remove();
+    return String(tmp.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function draftHasSubstance(draft) {
+    if (!draft) return false;
+    if (parseAddresses(draft.to).length || parseAddresses(draft.cc).length || parseAddresses(draft.bcc).length) {
+      return true;
+    }
+    if (String(draft.subject || '').trim()) return true;
+    var text = htmlToPlainForDraft(draft.bodyHtml || '');
+    if (!text) return false;
+    var sigText = htmlToPlainForDraft(composeSignatureHtml());
+    if (sigText && (text === sigText || text.indexOf(sigText) !== -1 || (text.length >= 20 && sigText.indexOf(text) !== -1))) {
+      return false;
+    }
+    var lower = text.toLowerCase();
+    if (/\bthis electronic mail\b/.test(lower) || /\bget outlook for\b/.test(lower)) {
+      return false;
+    }
+    return true;
   }
 
   /* Pull the compose body's HTML from the live editor when it is on screen.
@@ -9329,7 +9421,7 @@
     // JSON.stringify()'d value there put literal double quotes inside this
     // double-quoted attribute, which silently truncated the handler.
     if (row.avatarUrl) {
-      var initial = (row.sender || '?').charAt(0).toUpperCase();
+      var initial = (displaySender(row) || '?').charAt(0).toUpperCase();
       return (
         '<span class="tma-dash__email-row-avatar">' +
         '<img src="' + esc(row.avatarUrl) + '" alt="" data-email-row-avatar-fallback="' + esc(initial) + '">' +
@@ -9352,7 +9444,7 @@
 
   /* Initials avatar for a message's sender, via the shared generator. */
   function senderInitials(row) {
-    var name = row.sender || row.email || '?';
+    var name = displaySender(row) || '?';
     var seed = row.email || name;
     if (window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
       return window.TMACurrentUser.initialsFor(name, seed);
@@ -9376,7 +9468,7 @@
       ' data-email-row-select title="Select">' +
       '<input type="checkbox" class="tma-dash__email-row-select-input" data-email-check' +
       (checked ? ' checked' : '') +
-      ' aria-label="Select mail from ' + esc(row.sender) + '">' +
+      ' aria-label="Select mail from ' + esc(displaySender(row) || 'this message') + '">' +
       '<span class="tma-dash__email-row-select-face">' + rowListAvatarInner(row) + '</span>' +
       '<span class="tma-dash__email-row-select-box" aria-hidden="true"></span>' +
       '</label>'
@@ -10537,7 +10629,7 @@
         unreadDot +
         '<div class="tma-dash__email-row-content">' +
         '<div class="tma-dash__email-row-head">' +
-        '<span class="tma-dash__email-row-sender">' + esc(row.sender) + '</span>' +
+        '<span class="tma-dash__email-row-sender">' + esc(displaySender(row)) + '</span>' +
         '</div>' +
         '<div class="tma-dash__email-row-snippet">' + esc(lines.body) + '</div>' +
         '</div>' +
@@ -10556,7 +10648,7 @@
       rowListAvatar(row, state) +
       '<div class="tma-dash__email-row-content">' +
       '<div class="tma-dash__email-row-head">' +
-      '<span class="tma-dash__email-row-sender">' + esc(row.sender) + '</span>' +
+      '<span class="tma-dash__email-row-sender">' + esc(displaySender(row)) + '</span>' +
       renderConversationCountBadge(row) +
       renderInboxRowLabelChips(row.id, state) +
       '</div>' +

@@ -189,6 +189,10 @@
       return mailFetch(BASE + '/drafts/' + encodeURIComponent(id), { method: 'DELETE' });
     },
 
+    continueDraft: function (id) {
+      return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/continue', { method: 'POST' });
+    },
+
     attachmentUrl: function (id) {
       return BASE + '/attachments/' + encodeURIComponent(id);
     },

@@ -908,6 +908,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Literal paths before /{uuid} so the wildcard doesn't swallow them.
         Route::get('/drafts', [MailController::class, 'drafts'])->name('drafts');
         Route::post('/drafts', [MailController::class, 'saveDraft'])->name('drafts.save');
+        Route::post('/messages/{uuid}/continue', [MailController::class, 'continueDraft'])->name('messages.continue');
         Route::delete('/drafts/{uuid}', [MailController::class, 'deleteDraft'])->name('drafts.delete');
 
         // Recipient typeahead for compose To/Cc/Bcc (portal + prior mail).

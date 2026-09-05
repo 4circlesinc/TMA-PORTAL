@@ -28,7 +28,7 @@ class GraphProvider implements MailProvider
     private const BASE_USERS = 'https://graph.microsoft.com/v1.0/users';
 
     /** Fields the list rows need. Graph returns the full body otherwise. */
-    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
+    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
 
     /** Marks a cursor as "everything after this time" rather than a delta link. */
     private const TIME_CURSOR = 'ts:';
@@ -740,7 +740,11 @@ class GraphProvider implements MailProvider
      */
     private function normalize(array $raw, ?string $folder, bool $withBody): array
     {
-        $from = $raw['from']['emailAddress'] ?? [];
+        $fromRaw = $raw['from'] ?? null;
+        $from = is_array($fromRaw) ? ($fromRaw['emailAddress'] ?? []) : [];
+        if (! is_array($from)) {
+            $from = [];
+        }
 
         $message = [
             'remote_id' => (string) ($raw['id'] ?? ''),
@@ -748,12 +752,13 @@ class GraphProvider implements MailProvider
             'folder' => $folder ?? 'inbox',
             'subject' => (string) ($raw['subject'] ?? ''),
             'snippet' => (string) ($raw['bodyPreview'] ?? ''),
-            'from_name' => $from['name'] ?? null,
-            'from_email' => $from['address'] ?? null,
+            'from_name' => DraftContent::cleanName($from['name'] ?? null),
+            'from_email' => DraftContent::cleanName($from['address'] ?? null),
             'to' => self::addresses($raw['toRecipients'] ?? []),
             // CC is needed on the list path too, "sent you an email" checks
             // recipients, and shared inboxes often land as CC-only.
             'cc' => self::addresses($raw['ccRecipients'] ?? []),
+            'bcc' => self::addresses($raw['bccRecipients'] ?? []),
             'is_read' => (bool) ($raw['isRead'] ?? false),
             'is_starred' => ($raw['flag']['flagStatus'] ?? 'notFlagged') === 'flagged',
             // Outlook has no "important" concept matching Gmail's; the flag
@@ -788,8 +793,8 @@ class GraphProvider implements MailProvider
     {
         return collect($list)
             ->map(fn (array $entry): array => [
-                'name' => $entry['emailAddress']['name'] ?? null,
-                'email' => $entry['emailAddress']['address'] ?? null,
+                'name' => DraftContent::cleanName($entry['emailAddress']['name'] ?? null),
+                'email' => DraftContent::cleanName($entry['emailAddress']['address'] ?? null),
             ])
             ->filter(fn (array $address): bool => $address['email'] !== null)
             ->values()

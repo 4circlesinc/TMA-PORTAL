@@ -30,6 +30,9 @@ class MailSynchronizer
     /** Page size for the history backfill; providers cap this around 100. */
     private const BACKFILL_PER_PAGE = 100;
 
+    /** @var list<string>|null */
+    private ?array $signatureCache = null;
+
     public function __construct(
         private readonly ConnectedAccount $account,
     ) {}
@@ -40,6 +43,8 @@ class MailSynchronizer
         $this->account->forceFill(['mail_status' => 'syncing', 'mail_error' => null])->save();
 
         try {
+            $this->forgetEmptyDrafts();
+
             $written = $this->account->mail_cursor
                 ? $this->incremental()
                 : $this->seed();
@@ -300,6 +305,9 @@ class MailSynchronizer
         }
 
         $value = (string) $value;
+        if (strcasecmp($value, 'null') === 0 || strcasecmp($value, 'undefined') === 0) {
+            return null;
+        }
 
         return mb_strlen($value) > $limit ? mb_substr($value, 0, $limit) : $value;
     }
@@ -319,9 +327,15 @@ class MailSynchronizer
         $now = now();
         $rows = [];
         $incoming = [];
+        $huskIds = [];
 
         foreach ($messages as $m) {
             if (empty($m['remote_id'])) {
+                continue;
+            }
+            if (DraftContent::isHusk($m, $this->signatures())) {
+                $huskIds[] = (string) $m['remote_id'];
+
                 continue;
             }
 
@@ -337,8 +351,8 @@ class MailSynchronizer
                 'folder' => self::clamp($m['folder'] ?? 'inbox', 20),
                 'subject' => self::clamp($m['subject'] ?? null, 998),
                 'snippet' => $m['snippet'] ?? null,
-                'from_name' => self::clamp($m['from_name'] ?? null, 255),
-                'from_email' => self::clamp($m['from_email'] ?? null, 255),
+                'from_name' => self::clamp(DraftContent::cleanName($m['from_name'] ?? null), 255),
+                'from_email' => self::clamp(DraftContent::cleanName($m['from_email'] ?? null), 255),
                 // Written through the query builder, so JSON columns are
                 // encoded here rather than by a model cast.
                 'to' => json_encode($m['to'] ?? []),
@@ -353,6 +367,13 @@ class MailSynchronizer
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
+        }
+
+        if ($huskIds !== []) {
+            MailMessage::query()
+                ->where('connected_account_id', $this->account->id)
+                ->whereIn('remote_id', $huskIds)
+                ->delete();
         }
 
         if ($rows === []) {
@@ -379,7 +400,7 @@ class MailSynchronizer
         $fresh = [];
         foreach ($messages as $m) {
             $id = self::clamp($m['remote_id'] ?? null, 255);
-            if ($id && ! isset($knownSet[$id])) {
+            if ($id && ! isset($knownSet[$id]) && ! DraftContent::isHusk($m, $this->signatures())) {
                 $fresh[] = $m;
             }
         }
@@ -394,6 +415,15 @@ class MailSynchronizer
     private function upsert(array $message): bool
     {
         if (empty($message['remote_id'])) {
+            return false;
+        }
+
+        if (DraftContent::isHusk($message, $this->signatures())) {
+            MailMessage::query()
+                ->where('connected_account_id', $this->account->id)
+                ->where('remote_id', $message['remote_id'])
+                ->delete();
+
             return false;
         }
 
@@ -427,7 +457,9 @@ class MailSynchronizer
             'has_attachments', 'body_html', 'body_text',
         ] as $field) {
             if (array_key_exists($field, $message)) {
-                $row->{$field} = $message[$field];
+                $row->{$field} = $field === 'from_name' || $field === 'from_email'
+                    ? DraftContent::cleanName($message[$field])
+                    : $message[$field];
             }
         }
 
@@ -679,6 +711,52 @@ class MailSynchronizer
             ->where('thread_id', $threadId)
             ->where('id', '!=', $m->id)
             ->exists();
+    }
+
+    /**
+     * Drop signature-only Drafts-folder rows that leaked in from empty
+     * compose autosaves. Called at the start of a sync so the list is clean
+     * even when Graph's draft folder listing is skipped (no receivedDateTime).
+     */
+    private function forgetEmptyDrafts(): void
+    {
+        $signatures = $this->signatures();
+
+        MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->where('folder', 'draft')
+            ->where(function ($query) {
+                $query->whereNull('subject')->orWhere('subject', '');
+            })
+            ->get()
+            ->each(function (MailMessage $row) use ($signatures): void {
+                if (DraftContent::isHusk([
+                    'folder' => 'draft',
+                    'to' => $row->to ?? [],
+                    'cc' => $row->cc ?? [],
+                    'bcc' => $row->bcc ?? [],
+                    'subject' => $row->subject,
+                    'snippet' => $row->snippet,
+                    'body_html' => $row->body_html,
+                    'body_text' => $row->body_text,
+                ], $signatures)) {
+                    $row->delete();
+                }
+            });
+    }
+
+    /** @return list<string> */
+    private function signatures(): array
+    {
+        if ($this->signatureCache !== null) {
+            return $this->signatureCache;
+        }
+
+        $this->account->loadMissing('user');
+
+        return $this->signatureCache = DraftContent::signaturesFromPreferences(
+            $this->account->user?->preferences ?? []
+        );
     }
 
     /** Ask the photo queue about this sender so the next toast can show a face. */

@@ -425,8 +425,8 @@ class GmailProvider implements MailProvider
             'folder' => $folder ?? self::folderForLabels($labels),
             'subject' => $headers['subject'] ?? '',
             'snippet' => html_entity_decode((string) ($raw['snippet'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
-            'from_name' => $from['name'],
-            'from_email' => $from['email'],
+            'from_name' => DraftContent::cleanName($from['name'] ?? null),
+            'from_email' => DraftContent::cleanName($from['email'] ?? null),
             'to' => self::parseAddressList($headers['to'] ?? ''),
             // Headers are present without the body, keep CC for recipient checks.
             'cc' => self::parseAddressList($headers['cc'] ?? ''),

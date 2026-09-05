@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Mail\DraftContent;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -66,9 +67,9 @@ class MailMessage extends Model
             'id' => $this->uuid,
             'threadId' => $this->thread_id,
             'folder' => $this->folder,
-            'sender' => $this->from_name ?: $this->from_email,
-            'email' => $this->from_email,
-            'subject' => $this->subject,
+            'sender' => $this->listSender(),
+            'email' => $this->listEmail(),
+            'subject' => $this->listSubject(),
             'body' => $this->snippet,
             'time' => $this->listTime(),
             'dateLabel' => $this->sent_at?->format('M j, Y, g:i A'),
@@ -123,7 +124,7 @@ class MailMessage extends Model
             // The display name on its own, so a thread card can show "Jane Doe"
             // above "jane@example.com" rather than collapsing both into the one
             // `sender` string the list rows use.
-            'fromName' => $this->from_name,
+            'fromName' => DraftContent::cleanName($this->from_name),
             'attachments' => $this->relationLoaded('attachments')
                 ? $this->attachments->map->toRecord()->values()->all()
                 : [],
@@ -153,5 +154,61 @@ class MailMessage extends Model
         return $this->sent_at->isCurrentYear()
             ? $this->sent_at->format('M j')
             : $this->sent_at->format('M j, Y');
+    }
+
+    /**
+     * Drafts have no From until they are sent. Show the first To, never the
+     * literal word "null" that JSON/PHP leave behind when the name is missing.
+     */
+    private function listSender(): string
+    {
+        if ($this->folder === 'draft') {
+            $to = is_array($this->to) ? ($this->to[0] ?? null) : null;
+            if (is_array($to)) {
+                $label = DraftContent::cleanName($to['name'] ?? null)
+                    ?: DraftContent::cleanName($to['email'] ?? null);
+                if ($label) {
+                    return $label;
+                }
+            }
+
+            return 'Draft';
+        }
+
+        return DraftContent::cleanName($this->from_name)
+            ?: DraftContent::cleanName($this->from_email)
+            ?: '';
+    }
+
+    public function avatarAddress(): ?string
+    {
+        return $this->listEmail();
+    }
+
+    private function listEmail(): ?string
+    {
+        $from = DraftContent::cleanName($this->from_email);
+        if ($from) {
+            return $from;
+        }
+
+        if ($this->folder === 'draft') {
+            $to = is_array($this->to) ? ($this->to[0] ?? null) : null;
+            if (is_array($to)) {
+                return DraftContent::cleanName($to['email'] ?? null);
+            }
+        }
+
+        return null;
+    }
+
+    private function listSubject(): string
+    {
+        $subject = trim((string) $this->subject);
+        if ($subject !== '') {
+            return $subject;
+        }
+
+        return $this->folder === 'draft' ? '(no subject)' : '';
     }
 }
