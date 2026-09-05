@@ -443,6 +443,36 @@ class MailboxTest extends TestCase
             ->assertJsonPath('preferences.signatures.0.name', 'Default From Outlook');
     }
 
+    public function test_import_signature_reads_outlook_mail_that_uses_appendonsend(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user, [
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+            'scopes' => ['Mail.ReadWrite'],
+        ]);
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-append',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<p>See you Thursday.</p><div id="appendonsend"></div>'
+                .'<div id="Signature"><p>Kind Regards,</p><p>Outlook User</p></div>',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk()
+            ->assertJsonPath('preferences.signatures.0.name', 'Default From Outlook');
+
+        $html = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $this->assertStringContainsString('Outlook User', $html);
+        $this->assertStringContainsString('Kind Regards', $html);
+        $this->assertStringNotContainsString('See you Thursday', $html);
+    }
+
     public function test_import_signature_explains_when_nothing_is_found(): void
     {
         $user = $this->user();

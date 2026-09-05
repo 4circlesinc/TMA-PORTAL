@@ -9,6 +9,7 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use DOMXPath;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Throwable;
@@ -146,34 +147,23 @@ class SignatureImporter
      */
     private function fromSentMail(): ?string
     {
-        $email = mb_strtolower(trim((string) $this->account->email));
-
         $messages = MailMessage::query()
             ->where('connected_account_id', $this->account->id)
             ->where('folder', 'sent')
-            ->whereNotNull('body_html')
-            ->where('body_html', '!=', '')
-            ->when($email !== '', function ($query) use ($email) {
-                $query->whereRaw('LOWER(from_email) = ?', [$email]);
-            })
             ->with('attachments')
             ->orderByDesc('sent_at')
             ->limit(12)
             ->get();
 
-        if ($messages->isEmpty()) {
-            return null;
+        $candidates = $this->candidatesFromMessages($messages);
+
+        if ($candidates === []) {
+            $this->hydrateSentBodies($messages);
+            $candidates = $this->candidatesFromMessages($messages);
         }
 
-        /** @var list<array{html: string, message: MailMessage}> $candidates */
-        $candidates = [];
-
-        foreach ($messages as $message) {
-            $candidate = $this->extractFromBody((string) $message->body_html);
-
-            if (is_string($candidate) && trim($candidate) !== '') {
-                $candidates[] = ['html' => $candidate, 'message' => $message];
-            }
+        if ($candidates === []) {
+            $candidates = $this->candidatesFromProvider();
         }
 
         if ($candidates === []) {
@@ -197,6 +187,164 @@ class SignatureImporter
         }
 
         return $this->resolveInlineImages($candidates[0]['html'], $candidates[0]['message']);
+    }
+
+    /**
+     * @param  Collection<int, MailMessage>  $messages
+     * @return list<array{html: string, message: MailMessage}>
+     */
+    private function candidatesFromMessages($messages): array
+    {
+        $candidates = [];
+
+        foreach ($messages as $message) {
+            $html = (string) $message->body_html;
+            if (trim($html) === '') {
+                continue;
+            }
+
+            $candidate = $this->extractFromBody($html);
+
+            if (is_string($candidate) && trim($candidate) !== '') {
+                $candidates[] = ['html' => $candidate, 'message' => $message];
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Listing rows never carry a body. Import has to fetch a handful of Sent
+     * messages from the provider or it finds nothing until the user has
+     * opened each one in the reading pane.
+     *
+     * @param  Collection<int, MailMessage>  $messages
+     */
+    private function hydrateSentBodies($messages): void
+    {
+        $provider = Mailbox::provider($this->account);
+
+        foreach ($messages as $message) {
+            if (filled($message->body_html) || ! $message->remote_id) {
+                continue;
+            }
+
+            try {
+                $full = $provider->getMessage($message->remote_id);
+            } catch (Throwable) {
+                continue;
+            }
+
+            $this->applyProviderBody($message, $full);
+        }
+    }
+
+    /**
+     * @return list<array{html: string, message: MailMessage}>
+     */
+    private function candidatesFromProvider(): array
+    {
+        try {
+            $listed = Mailbox::provider($this->account)->listMessages('sent', 8);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $provider = Mailbox::provider($this->account);
+        $candidates = [];
+
+        foreach (array_slice($listed['messages'] ?? [], 0, 8) as $row) {
+            $remoteId = (string) ($row['remote_id'] ?? '');
+            if ($remoteId === '') {
+                continue;
+            }
+
+            $message = MailMessage::query()
+                ->where('connected_account_id', $this->account->id)
+                ->where('remote_id', $remoteId)
+                ->with('attachments')
+                ->first();
+
+            if (! $message) {
+                $message = new MailMessage([
+                    'user_id' => $this->account->user_id,
+                    'connected_account_id' => $this->account->id,
+                    'remote_id' => $remoteId,
+                    'folder' => 'sent',
+                ]);
+            }
+
+            if (! filled($message->body_html)) {
+                try {
+                    $full = $provider->getMessage($remoteId);
+                } catch (Throwable) {
+                    continue;
+                }
+                $this->applyProviderBody($message, $full);
+            }
+
+            $extracted = $this->extractFromBody((string) $message->body_html);
+            if (is_string($extracted) && trim($extracted) !== '') {
+                $candidates[] = ['html' => $extracted, 'message' => $message];
+            }
+        }
+
+        return $candidates;
+    }
+
+    /** @param  array<string, mixed>  $full */
+    private function applyProviderBody(MailMessage $message, array $full): void
+    {
+        $html = (string) ($full['body_html'] ?? '');
+        if (trim($html) === '') {
+            return;
+        }
+
+        $message->body_html = $html;
+
+        if ($message->exists) {
+            $message->save();
+        }
+
+        foreach ($full['attachments'] ?? [] as $attachment) {
+            if (! is_array($attachment) || empty($attachment['remote_id'])) {
+                continue;
+            }
+
+            $attrs = [
+                'filename' => (string) ($attachment['filename'] ?? 'attachment'),
+                'mime_type' => $attachment['mime_type'] ?? null,
+                'size' => (int) ($attachment['size'] ?? 0),
+                'is_inline' => (bool) ($attachment['is_inline'] ?? false),
+                'content_id' => $attachment['content_id'] ?? null,
+            ];
+
+            if ($message->exists) {
+                $existing = $message->attachments()->where('remote_id', $attachment['remote_id'])->first();
+                if ($existing) {
+                    $existing->fill($attrs)->save();
+                } else {
+                    $message->attachments()->create($attrs + [
+                        'uuid' => (string) Str::uuid(),
+                        'remote_id' => $attachment['remote_id'],
+                    ]);
+                }
+            } else {
+                $part = new MailAttachment($attrs + [
+                    'uuid' => (string) Str::uuid(),
+                    'remote_id' => $attachment['remote_id'],
+                ]);
+                $message->setRelation(
+                    'attachments',
+                    ($message->relationLoaded('attachments') ? $message->attachments : collect())->push($part)
+                );
+            }
+        }
+
+        if ($message->exists) {
+            $message->unsetRelation('attachments');
+            $message->load('attachments');
+        }
     }
 
     /**
@@ -240,7 +388,6 @@ class SignatureImporter
     }
 
     /**
-     * @param  MailProvider|null  $provider
      * @return array{0: string, 1: string}|null
      */
     private function bytesForImageSrc(string $src, MailMessage $message, ?MailProvider &$provider): ?array
@@ -293,8 +440,13 @@ class SignatureImporter
 
         return $message->attachments->first(function (MailAttachment $attachment) use ($cid) {
             $value = trim((string) $attachment->content_id, '<>');
+            if ($value === '') {
+                return false;
+            }
 
-            return $value !== '' && strcasecmp($value, $cid) === 0;
+            return strcasecmp($value, $cid) === 0
+                || str_ends_with(mb_strtolower($cid), mb_strtolower($value))
+                || str_ends_with(mb_strtolower($value), mb_strtolower($cid));
         });
     }
 
@@ -366,10 +518,20 @@ class SignatureImporter
 
     private function extractFromBody(string $html): ?string
     {
+        // Outlook puts the signature *after* #appendonsend. Stripping quotes
+        // first used to delete that whole tail, so #Signature never ran.
+        $known = $this->extractKnownWrapper($html);
+        if ($known !== null) {
+            return $known;
+        }
+
+        $appended = $this->extractAfterAppendOnSend($html);
+        if ($appended !== null) {
+            return $appended;
+        }
+
         $html = $this->stripQuotedContent($html);
 
-        // Provider wrappers are authoritative when present. Regex cannot own
-        // nested </div> trees, so these are read through the DOM.
         $known = $this->extractKnownWrapper($html);
         if ($known !== null) {
             return $known;
@@ -385,7 +547,7 @@ class SignatureImporter
             return trim($match[1]);
         }
 
-        if (preg_match('/(?:<br\s*\/?>\s*){2,}([\s\S]{1,2500})$/i', $html, $match)) {
+        if (preg_match('/(?:<br\s*\/?>\s*){2,}([\s\S]{1,8000})$/i', $html, $match)) {
             $tail = trim($match[1]);
 
             if ($this->looksLikeSignature($tail)) {
@@ -394,6 +556,33 @@ class SignatureImporter
         }
 
         return null;
+    }
+
+    /**
+     * Outlook's compose marker: everything after it is the signature, then
+     * (on a reply) the quoted thread. Take the after-block and drop quotes.
+     */
+    private function extractAfterAppendOnSend(string $html): ?string
+    {
+        $parts = preg_split(
+            '/<div[^>]*\bid=["\'](?:x_)?appendonsend["\'][^>]*>\s*(?:<\/div>)?/i',
+            $html,
+            2
+        );
+
+        if (! is_array($parts) || count($parts) < 2) {
+            return null;
+        }
+
+        $after = $this->stripQuotedContent($parts[1]);
+        $known = $this->extractKnownWrapper($after);
+        if ($known !== null) {
+            return $known;
+        }
+
+        $after = trim($after);
+
+        return $after !== '' && $this->looksLikeSignature($after) ? $after : null;
     }
 
     /**
@@ -421,6 +610,8 @@ class SignatureImporter
             '//*[@data-smartmail="gmail_signature"]',
             '//*[contains(concat(" ", normalize-space(@class), " "), " gmail_signature ")]',
             '//*[@id="Signature"]',
+            '//*[@id="x_Signature"]',
+            '//*[@id="ms-outlook-mobile-signature"]',
         ];
 
         foreach ($queries as $query) {
@@ -456,8 +647,7 @@ class SignatureImporter
             '/<div[^>]*class="[^"]*\bgmail_quote\b[^"]*"[^>]*>[\s\S]*$/i',
             '/<div[^>]*class="[^"]*\bgmail_extra\b[^"]*"[^>]*>[\s\S]*$/i',
             '/<blockquote\b[\s\S]*$/i',
-            '/<div[^>]*id=["\']divRplyFwdMsg["\'][^>]*>[\s\S]*$/i',
-            '/<div[^>]*id=["\']appendonsend["\'][^>]*>[\s\S]*$/i',
+            '/<div[^>]*id=["\'](?:x_)?divRplyFwdMsg["\'][^>]*>[\s\S]*$/i',
             '/<hr[^>]*>\s*(?:<b>)?From:[\s\S]*$/i',
             '/-----Original Message-----[\s\S]*$/i',
             '/On .+ wrote:<br[\s\S]*$/i',
@@ -480,7 +670,9 @@ class SignatureImporter
         }
 
         // A whole letter that slipped through the strippers is not a signature.
-        if (mb_strlen($text) > 800) {
+        // Outlook legal footers commonly run past 800 characters; 800 used to
+        // reject the real mailbox signature as if it were the message body.
+        if (mb_strlen($text) > 8000) {
             return false;
         }
 

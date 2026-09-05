@@ -131,6 +131,8 @@ class SignatureImporterTest extends TestCase
     {
         $account = $this->account();
 
+        Http::fake(['*' => Http::response(['messages' => [], 'value' => []], 404)]);
+
         $this->assertNull(SignatureImporter::for($account)->import());
     }
 
@@ -236,5 +238,95 @@ class SignatureImporterTest extends TestCase
         $this->assertStringContainsString('Jane Doe', $signature);
         $this->assertStringContainsString('data:image/png;base64,', $signature);
         $this->assertStringNotContainsString('cid:logo001', $signature);
+    }
+
+    public function test_it_lifts_an_outlook_signature_after_appendonsend(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $disclaimer = str_repeat('This Electronic Mail and any attached files may contain confidential information. ', 12);
+
+        $this->sent(
+            $account,
+            '<div class="WordSection1"><p class="MsoNormal">Hi Dana, please review.</p>'
+            .'<div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+            .'<p>'.$disclaimer.'</p></div></div>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringContainsString('Kind Regards', $signature);
+        $this->assertStringContainsString('confidential', $signature);
+        $this->assertStringNotContainsString('Hi Dana', $signature);
+    }
+
+    public function test_it_lifts_an_outlook_signature_that_has_no_signature_id(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->sent(
+            $account,
+            '<p>Thanks for the update.</p><div id="appendonsend"></div>'
+            .'<p>Kind Regards,</p><p><b>Sam Lee</b></p><p>Partner</p>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Sam Lee', $signature);
+        $this->assertStringContainsString('Kind Regards', $signature);
+        $this->assertStringNotContainsString('Thanks for the update', $signature);
+    }
+
+    public function test_it_fetches_sent_bodies_when_the_local_row_has_none(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $message = $this->sent($account, '', 'sent-empty');
+        $message->forceFill(['body_html' => null])->save();
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/sent-empty*' => Http::response([
+                'id' => 'sent-empty',
+                'conversationId' => 'c-sent-empty',
+                'subject' => 'Hello',
+                'bodyPreview' => 'Hi',
+                'from' => ['emailAddress' => ['name' => 'Test User', 'address' => 'user@example.com']],
+                'body' => [
+                    'contentType' => 'html',
+                    'content' => '<p>Hi there</p><div id="Signature"><p><b>Outlook User</b></p><p>Advisor</p></div>',
+                ],
+            ]),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Outlook User', $signature);
+        $this->assertStringContainsString('Advisor', $signature);
+        $this->assertStringNotContainsString('Hi there', $signature);
+        $this->assertNotNull($message->fresh()->body_html);
     }
 }
