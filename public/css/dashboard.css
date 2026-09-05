@@ -18127,11 +18127,16 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   .tma-dash__messages-list-mobile-head {
     display: none;
     align-items: center;
-    justify-content: space-between;
     flex-shrink: 0;
     padding: var(--space-8) 0 var(--space-4);
     padding-left: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
     padding-right: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-right, 0px));
+  }
+
+  .tma-dash__messages-list-mobile-head .tma-dash__messages-search {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
   }
 
   .tma-dash__messages-list-mobile-actions {
@@ -18154,13 +18159,6 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   .tma-dash--messages-mobile .tma-dash__messages-chat-actions .tma-dash__messages-icon-btn img {
     width: var(--dash-icon-md);
     height: var(--dash-icon-md);
-  }
-
-  .tma-dash__messages-list-mobile-title {
-    font-size: var(--text-size-14);
-    line-height: 20px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
   }
 
   .tma-dash__messages-compose-fab {

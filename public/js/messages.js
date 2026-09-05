@@ -1025,7 +1025,6 @@
   function renderListMobileHead(state) {
     return (
       '<div class="tma-dash__messages-list-mobile-head">' +
-      '<span class="tma-dash__messages-list-mobile-title">Messages</span>' +
       renderSearchField(state) +
       '</div>'
     );
