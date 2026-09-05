@@ -12959,6 +12959,64 @@
   padding: 0;
 }
 
+.tma-dash__email-detail--composing > .tma-dash__email-detail-subject-bar,
+.tma-dash__email-detail--composing > .tma-dash__email-detail-scroll,
+.tma-dash__email-detail--composing > .tma-dash__email-detail-footer,
+.tma-dash__email-detail--composing > .tma-dash__email-detail-empty-copy {
+  pointer-events: none;
+  user-select: none;
+}
+
+.tma-dash__email-detail-empty-copy {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-compose-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-white);
+  transform: translate3d(0, 100%, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.tma-dash__email-compose-overlay.is-open {
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.36s var(--email-ease-soft, cubic-bezier(0.22, 1.2, 0.36, 1));
+}
+
+.tma-dash__email-compose-overlay.is-leaving {
+  transform: translate3d(0, 100%, 0);
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tma-dash__email-compose-overlay > .tma-dash__email-compose-window--pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__email-compose-overlay,
+  .tma-dash__email-compose-overlay.is-open,
+  .tma-dash__email-compose-overlay.is-leaving {
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
+
 .tma-dash__email-detail--compose > .tma-dash__email-compose-window-head {
   flex-shrink: 0;
 }

@@ -617,6 +617,12 @@
     return window.matchMedia(EMAIL_MOBILE_MQ).matches;
   }
 
+  function emailReduceMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  var COMPOSE_PANE_MS = 340;
+
   /* New Mail / reply occupy the reading pane instead of a floating window.
    * Only one composer is on screen; extra drafts sit minimized in the dock. */
   function paneComposeDraft(state) {
@@ -647,6 +653,61 @@
     if (state.inlineCompose) closeInlineCompose(state);
     var draft = paneComposeDraft(state);
     if (draft) closeCompose(state, draft.id);
+  }
+
+  function wrapComposeOverlay(state, inner) {
+    var cls = 'tma-dash__email-compose-overlay tma-dash__email-detail--compose';
+    if (state._composeDismissing) cls += ' is-open is-leaving';
+    else if (!state._composeEnter) cls += ' is-open';
+    return (
+      '<div class="' + cls + '" data-email-compose-overlay data-key="email-compose-overlay">' +
+      inner +
+      '</div>'
+    );
+  }
+
+  function cancelComposePaneDismiss(state) {
+    state._composeDismissing = false;
+    state._composeDismissToken = (state._composeDismissToken || 0) + 1;
+  }
+
+  /* Slide the composer off the reading pane, then apply the close. Skipping
+   * the wait when nothing is on screen, motion is reduced, or a leave is
+   * already playing. */
+  function dismissComposePane(root, state, render, mutate) {
+    if (state._composeDismissing) return;
+    var overlay = root && root.querySelector('[data-email-compose-overlay]');
+    var play = overlay
+      && overlay.classList.contains('is-open')
+      && !overlay.classList.contains('is-leaving')
+      && !emailReduceMotion();
+    if (!play) {
+      mutate();
+      render();
+      return;
+    }
+    state._composeDismissing = true;
+    var token = (state._composeDismissToken || 0) + 1;
+    state._composeDismissToken = token;
+    overlay.classList.add('is-leaving');
+    overlay.setAttribute('aria-hidden', 'true');
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      overlay.removeEventListener('transitionend', onEnd);
+      if (state._composeDismissToken !== token) return;
+      state._composeDismissing = false;
+      mutate();
+      render();
+    }
+    function onEnd(event) {
+      if (event.target !== overlay) return;
+      if (event.propertyName && event.propertyName !== 'transform' && event.propertyName !== 'opacity') return;
+      finish();
+    }
+    overlay.addEventListener('transitionend', onEnd);
+    window.setTimeout(finish, COMPOSE_PANE_MS + 40);
   }
 
   function isSingleReading(state) {
@@ -1113,6 +1174,7 @@
     };
     enterComposeView(state);
     state._focusInlineCompose = true;
+    state._composeEnter = true;
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc
@@ -1142,8 +1204,6 @@
     var ic = state.inlineCompose;
     var mobile = isEmailMobile();
     return (
-      '<div class="tma-dash__email-detail tma-dash__email-detail--compose' +
-      (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
       '<div class="tma-dash__email-compose-window-head">' +
       (!mobile ? renderDetailBack(state, true) : '') +
       '<span class="tma-dash__email-compose-window-title">' +
@@ -1152,16 +1212,13 @@
       '<button type="button" class="tma-dash__email-compose-window-btn" data-email-inline-compose-close aria-label="Close">' +
       '<img src="' + ICONS.X + '" alt=""></button>' +
       '</div></div>' +
-      renderInlineCompose(state, row, ic.mode, metaEmail, metaDate, subject, lines.body) +
-      '</div>'
+      renderInlineCompose(state, row, ic.mode, metaEmail, metaDate, subject, lines.body)
     );
   }
 
   function renderDetailComposeDraft(state, draft) {
     var mobile = isEmailMobile();
     return (
-      '<div class="tma-dash__email-detail tma-dash__email-detail--compose' +
-      (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
       '<div class="tma-dash__email-compose-window tma-dash__email-compose-window--pane' +
       ' tma-dash__email-compose-window--focused" data-email-compose-window="' + esc(draft.id) + '"' +
       ' data-key="email-compose-window-' + esc(draft.id) + '">' +
@@ -1173,7 +1230,7 @@
       renderComposeContent(draft) +
       '</div>' +
       '<div class="tma-dash__email-compose-drop" data-email-compose-drop aria-hidden="true">Drop files to attach</div>' +
-      '</div></div>'
+      '</div>'
     );
   }
 
@@ -1289,8 +1346,9 @@
 
     var row = threadMessage(state, ic.messageId) || findAnyRow(state, ic.messageId);
     if (!row) {
-      closeInlineCompose(state);
-      render();
+      dismissComposePane(root, state, render, function () {
+        closeInlineCompose(state);
+      });
       return;
     }
 
@@ -1327,13 +1385,14 @@
     }
 
     ic._sendRequested = true;
-    closeInlineCompose(state);
-    render();
     startUndoSend(root, state, render, {
       kind: 'inline',
       inline: ic,
       seconds: seconds,
       payload: payload,
+    });
+    dismissComposePane(root, state, render, function () {
+      closeInlineCompose(state);
     });
   }
 
@@ -3152,8 +3211,14 @@
       return;
     }
 
-    if (paneComposeDraft(state)) minimizeOpenComposeDrafts(state);
-    if (id !== state.selectedId) closeInlineCompose(state);
+    if (isComposingInPane(state)) {
+      dismissComposePane(root, state, render, function () {
+        if (paneComposeDraft(state)) minimizeOpenComposeDrafts(state);
+        closeInlineCompose(state);
+        openMailMessage(root, state, render, id);
+      });
+      return;
+    }
 
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
@@ -6210,48 +6275,59 @@
     );
   }
 
-  function renderDetail(state) {
-    if (state.folder === 'templates') return renderTemplateDetail(state);
-
-    var draft = paneComposeDraft(state);
-    if (draft) return renderDetailComposeDraft(state, draft);
-
-    syncInlineCompose(state);
-    // findAnyRow: the open message may be one the reader picked out of a
-    // conversation dropdown, which is not a row on the page.
-    var row = findAnyRow(state, state.selectedId);
-    if (state.inlineCompose && row) {
-      return renderDetailInlineCompose(state, row);
-    }
+  function renderDetailThreadInner(state, row) {
     if (!row) {
-      return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>Select a message</p></div>';
+      return '<div class="tma-dash__email-detail-empty-copy" data-key="email-detail-empty"><p>Select a message</p></div>';
     }
-
     var lines = rowListLines(row);
-    // The conversation's subject once it has loaded, a thread is titled by
-    // what it is about, not by the "Re: Re: Fwd:" the newest reply happens to
-    // carry.
     var subject = (state.thread && state.thread.subject) || lines.subject;
     var metaEmail = row.email || '';
     var metaDate = formatMessageDate(row);
     var mobile = isEmailMobile();
     var threadActions = renderDetailThreadActions(state, row, metaEmail, metaDate, subject, lines.body);
     var body = renderEmailThread(state, null);
-
     return (
-      '<div class="tma-dash__email-detail' + (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
       renderDetailTopbar(state) +
-      '<div class="tma-dash__email-detail-subject-bar">' +
+      '<div class="tma-dash__email-detail-subject-bar" data-key="email-detail-subject">' +
       (!mobile ? renderDetailBack(state, true) : '') +
       renderDetailSubject(subject, row, state) +
       '</div>' +
-      '<div class="tma-dash__email-detail-scroll">' + body + '</div>' +
+      '<div class="tma-dash__email-detail-scroll" data-key="email-detail-scroll">' + body + '</div>' +
       (threadActions
         ? '<div class="tma-dash__email-detail-footer' +
-          (mobile ? ' tma-dash__email-detail-mobile-footer' : '') + '">' +
+          (mobile ? ' tma-dash__email-detail-mobile-footer' : '') + '" data-key="email-detail-footer">' +
           threadActions +
           '</div>'
-        : '') +
+        : '')
+    );
+  }
+
+  function renderDetail(state) {
+    if (state.folder === 'templates') return renderTemplateDetail(state);
+
+    var draft = paneComposeDraft(state);
+    syncInlineCompose(state);
+    var row = findAnyRow(state, state.selectedId);
+    var inline = !!(state.inlineCompose && row);
+    var composing = !!draft || inline;
+    var mobile = isEmailMobile();
+
+    if (!row && !composing) {
+      return '<div class="tma-dash__email-detail tma-dash__email-detail--empty" data-key="email-detail"><p>Select a message</p></div>';
+    }
+
+    var overlay = '';
+    if (draft) overlay = wrapComposeOverlay(state, renderDetailComposeDraft(state, draft));
+    else if (inline) overlay = wrapComposeOverlay(state, renderDetailInlineCompose(state, row));
+
+    var cls = 'tma-dash__email-detail';
+    if (mobile) cls += ' tma-dash__email-detail--mobile';
+    if (composing) cls += ' tma-dash__email-detail--composing';
+
+    return (
+      '<div class="' + cls + '" data-key="email-detail">' +
+      renderDetailThreadInner(state, row) +
+      overlay +
       '</div>'
     );
   }
@@ -7009,6 +7085,7 @@
     state.focusedComposeId = draft.id;
     enterComposeView(state);
     state._focusCompose = draft.id;
+    state._composeEnter = true;
     prefetchRecipientSuggest();
     // Outlook (and Gmail) get a Drafts-folder copy once the user has
     // addressed, titled, or written something beyond the signature — not
@@ -7034,6 +7111,7 @@
     state.focusedComposeId = id;
     enterComposeView(state);
     state._focusCompose = id;
+    state._composeEnter = true;
   }
 
   function closeCompose(state, id, persist) {
@@ -7439,8 +7517,10 @@
     MORPH.unwired(root, '[data-email-compose-minimize]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
-        minimizeCompose(state, btn.getAttribute('data-email-compose-minimize'));
-        render();
+        var id = btn.getAttribute('data-email-compose-minimize');
+        dismissComposePane(root, state, render, function () {
+          minimizeCompose(state, id);
+        });
       });
     });
 
@@ -7455,8 +7535,10 @@
     MORPH.unwired(root, '[data-email-compose-close]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
-        closeCompose(state, btn.getAttribute('data-email-compose-close'));
-        render();
+        var id = btn.getAttribute('data-email-compose-close');
+        dismissComposePane(root, state, render, function () {
+          closeCompose(state, id);
+        });
       });
     });
 
@@ -7478,8 +7560,9 @@
           api().deleteDraft(draft.serverId).catch(function () {});
         }
 
-        closeCompose(state, id, false);
-        render();
+        dismissComposePane(root, state, render, function () {
+          closeCompose(state, id, false);
+        });
       });
     });
 
@@ -7738,11 +7821,15 @@
       });
       state.focusedComposeId = job.draft.id;
       enterComposeView(state);
+      cancelComposePaneDismiss(state);
+      state._composeEnter = true;
     } else if (job.kind === 'inline' && job.inline) {
       job.inline.sending = false;
       job.inline._sendRequested = false;
       state.inlineCompose = job.inline;
       enterComposeView(state);
+      cancelComposePaneDismiss(state);
+      state._composeEnter = true;
     }
     if (render) render();
   }
@@ -7858,13 +7945,14 @@
       // Hide the window so it feels sent. Keep the draft object (and its
       // Outlook/Gmail serverId) parked for undo or the real send.
       draft._sendRequested = false;
-      closeCompose(state, id, false);
-      render();
       startUndoSend(root, state, render, {
         kind: 'compose',
         draft: draft,
         seconds: seconds,
         payload: payload,
+      });
+      dismissComposePane(root, state, render, function () {
+        closeCompose(state, id, false);
       });
     };
 
@@ -12256,8 +12344,9 @@
 
         var inlineComposeClose = event.target.closest('[data-email-inline-compose-close]');
         if (inlineComposeClose) {
-          closeInlineCompose(state);
-          render();
+          dismissComposePane(root, state, render, function () {
+            closeInlineCompose(state);
+          });
           return;
         }
 
@@ -12848,7 +12937,13 @@
 
     eventRoot.querySelectorAll('[data-email-back]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        leaveComposeView(state);
+        if (isComposingInPane(state)) {
+          dismissComposePane(root, state, render, function () {
+            leaveComposeView(state);
+            state.reading = false;
+          });
+          return;
+        }
         state.reading = false;
         render();
       });
@@ -13197,6 +13292,15 @@
         state._focusCompose = null;
         window.requestAnimationFrame(function () {
           focusPaneCompose(root, focusId);
+        });
+      }
+      if (state._composeEnter) {
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(function () {
+            var overlay = root.querySelector('[data-email-compose-overlay]');
+            state._composeEnter = false;
+            if (overlay) overlay.classList.add('is-open');
+          });
         });
       }
       if (state.profileMenuOpen) {
