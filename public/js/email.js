@@ -2629,6 +2629,7 @@
     warmBoot.suggest.then(function (result) {
       if (result.data && Array.isArray(result.data.suggestions)) {
         suggestCache[''] = result.data.suggestions;
+        hydrateRecipientPillAvatars();
       }
     });
   }
@@ -6471,6 +6472,87 @@
     return address.name ? address.name + ' <' + address.email + '>' : address.email;
   }
 
+  function lookupRecipientFace(email) {
+    var needle = String(email || '').toLowerCase();
+    if (!needle) return null;
+    var found = null;
+    Object.keys(suggestCache).some(function (key) {
+      return (suggestCache[key] || []).some(function (item) {
+        if (!item || item.source === 'group') return false;
+        if (String(item.email || '').toLowerCase() !== needle) return false;
+        found = item;
+        return true;
+      });
+    });
+    var state = state_active;
+    var rows = state
+      ? (state.rows || []).concat((state.thread && state.thread.messages) || [])
+      : [];
+    var fromMail = null;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (!row) continue;
+      var rowEmail = String(row.email || rowSenderEmail(row) || '').toLowerCase();
+      if (rowEmail === needle && (row.avatarUrl || row.avatar)) {
+        fromMail = row;
+        break;
+      }
+    }
+    if (found && found.avatarUrl) return found;
+    if (fromMail) return fromMail;
+    return found;
+  }
+
+  function renderRecipientAvatar(address) {
+    var face = lookupRecipientFace(address && address.email);
+    var name = (address && address.name) || (face && face.name) || (address && address.email) || '?';
+    var initial = String((face && face.initial) || name).charAt(0).toUpperCase() || '?';
+    var color = (address && address.initialColor) || (face && face.initialColor) || '';
+    var url = (address && address.avatarUrl) || (face && face.avatarUrl) || '';
+    if (!url && face && face.avatar) url = AVATAR + face.avatar + '.png';
+    if (url) {
+      return (
+        '<img class="tma-dash__email-recipient-avatar" src="' + esc(url) + '" alt=""' +
+        ' referrerpolicy="no-referrer" decoding="async"' +
+        ' data-email-recipient-initial="' + esc(initial) + '"' +
+        (color ? ' data-email-recipient-color="' + esc(color) + '"' : '') +
+        ' onerror="window.TMAEmail && window.TMAEmail._recipientPhotoFallback && window.TMAEmail._recipientPhotoFallback(this)">'
+      );
+    }
+    var initialsSrc = (window.TMACurrentUser && window.TMACurrentUser.initialsFor)
+      ? window.TMACurrentUser.initialsFor(name, (address && address.email) || name)
+      : '';
+    if (initialsSrc) {
+      return '<img class="tma-dash__email-recipient-avatar" src="' + esc(initialsSrc) + '" alt="" aria-hidden="true">';
+    }
+    var colorStyle = color ? ' style="background:' + esc(color) + ';color:#fff"' : '';
+    return '<span class="tma-dash__email-recipient-avatar tma-dash__email-recipient-avatar--initial" aria-hidden="true"' +
+      colorStyle + '>' + esc(initial) + '</span>';
+  }
+
+  function hydrateRecipientPillAvatars(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('[data-email-recipient]').forEach(function (pill) {
+      var email = pill.getAttribute('data-email-recipient');
+      var face = lookupRecipientFace(email);
+      var url = face && face.avatarUrl;
+      if (!url) return;
+      var current = pill.querySelector('.tma-dash__email-recipient-avatar');
+      if (current && current.getAttribute('src') === url) return;
+      var tmp = document.createElement('div');
+      tmp.innerHTML = renderRecipientAvatar({
+        email: email,
+        name: pill.getAttribute('data-email-recipient-name') || (face && face.name) || null,
+        avatarUrl: url,
+        initialColor: face.initialColor || '',
+      });
+      var node = tmp.firstChild;
+      if (!node) return;
+      if (current) current.parentNode.replaceChild(node, current);
+      else pill.insertBefore(node, pill.firstChild);
+    });
+  }
+
   function renderRecipientPill(address, removable) {
     var full = recipientFull(address);
     return (
@@ -6479,7 +6561,8 @@
       ' data-email-recipient="' + esc(address.email) + '"' +
       (address.name ? ' data-email-recipient-name="' + esc(address.name) + '"' : '') +
       ' title="' + esc(full) + '">' +
-      '<span>' + esc(address.name || address.email) + '</span>' +
+      renderRecipientAvatar(address) +
+      '<span class="tma-dash__email-recipient-name">' + esc(address.name || address.email) + '</span>' +
       (removable
         ? '<button type="button" class="tma-dash__email-recipient-remove" data-email-recipient-remove' +
           ' tabindex="-1" aria-label="Remove ' + esc(full) + '">' +
@@ -6658,7 +6741,12 @@
   function applyRecipientSuggestion(input, suggestion) {
     var pieces = (suggestion.source === 'group' && suggestion.emails && suggestion.emails.length)
       ? suggestion.emails
-      : [{ name: suggestion.name, email: suggestion.email }];
+      : [{
+          name: suggestion.name,
+          email: suggestion.email,
+          avatarUrl: suggestion.avatarUrl || null,
+          initialColor: suggestion.initialColor || null,
+        }];
 
     input.value = '';
     recipientFieldAdd(input, pieces);
@@ -6822,6 +6910,7 @@
     suggestPrefetching = true;
     api().suggest('').then(function (data) {
       suggestCache[''] = (data && data.suggestions) || [];
+      hydrateRecipientPillAvatars();
     }).catch(function () { /* typeahead still works on demand */ }).then(function () {
       suggestPrefetching = false;
     });
@@ -6948,7 +7037,12 @@
 
     var pieces = (suggestion.source === 'group' && suggestion.emails && suggestion.emails.length)
       ? suggestion.emails
-      : [{ name: suggestion.name, email: suggestion.email }];
+      : [{
+          name: suggestion.name,
+          email: suggestion.email,
+          avatarUrl: suggestion.avatarUrl || null,
+          initialColor: suggestion.initialColor || null,
+        }];
 
     if (recipientFieldAdd(toInput, pieces)) notifyRecipientField(toInput);
   }
@@ -13799,6 +13893,35 @@
         span.style.color = '#fff';
       }
       img.parentNode.replaceChild(span, img);
+    },
+    _recipientPhotoFallback: function (img) {
+      if (!img || !img.parentNode) return;
+      img.onerror = null;
+      var name = img.getAttribute('data-email-recipient-initial') || '?';
+      var pill = img.closest('[data-email-recipient]');
+      var email = pill ? pill.getAttribute('data-email-recipient') : '';
+      var initialsSrc = (window.TMACurrentUser && window.TMACurrentUser.initialsFor)
+        ? window.TMACurrentUser.initialsFor(name, email || name)
+        : '';
+      if (initialsSrc) {
+        var next = document.createElement('img');
+        next.className = 'tma-dash__email-recipient-avatar';
+        next.src = initialsSrc;
+        next.alt = '';
+        next.setAttribute('aria-hidden', 'true');
+        img.parentNode.replaceChild(next, img);
+        return;
+      }
+      var fallback = document.createElement('span');
+      fallback.className = 'tma-dash__email-recipient-avatar tma-dash__email-recipient-avatar--initial';
+      fallback.setAttribute('aria-hidden', 'true');
+      fallback.textContent = name;
+      var color = img.getAttribute('data-email-recipient-color');
+      if (color) {
+        fallback.style.background = color;
+        fallback.style.color = '#fff';
+      }
+      img.parentNode.replaceChild(fallback, img);
     },
   };
 })();

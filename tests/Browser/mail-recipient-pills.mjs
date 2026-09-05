@@ -104,8 +104,12 @@ try {
   let pills = await pillsOf(TO);
   check(pills.length === 2 && /Dana Reed <dana@example\.com>/.test(pills[1]), `pick became a pill (${pills.join(', ')})`);
   check((await to.inputValue()) === '', 'the typed name is gone from the input');
-  const label = await page.textContent('[data-email-recipient="dana@example.com"] > span');
+  const label = await page.textContent('[data-email-recipient="dana@example.com"] .tma-dash__email-recipient-name');
   check(label.trim() === 'Dana Reed', `the pill shows the name (${label.trim()})`);
+  check(
+    !!(await page.$('[data-email-recipient="dana@example.com"] .tma-dash__email-recipient-avatar')),
+    'the pill shows a profile picture'
+  );
 
   step(4, 'An address already in the field is not added twice');
   await to.type('dana@example.com');
@@ -180,6 +184,10 @@ try {
   await page.waitForSelector('[data-email-compose-window]', { timeout: 8000 });
   const replyPills = await pillsOf(TO);
   check(replyPills.length === 1 && /@/.test(replyPills[0]), `reply To is one pill (${replyPills.join(', ')})`);
+  check(
+    !!(await page.$('[data-email-compose-window] [data-email-recipient] .tma-dash__email-recipient-avatar')),
+    'the reply pill shows a profile picture'
+  );
   const replySubject = await page.inputValue('[data-email-compose-field="subject"]');
   check(/^re:/i.test(replySubject), `reply Subject is Re: ("${replySubject}")`);
   check(!!(await page.$('[data-email-compose-cc]')), 'Cc and Bcc can be shown');
