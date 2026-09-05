@@ -1128,7 +1128,6 @@
       '<div class="tma-dash__email-inline-compose-editor-wrap">' +
       '<div class="tma-dash__email-image-stage tma-dash__email-inline-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-inline-compose-editor" contenteditable="true" data-email-inline-compose-editor data-placeholder="Compose your ' + (isForward ? 'message' : 'reply') + '" aria-label="Message body" role="textbox">' + (ic.bodyHtml || '') + '</div>' +
-      renderImageTransformOverlay() +
       '</div>' +
       (isForward
         ? renderForwardQuote(row, metaEmail, metaDate, subject, bodyText, quotedBodyHtml)
@@ -8644,7 +8643,6 @@
       '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
       ' aria-multiline="true" aria-label="Message body"' +
       ' data-email-compose-body="' + esc(draft.id) + '">' + bodyHtml + '</div>' +
-      renderImageTransformOverlay() +
       '</div>' +
       '<div class="tma-dash__email-compose-footer">' +
       '<div class="tma-dash__email-compose-files" data-email-compose-files' +
@@ -9183,10 +9181,10 @@
     var editor = stage.querySelector(imageEditorSelector());
     var layer = stage.querySelector('[data-email-image-transform]');
     if (!editor || !layer) return null;
-    var kind = 'compose';
-    if (editor.hasAttribute('data-email-signature-editor')) kind = 'signature';
-    else if (editor.hasAttribute('data-email-inline-compose-editor')) kind = 'inline';
-    return { stage: stage, editor: editor, layer: layer, kind: kind };
+    // Resize chrome belongs on the signature editor only. In compose it
+    // floats over the message the moment a logo or quoted image is clicked.
+    if (!editor.hasAttribute('data-email-signature-editor')) return null;
+    return { stage: stage, editor: editor, layer: layer, kind: 'signature' };
   }
 
   function resolveImageEditor(fromEl, root) {
