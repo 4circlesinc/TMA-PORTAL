@@ -184,6 +184,22 @@ async function runAt(label, viewport) {
   check(!!shape && shape.starOnPreviewLine && shape.previewClearOfStar, 'the star rides the preview line, after the preview');
   check(!!shape && shape.chipsFullWidth && shape.chipsBelowPreview, 'attachment chips run the full width on their own line');
 
+  // The list keeps its place through a full repaint: the scrolling body is
+  // keyed, so a banner appearing before it cannot make the morph replace it.
+  const kept = await page.evaluate(async () => {
+    const body = document.querySelector('.tma-dash__email-list-body');
+    if (!body || body.scrollHeight <= body.clientHeight + 50) return { skipped: true };
+    body.scrollTop = Math.min(400, body.scrollHeight - body.clientHeight);
+    const want = body.scrollTop;
+    document.querySelector('[data-email]')._emailRender();
+    await new Promise((r) => setTimeout(r, 300));
+    const after = document.querySelector('.tma-dash__email-list-body');
+    const out = { want, afterRender: after.scrollTop, sameNode: after === body };
+    after.scrollTop = 0;
+    return out;
+  });
+  check(kept.skipped || (kept.sameNode && kept.afterRender === kept.want), kept.skipped ? 'the list is too short here to scroll (repaint check skipped)' : `the list keeps its place through a full repaint (${kept.want} → ${kept.afterRender})`);
+
   // The conversation arrow sits in line with the avatar, just before it.
   const arrow = await page.evaluate(() => {
     const toggle = document.querySelector('.tma-dash__email-row[data-email-row] [data-email-conversation-toggle]');
@@ -274,8 +290,17 @@ async function runAt(label, viewport) {
   await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
   await page.waitForSelector(LIST_ROW, { timeout: 15000 });
   check(await page.$eval('.tma-dash__tabbar', (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none'), 'the bottom navigation is back on the inbox list');
+  // Scrolled a little first: opening the drop must not move the list.
+  const scrolledTo = await page.evaluate(() => {
+    const body = document.querySelector('.tma-dash__email-list-body');
+    body.scrollTop = Math.min(120, Math.max(0, body.scrollHeight - body.clientHeight));
+    return body.scrollTop;
+  });
   await page.click(`${LIST_ROW}:has-text("INTRODUCTION") [data-email-conversation-toggle]`);
   await page.waitForSelector(`${LIST_ROW}:has-text("Hiroshi Mabuchi")`, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const afterDrop = await page.evaluate(() => document.querySelector('.tma-dash__email-list-body').scrollTop);
+  check(afterDrop === scrolledTo, `opening the drop leaves the list where it was (${scrolledTo} → ${afterDrop})`);
   // The arrow must open the drop only: a tap on it used to open the message
   // too, and the pane hid the drop it had just opened.
   check(!(await page.$('.tma-dash--email-mobile-reading')), 'the conversation arrow opens the drop without opening the message');

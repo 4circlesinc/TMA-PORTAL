@@ -4616,11 +4616,11 @@
     }
     return (
       '<div class="tma-dash__email-list tma-dash__email-list--templates">' +
-      '<div class="tma-dash__email-list-head tma-dash__email-list-head--templates">' +
+      '<div class="tma-dash__email-list-head tma-dash__email-list-head--templates" data-key="email-list-head">' +
       '<span class="tma-dash__email-template-list-title">Templates</span>' +
       renderListHeadActions(state, { templateCount: templates.length, showFilter: false }) +
       '</div>' +
-      '<div class="tma-dash__email-list-body">' + body + '</div>' +
+      '<div class="tma-dash__email-list-body" data-key="email-list-body">' + body + '</div>' +
       '</div>'
     );
   }
@@ -4688,12 +4688,12 @@
       /* Title + mailbox tabs stay put above the scroller. Expanding Today
          must grow the list downward, not slide this chrome off the top. */
       (isEmailMobile()
-        ? '<div class="tma-dash__email-list-chrome">' +
+        ? '<div class="tma-dash__email-list-chrome" data-key="email-list-chrome">' +
           renderListMobileHead(state) +
           renderInboxCategories(state) +
           '</div>'
         : renderListMobileHead(state)) +
-      '<div class="tma-dash__email-list-head">' +
+      '<div class="tma-dash__email-list-head" data-key="email-list-head">' +
       /* Desktop select-all lives in the page toolbar; keep it here on mobile
        * where that bar is hidden. */
       (isEmailMobile() ? renderEmailSelectAll(state) : '') +
@@ -4707,7 +4707,7 @@
       renderListHeadActions(state, { showFilter: !isEmailMobile() }) +
       '</div>' +
       renderReconnectBanner(state) +
-      '<div class="tma-dash__email-list-body">' +
+      '<div class="tma-dash__email-list-body" data-key="email-list-body">' +
       renderListState(state, rows) +
       '</div>' +
       renderMailPagination(state) +
@@ -4762,7 +4762,7 @@
     }
 
     return (
-      '<div class="tma-dash__email-pagination" data-email-pagination>' +
+      '<div class="tma-dash__email-pagination" data-key="email-pagination" data-email-pagination>' +
       '<div class="tma-dash__email-pagination-size">' +
       '<label for="tma-email-perpage">Per page</label>' +
       '<select id="tma-email-perpage" class="tma-dash__email-perpage" data-email-perpage>' + options + '</select>' +
@@ -4784,11 +4784,16 @@
   /* Shown above a list that still has mail in it when the mailbox connection
    * has failed: what is on screen is real but may be stale, and nothing new
    * will arrive until the account is reconnected. */
+  /* The list's scrolling body and everything that can sit beside it carry
+   * data-keys: this banner comes and goes before the body, and without keys
+   * the morph paired children by position, turned the old body into the
+   * banner and made a new body at scrollTop 0 — the phone list "jumping to
+   * the top" on any repaint. */
   function renderReconnectBanner(state) {
     if (!state.reconnectNeeded || !rowsOf(state).length) return '';
 
     return (
-      '<div class="tma-dash__email-reconnect" role="status">' +
+      '<div class="tma-dash__email-reconnect" data-key="email-reconnect" role="status">' +
       '<span>' + esc(state.mailError || 'This mailbox needs to be reconnected.') + '</span>' +
       '<button type="button" class="tma-dash__email-settings-btn" data-email-open-settings>Fix it</button>' +
       '</div>'
