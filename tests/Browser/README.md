@@ -478,6 +478,57 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/drawer-swipe.mjs
   ```
+- **`mail-thread-mobile.mjs`** — the reading pane on a phone (390px) and a
+  tablet (768px, still the phone layout). A phone used to get the desktop
+  row: the subject truncated to "INTRODUC…" beside the chips, the sender to
+  "Hiros…", the recipient wrapped into a three-line column, the date and five
+  action icons crammed together — because the phone layout in
+  renderMessageHead was keyed on a head name no caller ever passed.
+
+  It measures the pane rather than reading its markup: no horizontal
+  overflow on the page or the pane; the subject wraps in full with the star
+  level with its first line and the label chips on a row of their own; every
+  message head is the two-row grid (name and three actions, then recipient
+  and a short date) with nothing overlapping and every button a 36px target
+  on screen; the "to …" details panel fits; quoted history still toggles and
+  the page still does not scroll sideways with it shown; and a message with
+  a 1400px picture and a 1200px table keeps the picture inside the frame and
+  reflows the table instead of moving the page.
+
+  Uses the mailbox fixture's account plus two more seeds — a three-message
+  conversation under a long subject, one reply carrying a Gmail-style quote,
+  and a wide newsletter (the `remote_id`s must not collide with the
+  fixture's, so these use `c1`–`c3` and `w1`):
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+    \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+    \$a = App\Models\ConnectedAccount::where('user_id', \$u->id)->first();
+    \$subject = 'INTRODUCTION TO THE CITIZENSHIP BY INVESTMENT PROGRAMME AND THE DOCUMENTS WE WILL NEED FROM YOU';
+    \$quoted = '<div>Hi Carlos,<br>Thanks for your prompt response.</div><div>Regards,</div>'
+      . '<div class=\"gmail_quote\">On Fri, Carlos Labadie wrote:<blockquote><div style=\"font-size:16px\"><p>Dear Hiroshi Mabuchi,</p><p>Nice to hear from you again.</p></div></blockquote></div>';
+    foreach ([
+      ['c1','Carlos Labadie','clabadie@tmantoinelaw.com',\$subject,'<p>Please find the checklist attached.</p>', now()->subDays(2)],
+      ['c2','Hiroshi Mabuchi','hiroshi.mabuchi@example.jp','Re: '.\$subject,\$quoted, now()->subDay()],
+      ['c3','Carlos Labadie','clabadie@tmantoinelaw.com','Re: '.\$subject,'<p>Perfect, speak soon.</p>', now()->subHours(2)],
+    ] as [\$rid,\$fn,\$fe,\$sub,\$html,\$when]) {
+      App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+        'connected_account_id' => \$a->id, 'remote_id' => \$rid, 'thread_id' => 'conv-intro',
+        'folder' => 'inbox', 'subject' => \$sub, 'snippet' => strip_tags(\$html), 'body_html' => \$html,
+        'from_name' => \$fn, 'from_email' => \$fe,
+        'to' => [['name' => 'Carlos Labadie', 'email' => 'clabadie@tmantoinelaw.com'], ['name' => 'Test User', 'email' => 'e2e@example.com']],
+        'is_read' => true, 'sent_at' => \$when]);
+    }
+    \$wide = '<p>Wide content below.</p><img src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\" width=\"1400\" height=\"120\" style=\"width:1400px;height:120px;display:block\">'
+      . '<table width=\"1200\" style=\"width:1200px\"><tr><td style=\"white-space:nowrap\">A very long unbroken cell of text that should not force the page sideways</td><td>second</td></tr></table>';
+    App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+      'connected_account_id' => \$a->id, 'remote_id' => 'w1', 'thread_id' => 'conv-wide', 'folder' => 'inbox',
+      'subject' => 'Wide newsletter with a big image and a table', 'snippet' => 'Wide content below.', 'body_html' => \$wide,
+      'from_name' => 'Newsletter Robot', 'from_email' => 'news@example.org',
+      'to' => [['name' => 'Test User', 'email' => 'e2e@example.com']], 'is_read' => true, 'sent_at' => now()->subMinutes(5)]);
+  "
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/mail-thread-mobile.mjs
+  ```
 - **`people.mjs`** — the whole People section, which used to render from a
   localStorage store that was always empty. Checks each of the eight URLs is
   *served* on a cold load (they 404'd before, so a hard refresh dropped you on

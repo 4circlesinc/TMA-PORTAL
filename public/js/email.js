@@ -1692,6 +1692,19 @@
     var importantLabel = important ? 'Mark as not important' : 'Mark as important';
     var labelsHtml = renderDetailLabelChipsHtml(row, state);
     var mobile = isEmailMobile();
+    if (mobile) {
+      // The subject wraps in full with the star beside it; labels take a row
+      // of their own underneath, so a long label never truncates the title.
+      return (
+        '<div class="tma-dash__email-detail-subject tma-dash__email-detail-subject--mobile">' +
+        '<span class="tma-dash__email-detail-subject-text">' + esc(subject) + '</span>' +
+        '<span class="tma-dash__email-detail-subject-trailing">' + renderDetailSubjectStar(row, state) + '</span>' +
+        '</div>' +
+        (labelsHtml
+          ? '<div class="tma-dash__email-detail-subject-labels tma-dash__email-detail-subject-labels--row">' + labelsHtml + '</div>'
+          : '')
+      );
+    }
     return (
       '<div class="tma-dash__email-detail-subject">' +
       '<span class="tma-dash__email-detail-subject-text">' + esc(subject) + '</span>' +
@@ -3791,7 +3804,10 @@
 
   function renderMessageHead(row, metaEmail, metaDate, subject, headKey, state) {
     headKey = headKey || 'current';
-    var mobile = isEmailMobile() && headKey === 'current';
+    // Every card, not only a 'current' one: the thread renders each message
+    // through here with its own key, and a guard on the key had left the
+    // phone layout unused, so a 390px screen got the desktop row.
+    var mobile = isEmailMobile();
     var recipient = getMessageRecipient(row);
     var messageActions = mobile ? DETAIL_MESSAGE_ACTIONS_MOBILE : DETAIL_MESSAGE_ACTIONS;
     var headCls = 'tma-dash__email-message-head' + (mobile ? ' tma-dash__email-message-head--mobile' : '');
@@ -3816,7 +3832,8 @@
       '</div>' +
       '<div class="tma-dash__email-message-head-side">' +
       (mobile
-        ? '<time class="tma-dash__email-detail-date tma-dash__email-detail-date--inline">' + esc(metaDate) + '</time>'
+        ? '<time class="tma-dash__email-detail-date tma-dash__email-detail-date--inline" title="' + esc(metaDate) + '">' +
+          esc(formatMessageDateShort(row, metaDate)) + '</time>'
         : '<time class="tma-dash__email-detail-date">' + esc(metaDate) + '</time>') +
       '<div class="tma-dash__email-detail-actions">' +
       messageActions.map(function (action) {
@@ -5443,7 +5460,9 @@
       ':where(html){margin:0;padding:0;}' +
       // Reading-pane gutter so plain HTML (no own margins) is not flush to
       // the frame edges. Senders that set their own body padding still win.
-      ':where(body){margin:0;padding:20px 24px 12px;box-sizing:border-box;' +
+      // A phone's gutter is the pane's own 16px; the pane adds none of its
+      // own there, so the text lines up with the head above it.
+      ':where(body){margin:0;padding:' + (isEmailMobile() ? '16px 16px 12px' : '20px 24px 12px') + ';box-sizing:border-box;' +
       'font-family:Inter,system-ui,sans-serif;font-size:14px;' +
       // A white canvas in BOTH themes: mail is authored against white, and on
       // the dark theme a transparent body would show the dark frame through
@@ -5454,6 +5473,22 @@
       // sideways; wide tables keep their real layout and scroll instead of
       // being squashed into something the sender never designed.
       ':where(img){max-width:100%;height:auto;}' +
+      // On a phone the sender's fixed widths give way: an inline width="1400"
+      // would beat the rule above and push the message sideways, and a
+      // 600px newsletter table would scroll inside its frame with its text
+      // cut at the edge. Pictures are capped and tables reflow to the pane,
+      // the way every phone mail client reads them.
+      (isEmailMobile()
+        ? 'img{max-width:100% !important;height:auto !important;}' +
+          'table{max-width:100% !important;}' +
+          'td,th{white-space:normal !important;overflow-wrap:anywhere;}' +
+          'pre{white-space:pre-wrap !important;overflow-wrap:anywhere;}' +
+          // Quoted history carries the sizes of whatever client wrote it
+          // (Outlook's 12pt Calibri, Gmail's 16px blockquote) and on a phone
+          // came out bigger than the reply above it. History reads at the
+          // reply's own size.
+          QUOTE_FONT_CLAMP
+        : '') +
       '</style></head><body>' + html + '</body></html>'
     );
   }
@@ -5482,6 +5517,14 @@
     '.protonmail_quote',
     '.moz-cite-prefix',        // Thunderbird
   ];
+
+  /* The phone-only rule that sizes quoted history like the reply itself:
+   * every quote container, and everything after Outlook's reply header. */
+  var QUOTE_FONT_CLAMP = (function () {
+    var roots = QUOTE_SELECTORS.concat(['#divRplyFwdMsg ~ *', '#appendonsend ~ *']);
+    return roots.concat(roots.map(function (sel) { return sel + ' *'; })).join(',') +
+      '{font-size:14px !important;line-height:1.5 !important;}';
+  })();
 
   /* Splits a body into what the sender wrote and the history they quoted.
    *
@@ -5724,6 +5767,21 @@
       });
     } catch (e) {
       return message.dateLabel || message.time || '';
+    }
+  }
+
+  /* The phone head's date: "Sep 4, 8:36 PM", with the year only when it is
+   * not this one. The full form stays in the details panel and the title. */
+  function formatMessageDateShort(message, fallback) {
+    if (!message.sentAt) return fallback || '';
+    var when = new Date(message.sentAt);
+    if (isNaN(when.getTime())) return fallback || '';
+    var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    if (when.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    try {
+      return when.toLocaleString(undefined, opts);
+    } catch (e) {
+      return fallback || '';
     }
   }
 
@@ -10068,6 +10126,9 @@
         if (e.button !== 0) return;
         if (isEmailRowSelectTarget(e.target)) return;
         if (e.target.closest('.tma-dash__email-row-action')) return;
+        // The conversation arrow opens the drop in the list; the row's tap
+        // must not also open the message and hide that drop behind the pane.
+        if (e.target.closest('[data-email-conversation-toggle]')) return;
         if (isEmailMobile() && e.clientX <= DRAWER_EDGE_PX) return;
         dragging = true;
         moved = false;

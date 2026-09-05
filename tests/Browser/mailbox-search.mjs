@@ -227,6 +227,8 @@ try {
 
   step(5, 'Enter filters the list like the header field');
   await openInbox(page);
+  // Whatever the fixture holds today; the folder must come back to exactly this.
+  const rowsBefore = await page.$$eval(LIST_ROWS, (els) => els.length);
   await openDrawerSearch(page);
   await typeAndWait(page, 'invoice', ROWS, 'Invoice #1042');
   await page.keyboard.press('Enter');
@@ -244,12 +246,12 @@ try {
   const headTitle = ((await page.textContent('.tma-dash__email-list-mobile-title').catch(() => '')) || '').trim();
   check(headTitle === 'Results for “invoice”', `the list head says what it is showing (got "${headTitle}")`);
   await page.click('.tma-dash__email-list-mobile-clear');
-  await page.waitForFunction(() => {
+  await page.waitForFunction((expected) => {
     const mount = document.querySelector('[data-email]');
     const st = mount && mount._emailState;
-    return !!st && st.search === '' && !st.loading && !st.listRefreshing && st.rows.length === 3;
-  }, null, { timeout: 12000 });
-  check(true, 'clearing it brings the folder back');
+    return !!st && st.search === '' && !st.loading && !st.listRefreshing && st.rows.length === expected;
+  }, rowsBefore, { timeout: 12000 });
+  check(true, `clearing it brings the folder back (${rowsBefore} rows)`);
   const clearedTitle = ((await page.textContent('.tma-dash__email-list-mobile-title').catch(() => '')) || '').trim();
   check(clearedTitle === 'Inbox', `and the head names the folder again (got "${clearedTitle}")`);
 

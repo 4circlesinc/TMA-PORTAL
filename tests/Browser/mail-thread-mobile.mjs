@@ -1,0 +1,257 @@
+import { chromium } from 'playwright';
+
+/*
+ * The reading pane on a phone. A 390px screen used to get the desktop row:
+ * the subject truncated to "INTRODUC…" beside the chips, the sender to
+ * "Hiros…", the recipient wrapped into a three-line column, and the date
+ * and five action icons crammed together — because the phone layout in
+ * renderMessageHead was keyed on a head name no caller ever passed.
+ *
+ * So this measures the pane, not its markup: the page never scrolls
+ * sideways; the subject wraps in full with the star beside its first line
+ * and the label chips on a row of their own; every message head is the
+ * two-row grid (name and actions, then recipient and a short date) with
+ * nothing overlapping and every tap target inside the viewport; the "to …"
+ * details panel fits; quoted history still toggles; and a message with a
+ * 1400px image and a 1200px table keeps its picture inside the pane and
+ * scrolls its table inside its own frame rather than moving the page.
+ *
+ * Runs the same checks at a 768px tablet width, which is still the phone
+ * layout (isEmailMobile is ≤1024px).
+ *
+ * See README.md for setup: the mailbox fixture plus the long-subject
+ * conversation and the wide newsletter seeded there.
+ */
+const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
+const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
+const OUT = process.env.TMA_SHOT_DIR || 'tests/Browser';
+
+const log = (...a) => console.log(...a);
+const failures = [];
+function step(n, msg) { log(`\n[${n}] ${msg}`); }
+function check(ok, msg) {
+  log(`    ${ok ? '✓' : '✗'} ${msg}`);
+  if (!ok) failures.push(msg);
+}
+
+const NOISE = [/409/, /WebSocket|ws:\/\/|wss:\/\//i, /Failed to load resource/, /net::ERR/, /reconnect/i, /reverb|pusher/i];
+const real = (errors) => errors.filter((t) => !NOISE.some((re) => re.test(t)));
+
+const SUBJECT = 'INTRODUCTION TO THE CITIZENSHIP BY INVESTMENT PROGRAMME';
+const LIST_ROW = '.tma-dash__email-row[data-email-row]';
+
+const browser = await chromium.launch();
+
+async function signIn(page) {
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.click('text=Sign in with Email');
+  await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
+  await page.fill('input[name="email"]', EMAIL);
+  await page.fill('input[name="password"]', 'password12345');
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.click('button[type="submit"]:visible'),
+  ]);
+  await page.waitForTimeout(400);
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.click('button[type="submit"]:visible'),
+    ]);
+    await page.waitForTimeout(400);
+  }
+  if (page.url().includes('/auth/login')) throw new Error('login failed');
+}
+
+async function openMessage(page, text) {
+  await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
+  await page.waitForSelector(LIST_ROW, { timeout: 15000 });
+  await page.click(`${LIST_ROW}:has-text("${text}")`);
+  await page.waitForSelector('.tma-dash--email-mobile-reading', { timeout: 10000 });
+  await page.waitForSelector('.tma-dash__email-message-head--mobile', { timeout: 10000 });
+  // Frames size themselves a beat after the paint.
+  await page.waitForTimeout(1500);
+}
+
+/* Everything the layout promises, measured. */
+function measure(page) {
+  return page.evaluate(() => {
+    const vw = window.innerWidth;
+    const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+    const inside = (b) => b.left >= -0.5 && b.right <= vw + 0.5;
+    const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const scroll = document.querySelector('.tma-dash__email-detail-scroll');
+    const subjectText = document.querySelector('.tma-dash__email-detail-subject-text');
+    const subjectStar = document.querySelector('.tma-dash__email-detail-subject-trailing [data-email-star]');
+    const labelsRow = document.querySelector('.tma-dash__email-detail-subject-labels--row');
+    const chips = Array.from(document.querySelectorAll('.tma-dash__email-detail-subject-labels--row .tma-dash__email-detail-label-chip'));
+    const heads = Array.from(document.querySelectorAll('.tma-dash__email-message-head'));
+    const frames = Array.from(document.querySelectorAll('[data-email-body-frame]'));
+    return {
+      vw,
+      pageOverflow: document.documentElement.scrollWidth > vw || document.body.scrollWidth > vw,
+      paneOverflow: scroll ? scroll.scrollWidth > scroll.clientWidth + 1 : null,
+      subject: subjectText ? {
+        text: subjectText.textContent.trim(),
+        whiteSpace: getComputedStyle(subjectText).whiteSpace,
+        clipped: subjectText.scrollWidth > subjectText.clientWidth + 1,
+        lines: Math.round(subjectText.getBoundingClientRect().height / parseFloat(getComputedStyle(subjectText).lineHeight)),
+        box: box(subjectText),
+      } : null,
+      star: subjectStar ? Object.assign(box(subjectStar), { inside: inside(box(subjectStar)) }) : null,
+      labelsRow: labelsRow ? box(labelsRow) : null,
+      chips: chips.map((c) => Object.assign(box(c), { text: c.textContent.trim(), inside: inside(box(c)) })),
+      heads: heads.map((h) => {
+        const name = h.querySelector('.tma-dash__email-message-head-name');
+        const to = h.querySelector('.tma-dash__email-message-head-to');
+        const toLabel = h.querySelector('.tma-dash__email-message-head-to-label');
+        const date = h.querySelector('.tma-dash__email-detail-date');
+        const actions = h.querySelector('.tma-dash__email-detail-actions');
+        const buttons = Array.from(h.querySelectorAll('.tma-dash__email-detail-actions button'));
+        const nb = name && box(name), ab = actions && box(actions), tb = to && box(to), db = date && box(date);
+        return {
+          mobile: h.classList.contains('tma-dash__email-message-head--mobile'),
+          headOverflow: h.scrollWidth > h.clientWidth + 1,
+          name: name && name.textContent.trim(),
+          nameInside: nb && inside(nb),
+          nameClearOfActions: nb && ab ? !overlaps(nb, ab) : null,
+          toLines: tb ? Math.round(tb.height / 16) : null,
+          toInside: tb && inside(tb),
+          toClearOfDate: tb && db ? !overlaps(tb, db) : null,
+          toBelowName: tb && nb ? tb.top >= nb.bottom - 1 : null,
+          toEllipsis: toLabel ? getComputedStyle(toLabel).textOverflow === 'ellipsis' : null,
+          date: db && date.textContent.trim(),
+          dateInside: db && inside(db),
+          dateBelowActions: db && ab ? db.top >= ab.bottom - 1 : null,
+          buttons: buttons.map((b) => Object.assign(box(b), { label: b.getAttribute('aria-label'), inside: inside(box(b)) })),
+        };
+      }),
+      frames: frames.map((f) => {
+        let docWidth = null, imgWidths = [];
+        try {
+          const d = f.contentDocument;
+          docWidth = d ? Math.max(d.documentElement.scrollWidth, d.body ? d.body.scrollWidth : 0) : null;
+          imgWidths = d ? Array.from(d.images).map((i) => i.getBoundingClientRect().width) : [];
+        } catch (e) { /* sandboxed */ }
+        return Object.assign(box(f), { inside: inside(box(f)), clientWidth: f.clientWidth, docWidth, imgWidths });
+      }),
+    };
+  });
+}
+
+async function runAt(label, viewport) {
+  const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+
+  step(label, `Thread at ${viewport.width}px: nothing runs off the screen`);
+  await signIn(page);
+  await openMessage(page, 'INTRODUCTION');
+  let m = await measure(page);
+  check(!m.pageOverflow, 'the page has no horizontal overflow');
+  check(m.paneOverflow === false, 'the reading pane has no horizontal overflow');
+  await page.screenshot({ path: `${OUT}/mail-thread-mobile-${viewport.width}.png` });
+
+  step(label, 'The subject wraps in full, star beside it, labels on their own row');
+  check(!!m.subject && m.subject.text.startsWith(SUBJECT), `the full subject is there (got "${m.subject && m.subject.text.slice(0, 40)}…")`);
+  check(!!m.subject && m.subject.whiteSpace !== 'nowrap' && !m.subject.clipped, 'it wraps instead of truncating');
+  check(!!m.subject && m.subject.lines >= 2, `over more than one line (${m.subject && m.subject.lines})`);
+  check(!!m.star && m.star.inside, 'the star is on screen');
+  check(!!m.star && !!m.subject && m.star.top < m.subject.box.top + 30, 'and level with the first line of the subject');
+  check(m.chips.length >= 1 && m.chips.every((c) => c.inside), `label chips fit the screen (${m.chips.map((c) => c.text).join(', ')})`);
+  check(!!m.labelsRow && !!m.subject && m.labelsRow.top >= m.subject.box.bottom - 1, 'and sit under the subject, not beside it');
+
+  step(label, 'Every message head is the two-row phone grid');
+  check(m.heads.length >= 1, `${m.heads.length} message head(s) on screen`);
+  check(m.heads.every((h) => h.mobile), 'all of them use the phone layout');
+  check(m.heads.every((h) => !h.headOverflow), 'none overflows its box');
+  check(m.heads.every((h) => h.nameInside && h.nameClearOfActions), 'the sender name stays clear of the action buttons');
+  check(m.heads.every((h) => h.toLines === 1 && h.toInside && h.toEllipsis), 'the recipient is one line, ellipsised, on screen');
+  check(m.heads.every((h) => h.toBelowName && h.toClearOfDate), 'it sits under the name and clear of the date');
+  check(m.heads.every((h) => h.dateInside && h.dateBelowActions), `the date is on screen under the actions (${m.heads[0] && m.heads[0].date})`);
+  check(m.heads.every((h) => h.date && !/\d{4}/.test(h.date)), 'in its short form for this year');
+  check(m.heads.every((h) => h.buttons.length === 3 && h.buttons.every((b) => b.inside && b.width >= 36 && b.height >= 36)),
+    'three actions, each a 36px target on screen');
+
+  step(label, 'Frames stay inside the pane');
+  check(m.frames.length >= 1 && m.frames.every((f) => f.inside), 'every body frame is on screen');
+  check(m.frames.every((f) => f.docWidth === null || f.docWidth <= f.clientWidth + 1), 'plain messages do not scroll sideways inside their frame');
+
+  step(label, 'The "to …" details panel fits, and quoted history toggles');
+  await page.click('.tma-dash__email-message-head--mobile [data-email-header-details-toggle]');
+  await page.waitForTimeout(300);
+  const panel = await page.$eval('[data-email-header-details-panel]:not([hidden])', (el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, vw: window.innerWidth, overflow: el.scrollWidth > el.clientWidth + 1 };
+  }).catch(() => null);
+  check(!!panel && panel.left >= 0 && panel.right <= panel.vw && !panel.overflow, 'the details panel is within the viewport');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
+  // The pane shows one message of a conversation; the reply carrying the
+  // quote is the middle one, reached through the list's conversation drop.
+  await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
+  await page.waitForSelector(LIST_ROW, { timeout: 15000 });
+  await page.click(`${LIST_ROW}:has-text("INTRODUCTION") [data-email-conversation-toggle]`);
+  await page.waitForSelector(`${LIST_ROW}:has-text("Hiroshi Mabuchi")`, { timeout: 10000 });
+  // The arrow must open the drop only: a tap on it used to open the message
+  // too, and the pane hid the drop it had just opened.
+  check(!(await page.$('.tma-dash--email-mobile-reading')), 'the conversation arrow opens the drop without opening the message');
+  await page.click(`${LIST_ROW}:has-text("Hiroshi Mabuchi")`);
+  await page.waitForSelector('.tma-dash--email-mobile-reading', { timeout: 10000 });
+  await page.waitForSelector('[data-email-thread-quote]', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const quote = await page.$('[data-email-thread-quote]');
+  check(!!quote, 'the reply with history offers a quoted-text toggle');
+  if (quote) {
+    const toggleBox = await quote.boundingBox();
+    check(!!toggleBox && toggleBox.x >= 15, `the toggle keeps the pane gutter (x=${toggleBox && Math.round(toggleBox.x)})`);
+    // A programmatic click: the harness's floating sync toast can sit over
+    // the bottom of the pane, and what is under test is the toggle, not
+    // the toast.
+    await quote.evaluate((el) => el.click());
+    await page.waitForTimeout(1500);
+    check((await page.$eval('[data-email-thread-quote]', (el) => el.getAttribute('aria-expanded'))) === 'true', 'and it opens');
+    m = await measure(page);
+    check(!m.pageOverflow && m.paneOverflow === false, 'with the history shown the page still does not scroll sideways');
+    // The quote carried its own 16px; on a phone it reads at the reply's size.
+    const sizes = await page.$eval('[data-email-body-frame]', (f) => {
+      const d = f.contentDocument;
+      const px = (el) => el ? parseFloat(d.defaultView.getComputedStyle(el).fontSize) : null;
+      const quoted = d.querySelector('.gmail_quote p') || d.querySelector('.gmail_quote');
+      const own = d.body.querySelector('div');
+      return { own: px(own), quoted: px(quoted) };
+    }).catch(() => null);
+    check(!!sizes && sizes.quoted !== null && Math.abs(sizes.quoted - sizes.own) < 0.5, `quoted history reads at the reply's size (${sizes && sizes.own}px vs ${sizes && sizes.quoted}px)`);
+  }
+
+  step(label, 'A wide newsletter keeps the page put');
+  await openMessage(page, 'Wide newsletter');
+  m = await measure(page);
+  check(!m.pageOverflow && m.paneOverflow === false, 'the page and pane have no horizontal overflow');
+  const wide = m.frames[0];
+  check(!!wide && wide.inside, 'the frame is inside the viewport');
+  check(!!wide && wide.imgWidths.length === 1 && wide.imgWidths[0] <= wide.clientWidth, `the 1400px picture is held to the frame (${wide && Math.round(wide.imgWidths[0])}px of ${wide && wide.clientWidth}px)`);
+  await page.screenshot({ path: `${OUT}/mail-thread-mobile-wide-${viewport.width}.png` });
+
+  const bad = real(errors);
+  check(bad.length === 0, bad.length ? 'console: ' + bad.join(' | ') : 'clean console');
+  await context.close();
+}
+
+try {
+  await runAt('phone', { width: 390, height: 844 });
+  await runAt('tablet', { width: 768, height: 1024 });
+} catch (e) {
+  failures.push('threw: ' + e.message);
+  log(e.stack);
+}
+
+await browser.close();
+if (failures.length) {
+  log('\nFAILED:\n - ' + failures.join('\n - '));
+  process.exit(1);
+}
+log('\nAll checks passed.');
