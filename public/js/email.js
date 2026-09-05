@@ -1141,6 +1141,12 @@
         if (!state.inlineCompose) return;
         state.inlineCompose.bodyHtml = editor.innerHTML;
       });
+      MORPH.on(editor, 'paste', function (event) {
+        var files = clipboardFileList(event);
+        if (!files) return;
+        event.preventDefault();
+        attachFilesToComposeEditor(root, state, editor, files);
+      });
     }
 
     MORPH.unwired(panel, '[data-email-insert-image]').forEach(function (btn) {
@@ -5467,6 +5473,55 @@
     input.click();
   }
 
+  function clipboardFileList(event) {
+    var dt = event.clipboardData;
+    if (!dt) return null;
+    var files = [];
+    if (dt.files && dt.files.length) {
+      files = Array.prototype.slice.call(dt.files);
+    } else if (dt.items) {
+      for (var i = 0; i < dt.items.length; i++) {
+        if (dt.items[i].kind !== 'file') continue;
+        var file = dt.items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    return files.length ? files : null;
+  }
+
+  function composeHolderForEditor(state, editor) {
+    if (!editor || !editor.closest) return null;
+    var win = editor.closest('[data-email-compose-window]');
+    if (win) {
+      return {
+        holder: findComposeDraft(state, win.getAttribute('data-email-compose-window')),
+        scope: win,
+        persist: true,
+      };
+    }
+    var panel = editor.closest('[data-email-inline-compose-panel]');
+    if (panel && state.inlineCompose) {
+      return { holder: state.inlineCompose, scope: panel, persist: false };
+    }
+    return null;
+  }
+
+  function attachFilesToComposeEditor(root, state, editor, fileList) {
+    var target = composeHolderForEditor(state, editor);
+    if (!target || !target.holder) return;
+    function paint() {
+      paintComposeFileChips(target.scope, target.holder);
+      if (target.persist) scheduleDraftSave(state, target.holder);
+    }
+    if (fileList) {
+      addComposeFiles(root, target.holder, fileList, paint);
+      return;
+    }
+    openComposeFilePicker(function (files) {
+      addComposeFiles(root, target.holder, files, paint);
+    });
+  }
+
   function wireComposeDropTarget(el, onFiles) {
     if (!el || el._composeDropWired) return;
     el._composeDropWired = true;
@@ -7249,6 +7304,12 @@
         draft.bodyHtml = body.innerHTML;
         scheduleDraftSave(state, draft);
       });
+      body.addEventListener('paste', function (event) {
+        var files = clipboardFileList(event);
+        if (!files) return;
+        event.preventDefault();
+        attachFilesToComposeEditor(root, state, body, files);
+      });
     });
 
     // Compose footer/toolbar Insert image, also wired from settings path, but
@@ -7488,7 +7549,9 @@
 
   /* opts.expand: compose windows get the expand control; the signature editor
    * and inline reply/forward do not, there is nowhere for them to expand into.
-   * opts.image: show Insert image (compose, reply/forward, and signatures).
+   * opts.image: show the image tool (compose/reply attach a file; signatures
+   * still insert and transform a logo). opts.insertImage keeps the signature
+   * "Insert image" label and the transform dialog.
    * opts.full: every tool on the toolbar itself, no More menu — for wide
    * hosts (the template and letter editors); a compose window is too narrow
    * and keeps the three-dots menu. */
@@ -7519,7 +7582,7 @@
       [
         { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
       ].concat(
-        showImage ? [{ icon: 'Image', label: 'Insert image', image: true }] : [],
+        showImage ? [{ icon: 'Image', label: opts.insertImage ? 'Insert image' : 'Attach file', image: true }] : [],
         full ? [] : [{ icon: 'DotsThree', label: 'More', menu: 'more' }]
       ),
     ];
@@ -7665,7 +7728,7 @@
       '<div class="tma-dash__email-compose-attach">' +
       [
         { icon: 'Trash', label: 'Discard draft', discard: true },
-        { icon: 'Image', label: 'Insert image', image: true },
+        { icon: 'Image', label: 'Attach file', image: true },
         { icon: 'Paperclip', label: 'Attach file', attach: true },
       ]
         .map(function (item) {
@@ -7934,7 +7997,7 @@
       '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
       ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
-      renderComposeToolbar({ expand: false, image: true }) +
+      renderComposeToolbar({ expand: false, image: true, insertImage: true }) +
       '<div class="tma-dash__email-settings-signature-stage tma-dash__email-image-stage" data-email-image-stage>' +
       '<div id="tma-mail-signature" class="tma-dash__email-settings-signature-body"' +
       ' contenteditable="true" role="textbox" aria-multiline="true"' +
@@ -8472,6 +8535,11 @@
 
   function openInsertImagePicker(root, state, editor) {
     if (!editor) return;
+    if (editor.hasAttribute('data-email-compose-body')
+        || editor.hasAttribute('data-email-inline-compose-editor')) {
+      attachFilesToComposeEditor(root, state, editor);
+      return;
+    }
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,.jpg,.jpeg,.png,.webp,image/webp';
