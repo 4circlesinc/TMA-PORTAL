@@ -158,6 +158,16 @@ async function runAt(label, viewport) {
   check(rowType.sender !== null && rowType.sender <= 14, `sender at ${rowType.sender}px`);
   check(rowType.subject !== null && rowType.subject <= 13 && rowType.snippet !== null && rowType.snippet <= 13, `subject and preview at ${rowType.subject}px / ${rowType.snippet}px`);
   check(rowType.time !== null && rowType.time <= 12, `time at ${rowType.time}px`);
+  // The conversation arrow keeps to the left, on the avatar's own edge.
+  const arrow = await page.evaluate(() => {
+    const toggle = document.querySelector('.tma-dash__email-row[data-email-row] [data-email-conversation-toggle]');
+    if (!toggle) return null;
+    const row = toggle.closest('.tma-dash__email-row');
+    const avatar = row.querySelector('.tma-dash__email-row-avatar, .tma-dash__email-row-icon, [class*="avatar"]');
+    const t = toggle.getBoundingClientRect(), a = avatar ? avatar.getBoundingClientRect() : null, r = row.getBoundingClientRect();
+    return { left: t.left, avatarLeft: a ? a.left : null, rowLeft: r.left, belowAvatar: a ? t.top >= a.bottom - 8 : null };
+  });
+  check(!!arrow && arrow.avatarLeft !== null && arrow.left <= arrow.avatarLeft + 0.5 && arrow.left >= arrow.rowLeft, `the conversation arrow is on the avatar's left edge (arrow ${arrow && Math.round(arrow.left)}px, avatar ${arrow && Math.round(arrow.avatarLeft)}px)`);
 
   step(label, `Thread at ${viewport.width}px: nothing runs off the screen`);
   await openMessage(page, 'INTRODUCTION');

@@ -14788,7 +14788,10 @@
     gap: 1px;
     width: auto;
     height: 16px;
-    padding: 0 3px;
+    padding: 0 2px;
+    /* Flush with the avatar's left edge: the caret glyph carries whitespace
+       inside its box, which read as the arrow drifting right. */
+    margin-left: -5px;
     background: var(--color-bg-card);
     border-radius: var(--radius-pill);
   }
