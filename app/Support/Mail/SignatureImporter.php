@@ -170,23 +170,9 @@ class SignatureImporter
             return null;
         }
 
-        $counts = [];
+        $best = $this->pickOwnSignature($candidates);
 
-        foreach ($candidates as $candidate) {
-            $key = $this->fingerprint($candidate['html']);
-            $counts[$key] = ($counts[$key] ?? 0) + 1;
-        }
-
-        arsort($counts);
-        $bestKey = array_key_first($counts);
-
-        foreach ($candidates as $candidate) {
-            if ($this->fingerprint($candidate['html']) === $bestKey) {
-                return $this->resolveInlineImages($candidate['html'], $candidate['message']);
-            }
-        }
-
-        return $this->resolveInlineImages($candidates[0]['html'], $candidates[0]['message']);
+        return $this->resolveInlineImages($best['html'], $best['message']);
     }
 
     /**
@@ -211,6 +197,48 @@ class SignatureImporter
         }
 
         return $candidates;
+    }
+
+    /**
+     * Prefer the block that names this mailbox, then the one that repeats.
+     * Repeating a quoted someone-else signature used to beat a less common
+     * but actually-yours block.
+     *
+     * @param  list<array{html: string, message: MailMessage}>  $candidates
+     * @return array{html: string, message: MailMessage}
+     */
+    private function pickOwnSignature(array $candidates): array
+    {
+        $ownEmail = mb_strtolower(trim((string) $this->account->email));
+        $ownName = mb_strtolower(trim((string) $this->account->name));
+
+        $groups = [];
+
+        foreach ($candidates as $candidate) {
+            $key = $this->fingerprint($candidate['html']);
+            $groups[$key]['items'][] = $candidate;
+            $text = mb_strtolower(html_entity_decode(strip_tags($candidate['html']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($ownEmail !== '' && str_contains($text, $ownEmail)) {
+                $groups[$key]['own'] = true;
+            }
+            if ($ownName !== '' && mb_strlen($ownName) >= 5 && str_contains($text, $ownName)) {
+                $groups[$key]['own'] = true;
+            }
+        }
+
+        uasort($groups, function (array $a, array $b): int {
+            $ownA = ! empty($a['own']);
+            $ownB = ! empty($b['own']);
+            if ($ownA !== $ownB) {
+                return $ownA ? -1 : 1;
+            }
+
+            return count($b['items']) <=> count($a['items']);
+        });
+
+        $winner = reset($groups);
+
+        return $winner['items'][0];
     }
 
     /**
@@ -518,16 +546,11 @@ class SignatureImporter
 
     private function extractFromBody(string $html): ?string
     {
-        // Outlook puts the signature *after* #appendonsend. Stripping quotes
-        // first used to delete that whole tail, so #Signature never ran.
-        $known = $this->extractKnownWrapper($html);
-        if ($known !== null) {
-            return $known;
-        }
-
-        $appended = $this->extractAfterAppendOnSend($html);
-        if ($appended !== null) {
-            return $appended;
+        // Outlook: the author's signature is after #appendonsend; anything
+        // below divRplyFwdMsg is the other person's mail. Never scan the
+        // whole document for #Signature — that last match is theirs.
+        if (preg_match('/<div[^>]*\bid=["\'](?:x_)?appendonsend["\']/i', $html)) {
+            return $this->extractAfterAppendOnSend($html);
         }
 
         $html = $this->stripQuotedContent($html);
@@ -587,8 +610,8 @@ class SignatureImporter
 
     /**
      * Gmail (`gmail_signature`) and Outlook (`#Signature`) wrap the block the
-     * author configured. Prefer the last match, a reply can still carry an
-     * older copy further up the document after quote stripping.
+     * author configured. The first match is theirs; later copies live inside
+     * the quoted thread and belong to someone else.
      */
     private function extractKnownWrapper(string $html): ?string
     {
@@ -606,12 +629,15 @@ class SignatureImporter
         }
 
         $xpath = new DOMXPath($doc);
+        $notQuoted = '[not(ancestor::blockquote)]'
+            .'[not(ancestor::*[contains(concat(" ", normalize-space(@class), " "), " gmail_quote ")])]'
+            .'[not(ancestor::*[@id="divRplyFwdMsg" or @id="x_divRplyFwdMsg"])]';
         $queries = [
-            '//*[@data-smartmail="gmail_signature"]',
-            '//*[contains(concat(" ", normalize-space(@class), " "), " gmail_signature ")]',
-            '//*[@id="Signature"]',
-            '//*[@id="x_Signature"]',
-            '//*[@id="ms-outlook-mobile-signature"]',
+            '//*[@data-smartmail="gmail_signature"]'.$notQuoted,
+            '//*[contains(concat(" ", normalize-space(@class), " "), " gmail_signature ")]'.$notQuoted,
+            '//*[@id="Signature"]'.$notQuoted,
+            '//*[@id="x_Signature"]'.$notQuoted,
+            '//*[@id="ms-outlook-mobile-signature"]'.$notQuoted,
         ];
 
         foreach ($queries as $query) {
@@ -621,7 +647,7 @@ class SignatureImporter
                 continue;
             }
 
-            $node = $nodes->item($nodes->length - 1);
+            $node = $nodes->item(0);
 
             if (! $node instanceof DOMElement) {
                 continue;
@@ -648,7 +674,8 @@ class SignatureImporter
             '/<div[^>]*class="[^"]*\bgmail_extra\b[^"]*"[^>]*>[\s\S]*$/i',
             '/<blockquote\b[\s\S]*$/i',
             '/<div[^>]*id=["\'](?:x_)?divRplyFwdMsg["\'][^>]*>[\s\S]*$/i',
-            '/<hr[^>]*>\s*(?:<b>)?From:[\s\S]*$/i',
+            '/<div[^>]*class="[^"]*\bOutlookMessageHeader\b[^"]*"[^>]*>[\s\S]*$/i',
+            '/<hr[^>]*>\s*(?:<b>|<span[^>]*>)?\s*From:[\s\S]*$/i',
             '/-----Original Message-----[\s\S]*$/i',
             '/On .+ wrote:<br[\s\S]*$/i',
         ];
@@ -677,6 +704,10 @@ class SignatureImporter
         }
 
         if (preg_match('/\bOn .{10,80} wrote:\s*$/i', $text)) {
+            return false;
+        }
+
+        if (preg_match('/^(From|Sent|To|Subject)\s*:/i', $text)) {
             return false;
         }
 

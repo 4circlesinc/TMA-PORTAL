@@ -329,4 +329,61 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('Hi there', $signature);
         $this->assertNotNull($message->fresh()->body_html);
     }
+
+    public function test_it_does_not_import_a_quoted_outlook_signature(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'name' => 'Vernon Francis',
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $quoted = '<div id="divRplyFwdMsg"><hr><b>From:</b> Dana Reed<br>'
+            .'<div id="Signature"><p>Dana Reed</p><p>Client Corp</p></div></div>';
+
+        $this->sent(
+            $account,
+            '<p>Sounds good.</p><div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p></div>'
+            .$quoted,
+            'reply-1'
+        );
+        $this->sent(
+            $account,
+            '<p>Following up.</p><div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p></div>'
+            .$quoted,
+            'reply-2'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringNotContainsString('Dana Reed', $signature);
+        $this->assertStringNotContainsString('Client Corp', $signature);
+    }
+
+    public function test_it_does_not_import_a_quoted_gmail_signature(): void
+    {
+        $account = $this->account();
+
+        $this->sent(
+            $account,
+            '<div>On it.</div>'
+            .'<div class="gmail_signature" data-smartmail="gmail_signature"><div>Jane Doe</div><div>Advisor</div></div>'
+            .'<div class="gmail_quote">On Mon, Dana wrote:<br>'
+            .'<div class="gmail_signature">Dana Reed<br>Other Co</div></div>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Jane Doe', $signature);
+        $this->assertStringContainsString('Advisor', $signature);
+        $this->assertStringNotContainsString('Dana Reed', $signature);
+        $this->assertStringNotContainsString('Other Co', $signature);
+    }
 }
