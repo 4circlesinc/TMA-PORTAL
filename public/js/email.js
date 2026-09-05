@@ -1147,6 +1147,7 @@
 
   function openInlineCompose(state, mode) {
     if (!state.selectedId) return;
+    closeRecipientSuggest();
     // The open message may be one the thread carries rather than a row on the
     // page, its cc list is what "reply all" has to answer.
     var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
@@ -6635,6 +6636,14 @@
     }).join('');
   }
 
+  function recipientSuggestAnchor(input) {
+    return (input && (
+      input.closest('.tma-dash__email-compose-to') ||
+      input.closest('.tma-dash__email-inline-compose-row') ||
+      input.closest('[data-email-recipients]')
+    )) || input;
+  }
+
   function openRecipientSuggest(input, items) {
     closeRecipientSuggest();
     closeComposeMention();
@@ -6648,9 +6657,21 @@
     menu.innerHTML = renderSuggestMenu(items, activeIndex);
     document.body.appendChild(menu);
 
-    var rect = input.getBoundingClientRect();
+    var anchor = recipientSuggestAnchor(input);
+    var rect = anchor.getBoundingClientRect();
     menu.style.minWidth = Math.max(260, Math.round(rect.width)) + 'px';
-    positionEmailPopupMenu(input, menu);
+    positionEmailPopupMenu(anchor, menu);
+
+    var overlay = input.closest('[data-email-compose-overlay]');
+    if (overlay && !overlay.classList.contains('is-open')) {
+      overlay.addEventListener('transitionend', function onEnd(event) {
+        if (event.target !== overlay) return;
+        overlay.removeEventListener('transitionend', onEnd);
+        if (suggestActive && suggestActive.input === input && menu.isConnected) {
+          positionEmailPopupMenu(recipientSuggestAnchor(input), menu);
+        }
+      });
+    }
 
     function setActive(next) {
       activeIndex = Math.max(0, Math.min(items.length - 1, next));
@@ -6736,6 +6757,11 @@
 
   function requestRecipientSuggest(input) {
     var token = currentAddressToken(input.value, input.selectionStart).text;
+    // An empty To must not dump the directory the moment compose opens.
+    if (!String(token || '').trim()) {
+      closeRecipientSuggest();
+      return;
+    }
     // Skip when the token already looks like a finished address.
     if (token.indexOf('@') !== -1 && token.indexOf(' ') === -1 && /\.[a-z]{2,}$/i.test(token)) {
       closeRecipientSuggest();
@@ -6772,6 +6798,10 @@
     var timer = null;
     input.addEventListener('input', function () {
       var q = currentAddressToken(input.value, input.selectionStart).text;
+      if (!String(q || '').trim()) {
+        closeRecipientSuggest();
+        return;
+      }
       var cached = cachedSuggestions(q);
       if (cached && cached.length) openRecipientSuggest(input, cached);
       clearTimeout(timer);
@@ -6779,7 +6809,9 @@
     });
     input.addEventListener('focus', function () {
       prefetchRecipientSuggest();
-      var cached = cachedSuggestions(currentAddressToken(input.value, input.selectionStart).text);
+      var q = currentAddressToken(input.value, input.selectionStart).text;
+      if (!String(q || '').trim()) return;
+      var cached = cachedSuggestions(q);
       if (cached && cached.length) openRecipientSuggest(input, cached);
       clearTimeout(timer);
       timer = setTimeout(function () { requestRecipientSuggest(input); }, SUGGEST_DEBOUNCE_MS);
@@ -7062,6 +7094,7 @@
 
   function openCompose(state, opts) {
     opts = opts || {};
+    closeRecipientSuggest();
     closeInlineCompose(state);
     if (!opts.serverId && !opts.to && !opts.subject && !opts.bodyHtml && (!opts.mode || opts.mode === 'new')) {
       var existing = paneComposeDraft(state);
@@ -13290,9 +13323,10 @@
       if (state._focusCompose) {
         var focusId = state._focusCompose;
         state._focusCompose = null;
-        window.requestAnimationFrame(function () {
+        var wait = (state._composeEnter && !emailReduceMotion()) ? COMPOSE_PANE_MS : 0;
+        window.setTimeout(function () {
           focusPaneCompose(root, focusId);
-        });
+        }, wait);
       }
       if (state._composeEnter) {
         window.requestAnimationFrame(function () {
