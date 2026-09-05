@@ -17,6 +17,8 @@ check('and a trailing slash still counts',
   isComposePopoutUrl('https://portal.example.com/email/compose/', origin) === true);
 check('a draft query does not change that',
   isComposePopoutUrl('https://portal.example.com/email/compose?draft=compose-1', origin) === true);
+check('nor does a reply from the conversation window',
+  isComposePopoutUrl('https://portal.example.com/email/compose?message=abc&mode=reply', origin) === true);
 check('the mailbox itself is not a pop-out',
   isComposePopoutUrl('https://portal.example.com/email', origin) === false);
 check('nor is a conversation window',

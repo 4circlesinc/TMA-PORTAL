@@ -1179,16 +1179,10 @@
   /* Reply / reply-all / forward use the same pane composer as New Mail:
    * editable To, Cc/Bcc, Subject, toolbar, send, and pop-out. The quoted
    * original lives in the body so it actually goes out with Send. */
-  function openInlineCompose(state, mode) {
-    if (!state.selectedId) return;
-    closeRecipientSuggest();
-    closeInlineCompose(state);
-    var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
-    if (!row) return;
-
-    var quotedSource = threadMessage(state, row.id) || row;
-    var lines = rowListLines(row);
-    var subject = (state.thread && state.thread.subject) || lines.subject;
+  function composeFieldsFromMessage(row, mode, quotedSource) {
+    quotedSource = quotedSource || row;
+    var lines = rowListLines(quotedSource);
+    var subject = row.subject || lines.subject || '';
     var metaEmail = row.email || rowSenderEmail(row) || '';
     var metaDate = formatMessageDate(row);
     var quotedBodyHtml = quotedSource.bodyHtml || '';
@@ -1206,7 +1200,7 @@
       cc = formatAddressList(all.cc);
     }
 
-    openCompose(state, {
+    return {
       to: to,
       cc: cc,
       showCc: mode === 'reply-all',
@@ -1214,7 +1208,23 @@
       bodyHtml: composeTypingRoomHtml() + composeSignatureHtml() + quoteHtml,
       mode: mode,
       inReplyTo: row.id,
-    });
+    };
+  }
+
+  function openInlineCompose(state, mode) {
+    if (!state.selectedId) return;
+    closeRecipientSuggest();
+    closeInlineCompose(state);
+    var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
+    if (!row) return;
+
+    var quotedSource = threadMessage(state, row.id) || row;
+    var fields = composeFieldsFromMessage(row, mode, quotedSource);
+    if (state.thread && state.thread.subject) {
+      var threadSubject = state.thread.subject;
+      fields.subject = mode === 'forward' ? getForwardSubject(threadSubject) : getReplySubject(threadSubject);
+    }
+    openCompose(state, fields);
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc
@@ -3231,6 +3241,17 @@
       applyMailPreferences(state, data && data.preferences);
       announceInboxUnread(state);
 
+      // Reply / forward from the conversation window: fill the composer now
+      // that the mailbox address and signature library are known. The inbox
+      // listing is unused in this chrome-less window.
+      if (state._pendingPopoutCompose) {
+        state.loading = false;
+        state.listRefreshing = false;
+        finishPendingPopoutCompose(state);
+        render();
+        return;
+      }
+
       if (!state.connected) {
         state.loading = false;
         state.listRefreshing = false;
@@ -3259,6 +3280,7 @@
       // mailbox drops to the disconnected state.
       if (!rowsOf(state).length) state.connected = false;
       reportMailError(state, err);
+      finishPendingPopoutCompose(state);
       render();
     });
   }
@@ -7514,39 +7536,103 @@
     });
   }
 
-  function adoptComposePopoutDraft(state) {
-    var draftId = '';
-    try { draftId = new URLSearchParams(window.location.search).get('draft') || ''; } catch (e) {}
-    var snapshot = readComposePopoutSnapshot(draftId);
-    if (!snapshot) {
-      openCompose(state, {});
+  function applyPopoutComposeFields(state, fields) {
+    var draft = paneComposeDraft(state);
+    if (!draft) {
+      openCompose(state, fields);
       state._composeEnter = false;
+      draft = paneComposeDraft(state);
+    } else {
+      draft.to = fields.to;
+      draft.cc = fields.cc;
+      draft.showCc = fields.showCc;
+      draft.subject = fields.subject;
+      draft.bodyHtml = fields.bodyHtml;
+      draft.mode = fields.mode;
+      draft.inReplyTo = fields.inReplyTo;
+      draft.signatureId = signatureLibraryFromState().activeSignatureId || draft.signatureId;
+    }
+    if (fields.subject) {
+      try { document.title = fields.subject; } catch (e) { /* ignore */ }
+    }
+    if (state.render) state.render();
+    if (draft) {
+      var editor = (state.root || document).querySelector('[data-email-compose-body="' + draft.id + '"]');
+      if (editor) editor.innerHTML = draft.bodyHtml || '';
+    }
+  }
+
+  function fillComposeFromMessage(state, messageId, mode) {
+    if (!api() || typeof api().getMessage !== 'function') return;
+    rememberMailboxAccount(state.account);
+    var request = state._popoutComposeMessage || api().getMessage(messageId);
+    state._popoutComposeMessage = null;
+    request.then(function (data) {
+      var row = data && data.message;
+      if (!row) return;
+      applyPopoutComposeFields(state, composeFieldsFromMessage(row, mode));
+    }).catch(function () {
+      if (state.root) showEmailToast(state.root, 'Could not load the message to reply to');
+    });
+  }
+
+  function finishPendingPopoutCompose(state) {
+    var pending = state._pendingPopoutCompose;
+    if (!pending) return;
+    state._pendingPopoutCompose = null;
+    fillComposeFromMessage(state, pending.messageId, pending.mode);
+  }
+
+  function adoptComposePopoutDraft(state) {
+    var params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { params = new URLSearchParams(); }
+    var draftId = params.get('draft') || '';
+    var snapshot = readComposePopoutSnapshot(draftId);
+    if (snapshot) {
+      var draft = createComposeDraft(state, {
+        to: snapshot.to,
+        cc: snapshot.cc,
+        bcc: snapshot.bcc,
+        subject: snapshot.subject,
+        bodyHtml: snapshot.bodyHtml,
+        showCc: snapshot.showCc,
+        serverId: snapshot.serverId,
+        mode: snapshot.mode,
+        inReplyTo: snapshot.inReplyTo,
+        attachments: snapshot.attachments,
+        signatureId: snapshot.signatureId,
+      });
+      if (snapshot.id) draft.id = snapshot.id;
+      draft._typing = snapshot._typing || {};
+      state.composeDrafts.push(draft);
+      state.focusedComposeId = draft.id;
+      enterComposeView(state);
+      state._focusCompose = draft.id;
+      state._composeEnter = false;
+      prefetchRecipientSuggest();
+      if (draft.subject) {
+        try { document.title = draft.subject; } catch (e) { /* ignore */ }
+      }
       return;
     }
-    var draft = createComposeDraft(state, {
-      to: snapshot.to,
-      cc: snapshot.cc,
-      bcc: snapshot.bcc,
-      subject: snapshot.subject,
-      bodyHtml: snapshot.bodyHtml,
-      showCc: snapshot.showCc,
-      serverId: snapshot.serverId,
-      mode: snapshot.mode,
-      inReplyTo: snapshot.inReplyTo,
-      attachments: snapshot.attachments,
-      signatureId: snapshot.signatureId,
-    });
-    if (snapshot.id) draft.id = snapshot.id;
-    draft._typing = snapshot._typing || {};
-    state.composeDrafts.push(draft);
-    state.focusedComposeId = draft.id;
-    enterComposeView(state);
-    state._focusCompose = draft.id;
-    state._composeEnter = false;
-    prefetchRecipientSuggest();
-    if (draft.subject) {
-      try { document.title = draft.subject; } catch (e) { /* ignore */ }
+
+    var messageId = params.get('message') || '';
+    var mode = params.get('mode') || '';
+    if (messageId && (mode === 'reply' || mode === 'reply-all' || mode === 'forward')) {
+      // Title the window immediately; To / quote wait until bootstrap has the
+      // mailbox address and signature, then getMessage fills the draft.
+      openCompose(state, {
+        mode: mode,
+        inReplyTo: messageId,
+      });
+      state._composeEnter = false;
+      state._pendingPopoutCompose = { messageId: messageId, mode: mode };
+      try { state._popoutComposeMessage = api().getMessage(messageId); } catch (e) { state._popoutComposeMessage = null; }
+      return;
     }
+
+    openCompose(state, {});
+    state._composeEnter = false;
   }
 
   function toggleComposeExpand(state, id) {
@@ -13839,8 +13925,9 @@
       var mailParams = new URLSearchParams(window.location.search);
       var mailNotice = mailParams.get('notice');
       var mailMessage = mailParams.get('message');
-      // Reply / Reply all / Forward in the standalone conversation window come
-      // back here as ?compose=, since composing belongs in the mailbox.
+      // Reply / Reply all / Forward from the standalone conversation window
+      // open /email/compose?message=&mode=, a real composer window. The older
+      // ?compose= deep-link into the mailbox still works if it arrives.
       var mailCompose = mailParams.get('compose');
       if (!state.composePopout && (mailCompose === 'reply' || mailCompose === 'reply-all' || mailCompose === 'forward')) {
         state._pendingCompose = mailCompose;
@@ -13849,7 +13936,9 @@
         if (mailMessage) state._pendingMessageId = mailMessage;
         else if (pendingMessageId) state._pendingMessageId = pendingMessageId;
       }
-      if (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage) {
+      // Keep /email/compose?message=&mode= intact so a refresh still fills
+      // the reply. The mailbox deep-link is the one that should not linger.
+      if (!state.composePopout && (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage)) {
         var mailReason = mailParams.get('reason');
         mailParams.delete('notice');
         mailParams.delete('reason');

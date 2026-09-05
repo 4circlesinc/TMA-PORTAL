@@ -307,6 +307,11 @@ class MailConversationListTest extends TestCase
         $response->assertSee('tma-dash__email-message-head-name', false);
         $response->assertSee('tma-dash__email-thread-btn', false);
         $response->assertSee('to Test User', false);
+        $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=reply"', false);
+        $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=reply-all"', false);
+        $response->assertSee('/email/compose?message='.$message->uuid.'&amp;mode=forward"', false);
+        $response->assertSee('data-mail-window-compose', false);
+        $response->assertDontSee('compose=reply', false);
         $response->assertDontSee('tma-dash__sidebar', false);
         $response->assertDontSee('mw__bar', false);
         $response->assertDontSee('mw__msg', false);

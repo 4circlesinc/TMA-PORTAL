@@ -73,7 +73,7 @@
   };
 
   $icon = static fn (string $name): string => '/images/icons/phosphor/'.$name.'.svg';
-  $composeUrl = static fn (string $uuid, string $mode): string => '/email?message='.urlencode($uuid).'&compose='.$mode;
+  $composeUrl = static fn (string $uuid, string $mode): string => '/email/compose?message='.urlencode($uuid).'&mode='.$mode;
   $lastId = $messages->last()?->id;
 @endphp
 <!doctype html>
@@ -197,13 +197,13 @@
                     <time class="tma-dash__email-detail-date">{{ $metaDate }}</time>
                   @endif
                   <div class="tma-dash__email-detail-actions">
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply') }}" title="Reply" aria-label="Reply">
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Reply" aria-label="Reply">
                       <img src="{{ $icon('ArrowBendUpLeft') }}" alt="">
                     </a>
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply-all') }}" title="Reply all" aria-label="Reply all">
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply-all') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Reply all" aria-label="Reply all">
                       <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt="">
                     </a>
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'forward') }}" title="Forward" aria-label="Forward">
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'forward') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Forward" aria-label="Forward">
                       <img src="{{ $icon('ArrowBendUpRight') }}" alt="">
                     </a>
                   </div>
@@ -270,13 +270,13 @@
     <div class="tma-dash__email-detail-footer">
       <div class="tma-dash__email-thread-actions">
         <div class="tma-dash__email-thread-btns">
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply') }}">
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
             <img src="{{ $icon('ArrowBendUpLeft') }}" alt=""> Reply
           </a>
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply-all') }}">
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply-all') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
             <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt=""> Reply all
           </a>
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'forward') }}">
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'forward') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
             <img src="{{ $icon('ArrowBendUpRight') }}" alt=""> Forward
           </a>
         </div>
@@ -291,6 +291,25 @@
          bodies have been measured. */
       window.addEventListener('load', function () { window.setTimeout(function () { window.print(); }, 600); });
     @endif
+
+    /* Reply / Reply all / Forward open the chrome-less composer in its own
+       window — the same /email/compose surface New Mail pops out to — rather
+       than replacing this conversation with the full mailbox. */
+    document.querySelectorAll('[data-mail-window-compose]').forEach(function (link) {
+      link.addEventListener('click', function (event) {
+        event.preventDefault();
+        var opened = window.open(
+          link.href,
+          link.getAttribute('target') || 'tma-compose',
+          'popup=yes,width=760,height=820,menubar=no,toolbar=no,location=no,status=no'
+        );
+        if (opened) {
+          try { opened.focus(); } catch (e) { /* ignore */ }
+          return;
+        }
+        window.location.href = link.href;
+      });
+    });
 
     document.querySelectorAll('[data-sent-at]').forEach(function (el) {
       var when = new Date(el.getAttribute('data-sent-at'));
