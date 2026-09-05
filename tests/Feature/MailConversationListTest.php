@@ -308,7 +308,10 @@ class MailConversationListTest extends TestCase
         $response->assertSee('data-email-detail-tool="move"', false);
         $response->assertSee('data-email-detail-tool="flag"', false);
         $response->assertSee('data-email-detail-tool="unread"', false);
-        $response->assertSee('data-email-detail-tool="more"', false);
+        $response->assertSee('data-email-detail-tool="star"', false);
+        $response->assertSee('data-email-detail-tool="spam"', false);
+        $response->assertSee('data-email-detail-tool="print"', false);
+        $response->assertDontSee('data-email-detail-tool="more"', false);
         $response->assertSee('tma-dash__email-detail', false);
         $response->assertSee('tma-dash__email-message-head-name', false);
         $response->assertSee('tma-dash__email-thread-btn', false);

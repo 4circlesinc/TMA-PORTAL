@@ -3581,6 +3581,17 @@
     });
   }
 
+  function setRowStarred(state, id, starred) {
+    var row = findAnyRow(state, id);
+    if (!row || !!row.starred === !!starred) return;
+    eachRowCopy(state, id, function (copy) { copy.starred = starred; });
+    api().setFlags(id, { starred: starred }).catch(function (err) {
+      eachRowCopy(state, id, function (copy) { copy.starred = !starred; });
+      reportMailError(state, err);
+      if (state.render) state.render();
+    });
+  }
+
   function syncEmailRowReadClasses(rowEl, unread) {
     if (!rowEl) return;
     rowEl.classList.toggle('tma-dash__email-row--unread', unread);
@@ -6443,6 +6454,7 @@
     var inArchive = folder === 'archive';
     var unread = isRowUnread(row, state);
     var important = isRowImportant(row, state);
+    var starred = isRowStarred(row, state);
     return [
       { id: 'delete', label: 'Delete', icon: 'Trash' },
       {
@@ -6463,7 +6475,14 @@
         label: unread ? 'Mark Read' : 'Mark Unread',
         icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple',
       },
-      { id: 'more', label: 'More', icon: 'DotsThree', menu: true },
+      {
+        id: 'star',
+        label: starred ? 'Starred' : 'Star',
+        icon: starred ? 'StarFilled' : 'Star',
+        active: starred,
+      },
+      { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+      { id: 'print', label: 'Print', icon: 'Printer' },
     ];
   }
 
@@ -13322,10 +13341,6 @@
         var action = btn.getAttribute('data-email-detail-tool');
         var id = state.selectedId;
         if (!id || !action) return;
-        if (action === 'more') {
-          openEmailMessageMenu(root, state, render, btn, id);
-          return;
-        }
         if (action === 'move') {
           openEmailMoveMenu(root, state, render, btn, id);
           return;
@@ -13339,7 +13354,17 @@
           render();
           return;
         }
-        if (action === 'archive' || action === 'inbox' || action === 'delete') {
+        if (action === 'star') {
+          var row = findAnyRow(state, id);
+          setRowStarred(state, id, !(row && row.starred));
+          render();
+          return;
+        }
+        if (action === 'print') {
+          openMailInWindow(root, id, { print: true });
+          return;
+        }
+        if (action === 'archive' || action === 'inbox' || action === 'delete' || action === 'spam') {
           applyEmailRowAction(
             root,
             state,

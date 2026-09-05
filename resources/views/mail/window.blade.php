@@ -198,7 +198,9 @@
           $isUnread
               ? ['id' => 'read', 'label' => 'Mark Read', 'icon' => 'EnvelopeSimpleOpen', 'menu' => false, 'active' => false]
               : ['id' => 'unread', 'label' => 'Mark Unread', 'icon' => 'EnvelopeSimple', 'menu' => false, 'active' => false],
-          ['id' => 'more', 'label' => 'More', 'icon' => 'DotsThree', 'menu' => true, 'active' => false],
+          ['id' => 'star', 'label' => $isStarred ? 'Starred' : 'Star', 'icon' => $isStarred ? 'StarFilled' : 'Star', 'menu' => false, 'active' => $isStarred],
+          ['id' => 'spam', 'label' => 'Spam', 'icon' => 'WarningOctagon', 'menu' => false, 'active' => false],
+          ['id' => 'print', 'label' => 'Print', 'icon' => 'Printer', 'menu' => false, 'active' => false],
       ];
     @endphp
     <div class="tma-dash__email-detail-tools" data-email-detail-tools role="toolbar" aria-label="Message tools"
@@ -227,9 +229,6 @@
       <div class="tma-dash__email-detail-subject">
         <span class="tma-dash__email-detail-subject-text">{{ $subject }}</span>
         <span class="tma-dash__email-detail-subject-trailing">
-          <button type="button" class="tma-dash__email-action" title="Print" aria-label="Print" onclick="window.print()">
-            <img src="{{ $icon('Printer') }}" alt="">
-          </button>
           <a class="tma-dash__email-action" href="/email?message={{ $opened->uuid }}" title="Open in mailbox" aria-label="Open in mailbox">
             <img src="{{ $icon('ArrowSquareOut') }}" alt="">
           </a>
@@ -701,13 +700,20 @@
 
       function setStarred(starred) {
         bar.setAttribute('data-starred', starred ? '1' : '0');
+        var btn = toolBtn('star');
+        if (!btn) return;
+        btn.classList.toggle('tma-dash__email-detail-tool--active', starred);
+        btn.setAttribute('aria-label', starred ? 'Starred' : 'Star');
+        var label = btn.querySelector('.tma-dash__email-detail-tool-label');
+        if (label) label.textContent = starred ? 'Starred' : 'Star';
+        var img = btn.querySelector(':scope > img');
+        if (img) img.src = iconUrl(starred ? 'StarFilled' : 'Star');
       }
 
       bar.addEventListener('click', function (event) {
         var btn = event.target.closest('[data-email-detail-tool]');
         if (!btn || !bar.contains(btn)) return;
         var action = btn.getAttribute('data-email-detail-tool');
-        var unread = bar.getAttribute('data-unread') === '1';
         var important = bar.getAttribute('data-important') === '1';
         var starred = bar.getAttribute('data-starred') === '1';
 
@@ -729,6 +735,22 @@
             setUnread(!nextRead);
             toast(nextRead ? 'Marked as read' : 'Marked as unread');
           }).catch(fail);
+          return;
+        }
+        if (action === 'star') {
+          var nextStar = !starred;
+          api.setFlags(id, { starred: nextStar }).then(function () {
+            setStarred(nextStar);
+            toast(nextStar ? 'Starred' : 'Star removed');
+          }).catch(fail);
+          return;
+        }
+        if (action === 'spam') {
+          moveTo('spam', 'Marked as spam');
+          return;
+        }
+        if (action === 'print') {
+          window.print();
           return;
         }
         if (action === 'move') {
@@ -759,30 +781,6 @@
             }).catch(fail);
           });
           return;
-        }
-        if (action === 'more') {
-          openMenu(btn, [
-            { id: starred ? 'unstar' : 'star', label: starred ? 'Remove star' : 'Add star', icon: starred ? 'StarFilled' : 'Star', active: starred },
-            { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
-            { separator: true },
-            { id: 'print', label: 'Print', icon: 'Printer' }
-          ], function (picked) {
-            if (picked === 'print') {
-              window.print();
-              return;
-            }
-            if (picked === 'spam') {
-              moveTo('spam', 'Marked as spam');
-              return;
-            }
-            if (picked === 'star' || picked === 'unstar') {
-              var nextStar = picked === 'star';
-              api.setFlags(id, { starred: nextStar }).then(function () {
-                setStarred(nextStar);
-                toast(nextStar ? 'Starred' : 'Star removed');
-              }).catch(fail);
-            }
-          });
         }
       });
     })();
