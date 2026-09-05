@@ -7536,6 +7536,25 @@
     });
   }
 
+  function paintPopoutComposeFields(state, draft) {
+    if (!draft) return;
+    var root = state.root || document;
+    var win = root.querySelector('[data-email-compose-window="' + draft.id + '"]');
+    if (!win) return;
+    var subject = win.querySelector('[data-email-compose-field="subject"]');
+    if (subject && document.activeElement !== subject) subject.value = draft.subject || '';
+    ['to', 'cc', 'bcc'].forEach(function (field) {
+      var input = win.querySelector('[data-email-compose-field="' + field + '"]');
+      if (!input) return;
+      var wrap = recipientFieldOf(input);
+      if (!wrap) return;
+      wrap.querySelectorAll('[data-email-recipient]').forEach(function (pill) { pill.remove(); });
+      recipientFieldAdd(input, parseAddresses(draft[field]));
+    });
+    var editor = win.querySelector('[data-email-compose-body="' + draft.id + '"]');
+    if (editor && draft.bodyHtml) editor.innerHTML = draft.bodyHtml;
+  }
+
   function applyPopoutComposeFields(state, fields) {
     var draft = paneComposeDraft(state);
     if (!draft) {
@@ -7556,10 +7575,7 @@
       try { document.title = fields.subject; } catch (e) { /* ignore */ }
     }
     if (state.render) state.render();
-    if (draft) {
-      var editor = (state.root || document).querySelector('[data-email-compose-body="' + draft.id + '"]');
-      if (editor) editor.innerHTML = draft.bodyHtml || '';
-    }
+    paintPopoutComposeFields(state, draft);
   }
 
   function fillComposeFromMessage(state, messageId, mode) {
@@ -7569,7 +7585,10 @@
     state._popoutComposeMessage = null;
     request.then(function (data) {
       var row = data && data.message;
-      if (!row) return;
+      if (!row) {
+        if (state.root) showEmailToast(state.root, 'Could not load the message to reply to');
+        return;
+      }
       applyPopoutComposeFields(state, composeFieldsFromMessage(row, mode));
     }).catch(function () {
       if (state.root) showEmailToast(state.root, 'Could not load the message to reply to');
@@ -7604,6 +7623,7 @@
       });
       if (snapshot.id) draft.id = snapshot.id;
       draft._typing = snapshot._typing || {};
+      if (!draft.bodyHtml) draft.bodyHtml = composeTypingRoomHtml() + composeSignatureHtml();
       state.composeDrafts.push(draft);
       state.focusedComposeId = draft.id;
       enterComposeView(state);
@@ -7613,14 +7633,19 @@
       if (draft.subject) {
         try { document.title = draft.subject; } catch (e) { /* ignore */ }
       }
+      var snapMessageId = params.get('message') || snapshot.inReplyTo || '';
+      var snapMode = params.get('mode') || snapshot.mode || '';
+      if (snapMessageId && (snapMode === 'reply' || snapMode === 'reply-all' || snapMode === 'forward')) {
+        state._pendingPopoutCompose = { messageId: snapMessageId, mode: snapMode };
+        try { state._popoutComposeMessage = api().getMessage(snapMessageId); } catch (e) { state._popoutComposeMessage = null; }
+        fillComposeFromMessage(state, snapMessageId, snapMode);
+      }
       return;
     }
 
     var messageId = params.get('message') || '';
     var mode = params.get('mode') || '';
     if (messageId && (mode === 'reply' || mode === 'reply-all' || mode === 'forward')) {
-      // Title the window immediately; To / quote wait until bootstrap has the
-      // mailbox address and signature, then getMessage fills the draft.
       openCompose(state, {
         mode: mode,
         inReplyTo: messageId,
@@ -7628,6 +7653,7 @@
       state._composeEnter = false;
       state._pendingPopoutCompose = { messageId: messageId, mode: mode };
       try { state._popoutComposeMessage = api().getMessage(messageId); } catch (e) { state._popoutComposeMessage = null; }
+      fillComposeFromMessage(state, messageId, mode);
       return;
     }
 

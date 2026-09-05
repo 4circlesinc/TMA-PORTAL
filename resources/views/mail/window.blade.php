@@ -74,6 +74,96 @@
 
   $icon = static fn (string $name): string => '/images/icons/phosphor/'.$name.'.svg';
   $composeUrl = static fn (string $uuid, string $mode): string => '/email/compose?message='.urlencode($uuid).'&mode='.$mode;
+
+  $mailboxAddr = strtolower(trim((string) ($mailboxEmail ?? '')));
+  $isSelfAddress = static function (string $email) use ($mailboxAddr): bool {
+      $email = strtolower(trim($email));
+
+      return $email !== '' && $mailboxAddr !== '' && $email === $mailboxAddr;
+  };
+  $asAddress = static function (mixed $a): ?array {
+      if (is_string($a)) {
+          $email = trim($a);
+
+          return $email !== '' ? ['name' => '', 'email' => $email] : null;
+      }
+      if (! is_array($a)) {
+          return null;
+      }
+      $email = trim((string) ($a['email'] ?? ''));
+      if ($email === '') {
+          return null;
+      }
+
+      return ['name' => trim((string) ($a['name'] ?? '')), 'email' => $email];
+  };
+  $uniqueAddresses = static function (array $list) use ($asAddress, $isSelfAddress): array {
+      $seen = [];
+      $out = [];
+      foreach ($list as $item) {
+          $addr = $asAddress($item);
+          if (! $addr || $isSelfAddress($addr['email'])) {
+              continue;
+          }
+          $key = strtolower($addr['email']);
+          if (isset($seen[$key])) {
+              continue;
+          }
+          $seen[$key] = true;
+          $out[] = $addr;
+      }
+
+      return $out;
+  };
+  $composeSubject = static function (?string $subject, string $mode): string {
+      $trimmed = trim((string) $subject);
+      if ($mode === 'forward') {
+          return preg_match('/^(fwd?:|fw:)/i', $trimmed) ? $trimmed : 'Fwd: '.$trimmed;
+      }
+
+      return preg_match('/^re:/i', $trimmed) ? $trimmed : 'Re: '.$trimmed;
+  };
+  $composeFields = static function ($m, string $mode) use ($addresses, $composeUrl, $composeSubject, $isSelfAddress, $uniqueAddresses): array {
+      $subject = $composeSubject($m->subject, $mode);
+      if ($mode === 'forward') {
+          return ['url' => $composeUrl($m->uuid, $mode), 'to' => '', 'cc' => '', 'subject' => $subject];
+      }
+      $replyTo = [];
+      if (is_string($m->reply_to) && trim($m->reply_to) !== '') {
+          $replyTo[] = ['name' => '', 'email' => trim($m->reply_to)];
+      } elseif (is_array($m->reply_to) && $m->reply_to) {
+          $replyTo = $m->reply_to;
+      } else {
+          $replyTo[] = ['name' => (string) $m->from_name, 'email' => (string) $m->from_email];
+      }
+      $fromSelf = $isSelfAddress((string) $m->from_email);
+      if ($mode === 'reply') {
+          $to = $fromSelf ? $uniqueAddresses($m->to ?? []) : $uniqueAddresses($replyTo);
+
+          return ['url' => $composeUrl($m->uuid, $mode), 'to' => $addresses($to), 'cc' => '', 'subject' => $subject];
+      }
+      $to = $fromSelf ? [] : $replyTo;
+      $to = $uniqueAddresses(array_merge($to, is_array($m->to) ? $m->to : []));
+      $inTo = [];
+      foreach ($to as $addr) {
+          $inTo[strtolower($addr['email'])] = true;
+      }
+      $cc = [];
+      foreach (is_array($m->cc) ? $m->cc : [] as $item) {
+          $email = strtolower(trim((string) (is_array($item) ? ($item['email'] ?? '') : $item)));
+          if ($email === '' || isset($inTo[$email]) || $isSelfAddress($email)) {
+              continue;
+          }
+          $cc[] = $item;
+      }
+
+      return [
+          'url' => $composeUrl($m->uuid, $mode),
+          'to' => $addresses($to),
+          'cc' => $addresses($uniqueAddresses($cc)),
+          'subject' => $subject,
+      ];
+  };
   $lastId = $messages->last()?->id;
 @endphp
 <!doctype html>
@@ -129,6 +219,9 @@
             $msgSubject = $m->subject ?: '(no subject)';
             $inlineCount = $m->attachments->where('is_inline', true)->count();
             $fileCount = $m->attachments->count() - $inlineCount;
+            $reply = $composeFields($m, 'reply');
+            $replyAll = $composeFields($m, 'reply-all');
+            $forward = $composeFields($m, 'forward');
           @endphp
           <article class="tma-dash__email-message tma-dash__email-message--expanded{{ $isCurrent ? ' tma-dash__email-message--current' : '' }}{{ $isPrior ? ' tma-dash__email-message--prior' : '' }}">
             <div class="tma-dash__email-message-head-wrap">
@@ -197,13 +290,13 @@
                     <time class="tma-dash__email-detail-date">{{ $metaDate }}</time>
                   @endif
                   <div class="tma-dash__email-detail-actions">
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Reply" aria-label="Reply">
+                    <a class="tma-dash__email-action" href="{{ $reply['url'] }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose data-compose-to="{{ $reply['to'] }}" data-compose-cc="{{ $reply['cc'] }}" data-compose-subject="{{ $reply['subject'] }}" title="Reply" aria-label="Reply">
                       <img src="{{ $icon('ArrowBendUpLeft') }}" alt="">
                     </a>
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply-all') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Reply all" aria-label="Reply all">
+                    <a class="tma-dash__email-action" href="{{ $replyAll['url'] }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose data-compose-to="{{ $replyAll['to'] }}" data-compose-cc="{{ $replyAll['cc'] }}" data-compose-subject="{{ $replyAll['subject'] }}" title="Reply all" aria-label="Reply all">
                       <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt="">
                     </a>
-                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'forward') }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose title="Forward" aria-label="Forward">
+                    <a class="tma-dash__email-action" href="{{ $forward['url'] }}" target="tma-compose-{{ $m->uuid }}" data-mail-window-compose data-compose-to="{{ $forward['to'] }}" data-compose-cc="{{ $forward['cc'] }}" data-compose-subject="{{ $forward['subject'] }}" title="Forward" aria-label="Forward">
                       <img src="{{ $icon('ArrowBendUpRight') }}" alt="">
                     </a>
                   </div>
@@ -268,15 +361,20 @@
     </div>
 
     <div class="tma-dash__email-detail-footer">
+      @php
+        $openedReply = $composeFields($opened, 'reply');
+        $openedReplyAll = $composeFields($opened, 'reply-all');
+        $openedForward = $composeFields($opened, 'forward');
+      @endphp
       <div class="tma-dash__email-thread-actions">
         <div class="tma-dash__email-thread-btns">
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
+          <a class="tma-dash__email-thread-btn" href="{{ $openedReply['url'] }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose data-compose-to="{{ $openedReply['to'] }}" data-compose-cc="{{ $openedReply['cc'] }}" data-compose-subject="{{ $openedReply['subject'] }}">
             <img src="{{ $icon('ArrowBendUpLeft') }}" alt=""> Reply
           </a>
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply-all') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
+          <a class="tma-dash__email-thread-btn" href="{{ $openedReplyAll['url'] }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose data-compose-to="{{ $openedReplyAll['to'] }}" data-compose-cc="{{ $openedReplyAll['cc'] }}" data-compose-subject="{{ $openedReplyAll['subject'] }}">
             <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt=""> Reply all
           </a>
-          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'forward') }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose>
+          <a class="tma-dash__email-thread-btn" href="{{ $openedForward['url'] }}" target="tma-compose-{{ $opened->uuid }}" data-mail-window-compose data-compose-to="{{ $openedForward['to'] }}" data-compose-cc="{{ $openedForward['cc'] }}" data-compose-subject="{{ $openedForward['subject'] }}">
             <img src="{{ $icon('ArrowBendUpRight') }}" alt=""> Forward
           </a>
         </div>
@@ -294,12 +392,41 @@
 
     /* Reply / Reply all / Forward open the chrome-less composer in its own
        window — the same /email/compose surface New Mail pops out to — rather
-       than replacing this conversation with the full mailbox. */
+       than replacing this conversation with the full mailbox. To and Subject
+       travel in sessionStorage so the composer is addressed on the first
+       paint, the same way New Mail hands off a draft. */
     document.querySelectorAll('[data-mail-window-compose]').forEach(function (link) {
       link.addEventListener('click', function (event) {
         event.preventDefault();
+        var href = link.href;
+        try {
+          var url = new URL(href, window.location.origin);
+          var messageId = url.searchParams.get('message') || '';
+          var mode = url.searchParams.get('mode') || 'reply';
+          if (messageId) {
+            var draftId = 'compose-window-' + messageId + '-' + mode;
+            var snapshot = {
+              id: draftId,
+              to: link.getAttribute('data-compose-to') || '',
+              cc: link.getAttribute('data-compose-cc') || '',
+              bcc: '',
+              subject: link.getAttribute('data-compose-subject') || '',
+              bodyHtml: '',
+              showCc: mode === 'reply-all' && !!(link.getAttribute('data-compose-cc') || ''),
+              serverId: null,
+              mode: mode,
+              inReplyTo: messageId,
+              attachments: [],
+              signatureId: '',
+              _typing: {}
+            };
+            window.sessionStorage.setItem('tma.mail.compose-popout.' + draftId, JSON.stringify(snapshot));
+            url.searchParams.set('draft', draftId);
+            href = url.pathname + url.search;
+          }
+        } catch (e) { /* fall through with the href on the link */ }
         var opened = window.open(
-          link.href,
+          href,
           link.getAttribute('target') || 'tma-compose',
           'popup=yes,width=760,height=820,menubar=no,toolbar=no,location=no,status=no'
         );
@@ -307,7 +434,7 @@
           try { opened.focus(); } catch (e) { /* ignore */ }
           return;
         }
-        window.location.href = link.href;
+        window.location.href = href;
       });
     });
 
