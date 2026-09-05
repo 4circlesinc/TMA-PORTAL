@@ -8098,8 +8098,7 @@
       (state.connected ? '' : ' disabled') +
       '>' + esc(importSignatureButtonLabel(state)) + '</button>' +
       '</div></div>' +
-      '<p class="tma-dash__email-settings-hint">Edits save as you type. Import adds signatures from Outlook or Gmail; pick which one is in use above.' +
-      ' You can also paste from Outlook Signatures, then upload a PNG, JPEG or WebP logo and resize it.</p>' +
+      '<p class="tma-dash__email-settings-hint">Edits save as you type. Import shows the signatures found in Outlook or Gmail so you can pick the right one.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, insertImage: true }) +
       '<div class="tma-dash__email-settings-signature-stage tma-dash__email-image-stage" data-email-image-stage>' +
@@ -8835,7 +8834,47 @@
           renderEmailSettingsPanel(state, tab, prefs) +
           '</div>') +
 
-      '</div></div>'
+      '</div>' +
+      renderSignatureImportPicker(state) +
+      '</div>'
+    );
+  }
+
+  function renderSignatureImportPicker(state) {
+    var choices = state.signatureImportChoices;
+    if (!choices || !choices.length) return '';
+    var selected = Math.max(0, Math.min(choices.length - 1, state.signatureImportSelected || 0));
+    var provider = state.account && state.account.provider === 'microsoft' ? 'Outlook' : 'the mailbox';
+
+    return (
+      '<div class="tma-dash__email-sig-import" data-email-sig-import role="dialog" aria-modal="true"' +
+      ' aria-labelledby="tma-mail-sig-import-title">' +
+      '<div class="tma-dash__email-sig-import-card">' +
+      '<h3 id="tma-mail-sig-import-title" class="tma-dash__email-sig-import-title">Which signature should we use?</h3>' +
+      '<p class="tma-dash__email-sig-import-lead">' +
+      esc(provider) + ' can keep more than one — new mail, replies, and older sends often differ. Pick the one that matches yours.</p>' +
+      '<div class="tma-dash__email-sig-import-list" role="listbox" aria-label="Signature choices">' +
+      choices.map(function (choice, index) {
+        var on = index === selected;
+        var preview = String(choice.preview || '').trim();
+        return (
+          '<button type="button" class="tma-dash__email-sig-import-choice' + (on ? ' is-selected' : '') + '"' +
+          ' role="option" aria-selected="' + (on ? 'true' : 'false') + '"' +
+          ' data-email-sig-import-choice="' + index + '">' +
+          '<span class="tma-dash__email-sig-import-choice-head">' +
+          '<span class="tma-dash__email-settings-signature-radio" aria-hidden="true"></span>' +
+          '<span class="tma-dash__email-sig-import-choice-name">' + esc(choice.name || 'Signature') + '</span>' +
+          '</span>' +
+          (preview ? '<span class="tma-dash__email-sig-import-choice-preview-text">' + esc(preview) + '</span>' : '') +
+          '<div class="tma-dash__email-sig-import-choice-html" aria-hidden="true">' + (choice.html || '') + '</div>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>' +
+      '<div class="tma-dash__email-sig-import-actions">' +
+      '<button type="button" class="tma-dash__email-settings-btn" data-email-sig-import-cancel>Cancel</button>' +
+      '<button type="button" class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary" data-email-sig-import-apply>Use this signature</button>' +
+      '</div></div></div>'
     );
   }
 
@@ -8849,6 +8888,7 @@
 
   function closeEmailSettingsPanel(root, state, render) {
     flushSignatureEditor(root, state);
+    state.signatureImportChoices = null;
     state.settingsOpen = false;
     render();
   }
@@ -8866,6 +8906,11 @@
       document.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !state.settingsOpen) return;
         event.preventDefault();
+        if (state.signatureImportChoices && state.signatureImportChoices.length) {
+          state.signatureImportChoices = null;
+          (state.render || render)();
+          return;
+        }
         closeEmailSettingsPanel(root, state, state.render || render);
       });
     }
@@ -9435,29 +9480,92 @@
         btn.textContent = 'Importing…';
 
         api().importSignature().then(function (data) {
-          if (!state.settings) state.settings = {};
-          state.settings.preferences = data.preferences || state.settings.preferences;
-          if (state.preferences && data.preferences) {
-            state.preferences.signature = data.preferences.signature;
-            state.preferences.signatures = data.preferences.signatures;
-            state.preferences.activeSignatureId = data.preferences.activeSignatureId;
+          btn.disabled = false;
+          btn.textContent = previous;
+          var choices = (data && data.choices) || [];
+          if (!choices.length) {
+            showEmailToast(root, (data && data.message) || 'No signature was found');
+            return;
           }
+          state.signatureImportChoices = choices;
+          state.signatureImportSelected = 0;
           state.settingsTab = 'sending';
-          state._signatureCidWarned = false;
-          var count = Number(data.importedCount) || 1;
-          showEmailToast(
-            root,
-            count > 1
-              ? 'Imported ' + count + ' signatures. Choose which one is in use.'
-              : 'Signature imported. Choose it above if you want a different one.'
-          );
           render();
         }).catch(function (err) {
           btn.disabled = false;
           btn.textContent = previous;
+          if (err && err.status === 422) {
+            showEmailToast(root, (err.data && err.data.message) || err.message || 'No signature was found');
+            return;
+          }
           reportMailError(state, err);
         });
       });
+    });
+
+    MORPH.unwired(root, '[data-email-sig-import]').forEach(function (overlay) {
+      overlay.addEventListener('click', function (event) {
+        if (event.target !== overlay) return;
+        state.signatureImportChoices = null;
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-sig-import-choice]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var index = parseInt(btn.getAttribute('data-email-sig-import-choice'), 10);
+        if (isNaN(index)) return;
+        state.signatureImportSelected = index;
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-sig-import-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.signatureImportChoices = null;
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-sig-import-apply]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyImportedSignatureChoice(root, state, render, btn);
+      });
+    });
+  }
+
+  function applyImportedSignatureChoice(root, state, render, btn) {
+    var choices = state.signatureImportChoices || [];
+    var selected = choices[state.signatureImportSelected || 0];
+    if (!selected || !selected.html) {
+      showEmailToast(root, 'Pick a signature first');
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+    }
+    api().applyImportedSignature({
+      html: selected.html,
+      name: selected.name || '',
+    }).then(function (data) {
+      if (!state.settings) state.settings = {};
+      state.settings.preferences = data.preferences || state.settings.preferences;
+      if (state.preferences && data.preferences) {
+        state.preferences.signature = data.preferences.signature;
+        state.preferences.signatures = data.preferences.signatures;
+        state.preferences.activeSignatureId = data.preferences.activeSignatureId;
+      }
+      state.signatureImportChoices = null;
+      state._signatureCidWarned = false;
+      showEmailToast(root, 'Signature imported');
+      render();
+    }).catch(function (err) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Use this signature';
+      }
+      reportMailError(state, err);
     });
   }
 
@@ -11944,8 +12052,12 @@
         if (event.key !== 'Escape') return;
         // Settings sits above everything else, so it closes first.
         if (state.settingsOpen) {
-          state.settingsOpen = false;
-          render();
+          if (state.signatureImportChoices && state.signatureImportChoices.length) {
+            state.signatureImportChoices = null;
+            render();
+            return;
+          }
+          closeEmailSettingsPanel(root, state, render);
           return;
         }
         if (root.querySelector('[data-email-header-details-toggle][aria-expanded="true"]')) {

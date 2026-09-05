@@ -1276,12 +1276,13 @@ field placement and drawing, and computed CSS only exist in a browser.
 - **`email-import-signature.mjs`** — the "Import from Gmail / Outlook" button
   in Email settings → Sending. PHPUnit pins the importer and the endpoint
   (`SignatureImporterTest`, `MailboxTest`); what only a browser can check is
-  the round trip the user sees: the click fills the contenteditable editor
-  with the block lifted from Sent mail, the library gains exactly one active
-  "Default From Gmail" entry, the button's label recovers after the morph
-  (both on success and on a stubbed 422 — a button stuck on "Importing…" is
-  the regression it guards), re-importing reuses the slot instead of stacking
-  duplicates, and a fresh compose opens carrying the imported block.
+  the round trip the user sees: the click opens a chooser of signatures found
+  in the mailbox, nothing is saved until **Use this signature**, the library
+  gains exactly one active "Default From Gmail" entry, the button's label
+  recovers after the morph (both on success and on a stubbed 422 — a button
+  stuck on "Importing…" is the regression it guards), re-importing reuses the
+  slot instead of stacking duplicates, and a fresh compose opens carrying the
+  imported block.
 
   Wants a **fresh** database — the flow writes the imported signature into the
   user's preferences, so a re-run against yesterday's file starts from a dirty

@@ -63,7 +63,25 @@ class MailboxTest extends TestCase
         ], $overrides));
     }
 
-    /** The access-token exchange every provider call begins with. */
+    private function pickImportedSignature(User $user, int $index = 0): array
+    {
+        $preview = $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk();
+        $choices = $preview->json('choices');
+        $this->assertIsArray($choices);
+        $this->assertNotEmpty($choices);
+        $choice = $choices[$index];
+
+        return $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature/apply', [
+                'html' => $choice['html'],
+                'name' => $choice['name'],
+            ])
+            ->assertOk()
+            ->json();
+    }
+
     private function fakeTokenEndpoint(array $extra = []): void
     {
         Http::fake(array_merge([
@@ -423,11 +441,10 @@ class MailboxTest extends TestCase
                 .'<div>Test User</div><img src="'.$logo.'" width="160" height="80" alt="Logo"></div>',
         ]);
 
-        $this->actingAs($user)
-            ->postJson('/portal/mail/settings/import-signature')
-            ->assertOk();
+        $this->assertNull(data_get($user->fresh()->preferences, 'mail.signature'));
 
-        $stored = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $applied = $this->pickImportedSignature($user);
+        $stored = (string) data_get($applied, 'preferences.signature');
         $this->assertGreaterThan(100000, strlen($stored));
         $this->assertStringContainsString($payload, $stored);
         $this->assertStringNotContainsString('Hi', $stored);
@@ -448,21 +465,34 @@ class MailboxTest extends TestCase
                 .'<div><b>Test User</b></div><div>TMA</div></div>',
         ]);
 
-        $response = $this->actingAs($user)
+        $preview = $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk();
+
+        $this->assertNull(data_get($user->fresh()->preferences, 'mail.signature'));
+        $choices = $preview->json('choices');
+        $this->assertNotEmpty($choices);
+        $this->assertStringContainsString('Test User', (string) $choices[0]['html']);
+        $this->assertStringContainsString('TMA', (string) $choices[0]['html']);
+        $this->assertStringNotContainsString('Hi', (string) $choices[0]['html']);
+
+        $response = $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature/apply', [
+                'html' => $choices[0]['html'],
+                'name' => $choices[0]['name'],
+            ])
             ->assertOk();
 
         $signature = $response->json('preferences.signature');
         $this->assertIsString($signature);
         $this->assertStringContainsString('Test User', $signature);
         $this->assertStringContainsString('TMA', $signature);
-        $this->assertStringNotContainsString('Hi', $signature);
         $this->assertStringContainsString(
             'Test User',
             data_get($user->fresh()->preferences, 'mail.signature')
         );
         $this->assertSame(
-            'Default From Gmail',
+            $choices[0]['name'],
             data_get($response->json('preferences.signatures'), '0.name')
         );
     }
@@ -493,15 +523,23 @@ class MailboxTest extends TestCase
                 .'<div><b>Imported User</b></div></div>',
         ]);
 
-        $response = $this->actingAs($user)
+        $preview = $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
             ->assertOk();
+        $choices = $preview->json('choices');
+        $this->assertNotEmpty($choices);
 
-        $names = collect($response->json('preferences.signatures'))->pluck('name')->all();
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature/apply', [
+                'html' => $choices[0]['html'],
+                'name' => $choices[0]['name'],
+            ])
+            ->assertOk();
+
+        $names = collect(data_get($user->fresh()->preferences, 'mail.signatures'))->pluck('name')->all();
         $this->assertContains('Work', $names);
-        $this->assertContains('Default From Gmail', $names);
-        $this->assertStringContainsString('Work', (string) collect($response->json('preferences.signatures'))->firstWhere('name', 'Work')['html']);
-        $this->assertStringContainsString('Imported User', (string) $response->json('preferences.signature'));
+        $this->assertStringContainsString('Work', (string) collect(data_get($user->fresh()->preferences, 'mail.signatures'))->firstWhere('name', 'Work')['html']);
+        $this->assertStringContainsString('Imported User', (string) data_get($user->fresh()->preferences, 'mail.signature'));
     }
 
     public function test_import_signature_names_outlook_defaults(): void
@@ -528,13 +566,91 @@ class MailboxTest extends TestCase
                 'expires_in' => 3600,
             ]),
             'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
-        $this->actingAs($user)
+        $preview = $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
-            ->assertOk()
-            ->assertJsonPath('preferences.signatures.0.name', 'Default From Outlook');
+            ->assertOk();
+        $this->assertNotEmpty($preview->json('choices'));
+        $this->assertStringContainsString(
+            'Outlook User',
+            (string) data_get($preview->json('choices'), '0.html')
+        );
+        $this->assertNull(data_get($user->fresh()->preferences, 'mail.signature'));
+    }
+
+    public function test_import_signature_saves_only_the_outlook_choice_the_user_picks(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user, [
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+            'scopes' => ['Mail.ReadWrite'],
+        ]);
+
+        $this->message($user, $account, [
+            'remote_id' => 'seed-1',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<p>Thanks.</p><div id="appendonsend"></div>'
+                .'<div id="Signature"><p>Office hours only</p></div>',
+        ]);
+
+        $draftBody = '<div></div><div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+            .'<p>Managing Director</p></div>';
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*/createReply' => Http::response(['id' => 'draft-sig-1']),
+            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/v1.0/me/messages/draft-sig-1*' => Http::response([
+                'id' => 'draft-sig-1',
+                'conversationId' => 'c-draft',
+                'subject' => 'Re: Hello',
+                'bodyPreview' => 'Kind Regards',
+                'from' => ['emailAddress' => ['name' => 'Vernon Francis', 'address' => 'user@example.com']],
+                'body' => [
+                    'contentType' => 'html',
+                    'content' => $draftBody,
+                ],
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []]),
+        ]);
+
+        $preview = $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk();
+
+        $choices = $preview->json('choices');
+        $this->assertIsArray($choices);
+        $this->assertGreaterThanOrEqual(2, count($choices));
+        $this->assertNull(data_get($user->fresh()->preferences, 'mail.signature'));
+
+        $names = collect($choices)->pluck('name');
+        $this->assertTrue($names->contains('Outlook · replies'));
+        $this->assertTrue($names->contains(fn ($name) => is_string($name) && str_starts_with($name, 'From sent mail')));
+
+        $picked = collect($choices)->firstWhere('name', 'Outlook · replies');
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature/apply', [
+                'html' => $picked['html'],
+                'name' => $picked['name'],
+            ])
+            ->assertOk();
+
+        $html = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $this->assertStringContainsString('Vernon Francis', $html);
+        $this->assertStringContainsString('Kind Regards', $html);
+        $this->assertStringNotContainsString('Office hours only', $html);
+        $this->assertSame('Outlook · replies', data_get($user->fresh()->preferences, 'mail.signatures.0.name'));
     }
 
     public function test_import_signature_reads_outlook_mail_that_uses_appendonsend(): void
@@ -562,15 +678,12 @@ class MailboxTest extends TestCase
                 'expires_in' => 3600,
             ]),
             'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/*/createForward' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
-        $this->actingAs($user)
-            ->postJson('/portal/mail/settings/import-signature')
-            ->assertOk()
-            ->assertJsonPath('preferences.signatures.0.name', 'Default From Outlook');
-
-        $html = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $applied = $this->pickImportedSignature($user);
+        $html = (string) data_get($applied, 'preferences.signature');
         $this->assertStringContainsString('Outlook User', $html);
         $this->assertStringContainsString('Kind Regards', $html);
         $this->assertStringNotContainsString('See you Thursday', $html);
@@ -584,6 +697,7 @@ class MailboxTest extends TestCase
         $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
             ->assertStatus(422)
+            ->assertJsonPath('choices', [])
             ->assertJsonPath('signature', null)
             ->assertJsonStructure(['message']);
     }

@@ -2110,12 +2110,8 @@ class MailController extends Controller
     }
 
     /**
-     * Copy the mailbox's outbound signature into the portal preference so it
-     * can be reviewed and edited under Email settings.
-     *
-     * The provider signature is preferred when the account can read it; otherwise
-     * recent Sent mail is scanned for the repeating trailer. Nothing is written
-     * back to Gmail/Outlook, the portal copy is independent after import.
+     * Collect distinct signatures from the mailbox and return them so the
+     * user can pick. Nothing is written until they confirm one.
      */
     public function importSignature(Request $request): JsonResponse
     {
@@ -2132,84 +2128,88 @@ class MailController extends Controller
         if ($choices === []) {
             return response()->json([
                 'message' => 'No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.',
+                'choices' => [],
                 'signature' => null,
                 'preferences' => $this->mailPreferences($user->preferences ?? []),
             ], 422);
         }
 
+        return response()->json([
+            'choices' => $choices,
+            'preferences' => $this->mailPreferences($user->preferences ?? []),
+        ]);
+    }
+
+    /**
+     * Save the signature the user picked from the import chooser.
+     */
+    public function applyImportedSignature(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        try {
+            $account = Mailbox::requireAccountFor($user);
+        } catch (MailAuthException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $data = $request->validate([
+            'html' => ['required', 'string', 'max:'.SignatureImporter::MAX_LENGTH],
+            'name' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        $html = SignatureImporter::for($account)->clean($data['html']);
+        if ($html === '') {
+            return response()->json([
+                'message' => 'That signature could not be used. Pick another, or paste it into the editor.',
+            ], 422);
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            $name = match ($account->provider) {
+                'microsoft' => 'Default From Outlook',
+                'google' => 'Default From Gmail',
+                default => 'Default From Mailbox',
+            };
+        }
+
         $current = $user->preferences ?? [];
         $mail = $this->mailPreferences($current['mail'] ?? [], raw: true);
         $signatures = $mail['signatures'];
-        $importedNames = [
-            'Imported',
-            'Default From Outlook',
-            'Default From Gmail',
-            'Default From Mailbox',
-        ];
-        $importedIds = [];
+        $importedId = null;
 
-        foreach ($choices as $choice) {
-            $name = $choice['name'];
-            $html = $choice['html'];
-            $matched = false;
-
-            foreach ($signatures as $index => $entry) {
-                if (($entry['name'] ?? '') !== $name) {
-                    continue;
-                }
-                $signatures[$index]['html'] = $html;
-                $importedIds[] = $entry['id'];
-                $matched = true;
-                break;
-            }
-
-            if ($matched) {
+        foreach ($signatures as $index => $entry) {
+            $entryName = (string) ($entry['name'] ?? '');
+            if ($entryName !== $name && ! $this->isMailboxImportName($entryName)) {
                 continue;
             }
+            $signatures[$index]['html'] = $html;
+            $signatures[$index]['name'] = $name;
+            $importedId = $entry['id'];
+            break;
+        }
 
-            // First mailbox default still reuses a leftover "Imported" slot.
-            if (in_array($name, $importedNames, true)) {
-                foreach ($signatures as $index => $entry) {
-                    if (! in_array($entry['name'] ?? '', $importedNames, true)) {
-                        continue;
-                    }
-                    $signatures[$index]['html'] = $html;
-                    $signatures[$index]['name'] = $name;
-                    $importedIds[] = $entry['id'];
-                    $matched = true;
-                    break;
-                }
-            }
-
-            if ($matched) {
-                continue;
-            }
-
+        if ($importedId === null) {
             if (count($signatures) >= 10) {
                 $last = count($signatures) - 1;
                 $signatures[$last]['html'] = $html;
                 $signatures[$last]['name'] = $name;
-                $importedIds[] = $signatures[$last]['id'];
-
-                continue;
+                $importedId = $signatures[$last]['id'];
+            } else {
+                $importedId = (string) Str::uuid();
+                $signatures[] = [
+                    'id' => $importedId,
+                    'name' => $name,
+                    'html' => $html,
+                ];
             }
-
-            $id = (string) Str::uuid();
-            $signatures[] = [
-                'id' => $id,
-                'name' => $name,
-                'html' => $html,
-            ];
-            $importedIds[] = $id;
         }
-
-        $importedId = $importedIds[0] ?? ($signatures[0]['id'] ?? null);
-        $signature = $choices[0]['html'];
 
         $payload = [
             'signatures' => $signatures,
             'activeSignatureId' => $importedId,
-            'signature' => $signature,
+            'signature' => $html,
         ];
         $current['mail'] = $this->mailPreferences(
             array_merge($mail, $payload),
@@ -2219,10 +2219,25 @@ class MailController extends Controller
         $user->forceFill(['preferences' => $current])->save();
 
         return response()->json([
-            'signature' => $signature,
-            'importedCount' => count($importedIds),
+            'signature' => $html,
             'preferences' => $this->mailPreferences($user->fresh()->preferences ?? []),
         ]);
+    }
+
+    private function isMailboxImportName(string $name): bool
+    {
+        if (in_array($name, [
+            'Imported',
+            'Default From Outlook',
+            'Default From Gmail',
+            'Default From Mailbox',
+        ], true)) {
+            return true;
+        }
+
+        return str_starts_with($name, 'Outlook ·')
+            || str_starts_with($name, 'From sent mail')
+            || str_starts_with($name, 'Gmail ·');
     }
 
     /** Inbox category strips the reader may switch on, beyond Inbox itself. */

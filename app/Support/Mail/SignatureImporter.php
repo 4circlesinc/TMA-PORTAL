@@ -70,6 +70,13 @@ class SignatureImporter
         return $this->choices()[0]['html'] ?? null;
     }
 
+    public function clean(string $html): string
+    {
+        $clean = $this->sanitize($html);
+
+        return $clean === '' ? '' : Str::limit($clean, self::MAX_LENGTH, '');
+    }
+
     /**
      * Distinct signatures this mailbox can offer, preferred first.
      *
@@ -77,7 +84,7 @@ class SignatureImporter
      * trailers can all differ. The settings panel keeps each one so the user
      * can pick which to send with.
      *
-     * @return list<array{name: string, html: string}>
+     * @return list<array{name: string, html: string, preview: string}>
      */
     public function choices(): array
     {
@@ -92,8 +99,8 @@ class SignatureImporter
             if (is_string($sent) && trim($sent) !== '') {
                 $raw[] = ['name' => $this->importedDefaultName(), 'html' => $sent];
             }
-        } else {
-            foreach ($this->collectSentCandidates() as $candidate) {
+        } elseif ($this->account->provider === 'google') {
+            foreach ($this->collectSentCandidates(fetchRemote: false) as $candidate) {
                 $raw[] = [
                     'name' => 'From sent mail',
                     'html' => $this->resolveInlineImages($candidate['html'], $candidate['message']),
@@ -147,7 +154,11 @@ class SignatureImporter
             }
             $usedNames[mb_strtolower($name)] = true;
 
-            $out[] = ['name' => $name, 'html' => $clean];
+            $out[] = [
+                'name' => $name,
+                'html' => $clean,
+                'preview' => Str::limit($this->plainSignatureText($clean), 90, '…'),
+            ];
             if (count($out) >= 8) {
                 break;
             }
@@ -209,22 +220,50 @@ class SignatureImporter
     /** @return list<array{name: string, html: string}> */
     private function outlookChoices(): array
     {
-        $html = $this->fromOutlookReplyDraft();
+        $out = [];
 
-        if (! is_string($html) || trim($html) === '') {
-            return [];
+        $reply = $this->fromOutlookComposeDraft('createReply');
+        if (is_string($reply) && trim($reply) !== '') {
+            $out[] = ['name' => 'Outlook · replies', 'html' => $reply];
         }
 
-        return [['name' => 'Default From Outlook', 'html' => $html]];
+        $forward = $this->fromOutlookComposeDraft('createForward');
+        if (is_string($forward) && trim($forward) !== '') {
+            $out[] = ['name' => 'Outlook · forwards', 'html' => $forward];
+        }
+
+        foreach ($this->collectSentCandidates() as $candidate) {
+            $out[] = [
+                'name' => $this->sentCandidateName($candidate),
+                'html' => $this->resolveInlineImages($candidate['html'], $candidate['message']),
+            ];
+        }
+
+        return $out;
+    }
+
+    private function sentCandidateName(array $candidate): string
+    {
+        $message = $candidate['message'];
+        $subject = trim((string) ($message->subject ?? ''));
+        $isReply = (bool) preg_match('/^\s*(re|fw|fwd|aw|sv)\s*:/i', $subject)
+            || str_contains((string) $message->body_html, 'divRplyFwdMsg');
+        $kind = $isReply ? 'Reply' : 'New message';
+        $text = $this->plainSignatureText($candidate['html']);
+        $text = Str::limit($text, 40, '…');
+
+        return $text !== ''
+            ? 'From sent mail · '.$kind.' · '.$text
+            : 'From sent mail · '.$kind;
     }
 
     /**
-     * Ask Outlook for the signature it would put on a reply.
+     * Ask Outlook for the signature it would put on a reply or forward.
      *
-     * createReply is the compose pipeline; scraping Sent mail is not, and a
-     * reply's quoted #Signature belongs to the other person.
+     * createReply / createForward is the compose pipeline; scraping Sent mail
+     * is not, and a reply's quoted #Signature belongs to the other person.
      */
-    private function fromOutlookReplyDraft(): ?string
+    private function fromOutlookComposeDraft(string $action): ?string
     {
         $provider = Mailbox::provider($this->account);
         if (! $provider instanceof GraphProvider) {
@@ -232,7 +271,9 @@ class SignatureImporter
         }
 
         foreach ($this->signatureSeedIds() as $seed) {
-            $draftId = $provider->createReplyDraft($seed);
+            $draftId = $action === 'createForward'
+                ? $provider->createForwardDraft($seed)
+                : $provider->createReplyDraft($seed);
             if ($draftId === null) {
                 continue;
             }
@@ -352,7 +393,7 @@ class SignatureImporter
     /**
      * @return list<array{html: string, message: MailMessage}>
      */
-    private function collectSentCandidates(): array
+    private function collectSentCandidates(bool $fetchRemote = true): array
     {
         $messages = MailMessage::query()
             ->where('connected_account_id', $this->account->id)
@@ -363,6 +404,10 @@ class SignatureImporter
             ->get();
 
         $candidates = $this->candidatesFromMessages($messages);
+
+        if (! $fetchRemote) {
+            return $candidates;
+        }
 
         if ($candidates === []) {
             $this->hydrateSentBodies($messages);
@@ -771,6 +816,8 @@ class SignatureImporter
 
     private function extractFromBody(string $html): ?string
     {
+        $html = $this->unwrapOutlookConditionalComments($html);
+
         // Outlook: the author's signature is after #appendonsend; anything
         // below divRplyFwdMsg is the other person's mail. Never scan the
         // whole document for #Signature — that last match is theirs.
@@ -835,7 +882,34 @@ class SignatureImporter
             return $known;
         }
 
-        return $this->looksLikeSignature($after) ? $after : $known;
+        return $after !== '' && $this->looksLikeSignature($after) ? $after : $known;
+    }
+
+    /**
+     * Outlook Word HTML hides the real <img> in an `<!--[if !vml]-->` branch
+     * and puts VML in the other. DOMDocument drops comments, so both the logo
+     * and neighbouring text used to vanish. Keep the HTML Outlook shows when
+     * VML is off.
+     */
+    private function unwrapOutlookConditionalComments(string $html): string
+    {
+        $html = preg_replace(
+            '/<!--\[if\s+gte?\s+vml[^\]]*\]>[\s\S]*?<!\[endif\]-->/i',
+            '',
+            $html
+        ) ?? $html;
+
+        // Word HTML either hides the <img> inside one comment (`<!--[if !vml]>`)
+        // or reveals it between two (`<!--[if !vml]-->` … `<!--[endif]-->`).
+        $html = preg_replace(
+            '/<!--\[if\s*!vml[^\]]*\]>([\s\S]*?)<!\[endif\]-->/i',
+            '$1',
+            $html
+        ) ?? $html;
+
+        $html = preg_replace('/<!--\[if\s*!vml[^\]]*\]-->/i', '', $html) ?? $html;
+
+        return preg_replace('/<!--\s*\[endif\]\s*-->/i', '', $html) ?? $html;
     }
 
     /**
@@ -979,7 +1053,7 @@ class SignatureImporter
         $text = mb_strtolower(trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 
-        return sha1($text !== '' ? $text : $html);
+        return sha1($text !== '' ? $text.'|img:'.(preg_match_all('/<img\b/i', $html) ?: 0) : $html);
     }
 
     private function sanitize(string $html): string
@@ -989,6 +1063,8 @@ class SignatureImporter
         if ($html === '') {
             return '';
         }
+
+        $html = $this->unwrapOutlookConditionalComments($html);
 
         $doc = new DOMDocument;
         $previous = libxml_use_internal_errors(true);
@@ -1127,7 +1203,7 @@ class SignatureImporter
             [$property, $value] = array_map('trim', explode(':', $declaration, 2));
             $property = strtolower($property);
 
-            if (! preg_match('/^(color|background-color|font-size|font-family|font-weight|font-style|text-align|text-decoration|line-height|letter-spacing|width|height|max-width|margin|margin-top|margin-right|margin-bottom|margin-left|padding|padding-top|padding-right|padding-bottom|padding-left|border|border-top|border-right|border-bottom|border-left|border-collapse|vertical-align|display)$/', $property)) {
+            if (! preg_match('/^(color|background-color|font-size|font-family|font-weight|font-style|text-align|text-decoration|line-height|letter-spacing|white-space|width|height|max-width|margin|margin-top|margin-right|margin-bottom|margin-left|padding|padding-top|padding-right|padding-bottom|padding-left|border|border-top|border-right|border-bottom|border-left|border-collapse|vertical-align|display)$/', $property)) {
                 continue;
             }
 

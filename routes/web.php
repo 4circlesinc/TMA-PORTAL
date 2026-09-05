@@ -901,6 +901,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');
         Route::post('/settings/import-signature', [MailController::class, 'importSignature'])
             ->name('settings.import-signature');
+        Route::post('/settings/import-signature/apply', [MailController::class, 'applyImportedSignature'])
+            ->name('settings.import-signature.apply');
 
         // Firm compose templates, managed on the admin Templates page.
         Route::get('/templates', [MailController::class, 'composeTemplates'])->name('templates');

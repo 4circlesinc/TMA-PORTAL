@@ -217,6 +217,10 @@
       return mailFetch(BASE + '/settings/import-signature', { method: 'POST' });
     },
 
+    applyImportedSignature: function (payload) {
+      return mailFetch(BASE + '/settings/import-signature/apply', { method: 'POST', json: payload });
+    },
+
     /* Re-dispatch a stalled or failed sync. Resumes from the stored page
      * tokens server-side, never a from-scratch re-import. */
     retrySync: function () {

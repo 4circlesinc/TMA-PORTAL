@@ -2,12 +2,12 @@ import { chromium } from 'playwright';
 
 // The "Import from Gmail / Outlook" button in Email settings → Sending.
 // PHPUnit pins the importer and the endpoint; what only a browser can check
-// is the round trip the user actually sees: the click fills the editor with
-// the signature lifted from Sent mail, the library gains an active
-// "Default From Gmail" entry, the button recovers its label after the morph,
-// re-importing reuses the slot instead of stacking duplicates, compose opens
-// carrying the imported block, and a 422 degrades to a toast — not a button
-// stuck on "Importing…".
+// is the round trip the user actually sees: the click opens a chooser of
+// signatures found in the mailbox, nothing is saved until "Use this
+// signature", the library gains an active "Default From Gmail" entry, the
+// button recovers its label after the morph, re-importing reuses the slot
+// instead of stacking duplicates, compose opens carrying the imported block,
+// and a 422 degrades to a toast — not a button stuck on "Importing…".
 //
 // See README.md for setup. Needs the mailbox fixture plus Sent messages
 // carrying a repeated gmail_signature block (seed-sig fixture).
@@ -86,6 +86,19 @@ function toastText() {
   });
 }
 
+async function pickImportedSignature() {
+  await page.click('[data-email-settings-import-signature]');
+  await page.waitForSelector('[data-email-sig-import]', { timeout: 15000 });
+  const choices = await page.$$('[data-email-sig-import-choice]');
+  check(choices.length >= 1, `import lists signatures to pick from (saw ${choices.length})`);
+  await page.click('[data-email-sig-import-apply]');
+  await page.waitForFunction(
+    () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
+      .includes('Signature imported'),
+    { timeout: 15000 }
+  );
+}
+
 function libraryEntries() {
   return page.evaluate(() => {
     return [...document.querySelectorAll('[data-email-signature-id]')].map((item) => ({
@@ -109,14 +122,28 @@ try {
   check(label === 'Import from Gmail', `button is named for the provider (saw "${label}")`);
   check(btn ? !(await btn.isDisabled()) : false, 'button is enabled while a mailbox is connected');
 
-  step(3, 'Importing fills the editor from Sent mail');
+  step(3, 'Importing opens a picker, then fills the editor after you confirm');
   await btn.click();
+  await page.waitForSelector('[data-email-sig-import]', { timeout: 15000 });
+  const pickerTitle = await page.textContent('#tma-mail-sig-import-title');
+  check((pickerTitle || '').includes('Which signature'), 'chooser asks which signature to use');
+  const listed = await page.$$('[data-email-sig-import-choice]');
+  check(listed.length >= 1, `chooser lists at least one preview (saw ${listed.length})`);
+  const prefsBefore = await page.evaluate(async (base) => {
+    const r = await fetch(base + '/portal/mail/settings', {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then((res) => res.json());
+    return r.preferences || {};
+  }, BASE);
+  check(!String(prefsBefore.signature || '').includes('Vernon Francis'),
+    'nothing is saved until the user confirms a choice');
+  await page.click('[data-email-sig-import-apply]');
   await page.waitForFunction(
     () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
       .includes('Signature imported'),
     { timeout: 15000 }
   );
-  check(true, 'success toast appeared');
 
   const editorHtml = await page.evaluate(
     () => document.querySelector('[data-email-signature-editor]')?.innerHTML || ''
@@ -161,12 +188,7 @@ try {
     const t = document.querySelector('[data-email-toast-text]');
     if (t) t.textContent = '';
   });
-  await page.click('[data-email-settings-import-signature]');
-  await page.waitForFunction(
-    () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
-      .includes('Signature imported'),
-    { timeout: 15000 }
-  );
+  await pickImportedSignature();
   entries = await libraryEntries();
   const again = entries.filter((e) => e.name === 'Default From Gmail');
   check(again.length === 1, `still exactly one imported entry (saw ${again.length})`);
@@ -191,6 +213,7 @@ try {
     body: JSON.stringify({
       message: 'No signature was found in this mailbox yet.',
       signature: null,
+      choices: [],
     }),
   }));
   await openSendingSettings();
