@@ -132,6 +132,74 @@ class MailSendTest extends TestCase
         });
     }
 
+    public function test_a_sent_reply_joins_the_conversation_immediately(): void
+    {
+        $user = $this->user();
+        $account = $this->googleAccount($user);
+        $first = $this->message($user, $account, [
+            'remote_id' => 'gmail-1',
+            'from_name' => 'Dana Reed',
+            'subject' => 'Testing time',
+            'sent_at' => now()->subHours(2),
+        ]);
+        $second = $this->message($user, $account, [
+            'remote_id' => 'gmail-2',
+            'from_name' => 'Dana Reed',
+            'subject' => 'Re: Testing time',
+            'sent_at' => now()->subHour(),
+        ]);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/messages/send' => Http::response(['id' => 'sent-reply']),
+            'gmail.googleapis.com/gmail/v1/users/me/messages/gmail-2*' => Http::response([
+                'id' => 'gmail-2',
+                'threadId' => 'thread-1',
+                'payload' => [
+                    'headers' => [
+                        ['name' => 'Message-ID', 'value' => '<CAE456@mail.gmail.com>'],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'dana@example.com']],
+                'subject' => 'Re: Testing time',
+                'bodyHtml' => '<p>On my way.</p>',
+                'mode' => 'reply',
+                'inReplyTo' => $second->uuid,
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        $sentId = $response->json('message.id');
+        $this->assertNotEmpty($sentId);
+        $this->assertSame('thread-1', $response->json('message.threadId'));
+        $this->assertSame('sent', MailMessage::where('uuid', $sentId)->value('folder'));
+
+        $ids = collect($this->actingAs($user)
+            ->getJson('/portal/mail/messages/'.$second->uuid.'/conversation')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('id')
+            ->all();
+
+        $this->assertCount(3, $ids);
+        $this->assertContains($sentId, $ids);
+        $this->assertContains($first->uuid, $ids);
+        $this->assertContains($second->uuid, $ids);
+
+        $inbox = collect($this->actingAs($user)->getJson('/portal/mail/messages?folder=inbox')->json('messages'));
+        $this->assertSame(3, $inbox->first()['threadCount']);
+    }
+
     public function test_a_gmail_forward_starts_a_new_conversation(): void
     {
         $user = $this->user();

@@ -2196,12 +2196,17 @@
     state.openConversations = {};
   }
 
-  function loadConversation(state, id) {
+  function loadConversation(state, id, opts) {
+    opts = opts || {};
     if (!state.conversationRows) state.conversationRows = {};
-    if (state.conversationRows[id]) return Promise.resolve(state.conversationRows[id]);
+    if (!opts.force && state.conversationRows[id]) {
+      return Promise.resolve(state.conversationRows[id]);
+    }
 
     if (!state._conversationLoads) state._conversationLoads = {};
-    if (state._conversationLoads[id]) return state._conversationLoads[id];
+    if (!opts.force && state._conversationLoads[id]) {
+      return state._conversationLoads[id];
+    }
 
     var request = api().conversation(id).then(function (data) {
       var rows = (data && data.messages) || [];
@@ -2217,6 +2222,50 @@
     state._conversationLoads[id] = request;
 
     return request;
+  }
+
+  /* Refetch an open drop when the badge and the cached rows disagree — that
+   * is how a just-sent reply (or a sync) shows up without a full reload. */
+  function refreshOpenConversations(state, render) {
+    var open = state.openConversations || {};
+    Object.keys(open).forEach(function (id) {
+      if (!open[id]) return;
+      var parent = findRow(state, id);
+      var cached = state.conversationRows && state.conversationRows[id];
+      if (parent && cached && cached.length === conversationCount(parent)) return;
+      loadConversation(state, id, { force: true }).then(function () {
+        if (render) render();
+      }).catch(function () {});
+    });
+  }
+
+  /* A just-sent reply belongs in the conversation the reader already has
+   * open, and the badge has to count it before the next list fetch lands. */
+  function applySentMessage(state, payload, message) {
+    if (!message || !message.id) return;
+
+    var replyTo = payload && payload.inReplyTo;
+    var parentId = conversationParentForMessage(state, replyTo) || replyTo;
+    var parent = findRow(state, parentId);
+    if (!parent && message.threadId) {
+      parent = rowsOf(state).filter(function (row) {
+        return row.threadId && row.threadId === message.threadId;
+      })[0] || null;
+    }
+
+    var alreadyListed = function (rows) {
+      return !!(rows && rows.some(function (row) { return row.id === message.id; }));
+    };
+
+    if (parent && !alreadyListed(state.conversationRows && state.conversationRows[parent.id])) {
+      parent.threadCount = (parent.threadCount || 1) + 1;
+    }
+
+    if (!parent) return;
+    if (!state.conversationRows) state.conversationRows = {};
+    var rows = state.conversationRows[parent.id];
+    if (!rows || alreadyListed(rows)) return;
+    rows.unshift(message);
   }
 
   /* Every id a conversation covers. Once the drop is loaded that is every
@@ -2828,6 +2877,7 @@
       if (!unchanged) render();
       writeMailCache(state);
       hydrateListAttachments(root, state, render, token);
+      refreshOpenConversations(state, render);
     }).catch(function (err) {
       if (token !== state.loadToken) return;
       // A restored folder stays on screen if the quiet revalidate fails —
@@ -8228,7 +8278,7 @@
       job.inline._sendRequested = true;
     }
 
-    return api().send(job.payload).then(function () {
+    return api().send(job.payload).then(function (data) {
       if (job.kind === 'compose' && job.draft && findComposeDraft(state, job.draft.id)) {
         closeCompose(state, job.draft.id, false);
         if (render) render();
@@ -8236,13 +8286,17 @@
         closeInlineCompose(state);
         if (render) render();
       }
+      applySentMessage(state, job.payload, data && data.message);
+      if (render) render();
       showEmailToast(root, 'Message sent');
-      reloadMessages(root, state, render);
       if (state.composePopout) {
         window.setTimeout(function () {
           maybeCloseComposePopoutWindow(state);
         }, 700);
       }
+      return reloadMessages(root, state, render).then(function () {
+        refreshOpenConversations(state, render);
+      });
     }).catch(function (err) {
       if (job.kind === 'compose' && job.draft) {
         job.draft.sending = false;

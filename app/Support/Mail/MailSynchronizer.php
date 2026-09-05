@@ -399,6 +399,27 @@ class MailSynchronizer
         return count($rows);
     }
 
+    /**
+     * Write one already-normalized message into the mirror.
+     *
+     * Used right after send so the conversation dropdown can list the reply
+     * without waiting on {@see SyncMailbox}. The next sync upserts the same
+     * remote id and fills in anything this pass left thin.
+     */
+    public function ingest(array $message): ?MailMessage
+    {
+        if (empty($message['remote_id'])) {
+            return null;
+        }
+
+        $this->upsert($message);
+
+        return MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->where('remote_id', $message['remote_id'])
+            ->first();
+    }
+
     /** @return bool whether the message was new to the mirror */
     private function upsert(array $message): bool
     {

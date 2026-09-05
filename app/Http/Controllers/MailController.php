@@ -1566,6 +1566,7 @@ class MailController extends Controller
 
         $mode = $data['mode'] ?? 'new';
         $replyUuid = $data['inReplyTo'] ?? null;
+        $original = null;
 
         // Older clients sent inReplyTo without a mode; that is a reply.
         if ($replyUuid && $mode === 'new') {
@@ -1660,7 +1661,62 @@ class MailController extends Controller
 
         SyncMailbox::dispatch($account);
 
-        return response()->json(['sent' => true]);
+        $sentRow = $this->rememberSentMessage(
+            $account,
+            is_string($sentId) ? $sentId : '',
+            $payload,
+            $original,
+        );
+
+        return response()->json([
+            'sent' => true,
+            'message' => $sentRow
+                ? ($this->withAvatars(collect([$sentRow]))[0] ?? null)
+                : null,
+        ]);
+    }
+
+    /**
+     * Mirror a just-sent message locally so the conversation dropdown can
+     * list it immediately. SyncMailbox still runs and will overwrite this
+     * row with the provider's copy of the same remote id.
+     */
+    private function rememberSentMessage(
+        ConnectedAccount $account,
+        string $sentId,
+        array $payload,
+        ?MailMessage $original,
+    ): ?MailMessage {
+        if ($sentId === '') {
+            return null;
+        }
+
+        $html = (string) ($payload['bodyHtml'] ?? '');
+        $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $text = (string) preg_replace('/\s+/', ' ', $text);
+
+        $message = [
+            'remote_id' => $sentId,
+            'thread_id' => $payload['threadId'] ?? $original?->thread_id,
+            'folder' => 'sent',
+            'subject' => $payload['subject'] ?? '',
+            'snippet' => Str::limit($text, 180),
+            'from_name' => DraftContent::cleanName($account->name),
+            'from_email' => DraftContent::cleanName($account->email),
+            'to' => $payload['to'] ?? [],
+            'cc' => $payload['cc'] ?? [],
+            'bcc' => $payload['bcc'] ?? [],
+            'is_read' => true,
+            'has_attachments' => ($payload['attachments'] ?? []) !== [],
+            'body_html' => $html !== '' ? $html : null,
+            'body_text' => $text !== '' ? $text : null,
+            'sent_at' => time(),
+        ];
+
+        return rescue(
+            fn () => (new MailSynchronizer($account))->ingest($message),
+            report: false,
+        );
     }
 
     /**
