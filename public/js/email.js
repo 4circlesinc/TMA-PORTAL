@@ -8137,11 +8137,11 @@
       '<img src="' + ICONS.ArrowClockwise + '" alt=""></button>' +
       '<label class="tma-dash__email-sig-transform-size">' +
       '<span>W</span>' +
-      '<input type="number" min="40" max="480" step="1" value="160" data-sig-transform-width aria-label="Image width">' +
+      '<input type="number" min="40" max="720" step="1" value="160" data-sig-transform-width aria-label="Image width">' +
       '<span>px</span></label>' +
       '<label class="tma-dash__email-sig-transform-size">' +
       '<span>H</span>' +
-      '<input type="number" min="20" max="480" step="1" value="160" data-sig-transform-height aria-label="Image height">' +
+      '<input type="number" min="20" max="720" step="1" value="160" data-sig-transform-height aria-label="Image height">' +
       '<span>px</span></label>' +
       '<button type="button" class="tma-dash__email-sig-transform-tool tma-dash__email-sig-transform-tool--danger"' +
       ' data-sig-transform-delete aria-label="Remove image">' +
@@ -8232,6 +8232,8 @@
     'image/jpg': true,
     'image/webp': true,
   };
+  var SIGNATURE_IMAGE_DISPLAY_MAX = 720;
+  var SIGNATURE_IMAGE_JPEG_QUALITY = 0.95;
 
   function isAllowedSignatureImage(file) {
     if (!file) return false;
@@ -8247,6 +8249,34 @@
     return 'image/jpeg';
   }
 
+  function canvasToSignatureDataUrl(canvas, mime) {
+    if (mime === 'image/jpeg') {
+      return canvas.toDataURL('image/jpeg', SIGNATURE_IMAGE_JPEG_QUALITY);
+    }
+    if (mime === 'image/webp') {
+      var webp = canvas.toDataURL('image/webp', SIGNATURE_IMAGE_JPEG_QUALITY);
+      if (webp.indexOf('data:image/webp') === 0) return webp;
+    }
+    return canvas.toDataURL('image/png');
+  }
+
+  function rasterizeRotatedSignatureImage(sourceImg, rotation, mime) {
+    var natW = Math.max(1, sourceImg.naturalWidth || 1);
+    var natH = Math.max(1, sourceImg.naturalHeight || 1);
+    var swap = rotation % 180 !== 0;
+    var canvas = document.createElement('canvas');
+    canvas.width = swap ? natH : natW;
+    canvas.height = swap ? natW : natH;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    if (ctx.imageSmoothingEnabled !== undefined) ctx.imageSmoothingEnabled = true;
+    if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'high';
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.drawImage(sourceImg, -natW / 2, -natH / 2, natW, natH);
+    return canvasToSignatureDataUrl(canvas, mime);
+  }
+
   function openSignatureImageDialog(file, onInsert) {
     if (!isAllowedSignatureImage(file)) return;
 
@@ -8255,7 +8285,7 @@
     img.onload = function () {
       var naturalW = img.naturalWidth || 160;
       var naturalH = img.naturalHeight || 160;
-      var width = Math.min(240, Math.max(40, naturalW > 480 ? 240 : naturalW));
+      var width = Math.max(40, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, naturalW));
       var height = Math.max(1, Math.round(naturalH * (width / naturalW)));
       var rotation = 0;
 
@@ -8279,8 +8309,8 @@
         '<img src="' + ICONS.ArrowClockwise + '" alt=""> Rotate right</button>' +
         '</div>' +
         '<div class="tma-dash__email-sig-image-dialog-dims">' +
-        '<label>W <input type="number" min="40" max="480" value="' + width + '" data-sig-w-input> px</label>' +
-        '<label>H <input type="number" min="20" max="480" value="' + height + '" data-sig-h-input> px</label>' +
+        '<label>W <input type="number" min="40" max="720" value="' + width + '" data-sig-w-input> px</label>' +
+        '<label>H <input type="number" min="20" max="720" value="' + height + '" data-sig-h-input> px</label>' +
         '</div>' +
         '<div class="tma-dash__email-sig-image-dialog-actions">' +
         '<button type="button" class="tma-dash__email-settings-btn" data-sig-cancel>Cancel</button>' +
@@ -8305,13 +8335,13 @@
       }
 
       function setSize(nextW, nextH, lockRatio) {
-        nextW = Math.max(40, Math.min(480, Math.round(nextW)));
+        nextW = Math.max(40, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextW)));
         if (lockRatio) {
           var ratio = naturalH / naturalW;
           if (rotation % 180 !== 0) ratio = naturalW / naturalH;
-          nextH = Math.max(20, Math.min(480, Math.round(nextW * ratio)));
+          nextH = Math.max(20, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextW * ratio)));
         } else {
-          nextH = Math.max(20, Math.min(480, Math.round(nextH)));
+          nextH = Math.max(20, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextH)));
         }
         width = nextW;
         height = nextH;
@@ -8378,25 +8408,25 @@
       });
 
       overlay.querySelector('[data-sig-insert]').addEventListener('click', function () {
-        var canvas = document.createElement('canvas');
-        var drawW = width;
-        var drawH = height;
-        canvas.width = drawW;
-        canvas.height = drawH;
-        var ctx = canvas.getContext('2d');
-        ctx.translate(drawW / 2, drawH / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        if (rotation % 180 !== 0) {
-          ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
-        } else {
-          ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        var insertBtn = overlay.querySelector('[data-sig-insert]');
+        if (insertBtn) insertBtn.disabled = true;
+
+        function finish(dataUrl) {
+          close();
+          onInsert(dataUrl, width, height);
         }
-        var mime = signatureImageMime(file);
-        var dataUrl = mime === 'image/jpeg'
-          ? canvas.toDataURL('image/jpeg', 0.88)
-          : canvas.toDataURL(mime);
-        close();
-        onInsert(dataUrl, drawW, drawH);
+
+        // Keep the original pixels. Width/height on the <img> only size it
+        // on screen; resampling into that box is what made logos look muddy.
+        if (!rotation) {
+          var reader = new FileReader();
+          reader.onload = function () { finish(String(reader.result || '')); };
+          reader.onerror = close;
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        finish(rasterizeRotatedSignatureImage(img, rotation, signatureImageMime(file)));
       });
     };
     img.onerror = function () {
@@ -8623,26 +8653,21 @@
 
     var source = new Image();
     source.onload = function () {
-      var size = signatureImageSize(img);
+      var display = signatureImageSize(img);
       var swap = Math.abs(degrees) % 180 !== 0;
-      var canvas = document.createElement('canvas');
-      canvas.width = swap ? size.height : size.width;
-      canvas.height = swap ? size.width : size.height;
-      var ctx = canvas.getContext('2d');
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((degrees * Math.PI) / 180);
-      ctx.drawImage(source, -size.width / 2, -size.height / 2, size.width, size.height);
-
       var src = String(img.getAttribute('src') || '');
       var mime = src.indexOf('data:image/png') === 0
         ? 'image/png'
         : (src.indexOf('data:image/webp') === 0 ? 'image/webp' : 'image/jpeg');
-      var dataUrl = mime === 'image/jpeg'
-        ? canvas.toDataURL('image/jpeg', 0.9)
-        : canvas.toDataURL(mime);
+      var dataUrl = rasterizeRotatedSignatureImage(source, degrees, mime);
+      if (!dataUrl) return;
 
       img.setAttribute('src', dataUrl);
-      applySignatureImageSize(img, canvas.width, canvas.height);
+      applySignatureImageSize(
+        img,
+        swap ? display.height : display.width,
+        swap ? display.width : display.height
+      );
       persistEditableImage(root, state);
     };
     source.src = img.getAttribute('src') || '';
