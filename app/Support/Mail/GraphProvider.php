@@ -608,7 +608,7 @@ class GraphProvider implements MailProvider
         $end = $size - 1;
         $response = Http::withBody($file['bytes'], $file['mime'])
             ->withHeaders(['Content-Range' => "bytes 0-{$end}/{$size}"])
-            ->timeout(120)
+            ->timeout(300)
             ->put($url);
 
         if (! $response->successful()) {

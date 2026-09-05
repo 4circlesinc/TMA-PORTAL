@@ -13,7 +13,7 @@ final class OutboundFiles
 {
     public const MAX_COUNT = 10;
 
-    public const MAX_BYTES = 10 * 1024 * 1024;
+    public const MAX_BYTES = 100 * 1024 * 1024;
 
     /**
      * @return list<array{name: string, mime: string, bytes: string}>
@@ -49,7 +49,7 @@ final class OutboundFiles
             }
             if (strlen($bytes) > self::MAX_BYTES) {
                 throw ValidationException::withMessages([
-                    "attachments.$index" => $name.' is over 10 MB.',
+                    "attachments.$index" => $name.' is over 100 MB.',
                 ]);
             }
             $mime = trim((string) ($item['mime'] ?? ''));

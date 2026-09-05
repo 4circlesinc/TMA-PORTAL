@@ -5356,7 +5356,7 @@
 
   /* ── Compose file attachments (paperclip + drag-and-drop) ───── */
   var MAX_COMPOSE_FILES = 10;
-  var MAX_COMPOSE_FILE_BYTES = 10 * 1024 * 1024;
+  var MAX_COMPOSE_FILE_BYTES = 100 * 1024 * 1024;
 
   function composeFilesOf(holder) {
     if (!holder.attachments) holder.attachments = [];
@@ -5404,7 +5404,7 @@
     }
     var tooBig = files.filter(function (file) { return file.size > MAX_COMPOSE_FILE_BYTES; });
     if (tooBig.length) {
-      showEmailToast(root, (tooBig.length === 1 ? tooBig[0].name : tooBig.length + ' files') + ' over 10 MB');
+      showEmailToast(root, (tooBig.length === 1 ? tooBig[0].name : tooBig.length + ' files') + ' over 100 MB');
       files = files.filter(function (file) { return file.size <= MAX_COMPOSE_FILE_BYTES; });
     }
     if (!files.length) return;
