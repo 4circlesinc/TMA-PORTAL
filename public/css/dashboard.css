@@ -13245,6 +13245,10 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   min-width: 0;
 }
 
+.tma-dash__email-detail-subject-bar {
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
 .tma-dash__email-detail-header {
   padding: var(--email-pad);
   background: var(--color-bg-card);
@@ -13507,6 +13511,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   gap: var(--space-12);
   padding: var(--email-pad);
   min-width: 0;
+  border-bottom: 1px solid var(--color-border-soft);
 }
 
 .tma-dash__email-message-head-main {
@@ -15524,7 +15529,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     align-items: stretch;
     gap: var(--space-8);
     padding: var(--space-4) 0 var(--space-12);
-    border-bottom: 1px solid var(--color-overlay-4);
+    border-bottom: 1px solid var(--color-border-soft);
   }
 
   .tma-dash__email-detail--mobile .tma-dash__email-detail-subject {
