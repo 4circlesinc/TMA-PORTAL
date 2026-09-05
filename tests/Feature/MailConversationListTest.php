@@ -319,6 +319,61 @@ class MailConversationListTest extends TestCase
         $response->assertDontSee('mw__msg', false);
     }
 
+    public function test_a_conversation_window_shows_only_the_opened_message(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        $this->message($user, $account, [
+            'subject' => 'First',
+            'body_html' => '<p>oldest body</p>',
+            'sent_at' => now()->subHours(2),
+        ]);
+        $opened = $this->message($user, $account, [
+            'subject' => 'Middle reply',
+            'body_html' => '<p>just this reply</p>',
+            'sent_at' => now()->subHour(),
+        ]);
+        $this->message($user, $account, [
+            'subject' => 'Latest',
+            'body_html' => '<p>newest body</p>',
+            'sent_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get('/portal/mail/window/'.$opened->uuid)
+            ->assertOk();
+
+        $response->assertSee('just this reply', escape: false);
+        $response->assertDontSee('oldest body', false);
+        $response->assertDontSee('newest body', false);
+    }
+
+    public function test_window_reply_all_includes_every_other_recipient(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        $message = $this->message($user, $account, [
+            'subject' => 'Kickoff',
+            'from_name' => 'Dana Reed',
+            'from_email' => 'dana@example.com',
+            'to' => [
+                ['name' => 'Test User', 'email' => 'user@example.com'],
+                ['name' => 'Pat Lee', 'email' => 'pat@example.com'],
+            ],
+            'cc' => [['name' => 'Sam Cole', 'email' => 'sam@example.com']],
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get('/portal/mail/window/'.$message->uuid)
+            ->assertOk();
+
+        $response->assertSee('data-compose-to="Dana Reed &lt;dana@example.com&gt;, Pat Lee &lt;pat@example.com&gt;"', false);
+        $response->assertSee('data-compose-cc="Sam Cole &lt;sam@example.com&gt;"', false);
+        $response->assertSee('mode=reply-all', false);
+    }
+
     public function test_another_users_message_has_no_window(): void
     {
         $user = $this->user();

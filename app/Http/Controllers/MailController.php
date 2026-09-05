@@ -889,14 +889,13 @@ class MailController extends Controller
     }
 
     /**
-     * The conversation as its own window, what a double-click, or the row
+     * The opened message as its own window, what a double-click, or the row
      * menu's "Open in new window", opens.
      *
-     * Server-rendered on purpose. The point of this window is that the mail is
-     * *there* when it appears; booting the portal shell to fetch a thread would
-     * put a loading screen in front of a message the reader has already asked
-     * twice to see. Bodies still render inside a sandboxed frame, exactly as
-     * they do in the reading pane, they are attacker-controlled either way.
+     * Same contract as the inbox reading pane: the message that was clicked,
+     * not every other message that shares its thread. The list is where the
+     * rest of the conversation lives. Server-rendered on purpose so the mail
+     * is there when the window appears.
      */
     public function window(Request $request, string $uuid): SymfonyResponse
     {
@@ -905,19 +904,21 @@ class MailController extends Controller
         $this->hydrate($message);
         $message->load(['labels', 'attachments', 'account']);
 
-        $messages = $message->thread_id
-            ? MailMessage::query()
-                ->with(['attachments', 'labels'])
+        $subject = $message->subject ?: '(no subject)';
+        if (is_string($message->thread_id) && $message->thread_id !== '') {
+            $firstSubject = MailMessage::query()
                 ->where('user_id', $request->user()->id)
                 ->where('thread_id', $message->thread_id)
                 ->where('folder', '!=', 'draft')
                 ->orderBy('sent_at')
                 ->orderBy('id')
-                ->get()
-                ->map(fn (MailMessage $m) => $m->id === $message->id ? $message : $m)
-            : collect([$message]);
+                ->value('subject');
+            if (is_string($firstSubject) && $firstSubject !== '') {
+                $subject = $firstSubject;
+            }
+        }
 
-        $avatars = collect($this->withThreadAvatars($messages))->mapWithKeys(function (array $row) {
+        $avatars = collect($this->withThreadAvatars(collect([$message])))->mapWithKeys(function (array $row) {
             $id = (string) ($row['id'] ?? '');
             if ($id === '') {
                 return [];
@@ -934,8 +935,8 @@ class MailController extends Controller
 
         return response()->view('mail.window', [
             'opened' => $message,
-            'messages' => $messages,
-            'subject' => $messages->first()?->subject ?: '(no subject)',
+            'messages' => collect([$message]),
+            'subject' => $subject,
             'avatars' => $avatars,
             'mailboxEmail' => $message->account?->email ?: $request->user()->email,
         ])->header('Cache-Control', 'no-store, private');

@@ -1,10 +1,10 @@
 {{--
-  One conversation, in its own window.
+  The opened message, in its own window.
 
   Opened by double-clicking a row (or the row menu's "Open in new window") in
-  both the browser and the desktop app. Everything on this page is rendered
-  server-side: the whole reason it exists is that the mail should be readable
-  the instant the window appears, so there is no boot, no fetch and no spinner.
+  both the browser and the desktop app. Same as the inbox reading pane: this
+  is the message that was clicked, not the rest of the thread. Everything is
+  rendered server-side so the mail is readable the instant the window appears.
 
   Chrome matches the inbox reading pane (subject bar, message head, footer
   Reply / Reply all / Forward). Message bodies are attacker-controlled, so
@@ -412,7 +412,7 @@
               bcc: '',
               subject: link.getAttribute('data-compose-subject') || '',
               bodyHtml: '',
-              showCc: mode === 'reply-all' && !!(link.getAttribute('data-compose-cc') || ''),
+              showCc: mode === 'reply-all',
               serverId: null,
               mode: mode,
               inReplyTo: messageId,

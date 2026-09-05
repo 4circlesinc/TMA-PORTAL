@@ -862,6 +862,7 @@
   var DETAIL_MESSAGE_ACTIONS_MOBILE = [
     { id: 'star', icon: 'Star', label: 'Star' },
     { id: 'reply', icon: 'ArrowBendUpLeft', label: 'Reply' },
+    { id: 'reply-all', icon: 'ArrowBendDoubleUpLeft', label: 'Reply all' },
     { id: 'more', icon: 'DotsThree', label: 'More' },
   ];
 
@@ -878,6 +879,7 @@
   function renderDetailMessageActionBtn(action) {
     var attrs = '';
     if (action.id === 'reply') attrs = ' data-email-inline-compose="reply"';
+    if (action.id === 'reply-all') attrs = ' data-email-inline-compose="reply-all"';
     if (action.id === 'forward') attrs = ' data-email-inline-compose="forward"';
     return renderEmailIconTooltipBtn({
       tipId: 'email-detail-tip-' + action.id,
@@ -1162,13 +1164,16 @@
     return (
       '<div class="tma-dash__email-thread-actions' + (mobile ? ' tma-dash__email-thread-actions--mobile' : '') + '">' +
       '<div class="tma-dash__email-thread-btns">' +
-      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply">' +
+      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply"' +
+      ' data-email-message-id="' + esc(row.id) + '">' +
       '<img src="' + ICONS.ArrowBendUpLeft + '" alt=""> Reply' +
       '</button>' +
-      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply-all">' +
+      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply-all"' +
+      ' data-email-message-id="' + esc(row.id) + '">' +
       '<img src="' + ICONS.ArrowBendDoubleUpLeft + '" alt=""> Reply all' +
       '</button>' +
-      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="forward">' +
+      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="forward"' +
+      ' data-email-message-id="' + esc(row.id) + '">' +
       '<img src="' + ICONS.ArrowBendUpRight + '" alt=""> Forward' +
       '</button>' +
       '</div>' +
@@ -1190,12 +1195,13 @@
       ? renderForwardQuote(row, metaEmail, metaDate, subject, lines.body, quotedBodyHtml)
       : renderReplyQuote(row, metaEmail, metaDate, lines.body, quotedBodyHtml);
 
+    var addrRow = quotedSource;
     var to = '';
     var cc = '';
     if (mode === 'reply') {
-      to = formatAddressList(replyRecipients(row));
+      to = formatAddressList(replyRecipients(addrRow));
     } else if (mode === 'reply-all') {
-      var all = replyAllRecipients(row);
+      var all = replyAllRecipients(addrRow);
       to = formatAddressList(all.to);
       cc = formatAddressList(all.cc);
     }
@@ -1219,12 +1225,22 @@
     if (!row) return;
 
     var quotedSource = threadMessage(state, row.id) || row;
-    var fields = composeFieldsFromMessage(row, mode, quotedSource);
+    var fields = composeFieldsFromMessage(quotedSource, mode, quotedSource);
     if (state.thread && state.thread.subject) {
       var threadSubject = state.thread.subject;
       fields.subject = mode === 'forward' ? getForwardSubject(threadSubject) : getReplySubject(threadSubject);
     }
     openCompose(state, fields);
+
+    // List rows do not carry Cc. Reply all has to hydrate the real message
+    // or it silently becomes Reply.
+    if (mode === 'reply-all' && !Array.isArray(quotedSource.cc) && api() && typeof api().getMessage === 'function') {
+      api().getMessage(row.id).then(function (data) {
+        var full = data && data.message;
+        if (!full) return;
+        applyPopoutComposeFields(state, composeFieldsFromMessage(full, mode, full));
+      }).catch(function () {});
+    }
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc
