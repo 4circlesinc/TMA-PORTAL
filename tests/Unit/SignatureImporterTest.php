@@ -439,6 +439,52 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('See you Thursday', $signature);
     }
 
+    public function test_it_keeps_the_legal_disclaimer_that_follows_an_outlook_banner(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->fakeOutlookReplyDraftUnavailable();
+
+        $disclaimer = 'This Electronic Mail and any attached files may contain confidential '
+            .'and/or privileged material for the sole use of the intended recipient. '
+            .'Any review, use, distribution, or disclosure by others is strictly prohibited. '
+            .'If you are not the intended recipient (or authorised to receive this email for '
+            .'the recipient), please contact the sender by reply email and delete all copies '
+            .'of this email. Further, Electronic messages are not secure or error free and '
+            .'can contain viruses or may be delayed. While TM ANTOINE Partners/BESPOKE has '
+            .'taken reasonable precautions to ensure that any attachment to this e-mail has '
+            .'been scanned for viruses, TM ANTOINE Partners/BESPOKE does not accept any '
+            .'liability for any of these occurrences and/or any loss or damage suffered '
+            .'resulting from such use.';
+
+        $this->sent(
+            $account,
+            '<p>Hi Dana, please review the draft.</p>'
+            .'<p>--</p>'
+            .'<div id="Signature"><img src="https://cdn.example.com/banner.png" width="600" height="120" alt=""></div>'
+            .'<p>'.$disclaimer.'</p>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('cdn.example.com/banner.png', $signature);
+        $this->assertStringContainsString('This Electronic Mail and any attached files', $signature);
+        $this->assertStringContainsString('does not accept any liability', $signature);
+        $this->assertStringNotContainsString('Hi Dana', $signature);
+
+        $choices = SignatureImporter::for($account)->choices();
+        $this->assertNotEmpty($choices);
+        $this->assertStringContainsString('This Electronic Mail', $choices[0]['preview']);
+        $this->assertStringContainsString('This Electronic Mail', $choices[0]['name']);
+        $this->assertStringNotContainsString(' · --', $choices[0]['name']);
+    }
+
     public function test_it_keeps_outlook_contact_lines_outside_an_image_only_wrapper(): void
     {
         $account = $this->account();

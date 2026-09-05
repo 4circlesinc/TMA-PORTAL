@@ -157,7 +157,7 @@ class SignatureImporter
             $out[] = [
                 'name' => $name,
                 'html' => $clean,
-                'preview' => Str::limit($this->plainSignatureText($clean), 90, '…'),
+                'preview' => Str::limit($this->plainSignatureText($clean), 220, '…'),
             ];
             if (count($out) >= 8) {
                 break;
@@ -249,8 +249,7 @@ class SignatureImporter
         $isReply = (bool) preg_match('/^\s*(re|fw|fwd|aw|sv)\s*:/i', $subject)
             || str_contains((string) $message->body_html, 'divRplyFwdMsg');
         $kind = $isReply ? 'Reply' : 'New message';
-        $text = $this->plainSignatureText($candidate['html']);
-        $text = Str::limit($text, 40, '…');
+        $text = Str::limit($this->plainSignatureText($candidate['html']), 40, '…');
 
         return $text !== ''
             ? 'From sent mail · '.$kind.' · '.$text
@@ -935,11 +934,110 @@ class SignatureImporter
         return mb_strlen($fullText) <= mb_strlen($wrapperText) + 20;
     }
 
+    /**
+     * Outlook often puts the banner in #Signature and the legal footer in the
+     * next paragraph. Take the named block plus the neighbouring pieces that
+     * belong with it, not the wrapper alone.
+     */
+    private function serializeSignatureAround(DOMElement $node): string
+    {
+        $doc = $node->ownerDocument;
+        if (! $doc) {
+            return '';
+        }
+
+        $start = $node;
+        $prev = $node->previousSibling;
+        while ($prev) {
+            if ($prev->nodeType === XML_TEXT_NODE && trim($prev->textContent) === '') {
+                $prev = $prev->previousSibling;
+
+                continue;
+            }
+            if ($this->isSignaturePrefixNode($prev)) {
+                $start = $prev;
+                $prev = $prev->previousSibling;
+
+                continue;
+            }
+            break;
+        }
+
+        $parts = [];
+        $current = $start;
+        while ($current) {
+            if ($current instanceof DOMElement && $current !== $node && $this->isQuoteBoundary($current)) {
+                break;
+            }
+            $parts[] = $doc->saveHTML($current) ?: '';
+            $current = $current->nextSibling;
+        }
+
+        return trim(implode('', $parts));
+    }
+
+    private function isSignaturePrefixNode(DOMNode $node): bool
+    {
+        if ($this->isSignatureDelimiterNode($node)) {
+            return true;
+        }
+
+        if ($node instanceof DOMElement && strtolower($node->nodeName) === 'img') {
+            return true;
+        }
+
+        $text = $this->nodePlainText($node);
+        if ($text !== '') {
+            return false;
+        }
+
+        if (! $node instanceof DOMElement || ! $node->ownerDocument) {
+            return false;
+        }
+
+        return (bool) preg_match('/<img\b/i', $node->ownerDocument->saveHTML($node) ?: '');
+    }
+
+    private function isSignatureDelimiterNode(DOMNode $node): bool
+    {
+        return (bool) preg_match('/^--\s*$/', $this->nodePlainText($node));
+    }
+
+    private function isQuoteBoundary(DOMNode $node): bool
+    {
+        if (! $node instanceof DOMElement) {
+            return false;
+        }
+
+        $id = $node->getAttribute('id');
+        if (in_array($id, ['divRplyFwdMsg', 'x_divRplyFwdMsg', 'appendonsend', 'x_appendonsend'], true)) {
+            return true;
+        }
+
+        $class = ' '.strtolower($node->getAttribute('class')).' ';
+        if (str_contains($class, ' gmail_quote ')
+            || str_contains($class, ' gmail_extra ')
+            || str_contains($class, ' outlookmessageheader ')) {
+            return true;
+        }
+
+        return strtolower($node->nodeName) === 'blockquote';
+    }
+
+    private function nodePlainText(DOMNode $node): string
+    {
+        $text = trim(html_entity_decode($node->textContent, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        return preg_replace('/\s+/u', ' ', $text) ?? $text;
+    }
+
     private function plainSignatureText(string $html): string
     {
         $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/^--\s*/', '', $text) ?? $text;
 
-        return preg_replace('/\s+/u', ' ', $text) ?? $text;
+        return trim($text);
     }
 
     /**
@@ -987,7 +1085,7 @@ class SignatureImporter
                 continue;
             }
 
-            $markup = trim($doc->saveHTML($node) ?: '');
+            $markup = $this->serializeSignatureAround($node);
 
             if ($markup !== '') {
                 return $markup;

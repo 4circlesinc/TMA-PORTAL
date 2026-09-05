@@ -30997,10 +30997,14 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .tma-dash__email-sig-import-choice-html {
-  max-height: 140px;
+  max-height: 280px;
   overflow: auto;
   padding: var(--space-8);
   border-radius: var(--radius-8);
@@ -31010,9 +31014,10 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__email-sig-import-choice-html img {
-  max-height: 72px;
+  max-height: 96px;
   width: auto;
   max-width: 100%;
+  display: block;
 }
 
 .tma-dash__email-sig-import-actions {
