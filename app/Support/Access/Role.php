@@ -255,10 +255,12 @@ class Role
         // Create and send signature requests. Everyone can *sign* one
         // addressed to them; this is the authoring side.
         'signatures.create' => [self::EMPLOYEE],
-        // The Templates page. Administrators only: it came back in Aug 2026
-        // as a place to keep document templates, and nothing on it is for
-        // an officer to use yet.
+        // System emails, CIP letters and document-requirement templates.
+        // Administrators only; officers never reword the firm's outbound copy.
         'templates.view' => [],
+        // Compose email templates. Staff (employees / officers) create their
+        // own; administrators can also publish defaults every mailbox sees.
+        'templates.email' => [self::EMPLOYEE],
         // The Workflows section: requests waiting on you or sent by you, and
         // the comment threads you are part of, across every file.
         // Service-provider contacts reach the same pages without holding
@@ -359,7 +361,7 @@ class Role
         'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
         'templates' => 'templates.view',
-        'templates/email' => 'templates.view',
+        'templates/email' => 'templates.email',
         'templates/letters' => 'templates.view',
         'templates/documents' => 'templates.view',
         'users' => 'users.view',

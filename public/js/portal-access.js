@@ -31,7 +31,7 @@
     'reporting': 'settings.reporting',
     'templates': 'templates.view',
     'templates-system': 'templates.view',
-    'templates-email': 'templates.view',
+    'templates-email': 'templates.email',
     'templates-letters': 'templates.view',
     'templates-documents': 'templates.view',
     'folders-all': 'files.viewOrg',

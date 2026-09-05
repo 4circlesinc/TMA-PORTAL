@@ -63,6 +63,8 @@ class PortalAccessTest extends TestCase
         $this->assertTrue(Role::can($employee, 'mail.use'));
         $this->assertTrue(Role::can($employee, 'signatures.create'));
         $this->assertTrue(Role::can($employee, 'overview.view'));
+        $this->assertTrue(Role::can($employee, 'templates.email'));
+        $this->assertFalse(Role::can($employee, 'templates.view'));
 
         $this->assertFalse(Role::can($employee, 'users.view'));
         $this->assertFalse(Role::can($employee, 'directory.view'));

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Template;
+use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Templates\ComposeTemplates;
@@ -16,6 +17,8 @@ use Illuminate\Http\Request;
  * its current copy, save an administrator's rewording, restore the shipped
  * default, and render a live preview of a draft. The whole group sits behind
  * `capability:templates.view` (administrators only, see Role::MATRIX).
+ * Compose email templates sit behind `templates.email` so staff can keep
+ * their own starting points; administrators can also publish firm defaults.
  */
 class TemplatesController extends Controller
 {
@@ -125,20 +128,23 @@ class TemplatesController extends Controller
     }
 
     /* ── Email (compose) templates ──────────────────────────────────
-     * The named starting points a mailbox user can pick in compose.
-     * Managed here (administrators); read by the mailbox through
-     * MailController::composeTemplates under capability:mail.use.
+     * Named starting points a mailbox user can pick in compose. Everyone
+     * with templates.email can create their own; administrators can publish
+     * a default (`user_id` null) that every mailbox sees. The mailbox reads
+     * them through MailController::composeTemplates under capability:mail.use.
      */
 
-    public function emailIndex(): JsonResponse
+    public function emailIndex(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         return response()->json([
-            'templates' => Template::query()
-                ->where('kind', ComposeTemplates::KIND)
+            'canShareDefaults' => Role::isAdmin($user),
+            'templates' => ComposeTemplates::visibleTo($user)
                 ->with('editor:id,name')
                 ->orderBy('name')
                 ->get()
-                ->map(fn (Template $t) => ComposeTemplates::record($t))
+                ->map(fn (Template $t) => ComposeTemplates::record($t, $user))
                 ->values(),
         ]);
     }
@@ -146,54 +152,69 @@ class TemplatesController extends Controller
     public function emailStore(Request $request): JsonResponse
     {
         $data = $this->validateEmailTemplate($request);
+        $user = $request->user();
+        $shared = Role::isAdmin($user) && ($request->exists('shared')
+            ? $request->boolean('shared')
+            : true);
 
         $template = Template::create([
             'kind' => ComposeTemplates::KIND,
             'key' => (string) \Illuminate\Support\Str::uuid(),
             'name' => $data['name'],
             'fields' => ['subject' => $data['subject'], 'body' => $data['body']],
-            'updated_by' => $request->user()->id,
+            'updated_by' => $user->id,
+            'user_id' => $shared ? null : $user->id,
         ]);
 
         ActivityLogger::log([
-            'actor' => $request->user(),
+            'actor' => $user,
             'type' => 'templates.email_template_created',
             'module' => 'system',
             'description' => 'Email template “'.$template->name.'” created',
         ]);
 
-        return response()->json(ComposeTemplates::record($template->load('editor')), 201);
+        return response()->json(ComposeTemplates::record($template->load('editor'), $user), 201);
     }
 
     public function emailUpdate(Request $request, string $uuid): JsonResponse
     {
-        $template = $this->findEmailTemplate($uuid);
+        $user = $request->user();
+        $template = $this->findEmailTemplate($request, $uuid);
+        $this->authorizeEmailTemplateWrite($user, $template);
         $data = $this->validateEmailTemplate($request);
 
         $template->forceFill([
             'name' => $data['name'],
             'fields' => ['subject' => $data['subject'], 'body' => $data['body']],
-            'updated_by' => $request->user()->id,
-        ])->save();
+            'updated_by' => $user->id,
+        ]);
+
+        if (Role::isAdmin($user) && $request->exists('shared')) {
+            $template->user_id = $request->boolean('shared') ? null : $user->id;
+        }
+
+        $template->save();
 
         ActivityLogger::log([
-            'actor' => $request->user(),
+            'actor' => $user,
             'type' => 'templates.email_template_updated',
             'module' => 'system',
             'description' => 'Email template “'.$template->name.'” updated',
         ]);
 
-        return response()->json(ComposeTemplates::record($template->refresh()->load('editor')));
+        return response()->json(ComposeTemplates::record($template->refresh()->load('editor'), $user));
     }
 
     public function emailDestroy(Request $request, string $uuid): JsonResponse
     {
-        $template = $this->findEmailTemplate($uuid);
+        $user = $request->user();
+        $template = $this->findEmailTemplate($request, $uuid);
+        $this->authorizeEmailTemplateWrite($user, $template);
         $name = $template->name;
         $template->delete();
 
         ActivityLogger::log([
-            'actor' => $request->user(),
+            'actor' => $user,
             'type' => 'templates.email_template_deleted',
             'module' => 'system',
             'description' => 'Email template “'.$name.'” deleted',
@@ -236,12 +257,16 @@ class TemplatesController extends Controller
         return $data;
     }
 
-    private function findEmailTemplate(string $uuid): Template
+    private function findEmailTemplate(Request $request, string $uuid): Template
     {
-        return Template::query()
-            ->where('kind', ComposeTemplates::KIND)
+        return ComposeTemplates::visibleTo($request->user())
             ->where('uuid', $uuid)
             ->firstOrFail();
+    }
+
+    private function authorizeEmailTemplateWrite(User $user, Template $template): void
+    {
+        abort_unless(ComposeTemplates::canEdit($user, $template), 403, 'You do not have access to this.');
     }
 
     private function find(string $key): void

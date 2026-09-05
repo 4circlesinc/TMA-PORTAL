@@ -1016,12 +1016,12 @@
     }
   }
 
-  /* ── Templates (administrators only, see Role::MATRIX) ──
+  /* ── Templates
    *
-   * System emails: every transactional email the portal sends, its copy
-   * editable field by field with a live preview of the real postcard.
-   * Server: TemplatesController under /portal/templates. Built to grow
-   * sideways — another kind of template is another listing, same page.
+   * System emails: administrators only, every transactional email the portal
+   * sends. Email templates: staff (templates.email) keep their own compose
+   * starting points; administrators can share a default with every mailbox.
+   * Server: TemplatesController under /portal/templates.
    */
   var TPL = {
     el: null, loaded: false, loading: false, error: null, data: null,
@@ -1318,13 +1318,17 @@
    * The named starting points a mailbox user picks in compose. Full CRUD:
    * these are created here, not shipped, so the empty state is real.
    */
-  var ETPL = { loaded: false, loading: false, error: null, items: [], search: '', previewSeq: 0 };
+  var ETPL = { loaded: false, loading: false, error: null, items: [], search: '', previewSeq: 0, canShareDefaults: false };
 
   function loadEmailTemplates() {
     ETPL.loading = true;
     ETPL.error = null;
     tplJson('GET', '/email-templates')
-      .then(function (d) { ETPL.items = d.templates || []; ETPL.loaded = true; })
+      .then(function (d) {
+        ETPL.items = d.templates || [];
+        ETPL.canShareDefaults = !!d.canShareDefaults;
+        ETPL.loaded = true;
+      })
       .catch(function (e) { ETPL.error = e.message; })
       .then(function () { ETPL.loading = false; renderTemplates(); });
   }
@@ -1348,23 +1352,26 @@
       return '<div class="tma-portal-page">' + ui().emptyState({
         illustration: 'Illustration05',
         title: 'No email templates yet',
-        subtitle: 'Templates you create here appear in compose.',
+        subtitle: 'Create one to start a message from. Administrators can also share a default with everyone.',
       }) + '</div>';
     }
 
     var rows = etplFiltered().map(function (t) {
+      var type = t.shared ? 'Everyone' : 'Just me';
+      var actions = t.canEdit
+        ? '<button type="button" class="tma-portal-icon-btn" data-etpl-edit="' + ui().esc(t.id) + '" title="Edit template" aria-label="Edit template"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>'
+        : '';
       return '<tr>' +
         '<td>' + ui().esc(t.name) + '</td>' +
         '<td class="tma-portal-table__muted">' + ui().esc(t.subject) + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(type) + '</td>' +
         '<td class="tma-portal-table__muted">' + ui().esc((t.editor ? t.editor + ', ' : '') + tplWhen(t.updatedAt)) + '</td>' +
-        '<td><div class="tma-portal-row-actions">' +
-          '<button type="button" class="tma-portal-icon-btn" data-etpl-edit="' + ui().esc(t.id) + '" title="Edit template" aria-label="Edit template"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
-        '</div></td></tr>';
+        '<td><div class="tma-portal-row-actions">' + actions + '</div></td></tr>';
     }).join('');
 
-    if (!rows) rows = '<tr><td colspan="4" class="tma-portal-table__empty">Nothing matches.</td></tr>';
+    if (!rows) rows = '<tr><td colspan="5" class="tma-portal-table__empty">Nothing matches.</td></tr>';
 
-    return ui().table(['Template', 'Subject', 'Last edited', ''], rows);
+    return ui().table(['Template', 'Subject', 'Who can use it', 'Last edited', ''], rows);
   }
 
   function renderEmailTemplates() {
@@ -1494,7 +1501,11 @@
 
   function etplEditorModal(t) {
     var isNew = !t;
-    t = t || { name: '', subject: '', body: '' };
+    t = t || { name: '', subject: '', body: '', shared: ETPL.canShareDefaults };
+    var shareChecked = isNew ? ETPL.canShareDefaults : !!t.shared;
+    var note = ETPL.canShareDefaults
+      ? 'Start a message from this in compose. Share it with everyone to offer it as a firm default.'
+      : 'This template is only for you. It appears when you compose a message.';
 
     ui().openModal({
       title: isNew ? 'New email template' : t.name,
@@ -1502,13 +1513,18 @@
       body:
         '<div class="tma-portal-tpl-edit">' +
         '<div class="tma-portal-tpl-edit__form">' +
-        '<p class="tma-portal-note">Anyone with a mailbox can start a message from this. Leave blanks to fill in.</p>' +
+        '<p class="tma-portal-note">' + ui().esc(note) + '</p>' +
         ui().field('Name', ui().input({ value: t.name, attrs: 'data-etpl-field="name" maxlength="191"', ariaLabel: 'Template name' })) +
         ui().field('Subject', ui().input({ value: t.subject, attrs: 'data-etpl-field="subject" maxlength="500"', ariaLabel: 'Subject' })) +
         ui().field('Body', richAvailable()
           ? richFieldControl('data-etpl-field', 'body', t.body)
           : '<textarea class="tma-portal-textarea" data-etpl-field="body" rows="12" maxlength="20000">' + ui().esc(t.body) + '</textarea>') +
         (richAvailable() ? '' : '<p class="tma-portal-table__muted">Blank line for a new paragraph, "- " for bullets, **bold**, [label](url) for links.</p>') +
+        (ETPL.canShareDefaults
+          ? '<label class="tma-portal-checkbox">' +
+            '<input type="checkbox" data-etpl-shared' + (shareChecked ? ' checked' : '') + '>' +
+            '<span>Share with everyone</span></label>'
+          : '') +
         '<div class="tma-portal-form-actions">' +
         ui().btn({ label: isNew ? 'Create' : 'Save', attrs: ' data-etpl-save' }) +
         (isNew ? '' : ui().btn({ label: 'Delete', variant: 'danger', attrs: ' data-etpl-delete' })) +
@@ -1532,6 +1548,10 @@
       host.querySelectorAll('[data-etpl-field]').forEach(function (input) {
         fields[input.getAttribute('data-etpl-field')] = fieldValue(input);
       });
+      if (ETPL.canShareDefaults) {
+        var box = host.querySelector('[data-etpl-shared]');
+        fields.shared = !!(box && box.checked);
+      }
       return fields;
     }
 

@@ -1721,21 +1721,16 @@ class MailController extends Controller
     }
 
     /**
-     * Firm compose templates: pick one to start a message from. Managed on
-     * the admin Templates page; readable by anyone with a mailbox, which is
-     * what capability:mail.use on this group enforces.
+     * Compose templates this mailbox can start from: firm defaults plus the
+     * signed-in person's own. capability:mail.use on this group is the gate.
      */
-    public function composeTemplates(): JsonResponse
+    public function composeTemplates(Request $request): JsonResponse
     {
         return response()->json([
-            'templates' => Template::query()
-                ->where('kind', ComposeTemplates::KIND)
+            'templates' => ComposeTemplates::visibleTo($request->user())
                 ->orderBy('name')
                 ->get()
-                ->map(fn (Template $t) => Arr::only(
-                    ComposeTemplates::record($t),
-                    ['id', 'name', 'subject', 'bodyHtml'],
-                ))
+                ->map(fn (Template $t) => ComposeTemplates::mailboxRecord($t))
                 ->values(),
         ]);
     }

@@ -133,12 +133,13 @@ class EmployeeReachTest extends TestCase
         $this->assertStringNotContainsString('data-view="projects-hub"', $html);
     }
 
-    public function test_the_templates_page_is_administrators_only(): void
+    public function test_the_templates_page_is_administrators_only_except_email_templates(): void
     {
-        // Taken off the menu for everyone on 25 Aug 2026, back on 30 Aug for
-        // administrators alone. The shell is static HTML, so the row is in
-        // the markup for every account and portal-access.js removes it for
-        // anyone without templates.view; the server is what refuses the page.
+        // System emails, letters and documents stay administrators-only.
+        // Email templates opened to staff on 5 Sep 2026 so officers can keep
+        // their own compose starting points. The shell is static HTML, so
+        // every row is in the markup and portal-access.js removes what the
+        // account cannot use; the server is what refuses the page.
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $this->actingAs($admin)->get('/templates')->assertOk();
@@ -150,11 +151,16 @@ class EmployeeReachTest extends TestCase
         $this->assertStringContainsString('href="/templates"', $html);
         $this->assertStringContainsString('href="/templates/email"', $html);
 
-        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $accountType) {
-            foreach (['/templates', '/templates/email'] as $page) {
-                $this->actingAs($this->user($accountType))->get($page)
-                    ->assertNotFound($page.' should be closed to '.$accountType);
-            }
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)->get('/templates/email')->assertOk();
+        $this->actingAs($officer)->get('/templates')->assertNotFound();
+        $this->actingAs($officer)->get('/templates/letters')->assertNotFound();
+        $this->actingAs($officer)->get('/templates/documents')->assertNotFound();
+
+        $client = $this->user(Role::CLIENT);
+        foreach (['/templates', '/templates/email', '/templates/letters', '/templates/documents'] as $page) {
+            $this->actingAs($client)->get($page)
+                ->assertNotFound($page.' should be closed to a client');
         }
     }
 

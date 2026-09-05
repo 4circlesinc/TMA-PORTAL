@@ -13919,6 +13919,29 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   letter-spacing: 0.6px;
 }
 
+.tma-dash__email-compose-menu--templates {
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+}
+
+.tma-dash__email-compose-menu-empty {
+  padding: var(--space-6) var(--space-8);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+}
+
+.tma-dash__email-compose-menu-item--foot {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-overlay-8, var(--color-overlay-4));
+  border-radius: 0 0 var(--radius-4, 4px) var(--radius-4, 4px);
+}
+
+.tma-dash__email-compose-menu--templates .tma-dash__email-compose-menu-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A formatting button whose command is active at the cursor. */
 .tma-dash__email-compose-tool--active {
   background: var(--color-overlay-8, var(--color-overlay-4));

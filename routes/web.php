@@ -871,19 +871,25 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      * inside the portal.
      */
     /*
-     * The Templates page (administrators only). System emails: every
-     * transactional email's copy, editable, with restore and live preview.
+     * Templates APIs. System emails stay administrators-only. Compose email
+     * templates are for anyone with templates.email (staff), who manage their
+     * own rows; administrators can also publish firm defaults.
      */
-    Route::prefix('portal/templates')->middleware('capability:templates.view')->name('templates.')->group(function () {
-        Route::get('/system-emails', [TemplatesController::class, 'index'])->name('system.index');
-        Route::get('/email-templates', [TemplatesController::class, 'emailIndex'])->name('email.index');
-        Route::post('/email-templates', [TemplatesController::class, 'emailStore'])->name('email.store');
-        Route::post('/email-templates/preview', [TemplatesController::class, 'emailPreview'])->name('email.preview');
-        Route::patch('/email-templates/{uuid}', [TemplatesController::class, 'emailUpdate'])->name('email.update');
-        Route::delete('/email-templates/{uuid}', [TemplatesController::class, 'emailDestroy'])->name('email.destroy');
-        Route::patch('/system-emails/{key}', [TemplatesController::class, 'update'])->name('system.update');
-        Route::post('/system-emails/{key}/restore', [TemplatesController::class, 'restore'])->name('system.restore');
-        Route::post('/system-emails/{key}/preview', [TemplatesController::class, 'preview'])->name('system.preview');
+    Route::prefix('portal/templates')->name('templates.')->group(function () {
+        Route::middleware('capability:templates.view')->group(function () {
+            Route::get('/system-emails', [TemplatesController::class, 'index'])->name('system.index');
+            Route::patch('/system-emails/{key}', [TemplatesController::class, 'update'])->name('system.update');
+            Route::post('/system-emails/{key}/restore', [TemplatesController::class, 'restore'])->name('system.restore');
+            Route::post('/system-emails/{key}/preview', [TemplatesController::class, 'preview'])->name('system.preview');
+        });
+
+        Route::middleware('capability:templates.email')->group(function () {
+            Route::get('/email-templates', [TemplatesController::class, 'emailIndex'])->name('email.index');
+            Route::post('/email-templates', [TemplatesController::class, 'emailStore'])->name('email.store');
+            Route::post('/email-templates/preview', [TemplatesController::class, 'emailPreview'])->name('email.preview');
+            Route::patch('/email-templates/{uuid}', [TemplatesController::class, 'emailUpdate'])->name('email.update');
+            Route::delete('/email-templates/{uuid}', [TemplatesController::class, 'emailDestroy'])->name('email.destroy');
+        });
     });
 
     Route::prefix('portal/mail')->middleware('capability:mail.use')->name('mail.')->group(function () {
@@ -904,7 +910,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/settings/import-signature/apply', [MailController::class, 'applyImportedSignature'])
             ->name('settings.import-signature.apply');
 
-        // Firm compose templates, managed on the admin Templates page.
+        // Compose templates visible to this mailbox (firm defaults + own).
         Route::get('/templates', [MailController::class, 'composeTemplates'])->name('templates');
 
         // Literal paths before /{uuid} so the wildcard doesn't swallow them.

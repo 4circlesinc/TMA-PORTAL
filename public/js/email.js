@@ -34,6 +34,7 @@
     PaperPlaneRightFill: ICON + 'PaperPlaneRightFill.svg',
     FileText: ICON + 'FileText.svg',
     FileTextFill: ICON + 'FileTextFill.svg',
+    Article: ICON + 'Article.svg',
     WarningOctagon: ICON + 'WarningOctagon.svg',
     WarningOctagonFill: ICON + 'WarningOctagonFill.svg',
     Trash: ICON + 'Trash.svg',
@@ -1142,7 +1143,7 @@
         : renderReplyQuote(row, metaEmail, metaDate, bodyText, quotedBodyHtml)) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-bar">' +
-      renderComposeToolbar({ expand: false, attach: true }) +
+      renderComposeToolbar({ expand: false, attach: true, templates: true }) +
       '</div>' +
       '<div class="tma-dash__email-compose-files" data-email-compose-files' +
       (composeFilesOf(ic).length ? '' : ' hidden') + '>' +
@@ -2532,15 +2533,17 @@
     return window.TMAEmailAPI;
   }
 
-  /* ── Firm compose templates ──────────────────────────────────────
-   * Written by administrators on Templates → Email templates; the mailbox
-   * only ever reads them. They fill the Templates folder and the "start
-   * from a template" pick in compose.
+  /* ── Compose templates ───────────────────────────────────────────
+   * Written on Templates → Email templates (firm defaults plus the
+   * signed-in person's own). The mailbox reads them for the Templates
+   * folder and the compose toolbar picker.
    */
   var FIRM_TEMPLATES = { loaded: false, loading: false, items: [] };
 
-  function loadFirmTemplates(render) {
-    if (FIRM_TEMPLATES.loading || !api().composeTemplates) return;
+  function loadFirmTemplates(render, force) {
+    if (!api().composeTemplates) return;
+    if (FIRM_TEMPLATES.loading) return;
+    if (FIRM_TEMPLATES.loaded && !force) return;
     FIRM_TEMPLATES.loading = true;
     api().composeTemplates()
       .then(function (d) { FIRM_TEMPLATES.items = (d && d.templates) || []; })
@@ -2562,6 +2565,69 @@
   function firmTemplateBodyHtml(template) {
     return '<div class="tma-dash__email-compose-template-body">' + template.bodyHtml + '</div>' +
       composeSignatureHtml();
+  }
+
+  function nearestComposeEditor(from) {
+    if (!from || !from.closest) return null;
+    var pane = from.closest('[data-email-compose-window]');
+    if (pane) return pane.querySelector('[data-email-compose-body]');
+    var inline = from.closest('[data-email-inline-compose-panel]');
+    if (inline) return inline.querySelector('[data-email-inline-compose-editor]');
+    return null;
+  }
+
+  function openEmailTemplatesPage() {
+    var url = '/templates/email';
+    try {
+      if (window.opener && !window.opener.closed) {
+        var other = window.opener.document && window.opener.document.querySelector('.tma-dash');
+        if (other && typeof other._portalNavigate === 'function') {
+          other._portalNavigate(url);
+          window.opener.focus();
+          return;
+        }
+      }
+    } catch (e) { /* a detached pop-out just navigates itself */ }
+    var dash = document.querySelector('.tma-dash');
+    if (dash && typeof dash._portalNavigate === 'function') {
+      dash._portalNavigate(url);
+      return;
+    }
+    window.location.assign(url);
+  }
+
+  function applyComposeTemplate(templateId) {
+    var template = firmTemplateById(templateId);
+    if (!template) return;
+    var editor = composeMenuEl && composeMenuEl._editor;
+    var host = composeMenuEl && composeMenuEl._host;
+    var state = (host && host._emailState) || state_active;
+    var render = host && host._emailRender;
+    if (!state) return;
+
+    var html = firmTemplateBodyHtml(template);
+
+    if (editor && editor.hasAttribute('data-email-compose-body')) {
+      var draft = findComposeDraft(state, editor.getAttribute('data-email-compose-body'));
+      if (!draft) return;
+      if (draft.mode === 'new' || !String(draft.subject || '').trim()) {
+        draft.subject = template.subject || draft.subject;
+      }
+      draft.bodyHtml = html;
+      if (typeof syncComposePopoutTitle === 'function') syncComposePopoutTitle(draft.subject);
+      scheduleDraftSave(state, draft);
+      if (render) render();
+      return;
+    }
+
+    if (editor && editor.hasAttribute('data-email-inline-compose-editor') && state.inlineCompose) {
+      var ic = state.inlineCompose;
+      if ((ic.mode === 'forward' || ic.mode === 'new') && template.subject) {
+        if (!String(ic.subject || '').trim()) ic.subject = template.subject;
+      }
+      ic.bodyHtml = html;
+      if (render) render();
+    }
   }
 
   /* ── warm start ──────────────────────────────────────────────────
@@ -5068,7 +5134,10 @@
     if (!FIRM_TEMPLATES.loaded) {
       body = '';
     } else if (!templates.length) {
-      body = '<div class="tma-dash__email-detail--empty" style="padding:24px 16px;"><p>No templates yet.</p></div>';
+      body = '<div class="tma-dash__email-detail--empty" style="padding:24px 16px;">' +
+        '<p>No templates yet.</p>' +
+        '<p><button type="button" class="tma-dash__email-template-use" data-email-manage-templates>Manage templates</button></p>' +
+        '</div>';
     } else {
       body = templates
         .map(function (template) {
@@ -7920,6 +7989,36 @@
       });
     }
 
+    if (kind === 'template') {
+      var items = [];
+      if (!FIRM_TEMPLATES.loaded) {
+        items.push({ muted: true, label: 'Loading templates\u2026' });
+      } else {
+        var shared = [];
+        var mine = [];
+        FIRM_TEMPLATES.items.forEach(function (t) {
+          if (t.shared) shared.push(t);
+          else mine.push(t);
+        });
+        if (shared.length) {
+          items.push({ separator: true, label: 'Everyone' });
+          shared.forEach(function (t) {
+            items.push({ label: t.name, cmd: 'applyTemplate', value: t.id });
+          });
+        }
+        items.push({ separator: true, label: 'My templates' });
+        if (mine.length) {
+          mine.forEach(function (t) {
+            items.push({ label: t.name, cmd: 'applyTemplate', value: t.id });
+          });
+        } else {
+          items.push({ muted: true, label: 'None yet' });
+        }
+      }
+      items.push({ label: 'Manage templates', cmd: 'openTemplatesPage', foot: true });
+      return items;
+    }
+
     return [];
   }
 
@@ -7928,8 +8027,13 @@
       return '<div class="tma-dash__email-compose-menu-sep">' + esc(item.label) + '</div>';
     }
 
+    if (item.muted) {
+      return '<div class="tma-dash__email-compose-menu-empty">' + esc(item.label) + '</div>';
+    }
+
     var cls = 'tma-dash__email-compose-menu-item';
     if (item.swatchOnly) cls += ' tma-dash__email-compose-menu-item--swatch';
+    if (item.foot) cls += ' tma-dash__email-compose-menu-item--foot';
 
     var swatchCls = 'tma-dash__email-compose-menu-swatch';
     if (item.none) swatchCls += ' tma-dash__email-compose-menu-swatch--none';
@@ -7989,7 +8093,9 @@
 
     var palette = kind === 'color' || kind === 'highlight';
     var menu = document.createElement('div');
-    menu.className = 'tma-dash__email-compose-menu' + (palette ? ' tma-dash__email-compose-menu--palette' : '');
+    menu.className = 'tma-dash__email-compose-menu' +
+      (palette ? ' tma-dash__email-compose-menu--palette' : '') +
+      (kind === 'template' ? ' tma-dash__email-compose-menu--templates' : '');
     menu.setAttribute('role', 'menu');
     if (palette) {
       menu.innerHTML =
@@ -8006,8 +8112,18 @@
     document.body.appendChild(menu);
     composeMenuEl = menu;
     composeMenuBtn = button;
+    menu._kind = kind;
+    menu._editor = nearestComposeEditor(button);
     button.setAttribute('aria-expanded', 'true');
     positionComposeMenu(menu, button);
+
+    if (kind === 'template') {
+      loadFirmTemplates(function () {
+        if (!composeMenuEl || composeMenuEl._kind !== 'template') return;
+        composeMenuEl.innerHTML = composeMenuItems('template').map(renderComposeMenuItem).join('');
+        if (composeMenuBtn) positionComposeMenu(composeMenuEl, composeMenuBtn);
+      }, true);
+    }
   }
 
   /* Runs a formatting command against the editor that owns the selection.
@@ -8016,6 +8132,15 @@
    * implements for contenteditable rich text, and it is what the rest of this
    * toolbar already uses. */
   function applyComposeCommand(cmd, value) {
+    if (cmd === 'applyTemplate') {
+      applyComposeTemplate(value);
+      return;
+    }
+    if (cmd === 'openTemplatesPage') {
+      openEmailTemplatesPage();
+      return;
+    }
+
     if (cmd === 'createLink') {
       var url = window.prompt('Link URL');
       if (!url) return;
@@ -8687,6 +8812,8 @@
    * and inline reply/forward do not, there is nowhere for them to expand into.
    * opts.attach: paperclip (compose draft id, or true for inline reply).
    * opts.insertImage: signature logo insert + transform dialog.
+   * opts.templates: compose-only picker for firm defaults and personal
+   * templates. Must not be set on TMAComposeEditor (the Templates page).
    *
    * New mail, reply, reply-all, forward and the template editors all share
    * this bar. Alignment, colour and highlight sit on it; a narrow host wraps
@@ -8736,6 +8863,12 @@
         { icon: 'Eraser', label: 'Clear formatting', cmd: 'removeFormat' },
       ].concat(extra),
     ];
+
+    if (opts.templates) {
+      groups.splice(1, 0, [
+        { icon: 'Article', label: 'Insert template', caret: true, menu: 'template' },
+      ]);
+    }
 
     return (
       '<div class="tma-dash__email-compose-toolbar">' +
@@ -8928,20 +9061,9 @@
       ' value="' + esc(getComposeSubject(draft)) + '"' +
       ' aria-label="Subject" placeholder="Subject">' +
       '</div>' +
-      (FIRM_TEMPLATES.items.length && draft.mode === 'new'
-        ? '<div class="tma-dash__email-compose-subject">' +
-          '<span class="tma-dash__email-compose-label">Template</span>' +
-          '<select class="tma-dash__email-compose-input" data-email-compose-template="' + esc(draft.id) + '" aria-label="Start from a template">' +
-          '<option value="">Start from a template\u2026</option>' +
-          FIRM_TEMPLATES.items.map(function (t) {
-            return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>';
-          }).join('') +
-          '</select>' +
-          '</div>'
-        : '') +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
-      renderComposeToolbar({ expand: false, attach: draft.id }) +
+      renderComposeToolbar({ expand: false, attach: draft.id, templates: true }) +
       '<div class="tma-dash__email-image-stage tma-dash__email-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
       ' aria-multiline="true" aria-label="Message body"' +
@@ -13557,6 +13679,7 @@
         state.mobileNavOpen = false;
         state.selectedId = null;
         clearEmailSelection(state);
+        if (folder === 'templates') loadFirmTemplates(render, true);
         if (folder === 'templates' || folder === 'inbox') syncEmailUrl(folder);
         reloadMessages(root, state, render);
       });
@@ -13648,15 +13771,9 @@
       });
     });
 
-    MORPH.unwired(root, '[data-email-compose-template]').forEach(function (sel) {
-      sel.addEventListener('change', function () {
-        var draft = findComposeDraft(state, sel.getAttribute('data-email-compose-template'));
-        var template = firmTemplateById(sel.value);
-        if (!draft || !template) return;
-        draft.subject = template.subject || draft.subject;
-        draft.bodyHtml = firmTemplateBodyHtml(template);
-        syncComposePopoutTitle(draft.subject);
-        render();
+    MORPH.unwired(root, '[data-email-manage-templates]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openEmailTemplatesPage();
       });
     });
 
