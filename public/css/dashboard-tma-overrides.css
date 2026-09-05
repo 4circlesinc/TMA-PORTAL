@@ -880,7 +880,9 @@
   flex: 0 0 var(--dash-icon-md);
 }
 
-.tma-dash__tab-badge--email,
+.tma-dash__tab-badge--email {
+  background: #ff4747;
+}
 .tma-dash__tab-badge--messages {
   background: var(--color-primary);
 }

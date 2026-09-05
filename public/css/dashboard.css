@@ -4235,7 +4235,7 @@
      — see .tma-dash__nav-count for the full rationale, including why this
      stays left-anchored instead of the header badge's right anchor. */
   position: absolute;
-  top: 2px;
+  top: -6px;
   left: 55%;
   min-width: 14px;
   height: 14px;
@@ -4251,7 +4251,7 @@
   overflow: visible;
 }
 .tma-dash__tab-badge--alerts { background: #ff4747; }
-.tma-dash__tab-badge--email { background: var(--color-primary); }
+.tma-dash__tab-badge--email { background: #ff4747; }
 .tma-dash__tab-badge--messages { background: var(--color-primary); }
 .tma-dash__tab-badge[hidden] { display: none; }
 
