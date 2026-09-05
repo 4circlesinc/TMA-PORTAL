@@ -3943,6 +3943,13 @@
     if (top + menuRect.height > window.innerHeight - 8) {
       top = Math.max(8, rect.top - menuRect.height - 4);
     }
+    // Viewport coords assume position:fixed. If an ancestor forces absolute
+    // layout, subtract that ancestor so the menu still sits on the button.
+    if (getComputedStyle(menu).position === 'absolute' && menu.offsetParent) {
+      var parentRect = menu.offsetParent.getBoundingClientRect();
+      top -= parentRect.top;
+      left -= parentRect.left;
+    }
     menu.style.top = Math.round(top) + 'px';
     menu.style.left = Math.round(left) + 'px';
   }

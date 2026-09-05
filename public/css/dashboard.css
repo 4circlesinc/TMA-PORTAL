@@ -10002,11 +10002,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tma-dash__email-toolbar .tma-dash__email-bulk-more-menu,
-.tma-dash__email-toolbar .tma-dash__email-label-menu {
-  position: absolute;
-}
-
 @media (max-width: 1100px) {
   .tma-dash__email-toolbar-btn-label {
     display: none;
