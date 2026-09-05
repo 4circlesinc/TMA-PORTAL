@@ -1040,11 +1040,6 @@
       '<img src="' + ICONS.ArrowBendUpRight + '" alt=""> Forward' +
       '</button>' +
       '</div>' +
-      (mobile
-        ? '<button type="button" class="tma-dash__email-thread-react" aria-label="Add reaction">' +
-          '<img src="' + ICONS.Smiley + '" alt="">' +
-          '</button>'
-        : '') +
       '</div>'
     );
   }

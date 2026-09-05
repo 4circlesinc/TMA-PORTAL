@@ -15209,19 +15209,24 @@
     min-width: 0;
   }
 
+  /* Three pills sharing the width; each label holds one line. The
+     reaction button that used to sit beside them did nothing and took the
+     room "Reply all" needed. */
   .tma-dash__email-thread-actions--mobile .tma-dash__email-thread-btn {
     flex: 1 1 0;
     justify-content: center;
+    gap: var(--space-6);
     min-width: 0;
     min-height: 44px;
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-12) var(--space-10, 10px);
     border: none;
     border-radius: var(--radius-24);
     background: #3c4043;
     color: var(--color-white);
-    font-size: var(--text-size-14);
+    font-size: var(--font-size-13, 13px);
     line-height: var(--text-lh-14);
     font-weight: 500;
+    white-space: nowrap;
     box-shadow: none;
   }
 
@@ -15237,24 +15242,11 @@
     filter: brightness(0) invert(1);
   }
 
-  .tma-dash__email-thread-react {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 48px;
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    border: 1px solid var(--color-overlay-4);
-    border-radius: 50%;
-    background: var(--color-white);
-    cursor: pointer;
-  }
-
-  .tma-dash__email-thread-react img {
-    width: 22px;
-    height: 22px;
-    opacity: 0.7;
+  /* The narrowest phones: the words stay, the glyphs go. */
+  @media (max-width: 360px) {
+    .tma-dash__email-thread-actions--mobile .tma-dash__email-thread-btn img {
+      display: none;
+    }
   }
 
   .tma-dash__email-detail-nav {

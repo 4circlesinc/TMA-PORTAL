@@ -171,6 +171,11 @@ async function runAt(label, viewport) {
   });
   check(!chrome.tabbar, 'the bottom navigation is hidden while a message is open');
   check(chrome.footer && chrome.footerBottom !== null && chrome.footerBottom <= chrome.vh + 0.5, `the reply bar sits within the screen (bottom ${chrome.footerBottom} of ${chrome.vh})`);
+  const pills = await page.$$eval('.tma-dash__email-thread-actions--mobile .tma-dash__email-thread-btn', (els) => els.map((el) => ({
+    label: el.textContent.trim(), oneLine: el.getBoundingClientRect().height <= 48, fits: el.scrollWidth <= el.clientWidth + 1,
+  })));
+  check(pills.length === 3 && pills.every((p) => p.oneLine && p.fits), `Reply, Reply all and Forward each hold one line (${pills.map((p) => p.label).join(' / ')})`);
+  check(!(await page.$('.tma-dash__email-thread-react')), 'no dead reaction button beside them');
 
   step(label, 'The subject wraps in full, star beside it, labels on their own row');
   check(!!m.subject && m.subject.text.startsWith(SUBJECT), `the full subject is there (got "${m.subject && m.subject.text.slice(0, 40)}…")`);
