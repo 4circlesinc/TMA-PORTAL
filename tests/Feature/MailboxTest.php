@@ -385,6 +385,54 @@ class MailboxTest extends TestCase
             ->assertJsonPath('preferences.signatures.0.html', '<div>Work</div>');
     }
 
+    public function test_signature_html_keeps_a_full_size_logo_data_uri(): void
+    {
+        $user = $this->user();
+        $this->account($user);
+
+        $logo = 'data:image/png;base64,'.str_repeat('A', 120000);
+        $html = '<div><img src="'.$logo.'" width="160" height="80" alt="Logo"></div>';
+        $this->assertGreaterThan(100000, strlen($html));
+
+        $this->actingAs($user)
+            ->putJson('/portal/mail/settings', [
+                'preferences' => ['signature' => $html],
+            ])
+            ->assertOk();
+
+        $stored = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $this->assertSame($html, $stored);
+        $this->assertGreaterThan(100000, strlen($stored));
+        $this->assertStringContainsString($logo, $stored);
+    }
+
+    public function test_import_signature_keeps_a_full_size_logo(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $payload = str_repeat('B', 110000);
+        $logo = 'data:image/png;base64,'.$payload;
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-hires-sig',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<div>Hi</div><div class="gmail_signature" data-smartmail="gmail_signature">'
+                .'<div>Test User</div><img src="'.$logo.'" width="160" height="80" alt="Logo"></div>',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk();
+
+        $stored = (string) data_get($user->fresh()->preferences, 'mail.signature');
+        $this->assertGreaterThan(100000, strlen($stored));
+        $this->assertStringContainsString($payload, $stored);
+        $this->assertStringNotContainsString('Hi', $stored);
+    }
+
     public function test_import_signature_copies_the_mailbox_signature_into_preferences(): void
     {
         $user = $this->user();

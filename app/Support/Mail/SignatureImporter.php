@@ -588,18 +588,25 @@ class SignatureImporter
 
     private function toDataUri(string $bytes, string $mime): ?string
     {
+        $mime = strtolower($mime);
+        if ($mime === 'image/jpg') {
+            $mime = 'image/jpeg';
+        }
+
         // Keep the source pixels. Outlook logos are often 2× the CSS size;
         // crushing them to 320px was what made imported signatures look
-        // muddy. Re-encode only when the file is enormous or the long edge
-        // is past a retina-wide cap.
-        if (strlen($bytes) > 500_000 || $this->imageMaxEdge($bytes) > 1600) {
-            $compressed = $this->compressImage($bytes, $mime);
+        // muddy. Re-encode only when the file is enormous, the long edge
+        // is past a retina-wide cap, or the type cannot live in a data URI
+        // the signature sanitizer will keep (GIF, BMP, …).
+        $keepAsIs = in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true);
+        if (! $keepAsIs || strlen($bytes) > 500_000 || $this->imageMaxEdge($bytes) > 1600) {
+            $compressed = $this->compressImage($bytes, $keepAsIs ? $mime : 'image/png');
             if ($compressed !== null) {
                 [$bytes, $mime] = $compressed;
             }
         }
 
-        if (strlen($bytes) > 900_000) {
+        if (strlen($bytes) > 1_400_000) {
             return null;
         }
 
@@ -1019,8 +1026,7 @@ class SignatureImporter
         }
 
         // Remote logos and cid: images from the original send are both common.
-        // GIF is not accepted for portal signature uploads.
-        if (preg_match('/^(https?:|cid:|data:image\/(?:png|jpe?g|webp);base64,)/i', $url)) {
+        if (preg_match('/^(https?:|cid:|data:image\/(?:png|jpe?g|gif|webp);base64,)/i', $url)) {
             return ! preg_match('/^(javascript:|vbscript:|data:text)/i', $url);
         }
 

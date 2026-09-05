@@ -2045,13 +2045,13 @@ class MailController extends Controller
             'provider' => ['sometimes', 'string', 'in:google,microsoft'],
             'syncEnabled' => ['sometimes', 'boolean'],
             'preferences' => ['sometimes', 'array'],
-            // Room for a few logo data-URIs inside HTML signatures.
-            'preferences.signature' => ['sometimes', 'nullable', 'string', 'max:100000'],
+            // Room for a few full-resolution logo data-URIs inside HTML signatures.
+            'preferences.signature' => ['sometimes', 'nullable', 'string', 'max:'.SignatureImporter::MAX_LENGTH],
             'preferences.activeSignatureId' => ['sometimes', 'nullable', 'string', 'max:64'],
             'preferences.signatures' => ['sometimes', 'array', 'max:10'],
             'preferences.signatures.*.id' => ['required', 'string', 'max:64'],
             'preferences.signatures.*.name' => ['required', 'string', 'max:80'],
-            'preferences.signatures.*.html' => ['nullable', 'string', 'max:100000'],
+            'preferences.signatures.*.html' => ['nullable', 'string', 'max:'.SignatureImporter::MAX_LENGTH],
             'preferences.readReceipts' => ['sometimes', 'boolean'],
             'preferences.conversationView' => ['sometimes', 'boolean'],
             'preferences.previewPane' => ['sometimes', 'boolean'],
@@ -2263,7 +2263,7 @@ class MailController extends Controller
                 return [
                     'id' => (string) $entry['id'],
                     'name' => $name !== '' ? mb_substr($name, 0, 80) : 'Signature',
-                    'html' => mb_substr((string) ($entry['html'] ?? ''), 0, 100000),
+                    'html' => $this->clipSignatureHtml((string) ($entry['html'] ?? '')),
                 ];
             })
             ->take(10)
@@ -2275,7 +2275,7 @@ class MailController extends Controller
             $signatures[] = [
                 'id' => (string) Str::uuid(),
                 'name' => 'Signature',
-                'html' => mb_substr((string) $merged['signature'], 0, 100000),
+                'html' => $this->clipSignatureHtml((string) $merged['signature']),
             ];
         }
 
@@ -2293,7 +2293,7 @@ class MailController extends Controller
         if (! $hadLibrary && $hadActiveHtml && $activeId !== null) {
             foreach ($signatures as $index => $entry) {
                 if ($entry['id'] === $activeId) {
-                    $signatures[$index]['html'] = mb_substr((string) ($merged['signature'] ?? ''), 0, 100000);
+                    $signatures[$index]['html'] = $this->clipSignatureHtml((string) ($merged['signature'] ?? ''));
                     break;
                 }
             }
@@ -2312,6 +2312,11 @@ class MailController extends Controller
         $merged['signature'] = $activeHtml;
 
         return $merged;
+    }
+
+    private function clipSignatureHtml(string $html): string
+    {
+        return mb_substr($html, 0, SignatureImporter::MAX_LENGTH);
     }
 
     /**
