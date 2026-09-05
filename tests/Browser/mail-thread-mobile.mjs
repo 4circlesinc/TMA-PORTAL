@@ -154,6 +154,24 @@ async function runAt(label, viewport) {
   check(m.paneOverflow === false, 'the reading pane has no horizontal overflow');
   await page.screenshot({ path: `${OUT}/mail-thread-mobile-${viewport.width}.png` });
 
+  // An open message owns the screen: no bottom navigation, and the reply
+  // bar at the bottom instead of behind it.
+  const chrome = await page.evaluate(() => {
+    const bar = document.querySelector('.tma-dash__tabbar');
+    const footer = document.querySelector('.tma-dash__email-detail-mobile-footer');
+    const visible = (el) => !!el && el.offsetWidth > 0 && el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
+    const fr = footer && footer.getBoundingClientRect();
+    return {
+      tabbar: visible(bar),
+      footer: visible(footer),
+      footerBottom: fr ? Math.round(fr.bottom) : null,
+      vh: window.innerHeight,
+      footerClear: fr && bar ? !(bar.offsetHeight && fr.bottom > bar.getBoundingClientRect().top) : true,
+    };
+  });
+  check(!chrome.tabbar, 'the bottom navigation is hidden while a message is open');
+  check(chrome.footer && chrome.footerBottom !== null && chrome.footerBottom <= chrome.vh + 0.5, `the reply bar sits within the screen (bottom ${chrome.footerBottom} of ${chrome.vh})`);
+
   step(label, 'The subject wraps in full, star beside it, labels on their own row');
   check(!!m.subject && m.subject.text.startsWith(SUBJECT), `the full subject is there (got "${m.subject && m.subject.text.slice(0, 40)}…")`);
   check(!!m.subject && m.subject.whiteSpace !== 'nowrap' && !m.subject.clipped, 'it wraps instead of truncating');
@@ -194,6 +212,7 @@ async function runAt(label, viewport) {
   // quote is the middle one, reached through the list's conversation drop.
   await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
   await page.waitForSelector(LIST_ROW, { timeout: 15000 });
+  check(await page.$eval('.tma-dash__tabbar', (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none'), 'the bottom navigation is back on the inbox list');
   await page.click(`${LIST_ROW}:has-text("INTRODUCTION") [data-email-conversation-toggle]`);
   await page.waitForSelector(`${LIST_ROW}:has-text("Hiroshi Mabuchi")`, { timeout: 10000 });
   // The arrow must open the drop only: a tap on it used to open the message

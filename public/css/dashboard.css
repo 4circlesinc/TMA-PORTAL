@@ -15282,6 +15282,13 @@
     display: none !important;
   }
 
+  /* An open message takes the whole screen: the bottom navigation goes, as
+     it does for an open chat, so the reply bar sits at the bottom instead
+     of behind the tabs. The inbox list keeps it. */
+  .tma-dash--email-mobile.tma-dash--email-mobile-reading .tma-dash__tabbar {
+    display: none !important;
+  }
+
   .tma-dash--email-mobile .tma-dash__email-compose-stack {
     position: fixed;
     inset: 0;
