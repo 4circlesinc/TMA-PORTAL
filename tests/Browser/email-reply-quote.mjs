@@ -88,6 +88,23 @@ try {
   step(2, 'Reply quotes the exact HTML, not the snippet');
   await page.click('[data-email-inline-compose="reply"]');
   await page.waitForSelector('.tma-dash__email-inline-quote', { timeout: 8000 });
+  await page.waitForSelector('[data-email-inline-compose-panel]', { timeout: 8000 });
+
+  const pane = await page.evaluate(() => {
+    const detail = document.querySelector('.tma-dash__email-detail--compose');
+    const panel = document.querySelector('[data-email-inline-compose-panel]');
+    const thread = document.querySelector('[data-email-thread]');
+    if (!detail || !panel) return null;
+    const d = detail.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    return {
+      threadHidden: !thread,
+      ratio: d.height ? p.height / d.height : 0,
+    };
+  });
+  check(!!pane && pane.threadHidden, 'reply replaces the thread in the reading pane');
+  check(!!pane && pane.ratio >= 0.7,
+    `composer fills the reading pane (ratio ${pane ? pane.ratio.toFixed(2) : 'n/a'})`);
 
   const quote = await page.evaluate(
     () => document.querySelector('.tma-dash__email-inline-quote-body')?.innerHTML || ''

@@ -7733,11 +7733,16 @@
       if (!findComposeDraft(state, job.draft.id)) {
         state.composeDrafts.push(job.draft);
       }
+      state.composeDrafts.forEach(function (d) {
+        d.minimized = d.id !== job.draft.id;
+      });
       state.focusedComposeId = job.draft.id;
+      enterComposeView(state);
     } else if (job.kind === 'inline' && job.inline) {
       job.inline.sending = false;
       job.inline._sendRequested = false;
       state.inlineCompose = job.inline;
+      enterComposeView(state);
     }
     if (render) render();
   }
