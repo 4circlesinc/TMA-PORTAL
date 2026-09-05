@@ -166,6 +166,29 @@ class MailboxTest extends TestCase
         });
     }
 
+    public function test_deleting_from_trash_permanently_removes_the_message(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $message = $this->message($user, $account, ['folder' => 'trash']);
+
+        $this->fakeTokenEndpoint([
+            'gmail.googleapis.com/*' => Http::response(['id' => 'gmail-1']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/messages/'.$message->uuid.'/move', ['folder' => 'trash'])
+            ->assertOk()
+            ->assertJsonMissingPath('message');
+
+        $this->assertDatabaseMissing('mail_messages', ['id' => $message->id]);
+
+        Http::assertSent(function ($request) {
+            return $request->method() === 'DELETE'
+                && str_contains($request->url(), '/messages/gmail-1');
+        });
+    }
+
     public function test_a_message_body_is_fetched_on_first_open_and_cached_after(): void
     {
         $user = $this->user();
@@ -268,8 +291,14 @@ class MailboxTest extends TestCase
             'gmail.googleapis.com/gmail/v1/users/me/labels' => Http::response(['labels' => []]),
             'gmail.googleapis.com/gmail/v1/users/me/profile' => Http::response(['historyId' => '999']),
             'gmail.googleapis.com/gmail/v1/users/me/messages/m1*' => Http::response($encoded('m1')),
-            'gmail.googleapis.com/gmail/v1/users/me/messages?*' => Http::response(['messages' => [['id' => 'm1']]]),
-            'gmail.googleapis.com/gmail/v1/users/me/messages*' => Http::response(['messages' => [['id' => 'm1']]]),
+            'gmail.googleapis.com/gmail/v1/users/me/messages*' => function ($request) {
+                $label = $request['labelIds'] ?? null;
+                if ($label === 'INBOX' || $label === ['INBOX']) {
+                    return Http::response(['messages' => [['id' => 'm1']]]);
+                }
+
+                return Http::response(['messages' => []]);
+            },
         ]);
 
         new MailSynchronizer($account)->sync();

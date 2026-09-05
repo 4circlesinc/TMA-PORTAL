@@ -1186,6 +1186,15 @@ class MailController extends Controller
 
         $message = $this->findMessage($request, $uuid);
 
+        if ($data['folder'] === 'trash' && $message->folder === 'trash') {
+            Mailbox::provider($message->account)->delete($message->remote_id);
+            $message->delete();
+
+            return response()->json([
+                'folders' => $this->folderCounts($request->user()->id),
+            ]);
+        }
+
         Mailbox::provider($message->account)->move($message->remote_id, $data['folder']);
         $message->forceFill(['folder' => $data['folder']])->save();
 

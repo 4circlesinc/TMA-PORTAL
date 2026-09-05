@@ -760,6 +760,44 @@ class GmailProvider implements MailProvider
     }
 
     /**
+     * @return list<string>|null
+     */
+    public function listMessageIds(string $folder, int $max = 400): ?array
+    {
+        $ids = [];
+        $pageToken = null;
+
+        do {
+            $query = ['maxResults' => min(100, $max - count($ids))];
+            if ($folder === 'archive') {
+                $query['q'] = '-in:inbox -in:trash -in:spam -in:sent -in:draft';
+            } else {
+                $query['labelIds'] = self::labelForFolder($folder);
+            }
+            if ($pageToken) {
+                $query['pageToken'] = $pageToken;
+            }
+
+            $response = $this->request()->get(self::BASE.'/messages', $query);
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $data = $this->json($response);
+            foreach ($data['messages'] ?? [] as $row) {
+                $id = (string) ($row['id'] ?? '');
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
+            }
+
+            $pageToken = $data['nextPageToken'] ?? null;
+        } while ($pageToken && count($ids) < $max);
+
+        return $pageToken ? null : $ids;
+    }
+
+    /**
      * Gmail has no cheap "how many messages have attachments" counter, a
      * search estimate is the closest and it is famously unreliable, so
      * nothing is claimed and the import counts what it actually finds.

@@ -9909,7 +9909,7 @@
   function commitEmailRowAction(root, state, render, id, destination) {
     var wasSelected = state.selectedId === id;
     dismissEmailRow(state, id, destination);
-    if (destination === 'trash') showEmailToast(root, 'Message deleted');
+    if (destination === 'trash' || destination === 'delete') showEmailToast(root, 'Message deleted');
     else if (destination === 'archive') showEmailToast(root, 'Message archived');
     else if (destination === 'inbox') showEmailToast(root, 'Moved to inbox');
     else if (destination === 'spam') showEmailToast(root, 'Marked as spam');
@@ -9922,11 +9922,29 @@
     announceInboxUnread(state);
   }
 
+  /* Delete in Outlook sends mail to Deleted Items. Delete from Deleted Items
+   * (portal Trash) removes it for good, matching Outlook. */
+  function mailDeleteDestination(state, id) {
+    if (state.folder === 'trash') return 'delete';
+    var row = id ? (findAnyRow(state, id) || findRow(state, id)) : null;
+    if (row && row.folder === 'trash') return 'delete';
+    return 'trash';
+  }
+
+  function mailDeleteDestinationForIds(state, ids) {
+    if (state.folder === 'trash') return 'delete';
+    if (ids && ids.length && ids.every(function (id) {
+      var row = findAnyRow(state, id) || findRow(state, id);
+      return row && row.folder === 'trash';
+    })) return 'delete';
+    return 'trash';
+  }
+
   function applyEmailRowAction(root, state, render, id, destination, wrap) {
     if (!id || (wrap && (wrap.classList.contains('is-deleting') || wrap.classList.contains('is-archiving')))) return;
     closeEmailRowSwipes(root);
-    if ((destination === 'trash' || destination === 'archive' || destination === 'inbox' || destination === 'spam') && wrap) {
-      animateEmailRowDismiss(wrap, destination === 'trash' ? 'trash' : 'archive', function () {
+    if ((destination === 'trash' || destination === 'delete' || destination === 'archive' || destination === 'inbox' || destination === 'spam') && wrap) {
+      animateEmailRowDismiss(wrap, destination === 'archive' ? 'archive' : 'trash', function () {
         commitEmailRowAction(root, state, render, id, destination);
       });
       return;
@@ -9956,14 +9974,21 @@
     }
 
     adjustFolderCount(state, state.folder, -1, row.unread);
-    adjustFolderCount(state, destination, 1, row.unread);
+    if (destination !== 'delete') {
+      adjustFolderCount(state, destination, 1, row.unread);
+    }
 
-    api().move(id, destination).then(function (data) {
+    var request = destination === 'delete'
+      ? api().remove(id)
+      : api().move(id, destination);
+    request.then(function (data) {
       if (data && data.folders) state.folderCounts = data.folders;
     }).catch(function (err) {
       rows.splice(at, 0, row);
       adjustFolderCount(state, state.folder, 1, row.unread);
-      adjustFolderCount(state, destination, -1, row.unread);
+      if (destination !== 'delete') {
+        adjustFolderCount(state, destination, -1, row.unread);
+      }
       reportMailError(state, err);
       if (state.render) state.render();
     });
@@ -10219,7 +10244,7 @@
         return;
       }
 
-      applyBulkAction(root, state, render, ids, action === 'delete' ? 'trash' : action);
+      applyBulkAction(root, state, render, ids, action === 'delete' ? mailDeleteDestinationForIds(state, ids) : action);
     });
   }
 
@@ -10274,7 +10299,7 @@
         return;
       }
 
-      applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : action, null);
+      applyEmailRowAction(root, state, render, id, action === 'delete' ? mailDeleteDestination(state, id) : action, null);
     });
   }
 
@@ -10710,7 +10735,7 @@
         var action = btn.getAttribute('data-email-row-swipe-action');
         var id = btn.getAttribute('data-email-row-id');
         var wrap = btn.closest('[data-email-row-swipe]');
-        applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : 'archive', wrap);
+        applyEmailRowAction(root, state, render, id, action === 'delete' ? mailDeleteDestination(state, id) : 'archive', wrap);
       });
     });
 
@@ -11508,7 +11533,7 @@
 
         if (action === 'archive' || action === 'inbox' || action === 'delete') {
           var wrap = rowEl.closest('[data-email-row-swipe]');
-          var destination = action === 'delete' ? 'trash' : action;
+          var destination = action === 'delete' ? mailDeleteDestination(state, id) : action;
           applyEmailRowAction(root, state, render, id, destination, wrap);
           return;
         }
@@ -12026,7 +12051,7 @@
           return;
         }
         if (action === 'archive' || action === 'inbox' || action === 'delete') {
-          applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : action, null);
+          applyEmailRowAction(root, state, render, id, action === 'delete' ? mailDeleteDestination(state, id) : action, null);
           return;
         }
         if (action === 'unread') {

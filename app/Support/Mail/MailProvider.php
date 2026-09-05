@@ -133,6 +133,15 @@ interface MailProvider
     public function folderTotals(): array;
 
     /**
+     * Provider ids currently in a folder. Used to drop local rows that were
+     * deleted or emptied on the mailbox side. Null means the listing did not
+     * finish, so the caller must not prune.
+     *
+     * @return list<string>|null
+     */
+    public function listMessageIds(string $folder, int $max = 400): ?array;
+
+    /**
      * How many messages in each folder carry attachments, where the provider
      * can answer cheaply. Used only for the initial "N attachments found"
      * estimate on the progress panel, a provider with no cheap answer

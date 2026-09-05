@@ -381,7 +381,7 @@ class MailDraftSaveTest extends TestCase
         $this->assertSame('outlook-draft-1', MailDraft::query()->where('uuid', $response->json('draft.id'))->value('remote_id'));
     }
 
-    public function test_empty_outlook_drafts_are_not_mirrored_into_the_list(): void
+    public function test_outlook_drafts_are_mirrored_into_the_list_including_empty_ones(): void
     {
         $user = $this->user();
         $account = $this->microsoftAccount($user);
@@ -403,7 +403,7 @@ class MailDraftSaveTest extends TestCase
                         'ccRecipients' => [],
                         'isRead' => true,
                         'hasAttachments' => true,
-                        'receivedDateTime' => '2026-09-04T12:00:00Z',
+                        'lastModifiedDateTime' => '2026-09-04T12:00:00Z',
                         'categories' => [],
                     ],
                     [
@@ -416,7 +416,7 @@ class MailDraftSaveTest extends TestCase
                         'ccRecipients' => [],
                         'isRead' => true,
                         'hasAttachments' => false,
-                        'receivedDateTime' => '2026-03-03T12:00:00Z',
+                        'lastModifiedDateTime' => '2026-03-03T12:00:00Z',
                         'categories' => [],
                     ],
                 ],
@@ -426,15 +426,123 @@ class MailDraftSaveTest extends TestCase
 
         new MailSynchronizer($account)->sync();
 
-        $this->assertDatabaseMissing('mail_messages', ['remote_id' => 'empty-draft']);
+        $this->assertDatabaseHas('mail_messages', [
+            'remote_id' => 'empty-draft',
+            'folder' => 'draft',
+        ]);
         $this->assertDatabaseHas('mail_messages', [
             'remote_id' => 'real-draft',
             'folder' => 'draft',
             'subject' => 'Re: Pending Approval',
         ]);
+        $this->assertSame(2, MailMessage::query()->where('folder', 'draft')->count());
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), 'mailFolders/drafts/messages')) {
+                return false;
+            }
+
+            $order = (string) ($request['$orderby'] ?? '');
+
+            return str_contains($order, 'lastModifiedDateTime');
+        });
     }
 
-    public function test_existing_empty_draft_rows_are_removed_on_sync(): void
+    public function test_outlook_drafts_older_than_the_sync_cursor_are_still_mirrored(): void
+    {
+        $user = $this->user();
+        $account = $this->microsoftAccount($user);
+        $account->forceFill(['mail_cursor' => 'ts:2026-09-05T00:00:00Z'])->save();
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response([
+                    'access_token' => 'access-token',
+                    'expires_in' => 3600,
+                ]);
+            }
+
+            $filter = (string) ($request['$filter'] ?? '');
+            if ($filter !== '') {
+                return Http::response(['value' => []]);
+            }
+
+            if (! str_contains($request->url(), 'mailFolders/drafts/messages')) {
+                return Http::response(['value' => []]);
+            }
+
+            return Http::response([
+                'value' => [
+                    [
+                        'id' => 'old-empty-draft',
+                        'conversationId' => 'c-old-empty',
+                        'subject' => '',
+                        'bodyPreview' => 'This Electronic Mail and any attached files may contain confidential information.',
+                        'from' => null,
+                        'toRecipients' => [],
+                        'lastModifiedDateTime' => '2026-01-15T12:00:00Z',
+                    ],
+                    [
+                        'id' => 'old-real-draft',
+                        'conversationId' => 'c-old-real',
+                        'subject' => 'Follow up',
+                        'bodyPreview' => 'Checking in',
+                        'toRecipients' => [['emailAddress' => ['address' => 'cindy@example.com']]],
+                        'lastModifiedDateTime' => '2026-03-03T12:00:00Z',
+                    ],
+                ],
+            ]);
+        });
+
+        new MailSynchronizer($account)->sync();
+
+        $this->assertDatabaseHas('mail_messages', [
+            'remote_id' => 'old-empty-draft',
+            'folder' => 'draft',
+        ]);
+        $this->assertDatabaseHas('mail_messages', [
+            'remote_id' => 'old-real-draft',
+            'folder' => 'draft',
+            'subject' => 'Follow up',
+        ]);
+        $this->assertSame(2, MailMessage::query()->where('folder', 'draft')->count());
+    }
+
+    public function test_a_draft_deleted_in_outlook_is_dropped_from_the_portal(): void
+    {
+        $user = $this->user();
+        $account = $this->microsoftAccount($user);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'gone-draft',
+            'thread_id' => 'thread-gone',
+            'folder' => 'draft',
+            'subject' => 'Old draft',
+            'to' => [['email' => 'dana@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subDay(),
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/mailFolders/drafts/messages*' => Http::response([
+                'value' => [['id' => 'still-here']],
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []]),
+        ]);
+
+        new MailSynchronizer($account)->sync();
+
+        $this->assertDatabaseMissing('mail_messages', ['remote_id' => 'gone-draft']);
+    }
+
+    public function test_existing_empty_draft_rows_are_removed_when_outlook_no_longer_has_them(): void
     {
         $user = $this->user();
         $account = $this->microsoftAccount($user);

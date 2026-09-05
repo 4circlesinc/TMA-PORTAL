@@ -28,7 +28,7 @@ class GraphProvider implements MailProvider
     private const BASE_USERS = 'https://graph.microsoft.com/v1.0/users';
 
     /** Fields the list rows need. Graph returns the full body otherwise. */
-    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
+    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,isRead,flag,hasAttachments,receivedDateTime,lastModifiedDateTime,categories,parentFolderId';
 
     /** Marks a cursor as "everything after this time" rather than a delta link. */
     private const TIME_CURSOR = 'ts:';
@@ -50,9 +50,19 @@ class GraphProvider implements MailProvider
             ? $this->request()->get($pageToken)
             : $this->request()->get(self::BASE.'/mailFolders/'.self::folderId($folder).'/messages', [
                 '$top' => $limit,
-                '$orderby' => 'receivedDateTime desc',
+                '$orderby' => self::listOrderBy($folder),
                 '$select' => self::LIST_SELECT,
             ]);
+
+        // Drafts often have no receivedDateTime, so the usual order-by 400s
+        // and the whole Drafts folder would never seed.
+        if (! $pageToken && ! $response->successful() && $folder === 'draft') {
+            $response = $this->request()->get(self::BASE.'/mailFolders/'.self::folderId($folder).'/messages', [
+                '$top' => $limit,
+                '$orderby' => 'lastModifiedDateTime desc',
+                '$select' => self::LIST_SELECT,
+            ]);
+        }
 
         $data = $this->json($response);
 
@@ -212,9 +222,10 @@ class GraphProvider implements MailProvider
             // them, which is how a message can arrive at the provider and never
             // reach the portal at all.
             $url = self::BASE.'/mailFolders/'.self::folderId($folder).'/messages';
+            $stamp = self::changeStamp($folder);
             $query = [
-                '$filter' => 'receivedDateTime gt '.$since,
-                '$orderby' => 'receivedDateTime asc',
+                '$filter' => $stamp.' gt '.$since,
+                '$orderby' => $stamp.' asc',
                 '$top' => 100,
                 '$select' => self::LIST_SELECT,
             ];
@@ -236,8 +247,18 @@ class GraphProvider implements MailProvider
                     ? $this->request(timeout: 6, tries: 1)->get($url)
                     : $this->request(timeout: 6, tries: 1)->get($url, $query);
 
-                // A folder that rejects the filter (drafts have no
-                // receivedDateTime to order by) or times out contributes
+                if (! $response->successful() && $page === 0 && $query !== [] && $stamp === 'lastModifiedDateTime') {
+                    $stamp = 'receivedDateTime';
+                    $query = [
+                        '$filter' => $stamp.' gt '.$since,
+                        '$orderby' => $stamp.' asc',
+                        '$top' => 100,
+                        '$select' => self::LIST_SELECT,
+                    ];
+                    $response = $this->request(timeout: 6, tries: 1)->get($url, $query);
+                }
+
+                // A folder that rejects the filter or times out contributes
                 // nothing this pass. It deliberately does not hold the cursor
                 // back: a folder that fails every time would stall the whole
                 // mailbox. It is logged instead, so a folder that has quietly
@@ -259,8 +280,8 @@ class GraphProvider implements MailProvider
                 foreach ($batch as $raw) {
                     $messages[] = $this->normalize($raw, $folder, withBody: false);
 
-                    if ($stamp = $raw['receivedDateTime'] ?? null) {
-                        $newest = max($newest ?? $stamp, $stamp);
+                    if ($at = $raw[$stamp] ?? $raw['lastModifiedDateTime'] ?? $raw['receivedDateTime'] ?? null) {
+                        $newest = max($newest ?? $at, $at);
                     }
                 }
 
@@ -877,9 +898,7 @@ class GraphProvider implements MailProvider
             // already carries that meaning, so this stays false.
             'is_important' => false,
             'has_attachments' => (bool) ($raw['hasAttachments'] ?? false),
-            'sent_at' => isset($raw['receivedDateTime'])
-                ? strtotime((string) $raw['receivedDateTime'])
-                : null,
+            'sent_at' => self::timestamp($raw['receivedDateTime'] ?? $raw['lastModifiedDateTime'] ?? null),
             'label_ids' => array_values($raw['categories'] ?? []),
         ];
 
@@ -974,6 +993,75 @@ class GraphProvider implements MailProvider
             'archive' => 'archive',
             default => throw new RuntimeException("Unknown mail folder '{$folder}'."),
         };
+    }
+
+    /** Drafts have no receivedDateTime, so the inbox order-by 400s on that folder. */
+    private static function listOrderBy(string $folder): string
+    {
+        return $folder === 'draft' ? 'lastModifiedDateTime desc' : 'receivedDateTime desc';
+    }
+
+    /**
+     * Moves (inbox → Deleted Items) and draft edits do not bump
+     * receivedDateTime, so a receivedDateTime filter never sees them.
+     */
+    private static function changeStamp(string $folder): string
+    {
+        return in_array($folder, ['draft', 'trash', 'inbox'], true)
+            ? 'lastModifiedDateTime'
+            : 'receivedDateTime';
+    }
+
+    private static function timestamp(mixed $value): ?int
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        $ts = strtotime($value);
+
+        return $ts === false ? null : $ts;
+    }
+
+    /**
+     * Ids currently in a folder, for pruning local rows Outlook has deleted.
+     * Null means the listing did not drain, so the caller must not prune.
+     *
+     * @return list<string>|null
+     */
+    public function listMessageIds(string $folder, int $max = 400): ?array
+    {
+        $ids = [];
+        $url = self::BASE.'/mailFolders/'.self::folderId($folder).'/messages';
+        $query = ['$select' => 'id', '$top' => 100];
+
+        while (count($ids) < $max) {
+            $response = $query === []
+                ? $this->request(timeout: 8, tries: 1)->get($url)
+                : $this->request(timeout: 8, tries: 1)->get($url, $query);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $data = $this->json($response);
+            foreach ($data['value'] ?? [] as $row) {
+                $id = (string) ($row['id'] ?? '');
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
+            }
+
+            $next = $data['@odata.nextLink'] ?? null;
+            if (! $next) {
+                return $ids;
+            }
+
+            $url = $next;
+            $query = [];
+        }
+
+        return null;
     }
 
     /**

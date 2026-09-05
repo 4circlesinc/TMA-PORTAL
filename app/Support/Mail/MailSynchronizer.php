@@ -43,11 +43,11 @@ class MailSynchronizer
         $this->account->forceFill(['mail_status' => 'syncing', 'mail_error' => null])->save();
 
         try {
-            $this->forgetEmptyDrafts();
-
             $written = $this->account->mail_cursor
                 ? $this->incremental()
                 : $this->seed();
+
+            $this->reconcileMirrorFolders();
 
             $this->account->forceFill([
                 'mail_status' => 'idle',
@@ -61,6 +61,7 @@ class MailSynchronizer
             $this->account->forceFill(['mail_cursor' => null])->save();
 
             $written = $this->seed();
+            $this->reconcileMirrorFolders();
 
             $this->account->forceFill([
                 'mail_status' => 'idle',
@@ -327,15 +328,9 @@ class MailSynchronizer
         $now = now();
         $rows = [];
         $incoming = [];
-        $huskIds = [];
 
         foreach ($messages as $m) {
             if (empty($m['remote_id'])) {
-                continue;
-            }
-            if (DraftContent::isHusk($m, $this->signatures())) {
-                $huskIds[] = (string) $m['remote_id'];
-
                 continue;
             }
 
@@ -367,13 +362,6 @@ class MailSynchronizer
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
-        }
-
-        if ($huskIds !== []) {
-            MailMessage::query()
-                ->where('connected_account_id', $this->account->id)
-                ->whereIn('remote_id', $huskIds)
-                ->delete();
         }
 
         if ($rows === []) {
@@ -415,15 +403,6 @@ class MailSynchronizer
     private function upsert(array $message): bool
     {
         if (empty($message['remote_id'])) {
-            return false;
-        }
-
-        if (DraftContent::isHusk($message, $this->signatures())) {
-            MailMessage::query()
-                ->where('connected_account_id', $this->account->id)
-                ->where('remote_id', $message['remote_id'])
-                ->delete();
-
             return false;
         }
 
@@ -714,35 +693,75 @@ class MailSynchronizer
     }
 
     /**
-     * Drop signature-only Drafts-folder rows that leaked in from empty
-     * compose autosaves. Called at the start of a sync so the list is clean
-     * even when Graph's draft folder listing is skipped (no receivedDateTime).
+     * Keep Drafts and Deleted Items in step with the mailbox.
+     *
+     * Incremental Graph filters miss both: empty Outlook drafts often have no
+     * receivedDateTime, and moving a message into Deleted Items does not bump
+     * that stamp, so a `receivedDateTime gt cursor` pass never sees them.
+     * Listing the folder's ids after every pass retags rows that moved, pulls
+     * in drafts the cursor window skipped, and drops rows Outlook has removed.
+     * Skipped when the listing did not drain — pruning against a partial page
+     * would delete mail that is still in the mailbox.
      */
-    private function forgetEmptyDrafts(): void
+    private function reconcileMirrorFolders(): void
     {
-        $signatures = $this->signatures();
+        foreach (['draft', 'trash'] as $folder) {
+            $this->reconcileFolder($folder);
+        }
+    }
+
+    private function reconcileFolder(string $folder): void
+    {
+        $ids = Mailbox::provider($this->account)->listMessageIds($folder);
+        if ($ids === null) {
+            return;
+        }
+
+        $query = MailMessage::query()
+            ->where('connected_account_id', $this->account->id);
+
+        if ($ids === []) {
+            $query->where('folder', $folder)->delete();
+
+            return;
+        }
+
+        // The same provider id in Deleted Items / Drafts is no longer in
+        // Inbox. Retag so a move made in Outlook or Gmail shows up here
+        // even when the incremental feed never reported it.
+        $query->whereIn('remote_id', $ids)->update(['folder' => $folder]);
+
+        $have = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->whereIn('remote_id', $ids)
+            ->pluck('remote_id')
+            ->all();
+
+        if (array_diff($ids, $have) !== []) {
+            $this->importMirrorFolder($folder);
+        }
 
         MailMessage::query()
             ->where('connected_account_id', $this->account->id)
-            ->where('folder', 'draft')
-            ->where(function ($query) {
-                $query->whereNull('subject')->orWhere('subject', '');
-            })
-            ->get()
-            ->each(function (MailMessage $row) use ($signatures): void {
-                if (DraftContent::isHusk([
-                    'folder' => 'draft',
-                    'to' => $row->to ?? [],
-                    'cc' => $row->cc ?? [],
-                    'bcc' => $row->bcc ?? [],
-                    'subject' => $row->subject,
-                    'snippet' => $row->snippet,
-                    'body_html' => $row->body_html,
-                    'body_text' => $row->body_text,
-                ], $signatures)) {
-                    $row->delete();
-                }
-            });
+            ->where('folder', $folder)
+            ->whereNotIn('remote_id', $ids)
+            ->delete();
+    }
+
+    /** Pull full list rows for a folder so never-stored ids can be inserted. */
+    private function importMirrorFolder(string $folder): void
+    {
+        $provider = Mailbox::provider($this->account);
+        $pageToken = null;
+
+        for ($page = 0; $page < 4; $page++) {
+            $listed = $provider->listMessages($folder, 100, $pageToken);
+            $this->bulkUpsert($listed['messages'] ?? []);
+            $pageToken = $listed['cursor'] ?? null;
+            if (! $pageToken) {
+                return;
+            }
+        }
     }
 
     /** @return list<string> */

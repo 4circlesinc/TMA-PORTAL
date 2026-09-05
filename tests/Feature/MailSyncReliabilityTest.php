@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AnalyzeMailbox;
 use App\Jobs\ResolveSenderPhoto;
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
@@ -174,7 +175,7 @@ class MailSyncReliabilityTest extends TestCase
         $user = $this->user();
         $this->account($user);
 
-        Queue::fake([SyncMailbox::class, \App\Jobs\AnalyzeMailbox::class]);
+        Queue::fake([SyncMailbox::class, AnalyzeMailbox::class]);
 
         $this->actingAs($user);
         $this->getJson('/portal/mail')->assertOk();
@@ -290,5 +291,87 @@ class MailSyncReliabilityTest extends TestCase
         Http::fake(['*' => Http::response([], 500)]);
 
         $this->assertSame(0, new MailSynchronizer($account)->quickCheck());
+    }
+
+    public function test_an_outlook_delete_moves_the_portal_row_to_trash(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'moved-1',
+            'thread_id' => 'thread-moved',
+            'folder' => 'inbox',
+            'subject' => 'Please review',
+            'from_email' => 'sender@example.com',
+            'is_read' => true,
+            'sent_at' => now()->subYear(),
+        ]);
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response([
+                    'access_token' => 'access-token',
+                    'expires_in' => 3600,
+                ]);
+            }
+
+            $filter = (string) ($request['$filter'] ?? '');
+            if ($filter !== '') {
+                return Http::response(['value' => []]);
+            }
+
+            if (! str_contains($request->url(), 'mailFolders/deleteditems/messages')) {
+                return Http::response(['value' => []]);
+            }
+
+            return Http::response([
+                'value' => [[
+                    'id' => 'moved-1',
+                    'conversationId' => 'thread-moved',
+                    'subject' => 'Please review',
+                    'receivedDateTime' => '2024-01-01T00:00:00Z',
+                    'lastModifiedDateTime' => '2026-09-05T12:00:00Z',
+                ]],
+            ]);
+        });
+
+        new MailSynchronizer($account)->sync();
+
+        $this->assertSame('trash', MailMessage::query()->where('remote_id', 'moved-1')->value('folder'));
+    }
+
+    public function test_emptying_deleted_items_in_outlook_clears_portal_trash(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'trashed-1',
+            'thread_id' => 'thread-trashed',
+            'folder' => 'trash',
+            'subject' => 'Gone from Outlook',
+            'from_email' => 'sender@example.com',
+            'is_read' => true,
+            'sent_at' => now()->subDay(),
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []]),
+        ]);
+
+        new MailSynchronizer($account)->sync();
+
+        $this->assertDatabaseMissing('mail_messages', ['remote_id' => 'trashed-1']);
     }
 }
