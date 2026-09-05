@@ -1190,7 +1190,7 @@
 
   function sendInlineCompose(root, state, render) {
     var ic = state.inlineCompose;
-    if (!ic || ic.sending) return;
+    if (!ic || ic.sending || ic._sendRequested) return;
 
     var row = threadMessage(state, ic.messageId) || findAnyRow(state, ic.messageId);
     if (!row) {
@@ -1212,12 +1212,7 @@
     var quote = panel && panel.querySelector('.tma-dash__email-inline-quote');
     var bodyHtml = (editor ? editor.innerHTML : ic.bodyHtml || '') + (quote ? quote.outerHTML : '');
     var subject = ic.mode === 'forward' ? getForwardSubject(row.subject) : getReplySubject(row.subject);
-
-    window.clearTimeout(ic._saveTimer);
-    ic.sending = true;
-    render();
-
-    api().send({
+    var payload = {
       to: to,
       cc: ic.mode === 'reply-all' ? parseAddresses(ic.cc) : [],
       subject: subject,
@@ -1225,17 +1220,25 @@
       mode: ic.mode,
       inReplyTo: ic.mode === 'new' ? null : ic.messageId,
       attachments: composeFilePayload(ic),
-    }).then(function () {
-      closeInlineCompose(state);
-      showEmailToast(root, 'Message sent');
+    };
 
-      // Sent mail only shows up locally after a sync, so refresh the folder
-      // the user is looking at.
-      reloadMessages(root, state, render);
-    }).catch(function (err) {
-      ic.sending = false;
-      reportMailError(state, err);
+    window.clearTimeout(ic._saveTimer);
+    var seconds = undoSendWindowSeconds(state);
+    if (seconds <= 0) {
+      ic.sending = true;
       render();
+      dispatchUndoSend(root, state, render, { kind: 'inline', inline: ic, payload: payload });
+      return;
+    }
+
+    ic._sendRequested = true;
+    closeInlineCompose(state);
+    render();
+    startUndoSend(root, state, render, {
+      kind: 'inline',
+      inline: ic,
+      seconds: seconds,
+      payload: payload,
     });
   }
 
@@ -7483,6 +7486,116 @@
     return draft._savePromise;
   }
 
+  function undoSendWindowSeconds(state) {
+    var prefs = (state && state.preferences) || {};
+    var n = prefs.undoSendSeconds;
+    if (n == null && state && state.settings && state.settings.preferences) {
+      n = state.settings.preferences.undoSendSeconds;
+    }
+    if (n == null || n === '') n = 5;
+    n = parseInt(n, 10);
+    if (!isFinite(n) || n < 0) n = 5;
+    if (n > 30) n = 30;
+    return n;
+  }
+
+  var undoSendJob = null;
+
+  function stopUndoSendCountdown() {
+    if (!undoSendJob || !undoSendJob.interval) return;
+    window.clearInterval(undoSendJob.interval);
+    undoSendJob.interval = null;
+  }
+
+  function clearUndoSendJob() {
+    stopUndoSendCountdown();
+    showEmailToast._persist = false;
+    showEmailToast._onUndo = null;
+    undoSendJob = null;
+  }
+
+  function restoreUndoSendJob(state, render, job) {
+    if (!job) return;
+    if (job.kind === 'compose' && job.draft) {
+      job.draft.sending = false;
+      job.draft._sendRequested = false;
+      job.draft.minimized = false;
+      if (!findComposeDraft(state, job.draft.id)) {
+        state.composeDrafts.push(job.draft);
+      }
+      state.focusedComposeId = job.draft.id;
+    } else if (job.kind === 'inline' && job.inline) {
+      job.inline.sending = false;
+      job.inline._sendRequested = false;
+      state.inlineCompose = job.inline;
+    }
+    if (render) render();
+  }
+
+  function dispatchUndoSend(root, state, render, job) {
+    if (!job || !job.payload) return Promise.resolve();
+    if (job.kind === 'compose' && job.draft) {
+      job.draft.sending = true;
+      job.draft._sendRequested = true;
+    } else if (job.inline) {
+      job.inline.sending = true;
+      job.inline._sendRequested = true;
+    }
+
+    return api().send(job.payload).then(function () {
+      if (job.kind === 'compose' && job.draft && findComposeDraft(state, job.draft.id)) {
+        closeCompose(state, job.draft.id, false);
+        if (render) render();
+      } else if (job.kind === 'inline' && state.inlineCompose === job.inline) {
+        closeInlineCompose(state);
+        if (render) render();
+      }
+      showEmailToast(root, 'Message sent');
+      reloadMessages(root, state, render);
+    }).catch(function (err) {
+      if (job.kind === 'compose' && job.draft) {
+        job.draft.sending = false;
+        job.draft._sendRequested = false;
+      } else if (job.inline) {
+        job.inline.sending = false;
+        job.inline._sendRequested = false;
+      }
+      restoreUndoSendJob(state, render, job);
+      reportMailError(state, err);
+    });
+  }
+
+  function flushUndoSendNow(root, state, render) {
+    var job = undoSendJob;
+    if (!job) return;
+    clearUndoSendJob();
+    dispatchUndoSend(root, state, render, job);
+  }
+
+  function startUndoSend(root, state, render, job) {
+    if (undoSendJob) flushUndoSendNow(root, state, render);
+    undoSendJob = job;
+    var remaining = job.seconds;
+    showUndoSendToast(root, remaining, function () {
+      if (undoSendJob !== job) return;
+      clearUndoSendJob();
+      hideEmailToast();
+      restoreUndoSendJob(state, render, job);
+    });
+    job.interval = window.setInterval(function () {
+      if (undoSendJob !== job) return;
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearUndoSendJob();
+        dispatchUndoSend(root, state, render, job);
+        return;
+      }
+      var toast = getEmailToastEl();
+      var text = toast && toast.querySelector('[data-email-toast-text]');
+      if (text) text.textContent = 'Sending in ' + remaining + '\u2026';
+    }, 1000);
+  }
+
   function sendCompose(root, state, render, id) {
     var draft = findComposeDraft(state, id);
     if (!draft || draft.sending || draft._sendRequested) return;
@@ -7502,11 +7615,8 @@
     draft._sendRequested = true;
 
     var beginSend = function () {
-      if (!findComposeDraft(state, id) || draft.sending) return;
-      draft.sending = true;
-      render();
-
-      api().send({
+      if (draft.sending) return;
+      var payload = {
         to: to,
         cc: parseAddresses(draft.cc),
         bcc: parseAddresses(draft.bcc),
@@ -7516,18 +7626,30 @@
         mode: draft.mode || 'new',
         inReplyTo: draft.inReplyTo,
         attachments: composeFilePayload(draft),
-      }).then(function () {
-        closeCompose(state, id, false);
-        showEmailToast(root, 'Message sent');
-
-        // Sent mail only shows up locally after a sync, so refresh the folder
-        // the user is looking at.
-        reloadMessages(root, state, render);
-      }).catch(function (err) {
-        draft.sending = false;
-        draft._sendRequested = false;
-        reportMailError(state, err);
+      };
+      var seconds = undoSendWindowSeconds(state);
+      if (seconds <= 0) {
+        if (!findComposeDraft(state, id)) return;
+        draft.sending = true;
         render();
+        dispatchUndoSend(root, state, render, {
+          kind: 'compose',
+          draft: draft,
+          payload: payload,
+        });
+        return;
+      }
+
+      // Hide the window so it feels sent. Keep the draft object (and its
+      // Outlook/Gmail serverId) parked for undo or the real send.
+      draft._sendRequested = false;
+      closeCompose(state, id, false);
+      render();
+      startUndoSend(root, state, render, {
+        kind: 'compose',
+        draft: draft,
+        seconds: seconds,
+        payload: payload,
       });
     };
 
@@ -8277,162 +8399,31 @@
     return canvasToSignatureDataUrl(canvas, mime);
   }
 
-  function openSignatureImageDialog(file, onInsert) {
-    if (!isAllowedSignatureImage(file)) return;
-
-    var url = URL.createObjectURL(file);
-    var img = new Image();
-    img.onload = function () {
-      var naturalW = img.naturalWidth || 160;
-      var naturalH = img.naturalHeight || 160;
-      var width = Math.max(40, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, naturalW));
-      var height = Math.max(1, Math.round(naturalH * (width / naturalW)));
-      var rotation = 0;
-
-      var overlay = document.createElement('div');
-      overlay.className = 'tma-dash__email-sig-image-dialog';
-      overlay.innerHTML =
-        '<div class="tma-dash__email-sig-image-dialog-card" role="dialog" aria-modal="true" aria-label="Transform image">' +
-        '<h3 class="tma-dash__email-sig-image-dialog-title">Transform image</h3>' +
-        '<div class="tma-dash__email-sig-image-dialog-preview" data-sig-preview-stage>' +
-        '<div class="tma-dash__email-sig-image-dialog-frame" data-sig-preview-frame>' +
-        '<img alt="" data-sig-preview-img>' +
-        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--nw" data-sig-preview-handle="nw" aria-label="Resize"></button>' +
-        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--ne" data-sig-preview-handle="ne" aria-label="Resize"></button>' +
-        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--se" data-sig-preview-handle="se" aria-label="Resize"></button>' +
-        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--sw" data-sig-preview-handle="sw" aria-label="Resize"></button>' +
-        '</div></div>' +
-        '<div class="tma-dash__email-sig-image-dialog-tools">' +
-        '<button type="button" class="tma-dash__email-settings-btn" data-sig-rotate="-90" aria-label="Rotate left">' +
-        '<img src="' + ICONS.ArrowCounterClockwise + '" alt=""> Rotate left</button>' +
-        '<button type="button" class="tma-dash__email-settings-btn" data-sig-rotate="90" aria-label="Rotate right">' +
-        '<img src="' + ICONS.ArrowClockwise + '" alt=""> Rotate right</button>' +
-        '</div>' +
-        '<div class="tma-dash__email-sig-image-dialog-dims">' +
-        '<label>W <input type="number" min="40" max="720" value="' + width + '" data-sig-w-input> px</label>' +
-        '<label>H <input type="number" min="20" max="720" value="' + height + '" data-sig-h-input> px</label>' +
-        '</div>' +
-        '<div class="tma-dash__email-sig-image-dialog-actions">' +
-        '<button type="button" class="tma-dash__email-settings-btn" data-sig-cancel>Cancel</button>' +
-        '<button type="button" class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary" data-sig-insert>Insert</button>' +
-        '</div></div>';
-
-      document.body.appendChild(overlay);
-      var preview = overlay.querySelector('[data-sig-preview-img]');
-      var frame = overlay.querySelector('[data-sig-preview-frame]');
-      var wInput = overlay.querySelector('[data-sig-w-input]');
-      var hInput = overlay.querySelector('[data-sig-h-input]');
-      preview.src = url;
-
-      function paint() {
-        preview.style.width = width + 'px';
-        preview.style.height = height + 'px';
-        preview.style.transform = 'rotate(' + rotation + 'deg)';
-        frame.style.width = width + 'px';
-        frame.style.height = height + 'px';
-        wInput.value = String(width);
-        hInput.value = String(height);
-      }
-
-      function setSize(nextW, nextH, lockRatio) {
-        nextW = Math.max(40, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextW)));
-        if (lockRatio) {
-          var ratio = naturalH / naturalW;
-          if (rotation % 180 !== 0) ratio = naturalW / naturalH;
-          nextH = Math.max(20, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextW * ratio)));
-        } else {
-          nextH = Math.max(20, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, Math.round(nextH)));
-        }
-        width = nextW;
-        height = nextH;
-        paint();
-      }
-
-      paint();
-
-      wInput.addEventListener('change', function () {
-        setSize(parseInt(wInput.value, 10) || width, height, true);
-      });
-      hInput.addEventListener('change', function () {
-        var nextH = parseInt(hInput.value, 10) || height;
-        var ratio = width / height;
-        setSize(Math.round(nextH * ratio), nextH, false);
-      });
-
-      overlay.querySelectorAll('[data-sig-rotate]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          rotation = (rotation + parseInt(btn.getAttribute('data-sig-rotate'), 10)) % 360;
-          if (rotation < 0) rotation += 360;
-          var swap = Math.abs(parseInt(btn.getAttribute('data-sig-rotate'), 10)) % 180 !== 0;
-          if (swap) {
-            var tmp = width;
-            width = height;
-            height = tmp;
-          }
-          paint();
-        });
-      });
-
-      // Corner drag on the insert preview.
-      overlay.querySelectorAll('[data-sig-preview-handle]').forEach(function (handle) {
-        handle.addEventListener('mousedown', function (event) {
-          event.preventDefault();
-          var startX = event.clientX;
-          var startW = width;
-          var dir = handle.getAttribute('data-sig-preview-handle');
-
-          function onMove(moveEvent) {
-            var dx = moveEvent.clientX - startX;
-            if (dir === 'nw' || dir === 'sw') dx = -dx;
-            setSize(startW + dx, height, true);
-          }
-
-          function onUp() {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-          }
-
-          document.addEventListener('mousemove', onMove);
-          document.addEventListener('mouseup', onUp);
-        });
-      });
-
-      function close() {
-        overlay.remove();
-        URL.revokeObjectURL(url);
-      }
-
-      overlay.querySelector('[data-sig-cancel]').addEventListener('click', close);
-      overlay.addEventListener('click', function (event) {
-        if (event.target === overlay) close();
-      });
-
-      overlay.querySelector('[data-sig-insert]').addEventListener('click', function () {
-        var insertBtn = overlay.querySelector('[data-sig-insert]');
-        if (insertBtn) insertBtn.disabled = true;
-
-        function finish(dataUrl) {
-          close();
-          onInsert(dataUrl, width, height);
-        }
-
-        // Keep the original pixels. Width/height on the <img> only size it
-        // on screen; resampling into that box is what made logos look muddy.
-        if (!rotation) {
-          var reader = new FileReader();
-          reader.onload = function () { finish(String(reader.result || '')); };
-          reader.onerror = close;
-          reader.readAsDataURL(file);
-          return;
-        }
-
-        finish(rasterizeRotatedSignatureImage(img, rotation, signatureImageMime(file)));
-      });
+  function insertSignatureImageFromFile(root, state, editor, file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var dataUrl = String(reader.result || '');
+      if (!dataUrl) return;
+      var probe = new Image();
+      probe.onload = function () {
+        var naturalW = probe.naturalWidth || 160;
+        var naturalH = probe.naturalHeight || 160;
+        var width = Math.max(1, Math.min(SIGNATURE_IMAGE_DISPLAY_MAX, naturalW));
+        var height = Math.max(1, Math.round(naturalH * (width / Math.max(1, naturalW))));
+        insertSignatureImage(editor, dataUrl, width, height);
+        prepareEditableImages(editor);
+        persistEditableImageSelectionAfterInsert(root, state, editor, dataUrl);
+        showEmailToast(root, 'Image added');
+      };
+      probe.onerror = function () {
+        showEmailToast(root, 'That image could not be read');
+      };
+      probe.src = dataUrl;
     };
-    img.onerror = function () {
-      URL.revokeObjectURL(url);
+    reader.onerror = function () {
+      showEmailToast(root, 'That image could not be read');
     };
-    img.src = url;
+    reader.readAsDataURL(file);
   }
 
   function insertSignatureImage(editor, dataUrl, width, height) {
@@ -8711,12 +8702,7 @@
         showEmailToast(root, 'Choose an image under 2.5 MB');
         return;
       }
-      openSignatureImageDialog(file, function (dataUrl, width, height) {
-        insertSignatureImage(editor, dataUrl, width, height);
-        prepareEditableImages(editor);
-        persistEditableImageSelectionAfterInsert(root, state, editor, dataUrl);
-        showEmailToast(root, 'Image added, drag the handles to transform it');
-      });
+      insertSignatureImageFromFile(root, state, editor, file);
     });
     input.click();
   }
@@ -8869,15 +8855,12 @@
     var choices = state.signatureImportChoices;
     if (!choices || !choices.length) return '';
     var selected = Math.max(0, Math.min(choices.length - 1, state.signatureImportSelected || 0));
-    var provider = state.account && state.account.provider === 'microsoft' ? 'Outlook' : 'the mailbox';
 
     return (
       '<div class="tma-dash__email-sig-import" data-email-sig-import role="dialog" aria-modal="true"' +
       ' aria-labelledby="tma-mail-sig-import-title">' +
       '<div class="tma-dash__email-sig-import-card">' +
       '<h3 id="tma-mail-sig-import-title" class="tma-dash__email-sig-import-title">Which signature should we use?</h3>' +
-      '<p class="tma-dash__email-sig-import-lead">' +
-      esc(provider) + ' can keep more than one — new mail, replies, and older sends often differ. Pick the one that matches yours.</p>' +
       (state.signatureImportReconnect
         ? '<p class="tma-dash__email-sig-import-notice"><a href="' + esc(api().connectUrl('google')) + '">Reconnect Gmail</a> to import the signature saved in Gmail.</p>'
         : '') +
@@ -10074,6 +10057,7 @@
         if (i === 0) return;
         if (el.parentNode) el.parentNode.removeChild(el);
       });
+      wireEmailToastUndo(existing);
       return existing;
     }
     if (!dash && !document.body) return null;
@@ -10087,22 +10071,57 @@
       '<img src="' + ICONS.CheckCircle + '" alt="">' +
       '<span data-email-toast-text></span>';
     document.body.appendChild(toast);
+    wireEmailToastUndo(toast);
     return toast;
+  }
+
+  function wireEmailToastUndo(toast) {
+    if (!toast || toast._undoWired) return;
+    var btn = toast.querySelector('[data-email-toast-undo]');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tma-dash__email-toast-undo';
+      btn.setAttribute('data-email-toast-undo', '');
+      btn.hidden = true;
+      btn.textContent = 'Undo';
+      toast.appendChild(btn);
+    }
+    btn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof showEmailToast._onUndo === 'function') showEmailToast._onUndo();
+    });
+    toast._undoWired = true;
   }
 
   function hideEmailToast(toast) {
     toast = toast || getEmailToastEl();
     if (!toast) return;
     toast.classList.remove('tma-dash__email-toast--visible');
+    toast.classList.remove('tma-dash__email-toast--action');
     toast.hidden = true;
+    var btn = toast.querySelector('[data-email-toast-undo]');
+    if (btn) btn.hidden = true;
   }
 
-  function showEmailToast(root, message) {
+  function showUndoSendToast(root, seconds, onUndo) {
+    showEmailToast(root, 'Sending in ' + seconds + '\u2026', {
+      persist: true,
+      actionLabel: 'Undo',
+      onUndo: onUndo,
+    });
+  }
+
+  function showEmailToast(root, message, opts) {
+    opts = opts || {};
     var dash = getEmailDashRoot(root) || (root && root.closest && root.closest('.tma-dash'));
     var toast = ensureEmailToast(dash);
     if (!toast) return;
+    wireEmailToastUndo(toast);
     var text = toast.querySelector('[data-email-toast-text]');
     if (!text) return;
+    var btn = toast.querySelector('[data-email-toast-undo]');
 
     text.textContent = message;
     toast.hidden = false;
@@ -10112,6 +10131,24 @@
 
     window.clearTimeout(showEmailToast._hideTimer);
     window.clearTimeout(showEmailToast._goneTimer);
+    showEmailToast._hideTimer = null;
+    showEmailToast._goneTimer = null;
+
+    if (opts.persist) {
+      showEmailToast._persist = true;
+      showEmailToast._onUndo = opts.onUndo || null;
+      toast.classList.add('tma-dash__email-toast--action');
+      if (btn) {
+        btn.hidden = false;
+        btn.textContent = opts.actionLabel || 'Undo';
+      }
+      return;
+    }
+
+    showEmailToast._persist = false;
+    showEmailToast._onUndo = null;
+    toast.classList.remove('tma-dash__email-toast--action');
+    if (btn) btn.hidden = true;
     showEmailToast._hideTimer = window.setTimeout(function () {
       toast.classList.remove('tma-dash__email-toast--visible');
       showEmailToast._goneTimer = window.setTimeout(function () {
@@ -12962,7 +12999,8 @@
       if (dashRoot) {
         ensureEmailToast(dashRoot);
         // A prior bug left orphan body toasts stuck visible with no hide timer.
-        if (!showEmailToast._hideTimer) hideEmailToast();
+        // Undo-send stays up on purpose until the countdown ends or they undo.
+        if (!showEmailToast._hideTimer && !showEmailToast._persist) hideEmailToast();
       }
       if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
       announceInboxUnread(state);

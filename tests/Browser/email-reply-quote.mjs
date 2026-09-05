@@ -110,6 +110,14 @@ try {
   await page.click('[data-email-inline-compose-send]');
   await page.waitForFunction(
     () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
+      .includes('Sending in'),
+    { timeout: 5000 }
+  );
+  check(!sentPayload, 'send waits for the undo window');
+  check(!!await page.$('[data-email-toast-undo]:not([hidden])'), 'undo is offered on the toast');
+
+  await page.waitForFunction(
+    () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
       .includes('Message sent'),
     { timeout: 15000 }
   );

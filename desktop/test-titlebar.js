@@ -245,6 +245,36 @@ app.whenReady().then(async () => {
   check('collapsed: the rail logo is hidden, not clipped', collapsed.logoHidden, true);
   check('collapsed: page does not scroll', collapsed.overflow, 0);
 
+  const compose = await win.webContents.executeJavaScript(`
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const dash = document.querySelector('.tma-dash');
+      const stack = document.createElement('div');
+      stack.className = 'tma-dash__email-compose-stack';
+      const winEl = document.createElement('div');
+      winEl.className = 'tma-dash__email-compose-window tma-dash__email-compose-window--large tma-dash__email-compose-window--fullscreen';
+      winEl.innerHTML = '<div class="tma-dash__email-compose-window-head">'
+        + '<span class="tma-dash__email-compose-window-title">New Email</span>'
+        + '<div class="tma-dash__email-compose-window-actions">'
+        + '<button type="button" class="tma-dash__email-compose-window-btn" aria-label="Close"></button>'
+        + '</div></div>';
+      stack.appendChild(winEl);
+      (dash || document.body).appendChild(stack);
+      const head = winEl.querySelector('.tma-dash__email-compose-window-head');
+      const winBox = winEl.getBoundingClientRect();
+      const headBox = head.getBoundingClientRect();
+      stack.remove();
+      resolve({
+        top: Math.round(winBox.top),
+        headTop: Math.round(headBox.top),
+        headBottom: Math.round(headBox.bottom),
+      });
+    })))
+  `, true);
+
+  check('fullscreen compose sits below the bar', compose.top >= titlebar.HEIGHT, true);
+  check('fullscreen compose head is fully visible', compose.headTop >= titlebar.HEIGHT, true);
+  check('fullscreen compose head is not a zero-height clip', compose.headBottom > compose.headTop, true);
+
   /*
    * The bar has to move the window. The injected strip is only a left-hand
    * stub beside the shell; the rest of the blue is the portal header, and

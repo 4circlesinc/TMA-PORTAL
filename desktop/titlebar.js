@@ -93,6 +93,7 @@ function buildCss(platform = process.platform) {
   .tma-dash {
     height: calc(100vh - ${HEIGHT}px) !important;
     min-height: calc(100vh - ${HEIGHT}px) !important;
+    --tma-desktop-titlebar-h: ${HEIGHT}px !important;
   }
 
   /*
@@ -185,6 +186,19 @@ function buildCss(platform = process.platform) {
      is unconditional, without it the bar covers the drawer's own toolbar. */
   .tma-user-info-overlay .tma-user-info-panel {
     top: ${HEIGHT + 16}px !important;
+  }
+
+  /* Fullscreen compose is position:fixed with a 24px inset. Without this it
+     opens under the bar: the title row (min / expand / close) is clipped and
+     To sits against the top of the white card. */
+  .tma-dash__email-compose-window--fullscreen {
+    top: ${HEIGHT + 24}px !important;
+  }
+
+  /* Phone-width compose is a full-viewport takeover. Keep its head below the
+     bar the same way, rather than padding the title row into the overlay. */
+  .tma-dash--email-mobile .tma-dash__email-compose-stack {
+    top: ${HEIGHT}px !important;
   }
 
   @media (max-width: 1024px) {
