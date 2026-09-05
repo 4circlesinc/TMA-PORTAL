@@ -9636,12 +9636,6 @@
 
 .tma-dash--email {
   --email-pad: var(--space-16);
-  --email-chrome: #ececef;
-}
-
-.tma-dash[data-theme="dark"].tma-dash--email,
-.tma-dash[data-theme="dark"] .tma-dash--email {
-  --email-chrome: var(--color-bg-card, #1c1c1c);
 }
 
 /* Email has its own toolbar — never leave the generic page-title row in flow.
@@ -12950,7 +12944,7 @@
   container-name: email-detail;
   padding: 0;
   box-sizing: border-box;
-  background: var(--email-chrome);
+  background: var(--color-white);
 }
 
 .tma-dash__email-detail--empty {
@@ -13143,7 +13137,7 @@ html.tma-dash.tma-dash--mail-window body {
   height: 100%;
   min-height: 100vh;
   overflow: hidden;
-  background: var(--email-chrome);
+  background: var(--color-white);
 }
 
 html.tma-dash.tma-dash--mail-window {
@@ -13214,10 +13208,9 @@ html.tma-dash.tma-dash--mail-window body {
   flex-direction: row;
   align-items: center;
   gap: var(--space-8);
-  padding: 8px 16px 4px;
+  padding: var(--email-pad);
   flex-shrink: 0;
   min-width: 0;
-  background: var(--email-chrome);
 }
 
 .tma-dash__email-detail-header {
@@ -13240,9 +13233,9 @@ html.tma-dash.tma-dash--mail-window body {
   align-items: stretch;
   flex-shrink: 0;
   gap: 2px;
-  padding: 2px 8px;
+  padding: var(--space-4) var(--email-pad);
   border-bottom: 1px solid var(--color-overlay-4);
-  background: var(--email-chrome);
+  background: var(--color-white);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -13253,9 +13246,9 @@ html.tma-dash.tma-dash--mail-window body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 2px;
-  min-width: 52px;
-  padding: 6px 8px 4px;
+  gap: 4px;
+  min-width: 56px;
+  padding: 8px 10px 6px;
   border: 0;
   border-radius: var(--radius-8);
   background: transparent;
@@ -13291,7 +13284,7 @@ html.tma-dash.tma-dash--mail-window body {
 }
 
 .tma-dash__email-detail-tool:hover {
-  background: var(--color-white);
+  background: var(--color-hover);
   color: var(--color-text-primary);
 }
 
@@ -13309,19 +13302,8 @@ html.tma-dash.tma-dash--mail-window body {
 }
 
 :root[data-theme="dark"] .tma-dash__email-detail-tools,
-:root[data-theme="dark"] .tma-dash__email-detail-subject-bar,
-:root[data-theme="dark"] .tma-dash__email-message-head,
-:root[data-theme="dark"] .tma-dash__email-detail-footer,
-.tma-dash[data-theme="dark"] .tma-dash__email-detail-tools,
-.tma-dash[data-theme="dark"] .tma-dash__email-detail-subject-bar,
-.tma-dash[data-theme="dark"] .tma-dash__email-message-head,
-.tma-dash[data-theme="dark"] .tma-dash__email-detail-footer {
+.tma-dash[data-theme="dark"] .tma-dash__email-detail-tools {
   background: var(--color-bg-card, #1c1c1c);
-}
-
-:root[data-theme="dark"] .tma-dash__email-detail-tool:hover,
-.tma-dash[data-theme="dark"] .tma-dash__email-detail-tool:hover {
-  background: var(--color-hover-deep);
 }
 
 :root[data-theme="dark"] .tma-dash__email-detail-tool > img,
@@ -13360,9 +13342,9 @@ html.tma-dash.tma-dash--mail-window body {
   padding: 0;
   background: transparent;
   border-radius: 0;
-  font-size: var(--text-size-16);
-  font-weight: 700;
-  line-height: 22px;
+  font-size: var(--text-size-18);
+  font-weight: 400;
+  line-height: 24px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -13490,11 +13472,9 @@ html.tma-dash.tma-dash--mail-window body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-8);
-  padding: 6px 16px 10px;
+  gap: var(--space-12);
+  padding: var(--email-pad);
   min-width: 0;
-  background: var(--email-chrome);
-  border-bottom: 1px solid var(--color-overlay-4);
 }
 
 .tma-dash__email-message-head-main {
@@ -13558,15 +13538,13 @@ html.tma-dash.tma-dash--mail-window body {
 
 .tma-dash__email-message-head-line {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-4);
   min-width: 0;
 }
 
 .tma-dash__email-message-head-name {
-  flex: 0 1 auto;
-  min-width: 4ch;
   font-size: var(--text-size-14);
   font-weight: 600;
   line-height: 20px;
@@ -13586,7 +13564,7 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash__email-message-head-to {
   appearance: none;
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-2);
   margin: 0;
   padding: 0 var(--space-4) 0 0;
@@ -13597,18 +13575,7 @@ html.tma-dash.tma-dash--mail-window body {
   font: inherit;
   font-size: var(--text-size-12);
   line-height: 16px;
-  max-width: 100%;
   cursor: pointer;
-}
-
-.tma-dash__email-message-head-to-label {
-  min-width: 0;
-  text-align: left;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .tma-dash__email-message-head-to:hover {
@@ -13690,11 +13657,8 @@ html.tma-dash.tma-dash--mail-window body {
 }
 
 .tma-dash__email-message-head-email {
-  flex: 0 1 auto;
-  min-width: 0;
   font-size: var(--text-size-12);
   line-height: 16px;
-  font-weight: 400;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -13786,7 +13750,6 @@ html.tma-dash.tma-dash--mail-window body {
   overflow: auto;
   min-height: 0;
   padding: 0;
-  background: var(--email-chrome);
 }
 
 .tma-dash__email-message {
@@ -14006,12 +13969,11 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash__email-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: 12px 16px;
+  gap: var(--space-16);
+  padding: var(--email-pad);
   font-size: var(--text-size-14);
   line-height: 20px;
   color: var(--color-text-primary);
-  background: var(--color-white);
 }
 
 .tma-dash__email-body p {
@@ -14098,8 +14060,8 @@ html.tma-dash.tma-dash--mail-window body {
   min-width: 0;
   margin-top: auto;
   box-sizing: border-box;
-  padding: 8px 16px;
-  background: var(--email-chrome);
+  padding: var(--space-12) var(--email-pad);
+  background: var(--color-white);
   border-top: 1px solid var(--color-overlay-4);
   z-index: 2;
 }
@@ -14144,15 +14106,15 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash__email-thread-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: 6px 12px;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
   border: 1px solid var(--color-overlay-4);
-  border-radius: var(--radius-8);
+  border-radius: var(--radius-24);
   background: var(--color-white);
   color: var(--color-text-primary);
   font: inherit;
-  font-size: var(--text-size-13, 13px);
-  line-height: 18px;
+  font-size: var(--text-size-14);
+  line-height: 20px;
   cursor: pointer;
 }
 
@@ -14611,10 +14573,6 @@ html.tma-dash.tma-dash--mail-window body {
 
     .tma-dash__email-message-head {
       padding: var(--space-8) var(--space-12) var(--space-4);
-    }
-
-    .tma-dash__email-message-head-email {
-      display: none;
     }
 
     .tma-dash__email-body,
@@ -15665,10 +15623,6 @@ html.tma-dash.tma-dash--mail-window body {
     display: flex;
     align-items: center;
     min-width: 0;
-  }
-
-  .tma-dash__email-detail--mobile .tma-dash__email-message-head-email {
-    display: none;
   }
 
   .tma-dash__email-message-head--mobile .tma-dash__email-message-head-name {
@@ -31720,9 +31674,8 @@ button.tma-dash__header-popup-item:focus-visible {
 /* Thread view: attachments live in their own section under the body, never
    mixed into it — a clear rule at the top, then a grid of cards. */
 .tma-dash__email-attachments {
-  padding: var(--space-8) var(--space-16) var(--space-12);
+  padding: var(--space-8) var(--space-16) var(--space-16);
   border-top: 1px solid var(--color-border-soft);
-  background: var(--color-white);
 }
 .tma-dash__email-attachments-head {
   display: flex;

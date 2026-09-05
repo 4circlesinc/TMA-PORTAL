@@ -43,16 +43,18 @@
       return $name !== '' ? $name : $email;
   };
 
-  $toLine = static function (?array $list) use ($addressLabel): string {
-      $names = collect($list ?? [])
-          ->map($addressLabel)
-          ->filter()
-          ->values();
-      if ($names->isEmpty()) {
-          return 'To: me';
+  $toShort = static function (?array $list) use ($addressLabel): string {
+      $items = collect($list ?? [])->filter();
+      if ($items->isEmpty()) {
+          return 'me';
+      }
+      $first = $addressLabel($items->first());
+      $extra = $items->count() - 1;
+      if ($extra > 0) {
+          return $first.' and '.$extra.' other'.($extra === 1 ? '' : 's');
       }
 
-      return 'To: '.$names->implode('; ');
+      return $first !== '' ? $first : 'me';
   };
 
   /**
@@ -63,7 +65,7 @@
       return '<!doctype html><html><head><meta charset="utf-8">'
           .'<meta name="referrer" content="no-referrer"><style>'
           .':where(html){margin:0;padding:0;}'
-          .':where(body){margin:0;padding:12px 16px 8px;box-sizing:border-box;'
+          .':where(body){margin:0;padding:20px 24px 12px;box-sizing:border-box;'
           .'font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;'
           .'color:#1c1c1c;background:#fff;word-wrap:break-word;overflow-wrap:anywhere;}'
           .':where(img){max-width:100%;height:auto;}'
@@ -177,7 +179,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/dashboard.css?v=291">
+  <link rel="stylesheet" href="/css/dashboard.css?v=290">
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
@@ -275,13 +277,10 @@
                   <div class="tma-dash__email-message-head-identity">
                     <div class="tma-dash__email-message-head-line">
                       <span class="tma-dash__email-message-head-name">{{ $name }}</span>
-                      @if($fromEmail !== '' && strcasecmp($fromEmail, $name) !== 0)
-                        <span class="tma-dash__email-message-head-email">&lt;{{ $fromEmail }}&gt;</span>
-                      @endif
                     </div>
                     <div class="tma-dash__email-message-head-recipient">
                       <button type="button" class="tma-dash__email-message-head-to" data-email-header-details-toggle aria-expanded="false">
-                        <span class="tma-dash__email-message-head-to-label">{{ $toLine($m->to) }}</span>
+                        <span class="tma-dash__email-message-head-to-label">to {{ $toShort($m->to) }}</span>
                         <span class="tma-dash__email-message-head-to-caret-wrap" aria-hidden="true">
                           <img src="{{ $icon('CaretDown') }}" alt="" class="tma-dash__email-message-head-to-caret">
                         </span>
