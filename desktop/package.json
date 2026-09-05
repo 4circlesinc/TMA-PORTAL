@@ -59,6 +59,7 @@
       "updater.js",
       "window-policy.js",
       "compose-window.js",
+      "mail-window.js",
       "call-window.js",
       "call-window.html",
       "call-preload.js",

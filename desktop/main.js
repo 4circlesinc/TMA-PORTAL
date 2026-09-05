@@ -27,6 +27,7 @@ const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
 const composeWindow = require('./compose-window');
+const mailWindow = require('./mail-window');
 const titlebar = require('./titlebar');
 const tray = require('./tray');
 const badge = require('./badge');
@@ -327,6 +328,7 @@ function attachNavigationRules(win, opts = {}) {
           height: 700,
           parent: win,
           autoHideMenuBar: true,
+          ...titlebar.windowOptions(),
           webPreferences: { contextIsolation: true, nodeIntegration: false },
         },
       };
@@ -347,12 +349,34 @@ function attachNavigationRules(win, opts = {}) {
       };
     }
 
-    return { action: 'allow' };
+    // A conversation in its own window: same brand bar, sized like the
+    // window.open features the mailbox already asks for.
+    if (mailWindow.isMailWindowUrl(url, PORTAL_ORIGIN)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: mailWindow.windowOptions(
+          path.join(__dirname, 'preload.js'),
+        ),
+      };
+    }
+
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        ...titlebar.windowOptions(),
+      },
+    };
   });
 
-  webContents.on('did-create-window', (child) => {
+  webContents.on('did-create-window', (child, details) => {
     contextMenu.install(child.webContents);
-    attachNavigationRules(child, { chrome: false });
+    // Picture-in-picture call windows are Chromium's; a brand bar would
+    // sit on top of the call the page is drawing into about:blank.
+    const pip = callWindow.isPictureInPictureRequest({
+      url: details && details.url,
+      disposition: details && details.disposition,
+    });
+    attachNavigationRules(child, { chrome: false, brandBar: !pip });
   });
 
   webContents.on('will-navigate', (event, url) => {
@@ -377,9 +401,15 @@ function attachNavigationRules(win, opts = {}) {
     shell.openExternal(url);
   });
 
-  // Child windows (compose pop-out, mail reader) keep the open/navigate
-  // policy so links stay in-app or go to the system browser. They do not
-  // get the main window's splash, brand title bar, or load-error overlay.
+  // Child windows keep the open/navigate policy so links stay in-app or go
+  // to the system browser. They do not get the main window's splash or
+  // load-error overlay. Mail, compose, and other in-app windows still get
+  // the same brand title bar as the main window — macOS will not tint a
+  // native one, so this is the only way they match.
+  if (opts.brandBar) {
+    webContents.on('did-finish-load', () => titlebar.apply(webContents));
+    webContents.on('did-navigate-in-page', () => titlebar.refresh(webContents));
+  }
   if (!chrome) return;
 
   /*

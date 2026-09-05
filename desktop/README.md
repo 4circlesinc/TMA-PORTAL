@@ -529,9 +529,14 @@ refuse). The only route is hiding the native bar and drawing our own, in
 
 Nothing about this lives in the portal's stylesheets. It is injected at runtime
 with `insertCSS` + `executeJavaScript`, so a browser never sees it and no portal
-CSS file can be broken by it. Re-applied on `did-navigate-in-page` as well as
-`did-finish-load`, because the portal routes through pushState and would
+CSS file can be broken by it. Re-applied on `did-finish-load` as well as
+`did-navigate-in-page`, because the portal routes through pushState and would
 otherwise lose the bar on the second screen.
+
+Mail and compose child windows use the same bar. macOS will not tint a native
+title bar, so those windows hide theirs (`titleBarStyle: 'hidden'`) and paint
+this one; the heading is the email subject. They do not get the main window's
+splash or load-error overlay.
 
 ### Back / Forward / Reload
 

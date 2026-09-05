@@ -625,6 +625,12 @@
     }
   }
 
+  function syncComposePopoutTitle(subject) {
+    if (!isComposePopoutPath()) return;
+    var text = String(subject || '').trim() || 'New Email';
+    try { document.title = text; } catch (e) { /* ignore */ }
+  }
+
   function isEmailMobile() {
     // A popped-out composer is a small app window (~760px). Treat it as
     // desktop compose, not the phone mailbox, or the chrome collapses.
@@ -7588,7 +7594,7 @@
       draft.signatureId = signatureLibraryFromState().activeSignatureId || draft.signatureId;
     }
     if (fields.subject) {
-      try { document.title = fields.subject; } catch (e) { /* ignore */ }
+      syncComposePopoutTitle(fields.subject);
     }
     if (state.render) state.render();
     paintPopoutComposeFields(state, draft);
@@ -7647,7 +7653,7 @@
       state._composeEnter = false;
       prefetchRecipientSuggest();
       if (draft.subject) {
-        try { document.title = draft.subject; } catch (e) { /* ignore */ }
+        syncComposePopoutTitle(draft.subject);
       }
       var snapMessageId = params.get('message') || snapshot.inReplyTo || '';
       var snapMode = params.get('mode') || snapshot.mode || '';
@@ -8149,6 +8155,7 @@
         var draft = findComposeDraft(state, input.getAttribute('data-email-compose-id'));
         if (!draft) return;
         draft[field] = input.value;
+        if (field === 'subject') syncComposePopoutTitle(input.value);
         scheduleDraftSave(state, draft);
       });
     });
@@ -13415,6 +13422,7 @@
         if (!draft || !template) return;
         draft.subject = template.subject || draft.subject;
         draft.bodyHtml = firmTemplateBodyHtml(template);
+        syncComposePopoutTitle(draft.subject);
         render();
       });
     });
@@ -13945,7 +13953,7 @@
       var dashPop = getEmailDashRoot(root);
       if (dashPop) dashPop.classList.add('tma-dash--compose-popout');
       document.documentElement.classList.add('tma-dash--compose-popout');
-      try { document.title = 'New Email'; } catch (e) { /* ignore */ }
+      syncComposePopoutTitle('');
       adoptComposePopoutDraft(state);
     }
 

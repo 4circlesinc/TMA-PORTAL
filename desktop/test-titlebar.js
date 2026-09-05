@@ -130,10 +130,20 @@ function checkEmittedScript() {
     check(`the injected script parses (${error.message})`, false, true);
   }
   check('its regex escapes survived the template', src.includes('\\d+'), true);
+  check('mail and compose windows are not treated as the portal shell',
+    src.includes('tma-dash--mail-window') && src.includes('tma-dash__header'), true);
+}
+
+function checkMailWindowCss() {
+  const css = titlebar.buildCss('darwin');
+  check('the conversation window keeps a full-viewport root under the bar',
+    css.includes('html.tma-dash.tma-dash--mail-window')
+    && css.includes('height: 100vh !important;'), true);
 }
 
 app.whenReady().then(async () => {
   checkEmittedScript();
+  checkMailWindowCss();
 
   const server = await serve();
   const { port } = server.address();

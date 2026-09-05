@@ -97,6 +97,22 @@ function buildCss(platform = process.platform) {
   }
 
   /*
+   * The conversation window's <html> IS .tma-dash, so the shrink above would
+   * make the root a bar shorter than the viewport, then body padding-top
+   * would take another bar and leave a hole at the bottom. Keep the root at
+   * the viewport and let body padding clear the strip.
+   */
+  html.tma-dash.tma-dash--mail-window {
+    height: 100vh !important;
+    min-height: 100vh !important;
+  }
+  html.tma-dash.tma-dash--mail-window body {
+    box-sizing: border-box;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  /*
    * The auth pages are not .tma-dash, and were left out of the shrink above for
    * every release the bar has existed.
    *
@@ -323,6 +339,33 @@ function buildCss(platform = process.platform) {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  /*
+   * Mail and compose are real OS windows, so the subject sits where a native
+   * title would: centred in the strip, not tucked beside Back/Forward.
+   */
+  html.tma-dash--mail-window #tma-desktop-titlebar .tma-tb-title,
+  html.tma-dash--compose-popout #tma-desktop-titlebar .tma-tb-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(60vw, calc(100% - 280px));
+    font-size: 14px;
+    text-align: center;
+  }
+  html.tma-dash--mail-window #tma-desktop-titlebar .tma-tb-sep,
+  html.tma-dash--compose-popout #tma-desktop-titlebar .tma-tb-sep {
+    display: none;
+  }
+
+  @media print {
+    #tma-desktop-titlebar { display: none !important; }
+    body { padding-top: 0 !important; }
+    html.tma-dash.tma-dash--mail-window {
+      height: auto !important;
+      min-height: 0 !important;
+    }
   }
 
   #tma-desktop-titlebar .tma-tb-presence-wrap {
@@ -740,7 +783,22 @@ function script({ canGoBack, canGoForward }) {
       if (dash && !dash.classList.contains('tma-dash--desktop-bar')) {
         dash.classList.add('tma-dash--desktop-bar');
       }
-      document.documentElement.classList.toggle('tma-desktop-has-shell', !!dash);
+      /*
+       * The full-width bar is for pages with no portal header to restyle.
+       * Mail and compose still have a .tma-dash (the conversation's <html>
+       * is one; compose hides a leftover header rather than removing it),
+       * and treating that as "has shell" shrinks the strip to the controls
+       * stub — a 300px patch of blue, not a title bar.
+       */
+      const root = document.documentElement;
+      const standalone = root.classList.contains('tma-dash--mail-window')
+        || root.classList.contains('tma-dash--compose-popout')
+        || !!(dash && (
+          dash.classList.contains('tma-dash--mail-window')
+          || dash.classList.contains('tma-dash--compose-popout')
+        ));
+      const header = dash && dash.querySelector('.tma-dash__header');
+      root.classList.toggle('tma-desktop-has-shell', !!(dash && header && !standalone));
       return dash;
     };
     let dashWatch = markDesktopBar();
@@ -805,9 +863,6 @@ function script({ canGoBack, canGoForward }) {
      * than in the middle of the chrome.
      */
     const heading = () => {
-      const el = document.querySelector('[data-page-title]')
-        || document.querySelector('.tma-dash__crumb--current');
-      const text = el && el.textContent.trim();
       /*
        * Every backslash below is doubled, and has to be. This function is built
        * inside a template literal, where backslash-s and backslash-d are not
@@ -819,15 +874,29 @@ function script({ canGoBack, canGoForward }) {
        * after an asterisk would close the comment early and turn the prose that
        * follows into code.
        */
-      return text
-        || (document.title || '')
-          // The unread count belongs on the badge, not in the chrome.
-          .replace(/^\\(\\d+\\)\\s*/, '')
-          // And "Sign In | TM ANTOINE Advisory" is the app telling you its own
-          // name inside its own window.
-          .split(/\\s+[—–|]\\s+/)[0]
-          .trim()
-        || 'TM ANTOINE Portal';
+      const fromTitle = (document.title || '')
+        // The unread count belongs on the badge, not in the chrome.
+        .replace(/^\\(\\d+\\)\\s*/, '')
+        // And "Sign In | TM ANTOINE Advisory" is the app telling you its own
+        // name inside its own window.
+        .split(/\\s+[—–|]\\s+/)[0]
+        .trim();
+
+      const root = document.documentElement;
+      const standalone = root.classList.contains('tma-dash--mail-window')
+        || root.classList.contains('tma-dash--compose-popout');
+      if (standalone) {
+        const subject = document.querySelector('.tma-dash__email-detail-subject-text');
+        const subjectText = subject && subject.textContent.trim();
+        const compose = document.querySelector('[data-email-compose-field="subject"]');
+        const composeText = compose && String(compose.value || '').trim();
+        return subjectText || composeText || fromTitle || 'TM ANTOINE Portal';
+      }
+
+      const el = document.querySelector('[data-page-title]')
+        || document.querySelector('.tma-dash__crumb--current');
+      const text = el && el.textContent.trim();
+      return text || fromTitle || 'TM ANTOINE Portal';
     };
 
     const paint = () => { title.textContent = heading(); };
@@ -852,6 +921,11 @@ function script({ canGoBack, canGoForward }) {
         const s = t && t.querySelector('.tma-tb-title');
         if (s) s.textContent = heading();
       }).observe(el, { childList: true });
+      document.addEventListener('input', (e) => {
+        const field = e.target && e.target.getAttribute
+          && e.target.getAttribute('data-email-compose-field');
+        if (field === 'subject') paint();
+      }, true);
     }
   })();
 `;

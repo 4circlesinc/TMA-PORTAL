@@ -297,6 +297,7 @@ class MailConversationListTest extends TestCase
 
         // Server-rendered: the mail is in the first response, which is the
         // whole point of the window.
+        $response->assertSee('<title>Quarterly review</title>', false);
         $response->assertSee('Quarterly review');
         $response->assertSee('sam@example.com');
         $response->assertSee('The numbers are attached.', escape: false);
