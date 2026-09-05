@@ -1007,7 +1007,7 @@
         : renderReplyQuote(row, metaEmail, metaDate, bodyText, quotedBodyHtml)) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-bar">' +
-      renderComposeToolbar({ expand: false, image: true }) +
+      renderComposeToolbar({ expand: false, attach: true }) +
       '</div>' +
       '<div class="tma-dash__email-compose-files" data-email-compose-files' +
       (composeFilesOf(ic).length ? '' : ' hidden') + '>' +
@@ -1168,9 +1168,8 @@
       });
     }
 
-    var attachBtn = panel.querySelector('[data-email-inline-compose-attach]');
-    if (attachBtn) {
-      MORPH.on(attachBtn, 'click', function (event) {
+    MORPH.unwired(panel, '[data-email-inline-compose-attach]').forEach(function (attachBtn) {
+      attachBtn.addEventListener('click', function (event) {
         event.stopPropagation();
         if (!state.inlineCompose) return;
         openComposeFilePicker(function (files) {
@@ -1179,7 +1178,7 @@
           });
         });
       });
-    }
+    });
 
     wireComposeDropTarget(panel, function (files) {
       if (!state.inlineCompose) return;
@@ -7549,17 +7548,21 @@
 
   /* opts.expand: compose windows get the expand control; the signature editor
    * and inline reply/forward do not, there is nowhere for them to expand into.
-   * opts.image: show the image tool (compose/reply attach a file; signatures
-   * still insert and transform a logo). opts.insertImage keeps the signature
-   * "Insert image" label and the transform dialog.
+   * opts.attach: paperclip (compose draft id, or true for inline reply).
+   * opts.insertImage: signature logo insert + transform dialog.
    * opts.full: every tool on the toolbar itself, no More menu — for wide
    * hosts (the template and letter editors); a compose window is too narrow
    * and keeps the three-dots menu. */
   function renderComposeToolbar(opts) {
     opts = opts || {};
     var showExpand = opts.expand !== false;
-    var showImage = !!opts.image;
     var full = !!opts.full;
+    var extra = [];
+    if (opts.insertImage) {
+      extra.push({ icon: 'Image', label: 'Insert image', image: true });
+    } else if (opts.attach != null && opts.attach !== false) {
+      extra.push({ icon: 'Paperclip', label: 'Attach file', attach: opts.attach });
+    }
 
     var groups = [
       [
@@ -7582,7 +7585,7 @@
       [
         { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
       ].concat(
-        showImage ? [{ icon: 'Image', label: opts.insertImage ? 'Insert image' : 'Attach file', image: true }] : [],
+        extra,
         full ? [] : [{ icon: 'DotsThree', label: 'More', menu: 'more' }]
       ),
     ];
@@ -7607,6 +7610,8 @@
                   (item.cmd ? ' data-email-compose-tool-cmd="' + esc(item.cmd) + '"' : '') +
                   (item.menu ? ' data-email-compose-tool-menu="' + esc(item.menu) + '"' : '') +
                   (item.image ? ' data-email-insert-image' : '') +
+                  (item.attach === true ? ' data-email-inline-compose-attach' : '') +
+                  (item.attach && item.attach !== true ? ' data-email-compose-attach="' + esc(item.attach) + '"' : '') +
                   // Marks the buttons whose pressed state tracks the cursor,
                   // so the toolbar shows what the text under it actually is.
                   (item.state ? ' data-email-compose-tool-state="' + esc(item.state) + '" aria-pressed="false"' : '') +
@@ -7712,7 +7717,7 @@
         : '') +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
-      renderComposeToolbar({ image: true }) +
+      renderComposeToolbar({ attach: draft.id }) +
       '<div class="tma-dash__email-image-stage tma-dash__email-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
       ' aria-multiline="true" aria-label="Message body"' +
@@ -7728,7 +7733,6 @@
       '<div class="tma-dash__email-compose-attach">' +
       [
         { icon: 'Trash', label: 'Discard draft', discard: true },
-        { icon: 'Image', label: 'Attach file', image: true },
         { icon: 'Paperclip', label: 'Attach file', attach: true },
       ]
         .map(function (item) {
@@ -7997,7 +8001,7 @@
       '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
       ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
-      renderComposeToolbar({ expand: false, image: true, insertImage: true }) +
+      renderComposeToolbar({ expand: false, insertImage: true }) +
       '<div class="tma-dash__email-settings-signature-stage tma-dash__email-image-stage" data-email-image-stage>' +
       '<div id="tma-mail-signature" class="tma-dash__email-settings-signature-body"' +
       ' contenteditable="true" role="textbox" aria-multiline="true"' +
