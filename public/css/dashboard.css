@@ -13665,13 +13665,15 @@
 }
 
 /* Reply stays pinned under the reading pane. The composer fills a capped
-   height; To / toolbar / Send stay put while the body + quote scroll inside. */
+   height; To / toolbar / Send stay put while the body + quote scroll inside.
+   Cap is tall enough for a Gmail-like reply box (several lines above the
+   signature) without covering the whole thread. */
 .tma-dash__email-detail-footer:has([data-email-inline-compose-panel]) {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(52vh, 26rem);
+  max-height: min(60vh, 32rem);
   padding-top: var(--space-8);
   padding-bottom: var(--space-8);
   overflow: hidden;
@@ -13811,7 +13813,7 @@
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
-  min-height: 0;
+  min-height: 220px;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -13819,7 +13821,7 @@
 }
 
 .tma-dash__email-inline-compose-editor {
-  min-height: 80px;
+  min-height: 220px;
   max-width: 100%;
   min-width: 0;
   padding: var(--space-12) var(--space-16);
@@ -13831,6 +13833,13 @@
   overflow-wrap: anywhere;
   word-break: break-word;
   overflow-x: hidden;
+}
+
+/* Visual typing room above the signature. A tall logo used to sit on the
+   first caret line because min-height on the editor includes the image.
+   Margin is stylesheet-only, so it does not travel with the sent HTML. */
+.tma-dash__email-inline-compose-editor [data-email-signature] {
+  margin-top: 8.75rem;
 }
 
 .tma-dash__email-inline-compose-editor:empty::before {
@@ -15266,7 +15275,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    max-height: min(58vh, 24rem);
+    max-height: min(62vh, 28rem);
     overflow: hidden;
   }
 
@@ -15843,6 +15852,16 @@
 .tma-dash__email-compose-body img.is-selected,
 .tma-dash__email-inline-compose-editor img.is-selected {
   max-width: none;
+}
+
+/* Signature banners often ship with inline width/height. Scale the box to
+   the composer without rewriting stored pixels — height:auto keeps ratio
+   when max-width kicks in; !important beats the inline px height. */
+.tma-dash__email-compose-body [data-email-signature] img:not(.is-selected),
+.tma-dash__email-inline-compose-editor [data-email-signature] img:not(.is-selected),
+.tma-dash__email-compose-signature img:not(.is-selected) {
+  max-width: 100% !important;
+  height: auto !important;
 }
 
 .tma-dash__email-inline-compose-stage {

@@ -104,6 +104,29 @@ try {
   check(/^On .+, Dana Reed <dana@example\.com> wrote:$/.test(lead.trim()),
     `attribution line names the original sender (saw "${lead.trim()}")`);
 
+  const editorBox = await page.evaluate(() => {
+    const editor = document.querySelector('[data-email-inline-compose-editor]');
+    if (!editor) return null;
+    const wrap = editor.closest('.tma-dash__email-inline-compose-editor-wrap');
+    const sig = editor.querySelector('[data-email-signature]');
+    const er = editor.getBoundingClientRect();
+    const wr = wrap ? wrap.getBoundingClientRect() : null;
+    const sr = sig ? sig.getBoundingClientRect() : null;
+    return {
+      minHeight: parseFloat(getComputedStyle(editor).minHeight),
+      wrapHeight: wr ? wr.height : 0,
+      spaceAboveSig: sr ? Math.max(0, sr.top - er.top) : null,
+    };
+  });
+  check(!!editorBox && editorBox.minHeight >= 200,
+    `inline editor min-height is at least 200px (saw ${editorBox && editorBox.minHeight})`);
+  check(!!editorBox && editorBox.wrapHeight >= 160,
+    `inline editor wrap is tall enough to type (saw ${editorBox && Math.round(editorBox.wrapHeight)})`);
+  if (editorBox && editorBox.spaceAboveSig !== null) {
+    check(editorBox.spaceAboveSig >= 160,
+      `several lines of room above the signature (saw ${Math.round(editorBox.spaceAboveSig)}px)`);
+  }
+
   step(3, 'The sent payload carries the typed reply plus the exact quote');
   await page.click('[data-email-inline-compose-editor]');
   await page.keyboard.type('Thanks Dana — looks great.');

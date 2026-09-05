@@ -1068,13 +1068,14 @@
       cc = formatAddressList(all.cc);
     }
     // Same as new compose: seed the signature into the draft so it paints and
-    // leaves with the reply even if the user never types in the body.
+    // leaves with the reply even if the user never types in the body. Blank
+    // blocks sit above it so a tall signature image cannot eat the typing area.
     state.inlineCompose = {
       mode: mode,
       messageId: state.selectedId,
       to: to,
       cc: cc,
-      bodyHtml: composeSignatureHtml(),
+      bodyHtml: inlineComposeBodyHtml(),
       sending: false,
       attachments: [],
     };
@@ -7830,6 +7831,16 @@
     var active = lib.signatures.find(function (entry) { return entry.id === lib.activeSignatureId; })
       || lib.signatures[0];
     return composeSignatureHtmlFor(active && active.html);
+  }
+
+  /* Two empty blocks so the caret sits above the signature in the HTML
+   * that actually goes out. Extra visual room in the reply box is CSS. */
+  function composeTypingRoomHtml() {
+    return '<div><br></div><div><br></div>';
+  }
+
+  function inlineComposeBodyHtml() {
+    return composeTypingRoomHtml() + composeSignatureHtml();
   }
 
   function renderComposeSignaturePicker(draft) {
