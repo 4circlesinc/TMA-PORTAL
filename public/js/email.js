@@ -389,6 +389,7 @@
 
   function wireEmailSidebarSearch(root, state, render) {
     ensureEmailSidebarSearch(root, state, render);
+    wireEmailHeaderMobileTools(root);
     if (root._emailSidebarSearchBound) return;
     root._emailSidebarSearchBound = true;
     root.addEventListener('click', function (event) {
@@ -607,6 +608,9 @@
   }
 
   var EMAIL_MOBILE_MQ = '(max-width: 1024px)';
+  /* The strip along the left edge belongs to the drawer's swipe-to-open
+   * (dashboard.js); a row's own swipe never starts there. */
+  var DRAWER_EDGE_PX = 24;
 
   function isEmailMobile() {
     return window.matchMedia(EMAIL_MOBILE_MQ).matches;
@@ -1520,10 +1524,19 @@
   }
 
   function renderListMobileHead(state) {
+    var searching = !!state.search;
     return (
       '<div class="tma-dash__email-list-mobile-head">' +
-      '<span class="tma-dash__email-list-mobile-title">' + esc(getFolderLabel(state)) + '</span>' +
+      '<span class="tma-dash__email-list-mobile-title">' +
+      (searching ? 'Results for “' + esc(state.search) + '”' : esc(getFolderLabel(state))) +
+      '</span>' +
       '<div class="tma-dash__email-list-mobile-actions">' +
+      // The header field is not on a phone, so the clear lives with the list.
+      (searching
+        ? '<button type="button" class="tma-dash__email-list-mobile-clear" data-email-search-clear aria-label="Clear search">' +
+          '<img src="' + ICONS.XCircle + '" alt="">' +
+          '</button>'
+        : '') +
       renderEmailListFilterBtn(state) +
       '</div>' +
       '</div>'
@@ -4240,6 +4253,70 @@
       '</div>' +
       '</div>'
     );
+  }
+
+  /* The phone header's right-hand bubble, the same shape as the shell's own
+   * on other pages: search (opens the drawer straight into searching), the
+   * theme, and the account. The shell's bubble stays hidden on this page. */
+  function renderEmailHeaderMobileTools(state) {
+    return (
+      '<div class="tma-dash__email-header-tools" role="group" aria-label="Mail">' +
+      '<button type="button" class="tma-dash__icon-btn" data-email-header-search aria-label="Search in mail">' +
+      '<img src="' + ICONS.MagnifyingGlass + '" alt="">' +
+      '</button>' +
+      '<button type="button" class="tma-dash__icon-btn" data-email-header-theme aria-label="Toggle theme">' +
+      '<img src="' + emailHeaderThemeIcon() + '" alt="">' +
+      '</button>' +
+      renderEmailHeaderProfileBtn(state) +
+      '</div>'
+    );
+  }
+
+  function emailHeaderThemeIcon() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return ICON + (dark ? 'MoonStars.svg' : 'Sun.svg');
+  }
+
+  /* The theme can change from Settings as well as from this button. */
+  function syncEmailHeaderThemeIcon(dash) {
+    var img = dash && dash.querySelector('[data-email-header-theme] img');
+    if (!img) return;
+    var want = emailHeaderThemeIcon();
+    if (img.getAttribute('src') !== want) img.setAttribute('src', want);
+  }
+
+  /* The header's search icon: the drawer opens already in searching mode,
+   * with the field focused inside this tap, which is what lets a phone show
+   * its keyboard. */
+  function openEmailDrawerSearch(root, state, render) {
+    if (!state.mobileNavOpen) toggleEmailMobileNav(root, state);
+    openEmailSidebarSearch(root, state, render);
+  }
+
+  function wireEmailHeaderMobileTools(root) {
+    var dash = getEmailDashRoot(root);
+    if (!dash || dash._emailHeaderToolsBound) return;
+    dash._emailHeaderToolsBound = true;
+    dash.addEventListener('click', function (event) {
+      var state = root._emailState;
+      var render = root._emailRender;
+      if (!state || !render) return;
+      if (event.target.closest('[data-email-header-search]')) {
+        event.preventDefault();
+        openEmailDrawerSearch(root, state, render);
+        return;
+      }
+      if (event.target.closest('[data-email-header-theme]')) {
+        event.preventDefault();
+        // The shell owns the theme; its own button (hidden on this page)
+        // does the switching and the saving.
+        var real = dash.querySelector('[data-action="toggle-theme"]');
+        if (real) real.click();
+        syncEmailHeaderThemeIcon(dash);
+      }
+    });
+    var themeWatch = new MutationObserver(function () { syncEmailHeaderThemeIcon(dash); });
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
   function renderEmailHeaderProfileBtn(state) {
@@ -8825,11 +8902,17 @@
   function syncEmailHeaderSearch(root, state) {
     var view = root.closest('[data-view="email"]');
     var onEmailPage = view && !view.hidden;
-    if (onEmailPage) {
-      ensureEmailHeaderSearch(root, state);
-    } else {
+    if (!onEmailPage) {
       restoreHeaderSearch(root);
+      return;
     }
+    // On a phone the search lives in the drawer, and the header's search icon
+    // opens it there, so the centre slot goes back to the shell's own.
+    if (isEmailMobile()) {
+      restoreHeaderSearchSlot(getEmailDashRoot(root));
+      return;
+    }
+    ensureEmailHeaderSearch(root, state);
   }
 
   function teardownEmailMobileHeader(dash) {
@@ -8865,6 +8948,12 @@
     var dash = root && root.classList && root.classList.contains('tma-dash') ? root : getEmailDashRoot(root);
     if (!dash) return;
     teardownEmailMobileHeader(dash);
+    restoreHeaderSearchSlot(dash);
+  }
+
+  /* Puts the shell's own search back in the header's centre slot. */
+  function restoreHeaderSearchSlot(dash) {
+    if (!dash) return;
     var header = dash.querySelector('.tma-dash__header');
     if (!header) return;
 
@@ -9119,7 +9208,8 @@
         readingToolsSlot.innerHTML = '';
         if (mobile) {
           profileSlot.hidden = false;
-          profileSlot.innerHTML = renderEmailHeaderProfileBtn(state);
+          // Patched, not rewritten: the avatar would reload on every repaint.
+          MORPH.patch(profileSlot, renderEmailHeaderMobileTools(state));
         } else {
           profileSlot.hidden = true;
           profileSlot.innerHTML = '';
@@ -9131,6 +9221,24 @@
   // Subject stands on its own line now (see .tma-dash__email-row-content in
   // CSS), the preview text runs in the separate .snippet line below it, not
   // concatenated here with a " - " separator the way it used to be.
+  /* When a message arrived, on the reader's own clock: the time today, the
+   * day this year, otherwise the date. Rendered from sentAt rather than the
+   * server's label, which is formatted in UTC (see MailMessage::toRow), and
+   * shared with the search popup's mail rows so both read the same. */
+  function emailTimeLabel(iso, fallback) {
+    if (!iso) return fallback || '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return fallback || '';
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function renderRowSubjectBody(lines) {
     var subject = lines.subject || '';
     return (
@@ -9960,6 +10068,7 @@
         if (e.button !== 0) return;
         if (isEmailRowSelectTarget(e.target)) return;
         if (e.target.closest('.tma-dash__email-row-action')) return;
+        if (isEmailMobile() && e.clientX <= DRAWER_EDGE_PX) return;
         dragging = true;
         moved = false;
         startX = e.clientX;
@@ -10091,7 +10200,7 @@
         '<div class="tma-dash__email-row-snippet">' + esc(lines.body) + '</div>' +
         '</div>' +
         '<div class="tma-dash__email-row-side">' +
-        '<span class="tma-dash__email-row-time">' + esc(row.time) + '</span>' +
+        '<span class="tma-dash__email-row-time">' + esc(emailTimeLabel(row.sentAt, row.time)) + '</span>' +
         '</div>' +
         '</div>'
       );
@@ -10125,7 +10234,7 @@
         ? '<img class="tma-dash__email-row-snoozed" src="' + ICONS.Clock + '" alt="Snoozed"' +
           ' title="Snoozed until ' + esc(formatSnoozeInstant(row.snoozedUntil)) + '">'
         : '') +
-      '<span class="tma-dash__email-row-time">' + esc(row.time) + '</span>' +
+      '<span class="tma-dash__email-row-time">' + esc(emailTimeLabel(row.sentAt, row.time)) + '</span>' +
       '</div>' +
       renderEmailRowMobileStar(row, state) +
       '</div>' +
@@ -12115,6 +12224,7 @@
 
   window.TMAEmail = {
     mount: mount,
+    timeLabel: emailTimeLabel,
     /* Reload the mailbox in place, the shell's refresh gesture, which must
        not re-mount and so must not close the message being read. */
     refresh: function (rootEl) {

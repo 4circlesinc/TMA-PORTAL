@@ -4807,20 +4807,6 @@
     display: none !important;
   }
 
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center {
-    display: flex !important;
-    grid-column: 2;
-    justify-self: center;
-    justify-content: center;
-    width: auto;
-    max-width: min(200px, 48vw);
-    min-width: 0;
-  }
-
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center .tma-dash__email-search {
-    display: flex !important;
-  }
-
   .tma-dash--email.tma-dash--email-mobile:not(.tma-dash--email-mobile-reading) .tma-dash__header-left [data-action="toggle-sidebar"] {
     display: grid !important;
   }
@@ -4991,37 +4977,6 @@
 
   .tma-dash--email.tma-dash--email-mobile .tma-dash__header {
     grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center .tma-dash__email-search {
-    width: 100%;
-    max-width: min(200px, 48vw);
-    min-width: 0;
-    min-height: 40px;
-    height: 40px;
-    padding: var(--space-6) var(--space-12);
-    border-radius: var(--radius-24);
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-overlay-4);
-    gap: var(--space-8);
-    justify-content: flex-start;
-    cursor: text;
-  }
-
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center .tma-dash__email-search .tma-dash__email-search-input {
-    display: block;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center .tma-dash__email-search .tma-dash__kbd {
-    display: none;
-  }
-
-  .tma-dash--email.tma-dash--email-mobile .tma-dash__header-center .tma-dash__email-search img {
-    opacity: 0.6;
-    width: var(--dash-icon-md);
-    height: var(--dash-icon-md);
   }
 
   .tma-dash--email-mobile .tma-dash__email-header-profile-btn {
@@ -11811,6 +11766,31 @@
 }
 
 .tma-dash__email-filter:hover {
+  background: var(--color-hover);
+}
+
+/* The list head's clear-search button on a phone, the filter button's twin:
+   with no header field there, this is where a search is let go. */
+.tma-dash__email-list-mobile-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-12);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__email-list-mobile-clear img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+.tma-dash__email-list-mobile-clear:hover {
   background: var(--color-hover);
 }
 

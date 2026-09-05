@@ -776,10 +776,107 @@
       });
     }
 
+    /* ── Drawer swipe (phone/tablet) ──
+       A drag from the left edge opens the page's drawer (the mailbox's on
+       Email, the main menu elsewhere); a drag to the left on an open drawer
+       or its scrim closes it. The drawer follows the finger, and the page's
+       own transition finishes the move. The edge strip is the drawer's
+       alone: the mailbox's rows yield it (email.js, DRAWER_EDGE_PX). */
+    function setupDrawerSwipe() {
+      if (!sidebar || root._drawerSwipeWired) return;
+      root._drawerSwipeWired = true;
+      var EDGE = 24;   // px from the left edge that starts an open
+      var SLOP = 10;   // movement before a direction is decided
+      var COMMIT = 56; // px of travel that counts as meant
+      var gesture = null;
+
+      function emailDrawer() {
+        return root.classList.contains('tma-dash--email')
+          ? root.querySelector('.tma-dash__email-sidebar')
+          : null;
+      }
+      function drawerEl() { return emailDrawer() || sidebar; }
+      function drawerOpen() {
+        var mail = emailDrawer();
+        return mail
+          ? mail.classList.contains('tma-dash__email-sidebar--open')
+          : root.classList.contains('is-nav-open');
+      }
+      function openDrawer() {
+        var mail = emailDrawer();
+        var emailMount = root.querySelector('[data-email]');
+        if (mail && emailMount && emailMount._emailToggleMobileNav) {
+          if (!drawerOpen()) emailMount._emailToggleMobileNav();
+          return;
+        }
+        if (!root.classList.contains('is-nav-open')) toggleNavDrawer();
+      }
+      function typingIn(el) {
+        return !!(el && el.closest && el.closest('input, textarea, select, [contenteditable="true"]'));
+      }
+
+      function onStart(e) {
+        gesture = null;
+        if (!isMobileSidebar() || !e.touches || e.touches.length !== 1) return;
+        var t = e.touches[0];
+        var open = drawerOpen();
+        var el = drawerEl();
+        if (!el || typingIn(e.target)) return;
+        if (open) {
+          var onDrawer = el.contains(e.target);
+          var onScrim = !!(e.target.closest && e.target.closest('[data-dash-scrim], [data-email-mobile-scrim]'));
+          if (!onDrawer && !onScrim) return;
+        } else if (t.clientX > EDGE) {
+          return;
+        }
+        gesture = { x: t.clientX, y: t.clientY, open: open, el: el, engaged: false, dead: false, dx: 0, w: 0 };
+      }
+
+      function onMove(e) {
+        if (!gesture || gesture.dead || !e.touches || !e.touches.length) return;
+        var t = e.touches[0];
+        var dx = t.clientX - gesture.x;
+        var dy = t.clientY - gesture.y;
+        if (!gesture.engaged) {
+          // A scroll is a scroll; only a sideways move is a drawer gesture.
+          if (Math.abs(dy) > SLOP && Math.abs(dy) > Math.abs(dx)) { gesture.dead = true; return; }
+          if (Math.abs(dx) <= SLOP) return;
+          if (gesture.open ? dx > 0 : dx < 0) { gesture.dead = true; return; }
+          gesture.engaged = true;
+          gesture.w = gesture.el.getBoundingClientRect().width || 280;
+          gesture.el.style.transition = 'none';
+        }
+        gesture.dx = dx;
+        var offset = gesture.open ? Math.min(0, dx) : Math.min(0, dx - gesture.w);
+        gesture.el.style.transform = 'translateX(' + Math.round(offset) + 'px)';
+      }
+
+      function onEnd() {
+        var g = gesture;
+        gesture = null;
+        if (!g || !g.engaged) return;
+        // Back to the stylesheet's transform; with the transition restored
+        // the drawer glides on from wherever the finger left it.
+        g.el.style.transition = '';
+        g.el.style.transform = '';
+        if (g.open) {
+          if (g.dx < -COMMIT) closeDrawers();
+        } else if (g.dx > COMMIT) {
+          openDrawer();
+        }
+      }
+
+      root.addEventListener('touchstart', onStart, { passive: true });
+      root.addEventListener('touchmove', onMove, { passive: true });
+      root.addEventListener('touchend', onEnd, { passive: true });
+      root.addEventListener('touchcancel', onEnd, { passive: true });
+    }
+
     setupMobileSidebarHead();
     setupMobileHeaderLogo();
     setupMobileHeaderScroll();
     setupSidebarProfileActions();
+    setupDrawerSwipe();
 
     function setupSidebarProfileActions() {
       if (!sidebar) return;

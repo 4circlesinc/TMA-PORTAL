@@ -424,8 +424,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/email-sidebar.mjs
   ```
-- **`mailbox-search.mjs`** — the mailbox drawer's search on a phone, and the
-  site search it shares a popup with. Three things had gone wrong at once: the
+- **`mailbox-search.mjs`** — the mailbox drawer's search on a phone, the
+  phone header around it, and the site search it shares a popup with. It
+  starts with the header: no Search in mail field there any more, but the
+  shell's own bubble shape on the right (search icon, theme, account), where
+  the search icon opens the drawer already in searching mode with the field
+  focused, and the theme button really switches the theme and its icon. After
+  a search is applied with Enter, the list head names it ("Results for …")
+  and its clear button brings the folder back, since there is no field left
+  to clear. Then the search itself. Three things had gone wrong at once: the
   field lost every letter after the first (the popup was rebuilt, input
   included, after each debounced search, so the focused field was thrown away
   mid-word — and a field focused from a timer is not one the user tapped, so
@@ -450,6 +457,26 @@ field placement and drawing, and computed CSS only exist in a browser.
 
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/mailbox-search.mjs
+  ```
+- **`drawer-swipe.mjs`** — swipe to open and close the phone drawers: the
+  mailbox's on Email, the main menu everywhere else. A drag from the left
+  edge opens the drawer, a drag to the left on the open drawer or its scrim
+  closes it, and while the finger is down the drawer follows it (asserted
+  mid-drag, with the finger held: an inline transform and no transition).
+  A nudge under the commit distance, a scroll that drifts sideways, and a
+  drag that starts away from the edge must all do nothing. The mailbox's own
+  row swipes keep working from inside a row but yield the edge strip
+  (`DRAWER_EDGE_PX` in email.js), or an edge drag would archive a message
+  and open the drawer at once.
+
+  Touches are synthesised as TouchEvents in the page — Playwright's
+  touchscreen only taps — which is the same input the gesture code listens
+  to. The row-yield check uses the real mouse instead: the row captures its
+  pointer, which a synthetic PointerEvent cannot satisfy (it throws in
+  `setPointerCapture`).
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/drawer-swipe.mjs
   ```
 - **`people.mjs`** — the whole People section, which used to render from a
   localStorage store that was always empty. Checks each of the eight URLs is

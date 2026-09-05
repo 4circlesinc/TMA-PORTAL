@@ -128,7 +128,7 @@ const derrors = [];
 watch(dpage, derrors);
 
 try {
-  step(1, 'The drawer offers a mail search, not the site one');
+  step(0, 'The phone header keeps the shell\'s shape: search icon, theme, account');
   await signIn(page);
   await page.evaluate(() => {
     try {
@@ -138,6 +138,42 @@ try {
     } catch (e) { /* ignore */ }
   });
   await openInbox(page);
+  check(!(await page.$('.tma-dash__header [data-email-search]')), 'no Search in mail field in the header');
+  const tools = await page.$$eval('.tma-dash__header-right .tma-dash__email-header-tools > *', (els) => els.map((el) => ({
+    tag: el.tagName, label: el.getAttribute('aria-label'), visible: !!(el.offsetWidth && el.offsetHeight),
+    icon: el.querySelector('img') ? el.querySelector('img').getAttribute('src') : '',
+  })));
+  check(tools.length === 3 && tools.every((t) => t.visible), `three buttons in the bubble (${tools.map((t) => t.label).join(', ')})`);
+  check(tools[0] && tools[0].label === 'Search in mail' && /MagnifyingGlass/.test(tools[0].icon), 'search first');
+  check(tools[1] && tools[1].label === 'Toggle theme' && /Sun/.test(tools[1].icon), 'then the theme, showing the sun in light mode');
+  check(tools[2] && tools[2].label === 'Open account menu', 'then the account');
+  check(await page.$eval('.tma-dash__header-right .tma-dash__header-icons:not(.tma-dash__email-header-tools)', (el) => !(el.offsetWidth && el.offsetHeight)).catch(() => true),
+    'the shell\'s own bubble stays hidden here');
+
+  await page.click('[data-email-header-theme]');
+  await page.waitForTimeout(150);
+  const themed = await page.evaluate(() => ({
+    dark: document.documentElement.getAttribute('data-theme') === 'dark',
+    icon: (document.querySelector('[data-email-header-theme] img') || {}).getAttribute ? document.querySelector('[data-email-header-theme] img').getAttribute('src') : '',
+  }));
+  check(themed.dark, 'the theme button switches to dark');
+  check(/MoonStars/.test(themed.icon), 'and now shows the moon');
+  await page.click('[data-email-header-theme]');
+  await page.waitForTimeout(150);
+  check(await page.evaluate(() => document.documentElement.getAttribute('data-theme') !== 'dark'), 'and back to light');
+
+  await page.click('[data-email-header-search]');
+  await page.waitForSelector(INPUT, { state: 'visible', timeout: 5000 });
+  check(!!(await page.$('.tma-dash__email-sidebar--open.tma-dash__email-sidebar--mobile-search')), 'the search icon opens the drawer already in searching mode');
+  check(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), INPUT), 'with the field focused');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await page.click('.tma-dash__header-left [data-action="toggle-sidebar"]').catch(() => {});
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { const m = document.querySelector('[data-email]'); if (m && m._emailCloseMobileNav) m._emailCloseMobileNav(); });
+  await page.waitForTimeout(300);
+
+  step(1, 'The drawer offers a mail search, not the site one');
   await openDrawerSearch(page);
 
   const head = ((await page.textContent('[data-email-sidebar-search-toggle]').catch(() => '')) || '').trim();
@@ -205,8 +241,17 @@ try {
     `only the matching email is listed (${subjects.length} row(s))`,
   );
   check(!(await page.$('.tma-dash__email-sidebar--open')), 'the drawer closed');
-  const headerValue = await page.inputValue('[data-email-search]').catch(() => null);
-  check(headerValue === 'invoice', `the header field shows the query (got "${headerValue}")`);
+  const headTitle = ((await page.textContent('.tma-dash__email-list-mobile-title').catch(() => '')) || '').trim();
+  check(headTitle === 'Results for “invoice”', `the list head says what it is showing (got "${headTitle}")`);
+  await page.click('.tma-dash__email-list-mobile-clear');
+  await page.waitForFunction(() => {
+    const mount = document.querySelector('[data-email]');
+    const st = mount && mount._emailState;
+    return !!st && st.search === '' && !st.loading && !st.listRefreshing && st.rows.length === 3;
+  }, null, { timeout: 12000 });
+  check(true, 'clearing it brings the folder back');
+  const clearedTitle = ((await page.textContent('.tma-dash__email-list-mobile-title').catch(() => '')) || '').trim();
+  check(clearedTitle === 'Inbox', `and the head names the folder again (got "${clearedTitle}")`);
 
   step(6, "Recent searches are the mailbox's own");
   await openDrawerSearch(page);

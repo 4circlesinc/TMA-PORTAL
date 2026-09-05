@@ -337,6 +337,21 @@
     border-right: none;
   }
 
+  /* Mail on a phone: the header's right bubble holds search, theme and the
+     account. It shares the shell bubble's look (the selectors above) but not
+     its class: scripts that find "the" header bubble by class must keep
+     finding the shell's, which stays hidden on this page (dashboard.css). */
+
+  .tma-dash__email-header-tools .tma-dash__email-header-profile-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: var(--space-6);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
   .tma-dash__sidebar-search-panel {
     display: none;
     flex: 1 1 auto;
@@ -702,7 +717,10 @@
     background: var(--color-hover);
   }
 
-  .tma-dash__header-icons {
+  .tma-dash__header-icons,
+  .tma-dash__email-header-tools {
+    display: flex;
+    align-items: center;
     gap: 0;
     padding: 0;
     overflow: hidden;
@@ -716,7 +734,8 @@
     backdrop-filter: blur(20px) saturate(165%);
   }
 
-  .tma-dash__header-icons .tma-dash__icon-btn {
+  .tma-dash__header-icons .tma-dash__icon-btn,
+  .tma-dash__email-header-tools .tma-dash__icon-btn {
     width: 44px;
     height: 44px;
     min-width: 44px;
@@ -725,7 +744,8 @@
     background: transparent;
   }
 
-  .tma-dash__header-icons .tma-dash__icon-btn:hover {
+  .tma-dash__header-icons .tma-dash__icon-btn:hover,
+  .tma-dash__email-header-tools .tma-dash__icon-btn:hover {
     background: var(--color-hover);
   }
 
@@ -744,7 +764,9 @@
 .tma-dash[data-theme="dark"] .tma-dash__header-left,
 :root[data-theme="dark"] .tma-dash__header-left,
 .tma-dash[data-theme="dark"] .tma-dash__header-icons,
-:root[data-theme="dark"] .tma-dash__header-icons {
+:root[data-theme="dark"] .tma-dash__header-icons,
+.tma-dash[data-theme="dark"] .tma-dash__email-header-tools,
+:root[data-theme="dark"] .tma-dash__email-header-tools {
     background: rgba(24, 24, 26, 0.48);
     border-color: rgba(255, 255, 255, 0.14);
     box-shadow:
