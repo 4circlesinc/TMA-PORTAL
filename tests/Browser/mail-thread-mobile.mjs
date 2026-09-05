@@ -158,6 +158,32 @@ async function runAt(label, viewport) {
   check(rowType.sender !== null && rowType.sender <= 14, `sender at ${rowType.sender}px`);
   check(rowType.subject !== null && rowType.subject <= 13 && rowType.snippet !== null && rowType.snippet <= 13, `subject and preview at ${rowType.subject}px / ${rowType.snippet}px`);
   check(rowType.time !== null && rowType.time <= 12, `time at ${rowType.time}px`);
+  // The right of a row is not a column of its own: the time rides the sender
+  // line, the star rides the preview line, and the subject and attachment
+  // chips run the full width beneath the time.
+  const shape = await page.evaluate(() => {
+    const row = Array.from(document.querySelectorAll('.tma-dash__email-row[data-email-row]')).find((r) => r.querySelector('.tma-dash__email-row-attachments'));
+    if (!row) return null;
+    const b = (sel) => { const el = row.querySelector(sel); return el ? el.getBoundingClientRect() : null; };
+    const sender = b('.tma-dash__email-row-sender'), time = b('.tma-dash__email-row-time'), subject = b('.tma-dash__email-row-subject');
+    const snippet = b('.tma-dash__email-row-snippet'), star = b('.tma-dash__email-row-star-mobile'), chips = b('.tma-dash__email-row-attachments');
+    const rowBox = row.getBoundingClientRect();
+    const rightPad = parseFloat(getComputedStyle(row).paddingRight);
+    const inner = rowBox.right - rightPad;
+    return {
+      timeOnSenderLine: Math.abs((time.top + time.bottom) / 2 - (sender.top + sender.bottom) / 2) <= 4,
+      subjectFullWidth: subject.right >= inner - 1 && subject.right > star.left + 10,
+      chipsFullWidth: chips.right >= inner - 1 && chips.right > star.left + 10,
+      starOnPreviewLine: (star.top + star.bottom) / 2 > snippet.top - 2 && (star.top + star.bottom) / 2 < snippet.bottom + 2,
+      previewClearOfStar: snippet.right <= star.left + 0.5,
+      chipsBelowPreview: chips.top >= snippet.bottom - 1,
+    };
+  });
+  check(!!shape && shape.timeOnSenderLine, 'the time rides the sender line');
+  check(!!shape && shape.subjectFullWidth, 'the subject runs the full width beneath it');
+  check(!!shape && shape.starOnPreviewLine && shape.previewClearOfStar, 'the star rides the preview line, after the preview');
+  check(!!shape && shape.chipsFullWidth && shape.chipsBelowPreview, 'attachment chips run the full width on their own line');
+
   // The conversation arrow sits in line with the avatar, just before it.
   const arrow = await page.evaluate(() => {
     const toggle = document.querySelector('.tma-dash__email-row[data-email-row] [data-email-conversation-toggle]');
@@ -254,11 +280,12 @@ async function runAt(label, viewport) {
   // too, and the pane hid the drop it had just opened.
   check(!(await page.$('.tma-dash--email-mobile-reading')), 'the conversation arrow opens the drop without opening the message');
   const drop = await page.evaluate(() => {
+    // The parent's content wrapper is `display: contents`, so measure the
+    // sender line itself on both rows.
     const child = document.querySelector('.tma-dash__email-row--child');
-    const parent = child && child.closest('.tma-dash__email-thread-children') && child.closest('.tma-dash__email-thread-children').previousElementSibling
-      ? child.closest('.tma-dash__email-thread-children').parentElement.querySelector('.tma-dash__email-row:not(.tma-dash__email-row--child) .tma-dash__email-row-content')
-      : null;
-    const cc = child && child.querySelector('.tma-dash__email-row-content');
+    const group = child && child.closest('.tma-dash__email-thread-children');
+    const parent = group && group.parentElement.querySelector('.tma-dash__email-row:not(.tma-dash__email-row--child) .tma-dash__email-row-head');
+    const cc = child && child.querySelector('.tma-dash__email-row-head, .tma-dash__email-row-sender');
     return parent && cc ? { parent: Math.round(parent.getBoundingClientRect().left), child: Math.round(cc.getBoundingClientRect().left) } : null;
   });
   check(!!drop && Math.abs(drop.parent - drop.child) <= 1, `the drop's messages line up under the parent's text (${drop && drop.parent}px vs ${drop && drop.child}px)`);

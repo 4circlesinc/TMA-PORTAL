@@ -14852,21 +14852,34 @@
 
   /* Avatar stays visible; selected rows show the corner tick (same as desktop). */
 
-  .tma-dash__email-row-content {
-    grid-column: 3;
-    grid-row: 1 / span 3;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    overflow: hidden;
+  /* The row's lines are grid items in their own right (the content and
+     side wrappers are `display: contents`), so the right-hand column holds
+     only the time on the sender's line and the star on the preview's, and
+     the subject and the attachment chips run the full width under them.
+     A column reserved for three lines had left the middle of it empty
+     while the subject and chips cut short beside it. */
+  .tma-dash__email-row:not(.tma-dash__email-row--child) > .tma-dash__email-row-content,
+  .tma-dash__email-row:not(.tma-dash__email-row--child) > .tma-dash__email-row-side {
+    display: contents;
   }
 
   .tma-dash__email-row-head {
+    grid-column: 3;
+    grid-row: 1;
     display: flex;
     align-items: center;
     gap: var(--space-8);
     min-width: 0;
+  }
+
+  .tma-dash__email-row--child .tma-dash__email-row-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .tma-dash__email-row-labels {
@@ -14884,7 +14897,10 @@
   }
 
   .tma-dash__email-row-subject {
+    grid-column: 3 / span 2;
+    grid-row: 2;
     flex: none;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -14897,7 +14913,10 @@
   }
 
   .tma-dash__email-row-snippet {
+    grid-column: 3;
+    grid-row: 3;
     display: block;
+    min-width: 0;
     font-size: 13px;
     line-height: 18px;
     color: var(--color-text-secondary);
@@ -14906,18 +14925,17 @@
     text-overflow: ellipsis;
   }
 
-  .tma-dash__email-row-side {
-    grid-column: 4;
-    grid-row: 1 / span 3;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-8);
-    flex: 0 0 auto;
+  .tma-dash__email-row:not(.tma-dash__email-row--child) .tma-dash__email-row-attachments {
+    grid-column: 3 / span 2;
+    grid-row: 4;
     min-width: 0;
-    align-self: stretch;
-    padding-top: 2px;
+  }
+
+  .tma-dash__email-row:not(.tma-dash__email-row--child) .tma-dash__email-row-side-top {
+    grid-column: 4;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
   }
 
   .tma-dash__email-row-time {
@@ -14929,6 +14947,13 @@
 
   .tma-dash__email-row-star-mobile {
     display: inline-flex;
+    grid-column: 4;
+    grid-row: 3;
+    justify-self: end;
+    align-self: center;
+    width: 22px;
+    height: 18px;
+    padding: 0;
   }
 
   .tma-dash__email-row--unread .tma-dash__email-row-sender,

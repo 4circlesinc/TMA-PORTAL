@@ -495,6 +495,14 @@ field placement and drawing, and computed CSS only exist in a browser.
   a 1400px picture and a 1200px table keeps the picture inside the frame and
   reflows the table instead of moving the page.
 
+  It also reads the inbox rows' shape: the time on the sender's line, the
+  subject and the attachment chips running the full width beneath it, the
+  star on the preview line, the conversation arrow in its own slot before
+  the avatar, and the drop's messages lined up under the parent's text. The
+  attachment-chip checks need one message with attachments, so seed one
+  (the `att-msg` recipe under `mail-thread.mjs` does, or any
+  `MailAttachment` rows on an inbox message).
+
   Uses the mailbox fixture's account plus two more seeds — a three-message
   conversation under a long subject, one reply carrying a Gmail-style quote,
   and a wide newsletter (the `remote_id`s must not collide with the
