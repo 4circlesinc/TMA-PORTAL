@@ -8029,7 +8029,8 @@
       '>' + esc(importSignatureButtonLabel(state)) + '</button>' +
       '</div></div>' +
       '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
-      ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
+      ' Import asks Outlook or Gmail for the signature it would put on a reply.' +
+      ' You can also paste from Outlook Signatures, then upload a PNG, JPEG or WebP logo and resize it.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, insertImage: true }) +
       '<div class="tma-dash__email-settings-signature-stage tma-dash__email-image-stage" data-email-image-stage>' +

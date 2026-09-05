@@ -483,6 +483,30 @@ class GraphProvider implements MailProvider
         $this->json($response);
     }
 
+    /**
+     * Outlook has no signature-read API. createReply is what the Outlook
+     * composer uses, so the draft it returns already carries the roaming
+     * signature. The caller must delete the draft; this never sends it.
+     */
+    public function createReplyDraft(string $remoteId): ?string
+    {
+        try {
+            $created = $this->json($this->request()->post(
+                self::BASE.'/messages/'.$remoteId.'/createReply',
+                new \stdClass
+            ));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $id = (string) ($created['id'] ?? '');
+        if ($id === '' || $id === $remoteId) {
+            return null;
+        }
+
+        return $id;
+    }
+
     private static function isConsumedDraftResponse(Response $response): bool
     {
         if ($response->successful()) {

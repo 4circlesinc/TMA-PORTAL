@@ -18,9 +18,10 @@ use Throwable;
  * Pulls the user's outbound email signature into the portal.
  *
  * Gmail can expose the configured signature when the account was granted
- * `gmail.settings.basic`; Microsoft Graph does not. In both cases the reliable
- * fallback is to read recent Sent mail and lift the trailing block that repeats
- * across messages, that is the signature people actually send.
+ * `gmail.settings.basic`. Graph has no signature-read API, so Outlook import
+ * opens a reply draft (which Outlook stamps with the roaming signature),
+ * copies that block, and deletes the draft without sending. Sent mail is
+ * the fallback when that is not possible.
  */
 class SignatureImporter
 {
@@ -85,8 +86,115 @@ class SignatureImporter
     {
         return match ($this->account->provider) {
             'google' => $this->fromGmailSendAs(),
+            'microsoft' => $this->fromOutlookReplyDraft(),
             default => null,
         };
+    }
+
+    /**
+     * Ask Outlook for the signature it would put on a reply.
+     *
+     * createReply is the compose pipeline; scraping Sent mail is not, and a
+     * reply's quoted #Signature belongs to the other person.
+     */
+    private function fromOutlookReplyDraft(): ?string
+    {
+        $provider = Mailbox::provider($this->account);
+        if (! $provider instanceof GraphProvider) {
+            return null;
+        }
+
+        foreach ($this->signatureSeedIds() as $seed) {
+            $draftId = $provider->createReplyDraft($seed);
+            if ($draftId === null) {
+                continue;
+            }
+
+            try {
+                $full = $provider->getMessage($draftId);
+            } catch (Throwable) {
+                $this->forgetReplyDraft($provider, $draftId);
+
+                continue;
+            }
+
+            $html = (string) ($full['body_html'] ?? '');
+            $extracted = $this->extractFromBody($html);
+
+            if (! is_string($extracted) || trim($extracted) === '') {
+                $this->forgetReplyDraft($provider, $draftId);
+
+                continue;
+            }
+
+            $scratch = new MailMessage([
+                'remote_id' => $draftId,
+                'user_id' => $this->account->user_id,
+                'connected_account_id' => $this->account->id,
+                'folder' => 'draft',
+                'body_html' => $html,
+            ]);
+            $this->applyProviderBody($scratch, $full);
+            $resolved = $this->resolveInlineImages($extracted, $scratch);
+            $this->forgetReplyDraft($provider, $draftId);
+
+            return $resolved;
+        }
+
+        return null;
+    }
+
+    private function forgetReplyDraft(GraphProvider $provider, string $draftId): void
+    {
+        try {
+            $provider->deleteDraft($draftId);
+        } catch (Throwable) {
+            // The draft is unused; a leftover in Outlook Drafts is recoverable.
+        }
+    }
+
+    /** @return list<string> */
+    private function signatureSeedIds(): array
+    {
+        $ids = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->whereIn('folder', ['sent', 'inbox'])
+            ->whereNotNull('remote_id')
+            ->orderByRaw("case when folder = 'sent' then 0 else 1 end")
+            ->orderByDesc('sent_at')
+            ->limit(5)
+            ->pluck('remote_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids !== []) {
+            return $ids;
+        }
+
+        $provider = Mailbox::provider($this->account);
+
+        foreach (['sent', 'inbox'] as $folder) {
+            try {
+                $page = $provider->listMessages($folder, 3);
+            } catch (Throwable) {
+                continue;
+            }
+
+            foreach ($page['messages'] ?? [] as $row) {
+                $id = (string) ($row['remote_id'] ?? '');
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
+            }
+
+            if ($ids !== []) {
+                break;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**

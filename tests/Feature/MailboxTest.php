@@ -437,6 +437,15 @@ class MailboxTest extends TestCase
             'body_html' => '<div>Hi</div><div id="Signature"><div><b>Outlook User</b></div></div>',
         ]);
 
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
+        ]);
+
         $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
             ->assertOk()
@@ -460,6 +469,15 @@ class MailboxTest extends TestCase
             'is_read' => true,
             'body_html' => '<p>See you Thursday.</p><div id="appendonsend"></div>'
                 .'<div id="Signature"><p>Kind Regards,</p><p>Outlook User</p></div>',
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
         ]);
 
         $this->actingAs($user)

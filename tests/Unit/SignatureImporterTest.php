@@ -57,6 +57,19 @@ class SignatureImporterTest extends TestCase
         ]);
     }
 
+    /** Sent-mail tests must not hit Graph createReply. */
+    private function fakeOutlookReplyDraftUnavailable(): void
+    {
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
+            'graph.microsoft.com/*' => Http::response(['value' => []], 404),
+        ]);
+    }
+
     public function test_it_lifts_a_gmail_signature_block_from_sent_mail(): void
     {
         $account = $this->account();
@@ -249,6 +262,8 @@ class SignatureImporterTest extends TestCase
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
 
+        $this->fakeOutlookReplyDraftUnavailable();
+
         $disclaimer = str_repeat('This Electronic Mail and any attached files may contain confidential information. ', 12);
 
         $this->sent(
@@ -276,6 +291,8 @@ class SignatureImporterTest extends TestCase
             'provider_id' => 'ms-'.$account->user_id,
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
+
+        $this->fakeOutlookReplyDraftUnavailable();
 
         $this->sent(
             $account,
@@ -308,6 +325,7 @@ class SignatureImporterTest extends TestCase
                 'access_token' => 'access-token',
                 'expires_in' => 3600,
             ]),
+            'graph.microsoft.com/*/createReply' => Http::response(['error' => ['message' => 'unavailable']], 400),
             'graph.microsoft.com/v1.0/me/messages/sent-empty*' => Http::response([
                 'id' => 'sent-empty',
                 'conversationId' => 'c-sent-empty',
@@ -339,6 +357,8 @@ class SignatureImporterTest extends TestCase
             'provider_id' => 'ms-'.$account->user_id,
             'scopes' => ['Mail.ReadWrite'],
         ])->save();
+
+        $this->fakeOutlookReplyDraftUnavailable();
 
         $quoted = '<div id="divRplyFwdMsg"><hr><b>From:</b> Dana Reed<br>'
             .'<div id="Signature"><p>Dana Reed</p><p>Client Corp</p></div></div>';
@@ -385,5 +405,65 @@ class SignatureImporterTest extends TestCase
         $this->assertStringContainsString('Advisor', $signature);
         $this->assertStringNotContainsString('Dana Reed', $signature);
         $this->assertStringNotContainsString('Other Co', $signature);
+    }
+
+    public function test_outlook_import_uses_the_signature_outlook_puts_on_a_reply_draft(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'name' => 'Vernon Francis',
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->sent(
+            $account,
+            '<p>Sounds good.</p><div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Wrong leftover</p></div>'
+            .'<div id="divRplyFwdMsg"><div id="Signature"><p>Dana Reed</p></div></div>',
+            'seed-1'
+        );
+
+        $draftBody = '<div></div><div id="appendonsend"></div>'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+            .'<p>Managing Director</p></div>'
+            .'<div id="divRplyFwdMsg"><b>From:</b> Dana Reed'
+            .'<div id="Signature"><p>Dana Reed</p><p>Client Corp</p></div></div>';
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/seed-1/createReply' => Http::response([
+                'id' => 'draft-sig-1',
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/draft-sig-1*' => Http::response([
+                'id' => 'draft-sig-1',
+                'conversationId' => 'c-draft',
+                'subject' => 'Re: Hello',
+                'bodyPreview' => 'Kind Regards',
+                'from' => ['emailAddress' => ['name' => 'Vernon Francis', 'address' => 'user@example.com']],
+                'body' => [
+                    'contentType' => 'html',
+                    'content' => $draftBody,
+                ],
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []]),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringContainsString('Managing Director', $signature);
+        $this->assertStringNotContainsString('Dana Reed', $signature);
+        $this->assertStringNotContainsString('Wrong leftover', $signature);
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), 'messages/seed-1/createReply'));
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_contains($request->url(), 'messages/draft-sig-1'));
     }
 }
