@@ -60,7 +60,7 @@ class MimeBuilderTest extends TestCase
         $this->assertStringContainsString('client@example.com', $mime);
     }
 
-    public function test_a_plain_body_stays_a_single_part(): void
+    public function test_a_plain_body_includes_a_text_alternative(): void
     {
         $mime = MimeBuilder::build([
             'to' => [['email' => 'client@example.com']],
@@ -68,8 +68,20 @@ class MimeBuilderTest extends TestCase
             'bodyHtml' => '<p>No images here.</p>',
         ]);
 
+        $this->assertStringContainsString('multipart/alternative', $mime);
+        $this->assertStringContainsString('Content-Type: text/plain; charset=UTF-8', $mime);
+        $this->assertStringContainsString('Content-Type: text/html; charset=UTF-8', $mime);
         $this->assertStringNotContainsString('multipart/related', $mime);
         $this->assertStringNotContainsString('Content-ID:', $mime);
+        $this->assertSame('No images here.', MimeBuilder::plainFromHtml('<p>No images here.</p>'));
+    }
+
+    public function test_plain_text_keeps_link_urls(): void
+    {
+        $this->assertSame(
+            'Open the portal (https://example.com/path)',
+            MimeBuilder::plainFromHtml('<p><a href="https://example.com/path">Open the portal</a></p>')
+        );
     }
 
     public function test_a_data_uri_image_becomes_a_cid_inline_part(): void
@@ -145,20 +157,17 @@ class MimeBuilderTest extends TestCase
         $this->assertStringNotContainsString('Content-ID:', $mime);
     }
 
-    /** Decoded HTML part of a multipart/related message. */
+    /** Decoded HTML part, including when it is nested in multipart/alternative. */
     private function htmlPart(string $mime): string
     {
-        preg_match('/boundary="([^"]+)"/', $mime, $match);
-        $this->assertNotEmpty($match[1] ?? '', 'expected a multipart boundary');
-
-        foreach (explode('--'.$match[1], $mime) as $part) {
-            if (str_contains($part, 'Content-Type: text/html')) {
-                [, $body] = explode("\r\n\r\n", $part, 2);
-
-                return base64_decode(preg_replace('/\s+/', '', $body), true) ?: '';
-            }
+        if (! preg_match(
+            '/Content-Type: text\/html[^\r\n]*\r\n(?:[^\r\n]+\r\n)*\r\n([\s\S]*?)(?:\r\n--|\z)/',
+            $mime,
+            $match
+        )) {
+            $this->fail('no text/html part found');
         }
 
-        $this->fail('no text/html part found');
+        return base64_decode(preg_replace('/\s+/', '', $match[1]) ?? '', true) ?: '';
     }
 }

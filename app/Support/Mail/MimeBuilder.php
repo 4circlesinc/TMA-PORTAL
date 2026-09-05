@@ -45,11 +45,11 @@ class MimeBuilder
         [$bodyHtml, $inline] = InlineImages::extract((string) ($message['bodyHtml'] ?? ''));
         $files = self::fileParts($message['attachments'] ?? []);
 
+        // Filters treat HTML-only MIME as bulk. A text/plain twin is what
+        // Gmail, Outlook and every other client actually send; Graph
+        // synthesises one, this raw Gmail path does not.
         if ($inline === [] && $files === []) {
-            $lines[] = 'Content-Type: text/html; charset=UTF-8';
-            $lines[] = 'Content-Transfer-Encoding: base64';
-            $lines[] = '';
-            $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+            array_push($lines, ...self::alternativePart($bodyHtml));
 
             return implode("\r\n", $lines);
         }
@@ -69,10 +69,7 @@ class MimeBuilder
         $lines[] = '';
         $lines[] = '--'.$mixed;
         if ($inline === []) {
-            $lines[] = 'Content-Type: text/html; charset=UTF-8';
-            $lines[] = 'Content-Transfer-Encoding: base64';
-            $lines[] = '';
-            $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+            array_push($lines, ...self::alternativePart($bodyHtml));
         } else {
             $related = '=_tma_'.bin2hex(random_bytes(12));
             $lines[] = 'Content-Type: multipart/related; boundary="'.$related.'"';
@@ -103,10 +100,7 @@ class MimeBuilder
     {
         $lines = [];
         $lines[] = '--'.$boundary;
-        $lines[] = 'Content-Type: text/html; charset=UTF-8';
-        $lines[] = 'Content-Transfer-Encoding: base64';
-        $lines[] = '';
-        $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+        array_push($lines, ...self::alternativePart($bodyHtml));
 
         foreach ($inline as $part) {
             $lines[] = '--'.$boundary;
@@ -119,6 +113,63 @@ class MimeBuilder
         }
 
         return $lines;
+    }
+
+    /**
+     * HTML plus a matching text/plain part. The HTML is last so capable
+     * clients pick it; the plain part is what filters and text-only inboxes
+     * actually read.
+     *
+     * @return list<string>
+     */
+    private static function alternativePart(string $html): array
+    {
+        $boundary = '=_tma_alt_'.bin2hex(random_bytes(12));
+        $plain = self::plainFromHtml($html);
+
+        return [
+            'Content-Type: multipart/alternative; boundary="'.$boundary.'"',
+            '',
+            '--'.$boundary,
+            'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: base64',
+            '',
+            chunk_split(base64_encode($plain), 76, "\r\n"),
+            '--'.$boundary,
+            'Content-Type: text/html; charset=UTF-8',
+            'Content-Transfer-Encoding: base64',
+            '',
+            chunk_split(base64_encode($html), 76, "\r\n"),
+            '--'.$boundary.'--',
+        ];
+    }
+
+    /** Strip tags, keep line breaks and link URLs, so the plain part matches the HTML. */
+    public static function plainFromHtml(string $html): string
+    {
+        $html = preg_replace('/<head\b[^>]*>.*?<\/head>/is', '', $html) ?? $html;
+        $html = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $html) ?? $html;
+        $html = preg_replace_callback(
+            '/<a\b[^>]*href=(["\'])([^"\']+)\1[^>]*>(.*?)<\/a>/is',
+            function (array $match): string {
+                $label = trim(html_entity_decode(strip_tags($match[3]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $href = html_entity_decode($match[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                if ($label === '' || strcasecmp($label, $href) === 0) {
+                    return $href;
+                }
+
+                return $label.' ('.$href.')';
+            },
+            $html
+        ) ?? $html;
+        $html = preg_replace('/<(br|\/p|\/div|\/li|\/h[1-6]|\/blockquote|\/tr)[^>]*>/i', "\n", $html) ?? $html;
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = str_replace("\u{00A0}", ' ', $text);
+        $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+        $text = preg_replace('/[ \t]{2,}/', ' ', $text) ?? $text;
+        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+
+        return trim($text);
     }
 
     /**

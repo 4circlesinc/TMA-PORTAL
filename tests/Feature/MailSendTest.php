@@ -508,9 +508,16 @@ class MailSendTest extends TestCase
             $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
             $this->assertStringNotContainsString('multipart/related', $raw);
             $this->assertStringNotContainsString('Content-ID:', $raw);
+            $this->assertStringContainsString('multipart/alternative', $raw);
 
-            [, $body] = explode("\r\n\r\n", $raw, 2);
-            $html = base64_decode(preg_replace('/\s+/', '', $body), true);
+            if (! preg_match(
+                '/Content-Type: text\/html[^\r\n]*\r\n(?:[^\r\n]+\r\n)*\r\n([\s\S]*?)(?:\r\n--|\z)/',
+                $raw,
+                $match
+            )) {
+                return false;
+            }
+            $html = base64_decode(preg_replace('/\s+/', '', $match[1]) ?? '', true);
             $this->assertStringContainsString($foreign->uuid, $html);
 
             return true;

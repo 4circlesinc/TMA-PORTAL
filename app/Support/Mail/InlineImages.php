@@ -47,7 +47,9 @@ final class InlineImages
 
                     $index++;
                     $type = strtolower($match[3]) === 'jpg' ? 'jpeg' : strtolower($match[3]);
-                    $seen[$key] = 'tma-inline-'.$index.'-'.substr(sha1($bytes), 0, 12).'@portal';
+                    $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+                    $host = is_string($host) && $host !== '' ? $host : 'localhost';
+                    $seen[$key] = 'tma-inline-'.$index.'-'.substr(sha1($bytes), 0, 12).'@'.$host;
                     $parts[] = [
                         'cid' => $seen[$key],
                         'mime' => 'image/'.$type,
