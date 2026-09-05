@@ -179,7 +179,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/dashboard.css?v=295">
+  <link rel="stylesheet" href="/css/dashboard.css?v=296">
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>

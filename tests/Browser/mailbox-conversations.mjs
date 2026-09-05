@@ -43,6 +43,17 @@ await context.route('**/portal/mail/messages/*', async (route) => {
   });
 });
 
+const bulkCalls = [];
+await context.route('**/portal/mail/bulk', async (route) => {
+  const body = route.request().postDataJSON() || {};
+  bulkCalls.push(body);
+  return route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ applied: (body.ids || []).length, failed: 0, folders: {} }),
+  });
+});
+
 async function signIn() {
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
   await page.click('text=Sign in with Email');
@@ -160,6 +171,32 @@ try {
   });
   check(openedChild.selected && !openedChild.rowIds.includes(openedChild.selected),
     'the open message is one from the conversation, not a page row');
+
+  step(4.5, 'The page toolbar acts on the open thread with nothing ticked');
+  const toolbar = await page.evaluate(() => {
+    const state = document.querySelector('[data-email]')._emailState;
+    const deleteBtn = document.querySelector('[data-email-toolbar-action][data-email-bulk-action="delete"]');
+    return {
+      checked: Object.keys(state.checkedIds || {}).length,
+      selected: state.selectedId,
+      ready: !!(document.querySelector('[data-email-toolbar]') &&
+        document.querySelector('[data-email-toolbar]').classList.contains('tma-dash__email-toolbar--ready')),
+      ariaDisabled: deleteBtn ? deleteBtn.getAttribute('aria-disabled') : 'missing',
+      nativeDisabled: deleteBtn ? !!deleteBtn.disabled : true,
+    };
+  });
+  check(toolbar.selected && toolbar.checked === 0, 'a thread is open and no boxes are ticked');
+  check(toolbar.ready && toolbar.ariaDisabled !== 'true' && !toolbar.nativeDisabled,
+    `Delete/Archive/… are live for that thread (ready=${toolbar.ready} aria-disabled=${toolbar.ariaDisabled} disabled=${toolbar.nativeDisabled})`);
+
+  bulkCalls.length = 0;
+  await page.click('[data-email-toolbar-action][data-email-bulk-action="unread"]');
+  await page.waitForTimeout(400);
+  const unreadCall = bulkCalls[bulkCalls.length - 1];
+  check(!!unreadCall && unreadCall.action === 'unread',
+    `Mark unread went to /bulk (saw ${unreadCall ? unreadCall.action : 'nothing'})`);
+  check(!!unreadCall && (unreadCall.ids || []).indexOf(openedChild.selected) !== -1,
+    'that bulk call included the open message');
 
   step(5, 'The reading pane shows one message, with no collapse control');
   const paneText = await page.textContent('.tma-dash__email-thread');

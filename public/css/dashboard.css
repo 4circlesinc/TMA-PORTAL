@@ -9956,7 +9956,7 @@
   white-space: nowrap;
 }
 
-.tma-dash__email-toolbar-btn:hover:not(:disabled) {
+.tma-dash__email-toolbar-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-hover-deep, rgba(0, 0, 0, 0.08));
   color: var(--color-text-primary);
 }

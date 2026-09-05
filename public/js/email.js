@@ -1583,17 +1583,45 @@
     );
   }
 
-  /* Ids the top toolbar should act on: ticked rows, or the open message. */
+  function uniqueEmailIds(ids) {
+    var seen = {};
+    var out = [];
+    (ids || []).forEach(function (id) {
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      out.push(id);
+    });
+    return out;
+  }
+
+  /* Every message in the conversation that owns this id: the open thread when
+   * we have it, otherwise the list-row drop (parent + replies). */
+  function conversationIdsForMessage(state, id) {
+    if (!id) return [];
+    if (state.thread && state.thread.messages && state.thread.messages.length &&
+        state.thread.messages.some(function (m) { return m.id === id; })) {
+      return uniqueEmailIds(state.thread.messages.map(function (m) { return m.id; }));
+    }
+    var parentId = conversationParentForMessage(state, id);
+    if (parentId) return uniqueEmailIds(conversationIds(state, parentId).concat([id]));
+    return conversationIds(state, id);
+  }
+
+  /* Ids the top toolbar should act on: ticked rows, or the open conversation. */
   function emailToolbarTargetIds(state) {
     var ids = Object.keys(state.checkedIds || {});
     if (ids.length) return ids;
-    return state.selectedId ? [state.selectedId] : [];
+    if (!state.selectedId) return [];
+    return conversationIdsForMessage(state, state.selectedId);
   }
 
   function emailToolbarActions(state) {
     var folder = state.folder;
     var ids = emailToolbarTargetIds(state);
-    var row = ids.length === 1 ? findAnyRow(state, ids[0]) : null;
+    var sampleId = (!Object.keys(state.checkedIds || {}).length && state.selectedId)
+      ? state.selectedId
+      : (ids[0] || null);
+    var row = sampleId ? findAnyRow(state, sampleId) : null;
     var starred = !!(row && row.starred);
     var important = !!(row && isRowImportant(row, state));
     var archiveAction = folder === 'archive'
@@ -1638,9 +1666,9 @@
 
     var hasTarget = emailToolbarTargetIds(state).length > 0;
     var actions = emailToolbarActions(state).map(function (action) {
-      var extraAttrs = '';
+      var extraAttrs = hasTarget ? '' : ' aria-disabled="true"';
       if (action.id === 'more') {
-        extraAttrs =
+        extraAttrs +=
           ' data-email-bulk-more-toggle aria-haspopup="menu" aria-expanded="' +
           (state.bulkMoreMenuOpen ? 'true' : 'false') +
           '"';
@@ -1650,7 +1678,6 @@
         label: action.label,
         className: 'tma-dash__tool-btn tma-dash__email-toolbar-btn',
         attrs: ' data-email-bulk-action="' + esc(action.id) + '" data-email-toolbar-action' + extraAttrs,
-        disabled: !hasTarget,
         innerHtml:
           '<img src="' + esc(ICONS[action.icon]) + '" alt="">' +
           '<span class="tma-dash__email-toolbar-btn-label">' + esc(action.label) + '</span>',
@@ -3872,7 +3899,11 @@
     var hasTarget = emailToolbarTargetIds(state).length > 0;
     toolbar.classList.toggle('tma-dash__email-toolbar--ready', hasTarget);
     toolbar.querySelectorAll('[data-email-toolbar-action]').forEach(function (btn) {
-      btn.disabled = !hasTarget;
+      // Native disabled swallows clicks and Morph can leave the property set
+      // after the open message should have armed the toolbar. Grey out with
+      // aria-disabled instead; the click handler no-ops when nothing is open.
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
       if (hasTarget) btn.removeAttribute('aria-disabled');
       else btn.setAttribute('aria-disabled', 'true');
     });
@@ -11728,30 +11759,46 @@
 
     // Snapshot enough to restore the list if the call fails.
     var before = rowsOf(state).slice();
+    var beforeSelected = state.selectedId;
+    var beforeReading = state.reading;
+    var beforeThread = state.thread;
+    var closedOpen = false;
 
     if (removes) {
+      var drop = {};
+      ids.forEach(function (id) {
+        drop[id] = true;
+        var parentId = conversationParentForMessage(state, id);
+        if (parentId) drop[parentId] = true;
+      });
+      closedOpen = !!(state.selectedId && drop[state.selectedId]);
       state.rows = rowsOf(state).filter(function (row) {
-        return ids.indexOf(row.id) === -1;
+        return !drop[row.id];
       });
       clearEmailSelection(state);
-      if (state.selectedId && ids.indexOf(state.selectedId) !== -1) {
+      if (closedOpen) {
         state.selectedId = null;
         state.reading = false;
+        state.thread = null;
       }
     } else {
       ids.forEach(function (id) {
-        var row = findRow(state, id);
-        if (!row) return;
-        if (action === 'read' || action === 'unread') row.unread = action === 'unread';
-        if (action === 'star' || action === 'unstar') row.starred = action === 'star';
-        if (action === 'pin' || action === 'unpin') row.pinned = action === 'pin';
+        if (action === 'read' || action === 'unread') {
+          eachRowCopy(state, id, function (copy) { copy.unread = action === 'unread'; });
+        }
+        if (action === 'star' || action === 'unstar') {
+          eachRowCopy(state, id, function (copy) { copy.starred = action === 'star'; });
+        }
+        if (action === 'pin' || action === 'unpin') {
+          eachRowCopy(state, id, function (copy) { copy.pinned = action === 'pin'; });
+        }
       });
       if (action === 'pin' || action === 'unpin') resortPinnedRows(state);
     }
 
-    // Keep the list head height stable: patch rows in place for moves;
-    // flag toggles still need a light chrome refresh.
-    if (removes) updateInboxList(root, state, render);
+    // Keep the list head height stable when the open message is staying;
+    // closing it needs a full render so the reading pane clears.
+    if (removes && !closedOpen) updateInboxList(root, state, render);
     else render();
 
     api().bulk(ids, action).then(function (data) {
@@ -11774,12 +11821,16 @@
       }
     }).catch(function (err) {
       state.rows = before;
+      state.selectedId = beforeSelected;
+      state.reading = beforeReading;
+      state.thread = beforeThread;
       reportMailError(state, err);
       render();
     });
   }
 
   function handleEmailBulkToolbarAction(root, state, render, btn, action, ids) {
+    ids = ids && ids.length ? ids : emailToolbarTargetIds(state);
     if (!ids.length) return;
 
     if (action === 'more') {
@@ -11791,6 +11842,10 @@
 
     closeEmailBulkMoreMenu(root, state);
 
+    if (action === 'delete') {
+      action = mailDeleteDestinationForIds(state, ids);
+    }
+
     if (action === 'move') {
       openEmailLabelPopup(root, state, btn, { bulk: true });
       return;
@@ -11798,9 +11853,18 @@
 
     if (action === 'snooze') {
       openEmailSnoozeMenu(root, btn, function (iso, label) {
-        var affected = ids.filter(function (rowId) { return !!findRow(state, rowId); });
+        var affected = ids.filter(function (rowId) { return !!findAnyRow(state, rowId); });
+        if (!affected.length) affected = ids.slice();
+        var drop = {};
+        affected.forEach(function (id) {
+          drop[id] = true;
+          eachRowCopy(state, id, function (copy) { copy.snoozedUntil = iso; });
+          var parentId = conversationParentForMessage(state, id);
+          if (parentId) drop[parentId] = true;
+        });
+        var closedOpen = !!(state.selectedId && drop[state.selectedId]);
         state.rows = rowsOf(state).filter(function (row) {
-          if (ids.indexOf(row.id) === -1) return true;
+          if (!drop[row.id]) return true;
           row.snoozedUntil = iso;
           if (state.folder !== 'snoozed') {
             adjustFolderCount(state, state.folder, -1, row.unread);
@@ -11809,6 +11873,11 @@
           return state.folder === 'snoozed';
         });
         clearEmailSelection(state);
+        if (closedOpen) {
+          state.selectedId = null;
+          state.reading = false;
+          state.thread = null;
+        }
         render();
         showEmailToast(root, affected.length + ' snoozed until ' + label);
         Promise.all(affected.map(function (rowId) {
@@ -11822,7 +11891,8 @@
     }
 
     if (action === 'flag') {
-      var sample = findAnyRow(state, ids[0]);
+      var flagId = (!selectedEmailCount(state) && state.selectedId) ? state.selectedId : ids[0];
+      var sample = findAnyRow(state, flagId) || findAnyRow(state, ids[0]);
       var next = !(sample && isRowImportant(sample, state));
       ids.forEach(function (id) { setRowImportant(state, id, next); });
       render();
@@ -11830,13 +11900,15 @@
     }
 
     if (action === 'star') {
-      var starredRow = findAnyRow(state, ids[0]);
+      var starId = (!selectedEmailCount(state) && state.selectedId) ? state.selectedId : ids[0];
+      var starredRow = findAnyRow(state, starId) || findAnyRow(state, ids[0]);
       applyBulkAction(root, state, render, ids, (starredRow && starredRow.starred) ? 'unstar' : 'star');
       return;
     }
 
     if (action === 'print') {
-      openMailInWindow(root, ids[0], { print: true });
+      var printId = (!selectedEmailCount(state) && state.selectedId) ? state.selectedId : ids[0];
+      openMailInWindow(root, printId, { print: true });
       return;
     }
 
@@ -12958,6 +13030,9 @@
     // Selection can move without going through openMailMessage; this catches
     // those cases rather than leaving the pane on a stale conversation.
     ensureThreadLoaded(root, state, render);
+    // Morph can reuse toolbar buttons without clearing the disabled property;
+    // sync from the open message / ticks after every patch.
+    updateEmailToolbar(root, state);
     // Grow any open message to its full height (see sizeMessageFrames).
     sizeMessageFrames(root);
     wireAttachmentPreviews(root);
