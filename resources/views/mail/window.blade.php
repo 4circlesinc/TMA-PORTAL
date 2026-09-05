@@ -179,7 +179,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/dashboard.css?v=292">
+  <link rel="stylesheet" href="/css/dashboard.css?v=293">
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
@@ -203,27 +203,31 @@
           ['id' => 'print', 'label' => 'Print', 'icon' => 'Printer', 'menu' => false, 'active' => false],
       ];
     @endphp
-    <div class="tma-dash__email-detail-tools" data-email-detail-tools role="toolbar" aria-label="Message tools"
+    <div class="tma-dash__email-toolbar tma-dash__email-detail-tools" data-email-detail-tools role="toolbar" aria-label="Message tools"
          data-message-id="{{ $opened->uuid }}"
          data-folder="{{ $opened->folder }}"
          data-unread="{{ $isUnread ? '1' : '0' }}"
          data-important="{{ $isImportant ? '1' : '0' }}"
          data-starred="{{ $isStarred ? '1' : '0' }}">
-      @foreach($detailTools as $tool)
-        <button type="button"
-                class="tma-dash__email-detail-tool{{ !empty($tool['active']) ? ' tma-dash__email-detail-tool--active' : '' }}"
-                data-email-detail-tool="{{ $tool['id'] }}"
-                @if(!empty($tool['menu'])) aria-haspopup="menu" aria-expanded="false" @endif
-                aria-label="{{ $tool['label'] }}">
-          <img src="{{ $icon($tool['icon']) }}" alt="">
-          <span class="tma-dash__email-detail-tool-label">
-            {{ $tool['label'] }}
-            @if(!empty($tool['menu']))
-              <img class="tma-dash__email-detail-tool-caret" src="{{ $icon('CaretDown') }}" alt="">
-            @endif
-          </span>
-        </button>
-      @endforeach
+      <div class="tma-dash__toolbar-actions">
+        <div class="tma-dash__email-toolbar-actions">
+          @foreach($detailTools as $tool)
+            <button type="button"
+                    class="tma-dash__tool-btn tma-dash__email-toolbar-btn{{ !empty($tool['active']) ? ' tma-dash__email-detail-tool--active' : '' }}"
+                    data-email-detail-tool="{{ $tool['id'] }}"
+                    @if(!empty($tool['menu'])) aria-haspopup="menu" aria-expanded="false" @endif
+                    aria-label="{{ $tool['label'] }}">
+              <img src="{{ $icon($tool['icon']) }}" alt="">
+              <span class="tma-dash__email-toolbar-btn-label tma-dash__email-detail-tool-label">
+                {{ $tool['label'] }}
+                @if(!empty($tool['menu']))
+                  <img class="tma-dash__email-detail-tool-caret" src="{{ $icon('CaretDown') }}" alt="">
+                @endif
+              </span>
+            </button>
+          @endforeach
+        </div>
+      </div>
     </div>
     <div class="tma-dash__email-detail-subject-bar">
       <div class="tma-dash__email-detail-subject">

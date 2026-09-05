@@ -303,6 +303,7 @@ class MailConversationListTest extends TestCase
         $response->assertSee('The numbers are attached.', escape: false);
 
         $response->assertSee('tma-dash__email-detail-tools', false);
+        $response->assertSee('tma-dash__email-toolbar-btn', false);
         $response->assertSee('data-email-detail-tool="delete"', false);
         $response->assertSee('data-email-detail-tool="archive"', false);
         $response->assertSee('data-email-detail-tool="move"', false);

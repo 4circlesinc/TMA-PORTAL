@@ -10017,6 +10017,18 @@
     padding: 0;
     justify-content: center;
   }
+
+  /* A mail window is often narrower than the inbox, but the labels still
+     need to sit beside the icons the way they do on the mailbox toolbar. */
+  html.tma-dash--mail-window .tma-dash__email-toolbar-btn-label {
+    display: inline-flex;
+  }
+
+  html.tma-dash--mail-window .tma-dash__email-toolbar-btn.tma-dash__tool-btn {
+    width: auto;
+    padding: 0 var(--space-8);
+    justify-content: flex-start;
+  }
 }
 
 .tma-dash__email-topbar {
@@ -13166,6 +13178,27 @@ html.tma-dash.tma-dash--mail-window body {
 .tma-dash--mail-window a.tma-dash__email-thread-btn {
   color: inherit;
   text-decoration: none;
+}
+
+/* Same ribbon as the inbox toolbar: grey card, icon beside the label. */
+html.tma-dash--mail-window .tma-dash__email-detail-tools.tma-dash__email-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-12);
+  min-height: 48px;
+  margin: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-16);
+  background: var(--color-hover, rgba(0, 0, 0, 0.03));
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-actions {
+  flex: 1 1 auto;
 }
 
 @media print {
