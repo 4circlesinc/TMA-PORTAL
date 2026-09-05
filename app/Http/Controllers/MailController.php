@@ -903,7 +903,7 @@ class MailController extends Controller
         $message = $this->findMessage($request, $uuid);
 
         $this->hydrate($message);
-        $message->load(['labels', 'attachments']);
+        $message->load(['labels', 'attachments', 'account']);
 
         $messages = $message->thread_id
             ? MailMessage::query()
@@ -917,11 +917,61 @@ class MailController extends Controller
                 ->map(fn (MailMessage $m) => $m->id === $message->id ? $message : $m)
             : collect([$message]);
 
+        $avatars = collect($this->withThreadAvatars($messages))->mapWithKeys(function (array $row) {
+            $id = (string) ($row['id'] ?? '');
+            if ($id === '') {
+                return [];
+            }
+            $url = $row['avatarUrl'] ?? null;
+            if (is_string($url) && $url !== '') {
+                return [$id => $url];
+            }
+            $name = trim((string) ($row['fromName'] ?? $row['sender'] ?? '')) ?: '?';
+            $seed = trim((string) ($row['email'] ?? '')) ?: $name;
+
+            return [$id => self::initialsDataUri($name, $seed)];
+        })->all();
+
         return response()->view('mail.window', [
             'opened' => $message,
             'messages' => $messages,
             'subject' => $messages->first()?->subject ?: '(no subject)',
+            'avatars' => $avatars,
+            'mailboxEmail' => $message->account?->email ?: $request->user()->email,
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * The same coloured initials chip current-user.js draws, so a conversation
+     * window matches the inbox when no sender photo is on file.
+     */
+    private static function initialsDataUri(string $displayName, string $seed): string
+    {
+        $trimmed = trim($displayName) !== '' ? trim($displayName) : '?';
+        $words = preg_split('/\s+/', $trimmed) ?: ['?'];
+        $initials = strtoupper(implode('', array_map(
+            static fn (string $word) => mb_substr($word, 0, 1),
+            array_slice($words, 0, 2)
+        )));
+        if ($initials === '') {
+            $initials = '?';
+        }
+
+        $colors = ['#136da0', '#03a5e9', '#0f9d8c', '#3f9142', '#c77d18', '#b5497e', '#3b6fb8'];
+        $n = 0;
+        $s = $seed !== '' ? $seed : $displayName;
+        $len = strlen($s);
+        for ($i = 0; $i < $len; $i++) {
+            $n = ($n + ord($s[$i])) % 997;
+        }
+        $bg = $colors[$n % count($colors)];
+        $safe = htmlspecialchars($initials, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">'
+            .'<rect width="40" height="40" rx="20" fill="'.$bg.'"/>'
+            .'<text x="20" y="21" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" '
+            .'fill="#ffffff" text-anchor="middle" dominant-baseline="central">'.$safe.'</text></svg>';
+
+        return 'data:image/svg+xml,'.rawurlencode($svg);
     }
 
     /**

@@ -6,8 +6,9 @@
   server-side: the whole reason it exists is that the mail should be readable
   the instant the window appears, so there is no boot, no fetch and no spinner.
 
-  Message bodies are attacker-controlled, so each one renders inside a
-  sandboxed, script-free iframe, the same rule the reading pane follows.
+  Chrome matches the inbox reading pane (subject bar, message head, footer
+  Reply / Reply all / Forward). Message bodies are attacker-controlled, so
+  each one still renders inside a sandboxed, script-free iframe.
 --}}
 @php
   /** Address arrays are stored as [{name, email}]; render them the way a mail client does. */
@@ -29,6 +30,33 @@
           ->implode(', ');
   };
 
+  $addressLabel = static function (mixed $a): string {
+      if (is_string($a)) {
+          return $a;
+      }
+      if (! is_array($a)) {
+          return '';
+      }
+      $name = trim((string) ($a['name'] ?? ''));
+      $email = trim((string) ($a['email'] ?? ''));
+
+      return $name !== '' ? $name : $email;
+  };
+
+  $toShort = static function (?array $list) use ($addressLabel): string {
+      $items = collect($list ?? [])->filter();
+      if ($items->isEmpty()) {
+          return 'me';
+      }
+      $first = $addressLabel($items->first());
+      $extra = $items->count() - 1;
+      if ($extra > 0) {
+          return $first.' and '.$extra.' other'.($extra === 1 ? '' : 's');
+      }
+
+      return $first !== '' ? $first : 'me';
+  };
+
   /**
    * The frame document for one body. :where() keeps the resets at zero
    * specificity so the sender's own styling still wins.
@@ -37,180 +65,223 @@
       return '<!doctype html><html><head><meta charset="utf-8">'
           .'<meta name="referrer" content="no-referrer"><style>'
           .':where(html){margin:0;padding:0;}'
-          .':where(body){margin:0;padding:20px 24px;box-sizing:border-box;'
+          .':where(body){margin:0;padding:20px 24px 12px;box-sizing:border-box;'
           .'font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;'
-          .'color:#1c1c1c;word-wrap:break-word;overflow-wrap:anywhere;}'
+          .'color:#1c1c1c;background:#fff;word-wrap:break-word;overflow-wrap:anywhere;}'
           .':where(img){max-width:100%;height:auto;}'
           .'</style></head><body>'.$html.'</body></html>';
   };
+
+  $icon = static fn (string $name): string => '/images/icons/phosphor/'.$name.'.svg';
+  $composeUrl = static fn (string $uuid, string $mode): string => '/email?message='.urlencode($uuid).'&compose='.$mode;
+  $lastId = $messages->last()?->id;
 @endphp
 <!doctype html>
-<html lang="en">
+<html lang="en" class="tma-dash tma-dash--email tma-dash--mail-window">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>{{ $subject }}</title>
-  <link rel="icon" href="/images/logo/favicon.svg">
+  <link rel="icon" type="image/png" href="/images/brand/tma/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--color-bg-page, #f5f7fa);
-      color: var(--color-text-primary, #1c1c1c);
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .mw { max-width: 900px; margin: 0 auto; padding: 24px 20px 48px; }
-    .mw__bar {
-      position: sticky; top: 0; z-index: 2;
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-      padding: 12px 20px;
-      background: var(--color-white, #fff);
-      border-bottom: 1px solid var(--color-overlay-4, rgba(0, 0, 0, 0.06));
-    }
-    .mw__bar-title {
-      flex: 1 1 240px; min-width: 0;
-      font-size: 15px; font-weight: 600;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .mw__btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
-      border: 1px solid var(--color-overlay-8, rgba(0, 0, 0, 0.1));
-      border-radius: var(--radius-8, 8px);
-      background: var(--color-white, #fff);
-      color: inherit; font: inherit; font-size: 13px;
-      text-decoration: none; cursor: pointer;
-    }
-    .mw__btn:hover { background: var(--color-hover, rgba(0, 0, 0, 0.04)); }
-    .mw__btn--primary {
-      background: var(--color-primary, #03a5e9);
-      border-color: transparent; color: #fff;
-    }
-    .mw__btn--primary:hover { background: var(--color-primary-dark, #0288c2); }
-    .mw__head { margin: 24px 0 16px; }
-    .mw__subject { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
-    .mw__count { margin: 4px 0 0; font-size: 12px; color: var(--color-text-secondary, #666); }
-    .mw__msg {
-      background: var(--color-white, #fff);
-      border: 1px solid var(--color-overlay-4, rgba(0, 0, 0, 0.06));
-      border-radius: var(--radius-12, 12px);
-      margin-bottom: 16px;
-      overflow: hidden;
-    }
-    .mw__msg-head {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 16px 20px 12px;
-    }
-    .mw__avatar {
-      flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--color-hover, rgba(0, 0, 0, 0.06));
-      font-weight: 600; font-size: 15px; overflow: hidden;
-    }
-    .mw__avatar img { width: 100%; height: 100%; object-fit: cover; }
-    .mw__who { flex: 1 1 auto; min-width: 0; }
-    .mw__name { font-weight: 600; }
-    .mw__from { font-size: 12px; color: var(--color-text-secondary, #666); }
-    .mw__date { flex: 0 0 auto; font-size: 12px; color: var(--color-text-secondary, #666); }
-    .mw__fields {
-      margin: 0; padding: 0 20px 12px;
-      display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
-      font-size: 12px; color: var(--color-text-secondary, #666);
-    }
-    .mw__fields dt { font-weight: 600; text-transform: lowercase; }
-    .mw__fields dd { margin: 0; word-break: break-word; }
-    .mw__body { width: 100%; border: 0; display: block; background: #fff; }
-    .mw__plain {
-      margin: 0; padding: 16px 24px 20px;
-      font: inherit; white-space: pre-wrap; word-break: break-word;
-    }
-    .mw__files {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      padding: 12px 20px 16px;
-      border-top: 1px solid var(--color-overlay-4, rgba(0, 0, 0, 0.06));
-    }
-    .mw__file {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 10px;
-      border: 1px solid var(--color-overlay-8, rgba(0, 0, 0, 0.1));
-      border-radius: var(--radius-8, 8px);
-      font-size: 12px; color: inherit; text-decoration: none;
-    }
-    .mw__file:hover { background: var(--color-hover, rgba(0, 0, 0, 0.04)); }
-    @media print {
-      .mw__bar { display: none; }
-      .mw__msg { border: 0; }
-    }
-  </style>
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/dashboard.css?v=289">
 </head>
 <body>
-  <div class="mw__bar">
-    <span class="mw__bar-title">{{ $subject }}</span>
-    <a class="mw__btn mw__btn--primary" href="/email?message={{ $opened->uuid }}&amp;compose=reply">Reply</a>
-    <a class="mw__btn" href="/email?message={{ $opened->uuid }}&amp;compose=reply-all">Reply all</a>
-    <a class="mw__btn" href="/email?message={{ $opened->uuid }}&amp;compose=forward">Forward</a>
-    <button type="button" class="mw__btn" onclick="window.print()">Print</button>
-    <a class="mw__btn" href="/email?message={{ $opened->uuid }}">Open in mailbox</a>
-  </div>
-
-  <div class="mw">
-    <div class="mw__head">
-      <h1 class="mw__subject">{{ $subject }}</h1>
-      @if($messages->count() > 1)
-        <p class="mw__count">{{ $messages->count() }} messages in this conversation</p>
-      @endif
+  <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
+    <div class="tma-dash__email-detail-subject-bar">
+      <div class="tma-dash__email-detail-subject">
+        <span class="tma-dash__email-detail-subject-text">{{ $subject }}</span>
+        <span class="tma-dash__email-detail-subject-trailing">
+          <button type="button" class="tma-dash__email-action" title="Print" aria-label="Print" onclick="window.print()">
+            <img src="{{ $icon('Printer') }}" alt="">
+          </button>
+          <a class="tma-dash__email-action" href="/email?message={{ $opened->uuid }}" title="Open in mailbox" aria-label="Open in mailbox">
+            <img src="{{ $icon('ArrowSquareOut') }}" alt="">
+          </a>
+        </span>
+      </div>
     </div>
 
-    @foreach($messages as $m)
-      @php
-        $name = $m->from_name ?: $m->from_email;
-        $to = $addresses($m->to);
-        $cc = $addresses($m->cc);
-        $bcc = $addresses($m->bcc);
-      @endphp
-      <article class="mw__msg">
-        <div class="mw__msg-head">
-          <span class="mw__avatar">{{ mb_strtoupper(mb_substr($name ?: '?', 0, 1)) }}</span>
-          <span class="mw__who">
-            <span class="mw__name">{{ $name }}</span>
-            <span class="mw__from">&lt;{{ $m->from_email }}&gt;</span>
-          </span>
-          <time class="mw__date">{{ $m->sent_at?->format('M j, Y, g:i A') }}</time>
+    <div class="tma-dash__email-detail-scroll">
+      <div class="tma-dash__email-thread">
+        @foreach($messages as $m)
+          @php
+            $name = $m->from_name ?: $m->from_email ?: '?';
+            $fromEmail = (string) $m->from_email;
+            $to = $addresses($m->to);
+            $cc = $addresses($m->cc);
+            $bcc = $addresses($m->bcc);
+            $replyTo = is_string($m->reply_to) ? $m->reply_to : $addresses(is_array($m->reply_to) ? $m->reply_to : null);
+            $metaDate = $m->sent_at?->format('M j, Y, g:i A') ?? '';
+            $sentAt = $m->sent_at?->toIso8601String();
+            $avatar = $avatars[$m->uuid] ?? null;
+            $initials = mb_strtoupper(implode('', array_map(
+                static fn (string $word) => mb_substr($word, 0, 1),
+                array_slice(preg_split('/\s+/', $name) ?: ['?'], 0, 2)
+            ))) ?: '?';
+            $isCurrent = $m->id === $opened->id;
+            $isPrior = $m->id !== $lastId;
+            $msgSubject = $m->subject ?: '(no subject)';
+            $inlineCount = $m->attachments->where('is_inline', true)->count();
+            $fileCount = $m->attachments->count() - $inlineCount;
+          @endphp
+          <article class="tma-dash__email-message tma-dash__email-message--expanded{{ $isCurrent ? ' tma-dash__email-message--current' : '' }}{{ $isPrior ? ' tma-dash__email-message--prior' : '' }}">
+            <div class="tma-dash__email-message-head-wrap">
+              <div class="tma-dash__email-message-head">
+                <div class="tma-dash__email-message-head-main">
+                  <span class="tma-dash__email-message-avatar{{ $avatar ? '' : ' tma-dash__email-message-avatar--initial' }}" data-initials="{{ $initials }}">
+                    @if($avatar)
+                      <img src="{{ $avatar }}" alt=""
+                           onerror="var s=this.closest('.tma-dash__email-message-avatar');s.classList.add('tma-dash__email-message-avatar--initial');s.textContent=s.getAttribute('data-initials')||'?';">
+                    @else
+                      {{ $initials }}
+                    @endif
+                  </span>
+                  <div class="tma-dash__email-message-head-identity">
+                    <div class="tma-dash__email-message-head-line">
+                      <span class="tma-dash__email-message-head-name">{{ $name }}</span>
+                    </div>
+                    <div class="tma-dash__email-message-head-recipient">
+                      <button type="button" class="tma-dash__email-message-head-to" data-email-header-details-toggle aria-expanded="false">
+                        <span class="tma-dash__email-message-head-to-label">to {{ $toShort($m->to) }}</span>
+                        <span class="tma-dash__email-message-head-to-caret-wrap" aria-hidden="true">
+                          <img src="{{ $icon('CaretDown') }}" alt="" class="tma-dash__email-message-head-to-caret">
+                        </span>
+                      </button>
+                      <div class="tma-dash__email-header-details" data-email-header-details-panel hidden>
+                        <dl class="tma-dash__email-header-details-list">
+                          <div class="tma-dash__email-header-details-row">
+                            <dt>from:</dt>
+                            <dd><strong>{{ $name }}</strong>@if($fromEmail !== '') &lt;{{ $fromEmail }}&gt;@endif</dd>
+                          </div>
+                          @if($replyTo !== '' && strcasecmp($replyTo, $fromEmail) !== 0)
+                            <div class="tma-dash__email-header-details-row">
+                              <dt>reply-to:</dt><dd>{{ $replyTo }}</dd>
+                            </div>
+                          @endif
+                          <div class="tma-dash__email-header-details-row">
+                            <dt>to:</dt><dd>{{ $to !== '' ? $to : $mailboxEmail }}</dd>
+                          </div>
+                          @if($cc !== '')
+                            <div class="tma-dash__email-header-details-row">
+                              <dt>cc:</dt><dd>{{ $cc }}</dd>
+                            </div>
+                          @endif
+                          @if($bcc !== '')
+                            <div class="tma-dash__email-header-details-row">
+                              <dt>bcc:</dt><dd>{{ $bcc }}</dd>
+                            </div>
+                          @endif
+                          @if($metaDate !== '')
+                            <div class="tma-dash__email-header-details-row">
+                              <dt>date:</dt><dd @if($sentAt) data-sent-at="{{ $sentAt }}" @endif>{{ $metaDate }}</dd>
+                            </div>
+                          @endif
+                          <div class="tma-dash__email-header-details-row">
+                            <dt>subject:</dt><dd>{{ $msgSubject }}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="tma-dash__email-message-head-side">
+                  @if($sentAt)
+                    <time class="tma-dash__email-detail-date" datetime="{{ $sentAt }}" data-sent-at="{{ $sentAt }}">{{ $metaDate }}</time>
+                  @elseif($metaDate !== '')
+                    <time class="tma-dash__email-detail-date">{{ $metaDate }}</time>
+                  @endif
+                  <div class="tma-dash__email-detail-actions">
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply') }}" title="Reply" aria-label="Reply">
+                      <img src="{{ $icon('ArrowBendUpLeft') }}" alt="">
+                    </a>
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'reply-all') }}" title="Reply all" aria-label="Reply all">
+                      <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt="">
+                    </a>
+                    <a class="tma-dash__email-action" href="{{ $composeUrl($m->uuid, 'forward') }}" title="Forward" aria-label="Forward">
+                      <img src="{{ $icon('ArrowBendUpRight') }}" alt="">
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            @if($m->body_html)
+              <div class="tma-dash__email-body tma-dash__email-body--html">
+                <iframe class="tma-dash__email-body-frame" title="Message content" sandbox="allow-same-origin"
+                        referrerpolicy="no-referrer" onload="tmaFitFrame(this)"
+                        srcdoc="{{ $frame($m->body_html) }}"></iframe>
+              </div>
+            @else
+              <div class="tma-dash__email-body">
+                <pre class="tma-dash__email-body-plain">{{ $m->body_text ?: $m->snippet }}</pre>
+              </div>
+            @endif
+
+            @if($m->attachments->isNotEmpty())
+              @php
+                $heading = $m->attachments->count().' attachment'.($m->attachments->count() === 1 ? '' : 's');
+                if ($inlineCount && $fileCount) {
+                    $heading = $fileCount.' attachment'.($fileCount === 1 ? '' : 's')
+                        .' · '.$inlineCount.' embedded image'.($inlineCount === 1 ? '' : 's');
+                } elseif ($inlineCount && ! $fileCount) {
+                    $heading = $inlineCount.' embedded image'.($inlineCount === 1 ? '' : 's');
+                }
+              @endphp
+              <div class="tma-dash__email-attachments">
+                <div class="tma-dash__email-attachments-head">
+                  <img src="{{ $icon('PaperclipHorizontal') }}" alt="" aria-hidden="true">
+                  {{ $heading }}
+                </div>
+                <div class="tma-dash__email-attachments-list">
+                  @foreach($m->attachments as $a)
+                    @php
+                      $mime = (string) $a->mime_type;
+                      $isImage = in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true);
+                    @endphp
+                    <a class="tma-dash__email-attachment-tile{{ $isImage ? '' : ' tma-dash__email-attachment-tile--icon' }}"
+                       href="/portal/mail/attachments/{{ $a->uuid }}">
+                      <div class="tma-dash__email-attachment-tile-preview">
+                        @if($isImage)
+                          <img src="/portal/mail/attachments/{{ $a->uuid }}?inline=1" alt="" loading="lazy">
+                        @else
+                          <img class="tma-dash__email-attachment-tile-icon-img" src="{{ $icon('Paperclip') }}" alt="">
+                        @endif
+                      </div>
+                      <div class="tma-dash__email-attachment-tile-bar">
+                        <img class="tma-dash__email-attachment-tile-bar-icon" src="{{ $icon('Paperclip') }}" alt="">
+                        <span class="tma-dash__email-attachment-tile-name" title="{{ $a->filename }}">{{ $a->filename }}</span>
+                      </div>
+                    </a>
+                  @endforeach
+                </div>
+              </div>
+            @endif
+          </article>
+        @endforeach
+      </div>
+    </div>
+
+    <div class="tma-dash__email-detail-footer">
+      <div class="tma-dash__email-thread-actions">
+        <div class="tma-dash__email-thread-btns">
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply') }}">
+            <img src="{{ $icon('ArrowBendUpLeft') }}" alt=""> Reply
+          </a>
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'reply-all') }}">
+            <img src="{{ $icon('ArrowBendDoubleUpLeft') }}" alt=""> Reply all
+          </a>
+          <a class="tma-dash__email-thread-btn" href="{{ $composeUrl($opened->uuid, 'forward') }}">
+            <img src="{{ $icon('ArrowBendUpRight') }}" alt=""> Forward
+          </a>
         </div>
-
-        <dl class="mw__fields">
-          <dt>to:</dt><dd>{{ $to !== '' ? $to : '-' }}</dd>
-          @if($cc !== '')<dt>cc:</dt><dd>{{ $cc }}</dd>@endif
-          @if($bcc !== '')<dt>bcc:</dt><dd>{{ $bcc }}</dd>@endif
-          <dt>subject:</dt><dd>{{ $m->subject ?: '(no subject)' }}</dd>
-        </dl>
-
-        @if($m->body_html)
-          <iframe class="mw__body" title="Message content" sandbox="allow-same-origin"
-                  referrerpolicy="no-referrer" onload="tmaFitFrame(this)"
-                  srcdoc="{{ $frame($m->body_html) }}"></iframe>
-        @else
-          <pre class="mw__plain">{{ $m->body_text ?: $m->snippet }}</pre>
-        @endif
-
-        @if($m->attachments->isNotEmpty())
-          <div class="mw__files">
-            @foreach($m->attachments as $a)
-              {{-- No ?inline, the plain attachment URL downloads, which is
-                   what a paperclip in a read-only window should do. --}}
-              <a class="mw__file" href="/portal/mail/attachments/{{ $a->uuid }}">
-                <img src="/images/icons/phosphor/PaperclipHorizontal.svg" alt="" width="14" height="14">
-                <span>{{ $a->filename }}</span>
-              </a>
-            @endforeach
-          </div>
-        @endif
-      </article>
-    @endforeach
+      </div>
+    </div>
   </div>
 
   <script>
@@ -220,6 +291,71 @@
          bodies have been measured. */
       window.addEventListener('load', function () { window.setTimeout(function () { window.print(); }, 600); });
     @endif
+
+    document.querySelectorAll('[data-sent-at]').forEach(function (el) {
+      var when = new Date(el.getAttribute('data-sent-at'));
+      if (isNaN(when.getTime())) return;
+      try {
+        el.textContent = when.toLocaleString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit'
+        });
+      } catch (e) { /* keep the server-rendered label */ }
+    });
+
+    function closeHeaderDetails(except) {
+      document.querySelectorAll('[data-email-header-details-toggle]').forEach(function (btn) {
+        if (btn === except) return;
+        btn.setAttribute('aria-expanded', 'false');
+        btn.classList.remove('tma-dash__email-message-head-to--open');
+        var wrap = btn.closest('.tma-dash__email-message-head-recipient');
+        var panel = wrap && wrap.querySelector('[data-email-header-details-panel]');
+        if (!panel) return;
+        panel.hidden = true;
+        panel.style.top = '';
+        panel.style.left = '';
+      });
+    }
+
+    function positionHeaderDetails(anchor, menu) {
+      var rect = anchor.getBoundingClientRect();
+      menu.hidden = false;
+      menu.style.right = 'auto';
+      menu.style.bottom = 'auto';
+      menu.style.top = '-9999px';
+      menu.style.left = '-9999px';
+      var menuRect = menu.getBoundingClientRect();
+      var top = rect.bottom + 4;
+      var left = rect.left;
+      if (left + menuRect.width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - menuRect.width - 8);
+      }
+      if (top + menuRect.height > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - menuRect.height - 4);
+      }
+      menu.style.top = Math.round(top) + 'px';
+      menu.style.left = Math.round(left) + 'px';
+    }
+
+    document.addEventListener('click', function (event) {
+      if (event.target.closest('[data-email-header-details-panel]')) return;
+      var toggle = event.target.closest('[data-email-header-details-toggle]');
+      closeHeaderDetails(toggle);
+      if (!toggle) return;
+      var wrap = toggle.closest('.tma-dash__email-message-head-recipient');
+      var panel = wrap && wrap.querySelector('[data-email-header-details-panel]');
+      if (!panel) return;
+      var open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      toggle.classList.toggle('tma-dash__email-message-head-to--open', !open);
+      if (open) {
+        panel.hidden = true;
+        panel.style.top = '';
+        panel.style.left = '';
+        return;
+      }
+      positionHeaderDetails(toggle, panel);
+    });
 
     /* Grow each frame to its content so the window scrolls once, not twice. */
     function tmaFitFrame(frame) {

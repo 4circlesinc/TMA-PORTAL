@@ -300,6 +300,16 @@ class MailConversationListTest extends TestCase
         $response->assertSee('Quarterly review');
         $response->assertSee('sam@example.com');
         $response->assertSee('The numbers are attached.', escape: false);
+
+        // Same reading-pane chrome as the inbox, not the portal shell and not
+        // a separate gray-card layout.
+        $response->assertSee('tma-dash__email-detail', false);
+        $response->assertSee('tma-dash__email-message-head-name', false);
+        $response->assertSee('tma-dash__email-thread-btn', false);
+        $response->assertSee('to Test User', false);
+        $response->assertDontSee('tma-dash__sidebar', false);
+        $response->assertDontSee('mw__bar', false);
+        $response->assertDontSee('mw__msg', false);
     }
 
     public function test_another_users_message_has_no_window(): void

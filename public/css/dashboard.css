@@ -13127,6 +13127,53 @@ html.tma-dash--compose-popout body {
   margin: 0;
 }
 
+/* Conversation in its own window: the inbox reading pane, full viewport,
+   without the mailbox grid (sidebar / list) the .tma-dash shell assumes. */
+html.tma-dash.tma-dash--mail-window,
+html.tma-dash.tma-dash--mail-window body {
+  margin: 0;
+  height: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--color-white);
+}
+
+html.tma-dash.tma-dash--mail-window {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+  grid-template-rows: none;
+}
+
+html.tma-dash.tma-dash--mail-window body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tma-dash__email-detail.tma-dash__email-detail--window {
+  flex: 1 1 auto;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.tma-dash--mail-window a.tma-dash__email-action,
+.tma-dash--mail-window a.tma-dash__email-thread-btn {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media print {
+  .tma-dash--mail-window .tma-dash__email-detail-footer,
+  .tma-dash--mail-window .tma-dash__email-detail-actions,
+  .tma-dash--mail-window .tma-dash__email-detail-subject-trailing {
+    display: none !important;
+  }
+}
+
 .tma-dash__email-detail--compose > .tma-dash__email-compose-window-head {
   flex-shrink: 0;
   background: transparent;
