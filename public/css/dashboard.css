@@ -18128,9 +18128,10 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     display: none;
     align-items: center;
     flex-shrink: 0;
-    padding: var(--space-8) 0 var(--space-4);
-    padding-left: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
-    padding-right: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-right, 0px));
+    margin: var(--space-8) max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-right, 0px)) var(--space-4) max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
+    padding: var(--space-8);
+    background: var(--color-bg-card);
+    border-radius: var(--radius-16);
   }
 
   .tma-dash__messages-list-mobile-head .tma-dash__messages-search {
@@ -18147,8 +18148,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   }
 
   .tma-dash--messages-mobile .tma-dash__messages-list-tools .tma-dash__messages-icon-btn,
-  .tma-dash--messages-mobile .tma-dash__messages-list-mobile-actions .tma-dash__messages-icon-btn,
-  .tma-dash--messages-mobile .tma-dash__messages-chat-actions .tma-dash__messages-icon-btn {
+  .tma-dash--messages-mobile .tma-dash__messages-list-mobile-actions .tma-dash__messages-icon-btn {
     min-width: 44px;
     min-height: 44px;
     padding: var(--space-8);
@@ -18202,12 +18202,125 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     display: none;
   }
 
+  /*
+   * Open chat on a phone: the header sits in the column, not over it.
+   * Desktop floats a transparent bar so the thread can scroll underneath;
+   * that is what let day labels ("Wednesday") paint through the name and
+   * status. In-flow + the same card fill as the inbox search keeps the
+   * thread below the bar.
+   */
   .tma-dash--messages-mobile-reading .tma-dash__messages-chat-head {
-    padding-top: calc(var(--space-12) + env(safe-area-inset-top, 0px));
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: 8;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-8);
+    min-width: 0;
+    overflow: hidden;
+    padding-top: calc(var(--space-8) + env(safe-area-inset-top, 0px));
+    padding-bottom: var(--space-8);
+    background: var(--color-bg-card);
+    pointer-events: auto;
+    border-bottom: 0.5px solid var(--color-overlay-8, var(--color-overlay-4));
   }
 
   .tma-dash--messages-mobile-reading .tma-dash__messages-chat-body {
-    padding-top: calc(40px + var(--space-12) + var(--space-16) + env(safe-area-inset-top, 0px));
+    padding-top: var(--space-12);
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact {
+    gap: var(--space-8);
+    min-width: 0;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-back {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-back--unread {
+    width: auto;
+    padding-right: var(--space-4);
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-back-count {
+    font-size: var(--text-size-12);
+    line-height: 16px;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact .tma-dash__messages-row-icon,
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact .tma-dash__messages-row-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact .tma-dash__messages-row-avatar--user img {
+    width: 16px;
+    height: 16px;
+    margin: 8px;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact .tma-dash__messages-row-avatar-part {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-contact-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-name,
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-name-link {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-presence,
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-subtitle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-presence > span:last-of-type,
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-subtitle {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-actions {
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-actions .tma-dash__messages-icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+    width: 36px;
+    height: 36px;
+    padding: var(--space-6);
+  }
+
+  @media (max-width: 360px) {
+    .tma-dash--messages-mobile-reading .tma-dash__messages-chat-actions [data-messages-call="video"] {
+      display: none;
+    }
   }
 
   .tma-dash--messages-mobile .tma-dash__main {

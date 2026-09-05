@@ -277,8 +277,28 @@
     return isDirectThread(row) ? { lastSeen: 'Last seen recently' } : {};
   }
 
+  /*
+   * Phone headers cannot fit "Offline · Tuesday at 12:18 AM". Drop the clock
+   * and keep the weekday / relative clause, so the line ellipsizes instead of
+   * wrapping through the thread.
+   */
+  function compactPresenceLabel(label) {
+    return String(label || '')
+      .replace(/\s+at\s+\d{1,2}:\d{2}(?:\s*[AP]M)?/i, '')
+      .replace(/^Last seen /i, '');
+  }
+
+  function wrapPresence(cls, inner) {
+    return (
+      '<span class="tma-dash__messages-chat-presence' + (cls ? ' ' + cls : '') + '">' +
+      inner +
+      '</span>'
+    );
+  }
+
   function renderPresence(row) {
     var presence = threadPresence(row);
+    var compact = isMessagesMobile();
 
     // A live typing / recording indicator outranks online-or-last-seen.
     // Live typing is not part of `row.presence`, it is transient socket
@@ -287,10 +307,9 @@
     var typing = typingLabel(row);
 
     if (typing || presence.typing) {
-      return (
-        '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--typing">' +
-        esc(typing || (presence.typing === 'recording' ? 'Recording voice note…' : 'Typing…')) +
-        '</span>'
+      return wrapPresence(
+        'tma-dash__messages-chat-presence--typing',
+        '<span>' + esc(typing || (presence.typing === 'recording' ? 'Recording voice note…' : 'Typing…')) + '</span>'
       );
     }
 
@@ -300,24 +319,25 @@
       if (row.subtitle) return '';
       var groupLabel = groupCountLabel(row);
       return groupLabel
-        ? '<span class="tma-dash__messages-chat-presence">' + esc(groupLabel) + '</span>'
+        ? wrapPresence('', '<span>' + esc(groupLabel) + '</span>')
         : '';
     }
 
     if (presence.statusLabel && window.TMAPresence) {
       var statusHtml = window.TMAPresence.iconHtml(presence.statusIcon || presence.status, 8);
-      return (
-        '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--status">' +
-        statusHtml +
-        '<span>' + esc(window.TMAPresence.labelFor(presence)) + '</span></span>'
+      var statusLabel = window.TMAPresence.labelFor(presence);
+      if (compact) statusLabel = compactPresenceLabel(statusLabel);
+      return wrapPresence(
+        'tma-dash__messages-chat-presence--status',
+        statusHtml + '<span>' + esc(statusLabel) + '</span>'
       );
     }
 
     if (presence.online) {
-      return (
-        '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
+      return wrapPresence(
+        'tma-dash__messages-chat-presence--online',
         '<span class="tma-dash__messages-chat-presence-dot" aria-hidden="true"></span>' +
-        '<span>Online</span></span>'
+        '<span>Online</span>'
       );
     }
 
@@ -327,7 +347,17 @@
     if (!label || /^offline$/i.test(String(label).trim()) || /^group chat$/i.test(String(label).trim())) {
       label = 'Last seen recently';
     }
-    return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
+    if (compact) {
+      var shortSeen = (presence.lastSeenAt || presence.last_seen_at) && window.TMALastSeen
+        ? window.TMALastSeen.short(presence.lastSeenAt || presence.last_seen_at)
+        : null;
+      if (!shortSeen) {
+        var stripped = compactPresenceLabel(label);
+        if (stripped && !/^recently$/i.test(stripped)) shortSeen = stripped;
+      }
+      label = shortSeen ? 'Offline · ' + shortSeen : 'Offline';
+    }
+    return wrapPresence('', '<span>' + esc(label) + '</span>');
   }
 
   /* ------------------------------------------------------------- typing */
