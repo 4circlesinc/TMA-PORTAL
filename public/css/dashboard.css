@@ -12984,7 +12984,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-white);
+  background: var(--color-bg-card);
   transform: translate3d(0, 100%, 0);
   will-change: transform;
   backface-visibility: hidden;
@@ -13019,6 +13019,8 @@
 
 .tma-dash__email-detail--compose > .tma-dash__email-compose-window-head {
   flex-shrink: 0;
+  background: transparent;
+  border-bottom: none;
 }
 
 .tma-dash__email-detail--compose > .tma-dash__email-thread-actions--compose {
@@ -13028,6 +13030,8 @@
   min-height: 0;
   height: auto;
   max-height: none;
+  padding: var(--space-16);
+  box-sizing: border-box;
 }
 
 .tma-dash__email-detail--compose .tma-dash__email-compose-window-head .tma-dash__email-detail-back {
@@ -13879,8 +13883,8 @@
 }
 
 .tma-dash__email-inline-compose--pane {
-  border: none;
-  border-radius: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
   box-shadow: none;
   flex: 1 1 auto;
   min-height: 0;
@@ -15625,8 +15629,13 @@
 .tma-dash__email-compose-headers {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   width: 100%;
   max-width: 672px;
+  overflow: hidden;
+  background: var(--color-white);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
 }
 
 .tma-dash__email-compose-to,
@@ -15636,18 +15645,15 @@
   flex-wrap: wrap;
   gap: var(--space-8) var(--space-16);
   padding: var(--space-12) var(--space-16);
-  border: 1px solid var(--color-overlay-4);
+  border: 0;
+  border-bottom: 1px solid var(--color-border-soft);
+  border-radius: 0;
   font-size: var(--text-size-14);
   line-height: 20px;
 }
 
-.tma-dash__email-compose-to {
-  border-radius: var(--radius-16) var(--radius-16) 0 0;
-  border-bottom: none;
-}
-
-.tma-dash__email-compose-subject {
-  border-radius: 0 0 var(--radius-16) var(--radius-16);
+.tma-dash__email-compose-headers > :last-child {
+  border-bottom: 0;
 }
 
 .tma-dash__email-compose-label {
@@ -15896,7 +15902,8 @@
   flex-direction: column;
   width: 100%;
   max-width: 672px;
-  border: 1px solid var(--color-overlay-4);
+  background: var(--color-white);
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   overflow: hidden;
   position: relative;
@@ -16343,11 +16350,22 @@
   max-width: none;
   max-height: none;
   margin: 0;
+  background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.tma-dash__email-compose-window--pane .tma-dash__email-compose-window-head {
+  background: transparent;
+  border-bottom: none;
+}
+
+.tma-dash__email-compose-window--pane .tma-dash__email-compose-window-body .tma-dash__email-compose {
+  padding: var(--space-16);
+  gap: var(--space-16);
 }
 
 .tma-dash__email-detail--compose .tma-dash__email-compose-headers,
