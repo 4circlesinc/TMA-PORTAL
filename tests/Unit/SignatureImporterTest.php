@@ -377,6 +377,62 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('Thanks for the update', $signature);
     }
 
+    public function test_it_keeps_outlook_signature_text_that_sits_beside_the_logo(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->fakeOutlookReplyDraftUnavailable();
+
+        $this->sent(
+            $account,
+            '<p>See you Thursday.</p><div id="appendonsend"></div>'
+            .'<img src="https://cdn.example.com/logo.png" width="160" height="80" alt="Logo">'
+            .'<div id="Signature"><p>Kind Regards,</p><p><b>Vernon Francis</b></p>'
+            .'<p>Managing Director</p><p>1-555-0100</p></div>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringContainsString('Managing Director', $signature);
+        $this->assertStringContainsString('1-555-0100', $signature);
+        $this->assertStringContainsString('cdn.example.com/logo.png', $signature);
+        $this->assertStringNotContainsString('See you Thursday', $signature);
+    }
+
+    public function test_it_keeps_outlook_contact_lines_outside_an_image_only_wrapper(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$account->user_id,
+            'scopes' => ['Mail.ReadWrite'],
+        ])->save();
+
+        $this->fakeOutlookReplyDraftUnavailable();
+
+        $this->sent(
+            $account,
+            '<p>Thanks.</p><div id="appendonsend"></div>'
+            .'<div id="Signature"><img src="https://cdn.example.com/banner.png" width="160" height="80" alt=""></div>'
+            .'<p>Vernon Francis</p><p>Managing Director</p>'
+        );
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Vernon Francis', $signature);
+        $this->assertStringContainsString('Managing Director', $signature);
+        $this->assertStringContainsString('cdn.example.com/banner.png', $signature);
+        $this->assertStringNotContainsString('Thanks.', $signature);
+    }
+
     public function test_it_fetches_sent_bodies_when_the_local_row_has_none(): void
     {
         $account = $this->account();

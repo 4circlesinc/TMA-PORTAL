@@ -729,15 +729,50 @@ class SignatureImporter
             return null;
         }
 
-        $after = $this->stripQuotedContent($parts[1]);
+        $after = trim($this->stripQuotedContent($parts[1]));
+        if ($after === '') {
+            return null;
+        }
+
+        // #Signature is often just the logo card. Outlook then puts the name,
+        // title and phone as siblings after appendonsend. Narrowing to that
+        // wrapper used to import the picture and throw the text away.
         $known = $this->extractKnownWrapper($after);
-        if ($known !== null) {
+        if (is_string($known) && $this->wrapperCoversSignature($known, $after)) {
             return $known;
         }
 
-        $after = trim($after);
+        return $this->looksLikeSignature($after) ? $after : $known;
+    }
 
-        return $after !== '' && $this->looksLikeSignature($after) ? $after : null;
+    /**
+     * True when the named wrapper already has the same words and pictures as
+     * the bounded Outlook region. False when the logo or the contact lines
+     * live next to it instead of inside it.
+     */
+    private function wrapperCoversSignature(string $wrapper, string $full): bool
+    {
+        $wrapperText = $this->plainSignatureText($wrapper);
+        $fullText = $this->plainSignatureText($full);
+        $wrapperImgs = preg_match_all('/<img\b/i', $wrapper) ?: 0;
+        $fullImgs = preg_match_all('/<img\b/i', $full) ?: 0;
+
+        if ($fullImgs > $wrapperImgs) {
+            return false;
+        }
+
+        if ($fullText !== '' && $wrapperText === '') {
+            return false;
+        }
+
+        return mb_strlen($fullText) <= mb_strlen($wrapperText) + 20;
+    }
+
+    private function plainSignatureText(string $html): string
+    {
+        $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        return preg_replace('/\s+/u', ' ', $text) ?? $text;
     }
 
     /**
