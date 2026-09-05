@@ -480,7 +480,86 @@ class GraphProvider implements MailProvider
             $this->attachMissingInline($remoteId, $inline);
         }
 
+        $files = $draft['attachments'] ?? [];
+        if ($id !== '' && is_array($files) && $files !== []) {
+            $this->attachFiles($id, $files);
+        }
+
         return $id;
+    }
+
+    /**
+     * Ordinary file attachments (the paperclip / drag-and-drop files), not
+     * cid: signature images. Graph's JSON create only accepts ~3 MB in-line;
+     * anything larger uses an upload session.
+     *
+     * @param  list<array{name: string, mime: string, bytes: string}>  $files
+     */
+    private function attachFiles(string $remoteId, array $files): void
+    {
+        foreach ($files as $file) {
+            if (! is_array($file) || ! is_string($file['bytes'] ?? null) || $file['bytes'] === '') {
+                continue;
+            }
+            $name = OutboundFiles::safeFilename((string) ($file['name'] ?? 'attachment'));
+            $mime = trim((string) ($file['mime'] ?? ''));
+            if ($mime === '' || ! str_contains($mime, '/')) {
+                $mime = 'application/octet-stream';
+            }
+            $bytes = $file['bytes'];
+            if (strlen($bytes) <= 3 * 1024 * 1024) {
+                $this->json($this->request()->post(
+                    self::BASE.'/messages/'.$remoteId.'/attachments',
+                    [
+                        '@odata.type' => '#microsoft.graph.fileAttachment',
+                        'name' => $name,
+                        'contentType' => $mime,
+                        'contentBytes' => base64_encode($bytes),
+                        'isInline' => false,
+                    ],
+                ));
+
+                continue;
+            }
+
+            $this->uploadLargeFile($remoteId, [
+                'name' => $name,
+                'mime' => $mime,
+                'bytes' => $bytes,
+            ]);
+        }
+    }
+
+    /**
+     * @param  array{name: string, mime: string, bytes: string}  $file
+     */
+    private function uploadLargeFile(string $remoteId, array $file): void
+    {
+        $size = strlen($file['bytes']);
+        $session = $this->json($this->request()->post(
+            self::BASE.'/messages/'.$remoteId.'/attachments/createUploadSession',
+            [
+                'AttachmentItem' => [
+                    'attachmentType' => 'file',
+                    'name' => $file['name'],
+                    'size' => $size,
+                ],
+            ]
+        ));
+        $url = (string) ($session['uploadUrl'] ?? '');
+        if ($url === '') {
+            throw new RuntimeException('Graph did not return an attachment upload URL.');
+        }
+
+        $end = $size - 1;
+        $response = Http::withBody($file['bytes'], $file['mime'])
+            ->withHeaders(['Content-Range' => "bytes 0-{$end}/{$size}"])
+            ->timeout(120)
+            ->put($url);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Graph attachment upload failed ('.$response->status().').');
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
+use App\Models\MailAttachment;
 use App\Models\MailMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -403,7 +404,7 @@ class MailSendTest extends TestCase
         $account = $this->googleAccount($user);
         $original = $this->message($user, $account, ['remote_id' => 'gmail-1']);
 
-        $attachment = \App\Models\MailAttachment::create([
+        $attachment = MailAttachment::create([
             'uuid' => (string) Str::uuid(),
             'mail_message_id' => $original->id,
             'remote_id' => 'att-logo',
@@ -468,7 +469,7 @@ class MailSendTest extends TestCase
         $stranger = $this->user();
         $strangerAccount = $this->googleAccount($stranger);
         $strangerMessage = $this->message($stranger, $strangerAccount, ['remote_id' => 'other-1']);
-        $foreign = \App\Models\MailAttachment::create([
+        $foreign = MailAttachment::create([
             'uuid' => (string) Str::uuid(),
             'mail_message_id' => $strangerMessage->id,
             'remote_id' => 'att-secret',
@@ -511,6 +512,96 @@ class MailSendTest extends TestCase
             [, $body] = explode("\r\n\r\n", $raw, 2);
             $html = base64_decode(preg_replace('/\s+/', '', $body), true);
             $this->assertStringContainsString($foreign->uuid, $html);
+
+            return true;
+        });
+    }
+
+    public function test_a_gmail_file_attachment_is_sent_as_an_rfc_attachment(): void
+    {
+        $user = $this->user();
+        $this->googleAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/*' => Http::response(['id' => 'sent-123']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'client@example.com']],
+                'subject' => 'Invoice attached',
+                'bodyHtml' => '<p>Please find it enclosed.</p>',
+                'attachments' => [[
+                    'name' => 'invoice.pdf',
+                    'mime' => 'application/pdf',
+                    'content' => base64_encode('%PDF-1.4 fake'),
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/messages/send')) {
+                return false;
+            }
+
+            $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
+            $this->assertStringContainsString('multipart/mixed', $raw);
+            $this->assertStringContainsString('Content-Disposition: attachment; filename="invoice.pdf"', $raw);
+            $this->assertStringContainsString('Content-Type: application/pdf; name="invoice.pdf"', $raw);
+
+            return true;
+        });
+    }
+
+    public function test_an_outlook_file_attachment_is_posted_as_a_non_inline_file(): void
+    {
+        $user = $this->user();
+        $this->microsoftAccount($user);
+
+        Queue::fake([SyncMailbox::class]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/me/messages/draft-new/attachments' => Http::response(['id' => 'att-file']),
+            'graph.microsoft.com/v1.0/me/messages/draft-new/send' => Http::response(null, 202),
+            'graph.microsoft.com/v1.0/me/messages' => Http::response(['id' => 'draft-new']),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/send', [
+                'to' => [['email' => 'client@example.com']],
+                'subject' => 'Invoice attached',
+                'bodyHtml' => '<p>Please find it enclosed.</p>',
+                'attachments' => [[
+                    'name' => 'invoice.pdf',
+                    'mime' => 'application/pdf',
+                    'content' => base64_encode('%PDF-1.4 fake'),
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST'
+                || ! str_ends_with(parse_url($request->url(), PHP_URL_PATH) ?: '', '/messages/draft-new/attachments')) {
+                return false;
+            }
+
+            $this->assertSame('#microsoft.graph.fileAttachment', $request['@odata.type'] ?? null);
+            $this->assertSame('invoice.pdf', $request['name'] ?? null);
+            $this->assertSame('application/pdf', $request['contentType'] ?? null);
+            $this->assertFalse($request['isInline'] ?? true);
+            $this->assertArrayNotHasKey('contentId', $request->data());
 
             return true;
         });

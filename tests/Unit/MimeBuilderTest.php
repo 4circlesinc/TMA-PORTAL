@@ -113,6 +113,26 @@ class MimeBuilderTest extends TestCase
         $this->assertSame(2, substr_count($this->htmlPart($mime), 'src="cid:tma-inline-1-'));
     }
 
+    public function test_a_file_attachment_is_a_mixed_part(): void
+    {
+        $mime = MimeBuilder::build([
+            'to' => [['email' => 'client@example.com']],
+            'subject' => 'Invoice attached',
+            'bodyHtml' => '<p>Please find it enclosed.</p>',
+            'attachments' => [[
+                'name' => 'invoice.pdf',
+                'mime' => 'application/pdf',
+                'bytes' => '%PDF-1.4 fake',
+            ]],
+        ]);
+
+        $this->assertStringContainsString('multipart/mixed', $mime);
+        $this->assertStringContainsString('Content-Disposition: attachment; filename="invoice.pdf"', $mime);
+        $this->assertStringContainsString('Content-Type: application/pdf; name="invoice.pdf"', $mime);
+        $this->assertStringContainsString(chunk_split(base64_encode('%PDF-1.4 fake'), 76, "\r\n"), $mime);
+        $this->assertStringNotContainsString('Content-Disposition: inline', $mime);
+    }
+
     public function test_an_undecodable_data_uri_is_left_alone(): void
     {
         $mime = MimeBuilder::build([

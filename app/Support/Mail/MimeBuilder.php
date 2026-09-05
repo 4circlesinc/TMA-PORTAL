@@ -43,8 +43,9 @@ class MimeBuilder
         // inline parts. Gmail and Outlook render those and refuse data: URIs,
         // which otherwise arrive as a broken-image icon.
         [$bodyHtml, $inline] = InlineImages::extract((string) ($message['bodyHtml'] ?? ''));
+        $files = self::fileParts($message['attachments'] ?? []);
 
-        if ($inline === []) {
+        if ($inline === [] && $files === []) {
             $lines[] = 'Content-Type: text/html; charset=UTF-8';
             $lines[] = 'Content-Transfer-Encoding: base64';
             $lines[] = '';
@@ -53,9 +54,54 @@ class MimeBuilder
             return implode("\r\n", $lines);
         }
 
-        $boundary = '=_tma_'.bin2hex(random_bytes(12));
-        $lines[] = 'Content-Type: multipart/related; boundary="'.$boundary.'"';
+        if ($files === []) {
+            $boundary = '=_tma_'.bin2hex(random_bytes(12));
+            $lines[] = 'Content-Type: multipart/related; boundary="'.$boundary.'"';
+            $lines[] = '';
+            array_push($lines, ...self::relatedParts($boundary, $bodyHtml, $inline));
+            $lines[] = '--'.$boundary.'--';
+
+            return implode("\r\n", $lines);
+        }
+
+        $mixed = '=_tma_mix_'.bin2hex(random_bytes(12));
+        $lines[] = 'Content-Type: multipart/mixed; boundary="'.$mixed.'"';
         $lines[] = '';
+        $lines[] = '--'.$mixed;
+        if ($inline === []) {
+            $lines[] = 'Content-Type: text/html; charset=UTF-8';
+            $lines[] = 'Content-Transfer-Encoding: base64';
+            $lines[] = '';
+            $lines[] = chunk_split(base64_encode($bodyHtml), 76, "\r\n");
+        } else {
+            $related = '=_tma_'.bin2hex(random_bytes(12));
+            $lines[] = 'Content-Type: multipart/related; boundary="'.$related.'"';
+            $lines[] = '';
+            array_push($lines, ...self::relatedParts($related, $bodyHtml, $inline));
+            $lines[] = '--'.$related.'--';
+        }
+
+        foreach ($files as $file) {
+            $lines[] = '--'.$mixed;
+            $lines[] = 'Content-Type: '.$file['mime'].'; name="'.$file['name'].'"';
+            $lines[] = 'Content-Transfer-Encoding: base64';
+            $lines[] = 'Content-Disposition: attachment; filename="'.$file['name'].'"';
+            $lines[] = '';
+            $lines[] = chunk_split(base64_encode($file['bytes']), 76, "\r\n");
+        }
+
+        $lines[] = '--'.$mixed.'--';
+
+        return implode("\r\n", $lines);
+    }
+
+    /**
+     * @param  list<array{cid: string, mime: string, name: string, bytes: string}>  $inline
+     * @return list<string>
+     */
+    private static function relatedParts(string $boundary, string $bodyHtml, array $inline): array
+    {
+        $lines = [];
         $lines[] = '--'.$boundary;
         $lines[] = 'Content-Type: text/html; charset=UTF-8';
         $lines[] = 'Content-Transfer-Encoding: base64';
@@ -72,9 +118,36 @@ class MimeBuilder
             $lines[] = chunk_split(base64_encode($part['bytes']), 76, "\r\n");
         }
 
-        $lines[] = '--'.$boundary.'--';
+        return $lines;
+    }
 
-        return implode("\r\n", $lines);
+    /**
+     * @return list<array{name: string, mime: string, bytes: string}>
+     */
+    private static function fileParts(mixed $attachments): array
+    {
+        if (! is_array($attachments)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($attachments as $item) {
+            if (! is_array($item) || ! is_string($item['bytes'] ?? null) || $item['bytes'] === '') {
+                continue;
+            }
+            $name = OutboundFiles::safeFilename((string) ($item['name'] ?? 'attachment'));
+            $mime = trim((string) ($item['mime'] ?? ''));
+            if ($mime === '' || ! str_contains($mime, '/')) {
+                $mime = 'application/octet-stream';
+            }
+            $out[] = [
+                'name' => $name,
+                'mime' => $mime,
+                'bytes' => $item['bytes'],
+            ];
+        }
+
+        return $out;
     }
 
     /** Gmail wants the message base64url-encoded, unpadded. */

@@ -1009,13 +1009,22 @@
       '<div class="tma-dash__email-inline-compose-bar">' +
       renderComposeToolbar({ expand: false, image: true }) +
       '</div>' +
+      '<div class="tma-dash__email-compose-files" data-email-compose-files' +
+      (composeFilesOf(ic).length ? '' : ' hidden') + '>' +
+      renderComposeFileChips(ic) +
+      '</div>' +
       '<div class="tma-dash__email-inline-compose-actions">' +
       '<button type="button" class="tma-dash__email-inline-compose-send" data-email-inline-compose-send' + (ic.sending ? ' disabled' : '') + '>' +
       (ic.sending ? 'Sending…' : 'Send') + '</button>' +
+      '<div class="tma-dash__email-inline-compose-tools">' +
+      '<button type="button" class="tma-dash__email-inline-compose-discard" data-email-inline-compose-attach aria-label="Attach file">' +
+      '<img src="' + ICONS.Paperclip + '" alt=""></button>' +
       '<button type="button" class="tma-dash__email-inline-compose-discard" data-email-inline-compose-close aria-label="Discard draft">' +
       '<img src="' + ICONS.Trash + '" alt="">' +
       '</button>' +
       '</div>' +
+      '</div>' +
+      '<div class="tma-dash__email-compose-drop" data-email-compose-drop aria-hidden="true">Drop files to attach</div>' +
       '</div>' +
       '</div>'
     );
@@ -1067,6 +1076,7 @@
       cc: cc,
       bodyHtml: composeSignatureHtml(),
       sending: false,
+      attachments: [],
     };
   }
 
@@ -1151,6 +1161,26 @@
         sendInlineCompose(root, state, render);
       });
     }
+
+    var attachBtn = panel.querySelector('[data-email-inline-compose-attach]');
+    if (attachBtn) {
+      MORPH.on(attachBtn, 'click', function (event) {
+        event.stopPropagation();
+        if (!state.inlineCompose) return;
+        openComposeFilePicker(function (files) {
+          addComposeFiles(root, state.inlineCompose, files, function () {
+            paintComposeFileChips(panel, state.inlineCompose);
+          });
+        });
+      });
+    }
+
+    wireComposeDropTarget(panel, function (files) {
+      if (!state.inlineCompose) return;
+      addComposeFiles(root, state.inlineCompose, files, function () {
+        paintComposeFileChips(panel, state.inlineCompose);
+      });
+    });
   }
 
   function sendInlineCompose(root, state, render) {
@@ -1189,6 +1219,7 @@
       bodyHtml: bodyHtml,
       mode: ic.mode,
       inReplyTo: ic.mode === 'new' ? null : ic.messageId,
+      attachments: composeFilePayload(ic),
     }).then(function () {
       closeInlineCompose(state);
       showEmailToast(root, 'Message sent');
@@ -5261,6 +5292,147 @@
     return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + units[i];
   }
 
+  /* ── Compose file attachments (paperclip + drag-and-drop) ───── */
+  var MAX_COMPOSE_FILES = 10;
+  var MAX_COMPOSE_FILE_BYTES = 10 * 1024 * 1024;
+
+  function composeFilesOf(holder) {
+    if (!holder.attachments) holder.attachments = [];
+    return holder.attachments;
+  }
+
+  function dragHasFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    return Array.prototype.indexOf.call(types, 'Files') !== -1;
+  }
+
+  function readFileAsAttachment(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = String(reader.result || '');
+        var comma = result.indexOf(',');
+        resolve({
+          id: 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+          name: file.name || 'attachment',
+          mime: file.type || 'application/octet-stream',
+          size: file.size,
+          content: comma >= 0 ? result.slice(comma + 1) : result,
+        });
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function addComposeFiles(root, holder, fileList, paint) {
+    var files = Array.prototype.slice.call(fileList || []);
+    files = files.filter(function (file) { return file && file.size > 0; });
+    if (!files.length) return;
+    var current = composeFilesOf(holder);
+    var room = MAX_COMPOSE_FILES - current.length;
+    if (room <= 0) {
+      showEmailToast(root, 'Up to ' + MAX_COMPOSE_FILES + ' files can be attached');
+      return;
+    }
+    if (files.length > room) {
+      showEmailToast(root, 'Only the first ' + room + ' files were added');
+      files = files.slice(0, room);
+    }
+    var tooBig = files.filter(function (file) { return file.size > MAX_COMPOSE_FILE_BYTES; });
+    if (tooBig.length) {
+      showEmailToast(root, (tooBig.length === 1 ? tooBig[0].name : tooBig.length + ' files') + ' over 10 MB');
+      files = files.filter(function (file) { return file.size <= MAX_COMPOSE_FILE_BYTES; });
+    }
+    if (!files.length) return;
+    Promise.all(files.map(readFileAsAttachment)).then(function (items) {
+      items.forEach(function (item) { current.push(item); });
+      if (paint) paint();
+    }).catch(function () {
+      showEmailToast(root, 'Those files could not be read');
+    });
+  }
+
+  function composeFilePayload(holder) {
+    return composeFilesOf(holder).map(function (item) {
+      return { name: item.name, mime: item.mime, content: item.content };
+    });
+  }
+
+  function renderComposeFileChips(holder) {
+    var items = composeFilesOf(holder);
+    if (!items.length) return '';
+    return items.map(function (item) {
+      var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
+        ? window.TMAFileIcons.fileIconSrc(null, item.name)
+        : ICONS.Paperclip;
+      return (
+        '<span class="tma-dash__email-compose-file" data-email-compose-file="' + esc(item.id) + '" title="' + esc(item.name) + '">' +
+        '<img src="' + esc(icon) + '" alt="">' +
+        '<span class="tma-dash__email-compose-file-name">' + esc(item.name) + '</span>' +
+        '<span class="tma-dash__email-compose-file-size">' + esc(formatBytes(item.size)) + '</span>' +
+        '<button type="button" class="tma-dash__email-compose-file-remove" data-email-compose-file-remove="' + esc(item.id) + '"' +
+        ' aria-label="Remove ' + esc(item.name) + '">' +
+        '<img src="' + ICONS.X + '" alt=""></button></span>'
+      );
+    }).join('');
+  }
+
+  function paintComposeFileChips(scope, holder) {
+    if (!scope) return;
+    var host = scope.querySelector('[data-email-compose-files]');
+    if (!host) return;
+    var html = renderComposeFileChips(holder);
+    host.innerHTML = html;
+    host.hidden = !html;
+  }
+
+  function openComposeFilePicker(onFiles) {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.addEventListener('change', function () {
+      if (input.files && input.files.length) onFiles(input.files);
+    });
+    input.click();
+  }
+
+  function wireComposeDropTarget(el, onFiles) {
+    if (!el || el._composeDropWired) return;
+    el._composeDropWired = true;
+    var depth = 0;
+    function clearDrop() {
+      depth = 0;
+      el.classList.remove('is-drop-target');
+    }
+    el.addEventListener('dragenter', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      depth += 1;
+      el.classList.add('is-drop-target');
+    });
+    el.addEventListener('dragover', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    }, true);
+    el.addEventListener('dragleave', function () {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) el.classList.remove('is-drop-target');
+    });
+    el.addEventListener('drop', function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) {
+        clearDrop();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      clearDrop();
+      onFiles(e.dataTransfer.files);
+    }, true);
+  }
+
   /* ── attachment type detection ────────────────────────────────
    * One shared table for the human-readable type label; the icon itself comes
    * from window.TMAFileIcons, the same lookup the File Library uses, so a
@@ -5885,6 +6057,7 @@
       serverId: null,
       mode: opts.mode || 'new',
       inReplyTo: opts.inReplyTo || null,
+      attachments: [],
     };
   }
 
@@ -6671,7 +6844,9 @@
             renderComposeWindowHead(draft) +
             '<div class="tma-dash__email-compose-window-body">' +
             renderComposeContent(draft) +
-            '</div></div>'
+            '</div>' +
+            '<div class="tma-dash__email-compose-drop" data-email-compose-drop aria-hidden="true">Drop files to attach</div>' +
+            '</div>'
           );
         })
         .join('') +
@@ -6908,6 +7083,13 @@
           render();
         }
       });
+      wireComposeDropTarget(windowEl, function (files) {
+        var draft = findComposeDraft(state, windowEl.getAttribute('data-email-compose-window'));
+        if (!draft) return;
+        addComposeFiles(root, draft, files, function () {
+          paintComposeFileChips(windowEl, draft);
+        });
+      });
     });
 
     MORPH.unwired(root, '[data-email-compose-minimize]').forEach(function (btn) {
@@ -7003,6 +7185,37 @@
         var editor = resolveImageEditor(btn, root);
         if (!editor) return;
         openInsertImagePicker(root, state, editor);
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-compose-attach]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var id = btn.getAttribute('data-email-compose-attach');
+        var draft = findComposeDraft(state, id);
+        if (!draft) return;
+        openComposeFilePicker(function (files) {
+          addComposeFiles(root, draft, files, function () {
+            paintComposeFileChips(btn.closest('[data-email-compose-window]'), draft);
+          });
+        });
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-compose-files]').forEach(function (host) {
+      MORPH.on(host, 'click', function (event) {
+        var btn = event.target.closest('[data-email-compose-file-remove]');
+        if (!btn) return;
+        event.preventDefault();
+        var win = host.closest('[data-email-compose-window]');
+        var panel = host.closest('[data-email-inline-compose-panel]');
+        var holder = win
+          ? findComposeDraft(state, win.getAttribute('data-email-compose-window'))
+          : state.inlineCompose;
+        if (!holder) return;
+        var id = btn.getAttribute('data-email-compose-file-remove');
+        holder.attachments = composeFilesOf(holder).filter(function (item) { return item.id !== id; });
+        paintComposeFileChips(win || panel, holder);
       });
     });
 
@@ -7105,6 +7318,7 @@
       draftId: draft.serverId,
       mode: draft.mode || 'new',
       inReplyTo: draft.inReplyTo,
+      attachments: composeFilePayload(draft),
     }).then(function () {
       closeCompose(state, id, false);
       showEmailToast(root, 'Message sent');
@@ -7331,16 +7545,21 @@
       renderImageTransformOverlay() +
       '</div>' +
       '<div class="tma-dash__email-compose-footer">' +
+      '<div class="tma-dash__email-compose-files" data-email-compose-files' +
+      (composeFilesOf(draft).length ? '' : ' hidden') + '>' +
+      renderComposeFileChips(draft) +
+      '</div>' +
+      '<div class="tma-dash__email-compose-footer-row">' +
       '<div class="tma-dash__email-compose-attach">' +
       [
         { icon: 'Trash', label: 'Discard draft', discard: true },
         { icon: 'Image', label: 'Insert image', image: true },
-        { icon: 'Paperclip', label: 'Attach file' },
+        { icon: 'Paperclip', label: 'Attach file', attach: true },
       ]
         .map(function (item) {
           var attrs = item.discard
             ? ' data-email-compose-discard="' + esc(draft.id) + '"'
-            : (item.image ? ' data-email-insert-image' : '');
+            : (item.image ? ' data-email-insert-image' : (item.attach ? ' data-email-compose-attach="' + esc(draft.id) + '"' : ''));
           return (
             '<button type="button" class="tma-dash__email-compose-attach-btn"' + attrs + ' aria-label="' + esc(item.label) + '">' +
             '<img src="' + esc(ICONS[item.icon]) + '" alt="">' +
@@ -7355,6 +7574,7 @@
       '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--primary"' +
       ' data-email-compose-send="' + esc(draft.id) + '"' + (draft.sending ? ' disabled' : '') + '>' +
       (draft.sending ? 'Sending…' : 'Send') + '</button>' +
+      '</div>' +
       '</div>' +
       '</div>' +
       '</div>' +

@@ -20,6 +20,7 @@ use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailCorrespondents;
 use App\Support\Mail\MailSynchronizer;
+use App\Support\Mail\OutboundFiles;
 use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
 use App\Support\Mail\SignatureImporter;
@@ -1491,6 +1492,10 @@ class MailController extends Controller
             'draftId' => ['sometimes', 'nullable', 'string', 'uuid'],
             'inReplyTo' => ['sometimes', 'nullable', 'string', 'uuid'],
             'mode' => ['sometimes', 'string', 'in:new,reply,reply-all,forward'],
+            'attachments' => ['sometimes', 'array', 'max:'.OutboundFiles::MAX_COUNT],
+            'attachments.*.name' => ['required_with:attachments', 'string', 'max:255'],
+            'attachments.*.mime' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'attachments.*.content' => ['required_with:attachments', 'string'],
         ]);
 
         $account = Mailbox::requireAccountFor($request->user());
@@ -1521,6 +1526,7 @@ class MailController extends Controller
             // re-embed the bytes so they leave as real inline images.
             'bodyHtml' => OutboundImages::embed($account, $data['bodyHtml'] ?? ''),
             'mode' => $mode,
+            'attachments' => OutboundFiles::fromRequest($data['attachments'] ?? []),
         ];
 
         // The original's provider id is what Gmail/Graph need to stamp
