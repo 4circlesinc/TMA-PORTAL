@@ -5014,13 +5014,13 @@
     var listBody = root.querySelector('.tma-dash__messages-list-body');
 
     root.querySelectorAll('[data-messages-row-swipe]').forEach(function (wrap) {
-      // See the note on _messagesSwipeBound: an attribute flag does not
-      // survive attribute syncing, a property does.
-      if (wrap._swipeBound) return;
-      wrap._swipeBound = true;
-
       var track = wrap.querySelector('[data-messages-row-swipe-track]');
       if (!track) return;
+      // Flag the track, not the wrap. Morph can replace the track while
+      // keeping the wrap; a wrap-level flag then skipped rebinding and the
+      // row stopped opening chats after Back.
+      if (track._swipeBound) return;
+      track._swipeBound = true;
 
       var startX = 0;
       var startOffset = 0;
@@ -5153,11 +5153,13 @@
         var max = swipeMaxWidth();
         var id = wrap.getAttribute('data-messages-row-swipe');
 
-        if (current >= max * 0.75) {
+        // A hidden or not-yet-laid-out row reports width 0. 0 >= 0 would
+        // treat a tap as a completed pin swipe and never open the chat.
+        if (max > 0 && current >= max * 0.75) {
           applyMessagesRowAction(root, state, render, id, 'pin', wrap);
           return true;
         }
-        if (current <= -max * 0.75) {
+        if (max > 0 && current <= -max * 0.75) {
           closeMessagesRowSwipes(root);
           runConversationAction(root, state, render, id, 'leave');
           return true;
@@ -5845,7 +5847,11 @@
   }
 
   function openConversation(root, state, render, conversationId) {
-    if (!conversationId || conversationId === state.selectedId) return;
+    if (!conversationId) return;
+    // Same thread while already reading it is a no-op. After Back, selectedId
+    // can still name that row so the list highlight stays put; a tap must
+    // open it again rather than looking like the row is dead.
+    if (conversationId === state.selectedId && state.reading) return;
 
     // Persist the outgoing conversation's draft before switching, so it stays
     // with the conversation it was written in.
@@ -5893,6 +5899,9 @@
     state.editing = null;
     clearReplyTo(state);
     closeMessageMenu();
+    closeMessagesRowSwipes(root);
+    var listBody = root.querySelector('.tma-dash__messages-list-body');
+    if (listBody) listBody.classList.remove('is-swipe-dragging');
 
     render();
   }
@@ -8090,13 +8099,24 @@
   function wireEvents(root, state, render) {
     attachMessagesResizer(root, state);
 
-    if (!isMessagesMobile()) {
-      MORPH.unwired(root, '[data-messages-row]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          openConversation(root, state, render, btn.getAttribute('data-messages-row'));
-        });
+    MORPH.unwired(root, '[data-messages-row]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        var wrap = btn.closest('[data-messages-row-swipe]');
+        if (wrap) {
+          if (wrap.dataset.tapHandled || wrap.dataset.swipeMoved) return;
+          if (
+            wrap.classList.contains('is-open-left') ||
+            wrap.classList.contains('is-open-right') ||
+            wrap.classList.contains('is-dragging')
+          ) {
+            e.preventDefault();
+            closeMessagesRowSwipes(root);
+            return;
+          }
+        }
+        openConversation(root, state, render, btn.getAttribute('data-messages-row'));
       });
-    }
+    });
 
     MORPH.unwired(root, '[data-messages-reply]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -9129,8 +9149,7 @@
     }
 
     root._messagesOnBack = function () {
-      state.reading = false;
-      render();
+      closeConversation(root, state, render);
     };
 
     if (root._messagesMounted) {
