@@ -467,6 +467,43 @@ class MailboxTest extends TestCase
         );
     }
 
+    public function test_import_signature_keeps_existing_library_entries(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $user->forceFill([
+            'preferences' => [
+                'mail' => [
+                    'signatures' => [
+                        ['id' => 'sig-work', 'name' => 'Work', 'html' => '<div>Work</div>'],
+                    ],
+                    'activeSignatureId' => 'sig-work',
+                    'signature' => '<div>Work</div>',
+                ],
+            ],
+        ])->save();
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-sig-keep',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<div>Hi</div><div class="gmail_signature" data-smartmail="gmail_signature">'
+                .'<div><b>Imported User</b></div></div>',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk();
+
+        $names = collect($response->json('preferences.signatures'))->pluck('name')->all();
+        $this->assertContains('Work', $names);
+        $this->assertContains('Default From Gmail', $names);
+        $this->assertStringContainsString('Work', (string) collect($response->json('preferences.signatures'))->firstWhere('name', 'Work')['html']);
+        $this->assertStringContainsString('Imported User', (string) $response->json('preferences.signature'));
+    }
+
     public function test_import_signature_names_outlook_defaults(): void
     {
         $user = $this->user();

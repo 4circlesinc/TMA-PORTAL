@@ -184,6 +184,38 @@ class SignatureImporterTest extends TestCase
         $this->assertStringNotContainsString('<script', $signature);
     }
 
+    public function test_it_lists_each_gmail_send_as_signature_as_a_choice(): void
+    {
+        $account = $this->account();
+        $account->forceFill([
+            'scopes' => [
+                'https://www.googleapis.com/auth/gmail.modify',
+                'https://www.googleapis.com/auth/gmail.settings.basic',
+            ],
+        ])->save();
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/gmail/v1/users/me/settings/sendAs' => Http::response([
+                'sendAs' => [
+                    ['isPrimary' => true, 'sendAsEmail' => 'user@example.com', 'signature' => '<div>Work Sig</div>'],
+                    ['isPrimary' => false, 'sendAsEmail' => 'hello@example.com', 'signature' => '<div>Hello Sig</div>'],
+                ],
+            ]),
+        ]);
+
+        $choices = SignatureImporter::for($account)->choices();
+
+        $this->assertCount(2, $choices);
+        $this->assertSame('Default From Gmail', $choices[0]['name']);
+        $this->assertStringContainsString('Work Sig', $choices[0]['html']);
+        $this->assertSame('Gmail · hello@example.com', $choices[1]['name']);
+        $this->assertStringContainsString('Hello Sig', $choices[1]['html']);
+    }
+
     public function test_it_falls_back_to_sent_mail_when_the_gmail_settings_call_fails(): void
     {
         $account = $this->account();

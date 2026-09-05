@@ -2127,9 +2127,9 @@ class MailController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $signature = SignatureImporter::for($account)->import();
+        $choices = SignatureImporter::for($account)->choices();
 
-        if ($signature === null) {
+        if ($choices === []) {
             return response()->json([
                 'message' => 'No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.',
                 'signature' => null,
@@ -2140,38 +2140,71 @@ class MailController extends Controller
         $current = $user->preferences ?? [];
         $mail = $this->mailPreferences($current['mail'] ?? [], raw: true);
         $signatures = $mail['signatures'];
-        $importedName = match ($account->provider) {
-            'microsoft' => 'Default From Outlook',
-            'google' => 'Default From Gmail',
-            default => 'Default From Mailbox',
-        };
-        // Reuse the prior import slot whether it still has the old "Imported"
-        // label or an earlier provider-specific default name.
         $importedNames = [
             'Imported',
             'Default From Outlook',
             'Default From Gmail',
             'Default From Mailbox',
         ];
-        $importedId = null;
+        $importedIds = [];
 
-        foreach ($signatures as $index => $entry) {
-            if (in_array($entry['name'] ?? '', $importedNames, true)) {
-                $importedId = $entry['id'];
-                $signatures[$index]['html'] = $signature;
-                $signatures[$index]['name'] = $importedName;
+        foreach ($choices as $choice) {
+            $name = $choice['name'];
+            $html = $choice['html'];
+            $matched = false;
+
+            foreach ($signatures as $index => $entry) {
+                if (($entry['name'] ?? '') !== $name) {
+                    continue;
+                }
+                $signatures[$index]['html'] = $html;
+                $importedIds[] = $entry['id'];
+                $matched = true;
                 break;
             }
+
+            if ($matched) {
+                continue;
+            }
+
+            // First mailbox default still reuses a leftover "Imported" slot.
+            if (in_array($name, $importedNames, true)) {
+                foreach ($signatures as $index => $entry) {
+                    if (! in_array($entry['name'] ?? '', $importedNames, true)) {
+                        continue;
+                    }
+                    $signatures[$index]['html'] = $html;
+                    $signatures[$index]['name'] = $name;
+                    $importedIds[] = $entry['id'];
+                    $matched = true;
+                    break;
+                }
+            }
+
+            if ($matched) {
+                continue;
+            }
+
+            if (count($signatures) >= 10) {
+                $last = count($signatures) - 1;
+                $signatures[$last]['html'] = $html;
+                $signatures[$last]['name'] = $name;
+                $importedIds[] = $signatures[$last]['id'];
+
+                continue;
+            }
+
+            $id = (string) Str::uuid();
+            $signatures[] = [
+                'id' => $id,
+                'name' => $name,
+                'html' => $html,
+            ];
+            $importedIds[] = $id;
         }
 
-        if ($importedId === null) {
-            $importedId = (string) Str::uuid();
-            $signatures[] = [
-                'id' => $importedId,
-                'name' => $importedName,
-                'html' => $signature,
-            ];
-        }
+        $importedId = $importedIds[0] ?? ($signatures[0]['id'] ?? null);
+        $signature = $choices[0]['html'];
 
         $payload = [
             'signatures' => $signatures,
@@ -2187,6 +2220,7 @@ class MailController extends Controller
 
         return response()->json([
             'signature' => $signature,
+            'importedCount' => count($importedIds),
             'preferences' => $this->mailPreferences($user->fresh()->preferences ?? []),
         ]);
     }

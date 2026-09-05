@@ -67,28 +67,155 @@ class SignatureImporter
      */
     public function import(): ?string
     {
-        $raw = $this->fromProviderSettings() ?? $this->fromSentMail();
-
-        if (! is_string($raw) || trim($raw) === '') {
-            return null;
-        }
-
-        $clean = $this->sanitize($raw);
-
-        if ($clean === '' || ! $this->looksLikeSignature($clean)) {
-            return null;
-        }
-
-        return Str::limit($clean, self::MAX_LENGTH, '');
+        return $this->choices()[0]['html'] ?? null;
     }
 
-    private function fromProviderSettings(): ?string
+    /**
+     * Distinct signatures this mailbox can offer, preferred first.
+     *
+     * Gmail send-as aliases, the Outlook reply signature, and repeating Sent
+     * trailers can all differ. The settings panel keeps each one so the user
+     * can pick which to send with.
+     *
+     * @return list<array{name: string, html: string}>
+     */
+    public function choices(): array
+    {
+        $raw = match ($this->account->provider) {
+            'google' => $this->gmailSendAsChoices(),
+            'microsoft' => $this->outlookChoices(),
+            default => [],
+        };
+
+        if ($raw === []) {
+            $sent = $this->fromSentMail();
+            if (is_string($sent) && trim($sent) !== '') {
+                $raw[] = ['name' => $this->importedDefaultName(), 'html' => $sent];
+            }
+        } else {
+            foreach ($this->collectSentCandidates() as $candidate) {
+                $raw[] = [
+                    'name' => 'From sent mail',
+                    'html' => $this->resolveInlineImages($candidate['html'], $candidate['message']),
+                ];
+            }
+        }
+
+        return $this->finalizeChoices($raw);
+    }
+
+    private function importedDefaultName(): string
     {
         return match ($this->account->provider) {
-            'google' => $this->fromGmailSendAs(),
-            'microsoft' => $this->fromOutlookReplyDraft(),
-            default => null,
+            'microsoft' => 'Default From Outlook',
+            'google' => 'Default From Gmail',
+            default => 'Default From Mailbox',
         };
+    }
+
+    /**
+     * @param  list<array{name: string, html: string}>  $raw
+     * @return list<array{name: string, html: string}>
+     */
+    private function finalizeChoices(array $raw): array
+    {
+        $out = [];
+        $seen = [];
+        $usedNames = [];
+
+        foreach ($raw as $item) {
+            $clean = $this->sanitize($item['html']);
+            if ($clean === '' || ! $this->looksLikeSignature($clean)) {
+                continue;
+            }
+
+            $clean = Str::limit($clean, self::MAX_LENGTH, '');
+            $fingerprint = $this->fingerprint($clean);
+            if (isset($seen[$fingerprint])) {
+                continue;
+            }
+            $seen[$fingerprint] = true;
+
+            $name = trim((string) ($item['name'] ?? '')) ?: 'Signature';
+            $name = mb_substr($name, 0, 80);
+            if (isset($usedNames[mb_strtolower($name)])) {
+                $n = 2;
+                while (isset($usedNames[mb_strtolower($name.' '.$n)])) {
+                    $n++;
+                }
+                $name .= ' '.$n;
+            }
+            $usedNames[mb_strtolower($name)] = true;
+
+            $out[] = ['name' => $name, 'html' => $clean];
+            if (count($out) >= 8) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return list<array{name: string, html: string}> */
+    private function gmailSendAsChoices(): array
+    {
+        $scopes = collect($this->account->scopes ?? []);
+        $hasSettings = $scopes->contains(
+            fn ($scope) => is_string($scope) && str_contains($scope, 'gmail.settings.basic')
+        );
+
+        if (! $hasSettings) {
+            return [];
+        }
+
+        try {
+            $token = MailTokens::accessToken($this->account);
+            $response = Http::withToken($token)
+                ->timeout(15)
+                ->acceptJson()
+                ->get('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs');
+
+            if (! $response->successful()) {
+                return [];
+            }
+
+            $out = [];
+            foreach (collect($response->json('sendAs') ?? []) as $alias) {
+                if (! is_array($alias)) {
+                    continue;
+                }
+                $signature = $alias['signature'] ?? null;
+                if (! is_string($signature) || trim(strip_tags($signature)) === '') {
+                    continue;
+                }
+                $email = trim((string) ($alias['sendAsEmail'] ?? $alias['displayName'] ?? ''));
+                $name = ! empty($alias['isPrimary']) || ! empty($alias['isDefault'])
+                    ? 'Default From Gmail'
+                    : ($email !== '' ? 'Gmail · '.$email : 'Gmail');
+                $out[] = ['name' => $name, 'html' => $signature, 'primary' => ! empty($alias['isPrimary']) || ! empty($alias['isDefault'])];
+            }
+
+            usort($out, fn (array $a, array $b): int => ((int) ! empty($b['primary'])) <=> ((int) ! empty($a['primary'])));
+
+            return array_map(fn (array $row): array => [
+                'name' => $row['name'],
+                'html' => $row['html'],
+            ], $out);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<array{name: string, html: string}> */
+    private function outlookChoices(): array
+    {
+        $html = $this->fromOutlookReplyDraft();
+
+        if (! is_string($html) || trim($html) === '') {
+            return [];
+        }
+
+        return [['name' => 'Default From Outlook', 'html' => $html]];
     }
 
     /**
@@ -198,50 +325,6 @@ class SignatureImporter
     }
 
     /**
-     * Gmail's configured signature for the primary send-as alias.
-     *
-     * Needs `gmail.settings.basic`. Without that scope the call is skipped —
-     * asking for a 403 on every import is wasted round-trips for every account
-     * connected with today's mail scopes.
-     */
-    private function fromGmailSendAs(): ?string
-    {
-        $scopes = collect($this->account->scopes ?? []);
-        $hasSettings = $scopes->contains(
-            fn ($scope) => is_string($scope) && str_contains($scope, 'gmail.settings.basic')
-        );
-
-        if (! $hasSettings) {
-            return null;
-        }
-
-        try {
-            $token = MailTokens::accessToken($this->account);
-            $response = Http::withToken($token)
-                ->timeout(15)
-                ->acceptJson()
-                ->get('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs');
-
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $aliases = collect($response->json('sendAs') ?? []);
-            $primary = $aliases->firstWhere('isPrimary', true)
-                ?? $aliases->firstWhere('isDefault', true)
-                ?? $aliases->first();
-
-            $signature = is_array($primary) ? ($primary['signature'] ?? null) : null;
-
-            return is_string($signature) && trim(strip_tags($signature)) !== ''
-                ? $signature
-                : null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
      * Lift the repeating trailer from recent Sent messages.
      *
      * One message is enough when it carries a known signature wrapper
@@ -254,6 +337,22 @@ class SignatureImporter
      * signed in) are useless inside the signature editor and when composing.
      */
     private function fromSentMail(): ?string
+    {
+        $candidates = $this->collectSentCandidates();
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        $best = $this->pickOwnSignature($candidates);
+
+        return $this->resolveInlineImages($best['html'], $best['message']);
+    }
+
+    /**
+     * @return list<array{html: string, message: MailMessage}>
+     */
+    private function collectSentCandidates(): array
     {
         $messages = MailMessage::query()
             ->where('connected_account_id', $this->account->id)
@@ -274,13 +373,7 @@ class SignatureImporter
             $candidates = $this->candidatesFromProvider();
         }
 
-        if ($candidates === []) {
-            return null;
-        }
-
-        $best = $this->pickOwnSignature($candidates);
-
-        return $this->resolveInlineImages($best['html'], $best['message']);
+        return $candidates;
     }
 
     /**

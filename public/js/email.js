@@ -6181,6 +6181,7 @@
       mode: opts.mode || 'new',
       inReplyTo: opts.inReplyTo || null,
       attachments: opts.attachments ? opts.attachments.slice() : [],
+      signatureId: opts.signatureId || signatureLibraryFromState().activeSignatureId || '',
     };
   }
 
@@ -7681,15 +7682,84 @@
 
   /* The user's configured signature, kept in its own block so it stays
    * identifiable rather than merging into whatever they type above it. */
-  function composeSignatureHtml() {
-    var signature = mailPreference('signature', '');
-    if (!signature) return '';
+  function signatureLibraryFromState() {
+    var prefs = {};
+    if (state_active) {
+      if (state_active.settings && state_active.settings.preferences) {
+        prefs = state_active.settings.preferences;
+      } else if (state_active.preferences) {
+        prefs = state_active.preferences;
+      }
+    }
+    return ensureSignatureLibrary(prefs);
+  }
 
+  function composeSignatureHtmlFor(html) {
+    if (!html) return '';
     return (
       '<div class="tma-dash__email-compose-signature" data-email-signature>' +
-      '<br>' + signature +
+      '<br>' + html +
       '</div>'
     );
+  }
+
+  function composeSignatureHtml() {
+    var lib = signatureLibraryFromState();
+    var active = lib.signatures.find(function (entry) { return entry.id === lib.activeSignatureId; })
+      || lib.signatures[0];
+    return composeSignatureHtmlFor(active && active.html);
+  }
+
+  function renderComposeSignaturePicker(draft) {
+    var lib = signatureLibraryFromState();
+    if (!lib.signatures.length) return '';
+    var selected = draft.signatureId || lib.activeSignatureId || '';
+    if (selected && !lib.signatures.some(function (entry) { return entry.id === selected; })) {
+      selected = lib.activeSignatureId || lib.signatures[0].id;
+    }
+
+    return (
+      '<label class="tma-dash__email-compose-sig-pick">' +
+      '<span class="tma-dash__email-compose-sig-pick-label">Signature</span>' +
+      '<select class="tma-dash__email-compose-sig-pick-select" data-email-compose-signature="' + esc(draft.id) + '"' +
+      ' aria-label="Choose signature">' +
+      '<option value=""' + (selected ? '' : ' selected') + '>None</option>' +
+      lib.signatures.map(function (entry) {
+        var on = entry.id === selected;
+        return '<option value="' + esc(entry.id) + '"' + (on ? ' selected' : '') + '>' +
+          esc(entry.name || 'Signature') + '</option>';
+      }).join('') +
+      '</select></label>'
+    );
+  }
+
+  function applyComposeSignature(draft, signatureId, editor) {
+    var lib = signatureLibraryFromState();
+    draft.signatureId = signatureId || '';
+    var entry = lib.signatures.find(function (item) { return item.id === signatureId; });
+    var next = composeSignatureHtmlFor(entry && entry.html);
+
+    function swap(rootEl) {
+      var block = rootEl.querySelector('[data-email-signature]');
+      if (block && next) {
+        block.outerHTML = next;
+      } else if (block && !next) {
+        block.remove();
+      } else if (!block && next) {
+        rootEl.insertAdjacentHTML('beforeend', next);
+      }
+    }
+
+    if (editor) {
+      swap(editor);
+      draft.bodyHtml = editor.innerHTML;
+      return;
+    }
+
+    var tmp = document.createElement('div');
+    tmp.innerHTML = draft.bodyHtml || '';
+    swap(tmp);
+    draft.bodyHtml = tmp.innerHTML;
   }
 
   /* A real form: recipient pill fields, and subject / body inputs bound to
@@ -7776,6 +7846,7 @@
           );
         })
         .join('') +
+      renderComposeSignaturePicker(draft) +
       '</div>' +
       '<div class="tma-dash__email-compose-send">' +
       '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--late"' +
@@ -7968,30 +8039,29 @@
     return (
       '<div class="tma-dash__email-settings-signature-library" data-email-signature-library>' +
       '<div class="tma-dash__email-settings-signature-library-head">' +
-      '<span class="tma-dash__settings-row-label">Your signatures</span>' +
+      '<span class="tma-dash__settings-row-label">Choose a signature</span>' +
       '<button type="button" class="tma-dash__email-settings-btn" data-email-signature-add>' +
       '<img src="' + ICONS.Plus + '" alt=""> New</button>' +
       '</div>' +
-      '<div class="tma-dash__email-settings-signature-list" role="list" aria-label="Signatures">' +
+      '<p class="tma-dash__email-settings-hint">The one marked In use is added when you write a new email. Click another to switch.</p>' +
+      '<div class="tma-dash__email-settings-signature-list" role="listbox" aria-label="Signatures">' +
       lib.signatures.map(function (entry) {
         var on = entry.id === lib.activeSignatureId;
         var nameId = 'tma-mail-signature-name-' + String(entry.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
         return (
           '<div class="tma-dash__email-settings-signature-item' + (on ? ' is-active' : '') + '"' +
-          ' data-email-signature-id="' + esc(entry.id) + '">' +
+          ' role="option" aria-selected="' + (on ? 'true' : 'false') + '"' +
+          ' data-email-signature-id="' + esc(entry.id) + '"' +
+          ' data-email-signature-select="' + esc(entry.id) + '">' +
+          '<span class="tma-dash__email-settings-signature-radio" aria-hidden="true"></span>' +
           '<input id="' + esc(nameId) + '" type="text"' +
           ' class="tma-dash__email-settings-signature-name-input"' +
           ' data-email-signature-rename="' + esc(entry.id) + '"' +
           ' maxlength="80" value="' + esc(entry.name || 'Signature') + '"' +
           ' aria-label="Rename signature" placeholder="Signature name">' +
-          '<button type="button" class="tma-dash__email-settings-signature-select"' +
-          ' data-email-signature-select="' + esc(entry.id) + '"' +
-          ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
-          ' title="' + (on ? 'Active signature' : 'Use this signature') + '">' +
-          (on
-            ? '<span class="tma-dash__email-settings-signature-badge">Active</span>'
-            : '<span class="tma-dash__email-settings-signature-badge tma-dash__email-settings-signature-badge--use">Use</span>') +
-          '</button>' +
+          '<span class="tma-dash__email-settings-signature-badge">' +
+          (on ? 'In use' : 'Use') +
+          '</span>' +
           '<button type="button" class="tma-dash__email-settings-signature-icon-btn"' +
           ' data-email-signature-delete="' + esc(entry.id) + '"' +
           ' aria-label="Delete ' + esc(entry.name || 'signature') + '"' +
@@ -8028,8 +8098,7 @@
       (state.connected ? '' : ' disabled') +
       '>' + esc(importSignatureButtonLabel(state)) + '</button>' +
       '</div></div>' +
-      '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
-      ' Import asks Outlook or Gmail for the signature it would put on a reply.' +
+      '<p class="tma-dash__email-settings-hint">Edits save as you type. Import adds signatures from Outlook or Gmail; pick which one is in use above.' +
       ' You can also paste from Outlook Signatures, then upload a PNG, JPEG or WebP logo and resize it.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, insertImage: true }) +
@@ -8038,7 +8107,9 @@
       ' contenteditable="true" role="textbox" aria-multiline="true"' +
       ' aria-label="Signature content"' +
       ' data-email-signature-editor data-email-pref-html="signature"' +
-      ' data-placeholder="Appended to messages you send">' +
+      ' data-key="mail-signature-editor-' + esc((active && active.id) || 'none') + '"' +
+      ' data-morph-skip' +
+      ' data-placeholder="Name, title, phone and logo">' +
       signature +
       '</div>' +
       renderImageTransformOverlay() +
@@ -8098,6 +8169,7 @@
       state.preferences.signature = prefs.signature;
     }
 
+    var gen = state._signatureLocalGen || 0;
     api().saveSettings({
       preferences: {
         signatures: prefs.signatures,
@@ -8105,11 +8177,37 @@
         signature: prefs.signature,
       },
     }).then(function (data) {
+      if ((state._signatureLocalGen || 0) !== gen) return;
       state.settings = data;
       if (render) render();
     }).catch(function (err) {
       reportMailError(state, err);
     });
+  }
+
+  function bumpSignatureLocalGen(state) {
+    state._signatureLocalGen = (state._signatureLocalGen || 0) + 1;
+  }
+
+  function scheduleSignatureSave(root, state) {
+    if (!state.settings) return;
+    window.clearTimeout(state._signatureSaveTimer);
+    state._signatureSaveTimer = window.setTimeout(function () {
+      state._signatureSaveTimer = null;
+      persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+    }, 400);
+  }
+
+  function flushSignatureEditor(root, state) {
+    window.clearTimeout(state._signatureSaveTimer);
+    state._signatureSaveTimer = null;
+    if (!state.settings) return;
+    var editor = root.querySelector('[data-email-signature-editor]');
+    if (editor) {
+      bumpSignatureLocalGen(state);
+      syncActiveSignatureHtml(root, state, signatureEditorValue(editor));
+    }
+    persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
   }
 
   function syncActiveSignatureHtml(root, state, html) {
@@ -8749,6 +8847,12 @@
     return editor.innerHTML;
   }
 
+  function closeEmailSettingsPanel(root, state, render) {
+    flushSignatureEditor(root, state);
+    state.settingsOpen = false;
+    render();
+  }
+
   function openEmailSettings(root, state, render) {
     state.settingsOpen = true;
     if (!state.settingsTab) state.settingsTab = 'mailbox';
@@ -8762,8 +8866,7 @@
       document.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape' || !state.settingsOpen) return;
         event.preventDefault();
-        state.settingsOpen = false;
-        if (state.render) state.render();
+        closeEmailSettingsPanel(root, state, state.render || render);
       });
     }
 
@@ -8987,8 +9090,7 @@
 
     MORPH.unwired(root, '[data-email-settings-close]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.settingsOpen = false;
-        render();
+        closeEmailSettingsPanel(root, state, render);
       });
     });
 
@@ -9004,6 +9106,7 @@
         if (!tab || !root.contains(tab)) return;
         var key = tab.getAttribute('data-tab-key');
         if (!key || key === state.settingsTab) return;
+        flushSignatureEditor(root, state);
         state.settingsTab = key;
         render();
       });
@@ -9030,6 +9133,7 @@
         event.preventDefault();
         var key = tabs[next].getAttribute('data-tab-key');
         if (!key) return;
+        flushSignatureEditor(root, state);
         state.settingsTab = key;
         render();
         window.requestAnimationFrame(function () {
@@ -9163,6 +9267,14 @@
     });
 
     MORPH.unwired(root, '[data-email-pref-html]').forEach(function (editor) {
+      // Keep live HTML on state so a mailbox re-render cannot wipe typing.
+      editor.addEventListener('input', function () {
+        if (!state.settings) return;
+        bumpSignatureLocalGen(state);
+        syncActiveSignatureHtml(root, state, signatureEditorValue(editor));
+        scheduleSignatureSave(root, state);
+      });
+
       // Rich signature HTML, persist when the editor loses focus, not while
       // the toolbar is being used (mousedown on tools must not steal focus).
       editor.addEventListener('blur', function (event) {
@@ -9171,15 +9283,7 @@
         if (next && next.closest && next.closest('[data-email-image-transform]')) {
           return;
         }
-        var key = editor.getAttribute('data-email-pref-html');
-        var value = signatureEditorValue(editor);
-        var current = state.settings && state.settings.preferences
-          ? state.settings.preferences[key]
-          : undefined;
-        if (current === value) return;
-        syncActiveSignatureHtml(root, state, value);
-        var lib = ensureSignatureLibrary(state.settings.preferences);
-        persistSignatureLibrary(root, state, null, lib);
+        flushSignatureEditor(root, state);
       });
 
       editor.addEventListener('paste', function (event) {
@@ -9218,11 +9322,13 @@
     // from the main render path so compose/reply/forward share it.
 
     MORPH.unwired(root, '[data-email-signature-select]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (event) {
+        if (event.target.closest('[data-email-signature-delete], [data-email-signature-rename]')) return;
         var id = btn.getAttribute('data-email-signature-select');
         if (!id || !state.settings) return;
         var editor = root.querySelector('[data-email-signature-editor]');
         var lib = ensureSignatureLibrary(state.settings.preferences);
+        if (id === lib.activeSignatureId) return;
         // Persist edits on the signature we are leaving.
         if (editor) {
           var leavingHtml = signatureEditorValue(editor);
@@ -9264,7 +9370,8 @@
     });
 
     MORPH.unwired(root, '[data-email-signature-delete]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
         if (btn.disabled || !state.settings) return;
         var id = btn.getAttribute('data-email-signature-delete');
         var lib = ensureSignatureLibrary(state.settings.preferences);
@@ -9278,6 +9385,9 @@
     });
 
     MORPH.unwired(root, '[data-email-signature-rename]').forEach(function (input) {
+      input.addEventListener('click', function (event) {
+        event.stopPropagation();
+      });
       input.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -9319,6 +9429,7 @@
     MORPH.unwired(root, '[data-email-settings-import-signature]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
+        flushSignatureEditor(root, state);
         btn.disabled = true;
         var previous = btn.textContent;
         btn.textContent = 'Importing…';
@@ -9333,7 +9444,13 @@
           }
           state.settingsTab = 'sending';
           state._signatureCidWarned = false;
-          showEmailToast(root, 'Signature imported, click an image to resize it');
+          var count = Number(data.importedCount) || 1;
+          showEmailToast(
+            root,
+            count > 1
+              ? 'Imported ' + count + ' signatures. Choose which one is in use.'
+              : 'Signature imported. Choose it above if you want a different one.'
+          );
           render();
         }).catch(function (err) {
           btn.disabled = false;
@@ -12224,6 +12341,18 @@
         state.selectedTemplateId = btn.getAttribute('data-email-template');
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
         render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-compose-signature]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var draft = findComposeDraft(state, sel.getAttribute('data-email-compose-signature'));
+        if (!draft) return;
+        var editor = root.querySelector(
+          '[data-email-compose-body="' + sel.getAttribute('data-email-compose-signature') + '"]'
+        );
+        applyComposeSignature(draft, sel.value, editor);
+        scheduleDraftSave(state, draft);
       });
     });
 
