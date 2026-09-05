@@ -3570,6 +3570,17 @@
     });
   }
 
+  function setRowImportant(state, id, important) {
+    var row = findAnyRow(state, id);
+    if (!row || !!row.important === !!important) return;
+    eachRowCopy(state, id, function (copy) { copy.important = important; });
+    api().setFlags(id, { important: important }).catch(function (err) {
+      eachRowCopy(state, id, function (copy) { copy.important = !important; });
+      reportMailError(state, err);
+      if (state.render) state.render();
+    });
+  }
+
   function syncEmailRowReadClasses(rowEl, unread) {
     if (!rowEl) return;
     rowEl.classList.toggle('tma-dash__email-row--unread', unread);
@@ -6427,6 +6438,61 @@
     );
   }
 
+  function emailDetailToolActions(state, row) {
+    var folder = (row && row.folder) || state.folder;
+    var inArchive = folder === 'archive';
+    var unread = isRowUnread(row, state);
+    var important = isRowImportant(row, state);
+    return [
+      { id: 'delete', label: 'Delete', icon: 'Trash' },
+      {
+        id: inArchive ? 'inbox' : 'archive',
+        label: inArchive ? 'Inbox' : 'Archive',
+        icon: inArchive ? 'ArchiveTray' : 'Archive',
+      },
+      { id: 'move', label: 'Move', icon: 'FolderSimple', menu: true },
+      {
+        id: 'flag',
+        label: 'Flag',
+        icon: important ? 'FlagFilled' : 'Flag',
+        menu: true,
+        active: important,
+      },
+      {
+        id: unread ? 'read' : 'unread',
+        label: unread ? 'Mark Read' : 'Mark Unread',
+        icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple',
+      },
+      { id: 'more', label: 'More', icon: 'DotsThree', menu: true },
+    ];
+  }
+
+  function renderEmailDetailToolBtn(action) {
+    return (
+      '<button type="button" class="tma-dash__email-detail-tool' +
+      (action.active ? ' tma-dash__email-detail-tool--active' : '') + '"' +
+      ' data-email-detail-tool="' + esc(action.id) + '"' +
+      (action.menu ? ' aria-haspopup="menu" aria-expanded="false"' : '') +
+      ' aria-label="' + esc(action.label) + '">' +
+      '<img src="' + esc(ICONS[action.icon]) + '" alt="">' +
+      '<span class="tma-dash__email-detail-tool-label">' + esc(action.label) +
+      (action.menu
+        ? '<img class="tma-dash__email-detail-tool-caret" src="' + ICONS.CaretDown + '" alt="">'
+        : '') +
+      '</span>' +
+      '</button>'
+    );
+  }
+
+  function renderEmailDetailTools(state, row) {
+    if (!row || isEmailMobile() || state.composePopout) return '';
+    return (
+      '<div class="tma-dash__email-detail-tools" data-email-detail-tools data-key="email-detail-tools" role="toolbar" aria-label="Message tools">' +
+      emailDetailToolActions(state, row).map(renderEmailDetailToolBtn).join('') +
+      '</div>'
+    );
+  }
+
   function renderDetailThreadInner(state, row) {
     if (!row) {
       return '<div class="tma-dash__email-detail-empty-copy" data-key="email-detail-empty"><p>Select a message</p></div>';
@@ -6440,6 +6506,7 @@
     var body = renderEmailThread(state, null);
     return (
       renderDetailTopbar(state) +
+      renderEmailDetailTools(state, row) +
       '<div class="tma-dash__email-detail-subject-bar" data-key="email-detail-subject">' +
       (!mobile ? renderDetailBack(state, true) : '') +
       renderDetailSubject(subject, row, state) +
@@ -11424,6 +11491,39 @@
     });
   }
 
+  function openEmailMoveMenu(root, state, render, btn, id) {
+    var row = findAnyRow(state, id) || threadMessage(state, id);
+    var current = (row && row.folder) || state.folder;
+    var items = [
+      { id: 'inbox', label: 'Inbox', icon: 'Tray' },
+      { id: 'archive', label: 'Archive', icon: 'Archive' },
+      { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+      { id: 'trash', label: 'Trash', icon: 'Trash', danger: true },
+    ].filter(function (item) { return item.id !== current; });
+    btn.setAttribute('aria-expanded', 'true');
+    openEmailPointerMenu(items, btn, function (folder) {
+      applyEmailRowAction(root, state, render, id, folder, null);
+    });
+  }
+
+  function openEmailFlagMenu(root, state, render, btn, id) {
+    var row = findAnyRow(state, id) || threadMessage(state, id);
+    var important = isRowImportant(row, state);
+    btn.setAttribute('aria-expanded', 'true');
+    openEmailPointerMenu([
+      {
+        id: 'important',
+        label: important ? 'Flagged' : 'Flag',
+        icon: important ? 'FlagFilled' : 'Flag',
+        active: important,
+      },
+      { id: 'not-important', label: 'Clear flag', icon: 'Flag' },
+    ], btn, function (action) {
+      setRowImportant(state, id, action === 'important');
+      render();
+    });
+  }
+
   /* The three-dot button at the top of the open message. */
   function openEmailMessageMenu(root, state, render, btn, id) {
     var row = findAnyRow(state, id) || threadMessage(state, id);
@@ -13215,6 +13315,42 @@
         if (toggle) toggle.setAttribute('aria-expanded', 'false');
       });
     }
+
+    MORPH.unwired(root, '[data-email-detail-tool]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var action = btn.getAttribute('data-email-detail-tool');
+        var id = state.selectedId;
+        if (!id || !action) return;
+        if (action === 'more') {
+          openEmailMessageMenu(root, state, render, btn, id);
+          return;
+        }
+        if (action === 'move') {
+          openEmailMoveMenu(root, state, render, btn, id);
+          return;
+        }
+        if (action === 'flag') {
+          openEmailFlagMenu(root, state, render, btn, id);
+          return;
+        }
+        if (action === 'unread' || action === 'read') {
+          setRowRead(state, id, action === 'read');
+          render();
+          return;
+        }
+        if (action === 'archive' || action === 'inbox' || action === 'delete') {
+          applyEmailRowAction(
+            root,
+            state,
+            render,
+            id,
+            action === 'delete' ? mailDeleteDestination(state, id) : action,
+            null
+          );
+        }
+      });
+    });
 
     MORPH.unwired(root, '[data-email-detail-topbar]').forEach(function (btn) {
       btn.addEventListener('click', function () {

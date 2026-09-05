@@ -179,10 +179,50 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/dashboard.css?v=289">
+  <link rel="stylesheet" href="/css/dashboard.css?v=290">
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
+    @php
+      $inArchive = $opened->folder === 'archive';
+      $isUnread = ! $opened->is_read;
+      $isImportant = (bool) $opened->is_important;
+      $isStarred = (bool) $opened->is_starred;
+      $detailTools = [
+          ['id' => 'delete', 'label' => 'Delete', 'icon' => 'Trash', 'menu' => false, 'active' => false],
+          $inArchive
+              ? ['id' => 'inbox', 'label' => 'Inbox', 'icon' => 'ArchiveTray', 'menu' => false, 'active' => false]
+              : ['id' => 'archive', 'label' => 'Archive', 'icon' => 'Archive', 'menu' => false, 'active' => false],
+          ['id' => 'move', 'label' => 'Move', 'icon' => 'FolderSimple', 'menu' => true, 'active' => false],
+          ['id' => 'flag', 'label' => 'Flag', 'icon' => $isImportant ? 'FlagFilled' : 'Flag', 'menu' => true, 'active' => $isImportant],
+          $isUnread
+              ? ['id' => 'read', 'label' => 'Mark Read', 'icon' => 'EnvelopeSimpleOpen', 'menu' => false, 'active' => false]
+              : ['id' => 'unread', 'label' => 'Mark Unread', 'icon' => 'EnvelopeSimple', 'menu' => false, 'active' => false],
+          ['id' => 'more', 'label' => 'More', 'icon' => 'DotsThree', 'menu' => true, 'active' => false],
+      ];
+    @endphp
+    <div class="tma-dash__email-detail-tools" data-email-detail-tools role="toolbar" aria-label="Message tools"
+         data-message-id="{{ $opened->uuid }}"
+         data-folder="{{ $opened->folder }}"
+         data-unread="{{ $isUnread ? '1' : '0' }}"
+         data-important="{{ $isImportant ? '1' : '0' }}"
+         data-starred="{{ $isStarred ? '1' : '0' }}">
+      @foreach($detailTools as $tool)
+        <button type="button"
+                class="tma-dash__email-detail-tool{{ !empty($tool['active']) ? ' tma-dash__email-detail-tool--active' : '' }}"
+                data-email-detail-tool="{{ $tool['id'] }}"
+                @if(!empty($tool['menu'])) aria-haspopup="menu" aria-expanded="false" @endif
+                aria-label="{{ $tool['label'] }}">
+          <img src="{{ $icon($tool['icon']) }}" alt="">
+          <span class="tma-dash__email-detail-tool-label">
+            {{ $tool['label'] }}
+            @if(!empty($tool['menu']))
+              <img class="tma-dash__email-detail-tool-caret" src="{{ $icon('CaretDown') }}" alt="">
+            @endif
+          </span>
+        </button>
+      @endforeach
+    </div>
     <div class="tma-dash__email-detail-subject-bar">
       <div class="tma-dash__email-detail-subject">
         <span class="tma-dash__email-detail-subject-text">{{ $subject }}</span>
@@ -521,6 +561,231 @@
         window.setTimeout(fit, 400);
       } catch (e) { /* a frame we cannot measure keeps its default height */ }
     }
+  </script>
+  <div class="tma-dash__email-toast" data-mail-window-toast hidden>
+    <span data-mail-window-toast-text></span>
+  </div>
+  <script src="/js/email-api.js?v=11"></script>
+  <script>
+    (function () {
+      var api = window.TMAEmailAPI;
+      var bar = document.querySelector('[data-email-detail-tools]');
+      var toastEl = document.querySelector('[data-mail-window-toast]');
+      var toastText = toastEl && toastEl.querySelector('[data-mail-window-toast-text]');
+      if (!api || !bar) return;
+
+      var id = bar.getAttribute('data-message-id');
+      var folder = bar.getAttribute('data-folder') || 'inbox';
+      var toastTimer = null;
+
+      function toast(msg) {
+        if (!toastEl || !toastText) return;
+        toastText.textContent = msg;
+        toastEl.hidden = false;
+        toastEl.classList.add('tma-dash__email-toast--visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(function () {
+          toastEl.classList.remove('tma-dash__email-toast--visible');
+          toastTimer = window.setTimeout(function () { toastEl.hidden = true; }, 240);
+        }, 2200);
+      }
+
+      function fail(err) {
+        toast((err && err.message) || 'Could not update this message');
+      }
+
+      function closeSoon() {
+        window.setTimeout(function () { window.close(); }, 450);
+      }
+
+      function iconUrl(name) {
+        return '/images/icons/phosphor/' + name + '.svg';
+      }
+
+      function closeMenu() {
+        var menu = document.querySelector('[data-mail-window-menu]');
+        if (!menu) return;
+        if (menu._onDoc) document.removeEventListener('mousedown', menu._onDoc, true);
+        if (menu._onKey) document.removeEventListener('keydown', menu._onKey, true);
+        menu.remove();
+        bar.querySelectorAll('[aria-expanded="true"]').forEach(function (el) {
+          el.setAttribute('aria-expanded', 'false');
+        });
+      }
+
+      function openMenu(anchor, items, onPick) {
+        closeMenu();
+        anchor.setAttribute('aria-expanded', 'true');
+        var menu = document.createElement('div');
+        menu.className = 'tma-dash__email-context-menu';
+        menu.setAttribute('data-mail-window-menu', '');
+        menu.setAttribute('role', 'menu');
+        menu.innerHTML = items.map(function (item) {
+          if (item.separator) return '<div class="tma-dash__email-context-menu-divider" role="separator"></div>';
+          return (
+            '<button type="button" class="tma-dash__email-context-menu-item' +
+            (item.danger ? ' tma-dash__email-context-menu-item--danger' : '') +
+            (item.active ? ' is-active' : '') +
+            '" role="menuitem" data-mail-window-menu-item="' + item.id + '">' +
+            '<img class="tma-dash__email-context-menu-icon" src="' + iconUrl(item.icon) + '" alt="">' +
+            '<span>' + item.label + '</span>' +
+            '</button>'
+          );
+        }).join('');
+        document.body.appendChild(menu);
+        var rect = menu.getBoundingClientRect();
+        var point = anchor.getBoundingClientRect();
+        var left = Math.max(8, Math.min(point.left, window.innerWidth - rect.width - 8));
+        var top = Math.max(8, Math.min(point.bottom + 4, window.innerHeight - rect.height - 8));
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        menu._onDoc = function (event) {
+          if (menu.contains(event.target) || anchor.contains(event.target)) return;
+          closeMenu();
+        };
+        menu._onKey = function (event) {
+          if (event.key === 'Escape') closeMenu();
+        };
+        menu.addEventListener('click', function (event) {
+          var btn = event.target.closest('[data-mail-window-menu-item]');
+          if (!btn) return;
+          event.preventDefault();
+          var picked = btn.getAttribute('data-mail-window-menu-item');
+          closeMenu();
+          onPick(picked);
+        });
+        document.addEventListener('mousedown', menu._onDoc, true);
+        document.addEventListener('keydown', menu._onKey, true);
+      }
+
+      function leave(msg) {
+        toast(msg);
+        closeSoon();
+      }
+
+      function moveTo(dest, msg) {
+        var req = dest === 'delete' ? api.remove(id) : api.move(id, dest);
+        req.then(function () { leave(msg); }).catch(fail);
+      }
+
+      function toolBtn(action) {
+        return bar.querySelector('[data-email-detail-tool="' + action + '"]');
+      }
+
+      function setUnread(unread) {
+        bar.setAttribute('data-unread', unread ? '1' : '0');
+        var readBtn = toolBtn('read');
+        var unreadBtn = toolBtn('unread');
+        var btn = readBtn || unreadBtn;
+        if (!btn) return;
+        btn.setAttribute('data-email-detail-tool', unread ? 'read' : 'unread');
+        btn.setAttribute('aria-label', unread ? 'Mark Read' : 'Mark Unread');
+        var label = btn.querySelector('.tma-dash__email-detail-tool-label');
+        var caret = label && label.querySelector('.tma-dash__email-detail-tool-caret');
+        if (label) {
+          label.textContent = unread ? 'Mark Read' : 'Mark Unread';
+          if (caret) label.appendChild(caret);
+        }
+        var img = btn.querySelector(':scope > img');
+        if (img) img.src = iconUrl(unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple');
+      }
+
+      function setImportant(important) {
+        bar.setAttribute('data-important', important ? '1' : '0');
+        var btn = toolBtn('flag');
+        if (!btn) return;
+        btn.classList.toggle('tma-dash__email-detail-tool--active', important);
+        var img = btn.querySelector(':scope > img');
+        if (img) img.src = iconUrl(important ? 'FlagFilled' : 'Flag');
+      }
+
+      function setStarred(starred) {
+        bar.setAttribute('data-starred', starred ? '1' : '0');
+      }
+
+      bar.addEventListener('click', function (event) {
+        var btn = event.target.closest('[data-email-detail-tool]');
+        if (!btn || !bar.contains(btn)) return;
+        var action = btn.getAttribute('data-email-detail-tool');
+        var unread = bar.getAttribute('data-unread') === '1';
+        var important = bar.getAttribute('data-important') === '1';
+        var starred = bar.getAttribute('data-starred') === '1';
+
+        if (action === 'delete') {
+          moveTo(folder === 'trash' ? 'delete' : 'trash', 'Message deleted');
+          return;
+        }
+        if (action === 'archive') {
+          moveTo('archive', 'Message archived');
+          return;
+        }
+        if (action === 'inbox') {
+          moveTo('inbox', 'Moved to inbox');
+          return;
+        }
+        if (action === 'unread' || action === 'read') {
+          var nextRead = action === 'read';
+          api.setFlags(id, { read: nextRead }).then(function () {
+            setUnread(!nextRead);
+            toast(nextRead ? 'Marked as read' : 'Marked as unread');
+          }).catch(fail);
+          return;
+        }
+        if (action === 'move') {
+          openMenu(btn, [
+            { id: 'inbox', label: 'Inbox', icon: 'Tray' },
+            { id: 'archive', label: 'Archive', icon: 'Archive' },
+            { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+            { id: 'trash', label: 'Trash', icon: 'Trash', danger: true }
+          ].filter(function (item) { return item.id !== folder; }), function (dest) {
+            var msg =
+              dest === 'archive' ? 'Message archived' :
+              dest === 'inbox' ? 'Moved to inbox' :
+              dest === 'spam' ? 'Marked as spam' :
+              'Message deleted';
+            moveTo(dest === 'trash' && folder === 'trash' ? 'delete' : dest, msg);
+          });
+          return;
+        }
+        if (action === 'flag') {
+          openMenu(btn, [
+            { id: 'important', label: important ? 'Flagged' : 'Flag', icon: important ? 'FlagFilled' : 'Flag', active: important },
+            { id: 'not-important', label: 'Clear flag', icon: 'Flag' }
+          ], function (picked) {
+            var next = picked === 'important';
+            api.setFlags(id, { important: next }).then(function () {
+              setImportant(next);
+              toast(next ? 'Flagged' : 'Flag cleared');
+            }).catch(fail);
+          });
+          return;
+        }
+        if (action === 'more') {
+          openMenu(btn, [
+            { id: starred ? 'unstar' : 'star', label: starred ? 'Remove star' : 'Add star', icon: starred ? 'StarFilled' : 'Star', active: starred },
+            { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
+            { separator: true },
+            { id: 'print', label: 'Print', icon: 'Printer' }
+          ], function (picked) {
+            if (picked === 'print') {
+              window.print();
+              return;
+            }
+            if (picked === 'spam') {
+              moveTo('spam', 'Marked as spam');
+              return;
+            }
+            if (picked === 'star' || picked === 'unstar') {
+              var nextStar = picked === 'star';
+              api.setFlags(id, { starred: nextStar }).then(function () {
+                setStarred(nextStar);
+                toast(nextStar ? 'Starred' : 'Star removed');
+              }).catch(fail);
+            }
+          });
+        }
+      });
+    })();
   </script>
 </body>
 </html>

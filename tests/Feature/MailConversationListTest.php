@@ -302,8 +302,13 @@ class MailConversationListTest extends TestCase
         $response->assertSee('sam@example.com');
         $response->assertSee('The numbers are attached.', escape: false);
 
-        // Same reading-pane chrome as the inbox, not the portal shell and not
-        // a separate gray-card layout.
+        $response->assertSee('tma-dash__email-detail-tools', false);
+        $response->assertSee('data-email-detail-tool="delete"', false);
+        $response->assertSee('data-email-detail-tool="archive"', false);
+        $response->assertSee('data-email-detail-tool="move"', false);
+        $response->assertSee('data-email-detail-tool="flag"', false);
+        $response->assertSee('data-email-detail-tool="unread"', false);
+        $response->assertSee('data-email-detail-tool="more"', false);
         $response->assertSee('tma-dash__email-detail', false);
         $response->assertSee('tma-dash__email-message-head-name', false);
         $response->assertSee('tma-dash__email-thread-btn', false);

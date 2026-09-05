@@ -12960,6 +12960,7 @@
 }
 
 .tma-dash__email-detail--composing > .tma-dash__email-detail-subject-bar,
+.tma-dash__email-detail--composing > .tma-dash__email-detail-tools,
 .tma-dash__email-detail--composing > .tma-dash__email-detail-scroll,
 .tma-dash__email-detail--composing > .tma-dash__email-detail-footer,
 .tma-dash__email-detail--composing > .tma-dash__email-detail-empty-copy {
@@ -13044,7 +13045,8 @@ html.tma-dash--compose-popout body {
 .tma-dash--compose-popout .tma-dash__email-mobile-scrim,
 .tma-dash--compose-popout [data-email-compose-popout],
 .tma-dash--compose-popout [data-email-compose-minimize],
-.tma-dash--compose-popout .tma-dash__email-detail-back {
+.tma-dash--compose-popout .tma-dash__email-detail-back,
+.tma-dash--compose-popout .tma-dash__email-detail-tools {
   display: none !important;
 }
 
@@ -13169,7 +13171,8 @@ html.tma-dash.tma-dash--mail-window body {
 @media print {
   .tma-dash--mail-window .tma-dash__email-detail-footer,
   .tma-dash--mail-window .tma-dash__email-detail-actions,
-  .tma-dash--mail-window .tma-dash__email-detail-subject-trailing {
+  .tma-dash--mail-window .tma-dash__email-detail-subject-trailing,
+  .tma-dash--mail-window .tma-dash__email-detail-tools {
     display: none !important;
   }
 }
@@ -13222,6 +13225,112 @@ html.tma-dash.tma-dash--mail-window body {
   height: 32px;
   padding: var(--space-4);
   justify-content: center;
+}
+
+/* Outlook-style tools on the open message: icon above a short label. */
+.tma-dash__email-detail-tools {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: var(--space-4) var(--email-pad);
+  border-bottom: 1px solid var(--color-overlay-4);
+  background: var(--color-white);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tma-dash__email-detail-tool {
+  appearance: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 56px;
+  padding: 8px 10px 6px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  cursor: pointer;
+}
+
+.tma-dash__email-detail-tool > img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.72;
+  flex: 0 0 auto;
+}
+
+.tma-dash__email-detail-tool-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  max-width: 4.75rem;
+}
+
+.tma-dash__email-detail-tool-caret {
+  width: 8px;
+  height: 8px;
+  opacity: 0.55;
+  flex: 0 0 auto;
+}
+
+.tma-dash__email-detail-tool:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-detail-tool:hover > img {
+  opacity: 0.9;
+}
+
+.tma-dash__email-detail-tool--active {
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-detail-tool--active > img {
+  opacity: 1;
+  filter: none;
+}
+
+:root[data-theme="dark"] .tma-dash__email-detail-tools,
+.tma-dash[data-theme="dark"] .tma-dash__email-detail-tools {
+  background: var(--color-bg-card, #1c1c1c);
+}
+
+:root[data-theme="dark"] .tma-dash__email-detail-tool > img,
+:root[data-theme="dark"] .tma-dash__email-detail-tool-caret,
+.tma-dash[data-theme="dark"] .tma-dash__email-detail-tool > img,
+.tma-dash[data-theme="dark"] .tma-dash__email-detail-tool-caret {
+  filter: invert(1) brightness(1.6);
+}
+
+:root[data-theme="dark"] .tma-dash__email-detail-tool--active > img,
+.tma-dash[data-theme="dark"] .tma-dash__email-detail-tool--active > img {
+  filter: none;
+}
+
+@media (max-width: 1024px) {
+  .tma-dash__email-detail-tools {
+    display: none;
+  }
+  html.tma-dash--mail-window .tma-dash__email-detail-tools {
+    display: flex;
+  }
+}
+
+@media print {
+  .tma-dash__email-detail-tools {
+    display: none !important;
+  }
 }
 
 .tma-dash__email-detail-subject {
