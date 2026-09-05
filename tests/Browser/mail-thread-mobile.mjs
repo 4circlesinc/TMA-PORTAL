@@ -93,6 +93,7 @@ function measure(page) {
       paneOverflow: scroll ? scroll.scrollWidth > scroll.clientWidth + 1 : null,
       subject: subjectText ? {
         text: subjectText.textContent.trim(),
+        font: parseFloat(getComputedStyle(subjectText).fontSize),
         whiteSpace: getComputedStyle(subjectText).whiteSpace,
         clipped: subjectText.scrollWidth > subjectText.clientWidth + 1,
         lines: Math.round(subjectText.getBoundingClientRect().height / parseFloat(getComputedStyle(subjectText).lineHeight)),
@@ -146,8 +147,19 @@ async function runAt(label, viewport) {
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  step(label, `Thread at ${viewport.width}px: nothing runs off the screen`);
+  step(label, `Inbox at ${viewport.width}px: row type sized so the preview has room`);
   await signIn(page);
+  await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
+  await page.waitForSelector(LIST_ROW, { timeout: 15000 });
+  const rowType = await page.evaluate(() => {
+    const px = (sel) => { const el = document.querySelector(sel); return el ? parseFloat(getComputedStyle(el).fontSize) : null; };
+    return { sender: px('.tma-dash__email-row-sender'), subject: px('.tma-dash__email-row-subject-text'), snippet: px('.tma-dash__email-row-snippet'), time: px('.tma-dash__email-row-time') };
+  });
+  check(rowType.sender !== null && rowType.sender <= 14, `sender at ${rowType.sender}px`);
+  check(rowType.subject !== null && rowType.subject <= 13 && rowType.snippet !== null && rowType.snippet <= 13, `subject and preview at ${rowType.subject}px / ${rowType.snippet}px`);
+  check(rowType.time !== null && rowType.time <= 12, `time at ${rowType.time}px`);
+
+  step(label, `Thread at ${viewport.width}px: nothing runs off the screen`);
   await openMessage(page, 'INTRODUCTION');
   let m = await measure(page);
   check(!m.pageOverflow, 'the page has no horizontal overflow');
@@ -181,6 +193,7 @@ async function runAt(label, viewport) {
   check(!!m.subject && m.subject.text.startsWith(SUBJECT), `the full subject is there (got "${m.subject && m.subject.text.slice(0, 40)}…")`);
   check(!!m.subject && m.subject.whiteSpace !== 'nowrap' && !m.subject.clipped, 'it wraps instead of truncating');
   check(!!m.subject && m.subject.lines >= 2, `over more than one line (${m.subject && m.subject.lines})`);
+  check(!!m.subject && m.subject.font <= 17, `at ${m.subject && m.subject.font}px`);
   check(!!m.star && m.star.inside, 'the star is on screen');
   check(!!m.star && !!m.subject && m.star.top < m.subject.box.top + 30, 'and level with the first line of the subject');
   check(m.chips.length >= 1 && m.chips.every((c) => c.inside), `label chips fit the screen (${m.chips.map((c) => c.text).join(', ')})`);

@@ -14760,7 +14760,7 @@
     grid-template-rows: auto auto auto;
     align-items: start;
     gap: 2px var(--space-12);
-    min-height: 72px;
+    min-height: 64px;
     width: 100%;
     padding: var(--space-12) 0;
     padding-left: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
@@ -14866,11 +14866,14 @@
     display: none;
   }
 
+  /* Literal sizes: the type tokens step up on a phone (14 → 15px), and at
+     that size a row's preview and attachment chips were pushed off the end
+     of their line. */
   .tma-dash__email-row-sender {
     max-width: none;
     flex: 1 1 auto;
-    font-size: var(--text-size-14);
-    line-height: 20px;
+    font-size: 14px;
+    line-height: 18px;
   }
 
   .tma-dash__email-row-subject {
@@ -14878,8 +14881,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: var(--text-size-14);
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 18px;
   }
 
   .tma-dash__email-row-subject .tma-dash__email-row-body {
@@ -14888,8 +14891,8 @@
 
   .tma-dash__email-row-snippet {
     display: block;
-    font-size: var(--text-size-14);
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 18px;
     color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -14911,7 +14914,7 @@
   }
 
   .tma-dash__email-row-time {
-    font-size: var(--text-size-12);
+    font-size: 12px;
     line-height: 16px;
     color: var(--color-text-secondary);
     white-space: nowrap;
@@ -14964,8 +14967,8 @@
 
   .tma-dash__email-detail--mobile .tma-dash__email-detail-subject {
     align-items: flex-start;
-    font-size: 20px;
-    line-height: 26px;
+    font-size: 17px;
+    line-height: 22px;
     gap: var(--space-8);
     padding-left: max(var(--email-mobile-content-pad-x), env(safe-area-inset-left, 0px));
     padding-right: max(var(--email-mobile-content-pad-x), env(safe-area-inset-right, 0px));
@@ -14984,8 +14987,8 @@
     align-items: center;
     flex-wrap: nowrap;
     gap: var(--space-8);
-    /* Centred on the title's first line. */
-    margin-top: -3px;
+    /* Centred on the title's first line (32px star over a 22px line). */
+    margin-top: -5px;
   }
 
   .tma-dash__email-detail--mobile .tma-dash__email-detail-subject-labels {
