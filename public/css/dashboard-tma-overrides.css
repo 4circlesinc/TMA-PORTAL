@@ -292,6 +292,15 @@
     --dash-tabbar-clearance: calc(var(--dash-tabbar-block-h) + var(--space-8));
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
+    /* The shell is as tall as what is actually on screen. `100vh` is the
+       largest the viewport ever gets, so with a phone browser's address bar
+       showing the bottom of the shell (an open message's reply bar) sat
+       behind that bar until the reader scrolled it away. `dvh` follows the
+       bar; the vh line is the fallback where dvh is unknown. */
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
     /* dashboard.css steps this down at =<560px, but this file's unconditional
      * `.tma-dash { --dash-gutter }` above loads later at the same specificity
      * and wins, so the narrow-screen gutter has to be restated here. 28px

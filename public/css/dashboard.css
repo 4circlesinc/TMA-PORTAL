@@ -14429,6 +14429,7 @@
     max-width: none;
     max-height: none;
     height: calc(100vh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
     min-height: 0;
     border: none;
     border-right: none;
@@ -17451,6 +17452,7 @@
     max-width: none;
     max-height: none;
     height: calc(100vh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
     min-height: 0;
     gap: 0;
     display: flex;
