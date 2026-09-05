@@ -1590,7 +1590,12 @@
     return state.selectedId ? [state.selectedId] : [];
   }
 
-  function emailToolbarActions(folder) {
+  function emailToolbarActions(state) {
+    var folder = state.folder;
+    var ids = emailToolbarTargetIds(state);
+    var row = ids.length === 1 ? findAnyRow(state, ids[0]) : null;
+    var starred = !!(row && row.starred);
+    var important = !!(row && isRowImportant(row, state));
     var archiveAction = folder === 'archive'
       ? { id: 'inbox', label: 'Move to inbox', icon: 'ArchiveTray' }
       : { id: 'archive', label: 'Archive', icon: 'Archive' };
@@ -1598,8 +1603,12 @@
       { id: 'delete', label: 'Delete', icon: 'Trash' },
       archiveAction,
       { id: 'move', label: 'Label as', icon: 'Tag' },
+      { id: 'flag', label: important ? 'Unflag' : 'Flag', icon: important ? 'FlagFilled' : 'Flag' },
+      { id: 'star', label: starred ? 'Starred' : 'Star', icon: starred ? 'StarFilled' : 'Star' },
       { id: 'unread', label: 'Mark as unread', icon: 'EnvelopeSimple' },
+      { id: 'snooze', label: 'Snooze', icon: 'Clock' },
       { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
+      { id: 'print', label: 'Print', icon: 'Printer' },
       { id: 'more', label: 'More', icon: 'DotsThree' },
     ];
   }
@@ -1628,7 +1637,7 @@
     if (isEmailMobile()) return '';
 
     var hasTarget = emailToolbarTargetIds(state).length > 0;
-    var actions = emailToolbarActions(state.folder).map(function (action) {
+    var actions = emailToolbarActions(state).map(function (action) {
       var extraAttrs = '';
       if (action.id === 'more') {
         extraAttrs =
@@ -2105,17 +2114,6 @@
   var BULK_MORE_SECTIONS = [
     {
       items: [
-        { id: 'unread', label: 'Mark as unread', icon: 'EnvelopeSimple' },
-        { id: 'snooze', label: 'Snooze', icon: 'Clock' },
-      ],
-    },
-    {
-      items: [
-        { id: 'label', label: 'Label as', icon: 'Tag', submenu: true },
-        { id: 'add-star', label: 'Add star', icon: 'Star' },
-        { id: 'remove-star', label: 'Remove star', icon: 'StarFilled' },
-        { id: 'important', label: 'Mark as important', icon: 'Flag' },
-        { id: 'not-important', label: 'Mark as not important', icon: 'Flag', filled: true },
         { id: 'forward-attachment', label: 'Forward as attachment', icon: 'PaperclipHorizontal' },
         { id: 'filter-like', label: 'Filter messages like these', icon: 'FunnelSimple' },
         { id: 'mute', label: 'Mute', icon: 'SpeakerSlash' },
@@ -2124,11 +2122,6 @@
     {
       items: [
         { id: 'share-feedback', label: 'Share to help improve TMA', icon: 'ChatCircleDots' },
-      ],
-    },
-    {
-      items: [
-        { id: 'advanced-toolbar', label: 'Switch to advanced toolbar', icon: 'ArrowsHorizontal' },
       ],
     },
   ];
@@ -6503,13 +6496,10 @@
     );
   }
 
-  function renderEmailDetailTools(state, row) {
-    if (!row || isEmailMobile() || state.composePopout) return '';
-    return (
-      '<div class="tma-dash__email-detail-tools" data-email-detail-tools data-key="email-detail-tools" role="toolbar" aria-label="Message tools">' +
-      emailDetailToolActions(state, row).map(renderEmailDetailToolBtn).join('') +
-      '</div>'
-    );
+  function renderEmailDetailTools() {
+    // Message tools belong only on the popped-out mail window. The inbox
+    // reading pane uses the page toolbar (New Mail / Delete / Settings).
+    return '';
   }
 
   function renderDetailThreadInner(state, row) {
@@ -11782,6 +11772,70 @@
     });
   }
 
+  function handleEmailBulkToolbarAction(root, state, render, btn, action, ids) {
+    if (!ids.length) return;
+
+    if (action === 'more') {
+      if (state.bulkMoreMenuOpen) closeEmailBulkMoreMenu(root, state);
+      else openEmailBulkMoreMenu(root, state, btn);
+      ensureEmailMobileHeader(root, state);
+      return;
+    }
+
+    closeEmailBulkMoreMenu(root, state);
+
+    if (action === 'move') {
+      openEmailLabelPopup(root, state, btn, { bulk: true });
+      return;
+    }
+
+    if (action === 'snooze') {
+      openEmailSnoozeMenu(root, btn, function (iso, label) {
+        var affected = ids.filter(function (rowId) { return !!findRow(state, rowId); });
+        state.rows = rowsOf(state).filter(function (row) {
+          if (ids.indexOf(row.id) === -1) return true;
+          row.snoozedUntil = iso;
+          if (state.folder !== 'snoozed') {
+            adjustFolderCount(state, state.folder, -1, row.unread);
+            adjustFolderCount(state, 'snoozed', 1, row.unread);
+          }
+          return state.folder === 'snoozed';
+        });
+        clearEmailSelection(state);
+        render();
+        showEmailToast(root, affected.length + ' snoozed until ' + label);
+        Promise.all(affected.map(function (rowId) {
+          return api().setFlags(rowId, { snooze: iso });
+        })).catch(function (err) {
+          reportMailError(state, err);
+          reloadMessages(root, state, render);
+        });
+      });
+      return;
+    }
+
+    if (action === 'flag') {
+      var sample = findAnyRow(state, ids[0]);
+      var next = !(sample && isRowImportant(sample, state));
+      ids.forEach(function (id) { setRowImportant(state, id, next); });
+      render();
+      return;
+    }
+
+    if (action === 'star') {
+      var starredRow = findAnyRow(state, ids[0]);
+      applyBulkAction(root, state, render, ids, (starredRow && starredRow.starred) ? 'unstar' : 'star');
+      return;
+    }
+
+    if (action === 'print') {
+      openMailInWindow(root, ids[0], { print: true });
+      return;
+    }
+
+    applyBulkAction(root, state, render, ids, action);
+  }
+
   /* Keeps the sidebar badges honest between server round trips. */
   function adjustFolderCount(state, folder, delta, wasUnread) {
     if (!state.folderCounts || !state.folderCounts[folder]) return;
@@ -13433,24 +13487,7 @@
         event.preventDefault();
         event.stopPropagation();
         var action = bulkBtn.getAttribute('data-email-bulk-action');
-        var ids = emailToolbarTargetIds(state);
-        if (!ids.length) return;
-
-        if (action === 'more') {
-          if (state.bulkMoreMenuOpen) closeEmailBulkMoreMenu(root, state);
-          else openEmailBulkMoreMenu(root, state, bulkBtn);
-          ensureEmailMobileHeader(root, state);
-          return;
-        }
-
-        closeEmailBulkMoreMenu(root, state);
-
-        if (action === 'move') {
-          openEmailLabelPopup(root, state, bulkBtn, { bulk: true });
-          return;
-        }
-
-        applyBulkAction(root, state, render, ids, action);
+        handleEmailBulkToolbarAction(root, state, render, bulkBtn, action, emailToolbarTargetIds(state));
       });
     });
 
@@ -13468,32 +13505,7 @@
         }
 
         if (item === 'snooze') {
-          closeEmailBulkMoreMenu(root, state);
-          openEmailSnoozeMenu(root, btn, function (iso, label) {
-            // Optimistic: every selected row leaves the current view (they
-            // are all now snoozed), then the flags are written one by one —
-            // snooze is a local flag, so there is no bulk provider call to
-            // batch behind.
-            var affected = ids.filter(function (rowId) { return !!findRow(state, rowId); });
-            state.rows = rowsOf(state).filter(function (row) {
-              if (ids.indexOf(row.id) === -1) return true;
-              row.snoozedUntil = iso;
-              if (state.folder !== 'snoozed') {
-                adjustFolderCount(state, state.folder, -1, row.unread);
-                adjustFolderCount(state, 'snoozed', 1, row.unread);
-              }
-              return state.folder === 'snoozed';
-            });
-            clearEmailSelection(state);
-            render();
-            showEmailToast(root, affected.length + ' snoozed until ' + label);
-            Promise.all(affected.map(function (rowId) {
-              return api().setFlags(rowId, { snooze: iso });
-            })).catch(function (err) {
-              reportMailError(state, err);
-              reloadMessages(root, state, render);
-            });
-          });
+          handleEmailBulkToolbarAction(root, state, render, btn, 'snooze', ids);
           return;
         }
 
@@ -13528,29 +13540,7 @@
         if (!bulkBtn) return;
         event.stopPropagation();
         var action = bulkBtn.getAttribute('data-email-bulk-action');
-        var ids = emailToolbarTargetIds(state);
-        if (!ids.length) return;
-
-        if (action === 'more') {
-          if (state.bulkMoreMenuOpen) {
-            closeEmailBulkMoreMenu(root, state);
-          } else {
-            openEmailBulkMoreMenu(root, state, bulkBtn);
-          }
-          ensureEmailMobileHeader(root, state);
-          return;
-        }
-
-        closeEmailBulkMoreMenu(root, state);
-
-        // 'move' opens a picker rather than acting directly; everything else
-        // maps straight onto a bulk action.
-        if (action === 'move') {
-          openEmailLabelPopup(root, state, bulkBtn, { bulk: true });
-          return;
-        }
-
-        applyBulkAction(root, state, render, ids, action);
+        handleEmailBulkToolbarAction(root, state, render, bulkBtn, action, emailToolbarTargetIds(state));
       });
     }
 
