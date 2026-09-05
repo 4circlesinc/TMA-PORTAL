@@ -7,9 +7,10 @@ import { chromium } from 'playwright';
  * input after the pills only holds the address being typed. Enter, Tab, a
  * comma, a paste and leaving the field all turn text into pills; Backspace
  * on an empty input takes the last pill back; the × removes one; a typeahead
- * pick lands as a pill. A plain reply shows its one recipient as a fixed
- * pill. The draft keeps the "Name <a@b>, c@d" string the send path reads,
- * and half-typed text survives a re-render.
+ * pick lands as a pill. A plain reply opens the same full composer, with its
+ * recipient as an editable pill plus Subject and Cc/Bcc. The draft keeps the
+ * "Name <a@b>, c@d" string the send path reads, and half-typed text survives
+ * a re-render.
  *
  * See README.md for setup. Needs the seeded thread, a colleague named Dana
  * Reed and a connected mailbox.
@@ -169,43 +170,47 @@ try {
   check(sent && sent.to[1].name === 'Dana Reed', 'the name travelled with the address');
   check(sent && sent.cc.map((a) => a.email).join() === 'cc@x.test', `cc = ${sent && sent.cc.map((a) => a.email).join(', ')}`);
 
-  step(11, 'A reply shows its one recipient as a fixed pill');
+  step(11, 'A reply uses the full composer with To, Subject, and Cc/Bcc');
   await page.waitForSelector('[data-email-row]', { timeout: 15000 });
   await page.locator('[data-email-row]:not([data-email-row-child]):has-text("Quarterly review")').first()
     .locator('.tma-dash__email-row-content').click();
   await page.waitForSelector('.tma-dash__email-message--expanded', { timeout: 10000 });
   await page.waitForTimeout(1200);
   await page.click('.tma-dash__email-message--expanded [data-email-inline-compose="reply"]');
-  await page.waitForSelector('[data-email-inline-compose-panel]', { timeout: 5000 });
-  const replyPills = await page.$$eval('[data-email-inline-compose-panel] .tma-dash__email-recipients--static [data-email-recipient]',
-    (els) => els.map((e) => e.getAttribute('title')));
-  const replyRemove = await page.$$('[data-email-inline-compose-panel] .tma-dash__email-recipients--static [data-email-recipient-remove]');
+  await page.waitForSelector('[data-email-compose-window]', { timeout: 8000 });
+  const replyPills = await pillsOf(TO);
   check(replyPills.length === 1 && /@/.test(replyPills[0]), `reply To is one pill (${replyPills.join(', ')})`);
-  check(replyRemove.length === 0, 'and it cannot be removed');
-  await page.click('[data-email-inline-compose-close]');
+  const replySubject = await page.inputValue('[data-email-compose-field="subject"]');
+  check(/^re:/i.test(replySubject), `reply Subject is Re: ("${replySubject}")`);
+  check(!!(await page.$('[data-email-compose-cc]')), 'Cc and Bcc can be shown');
+  await page.click('[data-email-compose-window] [data-email-compose-close]');
+  await page.waitForSelector('[data-email-compose-window]', { state: 'detached', timeout: 5000 });
   await page.waitForTimeout(300);
 
   step(12, 'Reply all carries To and Cc as editable pills, and sends them');
   await page.click('.tma-dash__email-message--expanded [data-email-inline-compose="reply-all"]');
-  await page.waitForSelector('[data-email-inline-compose-field="cc"]', { timeout: 5000 });
-  const ITO = '[data-email-inline-compose-field="to"]';
-  const ICC = '[data-email-inline-compose-field="cc"]';
-  const raTo = await pillsOf(ITO);
-  const raCc = await pillsOf(ICC);
+  await page.waitForSelector('[data-email-compose-field="cc"]', { timeout: 8000 });
+  const raTo = await pillsOf(TO);
+  const raCc = await pillsOf(CC);
   check(raTo.length >= 1, `To pills (${raTo.join(', ')})`);
   check(/sam@example\.com/.test(raCc.join()), `Cc pill carries the thread's Cc (${raCc.join(', ')})`);
-  const ito = page.locator(ITO).first();
+  const ito = page.locator(TO).first();
   await ito.click();
   await ito.type('extra@x.test');
   await ito.press('Enter');
   await page.waitForTimeout(150);
-  const raTo2 = await pillsOf(ITO);
+  const raTo2 = await pillsOf(TO);
   check(raTo2.length === raTo.length + 1 && raTo2[raTo2.length - 1] === 'extra@x.test', 'an added address became a pill');
-  const icState = await page.evaluate(() => document.querySelector('[data-email]')._emailState.inlineCompose);
-  check(/extra@x\.test/.test(icState.to) && /sam@example\.com/.test(icState.cc), `state.inlineCompose to/cc updated ("${icState.to}" / "${icState.cc}")`);
-  await page.click('[data-email-inline-compose-editor]');
+  const icState = await page.evaluate(() => {
+    const s = document.querySelector('[data-email]')._emailState;
+    const d = (s.composeDrafts || []).filter((x) => !x.minimized).pop();
+    return d ? { to: d.to, cc: d.cc } : null;
+  });
+  check(icState && /extra@x\.test/.test(icState.to) && /sam@example\.com/.test(icState.cc),
+    `compose draft to/cc updated ("${icState && icState.to}" / "${icState && icState.cc}")`);
+  await page.click('[data-email-compose-body]');
   await page.keyboard.type('Thanks all');
-  await page.click('[data-email-inline-compose-send]');
+  await page.click('[data-email-compose-send]');
   await page.waitForTimeout(800);
   const ra = sends[sends.length - 1];
   check(ra && ra.mode === 'reply-all', 'reply-all send went out');

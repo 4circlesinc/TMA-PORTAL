@@ -1177,37 +1177,45 @@
     );
   }
 
+  /* Reply / reply-all / forward use the same pane composer as New Mail:
+   * editable To, Cc/Bcc, Subject, toolbar, send, and pop-out. The quoted
+   * original lives in the body so it actually goes out with Send. */
   function openInlineCompose(state, mode) {
     if (!state.selectedId) return;
     closeRecipientSuggest();
-    // The open message may be one the thread carries rather than a row on the
-    // page, its cc list is what "reply all" has to answer.
+    closeInlineCompose(state);
     var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
+    if (!row) return;
+
+    var quotedSource = threadMessage(state, row.id) || row;
+    var lines = rowListLines(row);
+    var subject = (state.thread && state.thread.subject) || lines.subject;
+    var metaEmail = row.email || rowSenderEmail(row) || '';
+    var metaDate = formatMessageDate(row);
+    var quotedBodyHtml = quotedSource.bodyHtml || '';
+    var quoteHtml = mode === 'forward'
+      ? renderForwardQuote(row, metaEmail, metaDate, subject, lines.body, quotedBodyHtml)
+      : renderReplyQuote(row, metaEmail, metaDate, lines.body, quotedBodyHtml);
+
     var to = '';
     var cc = '';
-    if (row && mode === 'reply') {
+    if (mode === 'reply') {
       to = formatAddressList(replyRecipients(row));
-    } else if (row && mode === 'reply-all') {
+    } else if (mode === 'reply-all') {
       var all = replyAllRecipients(row);
       to = formatAddressList(all.to);
       cc = formatAddressList(all.cc);
     }
-    // Same as new compose: seed the signature into the draft so it paints and
-    // leaves with the reply even if the user never types in the body. Blank
-    // blocks sit above it so a tall signature image cannot eat the typing area.
-    minimizeOpenComposeDrafts(state);
-    state.inlineCompose = {
-      mode: mode,
-      messageId: state.selectedId,
+
+    openCompose(state, {
       to: to,
       cc: cc,
-      bodyHtml: inlineComposeBodyHtml(),
-      sending: false,
-      attachments: [],
-    };
-    enterComposeView(state);
-    state._focusInlineCompose = true;
-    state._composeEnter = true;
+      showCc: mode === 'reply-all',
+      subject: mode === 'forward' ? getForwardSubject(subject) : getReplySubject(subject),
+      bodyHtml: composeTypingRoomHtml() + composeSignatureHtml() + quoteHtml,
+      mode: mode,
+      inReplyTo: row.id,
+    });
   }
 
   /* The loaded thread's copy of a message, the only one that carries cc, bcc
@@ -1273,20 +1281,28 @@
     );
   }
 
-  function focusInlineComposeEditor(root) {
-    var editor = root.querySelector('[data-email-inline-compose-editor]');
+  function focusComposeEditorStart(editor) {
     if (!editor) return;
     editor.focus();
-    if (typeof window.getSelection !== 'undefined' && typeof document.createRange !== 'undefined') {
-      var range = document.createRange();
+    if (typeof window.getSelection === 'undefined' || typeof document.createRange === 'undefined') return;
+    var range = document.createRange();
+    var first = editor.firstChild;
+    if (first && first.nodeType === 1) {
+      range.setStart(first, 0);
+      range.collapse(true);
+    } else {
       range.selectNodeContents(editor);
       range.collapse(true);
-      var selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
     }
+    var selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
+  function focusInlineComposeEditor(root) {
+    focusComposeEditorStart(root.querySelector('[data-email-inline-compose-editor]'));
   }
 
   function focusPaneCompose(root, draftId) {
@@ -1295,8 +1311,11 @@
     var to = win.querySelector('[data-email-compose-field="to"]');
     var body = win.querySelector('[data-email-compose-body]');
     var hasPills = !!(win.querySelector('[data-email-recipient]'));
-    var target = (to && !to.value && !hasPills) ? to : body;
-    if (target) target.focus();
+    if (to && !to.value && !hasPills) {
+      to.focus();
+      return;
+    }
+    focusComposeEditorStart(body);
   }
 
   /* Field edits and the editor body write straight to state.inlineCompose —
@@ -3224,7 +3243,6 @@
           state._pendingCompose = null;
           openInlineCompose(state, mode);
           render();
-          window.requestAnimationFrame(function () { focusInlineComposeEditor(root); });
         }
       });
     }).catch(function () {
@@ -6386,6 +6404,14 @@
     return draft.subject || '';
   }
 
+  function getComposeWindowTitle(draft) {
+    var subject = getComposeSubject(draft);
+    if (subject) return subject;
+    if (draft.mode === 'reply' || draft.mode === 'reply-all') return 'Reply';
+    if (draft.mode === 'forward') return 'Forward';
+    return 'New Email';
+  }
+
   function createComposeDraft(state, opts) {
     opts = opts || {};
     return {
@@ -7393,7 +7419,7 @@
 
   function renderComposeWindowHead(draft, opts) {
     opts = opts || {};
-    var title = getComposeSubject(draft) || 'New Email';
+    var title = getComposeWindowTitle(draft);
     var actions = '';
     if (!opts.popout) {
       actions +=
@@ -7439,7 +7465,7 @@
         .map(function (draft) {
           return (
             '<button type="button" class="tma-dash__email-compose-tab" data-email-compose-restore="' + esc(draft.id) + '">' +
-            '<span class="tma-dash__email-compose-tab-label">' + esc(getComposeSubject(draft)) + '</span>' +
+            '<span class="tma-dash__email-compose-tab-label">' + esc(getComposeWindowTitle(draft)) + '</span>' +
             '<span class="tma-dash__email-compose-tab-close" data-email-compose-close="' + esc(draft.id) + '" role="presentation" aria-hidden="true">' +
             '<img src="' + ICONS.X + '" alt=""></span></button>'
           );
@@ -11146,7 +11172,6 @@
         if (id !== state.selectedId) openMailMessage(root, state, render, id);
         openInlineCompose(state, action);
         render();
-        window.requestAnimationFrame(function () { focusInlineComposeEditor(root); });
         return;
       }
 
@@ -12605,9 +12630,6 @@
             }
             openInlineCompose(state, composeMode);
             render();
-            window.requestAnimationFrame(function () {
-              focusInlineComposeEditor(root);
-            });
             return;
           }
         }

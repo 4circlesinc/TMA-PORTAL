@@ -190,20 +190,23 @@ try {
     && topActions.includes('forward'), `all three are present (${topActions.join(', ')})`);
 
   await page.click('.tma-dash__email-message--expanded [data-email-inline-compose="reply-all"]');
-  await page.waitForTimeout(500);
-  const composeMode = await page.evaluate(
-    () => document.querySelector('[data-email]')._emailState.inlineCompose?.mode
-  );
+  await page.waitForSelector('[data-email-compose-window]', { timeout: 8000 });
+  const composeMode = await page.evaluate(() => {
+    const s = document.querySelector('[data-email]')._emailState;
+    const d = (s.composeDrafts || []).filter((x) => !x.minimized).pop();
+    return d && d.mode;
+  });
   check(composeMode === 'reply-all', `Reply all opened the composer (mode ${composeMode})`);
   const ccValue = await page.evaluate(() => {
-    const input = document.querySelector('[data-email-inline-compose-field="cc"]');
+    const input = document.querySelector('[data-email-compose-field="cc"]');
     const field = input && input.closest('[data-email-recipients]');
     return field
       ? Array.from(field.querySelectorAll('[data-email-recipient]')).map((p) => p.getAttribute('data-email-recipient')).join(', ')
       : '';
   });
   check(/sam@example\.com/.test(ccValue), `Reply all carried the Cc list ("${ccValue}")`);
-  await page.click('[data-email-inline-compose-close]');
+  await page.click('[data-email-compose-window] [data-email-compose-close]');
+  await page.waitForSelector('[data-email-compose-window]', { state: 'detached', timeout: 5000 });
   await page.waitForTimeout(300);
 
   step(7.5, 'The message\u2019s three-dot menu is a real menu');

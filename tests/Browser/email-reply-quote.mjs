@@ -89,13 +89,13 @@ try {
   await page.click('[data-email-inline-compose="reply"]');
   await page.waitForSelector('.tma-dash__email-inline-quote', { timeout: 8000 });
   await page.waitForSelector('[data-email-compose-overlay].is-open', { timeout: 8000 });
-  await page.waitForSelector('[data-email-inline-compose-panel]', { timeout: 8000 });
+  await page.waitForSelector('[data-email-compose-window]', { timeout: 8000 });
 
   const pane = await page.evaluate(() => {
     const reading = document.querySelector('.tma-dash__email-detail');
     const overlay = document.querySelector('[data-email-compose-overlay]');
-    const panel = document.querySelector('[data-email-inline-compose-panel]');
-    if (!reading || !overlay || !panel) return null;
+    const win = document.querySelector('[data-email-compose-window]');
+    if (!reading || !overlay || !win) return null;
     const d = reading.getBoundingClientRect();
     const o = overlay.getBoundingClientRect();
     return {
@@ -116,20 +116,28 @@ try {
   check(!quote.includes('Preview for'), 'the quote is the body, not the snippet');
 
   check(
-    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-cmd="justifyLeft"]')),
+    !!(await page.$('[data-email-compose-window] [data-email-compose-tool-cmd="justifyLeft"]')),
     'align left is on the reply toolbar'
   );
   check(
-    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="color"]')),
+    !!(await page.$('[data-email-compose-window] [data-email-compose-tool-menu="color"]')),
     'text colour is on the reply toolbar'
   );
   check(
-    !!(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="highlight"]')),
+    !!(await page.$('[data-email-compose-window] [data-email-compose-tool-menu="highlight"]')),
     'highlight is on the reply toolbar'
   );
   check(
-    !(await page.$('[data-email-inline-compose-panel] [data-email-compose-tool-menu="more"]')),
+    !(await page.$('[data-email-compose-window] [data-email-compose-tool-menu="more"]')),
     'reply has no More overflow menu'
+  );
+  check(
+    !!(await page.$('[data-email-compose-field="subject"]')),
+    'reply has a Subject field'
+  );
+  check(
+    !!(await page.$('[data-email-compose-cc]')),
+    'reply can show Cc and Bcc'
   );
 
   const lead = await page.evaluate(
@@ -139,32 +147,32 @@ try {
     `attribution line names the original sender (saw "${lead.trim()}")`);
 
   const editorBox = await page.evaluate(() => {
-    const editor = document.querySelector('[data-email-inline-compose-editor]');
+    const editor = document.querySelector('[data-email-compose-body]');
     if (!editor) return null;
-    const wrap = editor.closest('.tma-dash__email-inline-compose-editor-wrap');
+    const wrap = editor.closest('.tma-dash__email-compose-stage');
     const sig = editor.querySelector('[data-email-signature]');
     const er = editor.getBoundingClientRect();
     const wr = wrap ? wrap.getBoundingClientRect() : null;
     const sr = sig ? sig.getBoundingClientRect() : null;
     return {
-      minHeight: parseFloat(getComputedStyle(editor).minHeight),
-      wrapHeight: wr ? wr.height : 0,
+      minHeight: parseFloat(getComputedStyle(editor).minHeight) || er.height,
+      wrapHeight: wr ? wr.height : er.height,
       spaceAboveSig: sr ? Math.max(0, sr.top - er.top) : null,
     };
   });
   check(!!editorBox && editorBox.minHeight >= 200,
-    `inline editor min-height is at least 200px (saw ${editorBox && editorBox.minHeight})`);
+    `reply editor is at least 200px tall (saw ${editorBox && Math.round(editorBox.minHeight)})`);
   check(!!editorBox && editorBox.wrapHeight >= 160,
-    `inline editor wrap is tall enough to type (saw ${editorBox && Math.round(editorBox.wrapHeight)})`);
+    `reply editor is tall enough to type (saw ${editorBox && Math.round(editorBox.wrapHeight)})`);
   if (editorBox && editorBox.spaceAboveSig !== null) {
     check(editorBox.spaceAboveSig >= 160,
       `several lines of room above the signature (saw ${Math.round(editorBox.spaceAboveSig)}px)`);
   }
 
   step(3, 'The sent payload carries the typed reply plus the exact quote');
-  await page.click('[data-email-inline-compose-editor]');
+  await page.click('[data-email-compose-body]');
   await page.keyboard.type('Thanks Dana — looks great.');
-  await page.click('[data-email-inline-compose-send]');
+  await page.click('[data-email-compose-send]');
   await page.waitForFunction(
     () => (document.querySelector('[data-email-toast-text]')?.textContent || '')
       .includes('Sending in'),

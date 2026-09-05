@@ -14117,6 +14117,17 @@ html.tma-dash--compose-popout body {
   overflow-x: hidden;
 }
 
+.tma-dash__email-compose-body .tma-dash__email-inline-quote {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Same typing room the mini-reply used: a tall signature must not sit on
+   the first caret line. New Mail has no quote, so it stays compact. */
+.tma-dash__email-compose-body:has(.tma-dash__email-inline-quote) [data-email-signature] {
+  margin-top: 8.75rem;
+}
+
 .tma-dash__email-inline-quote-lead,
 .tma-dash__email-inline-quote-meta {
   margin: 0 0 var(--space-4);
