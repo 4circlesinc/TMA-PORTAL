@@ -48,7 +48,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tmantoinelaw.portal.core.data.files.UploadStatus
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.tmantoinelaw.portal.core.common.time.TimeLabels
@@ -81,6 +84,8 @@ fun FilesScreen(
 ) {
     val openFile: (FileItemDto) -> Unit = { onOpenFile(it.id, it.folder?.id) }
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val uploads by viewModel.uploadJobs.collectAsStateWithLifecycle()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> if (uris.isNotEmpty()) viewModel.upload(uris) }
     val snackbar = remember { SnackbarHostState() }
     var menuFor by remember { mutableStateOf<FileItemDto?>(null) }
     var bulkMenu by remember { mutableStateOf(false) }
@@ -101,14 +106,15 @@ fun FilesScreen(
             Column(Modifier.fillMaxSize()) {
                 Breadcrumb(ui, onRoot = { viewModel.openFolder(null); onOpenFolder(null) }, onCrumb = { viewModel.openFolder(it); onOpenFolder(it) })
                 if (ui.packageLocked) Banner("The original submission is locked. New files go in Additional Documents.")
-                Toolbar(ui, viewModel, phone, onNewFolder = { dialog = FilesDialog.NewFolder }, onBulk = { bulkMenu = true }, onEmptyBin = { dialog = FilesDialog.EmptyBin })
+                Toolbar(ui, viewModel, phone, onNewFolder = { dialog = FilesDialog.NewFolder }, onUpload = { picker.launch(arrayOf("*/*")) }, onBulk = { bulkMenu = true }, onEmptyBin = { dialog = FilesDialog.EmptyBin })
+                UploadPanel(uploads, onCancel = viewModel::cancelUpload, onRetry = viewModel::retryUpload, onDismiss = viewModel::dismissUpload, onClear = viewModel::clearUploads)
                 if (!ui.isRecycle) TypePills(ui, viewModel)
                 SearchField(ui.query.search) { viewModel.search(it) }
                 val items = ui.items
                 when {
                     ui.loading && ui.listing == null -> Column(Modifier.padding(Tma.space.s16)) { repeat(8) { SkeletonFileRow() } }
                     ui.error != null && ui.listing == null -> SectionError(onRetry = { viewModel.load() }, message = ui.error!!, modifier = Modifier.padding(Tma.space.s16))
-                    items.isEmpty() -> EmptyListing(ui, onUpload = { /* phase 5c */ })
+                    items.isEmpty() -> EmptyListing(ui, onUpload = { picker.launch(arrayOf("*/*")) })
                     ui.grid && !phone -> GridBody(ui, viewModel, onOpenFolder, openFile) { menuFor = it }
                     else -> ListBody(ui, viewModel, phone, onOpenFolder, openFile) { menuFor = it }
                 }
@@ -122,6 +128,9 @@ fun FilesScreen(
     }
     if (bulkMenu) BulkActionsSheet(ui = ui, viewModel = viewModel, onDismiss = { bulkMenu = false }, onDialog = { dialog = it })
     dialog?.let { FilesDialogHost(it, ui, viewModel) { dialog = null } }
+    uploads.firstOrNull { it.status == UploadStatus.Conflict }?.let { job ->
+        UploadConflictDialog(job, onChoice = { choice, name -> viewModel.resolveUploadConflict(job.id, choice, name) }, onCancel = { viewModel.cancelUpload(job.id) })
+    }
     // A deep link carried `file=`: open the viewer once (memory: read `file` before the URL is cleared).
     LaunchedEffect(ui.openFileId) {
         ui.openFileId?.let { id -> viewModel.openFile(null); onOpenFile(id, ui.query.folder) }
@@ -166,7 +175,7 @@ private fun Breadcrumb(ui: FilesUi, onRoot: () -> Unit, onCrumb: (String) -> Uni
 }
 
 @Composable
-private fun Toolbar(ui: FilesUi, vm: FilesViewModel, phone: Boolean, onNewFolder: () -> Unit, onBulk: () -> Unit, onEmptyBin: () -> Unit) {
+private fun Toolbar(ui: FilesUi, vm: FilesViewModel, phone: Boolean, onNewFolder: () -> Unit, onUpload: () -> Unit, onBulk: () -> Unit, onEmptyBin: () -> Unit) {
     val n = ui.selected.size
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Tma.space.s12), verticalAlignment = Alignment.CenterVertically) {
         if (n > 0) {
@@ -176,7 +185,7 @@ private fun Toolbar(ui: FilesUi, vm: FilesViewModel, phone: Boolean, onNewFolder
         } else {
             if (ui.canCreateHere) {
                 TmaIconButton(R.drawable.ic_folder_plus, "New folder", onNewFolder)
-                TmaIconButton(R.drawable.ic_cloud_arrow_up, "Upload files", {})
+                TmaIconButton(R.drawable.ic_cloud_arrow_up, "Upload files", onUpload)
             }
             if (ui.clipboard != null && ui.canCreateHere) TextButton(onClick = { vm.paste() }) { Text("Paste (${ui.clipboard.items.size})", style = Tma.type.text14sb, color = Tma.colors.ink) }
             if (ui.isRecycle) TmaIconButton(R.drawable.ic_trash, "Empty recycle bin", onEmptyBin)
@@ -244,6 +253,7 @@ private fun EmptyListing(ui: FilesUi, onUpload: () -> Unit) {
         Icon(painterResource(R.drawable.ic_folder_notch), contentDescription = null, tint = Tma.colors.inkSecondary, modifier = Modifier.size(32.dp))
         Text(title, style = Tma.type.text14sb, color = Tma.colors.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         if (subtitle.isNotBlank()) Text(subtitle, style = Tma.type.text14, color = Tma.colors.inkSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        if (ui.canCreateHere && !ui.isRecycle && ui.query.search.isBlank()) TextButton(onClick = onUpload) { Text("Upload files", style = Tma.type.text14sb, color = Tma.colors.ink) }
     }
 }
 

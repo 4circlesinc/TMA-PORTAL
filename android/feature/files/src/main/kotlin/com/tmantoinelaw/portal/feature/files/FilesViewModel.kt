@@ -9,6 +9,8 @@ import com.tmantoinelaw.portal.core.data.files.FilesRepository
 import com.tmantoinelaw.portal.core.data.files.ListingDto
 import com.tmantoinelaw.portal.core.data.files.ListingQuery
 import com.tmantoinelaw.portal.core.data.files.ListingResult
+import com.tmantoinelaw.portal.core.data.files.UploadJob
+import com.tmantoinelaw.portal.core.data.files.UploadManager
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
 import com.tmantoinelaw.portal.core.data.session.SessionRepository
@@ -87,7 +89,10 @@ class FilesViewModel @Inject constructor(
     private val repository: FilesRepository,
     private val session: SessionRepository,
     private val prefs: DevicePrefs,
+    private val uploads: UploadManager,
 ) : ViewModel() {
+    val uploadJobs: StateFlow<List<UploadJob>> = uploads.jobs
+
     private val route = savedState.toRoute<FilesRoute>()
     private val _ui = MutableStateFlow(FilesUi(query = ListingQuery(section = apiSection(route.section), folder = route.folder), openFileId = route.file))
     val ui: StateFlow<FilesUi> = _ui.asStateFlow()
@@ -102,8 +107,16 @@ class FilesViewModel @Inject constructor(
         viewModelScope.launch { session.identity.collect { id -> _ui.update { it.copy(identity = id) } } }
         viewModelScope.launch { prefs.filesGrid.collect { g -> _ui.update { it.copy(grid = g) } } }
         viewModelScope.launch { repository.changed.collect { if (it == "files") load(silent = true) } }
+        viewModelScope.launch { uploads.completed.collect { job -> job.result?.let { file -> if (job.folderId == _ui.value.query.folder) insert(file) } } }
         load()
     }
+
+    fun upload(uris: List<android.net.Uri>) = uploads.enqueue(uris, _ui.value.query.folder)
+    fun cancelUpload(id: String) = uploads.cancel(id)
+    fun retryUpload(id: String) = uploads.retry(id)
+    fun dismissUpload(id: String) = uploads.dismiss(id)
+    fun clearUploads() = uploads.clearFinished()
+    fun resolveUploadConflict(id: String, choice: String, newName: String?) = uploads.resolveConflict(id, choice, newName)
 
     /** Paint the snapshot, then the server (portal-store.js swr). Failures keep what is on screen. */
     fun load(silent: Boolean = false) {
