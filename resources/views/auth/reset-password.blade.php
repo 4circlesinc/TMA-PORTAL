@@ -79,6 +79,8 @@
             <span>Sign out of all other devices</span>
           </label>
 
+          @include('auth.partials.turnstile')
+
           <button type="submit" class="tma-auth__submit">Update password</button>
         </form>
 

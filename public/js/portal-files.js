@@ -6910,7 +6910,16 @@
     var create = host.querySelector('[data-link-create]');
     if (create) create.addEventListener('click', function () {
       create.disabled = true;
-      post({ type: type, id: id, mode: 'link', role: 'viewer', allowDownload: true }).then(reload).catch(function (e) { create.disabled = false; ui().toast(e.message); });
+      var payload = { type: type, id: id, mode: 'link', role: 'viewer', allowDownload: true };
+      if (data.requiresLinkPassword) {
+        var pw = window.prompt('This is an identity document. Set a password for the public link.');
+        if (!pw) { create.disabled = false; return; }
+        payload.password = pw;
+      }
+      post(payload).then(reload).catch(function (e) {
+        create.disabled = false;
+        ui().toast(e.message);
+      });
     });
 
     var copy = host.querySelector('[data-share-copy]');
@@ -6942,9 +6951,18 @@
   // Quick "Copy link": ensure a link exists, then copy it.
   function copyShareLink(item) {
     if (!perm(item, 'share')) { ui().toast('You can’t share this item'); return; }
-    net().fetchJSON(net().url('/shares'), { method: 'POST', json: { type: item.type, id: item.id, mode: 'link', role: 'viewer', allowDownload: true } })
+    net().fetchJSON(net().url('/shares?type=' + encodeURIComponent(item.type) + '&id=' + encodeURIComponent(item.id)))
+      .then(function (existing) {
+        var payload = { type: item.type, id: item.id, mode: 'link', role: 'viewer', allowDownload: true };
+        if (existing.requiresLinkPassword && !(existing.link && existing.link.hasPassword)) {
+          var pw = window.prompt('This is an identity document. Set a password for the public link.');
+          if (!pw) return;
+          payload.password = pw;
+        }
+        return net().fetchJSON(net().url('/shares'), { method: 'POST', json: payload });
+      })
       .then(function (data) {
-        if (data.link && data.link.link) { copyText(data.link.link); ui().toast('Link copied to clipboard'); }
+        if (data && data.link && data.link.link) { copyText(data.link.link); ui().toast('Link copied to clipboard'); }
       })
       .catch(function (err) { ui().toast(err.message || 'Could not create link'); });
   }

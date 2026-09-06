@@ -85,11 +85,18 @@ class ShareController extends BaseFilesController
         $item = $this->item($data['type'], $data['id']);
         FileAccess::authorize($user, 'share', $item);
 
+        abort_unless(
+            ! ($item instanceof FileItem) || \App\Support\Files\MalwareScanner::isShareable($item->malware_status),
+            422,
+            'This file cannot be shared until it has been scanned and found clean.',
+        );
+
         if ($data['mode'] === 'invite') {
             $this->invite($user, $item, $data['type'], $data);
         } elseif ($data['mode'] === 'company') {
             $this->shareWithCompany($user, $item, $data['type'], $data);
         } else {
+            $this->guardIdentityLinkPassword($item, $data);
             $this->link($user, $item, $data['type'], $data);
         }
 
@@ -107,6 +114,10 @@ class ShareController extends BaseFilesController
         ]);
 
         [$share, $item, $type] = $this->manageable($request, $uuid);
+
+        if ($share->kind === 'link') {
+            $this->guardIdentityLinkPassword($item, $data, $share);
+        }
 
         if (array_key_exists('role', $data)) {
             $share->role = $data['role'];
@@ -310,6 +321,24 @@ class ShareController extends BaseFilesController
             'companies' => $shares->where('kind', 'company')->map(fn (Share $s) => Sharing::present($s))->values(),
             'link' => $link ? Sharing::present($link) : null,
             'roles' => Sharing::ROLES,
+            'requiresLinkPassword' => \App\Support\Files\IdentityDocuments::requiresLinkPassword($item),
         ];
+    }
+
+    /**
+     * Public links to identity documents must carry a password so a forwarded
+     * URL is not enough to open someone's identification.
+     */
+    private function guardIdentityLinkPassword(FileItem|Folder $item, array $data, ?Share $existing = null): void
+    {
+        if (! \App\Support\Files\IdentityDocuments::requiresLinkPassword($item)) {
+            return;
+        }
+
+        $incoming = isset($data['password']) && $data['password'] !== '';
+        $clearing = array_key_exists('password', $data) && ($data['password'] ?? '') === '';
+        $willHave = ($incoming && ! $clearing) || ($existing?->password_hash && ! $clearing);
+
+        abort_unless($willHave, 422, 'Identity documents need a password on the public link.');
     }
 }

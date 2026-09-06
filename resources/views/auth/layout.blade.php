@@ -16,6 +16,9 @@
   {{-- in <head> and render-blocking on purpose: its observer has to be live while the
        body parses, or the stage art paints black for a frame before it swaps --}}
   <script src="/js/illustration-theme.js?v=1"></script>
+  @if (\App\Support\Security\Turnstile::siteKey())
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  @endif
   <style>
     html, body { margin: 0; min-height: 100%; }
   </style>

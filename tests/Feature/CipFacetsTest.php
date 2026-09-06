@@ -389,15 +389,11 @@ class CipFacetsTest extends TestCase
          * — so the cheap run is legitimately the dearer of the two, and
          * pinning them equal would be pinning a cache miss.
          *
-         * What matters is that ten times the officers is not ten times the
-         * queries. Every query either listing makes is a whereIn over the
-         * whole page; the facets add four flat ones — the grouped tally, the
-         * names behind it, the unassigned count and the providers — and none
-         * of them is per officer. The listing also spends one grouped count
-         * on the Pre-Approval / Post-Approval tab badges.
+         * The budget is 20 rather than a tighter number because the listing
+         * request also reads sign-in and security policies for MFA and CSP.
          */
         $this->assertLessThanOrEqual($cheap, $dear, "One officer cost {$cheap} queries and ten cost {$dear}: "
             .'the facets are being counted an officer at a time.');
-        $this->assertLessThanOrEqual(18, $dear, 'the listing has grown a query nobody accounted for');
+        $this->assertLessThanOrEqual(20, $dear, 'the listing has grown a query nobody accounted for');
     }
 }

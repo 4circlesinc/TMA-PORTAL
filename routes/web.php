@@ -1268,6 +1268,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::prefix('portal/call-recordings')->name('call-recordings.')->group(function () {
         Route::get('/', [CallRecordingController::class, 'index'])->name('index');
         Route::get('/{uuid}/media', [CallRecordingController::class, 'media'])->name('media');
+        Route::post('/{uuid}/hold', [CallRecordingController::class, 'hold'])->name('hold');
     });
 
     /*

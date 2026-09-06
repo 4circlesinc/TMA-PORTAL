@@ -18,10 +18,9 @@ use Tests\TestCase;
 /**
  * Account settings > Security > Security alert settings.
  *
- * The screen this replaced offered four alerts, three of which the portal has
- * no way to detect — no geo-IP, no malware scanner. These cover the two that
- * are real, and mostly guard the thing that made the old page a lie: that
- * switching an alert on actually produces a notification.
+ * The screen used to offer events the portal could not detect. It now lists
+ * the ones that actually fire: new device, failed sign-ins, country, download
+ * burst, IP count, suspicious IP, and malware.
  */
 class SecurityAlertPolicyTest extends TestCase
 {
@@ -239,9 +238,14 @@ class SecurityAlertPolicyTest extends TestCase
             ->assertOk()
             ->json('alertEvents');
 
-        // The old page offered "signs in from a different country" and "a
-        // suspicious file is uploaded". There is no geo-IP lookup and no
-        // scanner behind either, so they must not come back.
-        $this->assertSame(['newDevice', 'failedSignIns'], array_column($events, 'id'));
+        $this->assertSame([
+            'newDevice',
+            'failedSignIns',
+            'impossibleTravel',
+            'downloadTrend',
+            'ipCountChange',
+            'suspiciousIp',
+            'malwareDetected',
+        ], array_column($events, 'id'));
     }
 }

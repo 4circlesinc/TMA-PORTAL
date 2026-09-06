@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedIdentity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ use Illuminate\Support\Str;
     'financials', 'extra',
     'source_sheet_remote_id', 'source_row_remote_id', 'source_permalink', 'source_modified_at',
     'first_imported_at', 'synced_at',
+    'passport_number_lookup', 'date_of_birth_lookup',
 ])]
 class CbiApplication extends Model
 {
@@ -61,7 +63,8 @@ class CbiApplication extends Model
             'granted' => 'boolean',
             'closed' => 'boolean',
             'number_of_dependents' => 'integer',
-            'date_of_birth' => 'date',
+            'date_of_birth' => EncryptedIdentity::class,
+            'passport_number' => EncryptedIdentity::class,
             'received_at' => 'date',
             'pre_processing_at' => 'date',
             'submitted_at' => 'date',

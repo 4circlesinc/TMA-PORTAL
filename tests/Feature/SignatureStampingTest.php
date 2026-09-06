@@ -161,7 +161,7 @@ class SignatureStampingTest extends TestCase
         $this->assertTrue(Storage::disk($signed->disk)->exists($signed->storage_path));
 
         // Real PDF bytes, not an empty file.
-        $bytes = Storage::disk($signed->disk)->get($signed->storage_path);
+        $bytes = $this->plaintextOnDisk($signed->disk, $signed->storage_path);
         $this->assertStringStartsWith('%PDF', $bytes);
         $this->assertGreaterThan(1000, strlen($bytes));
     }
@@ -200,7 +200,7 @@ class SignatureStampingTest extends TestCase
         ]);
 
         $signed = $request->signedFile;
-        $raw = Storage::disk($signed->disk)->get($signed->storage_path);
+        $raw = $this->plaintextOnDisk($signed->disk, $signed->storage_path);
 
         // FPDI needs a real path, and the vault disk may not be local.
         $out = tempnam(sys_get_temp_dir(), 'signed').'.pdf';
@@ -237,7 +237,7 @@ class SignatureStampingTest extends TestCase
         $this->assertNotNull($signed, 'every field type must survive stamping');
         $this->assertStringStartsWith(
             '%PDF',
-            Storage::disk($signed->disk)->get($signed->storage_path)
+            $this->plaintextOnDisk($signed->disk, $signed->storage_path)
         );
 
         // The autofilled values came from us, not the signer.
@@ -261,7 +261,7 @@ class SignatureStampingTest extends TestCase
         $this->assertSame('Scan (signed).pdf', $signed->name);
         $this->assertStringStartsWith(
             '%PDF',
-            Storage::disk($signed->disk)->get($signed->storage_path)
+            $this->plaintextOnDisk($signed->disk, $signed->storage_path)
         );
         // ...and the original PNG is still a PNG.
         $this->assertSame('png', $original->fresh()->extension);

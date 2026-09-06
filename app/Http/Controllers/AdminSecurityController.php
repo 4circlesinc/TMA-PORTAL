@@ -35,6 +35,31 @@ class AdminSecurityController extends Controller
                     'label' => 'Repeated failed sign-ins on one account',
                     'help' => 'Sent once, when the count is reached inside an hour, not on every attempt after it.',
                 ],
+                [
+                    'id' => 'impossibleTravel',
+                    'label' => 'Sign-in from a new country too quickly',
+                    'help' => 'Uses the Cloudflare country header. Off when that header is missing (local).',
+                ],
+                [
+                    'id' => 'downloadTrend',
+                    'label' => 'Unusual download volume',
+                    'help' => 'Forty or more file downloads in ten minutes from one account.',
+                ],
+                [
+                    'id' => 'ipCountChange',
+                    'label' => 'Many networks used in a day',
+                    'help' => 'Six or more distinct IP addresses on one account in 24 hours.',
+                ],
+                [
+                    'id' => 'suspiciousIp',
+                    'label' => 'One address attacking several accounts',
+                    'help' => 'Failed sign-ins against three or more accounts from the same IP in an hour.',
+                ],
+                [
+                    'id' => 'malwareDetected',
+                    'label' => 'Malware blocked in an upload',
+                    'help' => 'A vault file scanned as infected and its public links were revoked.',
+                ],
             ],
             'failureWindowMinutes' => SecurityAlertPolicy::FAILURE_WINDOW_MINUTES,
         ]);
@@ -47,15 +72,19 @@ class AdminSecurityController extends Controller
 
         $value = match ($section) {
             'sign-in' => $this->signInRules($request),
-            'security' => $request->validate([
-                'trustedDomains' => ['present', 'string', 'max:2000'],
-                'autoRemediation' => ['required', 'array'],
-                'autoRemediation.impossibleTravel' => ['required', 'boolean'],
-                'autoRemediation.downloadTrend' => ['required', 'boolean'],
-                'autoRemediation.ipCountChange' => ['required', 'boolean'],
-                'autoRemediation.failedSignIns' => ['required', 'boolean'],
-                'autoRemediation.suspiciousIp' => ['required', 'boolean'],
-            ]),
+            'security' => array_replace_recursive(
+                SecurityPolicies::get('security'),
+                $request->validate([
+                    'trustedDomains' => ['present', 'string', 'max:2000'],
+                    'callRecordingRetentionDays' => ['sometimes', 'integer', 'between:30,3650'],
+                    'autoRemediation' => ['required', 'array'],
+                    'autoRemediation.impossibleTravel' => ['required', 'boolean'],
+                    'autoRemediation.downloadTrend' => ['required', 'boolean'],
+                    'autoRemediation.ipCountChange' => ['required', 'boolean'],
+                    'autoRemediation.failedSignIns' => ['required', 'boolean'],
+                    'autoRemediation.suspiciousIp' => ['required', 'boolean'],
+                ]),
+            ),
             'device' => $request->validate([
                 'defaultMode' => ['required', Rule::in(['standard', 'secure'])],
                 'selfDestruct' => ['required', Rule::in(['Never', 'After 1 day offline', 'After 7 days offline', 'After 30 days offline'])],
@@ -107,6 +136,11 @@ class AdminSecurityController extends Controller
         $data = $request->validate([
             'newDevice.admins' => ['required', 'boolean'],
             'failedSignIns.admins' => ['required', 'boolean'],
+            'impossibleTravel.admins' => ['sometimes', 'boolean'],
+            'downloadTrend.admins' => ['sometimes', 'boolean'],
+            'ipCountChange.admins' => ['sometimes', 'boolean'],
+            'suspiciousIp.admins' => ['sometimes', 'boolean'],
+            'malwareDetected.admins' => ['sometimes', 'boolean'],
             'failedSignInThreshold' => ['required', 'integer', 'between:3,20'],
             'alternateContacts' => ['present', 'string', 'max:2000'],
         ]);
@@ -124,6 +158,11 @@ class AdminSecurityController extends Controller
         return [
             'newDevice' => ['admins' => $request->boolean('newDevice.admins')],
             'failedSignIns' => ['admins' => $request->boolean('failedSignIns.admins')],
+            'impossibleTravel' => ['admins' => $request->boolean('impossibleTravel.admins', true)],
+            'downloadTrend' => ['admins' => $request->boolean('downloadTrend.admins', true)],
+            'ipCountChange' => ['admins' => $request->boolean('ipCountChange.admins', false)],
+            'suspiciousIp' => ['admins' => $request->boolean('suspiciousIp.admins', true)],
+            'malwareDetected' => ['admins' => $request->boolean('malwareDetected.admins', true)],
             'failedSignInThreshold' => (int) $data['failedSignInThreshold'],
             'alternateContacts' => implode(', ', $contacts),
         ];

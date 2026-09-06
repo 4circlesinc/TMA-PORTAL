@@ -10,6 +10,7 @@ use App\Http\Middleware\EnsureProfileComplete;
 use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
 use App\Http\Middleware\PreventDisablingRequiredAuthenticator;
+use App\Http\Middleware\VerifyTurnstile;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\UploadConflictException;
 use App\Support\Mail\MailAuthException;
@@ -45,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'onboarded' => EnsureOnboarded::class,
         ]);
 
+        $middleware->prependToGroup('web', VerifyTurnstile::class);
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
         $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);

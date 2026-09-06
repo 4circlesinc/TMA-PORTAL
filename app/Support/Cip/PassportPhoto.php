@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipPerson;
 use App\Support\AvatarService;
+use App\Support\Security\Envelope;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -100,7 +101,7 @@ class PassportPhoto
         // No visibility argument: the bucket is private and the photo is
         // served through the app, so an applicant's likeness is never a
         // guessable public URL.
-        Storage::disk(self::disk())->put($path, $binary);
+        Storage::disk(self::disk())->put($path, Envelope::wrapBytes($binary));
 
         if ($previous?->photo_path) {
             Storage::disk(self::disk())->delete($previous->photo_path);
@@ -117,7 +118,7 @@ class PassportPhoto
         }
 
         return [
-            'body' => Storage::disk(self::disk())->get($person->photo_path),
+            'body' => Envelope::unwrapBytes((string) Storage::disk(self::disk())->get($person->photo_path)),
             'mime' => Storage::disk(self::disk())->mimeType($person->photo_path) ?: 'image/jpeg',
         ];
     }

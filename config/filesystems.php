@@ -45,6 +45,22 @@ return [
     'files_signed_urls' => (bool) env('FILES_SIGNED_URLS', true),
 
     /*
+     * Envelope-encrypt vault bytes and call recordings with a firm-held key
+     * (derived from APP_KEY, or FILES_ENVELOPE_KEY). Existing plaintext
+     * objects stay readable. Signed object-store redirects are skipped while
+     * this is on so browsers never receive ciphertext.
+     */
+    'envelope_encrypt' => filter_var(env('FILES_ENVELOPE_ENCRYPT', true), FILTER_VALIDATE_BOOLEAN),
+
+    'envelope_key' => env('FILES_ENVELOPE_KEY', ''),
+
+    /*
+     * Upload malware scan. `none` leaves files clean so local and tests do
+     * not wait on a daemon. Production: MALWARE_SCANNER=clamav.
+     */
+    'malware_scanner' => env('MALWARE_SCANNER', 'none'),
+
+    /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------

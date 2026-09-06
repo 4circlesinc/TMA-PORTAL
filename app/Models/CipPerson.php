@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedIdentity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ use Illuminate\Support\Str;
     'first_name', 'last_name', 'gender', 'date_of_birth', 'country_of_birth',
     'country_of_residence', 'occupation', 'passport_number', 'folder_id',
     'post_approval_status',
+    'passport_number_lookup', 'date_of_birth_lookup',
 ])]
 class CipPerson extends Model
 {
@@ -55,7 +57,8 @@ class CipPerson extends Model
     protected function casts(): array
     {
         return [
-            'date_of_birth' => 'date',
+            'date_of_birth' => EncryptedIdentity::class,
+            'passport_number' => EncryptedIdentity::class,
         ];
     }
 

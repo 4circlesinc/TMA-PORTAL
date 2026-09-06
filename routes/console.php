@@ -166,6 +166,8 @@ Schedule::command('files:prune-presence')->everyThirtyMinutes();
  */
 Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping(180);
 
+Schedule::command('recordings:prune')->dailyAt('03:40')->withoutOverlapping(180);
+
 /*
  * Recompute recurring account reports whose next run is due.
  *

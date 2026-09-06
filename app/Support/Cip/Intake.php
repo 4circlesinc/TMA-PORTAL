@@ -11,6 +11,7 @@ use App\Models\CipProvider;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Security\IdentityFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -446,17 +447,22 @@ class Intake
         $first = mb_strtolower(trim((string) $data['firstName']));
         $last = mb_strtolower(trim((string) $data['lastName']));
         $passport = mb_strtolower(trim((string) $data['passportNumber']));
+        $dobLookup = IdentityFields::lookup((string) ($data['dateOfBirth'] ?? ''));
+        $passportLookup = $passport !== '' ? IdentityFields::lookup($passport) : null;
 
         return CipApplication::query()
-            ->whereHas('people', function ($q) use ($first, $last, $passport, $data) {
+            ->whereHas('people', function ($q) use ($first, $last, $passportLookup, $dobLookup) {
                 $q->where('role', CipPerson::ROLE_MAIN_APPLICANT)
-                    ->where(function ($q) use ($first, $last, $passport, $data) {
+                    ->where(function ($q) use ($first, $last, $passportLookup, $dobLookup) {
                         $q->where(fn ($person) => $person
                             ->whereRaw('lower(first_name) = ?', [$first])
                             ->whereRaw('lower(last_name) = ?', [$last])
-                            ->whereDate('date_of_birth', $data['dateOfBirth']));
-                        if ($passport !== '') {
-                            $q->orWhereRaw('lower(passport_number) = ?', [$passport]);
+                            ->when(
+                                $dobLookup,
+                                fn ($person) => $person->where('date_of_birth_lookup', $dobLookup),
+                            ));
+                        if ($passportLookup) {
+                            $q->orWhere('passport_number_lookup', $passportLookup);
                         }
                     });
             })

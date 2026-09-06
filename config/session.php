@@ -58,7 +58,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => filter_var(env('SESSION_ENCRYPT', true), FILTER_VALIDATE_BOOLEAN),
 
     /*
     |--------------------------------------------------------------------------

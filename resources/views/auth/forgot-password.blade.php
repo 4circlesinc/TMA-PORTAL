@@ -49,6 +49,7 @@
                 </p>
               @endif
             </div>
+            @include('auth.partials.turnstile')
             <button type="submit" class="tma-auth__submit">Send reset link</button>
           </form>
 

@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'uuid', 'conversation_id', 'client_id', 'client_user_id', 'recorded_by',
     'participants', 'client_name', 'media', 'status',
     'disk', 'path', 'mime', 'size', 'duration_ms', 'last_seq',
-    'started_at', 'ended_at',
+    'started_at', 'ended_at', 'legal_hold', 'retain_until',
 ])]
 class CallRecording extends Model
 {
@@ -33,6 +33,8 @@ class CallRecording extends Model
             'participants' => 'array',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
+            'retain_until' => 'datetime',
+            'legal_hold' => 'boolean',
         ];
     }
 

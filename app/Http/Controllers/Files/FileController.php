@@ -6,6 +6,8 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
+use App\Support\Security\Detectors;
+use App\Support\Security\SecurityAudit;
 use App\Support\Files\FileType;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
@@ -202,6 +204,12 @@ class FileController extends BaseFilesController
         FileAccess::authorize($user, 'download', $file);
 
         Activity::forFile($user->id, $file, 'download');
+        SecurityAudit::record('file.download', [
+            'file_id' => $file->id,
+            'uuid' => $file->uuid,
+            'user_id' => $user->id,
+        ]);
+        Detectors::onFileDownload($user->id);
 
         return Vault::download($file);
     }

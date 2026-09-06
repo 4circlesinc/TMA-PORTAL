@@ -82,6 +82,8 @@
             </button>
           </label>
 
+          @include('auth.partials.turnstile')
+
           <div class="tma-auth__row-split">
             <span></span>
             <a class="tma-auth__forgot" href="{{ route('password.request') }}">Forgot password?</a>

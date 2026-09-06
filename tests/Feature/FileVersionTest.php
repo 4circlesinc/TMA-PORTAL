@@ -7,6 +7,7 @@ use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Security\Envelope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -138,7 +139,7 @@ class FileVersionTest extends TestCase
 
         // Same path, still there, and still holding v1's content.
         $this->assertFileExists($this->vaultRoot.'/'.$v1Path, 'v1 bytes were deleted by the v2 upload');
-        $this->assertSame('version one', file_get_contents($this->vaultRoot.'/'.$v1Path));
+        $this->assertSame('version one', Envelope::unwrapBytes((string) file_get_contents($this->vaultRoot.'/'.$v1Path)));
 
         // And the file now points somewhere else entirely.
         $this->assertNotSame($v1Path, $file->fresh()->storage_path);
@@ -408,7 +409,7 @@ class FileVersionTest extends TestCase
         $this->assertSame(2, $fresh->version_number);
         $this->assertNotSame($v1Path, $fresh->storage_path);
         $this->assertFileExists($this->vaultRoot.'/'.$v1Path);
-        $this->assertSame('version one', file_get_contents($this->vaultRoot.'/'.$v1Path));
+        $this->assertSame('version one', Envelope::unwrapBytes((string) file_get_contents($this->vaultRoot.'/'.$v1Path)));
 
         $this->assertSame('version two',
             $this->fileBody($this->actingAs($user)->get('/portal/files/files/'.$file->uuid.'/download')));

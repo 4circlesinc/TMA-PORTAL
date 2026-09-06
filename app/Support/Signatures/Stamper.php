@@ -86,6 +86,7 @@ class Stamper
                 previous: $e,
             );
         } finally {
+            Vault::cleanupLocalCopy($source);
             foreach ($temps as $tmp) {
                 @unlink($tmp);
             }
@@ -110,6 +111,8 @@ class Stamper
             return $pdf->setSourceFile($path) > 0;
         } catch (\Throwable) {
             return false;
+        } finally {
+            Vault::cleanupLocalCopy($path);
         }
     }
 

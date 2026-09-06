@@ -128,7 +128,7 @@ class CbiDocumentImportTest extends TestCase
         $file = FileItem::firstOrFail();
         $this->assertGreaterThan(0, $file->size);
         Storage::disk('local')->assertExists($file->storage_path);
-        $this->assertSame('THE-REAL-BYTES', Storage::disk('local')->get($file->storage_path));
+        $this->assertSame('THE-REAL-BYTES', $this->plaintextOnDisk('local', $file->storage_path));
     }
 
     public function test_running_it_again_imports_nothing_new(): void

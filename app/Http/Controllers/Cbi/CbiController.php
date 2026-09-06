@@ -18,6 +18,7 @@ use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\Names;
 use App\Support\Cbi\SyncActor;
 use App\Support\Imports\ImportPause;
+use App\Support\Security\IdentityFields;
 use App\Support\Smartsheet\Client;
 use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
@@ -172,10 +173,14 @@ class CbiController extends Controller
 
         if (($q = trim((string) $request->query('q'))) !== '') {
             $needle = '%'.strtolower($q).'%';
-            $query->where(function ($w) use ($needle) {
+            $passportLookup = IdentityFields::lookup($q);
+            $query->where(function ($w) use ($needle, $passportLookup) {
                 foreach (['applicant_name', 'main_applicant_name', 'applicant_number',
-                    'passport_number', 'clio_matter_number', 'referred_by', 'nationality'] as $column) {
+                    'clio_matter_number', 'referred_by', 'nationality'] as $column) {
                     $w->orWhereRaw('lower('.$column.') like ?', [$needle]);
+                }
+                if ($passportLookup) {
+                    $w->orWhere('passport_number_lookup', $passportLookup);
                 }
             });
         }

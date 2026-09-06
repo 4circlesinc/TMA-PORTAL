@@ -33,6 +33,7 @@ class SecurityPolicies
         ],
         'security' => [
             'trustedDomains' => '',
+            'callRecordingRetentionDays' => 2555,
             'autoRemediation' => [
                 'impossibleTravel' => true,
                 'downloadTrend' => true,
@@ -57,6 +58,11 @@ class SecurityPolicies
         'alerts' => [
             'newDevice' => ['admins' => false],
             'failedSignIns' => ['admins' => true],
+            'impossibleTravel' => ['admins' => true],
+            'downloadTrend' => ['admins' => true],
+            'ipCountChange' => ['admins' => false],
+            'suspiciousIp' => ['admins' => true],
+            'malwareDetected' => ['admins' => true],
             'failedSignInThreshold' => 5,
             'alternateContacts' => '',
         ],
@@ -65,12 +71,28 @@ class SecurityPolicies
     public static function get(string $section): array
     {
         $stored = Cache::remember("portal-settings.{$section}", 60, function () use ($section) {
-            $row = DB::table('portal_settings')->where('key', "security.{$section}")->first();
+            try {
+                $row = DB::table('portal_settings')->where('key', "security.{$section}")->first();
+            } catch (\Throwable) {
+                return [];
+            }
 
             return $row ? json_decode($row->value, true) : [];
         });
 
-        return array_replace_recursive(self::DEFAULTS[$section], $stored ?: []);
+        $merged = array_replace_recursive(self::DEFAULTS[$section] ?? [], $stored ?: []);
+
+        if ($section === 'sign-in') {
+            $explicit = is_array($stored)
+                && (array_key_exists('requireMfa', $stored) || array_key_exists('requireAuthenticatorApp', $stored));
+            if (! $explicit) {
+                $required = filter_var(env('PORTAL_REQUIRE_MFA', true), FILTER_VALIDATE_BOOLEAN);
+                $merged['requireMfa'] = $required;
+                $merged['requireAuthenticatorApp'] = $required;
+            }
+        }
+
+        return $merged;
     }
 
     public static function put(string $section, array $value, ?int $userId = null): void
@@ -100,5 +122,13 @@ class SecurityPolicies
         $days = (int) (self::get('sign-in')['sessionDays'] ?? 7);
 
         return max(1, min(30, $days));
+    }
+
+    /** Days to keep call recordings that are not on legal hold. */
+    public static function callRecordingRetentionDays(): int
+    {
+        $days = (int) (self::get('security')['callRecordingRetentionDays'] ?? 2555);
+
+        return max(30, min(3650, $days));
     }
 }

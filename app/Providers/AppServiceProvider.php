@@ -202,6 +202,14 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        $https = $this->app->environment('production')
+            || str_starts_with((string) config('app.url'), 'https://');
+        if ($https) {
+            config(['session.secure' => true]);
+        }
+
+        \App\Models\FileItem::observe(\App\Observers\FileMalwareObserver::class);
+
         // App\Listeners\RecordAuthEvent is picked up by Laravel's automatic
         // listener discovery - do not also register it manually, or every
         // auth event gets recorded twice.

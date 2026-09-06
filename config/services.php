@@ -138,4 +138,9 @@ return [
         'time_budget' => max(60, (int) env('SHAREPOINT_SYNC_TIME_BUDGET', 1200)),
     ],
 
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY', ''),
+        'secret' => env('TURNSTILE_SECRET', ''),
+    ],
+
 ];

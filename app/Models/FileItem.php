@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'uploaded_by_member_id',
     'source_modified_at', 'deleted_by',
     'review_status', 'review_note', 'reviewed_by', 'reviewed_at',
+    'malware_status', 'malware_scanned_at', 'envelope_encrypted',
 ])]
 #[Hidden(['storage_path', 'disk'])]
 class FileItem extends Model
@@ -51,6 +52,8 @@ class FileItem extends Model
             'source_modified_at' => 'datetime',
             'deleted_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'malware_scanned_at' => 'datetime',
+            'envelope_encrypted' => 'boolean',
         ];
     }
 

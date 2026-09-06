@@ -9,7 +9,9 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\PresenceService;
 use App\Support\Notifications\Notifier;
+use App\Support\Security\Detectors;
 use App\Support\Security\SecurityAlertPolicy;
+use App\Support\Security\SecurityAudit;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -95,6 +97,18 @@ class RecordAuthEvent
 
         $this->record('login', $userId);
 
+        if ($event->user instanceof User) {
+            Detectors::onLogin(
+                $event->user,
+                Detectors::countryFromRequest(),
+                (string) $ip,
+            );
+            SecurityAudit::record('auth.login', [
+                'user_id' => $userId,
+                'email' => $event->user->email,
+            ]);
+        }
+
         // Sign-ins feed the Activities panel too — without them a user who
         // hasn't touched clients/files yet sees an empty audit trail.
         if ($event->user instanceof User) {
@@ -158,6 +172,11 @@ class RecordAuthEvent
 
         $this->record('login_failed', $userId);
 
+        SecurityAudit::record('auth.login_failed', [
+            'user_id' => $userId,
+            'guard' => $event->guard,
+        ]);
+
         // Recorded first, so this attempt counts towards the threshold — the
         // check reads auth_events rather than keeping its own tally.
         if ($event->user instanceof User && SecurityAlertPolicy::crossedFailureThreshold((int) $userId)) {
@@ -200,6 +219,7 @@ class RecordAuthEvent
             'event' => $event,
             'ip' => request()->ip(),
             'user_agent' => (string) request()->userAgent(),
+            'country' => Detectors::countryFromRequest(),
             'created_at' => now(),
         ]);
     }

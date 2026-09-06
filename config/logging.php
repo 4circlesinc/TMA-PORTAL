@@ -127,6 +127,28 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'security_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => 'info',
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        /*
+         * Auth and file-access trail that the in-app UI cannot edit.
+         * Optional Papertrail/Slack copies are added when those env vars exist.
+         */
+        'security' => [
+            'driver' => 'stack',
+            'channels' => array_values(array_filter([
+                'security_file',
+                env('LOG_SECURITY_PAPERTRAIL') ? 'papertrail' : null,
+                env('LOG_SLACK_WEBHOOK_URL') ? 'slack' : null,
+            ])),
+            'ignore_exceptions' => true,
+        ],
+
     ],
 
 ];

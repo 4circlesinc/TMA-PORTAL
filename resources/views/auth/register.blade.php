@@ -168,6 +168,8 @@
             @enderror
           </div>
 
+          @include('auth.partials.turnstile')
+
           <button type="submit" class="tma-auth__submit">Create account</button>
         </form>
 

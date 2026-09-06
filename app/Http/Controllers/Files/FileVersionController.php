@@ -121,6 +121,13 @@ class FileVersionController extends BaseFilesController
         \App\Support\Files\Activity::forFile($user->id, $file, 'download', [
             'version' => $version->version_number,
         ]);
+        \App\Support\Security\SecurityAudit::record('file.download', [
+            'file_id' => $file->id,
+            'uuid' => $file->uuid,
+            'user_id' => $user->id,
+            'version' => $version->version_number,
+        ]);
+        \App\Support\Security\Detectors::onFileDownload($user->id);
 
         return Vault::downloadVersion($version, $this->versionName($file, $version));
     }

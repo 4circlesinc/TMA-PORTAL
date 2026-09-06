@@ -5,6 +5,7 @@ namespace App\Support\Files;
 use App\Models\FileItem;
 use App\Support\SharePoint\RemoteContent;
 use App\Models\FileVersion;
+use App\Support\Security\Envelope;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -87,8 +88,24 @@ class Vault
         $size = filesize($sourceAbsPath) ?: 0;
         $checksum = hash_file('sha256', $sourceAbsPath) ?: null;
 
-        $in = fopen($sourceAbsPath, 'rb');
+        $toWrite = $sourceAbsPath;
+        $wrapTemp = null;
+        $encrypted = false;
+        if (Envelope::enabled() && ! Envelope::pathIsWrapped($sourceAbsPath)) {
+            $wrapTemp = tempnam(sys_get_temp_dir(), 'tmaencw');
+            if ($wrapTemp === false) {
+                throw new FileValidationException('Storage unavailable, the file could not be saved.');
+            }
+            Envelope::wrapFile($sourceAbsPath, $wrapTemp);
+            $toWrite = $wrapTemp;
+            $encrypted = true;
+        }
+
+        $in = fopen($toWrite, 'rb');
         if ($in === false) {
+            if ($wrapTemp) {
+                @unlink($wrapTemp);
+            }
             throw new FileValidationException('Storage unavailable, the file could not be read.');
         }
 
@@ -97,6 +114,9 @@ class Vault
         } finally {
             if (is_resource($in)) {
                 fclose($in);
+            }
+            if ($wrapTemp) {
+                @unlink($wrapTemp);
             }
         }
 
@@ -112,6 +132,7 @@ class Vault
             'path' => $relPath,
             'size' => $size,
             'checksum' => $checksum,
+            'encrypted' => $encrypted,
         ];
     }
 
@@ -349,16 +370,45 @@ class Vault
                 throw new FileValidationException('File no longer exists.');
             }
 
-            $response = response()->file($abs, array_filter([
+            $serve = $abs;
+            $deleteAfter = false;
+            if (Envelope::pathIsWrapped($abs)) {
+                $serve = self::decryptToScratch($abs);
+                $deleteAfter = true;
+            }
+
+            $response = response()->file($serve, array_filter([
                 'Content-Type' => $mime,
                 'X-Content-Type-Options' => 'nosniff',
                 'Cache-Control' => self::CACHE_CONTROL,
                 'ETag' => $etag,
             ]));
             $response->setContentDisposition($disposition, $name, self::asciiName($name));
-            // setAutoEtag() would hash the whole file on every request; the tag
-            // above says the same thing from columns we already hold.
             $response->setAutoLastModified();
+            if ($deleteAfter) {
+                $response->deleteFileAfterSend(true);
+            }
+            if ($request) {
+                $response->isNotModified($request);
+            }
+
+            return $response;
+        }
+
+        if (Envelope::enabled()) {
+            $plain = Envelope::materializeDisk($disk, $path);
+            if ($plain === null) {
+                throw new FileValidationException('File no longer exists.');
+            }
+
+            $response = response()->file($plain, array_filter([
+                'Content-Type' => $mime,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => self::CACHE_CONTROL,
+                'ETag' => $etag,
+            ]));
+            $response->setContentDisposition($disposition, $name, self::asciiName($name));
+            $response->deleteFileAfterSend(true);
             if ($request) {
                 $response->isNotModified($request);
             }
@@ -537,6 +587,11 @@ class Vault
             return false;
         }
 
+        // Ciphertext must not be handed to <img>/<video> via a signed URL.
+        if (Envelope::enabled()) {
+            return false;
+        }
+
         $mime = strtolower(trim(explode(';', (string) $mimeType)[0]));
 
         if ($mime === 'image/svg+xml') {
@@ -623,10 +678,18 @@ class Vault
             return null;
         }
 
-        // Local-driver disk: use the real file in place (no copy, no cleanup).
+        // Local-driver disk: use the real file in place (no copy, no cleanup)
+        // unless it is envelope-wrapped, in which case callers need plaintext.
         $abs = self::localAbsPath($file->disk ?: self::diskName(), (string) $file->storage_path);
         if ($abs !== null) {
-            return is_file($abs) ? $abs : null;
+            if (! is_file($abs)) {
+                return null;
+            }
+            if (Envelope::pathIsWrapped($abs)) {
+                return self::decryptToScratch($abs);
+            }
+
+            return $abs;
         }
 
         // Remote disk: stream a copy down to local scratch.
@@ -650,7 +713,18 @@ class Vault
         fclose($in);
         fclose($out);
 
-        return is_file($tmp) ? $tmp : null;
+        if (! is_file($tmp)) {
+            return null;
+        }
+
+        if (Envelope::pathIsWrapped($tmp)) {
+            $plain = self::decryptToScratch($tmp);
+            @unlink($tmp);
+
+            return $plain;
+        }
+
+        return $tmp;
     }
 
     /** Delete a temp local copy (no-op for real local-disk paths). */
@@ -659,6 +733,19 @@ class Vault
         if ($path && str_starts_with($path, self::tempRoot().'/tmp/') && is_file($path)) {
             @unlink($path);
         }
+    }
+
+    /** Decrypt a wrapped local file into scratch; caller must cleanupLocalCopy. */
+    private static function decryptToScratch(string $wrappedAbs): string
+    {
+        $tmpDir = self::tempRoot().'/tmp';
+        if (! is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
+        }
+        $tmp = $tmpDir.'/'.Str::uuid()->toString();
+        Envelope::unwrapFile($wrappedAbs, $tmp);
+
+        return $tmp;
     }
 
     private static function relPath(string $uuid, string $ext): string

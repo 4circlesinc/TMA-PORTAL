@@ -188,10 +188,11 @@ class CipIntakeTest extends TestCase
         $this->assertSame(1, $body['familySize']);
         $this->assertSame('F1', $body['familyLabel']);
 
-        $this->assertDatabaseHas('cip_people', [
-            'role' => CipPerson::ROLE_MAIN_APPLICANT,
-            'passport_number' => 'X1234567',
-        ]);
+        $person = CipPerson::query()
+            ->where('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ->first();
+        $this->assertNotNull($person);
+        $this->assertSame('X1234567', $person->passport_number);
     }
 
     public function test_the_region_is_derived_from_the_country_never_asked(): void
@@ -468,7 +469,7 @@ class CipIntakeTest extends TestCase
         Storage::disk(config('filesystems.avatar_disk', 'public'))->assertExists($person->photo_path);
 
         [$width] = getimagesizefromstring(
-            Storage::disk(config('filesystems.avatar_disk', 'public'))->get($person->photo_path)
+            (string) (\App\Support\Cip\PassportPhoto::read($person)['body'] ?? '')
         );
         $this->assertSame(600, $width, 'the filed photo keeps the resolution it arrived at');
     }

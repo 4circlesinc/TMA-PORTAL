@@ -23,7 +23,10 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/app/private/**
+!/storage/app/private/.gitignore
 /storage/app/public/cip
+/storage/framework/testing/disks
 /storage/pail
 /tmp
 /vendor

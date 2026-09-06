@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'event', 'detail', 'ip', 'user_agent', 'created_at'])]
+#[Fillable(['user_id', 'event', 'detail', 'ip', 'user_agent', 'country', 'created_at'])]
 class AuthEvent extends Model
 {
     public $timestamps = false;

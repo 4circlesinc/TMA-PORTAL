@@ -245,6 +245,7 @@ class CallRecordingTest extends TestCase
             ->assertHeader('Content-Range', 'bytes 2-5/10')
             ->assertHeader('Accept-Ranges', 'bytes');
         $this->assertSame('cdef', $response->streamedContent());
+        $this->assertDatabaseHas('call_recording_access_logs', ['action' => 'play']);
     }
 
     // ---------------------------------------------------- chunks + finish

@@ -70,6 +70,12 @@ abstract class TestCase extends BaseTestCase
         return $response->getContent();
     }
 
+    /** Plaintext of a vault object, wrapped or not. */
+    protected function plaintextOnDisk(string $disk, string $path): string
+    {
+        return \App\Support\Security\Envelope::readDisk(Storage::disk($disk), $path);
+    }
+
     /** A minimal PDF for CIP decision-letter uploads in feature tests. */
     protected function cipDecisionLetterPdf(): UploadedFile
     {

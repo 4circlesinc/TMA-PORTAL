@@ -14,6 +14,7 @@ use App\Support\Files\FolderProvisioner;
 use App\Support\SharePoint\Pusher;
 use App\Support\SharePoint\RemoteContent;
 use App\Support\SharePoint\Synchroniser;
+use App\Support\Security\Envelope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -674,7 +675,7 @@ class SharePointSyncTest extends TestCase
         $file->refresh();
         $this->assertNull($file->content_state, 'no longer a placeholder');
         $this->assertNotNull($file->storage_path);
-        $this->assertSame('the real bytes', file_get_contents($this->vaultRoot.'/'.$file->storage_path));
+        $this->assertSame('the real bytes', Envelope::unwrapBytes((string) file_get_contents($this->vaultRoot.'/'.$file->storage_path)));
 
         // Version 1 was a placeholder alongside it and must be filled in too,
         // or the version history 404s on a file that opens perfectly well.

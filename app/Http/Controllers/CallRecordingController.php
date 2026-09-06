@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\CallRecording;
+use App\Models\CallRecordingAccessLog;
 use App\Models\Client;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Files\Vault;
+use App\Support\Security\Envelope;
+use App\Support\Security\SecurityAudit;
+use App\Support\SecurityPolicies;
 use App\Support\UserTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -205,6 +209,7 @@ class CallRecordingController extends Controller
             'size' => $stored['size'],
             'duration_ms' => (int) ($data['durationMs'] ?? 0),
             'ended_at' => now(),
+            'retain_until' => now()->addDays(SecurityPolicies::callRecordingRetentionDays()),
         ])->save();
 
         return response()->json(['ok' => true]);
@@ -360,20 +365,34 @@ class CallRecordingController extends Controller
         $storage = Storage::disk($recording->disk);
         abort_unless($storage->exists($recording->path), 404);
 
-        $total = $storage->size($recording->path);
+        $plain = Envelope::materializeDisk($storage, $recording->path);
+        abort_unless($plain && is_file($plain), 404);
+
+        $total = filesize($plain) ?: 0;
         $download = $request->boolean('download');
         $name = $this->fileName($recording);
 
-        // Only 'bytes=start-end' / 'bytes=start-'; multipart ranges are more
-        // machinery than a media element ever asks for.
+        CallRecordingAccessLog::create([
+            'call_recording_id' => $recording->id,
+            'user_id' => $user->id,
+            'action' => $download ? 'download' : 'play',
+            'ip' => $request->ip(),
+            'created_at' => now(),
+        ]);
+        SecurityAudit::record('call_recording.'.($download ? 'download' : 'play'), [
+            'uuid' => $recording->uuid,
+            'user_id' => $user->id,
+        ]);
+
         $start = 0;
-        $end = $total - 1;
+        $end = max(0, $total - 1);
         $partial = false;
         $range = (string) $request->header('Range', '');
         if (! $download && preg_match('/^bytes=(\d+)-(\d*)$/', $range, $m)) {
             $start = (int) $m[1];
             $end = $m[2] === '' ? $total - 1 : min((int) $m[2], $total - 1);
             if ($start > $end || $start >= $total) {
+                @unlink($plain);
                 abort(416, 'Range not satisfiable');
             }
             $partial = true;
@@ -391,34 +410,45 @@ class CallRecordingController extends Controller
             $headers['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$total;
         }
 
-        return response()->stream(function () use ($storage, $recording, $start, $end) {
-            $handle = $storage->readStream($recording->path);
-            if ($handle === false || $handle === null) {
-                return;
-            }
-
-            // Object storage streams rarely seek; skipping by reading is the
-            // portable way to honour an offset.
-            $toSkip = $start;
-            while ($toSkip > 0 && ! feof($handle)) {
-                $skipped = fread($handle, min($toSkip, 1 << 20));
-                if ($skipped === false || $skipped === '') {
-                    break;
+        return response()->stream(function () use ($plain, $start, $end) {
+            try {
+                $handle = fopen($plain, 'rb');
+                if ($handle === false) {
+                    return;
                 }
-                $toSkip -= strlen($skipped);
-            }
-
-            $remaining = $end - $start + 1;
-            while ($remaining > 0 && ! feof($handle)) {
-                $piece = fread($handle, min($remaining, 1 << 16));
-                if ($piece === false || $piece === '') {
-                    break;
+                if ($start > 0) {
+                    fseek($handle, $start);
                 }
-                echo $piece;
-                $remaining -= strlen($piece);
+                $remaining = $end - $start + 1;
+                while ($remaining > 0 && ! feof($handle)) {
+                    $piece = fread($handle, min($remaining, 1 << 16));
+                    if ($piece === false || $piece === '') {
+                        break;
+                    }
+                    echo $piece;
+                    $remaining -= strlen($piece);
+                }
+                fclose($handle);
+            } finally {
+                @unlink($plain);
             }
-            fclose($handle);
         }, $partial ? 206 : 200, $headers);
+    }
+
+    /** Keep a recording past retention (administrators). */
+    public function hold(Request $request, string $uuid): JsonResponse
+    {
+        $user = $this->areaUser($request);
+        abort_unless(Role::isAdmin($user), 404);
+
+        $recording = CallRecording::query()
+            ->where('uuid', $uuid)
+            ->firstOrFail();
+
+        $on = $request->boolean('legalHold', true);
+        $recording->forceFill(['legal_hold' => $on])->save();
+
+        return response()->json($this->record($recording));
     }
 
     // ----------------------------------------------------------- helpers
@@ -474,6 +504,8 @@ class CallRecordingController extends Controller
             'startedAt' => $r->started_at?->toIso8601String(),
             'endedAt' => $r->ended_at?->toIso8601String(),
             'conversationId' => $r->conversation?->uuid,
+            'legalHold' => (bool) $r->legal_hold,
+            'retainUntil' => $r->retain_until?->toIso8601String(),
         ];
     }
 

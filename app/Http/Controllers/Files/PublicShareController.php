@@ -9,6 +9,7 @@ use App\Models\Share;
 use App\Support\Files\Activity;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderTree;
+use App\Support\Files\MalwareScanner;
 use App\Support\Files\Sharing;
 use App\Support\Files\Vault;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class PublicShareController extends Controller
 
         if ($share->item_type === 'file') {
             $file = FileItem::find($share->item_id);
-            if (! $file) {
+            if (! $file || MalwareScanner::isBlocked($file->malware_status)) {
                 return response()->view('share.expired', [], 404);
             }
             Activity::log(null, 'file', $file->id, 'preview', ['via' => 'link']);
@@ -80,7 +81,7 @@ class PublicShareController extends Controller
     {
         $share = $this->guardedFileShare($request, $token);
         $file = FileItem::find($share->item_id);
-        abort_unless($file, 404);
+        abort_unless($file && MalwareScanner::isShareable($file->malware_status), 404);
 
         return Vault::preview($file);
     }
@@ -94,7 +95,7 @@ class PublicShareController extends Controller
 
         if ($share->item_type === 'file') {
             $file = FileItem::find($share->item_id);
-            abort_unless($file, 404);
+            abort_unless($file && MalwareScanner::isShareable($file->malware_status), 404);
             Activity::log(null, 'file', $file->id, 'download', ['via' => 'link']);
 
             return Vault::download($file);
@@ -129,7 +130,7 @@ class PublicShareController extends Controller
         $folder = Folder::find($share->item_id);
         abort_unless($folder, 404);
         $file = FileItem::where('uuid', $fileUuid)->first();
-        abort_unless($file, 404);
+        abort_unless($file && MalwareScanner::isShareable($file->malware_status), 404);
 
         $allowed = array_merge([$folder->id], FolderTree::descendantIds($folder));
         abort_unless(in_array($file->folder_id, $allowed, true), 403);

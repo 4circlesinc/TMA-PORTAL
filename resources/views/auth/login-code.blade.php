@@ -53,11 +53,13 @@
             <input type="checkbox" name="trust_device" value="1">
             <span>Trust this device for {{ $trustDays }} days</span>
           </label>
+          @include('auth.partials.turnstile')
           <button type="submit" class="tma-auth__submit">Confirm</button>
         </form>
 
         <form method="POST" action="{{ route('login-code.resend') }}">
           @csrf
+          @include('auth.partials.turnstile')
           <button type="submit" class="tma-auth__submit tma-auth__submit--ghost" data-resend @if (! $canResend) disabled @endif>Resend code</button>
         </form>
         @if (! $canResend)

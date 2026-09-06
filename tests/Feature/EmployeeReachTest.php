@@ -103,7 +103,7 @@ class EmployeeReachTest extends TestCase
             'folders/recent', 'folders/recycle', 'folders/shared',
             'folders/shared-with-me', 'overview',
             'settings/change-email', 'signatures', 'social/feed',
-            'social/messages', 'workflows', 'workflows/feedback', 'workflows/updates',
+            'social/messages', 'templates/email', 'workflows', 'workflows/feedback', 'workflows/updates',
         ], $reach[Role::REVIEWING_OFFICER], 'the pages employee-like staff reach have changed');
 
         // A client keeps their own File Library screens; the two
