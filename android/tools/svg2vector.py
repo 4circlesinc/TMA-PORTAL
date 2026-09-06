@@ -56,5 +56,10 @@ def convert(name):
     return os.path.relpath(dest, ROOT)
 
 if __name__ == '__main__':
+    failed = []
     for n in sys.argv[1:]:
-        print(convert(n))
+        try:
+            print(convert(n))
+        except SystemExit as e:
+            failed.append(str(e)); print('skip:', e, file=sys.stderr)
+    if failed: sys.exit(1)

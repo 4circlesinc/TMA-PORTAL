@@ -19,13 +19,17 @@ class DevicePrefs @Inject constructor(private val store: DataStore<Preferences>)
     private val themeKey = stringPreferencesKey("device.themeMode")
     private val sidebarKey = booleanPreferencesKey("device.sidebarCollapsed")
     private val appLockKey = booleanPreferencesKey("device.appLock")
+    private val periodKey = stringPreferencesKey("device.dashboardPeriod")
 
     /** `light` (default), `dark`, or `system`; mirrors `/me/preferences.themeMode` until the account copy is synced. */
     val themeMode: Flow<String> = store.data.map { it[themeKey] ?: "light" }
     val sidebarCollapsed: Flow<Boolean> = store.data.map { it[sidebarKey] ?: false }
     val appLock: Flow<Boolean> = store.data.map { it[appLockKey] ?: false }
+    /** The KPI row's period (the web keeps it in localStorage `tma.today`): today, week, month, year. */
+    val dashboardPeriod: Flow<String> = store.data.map { it[periodKey] ?: "today" }
 
     suspend fun setThemeMode(mode: String) = store.edit { it[themeKey] = mode }
     suspend fun setSidebarCollapsed(collapsed: Boolean) = store.edit { it[sidebarKey] = collapsed }
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[appLockKey] = enabled }
+    suspend fun setDashboardPeriod(period: String) = store.edit { it[periodKey] = period }
 }

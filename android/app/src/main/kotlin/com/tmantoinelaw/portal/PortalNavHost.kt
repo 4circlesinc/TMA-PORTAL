@@ -26,6 +26,8 @@ import com.tmantoinelaw.portal.core.navigation.SignaturesRoute
 import com.tmantoinelaw.portal.core.navigation.TemplatesRoute
 import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
+import com.tmantoinelaw.portal.feature.home.HomeActions
+import com.tmantoinelaw.portal.feature.home.HomeScreen
 import com.tmantoinelaw.portal.feature.notifications.NotificationsScreen
 import com.tmantoinelaw.portal.feature.shell.ModulePlaceholder
 import com.tmantoinelaw.portal.feature.shell.NavTree
@@ -43,7 +45,15 @@ fun PortalNavHost(
         composable<NotificationsRoute> {
             NotificationsScreen(onOpen = { item -> item.actionUrl?.let(openUrl) }, resolveUrl = resolveUrl)
         }
-        composable<DashboardRoute> { ModulePlaceholder("Dashboard") }
+        composable<DashboardRoute> {
+            HomeScreen(
+                actions = HomeActions(
+                    go = { navController.navigate(it) { launchSingleTop = true } },
+                    openFile = { file, folder -> navController.navigate(FilesRoute("all", folder = folder, file = file)) { launchSingleTop = true } },
+                    openFolder = { folder -> navController.navigate(FilesRoute("all", folder = folder)) { launchSingleTop = true } },
+                ),
+            )
+        }
         composable<OverviewRoute> { ModulePlaceholder("Overview") }
         composable<ClientsRoute> { ModulePlaceholder("CIP Applications") }
         composable<EmailRoute> { ModulePlaceholder("Email") }

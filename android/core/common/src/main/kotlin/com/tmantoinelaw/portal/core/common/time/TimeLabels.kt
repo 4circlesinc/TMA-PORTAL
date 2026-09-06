@@ -13,6 +13,30 @@ object TimeLabels {
 
     fun parse(iso: String?): Instant? = iso?.let { runCatching { ZonedDateTime.parse(it).toInstant() }.getOrNull() ?: runCatching { Instant.parse(it) }.getOrNull() }
 
+    /** "just now", "12 min ago", "3h ago", "5d ago" (portal-home.js workAgo). */
+    fun ago(iso: String?, now: Instant = Instant.now()): String {
+        val at = parse(iso) ?: return ""
+        val secs = (now.epochSecond - at.epochSecond).toDouble()
+        if (secs < 60) return "just now"
+        if (secs < 3600) return "${Math.round(secs / 60)} min ago"
+        if (secs < 86400) return "${Math.round(secs / 3600)}h ago"
+        return "${Math.round(secs / 86400)}d ago"
+    }
+
+    private val clock = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    private val monthDay = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+
+    /** The time today, the day this year, otherwise the date (email.js emailTimeLabel, portal-home.js emailTime). */
+    fun clockOrDate(iso: String?, fallback: String = "", now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
+        val at = parse(iso) ?: return fallback
+        val d = at.atZone(zone); val n = now.atZone(zone)
+        return when {
+            d.toLocalDate() == n.toLocalDate() -> clock.format(d)
+            d.year == n.year -> monthDay.format(d)
+            else -> dateFormat.format(d)
+        }
+    }
+
     fun relative(iso: String?, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
         val at = parse(iso) ?: return ""
         val diff = (now.epochSecond - at.epochSecond).toDouble()
