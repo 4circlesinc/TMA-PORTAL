@@ -754,3 +754,16 @@ Finish each phase's checks on the phone, tablet and foldable AVDs, in light and 
 - [ ] Accessibility: TalkBack labels on every control, 48 dp touch targets, contrast checked in both themes.
 - [ ] Security: cookie jar and verifier encrypted at rest; no secrets in the repo; release build HTTPS only; `assetlinks.json` verified.
 - [ ] This file and `docs/android-api-catalogue.md` updated wherever the code taught you something different, with the commit saying so.
+
+## 17. Field notes from the first emulator run (6 Sep 2026)
+
+What the code taught us that the sections above did not say. Keep these true.
+
+- **Every OkHttp body read or close runs on `Dispatchers.IO`.** `PortalHttp` wraps each call in `withContext(IO)`; `raw(request) { response -> }` closes the response after the block. Closing a chunked 302 on the main thread throws `NetworkOnMainThreadException` and kills the process, and it only shows up on a device — unit tests with MockWebServer never see it.
+- **A 401 must not wipe a session it did not test.** `CsrfRetryInterceptor` emits the cookie-jar `generation` the request left with; `SessionRepository` forgets the session only when the jar still holds that generation. Without this, a notifications poll that left while signed out landed after the sign-in claim and erased the fresh cookies. Pollers (`ForegroundWatcher`, `NotificationsRepository.catchUp`) no-op while nobody is signed in.
+- **Sign-in claim success is a 302 whose Location path is `/`.** Every refusal is a 302 to the sign-in page; do not test for a path name.
+- **The listing facets are strings.** `GET /portal/cip/applications` → `assignees[].id` is `"none"` or `"3"`, with a `count`; `AssigneeDto.id: String?` plus `userKey` for the number. `investmentType` is `""` when unset, not null.
+- **`Client::toRecord().profile` is `[]` when empty** (PHP's empty array). Model it as `JsonElement?`, read it as an object when it is one.
+- **CIP status tones** go beyond the five portal tones: sky, indigo, violet, amber, teal, orange, rose, cyan, copper, emerald, slate, lime, navy, gold, plum, success, action, danger, neutral, pending. `core/ui` `toneColour` maps them.
+- **Docker stack:** CIP ships dark; `.env.docker` needs `FEATURE_CIP=true` and the app container must be recreated (`TMA_APP_PORT=8002 docker compose up -d app`). The new-device sign-in code is only in `docker compose logs app` (mail is the `log` mailer; the rendered mail carries `000000` placeholders, the real six digits sit on their own line). Tick "Trust this device" once.
+- **Emulator:** AVD `tma_phone` (android-36 google_apis arm64, Pixel 8). Chrome's first run must be dismissed once ("Use without an account") before a Custom Tab shows anything. Install with `./gradlew :app:installDebug -PportalOrigin=http://10.0.2.2:8002`.
