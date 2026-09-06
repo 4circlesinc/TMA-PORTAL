@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":feature:notifications"))
     implementation(project(":feature:home"))
     implementation(project(":feature:files"))
+    implementation(project(":feature:clients"))
     implementation(project(":core:database"))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)

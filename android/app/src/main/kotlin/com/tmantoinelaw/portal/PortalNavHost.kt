@@ -27,6 +27,9 @@ import com.tmantoinelaw.portal.core.navigation.TemplatesRoute
 import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
 import com.tmantoinelaw.portal.feature.home.HomeActions
+import com.tmantoinelaw.portal.feature.clients.ClientsScreen
+import com.tmantoinelaw.portal.feature.clients.ClientProfileScreen
+import com.tmantoinelaw.portal.feature.clients.CompanyScreen
 import com.tmantoinelaw.portal.feature.files.FilesScreen
 import com.tmantoinelaw.portal.feature.files.viewer.FileViewerScreen
 import com.tmantoinelaw.portal.core.navigation.FileViewerRoute
@@ -67,7 +70,34 @@ fun PortalNavHost(
             )
         }
         composable<ActivityRoute> { ModulePlaceholder("Activity") }
-        composable<ClientsRoute> { ModulePlaceholder("CIP Applications") }
+        composable<ClientsRoute> { entry ->
+            val route = entry.toRoute<ClientsRoute>()
+            val (rest, query) = route.rest.split("?", limit = 2).let { it[0].trim('/') to it.getOrNull(1) }
+            val askedTab = query?.split("&")?.firstOrNull { it.startsWith("tab=") }?.substringAfter("=")
+            val parts = rest.split("/").filter { it.isNotBlank() }
+            val go: (Route) -> Unit = { navController.navigate(it) { launchSingleTop = true } }
+            val editor = parts.firstOrNull() == "new" || parts.firstOrNull() == "applications" || parts.getOrNull(1) == "edit" ||
+                (parts.firstOrNull() == "companies" && (parts.getOrNull(1) == "new" || parts.getOrNull(2) == "edit"))
+            when {
+                parts.isEmpty() -> ClientsScreen(
+                    onOpenClient = { go(ClientsRoute(it)) },
+                    onOpenApplication = { a -> go(ClientsRoute(a.clientUid ?: "applications/${a.id}")) },
+                    onOpenCompany = { go(ClientsRoute("companies/$it")) },
+                    onCreate = { kind -> go(ClientsRoute(if (kind == "company") "companies/new" else if (kind == "import") "import" else "applications/new?phase=$kind")) },
+                )
+                editor -> ModulePlaceholder("Application editor")
+                parts[0] == "companies" -> CompanyScreen(uid = parts[1], onBack = { navController.popBackStack() }, onOpenClient = { go(ClientsRoute(it)) })
+                else -> ClientProfileScreen(
+                    uid = parts[0],
+                    askedTab = askedTab,
+                    onBack = { navController.popBackStack() },
+                    onOpenFolder = { go(FilesRoute("clients", folder = it)) },
+                    onOpenFile = { file, folder -> go(FileViewerRoute(file, folder, "clients")) },
+                    onOpenConversation = { go(MessagesRoute(conversation = it)) },
+                    onEdit = { uid, appId -> go(ClientsRoute(if (appId != null) "applications/$appId/edit" else "$uid/edit")) },
+                )
+            }
+        }
         composable<EmailRoute> { ModulePlaceholder("Email") }
         composable<MessagesRoute> { ModulePlaceholder("Messages") }
         composable<FeedRoute> { ModulePlaceholder("Feed") }
