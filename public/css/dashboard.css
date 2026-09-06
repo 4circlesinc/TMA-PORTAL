@@ -4138,9 +4138,7 @@
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */
 
-/* Full-width dock: flush with the bottom edge, rounded only at its top
-   corners, filled icons with no labels. Kept in sync with the copy in
-   dashboard-tma-overrides.css, which loads later and wins ties. */
+/* Full-width strip: glued to the bottom edge, no float, no pill, no frost. */
 .tma-dash__tabbar {
   display: none;
   position: fixed;
@@ -4149,15 +4147,16 @@
   bottom: 0;
   z-index: 45;
   flex-direction: column;
-  width: auto;
+  width: 100%;
   max-width: none;
+  margin: 0;
   transform: none;
-  padding: var(--space-8) var(--space-8) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
-  border-radius: var(--radius-20) var(--radius-20) 0 0;
+  padding: var(--space-8) 0 calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  border-radius: 0;
   background: #ffffff;
   border: none;
   border-top: 0.5px solid var(--color-overlay-4);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   opacity: 1;
@@ -4350,9 +4349,8 @@
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
   background: #1c1c1c;
-  /* --color-white flips to the dark surface; only the hairline needs help. */
   border-top-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 :root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,

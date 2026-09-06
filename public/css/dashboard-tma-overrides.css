@@ -65,13 +65,25 @@
 }
 
 /* ─────────────────────────────────────────
- * MOBILE - bottom tab bar (full-width dock)
- * Solid paint, no frost. This file loads last so it has to kill any
- * leftover glass (rgba fill + backdrop-filter) from older shells.
+ * MOBILE - bottom tab bar
+ * Flush strip, not a floating pill. This file loads last so it has to
+ * kill leftover glass, inset, radius, and shadow from older shells.
  * ───────────────────────────────────────── */
 
 .tma-dash__tabbar {
-  background: #ffffff;
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  transform: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+  border: none !important;
+  border-top: 0.5px solid var(--color-overlay-4);
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   opacity: 1;
@@ -79,7 +91,9 @@
 
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
-  background: #1c1c1c;
+  background: #1c1c1c !important;
+  border-top-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none !important;
 }
 
 .tma-dash__tabbar::before,
@@ -216,9 +230,9 @@
 :root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
-  background: #1c1c1c;
+  background: #1c1c1c !important;
   border-top-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: none !important;
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 :root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
