@@ -378,27 +378,38 @@
     window.__TMA_ME__ = null;
 
     return (early || api('GET', '/me')).then(function (res) {
+      if (res.ok) {
+        return res.json().then(function (j) {
+          rememberMe(j);
+          settledAt = Date.now();
+          var result = applyMe(j);
+          if (window.TMAAuthenticatorNudge && window.TMAAuthenticatorNudge.maybeShow) {
+            window.TMAAuthenticatorNudge.maybeShow(j);
+          }
+          return result;
+        });
+      }
+
       /*
-       * A real answer that is not this person, signed out, suspended. The
-       * remembered copy dies with it: falling back here would paint an
-       * account the server just refused to.
+       * A real refusal of this person: signed out, session expired. The
+       * remembered copy dies with it.
+       *
+       * Anything else is not a statement about who this is. The desktop
+       * protocol handler used to answer a dead network with HTTP 502, which
+       * landed here, deleted tma.me, and left the next offline boot with a
+       * week of replica data and no account to scope it to. A portal 5xx
+       * is the same kind of non-answer. Keep what we had.
        */
-      if (!res.ok) {
+      if (res.status === 401 || res.status === 419) {
         try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing to drop */ }
         if (res.status === 401 && !/^\/auth\//.test(location.pathname || '')) {
           location.assign('/auth/login?return=' + encodeURIComponent(location.pathname + location.search));
         }
         return null;
       }
-      return res.json().then(function (j) {
-        rememberMe(j);
-        settledAt = Date.now();
-        var result = applyMe(j);
-        if (window.TMAAuthenticatorNudge && window.TMAAuthenticatorNudge.maybeShow) {
-          window.TMAAuthenticatorNudge.maybeShow(j);
-        }
-        return result;
-      });
+
+      var kept = recallMe();
+      return kept && kept.id != null ? applyMe(kept) : null;
     }).catch(function () {
       /*
        * Nothing answered at all, the offline case, and only that one. The

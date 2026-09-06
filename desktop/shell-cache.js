@@ -37,7 +37,9 @@
  *      bundles the new deploy may no longer serve, which is a broken page,
  *      not a slow one. Verification is not a launch-time question: the app
  *      stays open for days and the portal deploys under it, so asset-cache.js
- *      asks again on every navigation and on a timer.
+ *      asks again on every navigation and on a timer. The first navigation
+ *      itself is captured before that name exists — the SPA will not make
+ *      another — and stamped the moment the deploy is known.
  *
  * A reload cannot be a fourth gate, though it is the gesture somebody makes
  * when a page looks wrong. Chromium adds `Cache-Control: max-age=0` downstream
@@ -189,6 +191,12 @@ async function maybeServe(url, request, opts) {
     return null;
   }
 
+  // Captured before verification named the deploy. Online, after we know
+  // which deploy this is, the network can still tell us whether the copy
+  // is current. Offline — or before that name has arrived — this copy is
+  // the portal, and refusing it is the "You're offline" screen.
+  if (remoteBuild && !meta.build && !(opts && opts.offline)) return null;
+
   // No session, no shell — the network will route a stranger to sign-in.
   if (!(await hasSessionCookie(url.origin))) return null;
 
@@ -248,13 +256,16 @@ async function captureIfShell(url, copy) {
   if (!type.includes('text/html')) return;
 
   /*
-   * Only once the deploy is known. A capture without a build stamp could
-   * never be invalidated by a deploy, which is the one mismatch that breaks
-   * a page rather than slowing it — and verification finishes seconds after
-   * launch, so the window where captures are skipped is tiny.
+   * Keep the document even before verification has named the deploy.
+   *
+   * The first navigation is the only full document load the SPA usually
+   * makes, and it races verification: install() does not wait, and after
+   * paint the router is pushState. Skipping this capture used to mean the
+   * shell was never on disk at all — quit, go offline, reopen, and the
+   * app had nothing to paint but the offline notice. An unstamped copy
+   * is stamped the moment noteBuild learns the deploy; until then it is
+   * served only when there is no network to ask (see maybeServe).
    */
-  if (!remoteBuild) return;
-
   const html = Buffer.from(await copy.arrayBuffer());
   if (!html.subarray(0, SNIFF_BYTES).toString('utf8').includes(MARKER)) return;
 
@@ -269,7 +280,7 @@ async function captureIfShell(url, copy) {
   fs.mkdirSync(cacheDir(), { recursive: true });
   fs.writeFileSync(htmlFile(), html);
   fs.writeFileSync(metaFile(), JSON.stringify({
-    build: remoteBuild,
+    build: remoteBuild || meta.build || null,
     account: accountId ?? meta.account ?? null,
     segments: [...new Set([...meta.segments, segment])].filter(Boolean),
     savedAt: new Date().toISOString(),
@@ -323,7 +334,17 @@ function noteBuild(build) {
   remoteBuild = String(build);
 
   const meta = readMeta();
-  if (meta && meta.build && meta.build !== remoteBuild) goStale('deploy-changed');
+  if (!meta) return;
+
+  if (!meta.build) {
+    try {
+      fs.writeFileSync(metaFile(), JSON.stringify({ ...meta, build: remoteBuild }));
+    } catch { /* the next noteBuild retries; maybeServe already knows this case */ }
+
+    return;
+  }
+
+  if (meta.build !== remoteBuild) goStale('deploy-changed');
 }
 
 /** Test seam: point the cache at a scratch directory and reset state. */

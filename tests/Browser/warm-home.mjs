@@ -76,11 +76,21 @@ try {
   step(2, 'Reload with every data endpoint dead');
   // The document and static assets still serve (the desktop's shell and
   // bundle would); the DATA cannot — every /portal/* call and /me are killed.
+  // /me is a 502, which is how the desktop protocol handler used to name a
+  // dead network, so this also proves that answer does not wipe the
+  // remembered identity. Everything else is aborted the way a dropped
+  // socket is.
   // The first version of this test only killed four endpoints and passed
   // while hydration was completely broken: the untouched files listing
   // painted the one tile it checked, and dead tiles render EMPTY, not
   // skeleton. Nothing may answer, and the tiles must still show substance.
-  await context.route(/\/(me$|me\/|portal\/)/, (route) => route.abort());
+  await context.route(/\/me$/, (route) => route.fulfill({
+    status: 502,
+    contentType: 'text/plain',
+    body: '',
+    headers: { 'x-tma-offline': '1' },
+  }));
+  await context.route(/\/(me\/|portal\/)/, (route) => route.abort());
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
@@ -90,6 +100,8 @@ try {
   check(await page.evaluate(() =>
     !document.querySelector('.tma-portal-hello__title.tma-skeleton')),
   'and it is painted text, not a skeleton');
+  check(await page.evaluate(() => !!localStorage.getItem('tma.me')),
+    'the remembered /me survived a 502 — that is not a sign-out');
 
   const skeletons = await page.evaluate(() => {
     const mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');

@@ -485,6 +485,7 @@
           var err = new Error((data && data.message) || 'Request failed');
           err.status = res.status;
           err.data = data;
+          err.offline = res.headers.get('x-tma-offline') === '1';
           throw err;
         }
         /*
@@ -13256,8 +13257,11 @@
        * unset exactly when fetch itself rejected, which is the offline case,
        * and on the desktop the record layer clients-sync.js filled may hold
        * the whole profile of a client nobody ever clicked while connected.
+       * The desktop handler's own 502 (x-tma-offline) is that same case,
+       * named so Chromium does not turn it into ERR_UNEXPECTED — it is not
+       * a server 502 to believe.
        */
-      var offline = !(err && err.status);
+      var offline = !(err && err.status) || !!(err && err.offline);
       var recovered = offline && window.TMAStore && window.TMAStore.persistent
         ? window.TMAStore.get('clients:record:' + id)
         : Promise.resolve(undefined);

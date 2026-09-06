@@ -71,19 +71,26 @@ app.whenReady().then(async () => {
 
   scratch();
 
-  // Before the deploy is known, nothing is kept — a capture with no build
-  // stamp could never be invalidated by the one mismatch that breaks pages.
+  // The first navigation races verification. Capture it anyway — unstamped —
+  // or the SPA never remavigates and there is nothing to serve offline.
   shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
   await settle();
-  check('nothing is captured before the deploy is known', shellCache.readMeta(), null);
+  let pending = shellCache.readMeta();
+  check('a shell is captured before the deploy is known', !!pending, true);
+  check('and left unstamped until verification finishes', pending && pending.build, null);
+  check('remembering where the shell lives', pending && pending.segments, ['clients']);
 
   shellCache.noteBuild('build-1');
+  let meta = shellCache.readMeta();
+  check('learning the deploy stamps the copy already kept', meta && meta.build, 'build-1');
+  check('without needing another navigation', meta && meta.segments, ['clients']);
+
   shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
   await settle();
-  let meta = shellCache.readMeta();
-  check('a shell navigation is captured', !!meta, true);
+  meta = shellCache.readMeta();
+  check('a later navigation recaptures under that stamp', !!meta, true);
   check('stamped with the deploy', meta.build, 'build-1');
-  check('and remembers where the shell lives', meta.segments, ['clients']);
+  check('and still remembers where the shell lives', meta.segments, ['clients']);
 
   // A page without the marker is somebody's document, not the shell.
   shellCache.observe(url('/privacy-policy'), nav(`${ORIGIN}/privacy-policy`), htmlResponse('<html><body>legal</body></html>'));

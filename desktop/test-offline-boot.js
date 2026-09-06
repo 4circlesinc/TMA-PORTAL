@@ -52,6 +52,34 @@ app.whenReady().then(async () => {
 
   check('a shell was captured while online', !!shellCache.readMeta(), true);
 
+  /* ── captured before the deploy was named ──────────────────────────
+   * The production launch does this: the first navigation finishes while
+   * verification is still in flight, then the SPA never remavigates.
+   */
+  const pendingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tma-offline-pending-'));
+  shellCache._reset(pendingDir);
+  await session.defaultSession.cookies.set({
+    url: ORIGIN, name: 'tm-antoine-advisory-session', value: 'x', httpOnly: true,
+  });
+  shellCache.observe(url('/'), nav(`${ORIGIN}/`), new Response(SHELL, {
+    status: 200, headers: { 'content-type': 'text/html; charset=utf-8' },
+  }));
+  await settle();
+  check('an unstamped shell is kept', !!(shellCache.readMeta() && !shellCache.readMeta().build), true);
+  const pendingServed = await shellCache.maybeServe(url('/'), nav(`${ORIGIN}/`));
+  check('and that is enough to boot offline', !!pendingServed, true);
+  if (pendingServed) {
+    check('the unstamped copy is still the portal', (await pendingServed.text()).includes('the portal'), true);
+  }
+
+  /* restore the stamped cache the rest of this file uses */
+  shellCache._reset(dir);
+  shellCache.noteBuild('build-1');
+  shellCache.observe(url('/'), nav(`${ORIGIN}/`), new Response(SHELL, {
+    status: 200, headers: { 'content-type': 'text/html; charset=utf-8' },
+  }));
+  await settle();
+
   /* ── the network dies ────────────────────────────────────────────── */
   const realFetch = net.fetch;
   net.fetch = () => Promise.reject(new Error('net::ERR_INTERNET_DISCONNECTED'));

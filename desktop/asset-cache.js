@@ -396,8 +396,9 @@ async function handle(request) {
    * always stands; the 502 below is only ever the handler's own name for a
    * dead connection. See file-cache.js for why this seam and no other.
    */
+  let response;
   if (fileCache.cacheable(url, request.method)) {
-    const response = await networkFetch(request);
+    response = await networkFetch(request);
 
     if (response.ok) {
       /*
@@ -424,22 +425,35 @@ async function handle(request) {
     if (response.status === 502) {
       const kept = fileCache.serve(url.pathname);
       if (kept) return kept;
+    } else {
+      return response;
     }
-
-    return response;
+  } else {
+    response = await networkFetch(request);
   }
-
-  const response = await networkFetch(request);
 
   /*
    * The network had nothing. If this was a navigation and we kept a shell,
    * paint it rather than handing Chromium a 502 that becomes an error page —
    * a reader who was signed in a minute ago should get their portal back,
    * with the data layer serving from its own cache behind it.
+   *
+   * Data fetches are the other half. Answering 502 here used to look like
+   * the portal refusing: /me deleted the remembered identity, listings
+   * skipped the replica, and queued writes looked delivered-then-rejected.
+   * Page JS is written for a rejected fetch (the real "nothing answered"
+   * case). Navigations still get the 502 — a rejected handler is
+   * ERR_UNEXPECTED, which is the screen this header exists to replace.
    */
-  if (response.headers.get(OFFLINE_HEADER) && shellCache.isNavigation(request)) {
-    const kept = await shellCache.maybeServe(url, request, { offline: true });
-    if (kept) return kept;
+  if (response.headers.get(OFFLINE_HEADER)) {
+    if (shellCache.isNavigation(request)) {
+      const kept = await shellCache.maybeServe(url, request, { offline: true });
+      if (kept) return kept;
+
+      return response;
+    }
+
+    return Promise.reject(new Error('Failed to fetch'));
   }
 
   return shellCache.observe(url, request, response);

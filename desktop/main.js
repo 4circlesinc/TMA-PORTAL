@@ -562,9 +562,11 @@ async function looksOffline() {
   try {
     const res = await net.fetch(new URL('/up', PORTAL_URL).toString(), {
       bypassCustomProtocolHandlers: true,
+      signal: AbortSignal.timeout(4000),
     });
 
-    // The handler's marker survives here too; a real /up says 200.
+    if (res.headers.get(assetCache.OFFLINE_HEADER)) return true;
+
     return !res.ok;
   } catch {
     return true;

@@ -70,6 +70,27 @@ app.whenReady().then(async () => {
   check('an unreachable portal serves the bundle unverified', result.active, true);
   check('and says so', result.mode, 'unverified');
 
+  /*
+   * Data vs navigation once the portal cannot answer. A 502 is the handler's
+   * name for a dead network on a navigation (so the window is not
+   * ERR_UNEXPECTED). The same 502 on /me used to look like a sign-out.
+   */
+  let dataRejected = false;
+  try {
+    await assetCache.handle(new Request(`${origin}/me`, {
+      headers: { accept: 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+    }));
+  } catch {
+    dataRejected = true;
+  }
+  check('an unreachable data request fails as a network error', dataRejected, true);
+
+  const nav = await assetCache.handle(new Request(`${origin}/`, {
+    headers: { accept: 'text/html,application/xhtml+xml' },
+  }));
+  check('an unreachable navigation is still a 502 the app can name', nav.status, 502);
+  check('and marked offline, not a portal outage', nav.headers.get('x-tma-offline'), '1');
+
   /* ── path safety ───────────────────────────────────────────────── */
 
   const url = (u) => new URL(u, 'https://example.test');
