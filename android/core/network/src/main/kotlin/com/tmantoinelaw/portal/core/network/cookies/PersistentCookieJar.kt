@@ -59,6 +59,9 @@ class PersistentCookieJar(private val store: CookieStore) : CookieJar {
         cookies.any { it.name != "XSRF-TOKEN" && it.matches(url) && it.expiresAt > System.currentTimeMillis() }
     }
 
+    /** The `Cookie` header for a URL, for the system DownloadManager which cannot use this jar. */
+    fun cookieHeader(url: HttpUrl): String = loadForRequest(url).joinToString("; ") { "${it.name}=${it.value}" }
+
     fun clear() = synchronized(lock) {
         cookies.clear()
         store.clear()

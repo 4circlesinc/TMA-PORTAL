@@ -44,6 +44,7 @@ class AppViewModel @Inject constructor(
     private val prefs: DevicePrefs,
     private val config: PortalConfig,
     notifications: NotificationsRepository,
+    private val downloads: com.tmantoinelaw.portal.files.PortalDownloads,
 ) : ViewModel() {
     /** The bell's badge (`/portal/notifications/count.unread`, kept absolute by the store). */
     val unread: StateFlow<Int> = notifications.unread
@@ -119,6 +120,8 @@ class AppViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch { session.signOut() }
     }
+
+    fun download(context: android.content.Context, url: String, name: String) = downloads.enqueue(context, url, name)
 
     /** Relative portal URLs (`/media/avatars/…`) need the origin; the cookie jar adds the session. */
     fun absolute(url: String): String = if (url.startsWith("http")) url else config.url(url)

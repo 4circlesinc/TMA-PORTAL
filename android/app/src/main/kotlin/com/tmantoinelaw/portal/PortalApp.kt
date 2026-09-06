@@ -116,6 +116,6 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         onSignOut = { viewModel.signOut() },
         headerActions = { BellAction(unread = unread) { go(NotificationsRoute) } },
     ) {
-        PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute)
+        PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute, download = { url, name -> viewModel.download(context, url, name) })
     }
 }

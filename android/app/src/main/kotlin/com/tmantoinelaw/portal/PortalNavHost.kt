@@ -27,6 +27,7 @@ import com.tmantoinelaw.portal.core.navigation.TemplatesRoute
 import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
 import com.tmantoinelaw.portal.feature.home.HomeActions
+import com.tmantoinelaw.portal.feature.files.FilesScreen
 import com.tmantoinelaw.portal.feature.home.HomeScreen
 import com.tmantoinelaw.portal.feature.home.OverviewScreen
 import com.tmantoinelaw.portal.core.navigation.ActivityRoute
@@ -42,6 +43,7 @@ fun PortalNavHost(
     identity: Identity,
     openUrl: (String) -> Unit,
     resolveUrl: (String) -> String,
+    download: (url: String, name: String) -> Unit,
 ) {
     NavHost(navController = navController, startDestination = DashboardRoute) {
         composable<NotificationsRoute> {
@@ -69,7 +71,13 @@ fun PortalNavHost(
         composable<FeedRoute> { ModulePlaceholder("Feed") }
         composable<CalendarRoute> { ModulePlaceholder("Calendar") }
         composable<SignaturesRoute> { ModulePlaceholder("Signature requests") }
-        composable<FilesRoute> { entry -> ModulePlaceholder(filesTitle(entry.toRoute<FilesRoute>().section)) }
+        composable<FilesRoute> { entry ->
+            val route = entry.toRoute<FilesRoute>()
+            FilesScreen(
+                onOpenFolder = { folder -> navController.navigate(FilesRoute(route.section, folder = folder)) { launchSingleTop = true } },
+                onDownload = download,
+            )
+        }
         composable<UsersRoute> { ModulePlaceholder("Users") }
         composable<ReportingRoute> { ModulePlaceholder("Reporting") }
         composable<TemplatesRoute> { entry -> ModulePlaceholder(navLabel("templates-" + entry.toRoute<TemplatesRoute>().page, "Templates")) }
