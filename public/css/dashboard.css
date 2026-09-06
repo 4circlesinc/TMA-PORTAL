@@ -4138,7 +4138,9 @@
  * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */
 
-/* Full-width strip: glued to the bottom edge, no float, no pill, no frost. */
+/* Full-width dock: flush with the bottom edge, rounded only at its top
+   corners, filled icons with no labels. Kept in sync with the copy in
+   dashboard-tma-overrides.css, which loads later and wins ties. */
 .tma-dash__tabbar {
   display: none;
   position: fixed;
@@ -4147,19 +4149,17 @@
   bottom: 0;
   z-index: 45;
   flex-direction: column;
-  width: 100%;
+  width: auto;
   max-width: none;
-  margin: 0;
   transform: none;
-  padding: var(--space-8) 0 calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
-  border-radius: 0;
-  background: #ffffff;
+  padding: var(--space-8) var(--space-8) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--radius-20) var(--radius-20) 0 0;
+  background: var(--color-white);
   border: none;
   border-top: 0.5px solid var(--color-overlay-4);
-  box-shadow: none;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  opacity: 1;
   font-feature-settings: "ss01" 1, "cv01" 1;
   overflow: hidden;
 }
@@ -4206,10 +4206,9 @@
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  opacity: 0.38;
-  transition: opacity var(--transition-fast);
+  opacity: 1;
 }
-.tma-dash__tab-btn:hover .tma-dash__tab-btn-icon { opacity: 0.7; }
+.tma-dash__tab-btn:hover .tma-dash__tab-btn-icon,
 .tma-dash__tab-btn--active .tma-dash__tab-btn-icon { opacity: 1; }
 .tma-dash__tab-btn img { width: 24px; height: 24px; }
 .tma-dash__tab-btn--profile .tma-dash__tab-btn-icon {
@@ -4348,9 +4347,9 @@
 :root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
-  background: #1c1c1c;
+  /* --color-white flips to the dark surface; only the hairline needs help. */
   border-top-color: rgba(255, 255, 255, 0.12);
-  box-shadow: none;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
 }
 .tma-dash[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
 :root[data-theme="dark"] .tma-dash__tab-btn:not(.tma-dash__tab-btn--profile) img,
