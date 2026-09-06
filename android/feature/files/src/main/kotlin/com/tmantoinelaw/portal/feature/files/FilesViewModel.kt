@@ -11,6 +11,7 @@ import com.tmantoinelaw.portal.core.data.files.ListingQuery
 import com.tmantoinelaw.portal.core.data.files.ListingResult
 import com.tmantoinelaw.portal.core.data.files.UploadJob
 import com.tmantoinelaw.portal.core.data.files.UploadManager
+import com.tmantoinelaw.portal.core.data.replica.FilesReplica
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
 import com.tmantoinelaw.portal.core.data.session.SessionRepository
@@ -90,6 +91,7 @@ class FilesViewModel @Inject constructor(
     private val session: SessionRepository,
     private val prefs: DevicePrefs,
     private val uploads: UploadManager,
+    private val replica: FilesReplica,
 ) : ViewModel() {
     val uploadJobs: StateFlow<List<UploadJob>> = uploads.jobs
 
@@ -134,9 +136,16 @@ class FilesViewModel @Inject constructor(
                     if (s.query.copy(page = 1) != q) s
                     else s.copy(listing = result.listing, loading = false, error = null, stale = false, query = q.copy(perPage = result.listing.perPage), selected = s.selected.filter { id -> (result.listing.folders + result.listing.files).any { it.id == id } }.toSet())
                 }
-                is ListingResult.Failed -> _ui.update { s ->
-                    if (s.listing != null) s.copy(loading = false, stale = true)
-                    else s.copy(loading = false, error = result.message)
+                is ListingResult.Failed -> {
+                    val fromReplica = if (_ui.value.listing == null) replica.assemble(q) else null
+                    _ui.update { s ->
+                        when {
+                            s.listing != null -> s.copy(loading = false, stale = true)
+                            fromReplica != null -> s.copy(listing = fromReplica, loading = false, error = null, stale = true)
+                            result.offline && !q.isPlain -> s.copy(loading = false, error = "You’re offline")
+                            else -> s.copy(loading = false, error = result.message)
+                        }
+                    }
                 }
             }
         }

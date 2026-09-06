@@ -26,6 +26,7 @@ import com.tmantoinelaw.portal.feature.auth.SignInScreen
 import com.tmantoinelaw.portal.feature.auth.openCustomTab
 import com.tmantoinelaw.portal.feature.notifications.BellAction
 import com.tmantoinelaw.portal.feature.shell.PortalShell
+import com.tmantoinelaw.portal.feature.shell.SyncPill
 import kotlinx.coroutines.delay
 
 /**
@@ -78,6 +79,7 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         else -> navLabel(navId, "").ifEmpty { "Dashboard" }
     }
     val unread by viewModel.unread.collectAsStateWithLifecycle()
+    val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     val avatarUrl = identity.avatar?.let { viewModel.absolute(it) }
@@ -114,7 +116,7 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         onProfile = { go(SettingsRoute("profile")) },
         onSettings = { go(SettingsRoute()) },
         onSignOut = { viewModel.signOut() },
-        headerActions = { BellAction(unread = unread) { go(NotificationsRoute) } },
+        headerActions = { SyncPill(sync) { }; BellAction(unread = unread) { go(NotificationsRoute) } },
     ) {
         PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute, download = { url, name -> viewModel.download(context, url, name) })
     }

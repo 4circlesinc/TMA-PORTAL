@@ -4,6 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.data.notifications.NotificationsRepository
+import com.tmantoinelaw.portal.core.data.replica.FilesReplica
+import com.tmantoinelaw.portal.core.network.Connectivity
+import com.tmantoinelaw.portal.feature.shell.SyncStatus
+import com.tmantoinelaw.portal.feature.shell.syncStatusFor
+import kotlinx.coroutines.flow.combine
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
 import com.tmantoinelaw.portal.core.data.session.MeResult
 import com.tmantoinelaw.portal.core.data.session.SessionRepository
@@ -45,7 +50,14 @@ class AppViewModel @Inject constructor(
     private val config: PortalConfig,
     notifications: NotificationsRepository,
     private val downloads: com.tmantoinelaw.portal.files.PortalDownloads,
+    connectivity: Connectivity,
+    replica: FilesReplica,
 ) : ViewModel() {
+    /** The header's sync pill (prompt §9.6). */
+    val syncStatus: StateFlow<SyncStatus?> = combine(connectivity.online, replica.progress) { online, p ->
+        syncStatusFor(online = online, replicaRunning = p.running, replicaTaken = p.taken, waiting = 0, failed = 0, syncing = false)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /** The bell's badge (`/portal/notifications/count.unread`, kept absolute by the store). */
     val unread: StateFlow<Int> = notifications.unread
 

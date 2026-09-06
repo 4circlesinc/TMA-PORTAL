@@ -27,6 +27,7 @@ import com.tmantoinelaw.portal.core.data.files.versions
 import com.tmantoinelaw.portal.core.data.files.versionDownloadUrl
 import com.tmantoinelaw.portal.core.data.files.versionPreviewUrl
 import com.tmantoinelaw.portal.core.data.realtime.RealtimeCoordinator
+import com.tmantoinelaw.portal.core.data.replica.FilesReplica
 import com.tmantoinelaw.portal.core.navigation.FileViewerRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -86,6 +87,7 @@ class ViewerViewModel @Inject constructor(
     private val repository: FilesRepository,
     private val bytes: ByteCache,
     private val realtime: RealtimeCoordinator,
+    private val replica: FilesReplica,
 ) : ViewModel() {
     private val route = savedState.toRoute<FileViewerRoute>()
     val fileId: String = route.fileId
@@ -113,8 +115,8 @@ class ViewerViewModel @Inject constructor(
     }
 
     private suspend fun load() {
-        val file = runCatching { repository.file(fileId) }.getOrElse { e ->
-            _ui.update { it.copy(error = e.message ?: "This file could not be loaded.") }; return
+        val file = runCatching { repository.file(fileId) }.getOrNull() ?: replica.file(fileId) ?: run {
+            _ui.update { it.copy(error = "This file could not be loaded.") }; return
         }
         _ui.update { it.copy(file = file) }
         startPresence()
