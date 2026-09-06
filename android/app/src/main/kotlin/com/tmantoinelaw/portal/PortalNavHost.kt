@@ -28,6 +28,8 @@ import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
 import com.tmantoinelaw.portal.feature.home.HomeActions
 import com.tmantoinelaw.portal.feature.files.FilesScreen
+import com.tmantoinelaw.portal.feature.files.viewer.FileViewerScreen
+import com.tmantoinelaw.portal.core.navigation.FileViewerRoute
 import com.tmantoinelaw.portal.feature.home.HomeScreen
 import com.tmantoinelaw.portal.feature.home.OverviewScreen
 import com.tmantoinelaw.portal.core.navigation.ActivityRoute
@@ -75,8 +77,12 @@ fun PortalNavHost(
             val route = entry.toRoute<FilesRoute>()
             FilesScreen(
                 onOpenFolder = { folder -> navController.navigate(FilesRoute(route.section, folder = folder)) { launchSingleTop = true } },
+                onOpenFile = { file, folder -> navController.navigate(FileViewerRoute(file, folder, route.section)) { launchSingleTop = true } },
                 onDownload = download,
             )
+        }
+        composable<FileViewerRoute> {
+            FileViewerScreen(onClose = { navController.popBackStack() }, onDownload = download, onDelete = { })
         }
         composable<UsersRoute> { ModulePlaceholder("Users") }
         composable<ReportingRoute> { ModulePlaceholder("Reporting") }
@@ -117,6 +123,7 @@ fun NavBackStackEntry.navId(): String? {
         has(SettingsRoute::class) -> "account-settings"
         has(NotificationsRoute::class) -> "notifications"
         has(ActivityRoute::class) -> "activity"
+        has(FileViewerRoute::class) -> "folders-all"
         else -> null
     }
 }

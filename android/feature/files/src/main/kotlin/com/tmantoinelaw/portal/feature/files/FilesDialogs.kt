@@ -205,31 +205,3 @@ private fun DestinationPicker(title: String, viewModel: FilesViewModel, onDismis
 
 private fun Modifier.horizontalScrollIfNeeded(): Modifier = this
 
-/**
- * Stands in for the file viewer until it ships: the row's facts and its
- * actions, so a deep link to a file lands somewhere true.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FilePeekSheet(id: String, item: FileItemDto?, viewModel: FilesViewModel, onDismiss: () -> Unit, onMenu: (FileItemDto) -> Unit) {
-    var loaded by remember { mutableStateOf(item) }
-    LaunchedEffect(id) { if (loaded == null) loaded = runCatching { viewModel.fetchFile(id) }.getOrNull() }
-    val f = loaded
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Tma.colors.surface) {
-        Column(Modifier.padding(horizontal = Tma.space.s20).padding(bottom = Tma.space.s24), verticalArrangement = Arrangement.spacedBy(Tma.space.s8)) {
-            if (f == null) { Text("Loading…", style = Tma.type.text14, color = Tma.colors.inkSecondary); return@Column }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tma.space.s12)) {
-                FileGlyph(f, 40.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(f.name, style = Tma.type.text18sb, color = Tma.colors.ink)
-                    Text(listOfNotNull(f.category?.replaceFirstChar { it.uppercase() }, f.sizeLabel, fmtDate(f.modifiedAt ?: f.createdAt).takeIf { it != "-" }).joinToString(" · "), style = Tma.type.text12, color = Tma.colors.inkSecondary)
-                }
-            }
-            f.owner?.name?.let { Text("Owner: $it", style = Tma.type.text14, color = Tma.colors.inkSecondary) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tma.space.s8)) {
-                if (f.can("download")) Button(onClick = { viewModel.download(f); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = Tma.colors.ink, contentColor = Tma.colors.surface)) { Text("Download") }
-                TextButton(onClick = { onDismiss(); onMenu(f) }) { Text("More actions", color = Tma.colors.ink) }
-            }
-        }
-    }
-}

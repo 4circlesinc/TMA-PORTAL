@@ -5,6 +5,7 @@ import com.tmantoinelaw.portal.core.data.store.SnapshotStore
 import com.tmantoinelaw.portal.core.network.api.PortalException
 import com.tmantoinelaw.portal.core.network.api.PortalHttp
 import kotlinx.coroutines.flow.SharedFlow
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,6 +33,7 @@ sealed interface ListingResult {
 class FilesRepository @Inject constructor(
     private val http: PortalHttp,
     private val snapshots: SnapshotStore,
+    private val jar: com.tmantoinelaw.portal.core.network.cookies.PersistentCookieJar,
     realtime: RealtimeCoordinator,
 ) {
     /** The `files` signal: refetch the open listing (300 ms coalesced upstream). */
@@ -105,4 +107,41 @@ class FilesRepository @Inject constructor(
     suspend fun file(id: String): FileItemDto = http.get("/portal/files/files/$id", FileItemDto.serializer())
 
     suspend fun rawJson(path: String): JsonElement = http.getJson(path)
+
+    suspend fun <T> get(path: String, serializer: kotlinx.serialization.KSerializer<T>): T = http.get(path, serializer)
+    suspend fun <T> post(path: String, body: JsonElement?, serializer: kotlinx.serialization.KSerializer<T>): T = http.post(path, body, serializer)
+    suspend fun <T> patch(path: String, body: JsonElement?, serializer: kotlinx.serialization.KSerializer<T>): T = http.patch(path, body, serializer)
+    suspend fun <T> delete(path: String, body: JsonElement?, serializer: kotlinx.serialization.KSerializer<T>): T = http.delete(path, body, serializer)
+
+    /** The `Cookie` header for media players and downloaders that cannot use the jar. */
+    fun cookieHeader(url: String): String = jar.cookieHeader((if (url.startsWith("http")) url else http.config.url(url)).toHttpUrl())
+    val userAgent: String get() = http.config.userAgent
+}
+
+/* ── The viewer's side panels (prompt §11.6, appendix A3 §7-9) ─────────── */
+
+suspend fun FilesRepository.details(id: String): DetailsDto = get("/portal/files/files/$id/details", DetailsDto.serializer())
+suspend fun FilesRepository.activity(id: String, filter: String, before: Long?): ActivityFeedDto =
+    get("/portal/files/files/$id/activity?filter=$filter" + (before?.let { "&before=$it" } ?: ""), ActivityFeedDto.serializer())
+suspend fun FilesRepository.access(id: String): AccessDto = get("/portal/files/files/$id/access", AccessDto.serializer())
+/** `peek=1` reads without marking the file's threads read. */
+suspend fun FilesRepository.comments(id: String, peek: Boolean): CommentsDto = get("/portal/files/files/$id/comments" + if (peek) "?peek=1" else "", CommentsDto.serializer())
+suspend fun FilesRepository.postComment(id: String, body: String, parent: String?): CommentDto =
+    post("/portal/files/files/$id/comments", kotlinx.serialization.json.buildJsonObject { put("body", body); parent?.let { put("parent", it) } }, CommentDto.serializer())
+suspend fun FilesRepository.editComment(id: String, comment: String, body: String): CommentDto =
+    patch("/portal/files/files/$id/comments/$comment", kotlinx.serialization.json.buildJsonObject { put("body", body) }, CommentDto.serializer())
+suspend fun FilesRepository.deleteComment(id: String, comment: String) { delete("/portal/files/files/$id/comments/$comment", null, StatusOkDto.serializer()) }
+suspend fun FilesRepository.resolveComment(id: String, comment: String, resolved: Boolean): CommentDto =
+    post("/portal/files/files/$id/comments/$comment/resolve", kotlinx.serialization.json.buildJsonObject { put("resolved", resolved) }, CommentDto.serializer())
+suspend fun FilesRepository.versions(id: String): VersionsDto = get("/portal/files/files/$id/versions", VersionsDto.serializer())
+suspend fun FilesRepository.restoreVersion(id: String, version: String): JsonElement =
+    post("/portal/files/files/$id/versions/$version/restore", kotlinx.serialization.json.buildJsonObject { }, JsonElement.serializer())
+fun FilesRepository.versionPreviewUrl(id: String, version: String) = absolute("/portal/files/files/$id/versions/$version/preview")!!
+fun FilesRepository.versionDownloadUrl(id: String, version: String) = absolute("/portal/files/files/$id/versions/$version/download")!!
+/** Presence: say we are viewing; the server prunes after 10 min of silence. */
+suspend fun FilesRepository.presence(id: String, session: String, leaving: Boolean) {
+    runCatching {
+        if (leaving) delete("/portal/files/files/$id/presence", kotlinx.serialization.json.buildJsonObject { put("session", session) }, JsonElement.serializer())
+        else post("/portal/files/files/$id/presence", kotlinx.serialization.json.buildJsonObject { put("session", session); put("action", "viewing"); put("device", "android") }, JsonElement.serializer())
+    }
 }

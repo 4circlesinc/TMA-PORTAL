@@ -46,3 +46,6 @@ private fun String.prefixSlash() = if (isEmpty()) "" else if (startsWith("/")) t
 
 /** App-only: the web shows notifications in a popover; the app gives them a screen. */
 @Serializable data object NotificationsRoute : Route { override val path get() = "/notifications" }
+
+/** The one file viewer (prompt §11.6): full screen, opened from any list that shows a file. */
+@Serializable data class FileViewerRoute(val fileId: String, val folderId: String? = null, val section: String = "all") : Route { override val path get() = "/folders/$section?file=$fileId" + (folderId?.let { "&folder=$it" } ?: "") }

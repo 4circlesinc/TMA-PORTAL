@@ -75,10 +75,11 @@ private val SORT_FIELDS = listOf("name" to "Name", "modified" to "Modified", "cr
 @Composable
 fun FilesScreen(
     onOpenFolder: (String?) -> Unit,
+    onOpenFile: (fileId: String, folderId: String?) -> Unit,
     onDownload: (url: String, name: String) -> Unit,
     viewModel: FilesViewModel = hiltViewModel(),
 ) {
-    val onOpenFile: (FileItemDto) -> Unit = { viewModel.openFile(it.id) }
+    val openFile: (FileItemDto) -> Unit = { onOpenFile(it.id, it.folder?.id) }
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var menuFor by remember { mutableStateOf<FileItemDto?>(null) }
@@ -108,8 +109,8 @@ fun FilesScreen(
                     ui.loading && ui.listing == null -> Column(Modifier.padding(Tma.space.s16)) { repeat(8) { SkeletonFileRow() } }
                     ui.error != null && ui.listing == null -> SectionError(onRetry = { viewModel.load() }, message = ui.error!!, modifier = Modifier.padding(Tma.space.s16))
                     items.isEmpty() -> EmptyListing(ui, onUpload = { /* phase 5c */ })
-                    ui.grid && !phone -> GridBody(ui, viewModel, onOpenFolder, onOpenFile) { menuFor = it }
-                    else -> ListBody(ui, viewModel, phone, onOpenFolder, onOpenFile) { menuFor = it }
+                    ui.grid && !phone -> GridBody(ui, viewModel, onOpenFolder, openFile) { menuFor = it }
+                    else -> ListBody(ui, viewModel, phone, onOpenFolder, openFile) { menuFor = it }
                 }
             }
         }
@@ -117,13 +118,13 @@ fun FilesScreen(
     }
 
     menuFor?.let { item ->
-        ItemActionsSheet(item = item, ui = ui, viewModel = viewModel, onDismiss = { menuFor = null }, onOpen = { if (item.isFolder) { viewModel.openFolder(item.id); onOpenFolder(item.id) } else onOpenFile(item) }, onDialog = { dialog = it })
+        ItemActionsSheet(item = item, ui = ui, viewModel = viewModel, onDismiss = { menuFor = null }, onOpen = { if (item.isFolder) { viewModel.openFolder(item.id); onOpenFolder(item.id) } else openFile(item) }, onDialog = { dialog = it })
     }
     if (bulkMenu) BulkActionsSheet(ui = ui, viewModel = viewModel, onDismiss = { bulkMenu = false }, onDialog = { dialog = it })
     dialog?.let { FilesDialogHost(it, ui, viewModel) { dialog = null } }
-    ui.openFileId?.let { id ->
-        val item = ui.items.firstOrNull { it.id == id }
-        FilePeekSheet(id = id, item = item, viewModel = viewModel, onDismiss = { viewModel.openFile(null) }, onMenu = { menuFor = it })
+    // A deep link carried `file=`: open the viewer once (memory: read `file` before the URL is cleared).
+    LaunchedEffect(ui.openFileId) {
+        ui.openFileId?.let { id -> viewModel.openFile(null); onOpenFile(id, ui.query.folder) }
     }
 }
 
