@@ -316,7 +316,7 @@ private fun ApplicationCard(a: ApplicationDto, ui: ClientsUi, vm: ClientsViewMod
             StatusCell(a, ui, vm)
             RowMenu(a, ui, vm, onOpen)
         }
-        Text(listOfNotNull(a.number, a.provider, a.investmentType).joinToString(" · "), style = Tma.type.text12, color = Tma.colors.inkSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(listOfNotNull(a.number, a.provider, a.investmentType).filter { it.isNotBlank() }.joinToString(" · "), style = Tma.type.text12, color = Tma.colors.inkSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             a.familyLabel?.let { Text(it, style = Tma.type.text12, color = Tma.colors.inkSecondary) }
             AssignedFaces(a.assignedTo, vm, Modifier)

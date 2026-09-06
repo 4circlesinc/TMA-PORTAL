@@ -164,7 +164,8 @@ data class ClientRecordDto(
     val initial: String? = null,
     val initialColor: String? = null,
     val photo: String? = null,
-    val profile: JsonObject? = null,
+    /** An object, or `[]` when the client has no profile yet (PHP's empty array). */
+    val profile: JsonElement? = null,
     val folderUuid: String? = null,
     val hasLogin: Boolean = false,
     val userId: Long? = null,
@@ -176,7 +177,9 @@ data class ClientRecordDto(
     val referredByCompanyId: String? = null,
     val referredByLabel: String? = null,
     val contact: String? = null,
-)
+) {
+    val profileObject: JsonObject? get() = profile as? JsonObject
+}
 
 @Serializable
 data class ClientEnvelope(val client: ClientRecordDto)

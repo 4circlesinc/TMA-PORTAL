@@ -247,7 +247,7 @@ private fun formatAddress(addr: JsonObject): String = listOf("line1", "line2", "
 @Composable
 fun InfoPanel(ui: ProfileUi, phone: Boolean) {
     val c = ui.client ?: return
-    val p = c.profile
+    val p = c.profileObject
     val work = p.obj("work")
     val items = buildList {
         add(Triple(R.drawable.ic_users, "Client type", c.clientTypeLabel ?: "-"))
