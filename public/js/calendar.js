@@ -207,6 +207,9 @@
 
     selectedEventId: null,
     selectedDay: null,
+    // Stay on today until the reader pages away. Opening Calendar, the
+    // Today button, and midnight all re-anchor; prev/next release it.
+    followToday: true,
     // { date: 'YYYY-MM-DD', rect: DOMRect-like } when the quick-add menu is open
     quickAddFor: null,
     syncPollTimer: null,
@@ -2331,8 +2334,10 @@
 
         var starts = toLocalDate(saved.startsAt);
         if (starts) {
+          state.followToday = false;
           state.weekStart = SCHED.startOfWeek(starts);
           state.monthDate = startOfMonth(starts);
+          state.dayDate = new Date(starts.getFullYear(), starts.getMonth(), starts.getDate());
         }
 
         // Guests are invited after the event exists, an invitation needs
@@ -3264,16 +3269,21 @@
   function setView(view) {
     if (VIEWS.indexOf(view) === -1 || view === state.view) return;
     state.view = view;
-    if (view === 'month') state.monthDate = startOfMonth(state.weekStart);
-    if (view === 'day') {
-      state.dayDate = new Date(state.dayDate.getFullYear(), state.dayDate.getMonth(), state.dayDate.getDate());
-    }
-    if (view === 'week' || view === 'work_week' || view === 'agenda') {
-      state.weekStart = SCHED.startOfWeek(state.dayDate || state.weekStart);
+    if (state.followToday) {
+      applyTodayDates();
+    } else {
+      if (view === 'month') state.monthDate = startOfMonth(state.weekStart);
+      if (view === 'day') {
+        state.dayDate = new Date(state.dayDate.getFullYear(), state.dayDate.getMonth(), state.dayDate.getDate());
+      }
+      if (view === 'week' || view === 'work_week' || view === 'agenda') {
+        state.weekStart = SCHED.startOfWeek(state.dayDate || state.weekStart);
+      }
     }
     savePreference('calendarView', view);
     render();
     refreshEvents();
+    if (state.followToday) scrollNowIntoView();
   }
 
   function revealActiveViewTab(tabs) {
@@ -4002,6 +4012,7 @@
 
     M.unwired(root, '[data-calendar-month-prev]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        state.followToday = false;
         state.monthDate = addMonths(state.monthDate, -1);
         render();
         refreshEvents();
@@ -4010,6 +4021,7 @@
 
     M.unwired(root, '[data-calendar-month-next]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        state.followToday = false;
         state.monthDate = addMonths(state.monthDate, 1);
         render();
         refreshEvents();
@@ -4017,12 +4029,7 @@
     });
 
     M.unwired(root, '[data-calendar-month-today]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        state.monthDate = startOfMonth(new Date());
-        state.weekStart = SCHED.startOfWeek(new Date());
-        render();
-        refreshEvents();
-      });
+      btn.addEventListener('click', function () { goToday(); });
     });
 
     M.unwired(root, '[data-calendar-day]').forEach(function (cell) {
@@ -4199,6 +4206,7 @@
   }
 
   function stepWeek(days) {
+    state.followToday = false;
     state.weekStart = SCHED.addDays(state.weekStart, days);
     state.dayDate = SCHED.addDays(state.dayDate || state.weekStart, days);
     state.monthDate = startOfMonth(state.weekStart);
@@ -4207,6 +4215,7 @@
   }
 
   function stepSchedule(direction) {
+    state.followToday = false;
     if (state.view === 'day') {
       state.dayDate = SCHED.addDays(state.dayDate || new Date(), direction);
       state.weekStart = SCHED.startOfWeek(state.dayDate);
@@ -4218,13 +4227,124 @@
     stepWeek(direction * 7);
   }
 
-  function goToday() {
+  function isEditingCalendar() {
+    var mode = state.panel && state.panel.mode;
+    return mode === 'create' || mode === 'edit' || mode === 'calendar' || !!state.scopePrompt;
+  }
+
+  function calendarIsVisible() {
+    if (!state.el || !document.contains(state.el)) return false;
+    var view = state.el.closest('[data-view]');
+    if (view && view.hidden) return false;
+    var dash = document.querySelector('.tma-dash');
+    return !!(dash && dash.classList.contains('tma-dash--calendar'));
+  }
+
+  function applyTodayDates() {
     var now = new Date();
-    state.weekStart = SCHED.startOfWeek(now);
-    state.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    state.monthDate = startOfMonth(now);
-    render();
-    refreshEvents();
+    var weekStart = SCHED.startOfWeek(now);
+    var dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var monthDate = startOfMonth(now);
+    var changed = !state.dayDate || !SCHED.sameDay(state.dayDate, dayDate)
+      || !state.weekStart || !SCHED.sameDay(state.weekStart, weekStart)
+      || !state.monthDate
+      || state.monthDate.getFullYear() !== monthDate.getFullYear()
+      || state.monthDate.getMonth() !== monthDate.getMonth();
+    state.weekStart = weekStart;
+    state.dayDate = dayDate;
+    state.monthDate = monthDate;
+    return changed;
+  }
+
+  function scrollNowIntoView() {
+    requestAnimationFrame(function () {
+      var scroller = state.el && state.el.querySelector('.tma-dash__clients-schedule-scroll');
+      var nowEl = state.el && state.el.querySelector('.tma-dash__clients-schedule-now');
+      if (!scroller || !nowEl) return;
+      var sRect = scroller.getBoundingClientRect();
+      var nRect = nowEl.getBoundingClientRect();
+      var top = nRect.top - sRect.top + scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, top - scroller.clientHeight * 0.35);
+    });
+  }
+
+  function updateNowLine() {
+    var nowEl = state.el && state.el.querySelector('.tma-dash__clients-schedule-now');
+    if (!nowEl || !SCHED) return;
+    var now = new Date();
+    var hour = now.getHours() + now.getMinutes() / 60;
+    var span = SCHED.SCHEDULE_END - SCHED.SCHEDULE_START;
+    if (span <= 0) return;
+    var top = ((hour - SCHED.SCHEDULE_START) / span) * 100;
+    nowEl.style.top = top.toFixed(2) + '%';
+    var label = nowEl.querySelector('.tma-dash__clients-schedule-now-label');
+    if (label) {
+      var h = now.getHours() % 12 || 12;
+      var m = now.getMinutes();
+      label.textContent = (h < 10 ? '0' + h : String(h)) + ':' + (m < 10 ? '0' + m : String(m));
+    }
+  }
+
+  function goToday() {
+    state.followToday = true;
+    var changed = applyTodayDates();
+    if (changed) {
+      render();
+      refreshEvents().then(scrollNowIntoView).catch(scrollNowIntoView);
+      return;
+    }
+    updateNowLine();
+    scrollNowIntoView();
+  }
+
+  function tickTodayClock() {
+    if (!calendarIsVisible() || isEditingCalendar()) return;
+
+    var now = new Date();
+    var dayChanged = !state._clockDay || !SCHED.sameDay(state._clockDay, now);
+    state._clockDay = now;
+
+    if (state.followToday) {
+      var moved = applyTodayDates();
+      if (moved || dayChanged) {
+        render();
+        scrollNowIntoView();
+        if (moved) refreshEvents();
+        return;
+      }
+    } else if (dayChanged) {
+      // Keep the "today" highlight honest even when looking at another week.
+      render();
+      return;
+    }
+
+    updateNowLine();
+  }
+
+  function msUntilTomorrow() {
+    var now = new Date();
+    var next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    return Math.max(250, next.getTime() - now.getTime() + 250);
+  }
+
+  var todayClockStarted = false;
+
+  function startTodayClock() {
+    if (todayClockStarted) return;
+    todayClockStarted = true;
+    state._clockDay = new Date();
+    setInterval(tickTodayClock, 60000);
+    function armMidnight() {
+      if (state._midnightTimer) clearTimeout(state._midnightTimer);
+      state._midnightTimer = setTimeout(function () {
+        tickTodayClock();
+        armMidnight();
+      }, msUntilTomorrow());
+    }
+    armMidnight();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') tickTodayClock();
+    });
   }
 
   /* ── mount ───────────────────────────────────────────────── */
@@ -4274,20 +4394,22 @@
      runs once; pending opens from Overview/Dashboard land here too. */
   function activate() {
     if (!state.el) return;
-    consumePendingOpens();
+    if (consumePendingOpens()) return;
+    if (isEditingCalendar()) return;
+    goToday();
   }
 
   function mount(root) {
     if (!root || !SCHED) return;
 
     state.el = root;
-    var now = new Date();
-    state.weekStart = SCHED.startOfWeek(now);
-    state.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    state.monthDate = startOfMonth(now);
+    state.followToday = true;
+    applyTodayDates();
+    startTodayClock();
 
     load(false).then(function () {
-      consumePendingOpens();
+      if (consumePendingOpens()) return;
+      goToday();
     });
   }
 
