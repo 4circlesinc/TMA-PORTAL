@@ -1,0 +1,16 @@
+# docker compose -f android/compose.yaml run --rm build            -> android/app/build/outputs/apk/debug/app-debug.apk
+# docker compose -f android/compose.yaml run --rm build ./gradlew test
+name: tma-portal-android
+services:
+  build:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: tma-portal-android:build
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/home/builder/.gradle
+    environment:
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+volumes:
+  gradle-cache:

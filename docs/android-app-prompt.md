@@ -79,11 +79,11 @@ When this file and the code disagree, the code wins. Say so in your commit messa
 | Location | `android/` (Gradle root), app module `android/app` |
 | Application id | `com.tmantoinelaw.portal` (matches the desktop's `appId`, `desktop/package.json`) |
 | App name | `TM ANTOINE Portal` |
-| Language / UI | Kotlin 2.x, Jetpack Compose with Material 3, Compose BOM latest stable at the time you scaffold |
-| minSdk / targetSdk / compileSdk | 26 / 35 / 35 |
-| JDK | 17 |
+| Language / UI | Kotlin 2.4, AGP 9.4 with Gradle 9.7 (`android.builtInKotlin=false` keeps the classic Kotlin plugin DSL), Jetpack Compose with Material 3, Compose BOM 2026.08 |
+| minSdk / targetSdk / compileSdk | 26 / 37 / 37 (the AndroidX releases current in September 2026 require compileSdk 37 and AGP 9.1+) |
+| JDK | 17 or 21 (Android Studio's bundled runtime is 21 and works) |
 | Architecture | MVVM + repository, unidirectional data flow, `StateFlow` per screen |
-| DI | Hilt |
+| DI | Hilt 2.60+ (its Gradle plugin requires AGP 9) |
 | Navigation | Navigation Compose with typed routes; one `NavHost`; `NavigationSuiteScaffold`/window size classes for phone vs tablet |
 | Local data | Room (replica, write queue, notification/activity caches, warm-boot snapshots); Proto DataStore for preferences; `EncryptedSharedPreferences` for the sign-in verifier |
 | Network | OkHttp 4.x with a persistent `CookieJar` (see section 5) + Retrofit + `kotlinx.serialization` |
@@ -131,7 +131,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl unzip git 
  && curl -sSL -o /tmp/ct.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
  && unzip -q /tmp/ct.zip -d $ANDROID_SDK_ROOT/cmdline-tools && mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest \
  && yes | sdkmanager --licenses >/dev/null \
- && sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+ && sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 RUN useradd -m -u 1000 builder && chown -R builder /opt/android-sdk
 USER builder
 WORKDIR /workspace/android
@@ -158,7 +158,7 @@ volumes:
 
 ### 3.4 Android Studio
 
-Latest stable Android Studio, Android SDK Platform 35, Build-Tools 35.0.0, Android Emulator. Create three AVDs and test on all three before every phase's acceptance: a phone (Pixel 8, API 35), a tablet (Pixel Tablet, API 35), a foldable (Pixel Fold, API 35). Keep a physical phone in the loop for calls, camera and push (section 13).
+Latest stable Android Studio, Android SDK Platform 37.0, Build-Tools 37.0.0, Android Emulator (the command-line tools give you `sdkmanager` and `avdmanager`; the repo's `android/README.md` has the exact commands). Create three AVDs and test on all three before every phase's acceptance: a phone (Pixel 8, API 36), a tablet (Pixel Tablet, API 36), a foldable (Pixel Fold, API 36). Keep a physical phone in the loop for calls, camera and push (section 13).
 
 ---
 

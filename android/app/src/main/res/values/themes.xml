@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The first frame: the Android 12 splash, on the same surface the desktop's loading layer uses
+         (public/css/tokens.css, the primary-dark token). Compose takes over with BootSplash. -->
+    <style name="Theme.TMA.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#136da0</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.TMA</item>
+    </style>
+
+    <style name="Theme.TMA" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#f5f5f7</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
