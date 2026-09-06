@@ -1,6 +1,10 @@
 package com.tmantoinelaw.portal
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +21,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AppViewModel by viewModels()
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -31,6 +36,10 @@ class MainActivity : ComponentActivity() {
         handle(intent)
         setContent {
             val mode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            LaunchedEffect(state is AppState.SignedIn) {
+                if (state is AppState.SignedIn && Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             TmaTheme(mode = mode) {
                 PortalApp(viewModel = viewModel, onFirstFrame = { composed = true })
             }

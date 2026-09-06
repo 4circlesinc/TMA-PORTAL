@@ -3,6 +3,7 @@ package com.tmantoinelaw.portal
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tmantoinelaw.portal.core.data.identity.Identity
+import com.tmantoinelaw.portal.core.data.notifications.NotificationsRepository
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
 import com.tmantoinelaw.portal.core.data.session.MeResult
 import com.tmantoinelaw.portal.core.data.session.SessionRepository
@@ -42,7 +43,11 @@ class AppViewModel @Inject constructor(
     private val session: SessionRepository,
     private val prefs: DevicePrefs,
     private val config: PortalConfig,
+    notifications: NotificationsRepository,
 ) : ViewModel() {
+    /** The bell's badge (`/portal/notifications/count.unread`, kept absolute by the store). */
+    val unread: StateFlow<Int> = notifications.unread
+
     private val _state = MutableStateFlow<AppState>(AppState.Booting)
     val state: StateFlow<AppState> = _state.asStateFlow()
 

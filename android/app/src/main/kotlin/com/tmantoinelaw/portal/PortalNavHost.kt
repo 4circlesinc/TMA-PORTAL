@@ -16,6 +16,7 @@ import com.tmantoinelaw.portal.core.navigation.EmailRoute
 import com.tmantoinelaw.portal.core.navigation.FeedRoute
 import com.tmantoinelaw.portal.core.navigation.FilesRoute
 import com.tmantoinelaw.portal.core.navigation.MessagesRoute
+import com.tmantoinelaw.portal.core.navigation.NotificationsRoute
 import com.tmantoinelaw.portal.core.navigation.OverviewRoute
 import com.tmantoinelaw.portal.core.navigation.PeopleRoute
 import com.tmantoinelaw.portal.core.navigation.ReportingRoute
@@ -25,14 +26,23 @@ import com.tmantoinelaw.portal.core.navigation.SignaturesRoute
 import com.tmantoinelaw.portal.core.navigation.TemplatesRoute
 import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
+import com.tmantoinelaw.portal.feature.notifications.NotificationsScreen
 import com.tmantoinelaw.portal.feature.shell.ModulePlaceholder
 import com.tmantoinelaw.portal.feature.shell.NavTree
 import com.tmantoinelaw.portal.feature.shell.SettingsHubScreen
 
 /** Every portal route, each handed to its module's screen (placeholders until the module's phase). */
 @Composable
-fun PortalNavHost(navController: NavHostController, identity: Identity) {
+fun PortalNavHost(
+    navController: NavHostController,
+    identity: Identity,
+    openUrl: (String) -> Unit,
+    resolveUrl: (String) -> String,
+) {
     NavHost(navController = navController, startDestination = DashboardRoute) {
+        composable<NotificationsRoute> {
+            NotificationsScreen(onOpen = { item -> item.actionUrl?.let(openUrl) }, resolveUrl = resolveUrl)
+        }
         composable<DashboardRoute> { ModulePlaceholder("Dashboard") }
         composable<OverviewRoute> { ModulePlaceholder("Overview") }
         composable<ClientsRoute> { ModulePlaceholder("CIP Applications") }
@@ -79,6 +89,7 @@ fun NavBackStackEntry.navId(): String? {
         has(CallRecordingsRoute::class) -> "call-recordings"
         has(PeopleRoute::class) -> "people-" + peopleId(toRoute<PeopleRoute>().page)
         has(SettingsRoute::class) -> "account-settings"
+        has(NotificationsRoute::class) -> "notifications"
         else -> null
     }
 }

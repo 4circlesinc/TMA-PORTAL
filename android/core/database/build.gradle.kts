@@ -1,12 +1,11 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
 
 android {
-    namespace = "com.tmantoinelaw.portal.core.data"
+    namespace = "com.tmantoinelaw.portal.core.database"
     compileSdk = 37
     defaultConfig { minSdk = 26 }
     compileOptions {
@@ -20,16 +19,9 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core:common"))
-    api(project(":core:network"))
-    api(project(":core:database"))
-    api(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.security.crypto)
+    api(libs.androidx.room.runtime)
+    api(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlin.test)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.okhttp.mockwebserver)
 }

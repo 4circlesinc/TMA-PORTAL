@@ -41,3 +41,6 @@ sealed interface Route {
 @Serializable data class SettingsRoute(val page: String? = null) : Route { override val path get() = "/account-settings" + (page?.let { "?settings-page=$it" } ?: "") }
 
 private fun String.prefixSlash() = if (isEmpty()) "" else if (startsWith("/")) this else "/$this"
+
+/** App-only: the web shows notifications in a popover; the app gives them a screen. */
+@Serializable data object NotificationsRoute : Route { override val path get() = "/notifications" }

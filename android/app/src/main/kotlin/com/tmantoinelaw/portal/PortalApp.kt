@@ -16,12 +16,15 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.navigation.DashboardRoute
+import com.tmantoinelaw.portal.core.navigation.DeepLinks
+import com.tmantoinelaw.portal.core.navigation.NotificationsRoute
 import com.tmantoinelaw.portal.core.navigation.Route
 import com.tmantoinelaw.portal.core.navigation.SettingsRoute
 import com.tmantoinelaw.portal.core.ui.splash.BootSplash
 import com.tmantoinelaw.portal.core.ui.theme.Tma
 import com.tmantoinelaw.portal.feature.auth.SignInScreen
 import com.tmantoinelaw.portal.feature.auth.openCustomTab
+import com.tmantoinelaw.portal.feature.notifications.BellAction
 import com.tmantoinelaw.portal.feature.shell.PortalShell
 import kotlinx.coroutines.delay
 
@@ -68,7 +71,13 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val navId = entry?.navId()
-    val title = navId?.let { navLabel(it, "") }?.ifEmpty { null } ?: "Dashboard"
+    val title = when (navId) {
+        "notifications" -> "Notifications"
+        null -> "Dashboard"
+        else -> navLabel(navId, "").ifEmpty { "Dashboard" }
+    }
+    val unread by viewModel.unread.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     val avatarUrl = identity.avatar?.let { viewModel.absolute(it) }
 
@@ -86,6 +95,14 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         }
     }
 
+    /** A portal URL from a notification or a row: in-app when the app has the screen, else the browser. */
+    fun openUrl(url: String) {
+        val uri = android.net.Uri.parse(if (url.startsWith("http")) url else viewModel.absolute(url))
+        val query = uri.queryParameterNames.associateWith { uri.getQueryParameter(it).orEmpty() }
+        val route = DeepLinks.parse(uri.path.orEmpty(), query)
+        if (route != null) go(route) else context.openCustomTab(uri.toString())
+    }
+
     PortalShell(
         identity = identity,
         title = title,
@@ -96,7 +113,8 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         onProfile = { go(SettingsRoute("profile")) },
         onSettings = { go(SettingsRoute()) },
         onSignOut = { viewModel.signOut() },
+        headerActions = { BellAction(unread = unread) { go(NotificationsRoute) } },
     ) {
-        PortalNavHost(navController = navController, identity = identity)
+        PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute)
     }
 }
