@@ -21904,9 +21904,15 @@ a.tma-dash__clients-edit-btn--accent:visited {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-16);
+  gap: var(--space-8);
+  flex-wrap: nowrap;
   flex-shrink: 0;
+  min-width: 0;
   margin-bottom: var(--space-16);
+}
+
+.tma-dash__calendar-toolbar .tma-dash__tool-btn {
+  flex-shrink: 0;
 }
 
 .tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs {
@@ -22726,7 +22732,8 @@ a.tma-dash__clients-edit-btn--accent:visited {
   }
 
   .tma-dash__calendar-toolbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: var(--space-8);
   }
 
   .tma-dash__calendar-agenda-time {

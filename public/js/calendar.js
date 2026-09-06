@@ -26,7 +26,7 @@
     Note: ICON + 'Note.svg',
     Users: ICON + 'Users.svg',
     DotsThree: ICON + 'DotsThreeVertical.svg',
-    CaretDown: ICON + 'CaretDown.svg',
+    List: ICON + 'List.svg',
     DownloadSimple: ICON + 'DownloadSimple.svg',
     ArrowsClockwise: ICON + 'ArrowsClockwise.svg',
     ArrowLineLeft: TMA + 'ArrowLineLeft-16.svg',
@@ -2136,7 +2136,7 @@
       '<div class="tma-dash__calendar-toolbar-left">' +
       '<button type="button" class="tma-dash__tool-btn" data-calendar-sidebar-toggle' +
       ' aria-pressed="' + (state.sidebarOpen ? 'true' : 'false') + '" aria-label="Toggle calendar list">' +
-      '<img src="' + ICONS.CaretDown + '" alt=""></button>' +
+      '<img src="' + ICONS.List + '" alt=""></button>' +
       renderViewToggle() +
       (state.refreshing ? '<span class="tma-dash__calendar-syncing" role="status">Syncing…</span>' : '') +
       '</div>' +
