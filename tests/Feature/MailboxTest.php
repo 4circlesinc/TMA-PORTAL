@@ -7,6 +7,7 @@ use App\Models\MailMessage;
 use App\Models\User;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -135,6 +136,27 @@ class MailboxTest extends TestCase
             // Both inbox messages are unread; the sent one is not counted here.
             ->assertJsonPath('folders.inbox.unread', 2)
             ->assertJsonPath('folders.sent.total', 1);
+    }
+
+    /**
+     * `time` is a UTC Carbon label (H:i for today). The home widget and the
+     * mailbox must render from `sentAt` so a 12:09 AM message is not shown
+     * as 04:09 to anyone west of UTC.
+     */
+    public function test_list_rows_carry_an_iso_instant_because_the_time_label_is_utc(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-06 04:32:00', 'UTC'));
+
+        $user = $this->user();
+        $account = $this->account($user);
+        $sentAt = Carbon::parse('2026-09-06 04:09:00', 'UTC');
+        $this->message($user, $account, ['sent_at' => $sentAt]);
+
+        $this->actingAs($user)
+            ->getJson('/portal/mail/messages?folder=inbox')
+            ->assertOk()
+            ->assertJsonPath('messages.0.time', '04:09')
+            ->assertJsonPath('messages.0.sentAt', $sentAt->toIso8601String());
     }
 
     public function test_starring_a_message_reaches_gmail_and_is_mirrored_locally(): void

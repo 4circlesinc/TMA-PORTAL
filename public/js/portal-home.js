@@ -623,6 +623,29 @@
     return 'images/avatars/Avatar3d01.png';
   }
 
+  /* When a message arrived, on the reader's own clock: the time today, the
+   * day this year, otherwise the date. Same rule as the mailbox
+   * (email.js emailTimeLabel). The API's `time` string is formatted from a
+   * UTC Carbon, so printing it here showed 04:09 for a 12:09 AM message. */
+  function emailTime(msg) {
+    var iso = msg && msg.sentAt;
+    var fallback = (msg && msg.time) || '';
+    if (window.TMAEmail && typeof window.TMAEmail.timeLabel === 'function') {
+      return window.TMAEmail.timeLabel(iso, fallback);
+    }
+    if (!iso) return fallback;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return fallback;
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function renderEmail() {
     if (!homeEmailLoaded) {
       return tileShell(
@@ -649,7 +672,7 @@
         '<span class="tma-portal-email-row__meta">' +
         '<span class="tma-portal-email-row__top">' +
         '<span class="tma-portal-email-row__sender">' + ui().esc(m.sender || m.email || 'Unknown') + '</span>' +
-        '<span class="tma-portal-email-row__time">' + ui().esc(m.time || '') + '</span>' +
+        '<span class="tma-portal-email-row__time">' + ui().esc(emailTime(m)) + '</span>' +
         '</span>' +
         '<span class="tma-portal-email-row__subject">' + ui().esc(m.subject || '(no subject)') + '</span>' +
         (m.body ? '<span class="tma-portal-email-row__snippet">' + ui().esc(m.body) + '</span>' : '') +
@@ -670,7 +693,7 @@
     if (payload.connected === false) return 'disconnected';
     var msgs = payload.messages || [];
     return msgs.map(function (m) {
-      return [m.id, m.unread ? 1 : 0, m.time || '', m.subject || ''].join(':');
+      return [m.id, m.unread ? 1 : 0, m.sentAt || m.time || '', m.subject || ''].join(':');
     }).join('|');
   }
 
