@@ -12,10 +12,11 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /** The local store: snapshots now; the replica, cursors and the write queue join in their phases. */
-@Database(entities = [SnapshotEntity::class, ReplicaFolderEntity::class, ReplicaFileEntity::class, SyncCursorEntity::class], version = 2, exportSchema = false)
+@Database(entities = [SnapshotEntity::class, ReplicaFolderEntity::class, ReplicaFileEntity::class, SyncCursorEntity::class, WriteIntentEntity::class], version = 3, exportSchema = false)
 abstract class PortalDatabase : RoomDatabase() {
     abstract fun snapshots(): SnapshotDao
     abstract fun replica(): ReplicaDao
+    abstract fun writeQueue(): WriteQueueDao
 }
 
 @Module
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun replica(db: PortalDatabase): ReplicaDao = db.replica()
+
+    @Provides
+    fun writeQueue(db: PortalDatabase): WriteQueueDao = db.writeQueue()
 }

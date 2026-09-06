@@ -27,6 +27,9 @@ import com.tmantoinelaw.portal.feature.auth.openCustomTab
 import com.tmantoinelaw.portal.feature.notifications.BellAction
 import com.tmantoinelaw.portal.feature.shell.PortalShell
 import com.tmantoinelaw.portal.feature.shell.SyncPill
+import com.tmantoinelaw.portal.feature.shell.SyncPanel
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import kotlinx.coroutines.delay
 
 /**
@@ -80,6 +83,9 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
     }
     val unread by viewModel.unread.collectAsStateWithLifecycle()
     val sync by viewModel.syncStatus.collectAsStateWithLifecycle()
+    var syncPanel by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) { viewModel.syncedToasts.collect { n -> snackbar.showSnackbar(if (n == 1) "Your offline change has been synced" else "$n offline changes have been synced") } }
     val context = LocalContext.current
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     val avatarUrl = identity.avatar?.let { viewModel.absolute(it) }
@@ -116,8 +122,17 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
         onProfile = { go(SettingsRoute("profile")) },
         onSettings = { go(SettingsRoute()) },
         onSignOut = { viewModel.signOut() },
-        headerActions = { SyncPill(sync) { }; BellAction(unread = unread) { go(NotificationsRoute) } },
+        headerActions = { SyncPill(sync) { syncPanel = true }; BellAction(unread = unread) { go(NotificationsRoute) } },
     ) {
-        PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute, download = { url, name -> viewModel.download(context, url, name) })
+        Box(Modifier.fillMaxSize()) {
+            PortalNavHost(navController = navController, identity = identity, openUrl = ::openUrl, resolveUrl = viewModel::absolute, download = { url, name -> viewModel.download(context, url, name) })
+            SnackbarHost(snackbar, Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
+        }
+    }
+    if (syncPanel) {
+        val entries by viewModel.queueEntries.collectAsStateWithLifecycle()
+        val online by viewModel.online.collectAsStateWithLifecycle()
+        val replicaLine by viewModel.replicaLine.collectAsStateWithLifecycle()
+        SyncPanel(online = online, entries = entries, replica = replicaLine, onRetry = viewModel::retryQueued, onDiscard = viewModel::discardQueued, onDismiss = { syncPanel = false })
     }
 }

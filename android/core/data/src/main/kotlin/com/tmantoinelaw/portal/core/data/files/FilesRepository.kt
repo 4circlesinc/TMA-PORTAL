@@ -5,6 +5,7 @@ import com.tmantoinelaw.portal.core.data.store.SnapshotStore
 import com.tmantoinelaw.portal.core.network.api.PortalException
 import com.tmantoinelaw.portal.core.network.api.PortalHttp
 import kotlinx.coroutines.flow.SharedFlow
+import com.tmantoinelaw.portal.core.data.queue.deliverOrQueue
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
@@ -34,8 +35,33 @@ class FilesRepository @Inject constructor(
     private val http: PortalHttp,
     private val snapshots: SnapshotStore,
     private val jar: com.tmantoinelaw.portal.core.network.cookies.PersistentCookieJar,
+    private val queue: com.tmantoinelaw.portal.core.data.queue.WriteQueue,
     realtime: RealtimeCoordinator,
 ) {
+    private fun intent(kind: String, label: String, method: String, path: String, body: JsonElement?) =
+        com.tmantoinelaw.portal.core.data.queue.WriteIntent(kind, label, method, http.config.url(path), body)
+
+    /** Rename, tried on the network first and queued on a delivery failure (prompt §9.4). */
+    suspend fun renameOrQueue(item: FileItemDto, name: String) = queue.deliverOrQueue(
+        intent("files.rename", "Rename “${item.name}”", "PATCH", if (item.isFolder) "/portal/files/folders/${item.id}" else "/portal/files/files/${item.id}", buildJsonObject { put("name", name) }),
+    ) { rename(item, name) }
+
+    suspend fun toggleFavoriteOrQueue(item: FileItemDto) = queue.deliverOrQueue(
+        intent("files.favorite", (if (item.favorite) "Remove “" else "Favourite “") + item.name + "”", "POST", "/portal/files/favorites/toggle", buildJsonObject { put("type", item.type); put("id", item.id) }),
+    ) { toggleFavorite(item) }
+
+    suspend fun deleteOrQueue(item: FileItemDto) = queue.deliverOrQueue(
+        intent("files.delete", "Delete “${item.name}”", "DELETE", if (item.isFolder) "/portal/files/folders/${item.id}" else "/portal/files/files/${item.id}", null),
+    ) { delete(item) }
+
+    suspend fun restoreOrQueue(item: FileItemDto) = queue.deliverOrQueue(
+        intent("files.restore", "Restore “${item.name}”", "POST", (if (item.isFolder) "/portal/files/folders/" else "/portal/files/files/") + item.id + "/restore", null),
+    ) { restore(item) }
+
+    suspend fun createFolderOrQueue(name: String, parent: String?) = queue.deliverOrQueue(
+        intent("files.folder", "New folder “$name”", "POST", "/portal/files/folders", buildJsonObject { put("name", name); parent?.let { put("parent", it) } }),
+    ) { createFolder(name, parent) }
+
     /** The `files` signal: refetch the open listing (300 ms coalesced upstream). */
     val changed: SharedFlow<String> = realtime.dataChanged
 

@@ -11,6 +11,7 @@ import com.tmantoinelaw.portal.core.data.files.ListingQuery
 import com.tmantoinelaw.portal.core.data.files.ListingResult
 import com.tmantoinelaw.portal.core.data.files.UploadJob
 import com.tmantoinelaw.portal.core.data.files.UploadManager
+import com.tmantoinelaw.portal.core.data.queue.QueuedResult
 import com.tmantoinelaw.portal.core.data.replica.FilesReplica
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
@@ -189,15 +190,15 @@ class FilesViewModel @Inject constructor(
     private fun insert(item: FileItemDto) = _ui.update { s -> s.copy(listing = s.listing?.let { l -> if (item.isFolder) l.copy(folders = (l.folders.filter { it.id != item.id } + item).sortedBy { it.name.lowercase() }) else l.copy(files = (l.files.filter { it.id != item.id } + item).sortedBy { it.name.lowercase() }) }) }
 
     fun createFolder(name: String) = viewModelScope.launch {
-        runCatching { repository.createFolder(name, _ui.value.query.folder) }
-            .onSuccess { insert(it); toast("Folder created") }
+        runCatching { repository.createFolderOrQueue(name, _ui.value.query.folder) }
+            .onSuccess { r -> when (r) { is QueuedResult.Delivered -> { insert(r.value); toast("Folder created") }; is QueuedResult.Queued -> toast("Saved on this device") } }
             .onFailure { toast(it.message ?: "Could not create folder") }
     }
 
     fun rename(item: FileItemDto, name: String) = viewModelScope.launch {
         busy(item.id, true)
-        runCatching { repository.rename(item, name) }
-            .onSuccess { replace(it); toast("Renamed") }
+        runCatching { repository.renameOrQueue(item, name) }
+            .onSuccess { r -> when (r) { is QueuedResult.Delivered -> { replace(r.value); toast("Renamed") }; is QueuedResult.Queued -> { replace(item.copy(name = name)); toast("Saved on this device") } } }
             .onFailure { toast(it.message ?: "Could not rename") }
         busy(item.id, false)
     }
@@ -206,23 +207,25 @@ class FilesViewModel @Inject constructor(
         if (item.id in _ui.value.busy) return@launch
         busy(item.id, true)
         replace(item.copy(favorite = !item.favorite))
-        runCatching { repository.toggleFavorite(item) }
-            .onSuccess { fav -> if (_ui.value.section == "favorites" && !fav) remove(item.id) else replace(item.copy(favorite = fav)) }
+        runCatching { repository.toggleFavoriteOrQueue(item) }
+            .onSuccess { r -> when (r) { is QueuedResult.Delivered -> if (_ui.value.section == "favorites" && !r.value) remove(item.id) else replace(item.copy(favorite = r.value)); is QueuedResult.Queued -> toast("Saved on this device") } }
             .onFailure { replace(item); toast(it.message ?: "Could not update favourite") }
         busy(item.id, false)
     }
 
     fun delete(item: FileItemDto) = viewModelScope.launch {
         busy(item.id, true)
-        runCatching { repository.delete(item) }
-            .onSuccess { remove(item.id); toast("Moved to recycle bin") }
+        runCatching { repository.deleteOrQueue(item) }
+            .onSuccess { r -> remove(item.id); toast(if (r is QueuedResult.Queued) "Saved on this device" else "Moved to recycle bin") }
             .onFailure { toast(it.message ?: "Could not delete") }
         busy(item.id, false)
     }
 
     fun restore(item: FileItemDto) = viewModelScope.launch {
         busy(item.id, true)
-        runCatching { repository.restore(item) }.onSuccess { remove(item.id); toast("Restored") }.onFailure { toast(it.message ?: "Could not restore") }
+        runCatching { repository.restoreOrQueue(item) }
+            .onSuccess { r -> remove(item.id); toast(if (r is QueuedResult.Queued) "Saved on this device" else "Restored") }
+            .onFailure { toast(it.message ?: "Could not restore") }
         busy(item.id, false)
     }
 

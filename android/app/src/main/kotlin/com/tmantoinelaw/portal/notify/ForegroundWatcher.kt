@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.tmantoinelaw.portal.core.data.notifications.NotificationsRepository
 import com.tmantoinelaw.portal.core.data.realtime.RealtimeCoordinator
 import com.tmantoinelaw.portal.core.data.session.SessionRepository
+import com.tmantoinelaw.portal.core.data.queue.WriteQueue
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,7 @@ class ForegroundWatcher @Inject constructor(
     private val notifications: NotificationsRepository,
     private val session: SessionRepository,
     private val os: OsNotifications,
+    private val queue: WriteQueue,
 ) : DefaultLifecycleObserver {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile var inFront = false
@@ -47,6 +49,7 @@ class ForegroundWatcher @Inject constructor(
     override fun onStart(owner: LifecycleOwner) {
         inFront = true
         realtime.setForeground(true)
+        queue.flush()
         scope.launch(Dispatchers.IO) { notifications.catchUp() }
     }
 

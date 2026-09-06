@@ -55,6 +55,7 @@ class FilesReplica @Inject constructor(
     private val session: SessionRepository,
     private val state: SessionState,
     private val connectivity: Connectivity,
+    queue: com.tmantoinelaw.portal.core.data.queue.WriteQueue,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = Mutex()
@@ -64,6 +65,7 @@ class FilesReplica @Inject constructor(
     init {
         session.identity.filter { it != null }.distinctUntilChanged { a, b -> a?.id == b?.id }.onEach { run() }.launchIn(scope)
         connectivity.online.filter { it }.onEach { run() }.launchIn(scope)
+        queue.applied.onEach { run() }.launchIn(scope)
         session.signedOut.onEach { clearAll() }.launchIn(scope)
     }
 

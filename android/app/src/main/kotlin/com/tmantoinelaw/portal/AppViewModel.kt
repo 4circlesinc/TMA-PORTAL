@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.tmantoinelaw.portal.core.data.identity.Identity
 import com.tmantoinelaw.portal.core.data.notifications.NotificationsRepository
 import com.tmantoinelaw.portal.core.data.replica.FilesReplica
+import com.tmantoinelaw.portal.core.data.queue.WriteQueue
+import com.tmantoinelaw.portal.core.database.WriteIntentEntity
 import com.tmantoinelaw.portal.core.network.Connectivity
 import com.tmantoinelaw.portal.feature.shell.SyncStatus
 import com.tmantoinelaw.portal.feature.shell.syncStatusFor
@@ -52,11 +54,19 @@ class AppViewModel @Inject constructor(
     private val downloads: com.tmantoinelaw.portal.files.PortalDownloads,
     connectivity: Connectivity,
     replica: FilesReplica,
+    private val queue: WriteQueue,
 ) : ViewModel() {
     /** The header's sync pill (prompt §9.6). */
-    val syncStatus: StateFlow<SyncStatus?> = combine(connectivity.online, replica.progress) { online, p ->
-        syncStatusFor(online = online, replicaRunning = p.running, replicaTaken = p.taken, waiting = 0, failed = 0, syncing = false)
+    val syncStatus: StateFlow<SyncStatus?> = combine(connectivity.online, replica.progress, queue.summary) { online, p, q ->
+        syncStatusFor(online = online && q.online, replicaRunning = p.running, replicaTaken = p.taken, waiting = q.waiting, failed = q.failed, syncing = q.syncing)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val queueEntries: StateFlow<List<WriteIntentEntity>> = queue.entries
+    val online: StateFlow<Boolean> = combine(connectivity.online, queue.summary) { n, q -> n && q.online }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val replicaLine: StateFlow<String?> = replica.progress.map { p -> if (p.running) (if (p.taken > 0) "Syncing for offline, ${"%,d".format(p.taken)} records" else "Syncing for offline…") else null }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /** "Your offline change has been synced" / "N offline changes have been synced" (portal-queue.js announce). */
+    val syncedToasts = queue.synced
+    fun retryQueued(id: Long) = viewModelScope.launch { queue.retry(id) }
+    fun discardQueued(id: Long) = viewModelScope.launch { queue.discard(id) }
 
     /** The bell's badge (`/portal/notifications/count.unread`, kept absolute by the store). */
     val unread: StateFlow<Int> = notifications.unread
