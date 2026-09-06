@@ -49,7 +49,8 @@ class PortalHttp(
     /** A raw call for the few places that read status and headers themselves (the sign-in claim, downloads). */
     suspend fun raw(request: Request): Response = client.newCall(request).await().also { session.reachable.value = true }
 
-    fun request(path: String): Request.Builder = Request.Builder().url(config.url(path))
+    /** A portal path, or an absolute URL (a queued write stores the URL it was going to). */
+    fun request(path: String): Request.Builder = Request.Builder().url(if (path.startsWith("http")) path else config.url(path))
 
     private fun JsonElement?.toBody(): RequestBody = (this?.toString() ?: "{}").toRequestBody(jsonType)
 

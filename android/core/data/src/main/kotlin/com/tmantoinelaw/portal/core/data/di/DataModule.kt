@@ -11,6 +11,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import com.tmantoinelaw.portal.core.network.Connectivity
+import com.tmantoinelaw.portal.core.network.NetworkState
 import javax.inject.Singleton
 
 private val Context.identityDataStore: DataStore<Preferences> by preferencesDataStore(name = "identity")
@@ -21,6 +23,10 @@ object DataModule {
     @Provides
     @Singleton
     fun preferences(@ApplicationContext context: Context): DataStore<Preferences> = context.identityDataStore
+
+    @Provides
+    @Singleton
+    fun networkState(connectivity: Connectivity): NetworkState = connectivity
 
     @Provides
     @Singleton

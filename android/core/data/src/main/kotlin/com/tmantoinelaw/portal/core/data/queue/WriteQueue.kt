@@ -2,7 +2,7 @@ package com.tmantoinelaw.portal.core.data.queue
 
 import com.tmantoinelaw.portal.core.database.WriteIntentEntity
 import com.tmantoinelaw.portal.core.database.WriteQueueDao
-import com.tmantoinelaw.portal.core.network.Connectivity
+import com.tmantoinelaw.portal.core.network.NetworkState
 import com.tmantoinelaw.portal.core.network.api.PortalHttp
 import com.tmantoinelaw.portal.core.network.api.PortalJson
 import com.tmantoinelaw.portal.core.network.session.SessionState
@@ -75,7 +75,7 @@ class WriteQueue @Inject constructor(
     private val dao: WriteQueueDao,
     private val http: PortalHttp,
     private val state: SessionState,
-    private val connectivity: Connectivity,
+    private val connectivity: NetworkState,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = Mutex()
@@ -133,9 +133,10 @@ class WriteQueue @Inject constructor(
         dao.delete(id)
     }
 
+    /** Only the wait is cancellable; a replay already in flight always finishes its request. */
     private fun schedule(ms: Long) {
         retryJob?.cancel()
-        retryJob = scope.launch { delay(ms); run() }
+        retryJob = scope.launch { delay(ms); flush() }
     }
 
     private suspend fun run() {
@@ -145,12 +146,16 @@ class WriteQueue @Inject constructor(
         var applied = 0
         var outcome = "done"
         try {
-            val queue = dao.all(account).filter { it.state != "failed" }
-            for (entry in queue) {
-                when (send(entry)) {
-                    "applied" -> applied++
-                    "failed" -> Unit
-                    else -> { outcome = "stop"; break }
+            // Keep draining until nothing waits: entries added while a run is going must not sit until the next wake.
+            drain@ while (true) {
+                val queue = dao.all(account).filter { it.state != "failed" }
+                if (queue.isEmpty()) break
+                for (entry in queue) {
+                    when (send(entry)) {
+                        "applied" -> applied++
+                        "failed" -> Unit
+                        else -> { outcome = "stop"; break@drain }
+                    }
                 }
             }
         } finally {
@@ -159,7 +164,6 @@ class WriteQueue @Inject constructor(
         }
         if (outcome == "done") {
             retryDelay = RETRY_MS
-            if (summary.value.waiting > 0) schedule(retryDelay)
         } else {
             schedule(retryDelay)
             retryDelay = minOf(retryDelay * 2, RETRY_MAX_MS)
