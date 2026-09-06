@@ -14,7 +14,7 @@ use Carbon\CarbonInterface;
  * Calendar periods run from their boundary to *now*, on the reader's wall
  * clock (Settings → Time and language), so "today" ends at their midnight,
  * not the server's. The comparison is the same stretch of the previous
- * period, this Sunday-to-Wednesday against last Sunday-to-Wednesday, so a
+ * period, this Monday-to-Wednesday against last Monday-to-Wednesday, so a
  * week that is three days old is not read against seven days of the last
  * one and called a collapse.
  *
@@ -37,8 +37,11 @@ final class Period
 
     private const CALENDAR = [self::TODAY, self::WEEK, self::MONTH, self::YEAR];
 
-    /** The portal's calendars start the week on Sunday; so does this one. */
-    private const WEEK_STARTS = CarbonInterface::SUNDAY;
+    /**
+     * Monday, matching the calendar schedule widget. A Sunday-start week
+     * made "This week" empty at 1am Sunday and hid every weekday filing.
+     */
+    private const WEEK_STARTS = CarbonInterface::MONDAY;
 
     private function __construct(
         public readonly string $key,

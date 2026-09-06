@@ -292,7 +292,7 @@ class DashboardMetricsTest extends TestCase
     public function test_the_period_picker_measures_calendar_windows(): void
     {
         config(['services.cip.enabled' => true]);
-        // A Wednesday, so "today", "this week" (from Sunday) and "this month"
+        // A Wednesday, so "today", "this week" (from Monday) and "this month"
         // all draw different lines.
         $this->travelTo(CarbonImmutable::parse('2026-08-26 12:00:00', 'UTC'));
         $staff = $this->staff();
@@ -317,8 +317,8 @@ class DashboardMetricsTest extends TestCase
     public function test_the_comparison_is_the_same_stretch_of_the_previous_period(): void
     {
         config(['services.cip.enabled' => true]);
-        // Wednesday noon: this week so far is Sunday to Wednesday noon, so it
-        // is read against last Sunday to last Wednesday noon, not all seven
+        // Wednesday noon: this week so far is Monday to Wednesday noon, so it
+        // is read against last Monday to last Wednesday noon, not all seven
         // days of last week.
         $this->travelTo(CarbonImmutable::parse('2026-08-26 12:00:00', 'UTC'));
         $staff = $this->staff();
@@ -332,6 +332,23 @@ class DashboardMetricsTest extends TestCase
 
         $this->assertSame(1, $card['count']);
         $this->assertSame('No change', $card['delta']);
+    }
+
+    public function test_this_week_on_sunday_morning_still_counts_weekday_filings(): void
+    {
+        config(['services.cip.enabled' => true]);
+        // Sunday 01:02 in St Lucia. A Sunday-start week would have begun an
+        // hour earlier and dropped Friday's filing from "This week".
+        $this->travelTo(CarbonImmutable::parse('2026-09-06 05:02:00', 'UTC'));
+        $staff = $this->staff();
+        $staff->forceFill(['preferences' => ['timezone' => 'America/St_Lucia']])->save();
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $this->filedAt($provider, $staff, '2026-08-31 17:58:00'); // Monday afternoon
+        $this->filedAt($provider, $staff, '2026-09-02 14:16:00'); // Wednesday
+        $this->filedAt($provider, $staff, '2026-08-30 12:00:00'); // previous Sunday: last week
+
+        $this->assertSame(2, $this->metrics($staff, 'week')['cards']['cipNew']['count']);
     }
 
     public function test_today_ends_at_the_reader_midnight_not_the_server_one(): void

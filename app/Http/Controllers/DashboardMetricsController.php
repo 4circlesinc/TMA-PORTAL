@@ -48,7 +48,7 @@ class DashboardMetricsController extends Controller
             // scope and everyone else their own, and "today" and "this year"
             // are different numbers, so one shared entry would show the wrong ones.
             $payload = Cache::remember(
-                "dashboard-metrics.{$user->id}.{$period->key}",
+                "dashboard-metrics.week-monday.{$user->id}.{$period->key}",
                 self::TTL_SECONDS,
                 fn () => $metrics->toArray(),
             );
