@@ -180,6 +180,7 @@
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/dashboard.css?v=298">
+  <script src="/js/email-open-links.js?v=1"></script>
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
@@ -551,6 +552,7 @@
       try {
         var doc = frame.contentDocument;
         if (!doc) return;
+        if (window.TMAEmailOpenLinks) window.TMAEmailOpenLinks.wireFrame(frame);
         var fit = function () {
           frame.style.height = Math.max(
             doc.body ? doc.body.scrollHeight : 0,

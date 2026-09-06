@@ -136,7 +136,7 @@
               @isset($button)
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;"><tr>
                   <td align="center" bgcolor="#000000" style="background:#000000;border-radius:16px;">
-                    <a href="{{ $button['url'] }}" style="display:block;padding:14px 24px;font-size:17px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;">{{ $button['label'] }}</a>
+                    <a href="{{ $button['url'] }}" target="_blank" rel="noopener noreferrer" style="display:block;padding:14px 24px;font-size:17px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;">{{ $button['label'] }}</a>
                   </td>
                 </tr></table>
               @endisset
@@ -144,7 +144,7 @@
               @if ($help)
                 <p style="margin:20px 0 0;font-size:13px;line-height:18px;color:{{ $MUTED }};">
                   Trouble with the button? Copy and paste this link into your browser:
-                  <a href="{{ $helpUrl }}" style="color:{{ $BLUE }};text-decoration:none;">{{ $helpUrl }}</a>
+                  <a href="{{ $helpUrl }}" target="_blank" rel="noopener noreferrer" style="color:{{ $BLUE }};text-decoration:none;">{{ $helpUrl }}</a>
                 </p>
               @endif
 

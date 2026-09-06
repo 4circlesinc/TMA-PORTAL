@@ -41,6 +41,7 @@ const contextMenu = require('./context-menu');
 const shellCache = require('./shell-cache');
 const fileCache = require('./file-cache');
 const settings = require('./settings');
+const { safeExternalUrl } = require('./open-external');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
 const { version: APP_VERSION } = require('./package.json');
@@ -1423,6 +1424,16 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow && !mainWindow.isDestroyed()) {
         loadPortal(mainWindow, new URL('/auth/login', PORTAL_ORIGIN).toString());
       }
+    });
+
+    // A click in a sandboxed email body (and the mail pop-out window). Main
+    // and child windows both carry preload.js; the URL is still checked here.
+    ipcMain.handle('tma:open-in-browser', (event, url) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      const href = safeExternalUrl(url);
+      if (!href) return false;
+      shell.openExternal(href).catch(() => {});
+      return true;
     });
 
     // From the ring panel. It has no portal session of its own, so answering

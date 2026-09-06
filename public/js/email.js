@@ -6167,8 +6167,16 @@
         } catch (e) { /* cross-origin or torn down; keep the CSS height */ }
       };
 
+      var wireLinks = function () {
+        if (window.TMAEmailOpenLinks) window.TMAEmailOpenLinks.wireFrame(frame);
+      };
+
       fit();
-      frame.addEventListener('load', fit);
+      wireLinks();
+      frame.addEventListener('load', function () {
+        fit();
+        wireLinks();
+      });
 
       try {
         var d = frame.contentDocument;
