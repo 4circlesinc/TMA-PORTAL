@@ -85,9 +85,17 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            /*
+             * Same floor as the database driver: SyncSharePointLibrary's
+             * timeout is 1800s. Laravel's stock 90s would let a second
+             * worker steal a still-running import the moment production
+             * flips QUEUE_CONNECTION=redis.
+             */
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1830),
             'block_for' => null,
-            'after_commit' => false,
+            // Same as the database driver: signature mail is dispatched
+            // around the transaction that writes the token it links to.
+            'after_commit' => true,
         ],
 
         'deferred' => [
