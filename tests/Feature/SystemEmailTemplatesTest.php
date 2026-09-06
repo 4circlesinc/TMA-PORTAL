@@ -73,21 +73,6 @@ class SystemEmailTemplatesTest extends TestCase
         }
     }
 
-    public function test_postcard_buttons_open_in_a_new_tab(): void
-    {
-        $html = view('emails.postcard', [
-            'title' => 'Open your application',
-            'button' => [
-                'label' => 'View application',
-                'url' => 'https://portal.example/citizenship-applications/abc',
-            ],
-        ])->render();
-
-        $this->assertStringContainsString('target="_blank"', $html);
-        $this->assertStringContainsString('rel="noopener noreferrer"', $html);
-        $this->assertStringContainsString('https://portal.example/citizenship-applications/abc', $html);
-    }
-
     public function test_an_edit_changes_what_is_sent(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);

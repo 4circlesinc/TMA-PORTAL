@@ -180,7 +180,7 @@
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/dashboard.css?v=298">
-  <script src="/js/email-open-links.js?v=1"></script>
+  <script src="/js/email-open-links.js?v=2"></script>
 </head>
 <body>
   <div class="tma-dash__email-detail tma-dash__email-detail--window" data-mail-window>
@@ -350,7 +350,7 @@
 
             @if($m->body_html)
               <div class="tma-dash__email-body tma-dash__email-body--html">
-                <iframe class="tma-dash__email-body-frame" title="Message content" sandbox="allow-same-origin"
+                <iframe class="tma-dash__email-body-frame" title="Message content" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                         referrerpolicy="no-referrer" onload="tmaFitFrame(this)"
                         srcdoc="{{ $frame($m->body_html) }}"></iframe>
               </div>

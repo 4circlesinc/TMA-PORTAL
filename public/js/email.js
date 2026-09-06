@@ -6490,7 +6490,7 @@
 
     return (
       '<div class="tma-dash__email-body tma-dash__email-body--html">' +
-      '<iframe class="tma-dash__email-body-frame" sandbox="allow-same-origin"' +
+      '<iframe class="tma-dash__email-body-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"' +
       ' referrerpolicy="no-referrer" title="Message content" data-email-body-frame' +
       ' srcdoc="' + esc(wrapEmailBodyHtml(shown)) + '"></iframe>' +
       quoteToggle +

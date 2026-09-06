@@ -1,7 +1,10 @@
 /**
- * Clicks inside a sandboxed email body: open the destination outside the
- * message frame. The desktop app uses the system browser; a regular browser
- * uses a new tab. Hash-only jumps stay inside the frame.
+ * Links inside a mail you opened in the portal.
+ *
+ * The body lives in a sandboxed iframe, so a click would otherwise replace
+ * the message. In a browser the iframe itself opens a new tab (target=_blank
+ * plus allow-popups). In the desktop app that would spawn another Electron
+ * window, so those clicks are sent to the system browser instead.
  */
 (function (root) {
   'use strict';
@@ -33,31 +36,48 @@
     }
   }
 
-  function open(href, base) {
-    var url = resolveHref(href, base);
-    if (!isOpenable(url)) return false;
+  function isDesktopBrowser() {
     var desktop = root && root.TMADesktop;
-    if (desktop && typeof desktop.openInBrowser === 'function') {
-      desktop.openInBrowser(url);
-      return true;
-    }
-    if (root && typeof root.open === 'function') {
-      root.open(url, '_blank', 'noopener,noreferrer');
-    }
+    return !!(desktop && typeof desktop.openInBrowser === 'function');
+  }
+
+  function openInSystemBrowser(href) {
+    var url = resolveHref(href);
+    if (!isOpenable(url)) return false;
+    root.TMADesktop.openInBrowser(url);
     return true;
   }
 
+  function rewriteDocument(doc) {
+    if (!doc) return;
+    var nodes = doc.querySelectorAll('a[href], area[href]');
+    for (var i = 0; i < nodes.length; i++) {
+      var a = nodes[i];
+      var href = (a.getAttribute('href') || '').trim();
+      if (!href || href.charAt(0) === '#') continue;
+      var url = resolveHref(href);
+      if (!isOpenable(url)) {
+        a.removeAttribute('href');
+        continue;
+      }
+      a.setAttribute('href', url);
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+
   function onDocClick(event) {
-    if (!event || event.defaultPrevented) return;
+    if (!event) return;
     var t = event.target;
     if (!t || typeof t.closest !== 'function') return;
     var a = t.closest('a[href], area[href]');
     if (!a) return;
     var href = a.getAttribute('href');
     if (!href || href.trim().charAt(0) === '#') return;
+    if (!isDesktopBrowser()) return;
     event.preventDefault();
     if (event.stopPropagation) event.stopPropagation();
-    open(href);
+    openInSystemBrowser(href);
   }
 
   function wireFrame(frame) {
@@ -65,6 +85,7 @@
     var doc;
     try { doc = frame.contentDocument; } catch (e) { return; }
     if (!doc || !doc.documentElement) return;
+    rewriteDocument(doc);
     if (doc.documentElement.getAttribute('data-email-links-wired') === '1') return;
     doc.documentElement.setAttribute('data-email-links-wired', '1');
     doc.addEventListener('click', onDocClick, true);
@@ -73,7 +94,6 @@
   root.TMAEmailOpenLinks = {
     resolveHref: resolveHref,
     isOpenable: isOpenable,
-    open: open,
     wireFrame: wireFrame,
   };
 })(window);
