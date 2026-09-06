@@ -15,7 +15,7 @@
 
   <div class="tma-auth__intro">
     <h1 class="tma-auth__title" id="setup-title">Two-factor authentication</h1>
-    <p class="tma-auth__subtitle">Email codes already confirm unusual sign-ins. An authenticator app is faster and works even if you can't open your inbox.</p>
+    <p class="tma-auth__subtitle">Get codes on your phone, not in your inbox.</p>
     <p class="tma-auth__hint" style="margin:0">
       <span class="tma-auth__badge tma-auth__badge--recommended">{{ $optional ? 'Recommended' : 'Required' }}</span>
     </p>

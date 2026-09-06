@@ -48,7 +48,7 @@
       title: 'Protect your account',
       cls: 'tma-nudge',
       body:
-        '<p class="tma-nudge__lead">Email codes already confirm unusual sign-ins. An authenticator app is quicker and works even if you can\'t open your inbox.</p>' +
+        '<p class="tma-nudge__lead">Get codes on your phone, not in your inbox.</p>' +
         '<div class="tma-nudge__apps">' +
           '<div class="tma-nudge__app">' +
             '<img src="images/icons/brands/MicrosoftAuthenticator.webp" alt="">' +

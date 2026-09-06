@@ -130,9 +130,9 @@
 
         <p class="tma-auth__hint">
           @if ($authenticatorRequired ?? false)
-            Next: an authenticator app. Email codes already confirm unusual sign-ins; this organisation requires the app as well.
+            Next: set up an authenticator app.
           @else
-            Next: two-factor authentication. Email codes already confirm unusual sign-ins. An authenticator app is recommended.
+            Next: an authenticator app (recommended).
           @endif
         </p>
 

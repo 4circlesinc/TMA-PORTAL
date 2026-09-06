@@ -2812,7 +2812,7 @@
           '<div class="tma-security__head">' +
           '<h2 class="tma-security__title" id="sec-tfa">Two-factor authentication</h2>' +
           (on ? '<span class="tma-auth__badge tma-auth__badge--done">On</span>' : '<span class="tma-auth__badge">Off</span>') + '</div>' +
-          '<p class="tma-security__desc">Email codes already confirm unusual sign-ins. An authenticator app is stronger and works without opening your inbox.</p>' +
+          '<p class="tma-security__desc">Get codes on your phone, not in your inbox.</p>' +
           (on
             ? '<div class="tma-security__row">' +
               (d.twoFactorApp && d.twoFactorApp.key !== 'other'
@@ -2826,7 +2826,7 @@
               '</div>'
             : '<div class="tma-security__empty">' +
               '<img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">' +
-              '<span>Two-factor authentication is off. Email codes still confirm unusual sign-ins.</span>' +
+              '<span>Authenticator app is off.</span>' +
               '<button type="button" class="tma-auth__chip-btn" data-sec-setup><span>Turn on</span></button></div>') +
           '</section>' +
 
