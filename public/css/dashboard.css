@@ -21910,7 +21910,21 @@ a.tma-dash__clients-edit-btn--accent:visited {
 }
 
 .tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs {
-  flex-shrink: 0;
+  /* One row: shrink to the toolbar and pan sideways instead of wrapping
+     Agenda onto a second line. */
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-padding-inline: var(--tab-track-padding, 2px);
   --tab-track-padding: 2px;
   --tab-track-gap: 2px;
   --tab-track-radius: 10px;
@@ -21919,6 +21933,21 @@ a.tma-dash__clients-edit-btn--accent:visited {
   --tab-padding-x: 8px;
   --tab-radius: 8px;
   font-size: 12px;
+}
+
+.tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs .tma-tab {
+  flex: 0 0 auto;
+  touch-action: pan-x;
+}
+
+.tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs.is-dragging,
+.tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs.is-dragging .tma-tab {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .tma-dash__calendar-toolbar .tma-dash__clients-add-btn--toolbar {
@@ -22770,6 +22799,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
   align-items: center;
   gap: var(--space-8);
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .tma-dash__calendar-syncing {

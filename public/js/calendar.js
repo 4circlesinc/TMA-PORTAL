@@ -3276,6 +3276,65 @@
     refreshEvents();
   }
 
+  function revealActiveViewTab(tabs) {
+    var active = tabs.querySelector('.tma-tab.is-active');
+    if (!active || typeof active.scrollIntoView !== 'function') return;
+    active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }
+
+  /*
+   * Mouse drag pans the view strip when the five labels no longer fit.
+   * Touch keeps native overflow scrolling so a flick still has momentum.
+   */
+  function bindViewTabsDrag(tabs) {
+    if (tabs._viewTabsDragBound) return;
+    tabs._viewTabsDragBound = true;
+
+    var pointerId = null;
+    var startX = 0;
+    var startScroll = 0;
+    var dragging = false;
+
+    tabs.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      if (tabs.scrollWidth <= tabs.clientWidth + 1) return;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      startScroll = tabs.scrollLeft;
+      dragging = false;
+    });
+
+    tabs.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== pointerId) return;
+      var dx = e.clientX - startX;
+      if (!dragging) {
+        if (Math.abs(dx) < 6) return;
+        dragging = true;
+        try { tabs.setPointerCapture(e.pointerId); } catch (err) {}
+        tabs.classList.add('is-dragging');
+      }
+      tabs.scrollLeft = startScroll - dx;
+    });
+
+    function endDrag(e) {
+      if (e && pointerId != null && e.pointerId !== pointerId) return;
+      if (dragging) tabs._skipTabClick = true;
+      dragging = false;
+      pointerId = null;
+      tabs.classList.remove('is-dragging');
+    }
+
+    tabs.addEventListener('pointerup', endDrag);
+    tabs.addEventListener('pointercancel', endDrag);
+
+    tabs.addEventListener('click', function (e) {
+      if (!tabs._skipTabClick) return;
+      tabs._skipTabClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
+
   /* ── wiring ──────────────────────────────────────────────── */
 
   function wire() {
@@ -3294,6 +3353,8 @@
 
     var tabs = root.querySelector('[data-calendar-view-tabs]');
     if (tabs) {
+      bindViewTabsDrag(tabs);
+      revealActiveViewTab(tabs);
       M.on(tabs, 'tma-tab-change', function (e) {
         setView(e.detail && e.detail.key);
       });
