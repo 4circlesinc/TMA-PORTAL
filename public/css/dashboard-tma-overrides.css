@@ -66,10 +66,26 @@
 
 /* ─────────────────────────────────────────
  * MOBILE - bottom tab bar (full-width dock)
- * The bar's real styling lives in dashboard.css; this file only pins the
- * pieces that must win the cascade: the retired sliding indicator stays
- * gone, and legacy shells' text labels stay hidden.
+ * Solid paint, no frost. This file loads last so it has to kill any
+ * leftover glass (rgba fill + backdrop-filter) from older shells.
  * ───────────────────────────────────────── */
+
+.tma-dash__tabbar {
+  background: #ffffff;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  opacity: 1;
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__tabbar,
+:root[data-theme="dark"] .tma-dash__tabbar {
+  background: #1c1c1c;
+}
+
+.tma-dash__tabbar::before,
+.tma-dash__tabbar::after {
+  content: none !important;
+}
 
 .tma-dash__tabbar-indicator {
   display: none !important;
@@ -200,7 +216,7 @@
 :root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
-  /* Dock surface flips with --color-white; only the hairline needs help. */
+  background: #1c1c1c;
   border-top-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
 }

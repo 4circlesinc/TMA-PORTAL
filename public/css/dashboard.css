@@ -4154,12 +4154,13 @@
   transform: none;
   padding: var(--space-8) var(--space-8) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
   border-radius: var(--radius-20) var(--radius-20) 0 0;
-  background: var(--color-white);
+  background: #ffffff;
   border: none;
   border-top: 0.5px solid var(--color-overlay-4);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  opacity: 1;
   font-feature-settings: "ss01" 1, "cv01" 1;
   overflow: hidden;
 }
@@ -4348,6 +4349,7 @@
 :root[data-theme="dark"] .tma-dash__mmenu-card { background: var(--color-bg-card); }
 .tma-dash[data-theme="dark"] .tma-dash__tabbar,
 :root[data-theme="dark"] .tma-dash__tabbar {
+  background: #1c1c1c;
   /* --color-white flips to the dark surface; only the hairline needs help. */
   border-top-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
