@@ -47,7 +47,9 @@ class SecuritySettingsTest extends TestCase
             ->assertJsonPath('phone', '+1 555 123 4567')
             ->assertJsonPath('alerts.new_device', true)
             ->assertJsonPath('alerts.password_changed', true)
-            ->assertJsonPath('alerts.monthly_summary', false);
+            ->assertJsonPath('alerts.monthly_summary', false)
+            ->assertJsonPath('trustDays', 7)
+            ->assertJsonPath('authenticatorRequired', false);
     }
 
     public function test_a_phone_number_can_be_added_changed_and_removed(): void

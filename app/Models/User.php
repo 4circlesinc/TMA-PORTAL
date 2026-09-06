@@ -80,6 +80,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'approved_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
+            'last_authenticated_at' => 'datetime',
             'password' => 'hashed',
             'preferences' => 'array',
         ];

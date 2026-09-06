@@ -4,6 +4,7 @@ namespace App\Support\Templates;
 
 use App\Models\Template;
 use App\Models\User;
+use App\Support\Mail\Postcards;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
@@ -145,7 +146,7 @@ class SystemEmails
     public static function payload(string $key, array $vars, array $extras = [], ?array $copy = null): array
     {
         $copy ??= self::copy($key);
-        $vars += ['site' => \App\Support\Mail\Postcards::site()];
+        $vars += ['site' => Postcards::site()];
 
         $rendered = [];
         foreach (self::FIELDS as $field) {
@@ -435,6 +436,28 @@ class SystemEmails
                     'lead' => "We noticed a sign-in from a device we don't recognise.",
                     'quote' => "Don't recognise this? Secure your account now, we recommend changing your password and reviewing your active sessions.",
                     'button' => 'Review activity',
+                ],
+            ],
+            'login-code' => [
+                'name' => 'Sign-in confirmation code',
+                'category' => 'Security',
+                'when' => 'Sent when someone signs in from a new browser or location and needs a 6-digit email code.',
+                'variables' => [
+                    'name' => "The recipient's first name, when known",
+                ],
+                'sample' => ['name' => 'Ada'],
+                'sampleExtras' => [
+                    'code' => '847291',
+                    'details' => [['When', '12 Aug 2026, 9:41 AM'], ['Device', 'Chrome on macOS']],
+                ],
+                'copy' => [
+                    'subject' => 'Your sign-in code',
+                    'preheader' => 'Use this code to confirm it is you.',
+                    'eyebrow' => 'Security',
+                    'greeting' => self::HI_OR_HELLO,
+                    'title' => 'Your sign-in code',
+                    'lead' => 'Enter this code to finish signing in. It expires in 10 minutes.',
+                    'quote' => "If you didn't try to sign in, change your password. Someone else may have it.",
                 ],
             ],
             'password-changed' => [

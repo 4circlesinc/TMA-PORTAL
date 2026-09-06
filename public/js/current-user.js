@@ -390,7 +390,11 @@
       return res.json().then(function (j) {
         rememberMe(j);
         settledAt = Date.now();
-        return applyMe(j);
+        var result = applyMe(j);
+        if (window.TMAAuthenticatorNudge && window.TMAAuthenticatorNudge.maybeShow) {
+          window.TMAAuthenticatorNudge.maybeShow(j);
+        }
+        return result;
       });
     }).catch(function () {
       /*

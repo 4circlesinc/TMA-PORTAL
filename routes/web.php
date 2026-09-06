@@ -5,6 +5,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
+use App\Http\Controllers\AuthenticatorNudgeController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BackgroundOperationsController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\DesktopAuthController;
 use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\DevDatabaseController;
+use App\Http\Controllers\EmailTwoFactorController;
 use App\Http\Controllers\EmailVerificationStatusController;
 use App\Http\Controllers\Feed\FeedAnalyticsController;
 use App\Http\Controllers\Feed\FeedAttachmentController;
@@ -234,6 +236,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::redirect('/settings', '/account-settings');
 
     Route::get('/me', [MeController::class, 'show'])->name('me');
+    Route::post('/me/authenticator-nudge', [AuthenticatorNudgeController::class, 'shown'])
+        ->name('me.authenticator-nudge');
     Route::get('/me/profile', [MeController::class, 'profile'])->name('me.profile');
     Route::post('/me/avatar', [MeController::class, 'updateAvatar'])->name('me.avatar');
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
@@ -1314,6 +1318,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
  * Fortify owns /auth/login, /auth/register, /auth/forgot-password,
  * /auth/two-factor-challenge, /auth/user/* and the email verification routes.
  */
+Route::middleware('guest')->group(function () {
+    Route::get('/auth/login-code', [EmailTwoFactorController::class, 'show'])->name('login-code.show');
+    Route::post('/auth/login-code', [EmailTwoFactorController::class, 'store'])
+        ->middleware('throttle:two-factor')
+        ->name('login-code.store');
+    Route::post('/auth/login-code/resend', [EmailTwoFactorController::class, 'resend'])
+        ->name('login-code.resend');
+    Route::post('/auth/login-code/from-app', [EmailTwoFactorController::class, 'fromApp'])
+        ->name('login-code.from-app');
+});
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/auth/profile-setup', [ProfileSetupController::class, 'show'])->name('profile-setup');
     Route::post('/auth/profile-setup', [ProfileSetupController::class, 'store'])->name('profile-setup.store');

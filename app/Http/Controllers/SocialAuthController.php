@@ -7,15 +7,17 @@ use App\Jobs\ImportProviderCalendars;
 use App\Jobs\ProvisionPersonalOneDrive;
 use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
-use App\Models\Invitation;
 use App\Support\AvatarService;
+use App\Support\EmailTwoFactor;
 use App\Support\Invitations\Invitations;
+use App\Support\LoginChallenge;
+use App\Support\LoginSession;
 use App\Support\Microsoft\ChangeNotifications;
 use App\Support\Notifications\Notifier;
 use App\Support\StaySignedIn;
-use App\Support\TrustedDevices;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
@@ -489,10 +491,11 @@ class SocialAuthController extends Controller
     private function login(Request $request, User $user, bool $forceHome = false): RedirectResponse
     {
         // Respect two-factor authentication: hand off to Fortify's challenge,
-        // unless this is a device the user already trusted. Remember-me is
-        // applied in StaySignedIn::afterAuthenticated when the browser already
-        // chose to stay signed in (or on the stay-signed-in prompt).
-        if ($user->hasTwoFactorEnabled() && ! TrustedDevices::trusts($user, $request)) {
+        // unless this is a device the user already trusted. Unusual sign-ins
+        // without an authenticator app confirm by email instead. Remember-me
+        // is applied in StaySignedIn::afterAuthenticated when the browser
+        // already chose to stay signed in (or on the stay-signed-in prompt).
+        if (LoginChallenge::needsAuthenticator($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),
                 'login.remember' => StaySignedIn::wantsRemember($request),
@@ -501,8 +504,13 @@ class SocialAuthController extends Controller
             return redirect()->route('two-factor.login');
         }
 
+        if (LoginChallenge::needsEmail($user, $request)) {
+            return EmailTwoFactor::begin($request, $user);
+        }
+
         Auth::login($user, false);
         $request->session()->regenerate();
+        LoginSession::stamp($user);
 
         if ($forceHome) {
             $request->session()->forget('url.intended');
@@ -845,11 +853,11 @@ class SocialAuthController extends Controller
                  * when the fetch fails — better a hot-link than no photo.
                  */
                 try {
-                    $response = \Illuminate\Support\Facades\Http::timeout(10)->get($avatar);
+                    $response = Http::timeout(10)->get($avatar);
                     $providerUrl = $response->successful()
                         ? AvatarService::storeBinary($response->body(), $oldProvider)
                         : null;
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     $providerUrl = null;
                 }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Support\LoginSession;
 use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use Illuminate\Http\JsonResponse;
@@ -13,6 +14,10 @@ class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
     public function toResponse($request)
     {
         SafeIntended::scrub();
+
+        if ($user = $request->user()) {
+            LoginSession::stamp($user);
+        }
 
         if ($request->wantsJson()) {
             return new JsonResponse('', 204);

@@ -46,7 +46,7 @@ class EnforceTwoFactorTest extends TestCase
     {
         SecurityPolicies::put('sign-in', array_merge(
             SecurityPolicies::get('sign-in'),
-            ['requireMfa' => $on],
+            ['requireMfa' => $on, 'requireAuthenticatorApp' => $on],
         ));
 
         Cache::forget('portal-settings.sign-in');
@@ -55,7 +55,10 @@ class EnforceTwoFactorTest extends TestCase
     public function test_the_policy_is_off_by_default(): void
     {
         // It gates the entire portal, so it must never arrive switched on.
-        $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireMfa']);
+        $this->assertFalse(SecurityPolicies::authenticatorRequired());
+        $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireAuthenticatorApp']);
+        $this->assertFalse(SecurityPolicies::authenticatorRequired());
+        $this->assertSame(7, SecurityPolicies::DEFAULTS['sign-in']['sessionDays']);
     }
 
     public function test_a_json_request_gets_json_not_an_html_redirect(): void
@@ -112,5 +115,42 @@ class EnforceTwoFactorTest extends TestCase
         $this->requireMfa(false);
 
         $this->actingAs($this->user())->getJson('/admin/users')->assertOk();
+    }
+
+    public function test_require_authenticator_app_gates_the_portal_the_same_way(): void
+    {
+        SecurityPolicies::put('sign-in', array_merge(
+            SecurityPolicies::get('sign-in'),
+            ['requireAuthenticatorApp' => true, 'requireMfa' => false],
+        ));
+        Cache::forget('portal-settings.sign-in');
+
+        $this->actingAs($this->user())
+            ->getJson('/admin/users')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'mfa-required');
+    }
+
+    public function test_an_administrator_can_require_the_authenticator_from_sign_in_policy(): void
+    {
+        $this->actingAs($this->user())
+            ->putJson('/admin/security-policies/sign-in', [
+                'minLength' => 10,
+                'numbersRequired' => 0,
+                'specialRequired' => 0,
+                'requireMfa' => false,
+                'requireMicrosoftConnect' => false,
+                'requireGoogleConnect' => false,
+                'requireAuthenticatorApp' => true,
+                'sessionDays' => 7,
+            ])
+            ->assertOk();
+
+        Cache::forget('portal-settings.sign-in');
+
+        $this->assertTrue(SecurityPolicies::authenticatorRequired());
+        $this->assertTrue(SecurityPolicies::get('sign-in')['requireMfa']);
+        $this->assertTrue(SecurityPolicies::get('sign-in')['requireAuthenticatorApp']);
+        $this->assertSame(7, SecurityPolicies::sessionDays());
     }
 }

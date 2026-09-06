@@ -7,6 +7,8 @@ use App\Models\AuthEvent;
 use App\Models\User;
 use App\Support\AuthenticatorApp;
 use App\Support\Security\SecurityAlerts;
+use App\Support\SecurityPolicies;
+use App\Support\TrustedDevices;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -75,6 +77,9 @@ class SecuritySettingsController extends Controller
             'twoFactor' => $user->two_factor_confirmed_at ? 'on' : ($user->two_factor_secret ? 'pending' : 'off'),
             'twoFactorSince' => $user->two_factor_confirmed_at?->format('j M Y'),
             'twoFactorApp' => AuthenticatorApp::meta($user->two_factor_app),
+            'authenticatorRequired' => SecurityPolicies::authenticatorRequired(),
+            'trustDays' => TrustedDevices::days(),
+            'sessionDays' => SecurityPolicies::sessionDays(),
             'recoveryCodesCount' => $user->two_factor_confirmed_at ? count($user->recoveryCodes()) : 0,
             'failedSignins7d' => $failed,
             'sessions' => $this->sessionsFor($user, $request->session()->getId())->values(),

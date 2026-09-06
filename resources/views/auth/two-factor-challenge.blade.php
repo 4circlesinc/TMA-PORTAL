@@ -47,7 +47,7 @@
           <label class="tma-auth__check">
             <input type="checkbox" name="trust_device" value="1">
             <span>
-              Trust this device for 30 days
+              Trust this device for {{ $trustDays ?? 7 }} days
             </span>
           </label>
           <button type="submit" class="tma-auth__submit">Verify</button>
@@ -65,15 +65,23 @@
           <label class="tma-auth__check">
             <input type="checkbox" name="trust_device" value="1">
             <span>
-              Trust this device for 30 days
+              Trust this device for {{ $trustDays ?? 7 }} days
             </span>
           </label>
           <button type="submit" class="tma-auth__submit">Verify recovery code</button>
         </form>
 
-        <p class="tma-auth__alt-link" data-tfa-alt>
-          Can't use your app? <button type="button" class="tma-auth__link-btn" data-show-recovery>Use a recovery code</button>
-        </p>
+        <div class="tma-auth__alt-link" data-tfa-alt>
+          Can't use your app?
+          @if ($canEmail ?? false)
+            <form method="POST" action="{{ route('login-code.from-app') }}" class="tma-auth__inline-form">
+              @csrf
+              <button type="submit" class="tma-auth__link-btn">Email me a code</button>
+            </form>
+            or
+          @endif
+          <button type="button" class="tma-auth__link-btn" data-show-recovery>Use a recovery code</button>
+        </div>
         <p class="tma-auth__alt-link" data-recovery-alt hidden>
           Found your phone? <button type="button" class="tma-auth__link-btn" data-show-tfa>Use the authenticator app</button>
         </p>

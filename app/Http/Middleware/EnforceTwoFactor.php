@@ -34,7 +34,7 @@ class EnforceTwoFactor
             ! $user
             || $user->two_factor_confirmed_at !== null
             || $this->exempt($request)
-            || ! SecurityPolicies::get('sign-in')['requireMfa']
+            || ! SecurityPolicies::authenticatorRequired()
         ) {
             return $next($request);
         }

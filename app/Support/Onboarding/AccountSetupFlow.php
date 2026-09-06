@@ -54,11 +54,7 @@ final class AccountSetupFlow
     public static function isOptional(string $step): bool
     {
         if ($step === 'two-factor') {
-            $policy = SecurityPolicies::get('sign-in');
-            $required = (bool) ($policy['requireAuthenticatorApp'] ?? false)
-                || (bool) ($policy['requireMfa'] ?? false);
-
-            return ! $required;
+            return ! SecurityPolicies::authenticatorRequired();
         }
 
         return (bool) (self::STEPS[$step]['optional'] ?? false);

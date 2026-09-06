@@ -46,15 +46,7 @@ class AdminSecurityController extends Controller
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can change security policies.');
 
         $value = match ($section) {
-            'sign-in' => $request->validate([
-                'minLength' => ['required', 'integer', 'between:8,64'],
-                'numbersRequired' => ['required', 'integer', 'between:0,4'],
-                'specialRequired' => ['required', 'integer', 'between:0,4'],
-                'requireMfa' => ['required', 'boolean'],
-                'requireMicrosoftConnect' => ['required', 'boolean'],
-                'requireGoogleConnect' => ['required', 'boolean'],
-                'requireAuthenticatorApp' => ['required', 'boolean'],
-            ]),
+            'sign-in' => $this->signInRules($request),
             'security' => $request->validate([
                 'trustedDomains' => ['present', 'string', 'max:2000'],
                 'autoRemediation' => ['required', 'array'],
@@ -74,6 +66,31 @@ class AdminSecurityController extends Controller
         SecurityPolicies::put($section, $value, $request->user()->id);
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function signInRules(Request $request): array
+    {
+        $data = $request->validate([
+            'minLength' => ['required', 'integer', 'between:8,64'],
+            'numbersRequired' => ['required', 'integer', 'between:0,4'],
+            'specialRequired' => ['required', 'integer', 'between:0,4'],
+            'requireMfa' => ['required', 'boolean'],
+            'requireMicrosoftConnect' => ['required', 'boolean'],
+            'requireGoogleConnect' => ['required', 'boolean'],
+            'requireAuthenticatorApp' => ['required', 'boolean'],
+            'sessionDays' => ['required', 'integer', 'between:1,30'],
+        ]);
+
+        // One control on the screen, two stored flags so older rows and the
+        // portal gate stay in agreement.
+        $required = $request->boolean('requireAuthenticatorApp') || $request->boolean('requireMfa');
+        $data['requireAuthenticatorApp'] = $required;
+        $data['requireMfa'] = $required;
+
+        return $data;
     }
 
     /**

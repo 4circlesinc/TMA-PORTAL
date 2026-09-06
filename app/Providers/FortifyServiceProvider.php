@@ -14,6 +14,7 @@ use App\Http\Responses\VerifyEmailResponse;
 use App\Models\User;
 use App\Support\AuthenticatorApp;
 use App\Support\SafeIntended;
+use App\Support\TrustedDevices;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -58,6 +59,8 @@ class FortifyServiceProvider extends ServiceProvider
 
             return view('auth.two-factor-challenge', [
                 'authApp' => AuthenticatorApp::meta($user?->two_factor_app),
+                'trustDays' => TrustedDevices::days(),
+                'canEmail' => $user !== null,
             ]);
         });
         Fortify::confirmPasswordView(fn () => view('auth.confirm-password'));

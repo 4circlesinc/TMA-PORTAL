@@ -21,24 +21,31 @@ class TrustedDevices
 {
     public const COOKIE = 'tma_trusted_device';
 
-    public const DAYS = 30;
+    public const DAYS = 7;
+
+    public static function days(): int
+    {
+        return SecurityPolicies::sessionDays();
+    }
 
     public static function issue(User $user, Request $request): SymfonyCookie
     {
         $token = Str::random(64);
+
+        $days = self::days();
 
         $user->trustedDevices()->create([
             'token_hash' => hash('sha256', $token),
             'device' => DeviceName::describe((string) $request->userAgent()),
             'ip' => $request->ip(),
             'last_used_at' => now(),
-            'expires_at' => now()->addDays(self::DAYS),
+            'expires_at' => now()->addDays($days),
         ]);
 
         return Cookie::make(
             name: self::COOKIE,
             value: $token,
-            minutes: self::DAYS * 24 * 60,
+            minutes: $days * 24 * 60,
             httpOnly: true,
             secure: $request->isSecure(),
             sameSite: 'lax',

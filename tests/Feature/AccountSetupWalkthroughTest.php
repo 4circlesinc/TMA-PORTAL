@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\OnboardingProgress;
 use App\Models\User;
 use App\Support\Onboarding\AccountSetupFlow;
+use App\Support\SecurityPolicies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AccountSetupWalkthroughTest extends TestCase
@@ -45,7 +47,8 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee("1 of {$total}", false)
             ->assertSee('complete')
             ->assertDontSee('Step 1')
-            ->assertSee('Set up your account');
+            ->assertSee('Set up your account')
+            ->assertSee('Next: two-factor authentication');
     }
 
     public function test_each_setup_screen_shows_its_place_in_the_full_walkthrough(): void
@@ -225,5 +228,31 @@ class AccountSetupWalkthroughTest extends TestCase
             ->get(route('account-setup.show', ['step' => 'notifications']))
             ->assertOk()
             ->assertSee('3 of 3', false);
+    }
+
+    public function test_a_required_authenticator_hides_set_later_and_blocks_skip(): void
+    {
+        Cache::flush();
+        SecurityPolicies::put('sign-in', array_merge(
+            SecurityPolicies::get('sign-in'),
+            ['requireAuthenticatorApp' => true, 'requireMfa' => true, 'sessionDays' => 7],
+        ));
+
+        $user = $this->staffMidSetup(['accountSetupStep' => 'two-factor']);
+
+        $this->actingAs($user)
+            ->get(route('account-setup.show', ['step' => 'two-factor']))
+            ->assertOk()
+            ->assertSee('Required')
+            ->assertDontSee('Set later')
+            ->assertSee('Set up authenticator');
+
+        $this->actingAs($user)
+            ->post(route('account-setup.skip', ['step' => 'two-factor']))
+            ->assertRedirect(route('account-setup.show', ['step' => 'two-factor']));
+
+        $this->actingAs($user)
+            ->post(route('account-setup.store', ['step' => 'two-factor']))
+            ->assertSessionHasErrors();
     }
 }

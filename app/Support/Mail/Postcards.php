@@ -175,6 +175,21 @@ class Postcards
         ]);
     }
 
+    public static function loginCode(User $user, string $code): Postcard
+    {
+        $details = [['When', now()->format('j M Y, g:i A')]];
+        if ($device = self::deviceLabel(request()?->userAgent())) {
+            $details[] = ['Device', $device];
+        }
+
+        return self::postcard('login-code', [
+            'name' => $user->first_name ?: self::firstName($user->name),
+        ], [
+            'code' => $code,
+            'details' => $details,
+        ]);
+    }
+
     /**
      * Two-factor authentication was turned on, turned off, or had its recovery
      * codes replaced. $action is the past-tense phrase for the lead line.

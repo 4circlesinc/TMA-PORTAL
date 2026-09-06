@@ -26,11 +26,16 @@ class StaySignedIn
 
     public const SESSION_KEY = 'stay_signed_in.needed';
 
-    public const DAYS = 30;
+    public const DAYS = 7;
+
+    public static function days(): int
+    {
+        return SecurityPolicies::sessionDays();
+    }
 
     public static function minutes(): int
     {
-        return self::DAYS * 24 * 60;
+        return self::days() * 24 * 60;
     }
 
     /**
@@ -75,6 +80,7 @@ class StaySignedIn
             return;
         }
 
+        Auth::guard('web')->setRememberDuration(self::minutes());
         Auth::login($user, true);
         $request->session()->regenerate();
     }

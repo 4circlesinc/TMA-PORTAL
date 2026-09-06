@@ -128,6 +128,14 @@
 
         </div>
 
+        <p class="tma-auth__hint">
+          @if ($authenticatorRequired ?? false)
+            Next: an authenticator app. Email codes already confirm unusual sign-ins; this organisation requires the app as well.
+          @else
+            Next: two-factor authentication. Email codes already confirm unusual sign-ins. An authenticator app is recommended.
+          @endif
+        </p>
+
         @php
           $blocked = ($requireMicrosoft && ! $allConnected && $microsoftReady)
             || ($requireGoogle && ! $google);

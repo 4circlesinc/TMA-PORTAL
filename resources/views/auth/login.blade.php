@@ -30,6 +30,13 @@
           </div>
         @endif
 
+        @if (session('status') === 'session-expired')
+          <div class="tma-auth__alert tma-auth__alert--info" role="status">
+            <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+            <span>Your sign-in expired. Enter your password and a verification code to continue.</span>
+          </div>
+        @endif
+
         @error('email')
           <div class="tma-auth__alert tma-auth__alert--error" role="alert">
             <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">

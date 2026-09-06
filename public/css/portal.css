@@ -1408,11 +1408,70 @@
   gap: var(--space-16);
 }
 
-.tma-portal-toggle-row__label {
+.tma-portal-toggle-row__label .tma-portal-note {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+}
+
+.tma-portal-modal__card.tma-nudge {
+  width: min(420px, 100%);
+}
+
+.tma-nudge__lead {
+  margin: 0;
   font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
-  color: var(--color-black);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.tma-nudge__apps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-nudge__app {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
+  border-radius: var(--radius-16, 16px);
+  background: var(--color-bg-card, #f9f9fa);
+}
+
+.tma-nudge__app img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.tma-nudge__app-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.tma-nudge__app-name {
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-nudge__app-desc {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-nudge__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
 }
 
 .tma-portal-form-actions { display: flex; gap: var(--space-8); }

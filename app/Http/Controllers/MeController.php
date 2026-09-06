@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\WorkDay;
 use App\Support\Access\Role;
+use App\Support\AuthenticatorNudge;
 use App\Support\AvatarService;
 use App\Support\Cip\CipAccess;
 use App\Support\Messaging\MessagingSettings;
@@ -70,6 +71,7 @@ class MeController extends Controller
             'workStatus' => WorkDay::publicStatusFor($user),
             // Availability status for the header dropdown and self presence.
             'availability' => AvailabilityService::selfPayload($user),
+            'authenticatorNudge' => AuthenticatorNudge::payload($user),
         ]);
     }
 

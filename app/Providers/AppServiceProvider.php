@@ -208,9 +208,10 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
 
-        // Stay-signed-in remember cookie — Laravel's default is much longer;
-        // keep the portal restore window to StaySignedIn::DAYS.
-        Auth::guard('web')->setRememberDuration(StaySignedIn::minutes());
+        // Stay-signed-in remember cookie — Laravel's default is much longer.
+        // The default here is the shipped 7-day window; applyRemember()
+        // updates the duration from sign-in policy when a cookie is issued.
+        Auth::guard('web')->setRememberDuration(StaySignedIn::DAYS * 24 * 60);
 
         Mail::extend('microsoft-graph', function () {
             $tenant = (string) config('services.microsoft.graph_tenant_id');

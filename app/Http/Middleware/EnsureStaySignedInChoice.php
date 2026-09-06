@@ -21,6 +21,7 @@ class EnsureStaySignedInChoice
             && ! $request->routeIs('stay-signed-in.*')
             && ! $request->routeIs('logout')
             && ! $request->routeIs('two-factor.*')
+            && ! $request->routeIs('login-code.*')
         ) {
             // A browser that has already answered is never held here again.
             // The cookie *is* the answer; the session flag is only how we

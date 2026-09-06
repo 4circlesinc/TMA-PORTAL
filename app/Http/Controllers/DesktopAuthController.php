@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\LoginSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -126,6 +127,7 @@ class DesktopAuthController extends Controller
 
         Auth::login($user, true);
         $request->session()->regenerate();
+        LoginSession::stamp($user);
 
         return redirect('/');
     }

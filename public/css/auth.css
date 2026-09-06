@@ -823,6 +823,10 @@ body:has(.tma-auth__card--tall) {
   text-decoration: underline;
 }
 
+.tma-auth__inline-form {
+  display: inline;
+}
+
 .tma-auth__legal {
   width: min(384px, 100%);
   margin: 0;

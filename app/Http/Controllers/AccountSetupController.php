@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\AuthenticatorApp;
+use App\Support\AuthenticatorNudge;
 use App\Support\Notifications\NotificationPreferences;
 use App\Support\Notifications\NotificationType;
 use App\Support\Onboarding\AccountSetupFlow;
@@ -106,6 +107,10 @@ class AccountSetupController extends Controller
             return redirect()->route('account-setup.show', ['step' => $step]);
         }
 
+        if ($step === 'two-factor') {
+            AuthenticatorNudge::markShown($user);
+        }
+
         AccountSetupFlow::skip($user, $step);
 
         return $this->redirectAfterStep($user, $step);
@@ -188,6 +193,8 @@ class AccountSetupController extends Controller
         // Optional 2FA: Continue posts here with no code and must still
         // advance. Requiring a code trapped people on this screen.
         if (! $request->filled('code') && AccountSetupFlow::isOptional('two-factor')) {
+            AuthenticatorNudge::markShown($user);
+
             return;
         }
 

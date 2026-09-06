@@ -18,11 +18,18 @@ class SecurityPolicies
             'minLength' => 10,
             'numbersRequired' => 0,
             'specialRequired' => 0,
+            // Authenticator app can be required from Sign-in policy. Off by
+            // default: email codes already confirm unusual sign-ins, and
+            // onboarding still recommends the app (Set later stays available).
             'requireMfa' => false,
             // Getting-started checklist: firm can require provider connects.
             'requireMicrosoftConnect' => false,
             'requireGoogleConnect' => false,
             'requireAuthenticatorApp' => false,
+            // Absolute sign-in lifetime in days (Stay signed in, trusted
+            // devices, and the session cap). Email codes for unusual sign-ins
+            // are always on and are not a stored switch.
+            'sessionDays' => 7,
         ],
         'security' => [
             'trustedDomains' => '',
@@ -74,5 +81,24 @@ class SecurityPolicies
         );
 
         Cache::forget("portal-settings.{$section}");
+    }
+
+    /**
+     * Onboarding hides "Set later" and the portal is blocked until an
+     * authenticator app is confirmed.
+     */
+    public static function authenticatorRequired(): bool
+    {
+        $policy = self::get('sign-in');
+
+        return (bool) ($policy['requireAuthenticatorApp'] ?? false)
+            || (bool) ($policy['requireMfa'] ?? false);
+    }
+
+    public static function sessionDays(): int
+    {
+        $days = (int) (self::get('sign-in')['sessionDays'] ?? 7);
+
+        return max(1, min(30, $days));
     }
 }

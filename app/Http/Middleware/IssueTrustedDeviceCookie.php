@@ -21,7 +21,7 @@ class IssueTrustedDeviceCookie
 
         if (
             $request->isMethod('POST')
-            && $request->routeIs('two-factor.login*')
+            && ($request->routeIs('two-factor.login*') || $request->routeIs('login-code.store'))
             && Auth::check()
             && $request->boolean('trust_device')
         ) {

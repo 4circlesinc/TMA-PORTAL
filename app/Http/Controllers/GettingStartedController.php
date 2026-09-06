@@ -63,6 +63,7 @@ class GettingStartedController extends Controller
             'requireGoogle' => $requireGoogle,
             'features' => $features,
             'allConnected' => $microsoftConnected,
+            'authenticatorRequired' => SecurityPolicies::authenticatorRequired(),
             'index' => $wizard['index'],
             'total' => $wizard['total'],
         ]);

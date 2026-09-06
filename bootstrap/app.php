@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ApplySecurityPolicyHeaders;
+use App\Http\Middleware\EnforceSessionExpiry;
 use App\Http\Middleware\EnforceTwoFactor;
 use App\Http\Middleware\EnsureAccountApproved;
 use App\Http\Middleware\EnsureCapability;
@@ -8,6 +9,7 @@ use App\Http\Middleware\EnsureOnboarded;
 use App\Http\Middleware\EnsureProfileComplete;
 use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
+use App\Http\Middleware\PreventDisablingRequiredAuthenticator;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\UploadConflictException;
 use App\Support\Mail\MailAuthException;
@@ -46,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
         $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);
+        $middleware->appendToGroup('web', EnforceSessionExpiry::class);
+        $middleware->appendToGroup('web', PreventDisablingRequiredAuthenticator::class);
 
         // Guest hits on /media/avatars/*.jpg must not park that URL as
         // url.intended — otherwise register/login sends people to a raw image.
