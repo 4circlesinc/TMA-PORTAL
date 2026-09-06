@@ -23,7 +23,10 @@ data class ApplicationsPageDto(
 data class OptionDto(val value: String = "", val label: String = "", val tone: String? = null)
 
 @Serializable
-data class AssigneeDto(val id: Long? = null, val userId: Long? = null, val name: String = "", val email: String? = null, val avatar: String? = null, val accountType: String? = null, val role: String? = null, val roleLabel: String? = null, val assignedAt: String? = null, val first: String? = null, val roles: List<String> = emptyList())
+data class AssigneeDto(val id: String? = null, val userId: Long? = null, val count: Int? = null, val name: String = "", val email: String? = null, val avatar: String? = null, val accountType: String? = null, val role: String? = null, val roleLabel: String? = null, val assignedAt: String? = null, val first: String? = null, val roles: List<String> = emptyList()) {
+    /** The user id, whichever field carried it (`id` is a string facet key on the listing). */
+    val userKey: Long? get() = id?.toLongOrNull() ?: userId
+}
 
 @Serializable
 data class AttentionDto(val comments: Int = 0, val mentionsMe: Int = 0, val messages: Int = 0)

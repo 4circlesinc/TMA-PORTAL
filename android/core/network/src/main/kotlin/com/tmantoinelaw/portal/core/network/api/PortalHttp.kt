@@ -3,6 +3,8 @@ package com.tmantoinelaw.portal.core.network.api
 import com.tmantoinelaw.portal.core.network.PortalConfig
 import com.tmantoinelaw.portal.core.network.session.SessionState
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Call
@@ -30,24 +32,38 @@ class PortalHttp(
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
     suspend fun <T> get(path: String, serializer: KSerializer<T>): T =
-        decode(execute(request(path).get().build()), serializer)
+        withContext(Dispatchers.IO) { decode(execute(request(path).get().build()), serializer) }
 
     suspend fun getJson(path: String): JsonElement = get(path, JsonElement.serializer())
 
     suspend fun <T> post(path: String, body: JsonElement?, serializer: KSerializer<T>): T =
-        decode(execute(request(path).post(body.toBody()).build()), serializer)
+        withContext(Dispatchers.IO) { decode(execute(request(path).post(body.toBody()).build()), serializer) }
 
     suspend fun <T> put(path: String, body: JsonElement?, serializer: KSerializer<T>): T =
-        decode(execute(request(path).put(body.toBody()).build()), serializer)
+        withContext(Dispatchers.IO) { decode(execute(request(path).put(body.toBody()).build()), serializer) }
 
     suspend fun <T> patch(path: String, body: JsonElement?, serializer: KSerializer<T>): T =
-        decode(execute(request(path).patch(body.toBody()).build()), serializer)
+        withContext(Dispatchers.IO) { decode(execute(request(path).patch(body.toBody()).build()), serializer) }
 
     suspend fun <T> delete(path: String, body: JsonElement?, serializer: KSerializer<T>): T =
-        decode(execute(request(path).delete(body?.toBody()).build()), serializer)
+        withContext(Dispatchers.IO) { decode(execute(request(path).delete(body?.toBody()).build()), serializer) }
 
-    /** A raw call for the few places that read status and headers themselves (the sign-in claim, downloads). */
-    suspend fun raw(request: Request): Response = client.newCall(request).await().also { session.reachable.value = true }
+    /**
+     * A raw call for the few places that read status and headers themselves
+     * (the sign-in claim, /me, downloads). The block runs on the IO dispatcher
+     * and the response is closed after it: reading or discarding a body is
+     * socket work, and Android kills the process for doing that on Main.
+     */
+    suspend fun <R> raw(request: Request, block: suspend (Response) -> R): R = withContext(Dispatchers.IO) {
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: IOException) {
+            session.reachable.value = false
+            throw e
+        }
+        session.reachable.value = true
+        try { block(response) } finally { response.close() }
+    }
 
     /** A portal path, or an absolute URL (a queued write stores the URL it was going to). */
     fun request(path: String): Request.Builder = Request.Builder().url(if (path.startsWith("http")) path else config.url(path))

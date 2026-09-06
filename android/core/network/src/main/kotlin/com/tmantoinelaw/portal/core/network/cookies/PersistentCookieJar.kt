@@ -32,12 +32,24 @@ class PersistentCookieJar(private val store: CookieStore) : CookieJar {
     private val lock = Any()
     private var cookies: MutableList<Cookie> = load()
 
+    /**
+     * Bumps whenever a session-bearing cookie changes. A 401 names the
+     * generation its request was sent with, so a stale answer (a poll that
+     * left before the sign-in claim landed) can never wipe the newer session.
+     */
+    @Volatile var generation: Long = 0L
+        private set
+
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         synchronized(lock) {
+            var sessionChanged = false
             for (c in cookies) {
+                val before = this.cookies.firstOrNull { it.name == c.name && it.domain == c.domain && it.path == c.path }
                 this.cookies.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
                 if (c.expiresAt > System.currentTimeMillis() && c.value.isNotEmpty()) this.cookies.add(c)
+                if (c.name != "XSRF-TOKEN" && before?.value != c.value) sessionChanged = true
             }
+            if (sessionChanged) generation++
             persist()
         }
     }
@@ -63,6 +75,7 @@ class PersistentCookieJar(private val store: CookieStore) : CookieJar {
     fun cookieHeader(url: HttpUrl): String = loadForRequest(url).joinToString("; ") { "${it.name}=${it.value}" }
 
     fun clear() = synchronized(lock) {
+        generation++
         cookies.clear()
         store.clear()
     }

@@ -175,8 +175,9 @@ class UploadManager @Inject constructor(
             .addFormDataPart("index", index.toString())
             .addFormDataPart("chunk", job.name + ".part", bytes.toRequestBody("application/octet-stream".toMediaType()))
             .build()
-        val response = http.raw(http.request("/portal/files/uploads/${job.sessionId}/chunk").post(body).build())
-        response.use { if (!it.isSuccessful) { val err = PortalException.from(it); if (it.code in 500..599) throw IOException(err.message) else throw err } }
+        http.raw(http.request("/portal/files/uploads/${job.sessionId}/chunk").post(body).build()) {
+            if (!it.isSuccessful) { val err = PortalException.from(it); if (it.code in 500..599) throw IOException(err.message) else throw err }
+        }
     }
 
     private suspend fun complete(id: String, conflict: String?, newName: String?) {

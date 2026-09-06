@@ -50,7 +50,9 @@ class ForegroundWatcher @Inject constructor(
         inFront = true
         realtime.setForeground(true)
         queue.flush()
-        scope.launch(Dispatchers.IO) { notifications.catchUp() }
+        // Only for a signed-in account: a 401 from here while the sign-in claim is
+        // landing would read as a dead session (see SessionState.unauthorized).
+        if (session.identity.value != null) scope.launch(Dispatchers.IO) { notifications.catchUp() }
     }
 
     override fun onStop(owner: LifecycleOwner) {

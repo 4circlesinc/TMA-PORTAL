@@ -97,6 +97,7 @@ class NotificationsRepository @Inject constructor(
 
     /** Fresh count and first page; the caller's list keeps scrolling from `loadMore`. */
     suspend fun catchUp() {
+        if (session.identity.value == null) return
         refreshCount()
         runCatching { loadFirstPage() }
     }

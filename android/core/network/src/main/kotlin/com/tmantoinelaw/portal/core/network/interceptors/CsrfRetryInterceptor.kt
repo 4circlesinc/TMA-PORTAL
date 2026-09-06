@@ -20,6 +20,7 @@ class CsrfRetryInterceptor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val generation = jar.generation
         var response = chain.proceed(request)
         if (response.code == 419 && request.isWrite() && request.header(RETRIED) == null) {
             response.close()
@@ -30,7 +31,7 @@ class CsrfRetryInterceptor(
             response = chain.proceed(retry)
         }
         if (response.code == 401 || (response.code == 419 && request.header(RETRIED) != null)) {
-            session.unauthorized.tryEmit(Unit)
+            session.unauthorized.tryEmit(generation)
         }
         return response
     }

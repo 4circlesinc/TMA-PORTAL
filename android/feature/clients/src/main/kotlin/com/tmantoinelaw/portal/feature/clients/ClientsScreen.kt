@@ -130,7 +130,7 @@ private fun HubToolbar(ui: ClientsUi, vm: ClientsViewModel, phone: Boolean, onCr
         if (!ui.onProviders && !ui.onPeople) {
             if (ui.buckets.isNotEmpty()) FilterMenu("Status", ui.bucket, ui.buckets.map { Triple(it.key, it.label, it.count) }, { vm.toggleFilter("bucket", it) }, { vm.clearFilter("bucket") })
             ui.page?.let { p ->
-                if (p.assignees.isNotEmpty() && !phone) FilterMenu("Assignee", ui.assignee, p.assignees.map { Triple((it.id ?: it.userId)?.toString() ?: "none", it.name, null) }, { vm.toggleFilter("assignee", it) }, { vm.clearFilter("assignee") })
+                if (p.assignees.isNotEmpty() && !phone) FilterMenu("Assignee", ui.assignee, p.assignees.map { Triple(it.id ?: it.userId?.toString() ?: "none", it.name, it.count) }, { vm.toggleFilter("assignee", it) }, { vm.clearFilter("assignee") })
                 if (p.providers.isNotEmpty() && !phone) FilterMenu("Provider", ui.provider, p.providers.map { Triple(it.value, it.label, null) }, { vm.toggleFilter("provider", it) }, { vm.clearFilter("provider") })
             }
             if (phone) SortMenu(ui, vm)

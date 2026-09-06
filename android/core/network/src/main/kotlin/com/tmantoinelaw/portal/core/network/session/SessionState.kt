@@ -21,6 +21,11 @@ class SessionState @Inject constructor() {
     /** Learned from the last attempt, not from the connectivity manager alone (a captive portal is "online" and answers nothing). */
     val reachable = MutableStateFlow(true)
 
-    /** Fired when the server answered 401 (or 419 twice): the session is dead behind the cookie. */
-    val unauthorized = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /**
+     * Fired when the server answered 401 (or 419 twice), carrying the cookie
+     * jar generation the request left with. The session is dead only if the
+     * jar still holds that generation; a poll that left before a sign-in
+     * claim landed must not wipe the session the claim just stored.
+     */
+    val unauthorized = MutableSharedFlow<Long>(extraBufferCapacity = 8)
 }

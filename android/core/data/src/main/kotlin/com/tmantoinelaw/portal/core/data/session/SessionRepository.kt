@@ -58,7 +58,7 @@ class SessionRepository @Inject constructor(
 
     init {
         identity.onEach { state.accountId.value = it?.id }.launchIn(scope)
-        state.unauthorized.onEach { forget() }.launchIn(scope)
+        state.unauthorized.onEach { generation -> if (generation == jar.generation) forget() }.launchIn(scope)
     }
 
     /** True when the cookie jar holds anything that could be a session. Nobody has one on a fresh install. */
@@ -67,8 +67,7 @@ class SessionRepository @Inject constructor(
     /** One `/me` in flight at a time, like the web (current-user.js). */
     suspend fun refreshMe(): MeResult = refreshing.withLock {
         try {
-            val response = http.raw(http.request("/me").get().build())
-            response.use {
+            http.raw(http.request("/me").get().build()) {
                 when {
                     it.isSuccessful -> {
                         val raw = it.body.string()
@@ -78,9 +77,11 @@ class SessionRepository @Inject constructor(
                     }
                     it.code == 401 || it.code == 419 -> { forget(); MeResult.SignedOut }
                     it.code == 302 -> {
-                        val location = it.header("Location") ?: return MeResult.Failed(PortalException.from(it))
-                        val url = if (location.startsWith("http")) location else http.config.url(location)
-                        if (url.contains("/auth/login")) { forget(); MeResult.SignedOut } else MeResult.NeedsBrowser(url)
+                        val location = it.header("Location")
+                        if (location == null) MeResult.Failed(PortalException.from(it)) else {
+                            val url = if (location.startsWith("http")) location else http.config.url(location)
+                            if (url.contains("/auth/login")) { forget(); MeResult.SignedOut } else MeResult.NeedsBrowser(url)
+                        }
                     }
                     it.code == 403 -> {
                         val error = PortalException.from(it)
@@ -98,7 +99,7 @@ class SessionRepository @Inject constructor(
     /** `POST /auth/logout` (204), then everything the account left on this device except the write queue. */
     suspend fun signOut() {
         runCatching {
-            http.raw(http.request("/auth/logout").post(okhttp3.RequestBody.EMPTY).build()).close()
+            http.raw(http.request("/auth/logout").post(okhttp3.RequestBody.EMPTY).build()) { }
         }
         forget()
     }

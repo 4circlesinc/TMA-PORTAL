@@ -22,7 +22,14 @@ fun toneColour(tone: String?): Color = when (tone) {
     "danger" -> Tokens.Accent.red
     "warning", "action" -> Tokens.Accent.orange
     "pending" -> Tokens.Accent.yellow
-    "info" -> Tokens.Accent.blue
+    "info", "sky", "cyan" -> Tokens.Accent.blue
+    "indigo", "navy" -> Color(0xFF4F63D2)
+    "violet", "plum" -> Color(0xFF8E5BD8)
+    "amber", "gold" -> Tokens.Accent.yellow
+    "teal", "emerald", "lime", "mint" -> Tokens.Accent.mint
+    "rose", "pink" -> Tokens.Accent.pink
+    "copper", "orange" -> Tokens.Accent.orange
+    "slate", "neutral" -> Tma.colors.inactive
     else -> Tma.colors.inactive
 }
 

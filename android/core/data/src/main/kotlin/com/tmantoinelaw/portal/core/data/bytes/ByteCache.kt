@@ -46,7 +46,7 @@ class ByteCache @Inject constructor(
         val target = File(dir, keyFor(url))
         try {
             val absolute = if (url.startsWith("http")) url else http.config.url(url)
-            var response = http.raw(Request.Builder().url(absolute).get().build())
+            var response = http.client.newCall(Request.Builder().url(absolute).get().build()).execute()
             // Media answers with a 302 to a signed R2 URL (Vault.php:371-381); follow that one hop ourselves.
             if (response.code in 301..303 || response.code == 307 || response.code == 308) {
                 val location = response.header("Location")

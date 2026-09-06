@@ -51,11 +51,13 @@ class SignInHandoff @Inject constructor(
         val verifier = verifiers.stored() ?: return Claim.NoVerifier
         verifiers.forget()
         return try {
-            val response = http.raw(http.request("/auth/desktop/claim?token=$token&verifier=$verifier").get().build())
-            response.use {
+            http.raw(http.request("/auth/desktop/claim?token=$token&verifier=$verifier").get().build()) {
+                // Success is a 302 to the portal root; every refusal is a 302 to the
+                // sign-in page (whatever path that page has), so only "/" counts.
                 val location = it.header("Location").orEmpty()
+                val path = location.substringAfter("://", location).substringAfter("/", "").substringBefore("?").trimEnd('/')
                 when {
-                    it.code == 302 && !location.contains("/auth/login") -> Claim.Success
+                    it.code == 302 && path.isEmpty() -> Claim.Success
                     else -> Claim.Rejected
                 }
             }

@@ -64,7 +64,7 @@ fun AssignedPanel(ui: ProfileUi, vm: ClientProfileViewModel) {
     val items = a.assignments
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Tma.radius.r16)).background(Tma.colors.card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(plural(items.size, "assigned staff member"), style = Tma.type.text14sb, color = Tma.colors.ink)
-        if (ui.isAdmin) AssignForm(a.assignable.filter { s -> items.none { it.userId == (s.id ?: s.userId) } }, a.roles.map { it.value to it.label }, ui.busy, vm)
+        if (ui.isAdmin) AssignForm(a.assignable.filter { s -> items.none { it.userId == s.userKey } }, a.roles.map { it.value to it.label }, ui.busy, vm)
         if (items.isEmpty()) Text("No staff assigned to this client yet.", style = Tma.type.text14, color = Tma.colors.inkSecondary)
         items.forEach { AssignedRow(it, ui, vm, live = true) }
         if (a.history.isNotEmpty()) {
@@ -97,7 +97,7 @@ private fun AssignForm(unassigned: List<AssigneeDto>, roles: List<Pair<String, S
             }
         }
         Button(
-            onClick = { pick?.let { p -> (p.id ?: p.userId)?.let { vm.assign(it, role); pick = null } } },
+            onClick = { pick?.let { p -> p.userKey?.let { vm.assign(it, role); pick = null } } },
             enabled = pick != null && !busy,
             colors = ButtonDefaults.buttonColors(containerColor = Tma.colors.primary, contentColor = Tma.colors.onPrimary),
             shape = RoundedCornerShape(Tma.radius.pill),

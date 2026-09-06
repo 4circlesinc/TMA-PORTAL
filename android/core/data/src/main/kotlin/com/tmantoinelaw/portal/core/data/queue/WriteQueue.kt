@@ -176,8 +176,7 @@ class WriteQueue @Inject constructor(
         dao.update(entry.copy(tries = entry.tries + 1))
         val request = http.request(entry.url).method(entry.method, bodyFor(entry) ?: "{}".toRequestBody("application/json; charset=utf-8".toMediaType())).build()
         return try {
-            val response = http.raw(request)
-            response.use { r ->
+            http.raw(request) { r ->
                 state.reachable.value = true
                 when {
                     r.code == 401 || r.code == 419 -> "stop"
