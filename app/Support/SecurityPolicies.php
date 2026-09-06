@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -80,19 +81,7 @@ class SecurityPolicies
             return $row ? json_decode($row->value, true) : [];
         });
 
-        $merged = array_replace_recursive(self::DEFAULTS[$section] ?? [], $stored ?: []);
-
-        if ($section === 'sign-in') {
-            $explicit = is_array($stored)
-                && (array_key_exists('requireMfa', $stored) || array_key_exists('requireAuthenticatorApp', $stored));
-            if (! $explicit) {
-                $required = filter_var(env('PORTAL_REQUIRE_MFA', true), FILTER_VALIDATE_BOOLEAN);
-                $merged['requireMfa'] = $required;
-                $merged['requireAuthenticatorApp'] = $required;
-            }
-        }
-
-        return $merged;
+        return array_replace_recursive(self::DEFAULTS[$section] ?? [], $stored ?: []);
     }
 
     public static function put(string $section, array $value, ?int $userId = null): void
@@ -107,7 +96,9 @@ class SecurityPolicies
 
     /**
      * Onboarding hides "Set later" and the portal is blocked until an
-     * authenticator app is confirmed.
+     * authenticator app is confirmed. Off unless an administrator turns it
+     * on in Sign-in policy. Email codes for unusual sign-ins are always on
+     * and do not use this flag.
      */
     public static function authenticatorRequired(): bool
     {
@@ -115,6 +106,61 @@ class SecurityPolicies
 
         return (bool) ($policy['requireAuthenticatorApp'] ?? false)
             || (bool) ($policy['requireMfa'] ?? false);
+    }
+
+    /**
+     * Turn off the authenticator gate. Email verification codes stay on.
+     */
+    public static function disableRequiredAuthenticator(): void
+    {
+        $policy = self::get('sign-in');
+        $policy['requireMfa'] = false;
+        $policy['requireAuthenticatorApp'] = false;
+        self::put('sign-in', $policy);
+    }
+
+    /**
+     * Sessions stamped before this instant must sign in again. Null means
+     * no extra cutoff beyond the usual sign-in lifetime.
+     */
+    public static function forceReauthAfter(): ?Carbon
+    {
+        $stored = Cache::remember('portal-settings.auth.reauth-after', 60, function () {
+            try {
+                $row = DB::table('portal_settings')->where('key', 'auth.reauth_after')->first();
+            } catch (\Throwable) {
+                return null;
+            }
+
+            if (! $row) {
+                return null;
+            }
+
+            $raw = $row->value;
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                if (is_string($decoded) && $decoded !== '') {
+                    $raw = $decoded;
+                }
+            }
+
+            return is_string($raw) && $raw !== '' ? $raw : null;
+        });
+
+        return $stored ? Carbon::parse($stored) : null;
+    }
+
+    public static function setForceReauthAfter(Carbon $at): void
+    {
+        DB::table('portal_settings')->updateOrInsert(
+            ['key' => 'auth.reauth_after'],
+            [
+                'value' => json_encode($at->toIso8601String()),
+                'updated_at' => now(),
+            ],
+        );
+
+        Cache::forget('portal-settings.auth.reauth-after');
     }
 
     public static function sessionDays(): int

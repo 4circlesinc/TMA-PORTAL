@@ -47,7 +47,8 @@ class EnforceTwoFactor
             ], 403);
         }
 
-        return redirect()->route('security-settings')->with('status', 'mfa-required');
+        return redirect()->route('security-settings', ['notice' => 'mfa-required'])
+            ->with('status', 'mfa-required');
     }
 
     /**

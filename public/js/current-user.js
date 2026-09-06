@@ -385,6 +385,9 @@
        */
       if (!res.ok) {
         try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing to drop */ }
+        if (res.status === 401 && !/^\/auth\//.test(location.pathname || '')) {
+          location.assign('/auth/login?return=' + encodeURIComponent(location.pathname + location.search));
+        }
         return null;
       }
       return res.json().then(function (j) {

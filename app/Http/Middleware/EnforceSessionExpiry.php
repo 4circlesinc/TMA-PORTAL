@@ -14,7 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
  * who chose Stay signed in.
  *
  * Accounts that never got a stamp (tests using actingAs, sessions from before
- * this shipped) are left alone rather than kicked out on deploy.
+ * this shipped) are left alone rather than kicked out on deploy — unless a
+ * one-time force-reauth cutoff is set, which logs those sessions out too.
  */
 class EnforceSessionExpiry
 {
@@ -22,20 +23,32 @@ class EnforceSessionExpiry
     {
         $user = $request->user();
 
-        if (
-            ! $user
-            || $user->last_authenticated_at === null
-            || $request->routeIs('logout')
-        ) {
+        if (! $user || $request->routeIs('logout')) {
+            return $next($request);
+        }
+
+        $stamp = $user->last_authenticated_at;
+        $cutoff = SecurityPolicies::forceReauthAfter();
+
+        if ($cutoff && ($stamp === null || $stamp->lt($cutoff))) {
+            return $this->expire($request);
+        }
+
+        if ($stamp === null) {
             return $next($request);
         }
 
         $days = SecurityPolicies::sessionDays();
 
-        if ($user->last_authenticated_at->gt(now()->subDays($days))) {
+        if ($stamp->gt(now()->subDays($days))) {
             return $next($request);
         }
 
+        return $this->expire($request);
+    }
+
+    private function expire(Request $request): Response
+    {
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

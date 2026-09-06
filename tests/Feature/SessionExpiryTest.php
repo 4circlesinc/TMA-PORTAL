@@ -58,4 +58,26 @@ class SessionExpiryTest extends TestCase
     {
         $this->actingAs($this->user())->getJson('/me')->assertOk();
     }
+
+    public function test_a_force_reauth_cutoff_signs_out_unstamped_sessions(): void
+    {
+        \App\Support\SecurityPolicies::setForceReauthAfter(now());
+
+        $this->actingAs($this->user())
+            ->getJson('/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'session-expired');
+
+        $this->assertGuest();
+    }
+
+    public function test_a_stamp_after_the_cutoff_is_left_alone(): void
+    {
+        \App\Support\SecurityPolicies::setForceReauthAfter(now()->subMinute());
+
+        $user = $this->user();
+        $user->forceFill(['last_authenticated_at' => now()])->save();
+
+        $this->actingAs($user)->getJson('/me')->assertOk();
+    }
 }

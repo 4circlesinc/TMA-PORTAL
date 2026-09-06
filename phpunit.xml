@@ -32,7 +32,6 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="PORTAL_REQUIRE_MFA" value="false"/>
         <env name="SESSION_ENCRYPT" value="true"/>
         <env name="FILES_ENVELOPE_ENCRYPT" value="true"/>
         <env name="MALWARE_SCANNER" value="none"/>

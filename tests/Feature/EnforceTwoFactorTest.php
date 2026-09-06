@@ -57,8 +57,29 @@ class EnforceTwoFactorTest extends TestCase
         // It gates the entire portal, so it must never arrive switched on.
         $this->assertFalse(SecurityPolicies::authenticatorRequired());
         $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireAuthenticatorApp']);
-        $this->assertFalse(SecurityPolicies::authenticatorRequired());
+        $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireMfa']);
         $this->assertSame(7, SecurityPolicies::DEFAULTS['sign-in']['sessionDays']);
+    }
+
+    public function test_an_env_flag_does_not_turn_the_authenticator_gate_on(): void
+    {
+        putenv('PORTAL_REQUIRE_MFA=true');
+
+        $this->assertFalse(SecurityPolicies::authenticatorRequired());
+
+        putenv('PORTAL_REQUIRE_MFA');
+    }
+
+    public function test_stored_authenticator_requirement_can_be_turned_off(): void
+    {
+        $this->requireMfa(true);
+        $this->assertTrue(SecurityPolicies::authenticatorRequired());
+
+        SecurityPolicies::disableRequiredAuthenticator();
+        Cache::forget('portal-settings.sign-in');
+
+        $this->assertFalse(SecurityPolicies::authenticatorRequired());
+        $this->actingAs($this->user())->getJson('/admin/users')->assertOk();
     }
 
     public function test_a_json_request_gets_json_not_an_html_redirect(): void
@@ -81,7 +102,7 @@ class EnforceTwoFactorTest extends TestCase
 
         $this->actingAs($this->user())
             ->get('/clients')
-            ->assertRedirect(route('security-settings'));
+            ->assertRedirect(route('security-settings', ['notice' => 'mfa-required']));
     }
 
     public function test_the_shell_can_still_hydrate_itself(): void
