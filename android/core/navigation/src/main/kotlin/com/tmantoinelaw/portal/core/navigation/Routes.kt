@@ -12,7 +12,9 @@ sealed interface Route {
 }
 
 @Serializable data object DashboardRoute : Route { override val path get() = "/" }
-@Serializable data object OverviewRoute : Route { override val path get() = "/overview" }
+@Serializable data class OverviewRoute(val tab: String = "Overview") : Route { override val path get() = if (tab == "Overview") "/overview" else "/overview?tab=${tab.lowercase()}" }
+/** The activity log (`/overview?tab=activity` on the web). */
+@Serializable data object ActivityRoute : Route { override val path get() = "/overview?tab=activity" }
 /** `/citizenship-applications[/rest]`: the hub's own router reads `rest` (clients.js:1170-1207). */
 @Serializable data class ClientsRoute(val rest: String = "") : Route { override val path get() = "/citizenship-applications" + rest.prefixSlash() }
 @Serializable data class EmailRoute(val message: String? = null, val page: String = "") : Route {

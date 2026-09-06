@@ -40,7 +40,7 @@ data class NavItem(
 object NavTree {
     val items: List<NavItem> = listOf(
         NavItem("dash-dashboard", "Dashboard", DashboardRoute, R.drawable.ic_house),
-        NavItem("dash-project-overview", "Overview", OverviewRoute, R.drawable.ic_chart_pie_slice, { it.can("overview.view") }),
+        NavItem("dash-project-overview", "Overview", OverviewRoute(), R.drawable.ic_chart_pie_slice, { it.can("overview.view") }),
         NavItem("clients", "CIP Applications", ClientsRoute(), R.drawable.ic_users_three, { it.can("clients.view") || it.cipReach }),
         NavItem("email", "Email", EmailRoute(), R.drawable.ic_envelope_simple, { it.can("mail.use") }),
         NavItem("so-messages", "Messages", MessagesRoute(), R.drawable.ic_chats_circle),

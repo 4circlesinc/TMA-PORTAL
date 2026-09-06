@@ -115,6 +115,10 @@ data class FilesListingDto(val folders: List<FileRowDto> = emptyList(), val file
 @Serializable
 data class FileRefDto(val id: String, val name: String = "")
 
+/** `Person` in app/Support/Files/Presenter.php:586-600. */
+@Serializable
+data class FilePersonDto(val userId: Long? = null, val name: String? = null, val email: String? = null, val avatar: String? = null)
+
 @Serializable
 data class FileRowDto(
     val id: String,
@@ -132,6 +136,9 @@ data class FileRowDto(
     val modifiedAt: String? = null,
     val updatedAt: String? = null,
     val createdAt: String? = null,
+    val uploadedAt: String? = null,
+    val owner: FilePersonDto? = null,
+    val uploadedBy: FilePersonDto? = null,
     val fileCount: Int? = null,
     val folderCount: Int? = null,
     val colour: String? = null,

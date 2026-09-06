@@ -73,6 +73,7 @@ private fun SignedInApp(viewModel: AppViewModel, identity: Identity) {
     val navId = entry?.navId()
     val title = when (navId) {
         "notifications" -> "Notifications"
+        "activity" -> "Activity"
         null -> "Dashboard"
         else -> navLabel(navId, "").ifEmpty { "Dashboard" }
     }

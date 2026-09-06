@@ -21,7 +21,7 @@ object DeepLinks {
         val segments = p.trim('/').split('/').filter { it.isNotEmpty() }
         return when (segments.firstOrNull()) {
             null -> DashboardRoute
-            "overview" -> OverviewRoute
+            "overview" -> if (query["tab"] == "activity") ActivityRoute else OverviewRoute()
             "citizenship-applications", "clients" -> ClientsRoute(rest = segments.drop(1).joinToString("/"))
             "email" -> EmailRoute(message = query["message"], page = segments.drop(1).joinToString("/"))
             "social" -> when (segments.getOrNull(1)) {

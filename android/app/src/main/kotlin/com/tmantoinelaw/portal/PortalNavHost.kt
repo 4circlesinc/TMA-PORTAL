@@ -28,6 +28,8 @@ import com.tmantoinelaw.portal.core.navigation.UsersRoute
 import com.tmantoinelaw.portal.core.navigation.WorkflowsRoute
 import com.tmantoinelaw.portal.feature.home.HomeActions
 import com.tmantoinelaw.portal.feature.home.HomeScreen
+import com.tmantoinelaw.portal.feature.home.OverviewScreen
+import com.tmantoinelaw.portal.core.navigation.ActivityRoute
 import com.tmantoinelaw.portal.feature.notifications.NotificationsScreen
 import com.tmantoinelaw.portal.feature.shell.ModulePlaceholder
 import com.tmantoinelaw.portal.feature.shell.NavTree
@@ -54,7 +56,13 @@ fun PortalNavHost(
                 ),
             )
         }
-        composable<OverviewRoute> { ModulePlaceholder("Overview") }
+        composable<OverviewRoute> {
+            OverviewScreen(
+                go = { navController.navigate(it) { launchSingleTop = true } },
+                openFile = { file, folder -> navController.navigate(FilesRoute("all", folder = folder, file = file)) { launchSingleTop = true } },
+            )
+        }
+        composable<ActivityRoute> { ModulePlaceholder("Activity") }
         composable<ClientsRoute> { ModulePlaceholder("CIP Applications") }
         composable<EmailRoute> { ModulePlaceholder("Email") }
         composable<MessagesRoute> { ModulePlaceholder("Messages") }
@@ -100,6 +108,7 @@ fun NavBackStackEntry.navId(): String? {
         has(PeopleRoute::class) -> "people-" + peopleId(toRoute<PeopleRoute>().page)
         has(SettingsRoute::class) -> "account-settings"
         has(NotificationsRoute::class) -> "notifications"
+        has(ActivityRoute::class) -> "activity"
         else -> null
     }
 }

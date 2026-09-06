@@ -8,6 +8,8 @@ class DeepLinksTest {
     @Test
     fun `portal paths map to their screens`() {
         assertEquals(DashboardRoute, DeepLinks.parse("/"))
+        assertEquals(OverviewRoute(), DeepLinks.parse("/overview"))
+        assertEquals(ActivityRoute, DeepLinks.parse("/overview", mapOf("tab" to "activity")))
         assertEquals(ClientsRoute("abc-123/edit"), DeepLinks.parse("/citizenship-applications/abc-123/edit"))
         assertEquals(ClientsRoute("abc-123"), DeepLinks.parse("/clients/abc-123"))
         assertEquals(EmailRoute(message = "u1"), DeepLinks.parse("/email", mapOf("message" to "u1")))
