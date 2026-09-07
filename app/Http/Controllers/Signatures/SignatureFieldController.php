@@ -79,6 +79,10 @@ class SignatureFieldController extends Controller
             'fields.*.width' => ['required', 'numeric', 'min:0.005', 'max:1'],
             'fields.*.height' => ['required', 'numeric', 'min:0.005', 'max:1'],
             'fields.*.required' => ['nullable', 'boolean'],
+            // Typography. Null means "as before": size fitted to the field's
+            // height, left-aligned. Bounds match the stamper's own clamps.
+            'fields.*.fontSize' => ['nullable', 'numeric', 'min:5', 'max:22'],
+            'fields.*.align' => ['nullable', 'in:left,center,right'],
         ]);
 
         $signatureRequest = $this->findOwned($request, $uuid);
@@ -119,6 +123,8 @@ class SignatureFieldController extends Controller
                 'y' => $field['y'],
                 'width' => $field['width'],
                 'height' => $field['height'],
+                'font_size' => $field['fontSize'] ?? null,
+                'align' => $field['align'] ?? null,
                 // Autofilled values always arrive, so "optional" is meaningless
                 // for them; anything else honours the author's choice.
                 'required' => FieldType::isAutofilled($field['type'])

@@ -190,7 +190,7 @@ class Stamper
         match ($field->type) {
             FieldType::SIGNATURE, FieldType::INITIALS => self::drawImage($pdf, $value, $x, $y, $w, $h, $temps),
             FieldType::CHECKBOX => self::drawCheck($pdf, $x, $y, $w, $h),
-            default => self::drawText($pdf, $value, $x, $y, $w, $h),
+            default => self::drawText($pdf, $value, $x, $y, $w, $h, $field->font_size, $field->align),
         };
     }
 
@@ -235,22 +235,56 @@ class Stamper
         $pdf->Cell($w, $h, '4', 0, 0, 'C');
     }
 
-    private static function drawText(Fpdi $pdf, string $value, float $x, float $y, float $w, float $h): void
-    {
-        $pt = self::fitFont($h);
+    /**
+     * @param  float|null  $fontSize  points chosen by the author; null fits the field's height
+     * @param  string|null  $align     left|center|right; null is left
+     */
+    private static function drawText(
+        Fpdi $pdf,
+        string $value,
+        float $x,
+        float $y,
+        float $w,
+        float $h,
+        ?float $fontSize = null,
+        ?string $align = null,
+    ): void {
+        $pt = self::resolveFont($h, $fontSize);
         $pdf->SetFont('Helvetica', '', $pt);
         $pdf->SetTextColor(0, 0, 0);
 
         $text = self::latin1($value);
 
-        // Shrink to fit rather than spill past the field the author drew.
+        // Shrink to fit rather than spill past the field the author drew. This
+        // still applies to an explicit size: the author's choice is a starting
+        // point, not permission to overrun the box.
         while ($pt > self::MIN_FONT_PT && $pdf->GetStringWidth($text) > $w) {
             $pt -= 0.5;
             $pdf->SetFont('Helvetica', '', $pt);
         }
 
         $pdf->SetXY($x, $y);
-        $pdf->Cell($w, $h, $text, 0, 0, 'L');
+        $pdf->Cell($w, $h, $text, 0, 0, self::alignCode($align));
+    }
+
+    /** The author's size when they set one, clamped; otherwise fitted to height. */
+    public static function resolveFont(float $heightMm, ?float $fontSize = null): float
+    {
+        if ($fontSize !== null && $fontSize > 0) {
+            return max(self::MIN_FONT_PT, min(self::MAX_FONT_PT, $fontSize));
+        }
+
+        return self::fitFont($heightMm);
+    }
+
+    /** FPDF's one-letter alignment codes. */
+    private static function alignCode(?string $align): string
+    {
+        return match ($align) {
+            'center' => 'C',
+            'right' => 'R',
+            default => 'L',
+        };
     }
 
     private static function fitFont(float $heightMm): float

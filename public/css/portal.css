@@ -4544,6 +4544,21 @@ label.tma-portal-check-row:hover {
 .tma-portal-sig-field__label img { opacity: 0.75; flex-shrink: 0; }
 .tma-portal-sig-field__label > span { overflow: hidden; text-overflow: ellipsis; }
 
+/* The value as it will be stamped: Helvetica, because that is the core font
+   FPDF writes with, at the size and alignment the field carries. Overflow is
+   left visible on purpose - if the name is too wide for the box, the author
+   needs to see that, not have it quietly clipped. */
+.tma-portal-sig-field__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 1px;
+  font-family: Helvetica, Arial, sans-serif;
+  line-height: 1.1;
+  color: var(--color-black);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .tma-portal-sig-field__optional {
   flex-shrink: 0;
   opacity: 0.6;
@@ -4605,6 +4620,63 @@ label.tma-portal-check-row:hover {
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
 }
+
+/* Text size and alignment for the selected field. */
+.tma-portal-sig-wizard__type {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  margin-top: var(--space-12);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-sig-wizard__type-size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-wizard__type-size input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__type-pt {
+  flex: 0 0 auto;
+  min-width: 38px; /* fixed so the slider doesn't jump as digits change */
+  text-align: right;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-portal-sig-wizard__type-align {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.tma-portal-sig-wizard__align-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 30px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-6);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__align-btn:hover { background: var(--color-hover); }
+
+.tma-portal-sig-wizard__align-btn.is-active {
+  background: var(--color-black);
+  border-color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__align-btn.is-active img { filter: invert(1); }
 
 .tma-portal-sig-wizard__pages-panel {
   display: flex;

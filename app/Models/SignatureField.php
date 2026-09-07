@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'uuid', 'signature_request_id', 'signature_recipient_id', 'type', 'page',
-    'x', 'y', 'width', 'height', 'required', 'value', 'completed_at',
+    'x', 'y', 'width', 'height', 'font_size', 'align', 'required', 'value',
+    'completed_at',
 ])]
 class SignatureField extends Model
 {
@@ -25,6 +26,7 @@ class SignatureField extends Model
             'y' => 'float',
             'width' => 'float',
             'height' => 'float',
+            'font_size' => 'float',
             'required' => 'boolean',
             'completed_at' => 'datetime',
         ];

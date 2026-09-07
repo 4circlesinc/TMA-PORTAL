@@ -22,6 +22,20 @@ field placement and drawing, and computed CSS only exist in a browser.
   render() operations". Paints are now chained per canvas. Only a browser
   catches this - it surfaces as a `pageerror`, not a failed assertion.
 
+- **`signature-field-typography.mjs`** — what a placed field *shows*. A field
+  used to render its label ("Full name"), so an author could not tell whether
+  the value would fit until after sending. It now draws the real value at the
+  point size and alignment it will be stamped at, which only a browser can
+  check: the size is computed from the painted page's height, and the
+  shrink-to-fit loop measures `scrollWidth`.
+
+  It asserts a just-placed field previews immediately (the server sends
+  `preview` only for *saved* fields, so a new one is computed client-side),
+  that the slider and the alignment buttons change it, that both survive a
+  save and reopen, and — the point of the whole thing — that the text never
+  overflows its box, because `Stamper::drawText` shrinks rather than spills
+  and a preview that overflowed would be lying about the output.
+
 - **`signing-flow.mjs`** — the whole round trip: the owner sends, a recipient
   opens the link in a *separate browser context* (no portal session), draws a
   signature, finishes; then the used link must be dead and the portal
@@ -1773,6 +1787,7 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log 
 
 node tests/Browser/signature-editor.mjs
 node tests/Browser/signature-zoom.mjs   # reads the sign-in code from the log
+node tests/Browser/signature-field-typography.mjs
 node tests/Browser/signing-flow.mjs     # expects a fresh database
 node tests/Browser/stamped-output.mjs   # expects a fresh database
 node tests/Browser/folder-shortcuts.mjs # needs the folder fixtures below

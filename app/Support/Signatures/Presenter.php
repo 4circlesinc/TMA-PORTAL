@@ -146,8 +146,36 @@ class Presenter
             'height' => (float) $f->height,
             'required' => (bool) $f->required,
             'autofilled' => FieldType::isAutofilled($f->type),
+            // Typography. Null means "fit to the field's height", left-aligned.
+            'fontSize' => $f->font_size !== null ? (float) $f->font_size : null,
+            'align' => $f->align,
+            // What this field will actually say once stamped, so the editor can
+            // show it at size instead of a label - an author could not
+            // otherwise tell that a long name would be shrunk to fit.
+            'preview' => self::previewText($f),
             'completedAt' => optional($f->completed_at)->toIso8601String(),
         ], $fields);
+    }
+
+    /**
+     * The text the editor should draw inside a field.
+     *
+     * Autofilled types resolve to the assigned recipient's real value, which
+     * is exactly what gets stamped - so an author sees a long name overflow
+     * before they send it, not after. Types the signer fills in have no answer
+     * yet, so they keep showing their label.
+     */
+    private static function previewText(SignatureField $f): ?string
+    {
+        if ($f->value !== null && $f->value !== '' && ! in_array($f->type, [FieldType::SIGNATURE, FieldType::INITIALS], true)) {
+            return $f->type === FieldType::CHECKBOX ? null : $f->value;
+        }
+
+        if (! FieldType::isAutofilled($f->type) || ! $f->recipient) {
+            return null;
+        }
+
+        return FieldValue::preview($f, $f->recipient);
     }
 
     /** @return array<int, array> */

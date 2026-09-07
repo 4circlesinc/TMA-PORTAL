@@ -2181,6 +2181,47 @@
     // page, so re-rasterise at the new size.
     var canvas = root.querySelector('[data-sig-canvas]');
     if (canvas && sig.doc) sigPaintPage(canvas, sig.wizardPage || 0);
+
+    // Field previews are sized in pixels against the painted page, so they
+    // have to be recomputed or the text would keep its old size as the page
+    // grows and stop showing whether it fits.
+    sigRestyleFieldPreviews(root);
+  }
+
+  /* Re-apply every preview's pixel size from its point size. */
+  function sigRestyleFieldPreviews(root) {
+    root = root || sig.el;
+    if (!root) return;
+
+    (sig.fields || []).forEach(function (f) {
+      var el = root.querySelector('[data-sig-placed="' + f.id + '"] .tma-portal-sig-field__value');
+      if (el) sigFitPreview(el, f);
+    });
+  }
+
+  /* Shrink a preview until it fits its box, the way Stamper::drawText does:
+     step down half a point at a time, never below the stamper's floor. Without
+     this the editor would show text spilling out of a field that the PDF will
+     actually render neatly inside it. */
+  function sigFitPreview(el, f) {
+    if (!el) return;
+    var box = el.parentNode;
+    if (!box) return;
+
+    var pt = sigFieldPt(f);
+    el.style.fontSize = sigPtToPx(pt).toFixed(2) + 'px';
+
+    // Padding on the field means clientWidth overstates the room slightly;
+    // 4px matches .tma-portal-sig-field's 2px each side.
+    var room = box.clientWidth - 4;
+    if (room <= 0) return;
+
+    var guard = 0;
+    while (pt > SIG_MIN_PT && el.scrollWidth > room && guard < 80) {
+      pt -= 0.5;
+      el.style.fontSize = sigPtToPx(pt).toFixed(2) + 'px';
+      guard++;
+    }
   }
 
   /* Move to the next stop in `dir`, keeping the point under the pointer put
@@ -2317,6 +2358,8 @@
 
     layer.innerHTML = sigFieldsOnPage(sig.wizardPage || 0).map(sigPlacedField).join('');
     sigWireFieldLayer(layer);
+    // Fitting needs measured elements, so it runs after they're in the DOM.
+    sigRestyleFieldPreviews(root);
 
     var panelHost = root.querySelector('.tma-portal-sig-wizard__fields-panel');
     var existing = panelHost && panelHost.querySelector('.tma-portal-sig-wizard__assign');
@@ -2375,6 +2418,29 @@
 
   /* Place a field at a page-relative point, centred on the cursor and kept
      wholly inside the page - the server rejects anything that overhangs. */
+  /* The value an autofilled field will carry, worked out on the client so a
+     just-placed field previews immediately. Mirrors FieldValue::autofill();
+     the server still decides what actually gets stamped. */
+  function sigLocalPreview(field) {
+    if (!field.autofilled) return null;
+
+    var r = (sig.savedRecipients || []).filter(function (x) {
+      return x.id === field.recipient;
+    })[0];
+    if (!r) return null;
+
+    if (field.type === 'name') return r.name || r.email || null;
+    if (field.type === 'email') return r.email || null;
+    if (field.type === 'date') {
+      // 'j M Y', the format Stamper writes.
+      var d = new Date();
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+    }
+    return null;
+  }
+
   function sigPlaceField(type, xFrac, yFrac) {
     var recipient = sigDefaultRecipient();
     if (!recipient) {
@@ -2397,6 +2463,10 @@
       y: sigClamp(yFrac - size.height / 2, 0, 1 - size.height),
       required: true,
     };
+    // The server sends `preview` with saved fields; a brand-new one hasn't
+    // been saved yet, so work it out here or the author would have to save
+    // before they could see what the field will say.
+    field.preview = sigLocalPreview(field);
     sig.fields.push(field);
     sig.selectedFieldId = field.id;
     sig.fieldsDirty = true;
@@ -2445,6 +2515,12 @@
         el.style.top = (field.y * 100) + '%';
         el.style.width = (field.width * 100) + '%';
         el.style.height = (field.height * 100) + '%';
+
+        // A field sized to its box changes type size as it is resized; show
+        // that while dragging rather than only on release.
+        if (mode === 'resize') {
+          sigFitPreview(el.querySelector('.tma-portal-sig-field__value'), field);
+        }
       }
 
       function onUp(ev) {
@@ -2478,6 +2554,9 @@
             page: f.page,
             x: f.x, y: f.y, width: f.width, height: f.height,
             required: f.required,
+            // null = fit to the box / left, the server's own defaults.
+            fontSize: f.fontSize || null,
+            align: f.align || null,
           };
         }),
       },
@@ -2649,6 +2728,9 @@
         var f = sig.fields.filter(function (x) { return x.id === sig.selectedFieldId; })[0];
         if (!f) return;
         f.recipient = assign.value;
+        // The preview is that recipient's own name/email, so it moves with the
+        // assignment.
+        if (f.autofilled) f.preview = sigLocalPreview(f);
         sig.fieldsDirty = true;
         sigRefreshFields();
       });
@@ -2665,6 +2747,59 @@
         sigRefreshFields();
       });
     }
+
+    var size = root.querySelector('[data-sig-field-size]');
+    if (size) {
+      var sizeLabel = root.querySelector('[data-sig-field-size-label]');
+      // 'input' so the preview tracks the drag; the field is only redrawn on
+      // release, because rebuilding the panel mid-drag would drop the slider.
+      size.addEventListener('input', function () {
+        var f = sigSelectedField();
+        if (!f) return;
+        f.fontSize = parseFloat(size.value);
+        sig.fieldsDirty = true;
+        if (sizeLabel) sizeLabel.textContent = String(f.fontSize).replace(/\.0$/, '') + 'pt';
+        sigRestyleSelectedField();
+      });
+      size.addEventListener('change', function () { sigRefreshFields(); });
+    }
+
+    var sizeAuto = root.querySelector('[data-sig-field-size-auto]');
+    if (sizeAuto) {
+      sizeAuto.addEventListener('click', function () {
+        var f = sigSelectedField();
+        if (!f) return;
+        f.fontSize = null; // back to fitting the box
+        sig.fieldsDirty = true;
+        sigRefreshFields();
+      });
+    }
+
+    root.querySelectorAll('[data-sig-field-align]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var f = sigSelectedField();
+        if (!f) return;
+        f.align = btn.getAttribute('data-sig-field-align');
+        sig.fieldsDirty = true;
+        sigRefreshFields();
+      });
+    });
+  }
+
+  function sigSelectedField() {
+    return sig.fields.filter(function (x) { return x.id === sig.selectedFieldId; })[0];
+  }
+
+  /* Restyle the selected field in place. Used while dragging the size slider:
+     sigRefreshFields() rebuilds the panel, which would tear the slider out
+     from under the pointer. */
+  function sigRestyleSelectedField() {
+    var f = sigSelectedField();
+    if (!f || !sig.el) return;
+    sigFitPreview(
+      sig.el.querySelector('[data-sig-placed="' + f.id + '"] .tma-portal-sig-field__value'),
+      f
+    );
   }
 
   /* Repaint on width changes; the canvas is bitmap-sized from CSS width, so a
@@ -2791,6 +2926,62 @@
     return SIG_RECIPIENT_COLORS[(i < 0 ? 0 : i) % SIG_RECIPIENT_COLORS.length];
   }
 
+  /* Typography, mirrored from App\Support\Signatures\Stamper so the editor and
+     the stamped PDF agree. Points are the stamper's unit; the editor converts
+     to pixels against the rendered page height. */
+  var SIG_MM_PER_PT = 0.352777778;
+  var SIG_TEXT_FIT = 0.62;
+  var SIG_MIN_PT = 5;
+  var SIG_MAX_PT = 22;
+  /* A4 portrait is the page the fitted size is reasoned about in, matching
+     Stamper::fitFont working in millimetres. */
+  var SIG_PAGE_MM_H = 297;
+
+  function sigClampPt(pt) {
+    return Math.max(SIG_MIN_PT, Math.min(SIG_MAX_PT, pt));
+  }
+
+  /* The point size a field renders at: the author's choice, or fitted to the
+     field's height exactly as Stamper::fitFont does. */
+  function sigFieldPt(f) {
+    if (f.fontSize) return sigClampPt(f.fontSize);
+    var heightMm = (f.height || 0) * SIG_PAGE_MM_H;
+    return sigClampPt((heightMm / SIG_MM_PER_PT) * SIG_TEXT_FIT);
+  }
+
+  /* Points -> screen pixels, against the page as it is currently painted. So
+     the preview tracks zoom and stays honest at any scale. */
+  function sigPtToPx(pt) {
+    var host = sig.el && sig.el.querySelector('[data-sig-page-host]');
+    var pageH = host ? host.getBoundingClientRect().height : 0;
+    if (!pageH) return pt; // pre-paint: near enough for the first frame
+    return pt * SIG_MM_PER_PT * (pageH / SIG_PAGE_MM_H);
+  }
+
+  /* What a placed field shows. Once we know the value that will be stamped -
+     the recipient's name, their email, the date - draw *that*, at the size and
+     alignment it will be stamped at, so an author can see it fits before they
+     send. Fields the signer fills in have no answer yet and keep their label. */
+  function sigFieldFace(f) {
+    var preview = f.preview;
+
+    if (preview) {
+      // The stamper shrinks text that would overrun the box rather than let it
+      // spill (Stamper::drawText). Showing it spilling here would be a lie
+      // about the output, so the same rule is applied on screen: the box is
+      // the truth, and the type gets smaller inside it.
+      return '<span class="tma-portal-sig-field__value" data-sig-fit style="font-size:' +
+        sigPtToPx(sigFieldPt(f)).toFixed(2) + 'px;text-align:' +
+        (f.align || 'left') + '">' + ui().esc(preview) + '</span>';
+    }
+
+    return '<span class="tma-portal-sig-field__label">' +
+      '<img src="images/icons/phosphor/' + (SIG_FIELD_ICON[f.type] || 'TextAa') + '.svg" alt="" width="12" height="12">' +
+      '<span>' + ui().esc(f.label) + '</span>' +
+      (f.required ? '' : '<span class="tma-portal-sig-field__optional">opt</span>') +
+      '</span>';
+  }
+
   function sigPlacedField(f) {
     var selected = f.id === sig.selectedFieldId;
     var color = sigRecipientColor(f.recipient);
@@ -2800,11 +2991,7 @@
       ' style="left:' + (f.x * 100) + '%;top:' + (f.y * 100) + '%;' +
       'width:' + (f.width * 100) + '%;height:' + (f.height * 100) + '%;' +
       '--sig-field-color:' + color + '">' +
-      '<span class="tma-portal-sig-field__label">' +
-      '<img src="images/icons/phosphor/' + (SIG_FIELD_ICON[f.type] || 'TextAa') + '.svg" alt="" width="12" height="12">' +
-      '<span>' + ui().esc(f.label) + '</span>' +
-      (f.required ? '' : '<span class="tma-portal-sig-field__optional">opt</span>') +
-      '</span>' +
+      sigFieldFace(f) +
       '<button type="button" class="tma-portal-sig-field__remove" data-sig-field-remove="' + ui().esc(f.id) + '"' +
       ' aria-label="Remove ' + ui().esc(f.label) + ' field">' +
       '<img src="images/icons/phosphor/X.svg" alt="" width="10" height="10"></button>' +
@@ -2835,6 +3022,51 @@
         : '<label class="tma-portal-checkbox">' +
           '<input type="checkbox" data-sig-field-required' + (f.required ? ' checked' : '') + '>' +
           '<span>Required</span></label>') +
+      sigTypographyControls(f) +
+      '</div>';
+  }
+
+  /* Signatures and initials are drawn images, and a checkbox is a glyph sized
+     to its box - none of them have type to set. */
+  function sigHasText(f) {
+    return f.type !== 'signature' && f.type !== 'initials' && f.type !== 'checkbox';
+  }
+
+  function sigTypographyControls(f) {
+    if (!sigHasText(f)) return '';
+
+    var pt = sigFieldPt(f);
+    var align = f.align || 'left';
+    var aligns = [
+      { value: 'left', icon: 'TextAlignLeft', label: 'Left' },
+      { value: 'center', icon: 'TextAlignCenter', label: 'Centre' },
+      { value: 'right', icon: 'TextAlignRight', label: 'Right' },
+    ];
+
+    return '<div class="tma-portal-sig-wizard__type">' +
+      '<div class="tma-portal-field">' +
+      '<span class="tma-portal-field__label">Text size</span>' +
+      '<div class="tma-portal-sig-wizard__type-size">' +
+      '<input type="range" min="' + SIG_MIN_PT + '" max="' + SIG_MAX_PT + '" step="0.5"' +
+      ' value="' + pt.toFixed(1) + '" data-sig-field-size aria-label="Text size">' +
+      '<span class="tma-portal-sig-wizard__type-pt" data-sig-field-size-label>' +
+      pt.toFixed(1).replace(/\.0$/, '') + 'pt</span>' +
+      '</div>' +
+      (f.fontSize
+        ? '<button type="button" class="tma-portal-link" data-sig-field-size-auto>Fit to box</button>'
+        : '<p class="tma-portal-sig-wizard__assign-note">Sized to fit the box. Drag to override.</p>') +
+      '</div>' +
+      '<div class="tma-portal-field">' +
+      '<span class="tma-portal-field__label">Alignment</span>' +
+      '<div class="tma-portal-sig-wizard__type-align">' +
+      aligns.map(function (a) {
+        return '<button type="button" class="tma-portal-sig-wizard__align-btn' +
+          (align === a.value ? ' is-active' : '') + '" data-sig-field-align="' + a.value + '"' +
+          ' title="' + a.label + '" aria-label="' + a.label + '"' +
+          (align === a.value ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+          '<img src="images/icons/phosphor/' + a.icon + '.svg" alt="" width="16" height="16"></button>';
+      }).join('') +
+      '</div></div>' +
       '</div>';
   }
 

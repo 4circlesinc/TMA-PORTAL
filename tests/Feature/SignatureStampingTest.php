@@ -245,6 +245,64 @@ class SignatureStampingTest extends TestCase
         $this->assertSame('dana@example.com', $request->fields()->where('type', 'email')->first()->value);
     }
 
+    /**
+     * Font size and alignment are the author's, and they have to survive the
+     * round trip. Before these columns existed the size was derived from the
+     * field's height and nothing else, so the only way to change it was to
+     * redraw the box.
+     */
+    public function test_font_size_and_alignment_are_saved_and_stamped(): void
+    {
+        $user = $this->approvedUser();
+
+        $request = $this->signThrough($user, $this->pdfFile($user), [
+            ['type' => 'text', 'page' => 1, 'x' => 0.1, 'y' => 0.2, 'width' => 0.4, 'height' => 0.04,
+                'fontSize' => 14.5, 'align' => 'right'],
+            ['type' => 'signature', 'page' => 1, 'x' => 0.1, 'y' => 0.6, 'width' => 0.3, 'height' => 0.06],
+        ]);
+
+        $text = $request->fields()->where('type', 'text')->firstOrFail();
+        $this->assertSame(14.5, (float) $text->font_size);
+        $this->assertSame('right', $text->align);
+
+        // The signed copy still builds with them applied.
+        $this->assertNotNull($request->fresh()->signed_file_id);
+    }
+
+    /** Left unset, a field keeps the old behaviour: fitted to its height. */
+    public function test_typography_is_optional_and_defaults_to_fitting_the_box(): void
+    {
+        $user = $this->approvedUser();
+
+        $request = $this->signThrough($user, $this->pdfFile($user), [
+            ['type' => 'text', 'page' => 1, 'x' => 0.1, 'y' => 0.2, 'width' => 0.4, 'height' => 0.04],
+            ['type' => 'signature', 'page' => 1, 'x' => 0.1, 'y' => 0.6, 'width' => 0.3, 'height' => 0.06],
+        ]);
+
+        $text = $request->fields()->where('type', 'text')->firstOrFail();
+        $this->assertNull($text->font_size);
+        $this->assertNull($text->align);
+        $this->assertNotNull($request->fresh()->signed_file_id);
+    }
+
+    /** The author's size is clamped to what the stamper will actually draw. */
+    public function test_an_out_of_range_font_size_is_refused(): void
+    {
+        $user = $this->approvedUser();
+        $file = $this->pdfFile($user);
+
+        $id = $this->actingAs($user)->postJson('/portal/signatures', ['fileId' => $file->uuid])
+            ->json('request.id');
+        $recipient = $this->actingAs($user)->patchJson('/portal/signatures/'.$id, [
+            'recipients' => [['name' => 'Dana Reed', 'email' => 'dana@example.com']],
+        ])->json('request.recipients.0.id');
+
+        $this->actingAs($user)->putJson('/portal/signatures/'.$id.'/fields', ['fields' => [
+            ['type' => 'text', 'recipient' => $recipient, 'page' => 1,
+                'x' => 0.1, 'y' => 0.2, 'width' => 0.4, 'height' => 0.04, 'fontSize' => 400],
+        ]])->assertStatus(422);
+    }
+
     public function test_a_png_document_is_wrapped_into_a_signed_pdf(): void
     {
         $user = $this->approvedUser();
