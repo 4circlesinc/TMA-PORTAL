@@ -22,6 +22,19 @@ field placement and drawing, and computed CSS only exist in a browser.
   render() operations". Paints are now chained per canvas. Only a browser
   catches this - it surfaces as a `pageerror`, not a failed assertion.
 
+- **`signature-field-settings.mjs`** — the per-field settings have to be
+  *findable*, not merely present. Text size and alignment belong to the
+  selected field, so with nothing selected the panel was just the palette and
+  they looked as though they didn't exist. Worse, reopening a saved draft
+  cleared the selection — and the guard checked that `selectedFieldId` was
+  set, not that it still *resolved*, which it never did because saving
+  replaces every field with a fresh server row carrying a new uuid.
+
+  It walks the states that used to differ: nothing placed, just placed,
+  deselected, reselected, and saved-then-reopened. The last assertion is the
+  point — the slider and the alignment buttons are inside the viewport
+  without scrolling, which is what "I can't find it" actually meant.
+
 - **`signature-field-panel.mjs`** — the fields panel on a short viewport, and
   the date-format picker. The panel scrolled as a whole, which pushed the
   "Fields" heading and the first cards off the top; only its body scrolls now,
@@ -1811,6 +1824,7 @@ node tests/Browser/signature-zoom.mjs   # reads the sign-in code from the log
 node tests/Browser/signature-field-typography.mjs
 node tests/Browser/signature-page-scroll.mjs
 node tests/Browser/signature-field-panel.mjs
+node tests/Browser/signature-field-settings.mjs
 node tests/Browser/signing-flow.mjs     # expects a fresh database
 node tests/Browser/stamped-output.mjs   # expects a fresh database
 node tests/Browser/folder-shortcuts.mjs # needs the folder fixtures below

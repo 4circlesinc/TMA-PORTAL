@@ -2367,11 +2367,11 @@
     // Fitting needs measured elements, so it runs after they're in the DOM.
     sigRestyleFieldPreviews(root);
 
-    var panelHost = root.querySelector('.tma-portal-sig-wizard__fields-panel');
-    var existing = panelHost && panelHost.querySelector('.tma-portal-sig-wizard__assign');
-    if (existing) existing.remove();
-    if (panelHost) {
-      panelHost.insertAdjacentHTML('beforeend', sigAssignPanel());
+    // The selected field's settings live in the panel's pinned footer, so it
+    // is replaced wholesale rather than appended to the panel.
+    var foot = root.querySelector('.tma-portal-sig-wizard__fields-foot');
+    if (foot) {
+      foot.innerHTML = sigAssignPanel();
       sigWireAssignPanel(root);
     }
 
@@ -2589,6 +2589,17 @@
         sig.fieldTypes = res.types || [];
         sig.dateFormats = res.dateFormats || [];
         sig.fieldsDirty = false;
+        // Reopening a draft with fields already on it used to show only the
+        // palette, so the per-field settings looked as though they didn't
+        // exist. Start on the first field instead.
+        //
+        // Saving replaces every field with a fresh server row, so a selection
+        // held from before the save points at an id that no longer exists -
+        // check that it still resolves rather than that it is merely set.
+        var stillThere = sig.fields.some(function (f) { return f.id === sig.selectedFieldId; });
+        if (!stillThere) {
+          sig.selectedFieldId = sig.fields.length ? sig.fields[0].id : null;
+        }
       });
 
     return Promise.all([sigLoadDocument(record), wantFields])
@@ -3082,7 +3093,18 @@
 
   function sigAssignPanel() {
     var f = sig.fields.filter(function (x) { return x.id === sig.selectedFieldId; })[0];
-    if (!f) return '';
+
+    // Nothing selected: the settings below belong to one field, so say where
+    // they come from. Without this the panel is just the palette and the size,
+    // alignment and date-format controls look as though they don't exist.
+    if (!f) {
+      return sig.fields.length
+        ? '<div class="tma-portal-sig-wizard__assign">' +
+          '<p class="tma-portal-sig-wizard__assign-note">' +
+          'Select a field on the document to set who fills it, its text size and alignment.' +
+          '</p></div>'
+        : '';
+    }
     var recipients = sig.savedRecipients || [];
     return '<div class="tma-portal-sig-wizard__assign">' +
       '<h4 class="tma-portal-sig-wizard__assign-title">' + ui().esc(f.label) + '</h4>' +
@@ -3140,16 +3162,18 @@
 
     return '<div class="tma-portal-sig-wizard__type">' +
       '<div class="tma-portal-field">' +
-      '<span class="tma-portal-field__label">Text size</span>' +
+      '<span class="tma-portal-field__label">' +
+      'Text size' +
+      (f.fontSize
+        ? ' <button type="button" class="tma-portal-link" data-sig-field-size-auto>Fit to box</button>'
+        : '<span class="tma-portal-sig-wizard__type-auto" title="Sized to fit the box. Drag to override."> · auto</span>') +
+      '</span>' +
       '<div class="tma-portal-sig-wizard__type-size">' +
       '<input type="range" min="' + SIG_MIN_PT + '" max="' + SIG_MAX_PT + '" step="0.5"' +
       ' value="' + pt.toFixed(1) + '" data-sig-field-size aria-label="Text size">' +
       '<span class="tma-portal-sig-wizard__type-pt" data-sig-field-size-label>' +
       pt.toFixed(1).replace(/\.0$/, '') + 'pt</span>' +
       '</div>' +
-      (f.fontSize
-        ? '<button type="button" class="tma-portal-link" data-sig-field-size-auto>Fit to box</button>'
-        : '<p class="tma-portal-sig-wizard__assign-note">Sized to fit the box. Drag to override.</p>') +
       '</div>' +
       '<div class="tma-portal-field">' +
       '<span class="tma-portal-field__label">Alignment</span>' +
@@ -3195,8 +3219,7 @@
         (sig.fieldTypes || []).map(function (t) {
           return sigFieldCard(t.type, t.label);
         }).join('') +
-        '</div>' +
-        sigAssignPanel();
+        '</div>';
 
     var canvasInner = sig.docError
       ? ui().banner('warning', ui().esc(sig.docError) +
@@ -3210,9 +3233,12 @@
       '<div class="tma-portal-sig-wizard__fields-head">' +
       '<h3 class="tma-portal-sig-wizard__fields-title">Fields</h3>' +
       '</div>' +
-      // The heading stays put; only what's under it scrolls. Scrolling the
-      // whole panel pushed "Fields" and the first cards off the top.
+      // The heading stays put and the palette scrolls under it, but the
+      // selected field's settings are pinned below: seven field cards fill a
+      // short panel, and anything after them sat off the bottom where nobody
+      // found it.
       '<div class="tma-portal-sig-wizard__fields-body">' + panel + '</div>' +
+      '<div class="tma-portal-sig-wizard__fields-foot">' + sigAssignPanel() + '</div>' +
       '</aside>' +
       '<div class="tma-portal-sig-wizard__canvas">' +
       (sig.doc ? sigZoomBar() : '') +
