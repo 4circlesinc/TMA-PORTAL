@@ -53,6 +53,11 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     private var checkingUpdate = false
     private var pendingUpdate: AppUpdater.Release? = null
 
+    private var uiReady = false
+    private var skippedCallPermissionThisSession = false
+    private var askingCallPermission = false
+    private var showingCallPermissionDialog = false
+
     private var permissionCallback: ((Boolean) -> Unit)? = null
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         permissionCallback?.invoke(result.values.all { it }); permissionCallback = null
@@ -60,6 +65,10 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         host.evaluate("window.__tmaNotificationPermission && __tmaNotificationPermission($granted)")
         if (granted) ensureFullScreenCalls()
+    }
+    private val askFullScreenCalls = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        askingCallPermission = false
+        if (!canUseFullScreenIntent()) skippedCallPermissionThisSession = true
     }
     private var fileCallback: ((Array<Uri>?) -> Unit)? = null
     private val chooseFile = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -90,11 +99,16 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         }
         if (!handle(intent)) host.loadPortal()
         if (Build.VERSION.SDK_INT >= 33 && !notificationsAllowed()) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        else ensureFullScreenCalls()
 
         setContent {
             val mode by viewModel.themeMode.collectAsStateWithLifecycle()
-            TmaTheme(mode = mode) { PortalApp(host = host, onFirstFrame = { composed = true }) }
+            TmaTheme(mode = mode) {
+                PortalApp(host = host, onFirstFrame = {
+                    composed = true
+                    uiReady = true
+                    window.decorView.post { if (!isFinishing) ensureFullScreenCalls() }
+                })
+            }
         }
     }
 
@@ -167,6 +181,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         AppForeground.resumed = true
         resumePendingUpdate()
         checkForAppUpdate()
+        if (uiReady) ensureFullScreenCalls()
     }
     override fun onPause() { AppForeground.resumed = false; super.onPause() }
     override fun onFocus() = Unit
@@ -178,19 +193,55 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     override fun requestNotifications() { if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) else ensureFullScreenCalls() }
     /**
-     * Android 14+ holds full-screen incoming calls behind a separate grant.
-     * Asked once so a ring can take the lock screen the way a normal call does.
+     * Android 14+ will not pop the incoming-call screen unless the user has
+     * allowed full-screen notifications. That grant lives in Settings, so we
+     * explain first, then send them there — and ask again next launch until
+     * they allow it. Jumping straight to Settings (and never asking again)
+     * looked like nothing happened.
      */
+    private fun canUseFullScreenIntent(): Boolean {
+        if (Build.VERSION.SDK_INT < 34) return true
+        val nm = getSystemService(NotificationManager::class.java) ?: return false
+        return nm.canUseFullScreenIntent()
+    }
+
     private fun ensureFullScreenCalls() {
-        if (Build.VERSION.SDK_INT < 34) return
-        val nm = getSystemService(NotificationManager::class.java) ?: return
-        if (nm.canUseFullScreenIntent()) return
-        val prefs = getSharedPreferences("calls", MODE_PRIVATE)
-        if (prefs.getBoolean("asked_fsi", false)) return
-        prefs.edit().putBoolean("asked_fsi", true).apply()
-        runCatching {
-            startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(Uri.parse("package:$packageName")))
+        if (!uiReady || skippedCallPermissionThisSession || askingCallPermission || showingCallPermissionDialog || isFinishing) return
+        if (offeringUpdate) return
+        if (CallSession.phase == "ringing" || CallSession.phase == "active") return
+        if (!notificationsAllowed() || canUseFullScreenIntent()) return
+        showingCallPermissionDialog = true
+        AlertDialog.Builder(this)
+            .setTitle("Incoming calls")
+            .setMessage("To pop incoming calls over the lock screen like a phone call, Android needs permission for full-screen notifications. The next screen lets you allow it.")
+            .setPositiveButton("Continue") { _, _ ->
+                showingCallPermissionDialog = false
+                openFullScreenCallSettings()
+            }
+            .setNegativeButton("Not now") { _, _ ->
+                showingCallPermissionDialog = false
+                skippedCallPermissionThisSession = true
+            }
+            .setOnCancelListener {
+                showingCallPermissionDialog = false
+                skippedCallPermissionThisSession = true
+            }
+            .show()
+    }
+
+    private fun openFullScreenCallSettings() {
+        askingCallPermission = true
+        val candidates = buildList {
+            if (Build.VERSION.SDK_INT >= 34) {
+                add(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(Uri.parse("package:$packageName")))
+                add(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT))
+            }
+            add(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
         }
+        for (intent in candidates) {
+            if (runCatching { askFullScreenCalls.launch(intent) }.isSuccess) return
+        }
+        askingCallPermission = false
     }
     override fun requestPermissions(permissions: Array<String>, done: (Boolean) -> Unit) {
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) { done(true); return }
@@ -209,6 +260,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     private fun checkForAppUpdate() {
         if (offeringUpdate || pendingUpdate != null || checkingUpdate) return
         if (CallSession.phase == "ringing" || CallSession.phase == "active") return
+        if (Build.VERSION.SDK_INT >= 34 && notificationsAllowed() && !canUseFullScreenIntent() && !skippedCallPermissionThisSession) return
         checkingUpdate = true
         lifecycleScope.launch {
             try {
