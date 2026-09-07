@@ -1,6 +1,7 @@
 package com.tmantoinelaw.portal
 
 import android.Manifest
+import android.app.AlertDialog
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,7 +16,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -118,7 +118,10 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         handle(intent)
     }
 
-    override fun onDestroy() { super.onDestroy(); host.destroy() }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::host.isInitialized) host.destroy()
+    }
 
     /**
      * `tmaportal://auth?token=…` is the sign-in handoff's return leg; an https
@@ -211,22 +214,27 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         if (CallSession.phase == "ringing" || CallSession.phase == "active") return
         if (!notificationsAllowed() || canUseFullScreenIntent()) return
         showingCallPermissionDialog = true
-        AlertDialog.Builder(this)
-            .setTitle("Incoming calls")
-            .setMessage("To pop incoming calls over the lock screen like a phone call, Android needs permission for full-screen notifications. The next screen lets you allow it.")
-            .setPositiveButton("Continue") { _, _ ->
-                showingCallPermissionDialog = false
-                openFullScreenCallSettings()
-            }
-            .setNegativeButton("Not now") { _, _ ->
-                showingCallPermissionDialog = false
-                skippedCallPermissionThisSession = true
-            }
-            .setOnCancelListener {
-                showingCallPermissionDialog = false
-                skippedCallPermissionThisSession = true
-            }
-            .show()
+        runCatching {
+            AlertDialog.Builder(this)
+                .setTitle("Incoming calls")
+                .setMessage("To pop incoming calls over the lock screen like a phone call, Android needs permission for full-screen notifications. The next screen lets you allow it.")
+                .setPositiveButton("Continue") { _, _ ->
+                    showingCallPermissionDialog = false
+                    openFullScreenCallSettings()
+                }
+                .setNegativeButton("Not now") { _, _ ->
+                    showingCallPermissionDialog = false
+                    skippedCallPermissionThisSession = true
+                }
+                .setOnCancelListener {
+                    showingCallPermissionDialog = false
+                    skippedCallPermissionThisSession = true
+                }
+                .show()
+        }.onFailure {
+            showingCallPermissionDialog = false
+            skippedCallPermissionThisSession = true
+        }
     }
 
     private fun openFullScreenCallSettings() {
