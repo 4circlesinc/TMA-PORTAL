@@ -16,20 +16,23 @@ use Illuminate\Support\Facades\Storage;
  * from the same manifests, so the portal can link at /desktop/download/mac and
  * keep working after every release.
  *
- * Only macOS is built today. Windows resolves to "not available" rather than a
- * dead link, and turns itself on the day a latest.yml lands in the bucket.
+ * macOS, Windows and Android each resolve from their own manifest. A platform
+ * with nothing published reports itself unavailable rather than handing out a
+ * dead link, and turns itself on the day its latest-*.yml lands in the bucket.
  */
 class DesktopReleasesController extends Controller
 {
     private const MANIFESTS = [
         'mac' => 'latest-mac.yml',
         'windows' => 'latest.yml',
+        'android' => 'latest-android.yml',
     ];
 
     /** Installer first, archive last, whatever a person double-clicks. */
     private const PREFERRED = [
         'mac' => ['dmg', 'pkg', 'zip'],
         'windows' => ['exe', 'msi', 'zip'],
+        'android' => ['apk'],
     ];
 
     /**
@@ -43,6 +46,7 @@ class DesktopReleasesController extends Controller
     private const MIN_OS = [
         'mac' => '11',
         'windows' => '10',
+        'android' => '8',
     ];
 
     private const TTL = 300;
@@ -63,6 +67,7 @@ class DesktopReleasesController extends Controller
         foreach (array_keys(self::MANIFESTS) as $platform) {
             Cache::forget(self::CACHE_KEY.$platform);
         }
+        Cache::forget('desktop.android.qr');
     }
 
     public function index(): JsonResponse
@@ -96,8 +101,35 @@ class DesktopReleasesController extends Controller
     }
 
     /**
-     * @return array{version: string, file: string}|null
+     * What a phone lands on after scanning the QR code: the download starts
+     * on its own and the three steps to install stand under it.
      */
+    public function android(): \Illuminate\Contracts\View\View
+    {
+        $release = $this->release('android');
+
+        return view('desktop.android', [
+            'release' => $release,
+            'downloadUrl' => $release ? route('desktop.download', 'android') : null,
+            'minOs' => self::MIN_OS['android'],
+        ]);
+    }
+
+    /** The QR code the Overview promo shows: it encodes the landing page above. */
+    public function androidQr(): \Illuminate\Http\Response
+    {
+        $svg = Cache::remember('desktop.android.qr', 86400, function () {
+            $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                new \BaconQrCode\Renderer\RendererStyle\RendererStyle(240, 1),
+                new \BaconQrCode\Renderer\Image\SvgImageBackEnd,
+            );
+
+            return (new \BaconQrCode\Writer($renderer))->writeString(route('desktop.android'));
+        });
+
+        return response($svg, 200, ['Content-Type' => 'image/svg+xml', 'Cache-Control' => 'public, max-age=86400']);
+    }
+
     private function release(string $platform): ?array
     {
         if (! isset(self::MANIFESTS[$platform])) {

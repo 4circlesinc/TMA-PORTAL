@@ -8254,6 +8254,36 @@
   object-fit: contain;
 }
 
+/* The Android button's QR modal (account.js openAndroidQr). */
+.tma-portal-modal__card--android {
+  width: min(400px, calc(100vw - 48px));
+}
+.tma-dash__account-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+  text-align: center;
+}
+.tma-dash__account-qr-code {
+  width: 240px;
+  height: 240px;
+  border-radius: var(--radius-12);
+  background: #fff;
+  padding: var(--space-8);
+}
+.tma-dash__account-qr-meta {
+  color: var(--color-text-secondary);
+}
+.tma-dash__account-qr-link {
+  color: var(--color-text-link);
+  font-size: var(--text-size-14);
+  text-decoration: none;
+}
+.tma-dash__account-qr-link:hover {
+  text-decoration: underline;
+}
+
 .tma-dash__account-stub-text {
   margin: 0;
   font-size: var(--text-size-12);

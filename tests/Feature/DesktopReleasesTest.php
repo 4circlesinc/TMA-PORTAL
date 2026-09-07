@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\DesktopReleasesController;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -32,16 +33,32 @@ class DesktopReleasesTest extends TestCase
     releaseDate: '2026-07-28T12:23:11.521Z'
     YML;
 
+    private const ANDROID_MANIFEST = <<<'YML'
+    version: 0.1.0
+    files:
+      - url: TMA-Portal-0.1.0.apk
+        size: 123
+    path: TMA-Portal-0.1.0.apk
+    releaseDate: '2026-09-06T12:00:00.000Z'
+    YML;
+
     private function publishMac(): void
     {
         Storage::disk(config('filesystems.files_disk'))
             ->put('desktop/latest-mac.yml', self::MAC_MANIFEST);
     }
 
+    private function publishAndroid(): void
+    {
+        Storage::disk(config('filesystems.files_disk'))
+            ->put('desktop/latest-android.yml', self::ANDROID_MANIFEST);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
         Storage::fake(config('filesystems.files_disk'));
+        DesktopReleasesController::forgetCache();
     }
 
     public function test_it_reports_the_published_mac_build(): void
@@ -70,7 +87,8 @@ class DesktopReleasesTest extends TestCase
         $this->getJson('/desktop/releases')
             ->assertOk()
             ->assertJsonPath('mac.available', false)
-            ->assertJsonPath('windows.available', false);
+            ->assertJsonPath('windows.available', false)
+            ->assertJsonPath('android.available', false);
     }
 
     /**
@@ -95,6 +113,53 @@ class DesktopReleasesTest extends TestCase
     public function test_it_rejects_platforms_it_does_not_know(): void
     {
         $this->get('/desktop/download/linux')->assertNotFound();
+    }
+
+    public function test_it_reports_the_published_android_build(): void
+    {
+        $this->publishAndroid();
+
+        $this->getJson('/desktop/releases')
+            ->assertOk()
+            ->assertJsonPath('android.available', true)
+            ->assertJsonPath('android.version', '0.1.0')
+            ->assertJsonPath('android.minOs', '8')
+            ->assertJsonPath('android.url', route('desktop.download', 'android'));
+    }
+
+    public function test_downloading_android_lands_on_the_current_apk(): void
+    {
+        $this->publishAndroid();
+
+        $this->get('/desktop/download/android')
+            ->assertRedirect(route('desktop.update', 'TMA-Portal-0.1.0.apk'));
+    }
+
+    public function test_the_android_landing_page_starts_the_download(): void
+    {
+        $this->publishAndroid();
+
+        $this->get('/desktop/android')
+            ->assertOk()
+            ->assertSee('Your download is starting')
+            ->assertSee('0.1.0')
+            ->assertSee(route('desktop.download', 'android'), false);
+    }
+
+    public function test_the_android_landing_page_is_honest_when_nothing_is_published(): void
+    {
+        $this->get('/desktop/android')
+            ->assertOk()
+            ->assertSee('The Android app is not available yet')
+            ->assertDontSee('Your download is starting');
+    }
+
+    public function test_the_android_qr_code_is_an_svg_of_the_landing_page(): void
+    {
+        $this->get('/desktop/android/qr.svg')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/svg+xml')
+            ->assertSee('<svg', false);
     }
 
     /** The feed the installed app polls must still be reachable by filename. */

@@ -47,6 +47,12 @@ fun firebase(key: String): String = (project.findProperty("firebase.$key") as St
     ?: googleServices[key]
     ?: ""
 
+/* Release signing from a gitignored android/keystore.properties (storeFile, storePassword, keyAlias, keyPassword). */
+val keystoreProps = Properties().apply {
+    val f = rootProject.projectDir.resolve("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.tmantoinelaw.portal"
     compileSdk = 37
@@ -65,6 +71,17 @@ android {
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebase("senderId")}\"")
     }
 
+    signingConfigs {
+        if (keystoreProps.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = rootProject.projectDir.resolve(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "PORTAL_ORIGIN", "\"${portalOrigin ?: "http://10.0.2.2:8001"}\"")
@@ -74,6 +91,7 @@ android {
         release {
             buildConfigField("String", "PORTAL_ORIGIN", "\"${portalOrigin ?: "https://portal.tmantoinelaw.com"}\"")
             buildConfigField("boolean", "REWRITE_LOCALHOST", "false")
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

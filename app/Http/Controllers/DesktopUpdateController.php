@@ -23,7 +23,7 @@ class DesktopUpdateController extends Controller
     private const PREFIX = 'desktop';
 
     /** Only the shapes electron-builder actually produces. */
-    private const ALLOWED = '/^[A-Za-z0-9 ._-]+\.(yml|zip|dmg|pkg|exe|blockmap)$/';
+    private const ALLOWED = '/^[A-Za-z0-9 ._-]+\.(yml|zip|dmg|pkg|exe|blockmap|apk)$/';
 
     public function __invoke(string $file): Response|RedirectResponse|StreamedResponse
     {

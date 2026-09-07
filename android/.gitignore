@@ -13,3 +13,5 @@ app/src/main/assets/host-bridge.js
 app/src/main/assets/signin-waiting.html
 # Firebase console values for push (see README)
 firebase.properties
+# release signing (back these up; losing them means a new app identity)
+keystore/

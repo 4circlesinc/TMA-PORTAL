@@ -149,6 +149,10 @@
   var DESKTOP_PLATFORMS = [
     { key: 'mac', label: 'macOS', logo: 'AppleLight16' },
     { key: 'windows', label: 'Windows', logo: 'Windows16' },
+    /* The phone does not download from the computer it is looking at: the
+       button opens a QR code that lands the phone on /desktop/android, where
+       the download starts on its own. */
+    { key: 'android', label: 'Android', logo: 'Android16', qr: true, minOs: '8' },
   ];
   var desktopReleasesPromise = null;
 
@@ -182,41 +186,81 @@
   }
 
   function renderDownloadBtn(p) {
-    return '<a class="tma-dash__account-promo-btn tma-dash__account-promo-btn--download is-disabled" ' +
-      'data-desktop-download="' + p.key + '" href="' + ROOT + '/desktop/download/' + p.key + '" ' +
-      'aria-disabled="true" title="Checking for a build…">' +
+    // The QR button is a stable landing page, not a versioned file, so it is
+    // clickable before /desktop/releases answers. Direct downloads stay inert
+    // until the server names a build — otherwise the pill is a 404.
+    var qr = !!p.qr;
+    var href = qr ? ROOT + '/desktop/android' : ROOT + '/desktop/download/' + p.key;
+    var label = qr && p.minOs ? p.label + ' ' + p.minOs + '+' : p.label;
+    return '<a class="tma-dash__account-promo-btn tma-dash__account-promo-btn--download' + (qr ? '' : ' is-disabled') + '" ' +
+      'data-desktop-download="' + p.key + '" href="' + href + '" ' +
+      'aria-disabled="' + (qr ? 'false' : 'true') + '" title="' + (qr ? 'Scan to install on Android' : 'Checking for a build…') + '">' +
       // The real brand marks, drawn as artwork rather than masked: Windows is
       // four colours and would lose them to a mask, and Apple ships light grey
       // so it reads on the black pill.
       '<img class="tma-dash__account-promo-btn-icon" src="' + BRANDS + p.logo + '.svg" alt="" width="16" height="16">' +
       // The OS floor is appended once the server answers, so the pill reads
       // plainly if that fetch fails rather than claiming a version it guessed.
-      '<span data-desktop-label>' + esc(p.label) + '</span></a>';
+      '<span data-desktop-label>' + esc(label) + '</span></a>';
   }
 
   function applyDesktopReleases(root, data) {
     (root || document).querySelectorAll('[data-desktop-download]').forEach(function (btn) {
       var key = btn.getAttribute('data-desktop-download');
       var info = data && data[key];
-      var ready = !!(info && info.available);
       var platform = DESKTOP_PLATFORMS.filter(function (p) { return p.key === key; })[0];
+      var isQr = !!(platform && platform.qr);
+      var ready = isQr || !!(info && info.available);
       btn.classList.toggle('is-disabled', !ready);
       btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
-      btn.title = ready
+      btn.title = (info && info.available)
         ? 'Version ' + info.version + ', needs ' + platform.label + ' ' + info.minOs + ' or later'
-        : 'No build published yet';
+        : (isQr ? 'Scan to install on Android' : 'No build published yet');
 
       var label = btn.querySelector('[data-desktop-label]');
       if (label && platform) {
-        label.textContent = ready && info.minOs
-          ? platform.label + ' ' + info.minOs + '+'
-          : platform.label;
+        var floor = (info && info.available && info.minOs) || (isQr && platform.minOs);
+        label.textContent = floor ? platform.label + ' ' + floor + '+' : platform.label;
       }
     });
 
     var note = (root || document).querySelector('[data-desktop-note]');
     var anyBuild = !!(data && ((data.mac && data.mac.available) || (data.windows && data.windows.available)));
     if (note) note.hidden = !anyBuild;
+  }
+  /* The Android button: a QR code for the phone's camera, and a plain link
+     for somebody already reading this on an Android phone. */
+  function openAndroidQr(info) {
+    var landing = ROOT + '/desktop/android';
+    if (/Android/i.test(navigator.userAgent || '')) {
+      window.location.href = landing;
+      return;
+    }
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) {
+      window.location.href = landing;
+      return;
+    }
+    var ready = !!(info && info.available && info.version);
+    var meta = ready
+      ? '<p class="tma-portal-modal__text tma-dash__account-qr-meta">' +
+        esc('Version ' + info.version + ', Android ' + (info.minOs || '8') + ' or later') + '</p>'
+      : '';
+    ui.openModal({
+      title: 'Get the Android app',
+      cls: 'tma-portal-modal__card--android',
+      body:
+        '<div class="tma-dash__account-qr">' +
+        '<img class="tma-dash__account-qr-code" src="' + ROOT + '/desktop/android/qr.svg" alt="QR code for the Android app" width="240" height="240">' +
+        '<p class="tma-portal-modal__text">' +
+        (ready
+          ? 'Scan with your phone\'s camera. The download starts on its own.'
+          : 'Scan with your phone\'s camera to open the Android download page.') +
+        '</p>' +
+        meta +
+        '<a class="tma-dash__account-qr-link" href="' + landing + '">Or open the download page on this device</a>' +
+        '</div>',
+    });
   }
 
   function mountPromo(root) {
@@ -233,14 +277,21 @@
     container.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-desktop-download]');
       if (!btn || !container.contains(btn)) return;
-      if (btn.getAttribute('aria-disabled') === 'true') e.preventDefault();
+      if (btn.getAttribute('aria-disabled') === 'true') { e.preventDefault(); return; }
+      var key = btn.getAttribute('data-desktop-download');
+      var platform = DESKTOP_PLATFORMS.filter(function (p) { return p.key === key; })[0];
+      if (!platform || !platform.qr) return;
+      e.preventDefault();
+      desktopReleases().then(function (data) {
+        openAndroidQr((data && data[key]) || { available: false, minOs: platform.minOs || '8' });
+      });
     });
   }
 
   function renderPromo() {
     return '<section class="tma-dash__account-block tma-dash__account-block--promo" data-node-id="32546:46816">' +
       '<div class="tma-dash__account-promo-copy">' +
-      '<p class="tma-dash__account-promo-title">Have you tried<br>new macOS / Windows Application?</p>' +
+      '<p class="tma-dash__account-promo-title">Have you tried<br>new macOS / Windows / Android Application?</p>' +
       '<div class="tma-dash__account-promo-actions">' +
       DESKTOP_PLATFORMS.map(renderDownloadBtn).join('') +
       '</div>' +

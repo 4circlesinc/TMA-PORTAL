@@ -55,4 +55,18 @@ class DesktopUpdateFeedTest extends TestCase
         $this->get('/desktop/..%2F..%2F.env')->assertNotFound();
         $this->get('/desktop/'.urlencode('../.env'))->assertNotFound();
     }
+
+    public function test_it_serves_a_published_apk(): void
+    {
+        Storage::disk(config('filesystems.files_disk'))
+            ->put('desktop/TMA-Portal-0.1.0.apk', 'apk-bytes');
+
+        $response = $this->get('/desktop/TMA-Portal-0.1.0.apk');
+        // Object storage redirects to a signed URL; a local disk streams the
+        // bytes. Either way the APK must not 404 now that it is an allowed shape.
+        $this->assertTrue($response->isOk() || $response->isRedirect(), 'got '.$response->status());
+        if ($response->isOk()) {
+            $this->assertSame('apk-bytes', $this->fileBody($response));
+        }
+    }
 }

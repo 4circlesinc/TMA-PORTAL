@@ -1471,8 +1471,15 @@ Route::get('/desktop/releases', [DesktopReleasesController::class, 'index'])
     ->name('desktop.releases');
 
 Route::get('/desktop/download/{platform}', [DesktopReleasesController::class, 'download'])
-    ->where('platform', 'mac|windows')
+    ->where('platform', 'mac|windows|android')
     ->name('desktop.download');
+
+// The Android app: the page a phone lands on from the QR code (the download
+// starts on its own) and the QR code itself. Registered before the feed below.
+Route::get('/desktop/android', [DesktopReleasesController::class, 'android'])
+    ->name('desktop.android');
+Route::get('/desktop/android/qr.svg', [DesktopReleasesController::class, 'androidQr'])
+    ->name('desktop.android.qr');
 
 // Identity of this deploy's static assets. The desktop app ships a copy and
 // serves it locally only when this matches exactly — see the controller.

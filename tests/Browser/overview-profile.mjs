@@ -129,19 +129,35 @@ if (state.rowWidths.some((w) => w < state.gridWidth - 2)) {
 }
 const mac = state.buttons.find((b) => b.platform === 'mac');
 const win = state.buttons.find((b) => b.platform === 'windows');
-if (!mac || !win) fail.push('missing download buttons');
+const android = state.buttons.find((b) => b.platform === 'android');
+if (!mac || !win || !android) fail.push('missing download buttons');
 if (mac && mac.disabled !== 'false') fail.push(`mac button should be enabled: ${JSON.stringify(mac)}`);
 if (win && win.disabled !== 'true') fail.push(`windows button should be disabled: ${JSON.stringify(win)}`);
+if (android && android.disabled !== 'false') fail.push(`android QR button should be enabled: ${JSON.stringify(android)}`);
+if (android && !/\/desktop\/android$/.test(android.href || '')) fail.push(`android href should be the landing page: ${android.href}`);
 // Brand artwork: the right file, actually decoded, and boxed at 16px so a
 // slow SVG can't stretch the pill.
 if (mac && !/AppleLight16\.svg$/.test(mac.icon?.src || '')) fail.push(`mac logo wrong: ${mac.icon?.src}`);
 if (win && !/Windows16\.svg$/.test(win.icon?.src || '')) fail.push(`windows logo wrong: ${win.icon?.src}`);
-for (const b of [mac, win]) {
+if (android && !/Android16\.svg$/.test(android.icon?.src || '')) fail.push(`android logo wrong: ${android.icon?.src}`);
+for (const b of [mac, win, android]) {
   if (!b) continue;
   if (!b.icon?.loaded) fail.push(`${b.platform} logo failed to load: ${b.icon?.src}`);
   if (b.icon?.w !== 16 || b.icon?.h !== 16) fail.push(`${b.platform} logo box is ${b.icon?.w}x${b.icon?.h}, want 16x16`);
 }
-if (!/macOS \/ Windows/.test(state.promoTitle || '')) fail.push(`promo copy wrong: ${state.promoTitle}`);
+if (!/macOS \/ Windows \/ Android/.test(state.promoTitle || '')) fail.push(`promo copy wrong: ${state.promoTitle}`);
+
+await page.click('.tma-dash__overview-grid [data-desktop-download="android"]');
+await page.waitForSelector('.tma-dash__account-qr-code', { timeout: 8000 });
+const qr = await page.evaluate(() => {
+  const img = document.querySelector('.tma-dash__account-qr-code');
+  return { src: img?.getAttribute('src') || '', alt: img?.getAttribute('alt') || '' };
+});
+console.log('android qr:', JSON.stringify(qr));
+if (!/\/desktop\/android\/qr\.svg$/.test(qr.src)) fail.push(`QR image src wrong: ${qr.src}`);
+await page.screenshot({ path: `${DIR}/overview-android-qr.png` });
+await page.click('.tma-portal-modal__head [data-portal-modal-close]');
+await page.waitForSelector('.tma-dash__account-qr-code', { state: 'hidden', timeout: 5000 }).catch(() => {});
 
 // Sign-ins: firm-wide rows, resolved (no skeletons left), full grid width.
 const s = state.signIns;
