@@ -108,10 +108,10 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         }
         intent.getIntExtra(WebNotifications.EXTRA_ID, 0).takeIf { it > 0 }?.let { id ->
             val url = intent.getStringExtra(WebNotifications.EXTRA_URL).orEmpty()
-            host.evaluate("window.__tmaNotificationClick && __tmaNotificationClick($id)")
-            if (url.isNotBlank()) host.load(if (url.startsWith("http")) url else viewModel.config.url(url))
             intent.removeExtra(WebNotifications.EXTRA_ID)
-            return url.isNotBlank()
+            // The page's handler navigates on its own; the URL is only for a page that was reloaded since.
+            host.notificationClicked(id) { handled -> if (!handled && url.isNotBlank()) host.load(if (url.startsWith("http")) url else viewModel.config.url(url)) }
+            return true
         }
         val uri = intent.data ?: return false
         intent.data = null

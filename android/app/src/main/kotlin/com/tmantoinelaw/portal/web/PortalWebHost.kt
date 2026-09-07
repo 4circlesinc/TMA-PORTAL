@@ -130,6 +130,11 @@ class PortalWebHost(
 
     fun evaluate(js: String) { main.post { webView.evaluateJavascript(js, null) } }
 
+    /** Hand a shade tap to the page's own onclick (desktop: the click brings the window forward, the page does the rest). */
+    fun notificationClicked(id: Int, done: (Boolean) -> Unit) {
+        main.post { webView.evaluateJavascript("!!(window.__tmaNotificationClick && __tmaNotificationClick($id))") { result -> done(result == "true") } }
+    }
+
     /** desktop/signin-waiting.html, shown while the real browser signs in (showSignInWaiting). */
     fun showSignInWaiting(providerLabel: String) {
         _loading.value = false
