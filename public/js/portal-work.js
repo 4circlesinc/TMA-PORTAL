@@ -2157,30 +2157,29 @@
     root = root || sig.el;
     if (!root) return;
 
-    var sheet = root.querySelector('[data-sig-page-host]');
     var label = root.querySelector('[data-sig-zoom-label]');
     var out = root.querySelector('[data-sig-zoom-out]');
     var into = root.querySelector('[data-sig-zoom-in]');
     var fit = root.querySelector('[data-sig-zoom-fit]');
 
-    if (sheet) {
-      if (sig.zoom === null) {
-        // Hand the width back to the stylesheet.
-        sheet.style.width = '';
-      } else {
-        sheet.style.width = Math.round(sigFitWidth(root) * sig.zoom) + 'px';
-      }
-    }
+    // Every page shares one width, so the stack stays a single column.
+    var width = sig.zoom === null ? '' : Math.round(sigFitWidth(root) * sig.zoom) + 'px';
+    root.querySelectorAll('[data-sig-page-host]').forEach(function (sheet) {
+      sheet.style.width = width;
+    });
 
     if (label) label.textContent = Math.round((sig.zoom || 1) * 100) + '%';
     if (out) out.disabled = sig.zoom !== null && sig.zoom <= SIG_ZOOM_MIN;
     if (into) into.disabled = sig.zoom !== null && sig.zoom >= SIG_ZOOM_MAX;
     if (fit) fit.classList.toggle('is-active', sig.zoom === null);
 
-    // The canvas is a bitmap: widening it without repainting just blurs the
-    // page, so re-rasterise at the new size.
-    var canvas = root.querySelector('[data-sig-canvas]');
-    if (canvas && sig.doc) sigPaintPage(canvas, sig.wizardPage || 0);
+    // Canvases are bitmaps: widening one without repainting just blurs the
+    // page, so re-rasterise each at the new size.
+    if (sig.doc) {
+      root.querySelectorAll('[data-sig-canvas]').forEach(function (c) {
+        sigPaintPage(c, parseInt(c.getAttribute('data-sig-canvas'), 10) || 0);
+      });
+    }
 
     // Field previews are sized in pixels against the painted page, so they
     // have to be recomputed or the text would keep its old size as the page
@@ -2208,8 +2207,9 @@
     var box = el.parentNode;
     if (!box) return;
 
+    var host = box.closest ? box.closest('[data-sig-page-host]') : null;
     var pt = sigFieldPt(f);
-    el.style.fontSize = sigPtToPx(pt).toFixed(2) + 'px';
+    el.style.fontSize = sigPtToPx(pt, host).toFixed(2) + 'px';
 
     // Padding on the field means clientWidth overstates the room slightly;
     // 4px matches .tma-portal-sig-field's 2px each side.
@@ -2219,7 +2219,7 @@
     var guard = 0;
     while (pt > SIG_MIN_PT && el.scrollWidth > room && guard < 80) {
       pt -= 0.5;
-      el.style.fontSize = sigPtToPx(pt).toFixed(2) + 'px';
+      el.style.fontSize = sigPtToPx(pt, host).toFixed(2) + 'px';
       guard++;
     }
   }
@@ -2350,14 +2350,20 @@
     var root = sig.el;
     if (!root) return;
 
-    var layer = root.querySelector('[data-sig-field-layer]');
-    if (!layer) {
+    var layers = root.querySelectorAll('[data-sig-field-layer]');
+    if (!layers.length) {
       renderSignatures();
       return;
     }
 
-    layer.innerHTML = sigFieldsOnPage(sig.wizardPage || 0).map(sigPlacedField).join('');
-    sigWireFieldLayer(layer);
+    // Every page is on screen, so every page's fields are redrawn. A field can
+    // also be dragged onto a different page, and only rebuilding the one it
+    // started on would leave a copy behind.
+    layers.forEach(function (layer) {
+      var i = parseInt(layer.getAttribute('data-sig-field-layer'), 10) || 0;
+      layer.innerHTML = sigFieldsOnPage(i).map(sigPlacedField).join('');
+      sigWireFieldLayer(layer);
+    });
     // Fitting needs measured elements, so it runs after they're in the DOM.
     sigRestyleFieldPreviews(root);
 
@@ -2441,7 +2447,7 @@
     return null;
   }
 
-  function sigPlaceField(type, xFrac, yFrac) {
+  function sigPlaceField(type, xFrac, yFrac, pageIndex) {
     var recipient = sigDefaultRecipient();
     if (!recipient) {
       ui().toastError('Add a recipient before placing fields.');
@@ -2456,7 +2462,7 @@
       label: typeMeta ? typeMeta.label : type,
       autofilled: !!(typeMeta && typeMeta.autofilled),
       recipient: recipient,
-      page: (sig.wizardPage || 0) + 1,
+      page: (pageIndex === undefined ? (sig.wizardPage || 0) : pageIndex) + 1,
       width: size.width,
       height: size.height,
       x: sigClamp(xFrac - size.width / 2, 0, 1 - size.width),
@@ -2606,19 +2612,22 @@
       });
     }
 
-    var canvas = root.querySelector('[data-sig-canvas]');
-    var layer = root.querySelector('[data-sig-field-layer]');
-    if (!canvas || !sig.doc) return;
+    var canvases = root.querySelectorAll('[data-sig-canvas]');
+    if (!canvases.length || !sig.doc) return;
 
     // Paint after layout so clientWidth is real, and repaint on resize since
-    // the canvas is sized from its rendered width.
+    // each canvas is sized from its rendered width.
     requestAnimationFrame(function () {
-      sigPaintPage(canvas, sig.wizardPage || 0);
+      canvases.forEach(function (c) {
+        sigPaintPage(c, parseInt(c.getAttribute('data-sig-canvas'), 10) || 0);
+      });
       sigPaintThumbs(root);
+      sigRestyleFieldPreviews(root);
     });
-    sigWatchResize(canvas);
+    sigWatchResize(canvases[0]);
+    sigWatchPageScroll(root);
 
-    // Click a palette card to drop a field in the middle of the page.
+    // Click a palette card to drop a field in the middle of the page in view.
     root.querySelectorAll('[data-sig-field]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var at = sigFreeSpot(btn.getAttribute('data-sig-field'));
@@ -2630,10 +2639,12 @@
       });
     });
 
-    // ...or drag it exactly where you want it. The drop target is the layer,
-    // which is wired once here; the per-field handlers are re-applied whenever
-    // the layer's contents change.
-    if (layer) {
+    // ...or drag it exactly where you want it. Every page is a drop target of
+    // its own, so a field lands on the page it was dropped over rather than
+    // whichever page happened to be "current".
+    root.querySelectorAll('[data-sig-field-layer]').forEach(function (layer) {
+      var pageIndex = parseInt(layer.getAttribute('data-sig-field-layer'), 10) || 0;
+
       layer.addEventListener('dragover', function (e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
@@ -2643,15 +2654,56 @@
         var type = e.dataTransfer.getData('text/plain');
         if (!type) return;
         var rect = layer.getBoundingClientRect();
-        sigPlaceField(type, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+        sigPlaceField(
+          type,
+          (e.clientX - rect.left) / rect.width,
+          (e.clientY - rect.top) / rect.height,
+          pageIndex
+        );
       });
 
       sigWireFieldDrag(layer);
       sigWireFieldLayer(layer);
-    }
+    });
 
     sigWireZoom(root);
     sigWireAssignPanel(root);
+  }
+
+  /* Which page is being read, from the scroll position - the same idea as the
+     File Library viewer's tracker. Keeps the thumbnail rail's highlight and
+     `sig.wizardPage` (which decides where a click-placed field lands) honest
+     while the reader scrolls, without re-rendering anything. */
+  function sigWatchPageScroll(root) {
+    var pane = root.querySelector('[data-sig-canvas-scroll]');
+    if (!pane) return;
+
+    if (pane._sigScrollOff) { pane._sigScrollOff(); pane._sigScrollOff = null; }
+
+    function onScroll() {
+      var mid = pane.scrollTop + pane.clientHeight / 2;
+      var best = 0;
+      var bestDist = Infinity;
+
+      root.querySelectorAll('[data-sig-page-host]').forEach(function (sheet) {
+        var i = parseInt(sheet.getAttribute('data-sig-page-host'), 10) || 0;
+        var centre = sheet.offsetTop + sheet.offsetHeight / 2;
+        var dist = Math.abs(centre - mid);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+
+      if (best === sig.wizardPage) return;
+      sig.wizardPage = best;
+
+      root.querySelectorAll('[data-sig-page]').forEach(function (btn) {
+        var n = parseInt(btn.getAttribute('data-sig-page'), 10);
+        btn.classList.toggle('is-active', n === best);
+        if (n === best) btn.scrollIntoView({ block: 'nearest' });
+      });
+    }
+
+    pane.addEventListener('scroll', onScroll, { passive: true });
+    pane._sigScrollOff = function () { pane.removeEventListener('scroll', onScroll); };
   }
 
   /* Zoom: the buttons, ctrl/⌘+scroll, and ⌘/Ctrl +/-/0. */
@@ -2816,7 +2868,13 @@
       // A detached canvas reports 0; nothing to repaint.
       if (!w || Math.abs(w - last) < 2) return;
       last = w;
-      sigPaintPage(canvas, sig.wizardPage || 0);
+      // One canvas is watched, but they all share a width, so they all need
+      // re-rasterising - and the previews re-fitting against the new size.
+      if (!sig.el) return;
+      sig.el.querySelectorAll('[data-sig-canvas]').forEach(function (c) {
+        sigPaintPage(c, parseInt(c.getAttribute('data-sig-canvas'), 10) || 0);
+      });
+      sigRestyleFieldPreviews(sig.el);
     });
     sig.resizeObserver.observe(canvas);
   }
@@ -2951,8 +3009,10 @@
 
   /* Points -> screen pixels, against the page as it is currently painted. So
      the preview tracks zoom and stays honest at any scale. */
-  function sigPtToPx(pt) {
-    var host = sig.el && sig.el.querySelector('[data-sig-page-host]');
+  function sigPtToPx(pt, host) {
+    // Measured against the page the field sits on: a PDF may mix page sizes,
+    // and a point is a point on whichever one it lands.
+    host = host || (sig.el && sig.el.querySelector('[data-sig-page-host]'));
     var pageH = host ? host.getBoundingClientRect().height : 0;
     if (!pageH) return pt; // pre-paint: near enough for the first frame
     return pt * SIG_MM_PER_PT * (pageH / SIG_PAGE_MM_H);
@@ -3070,6 +3130,24 @@
       '</div>';
   }
 
+  /* Every page, stacked vertically, the way the File Library's viewer reads.
+     Each page carries its own canvas and its own field layer, so a field is
+     always placed on the page it is drawn over and the reader can scroll
+     straight from one page to the next. */
+  function sigPageStack() {
+    var out = '';
+    for (var i = 0; i < sig.doc.pageCount; i++) {
+      out += '<div class="tma-portal-sig-wizard__doc-sheet" data-sig-page-host="' + i + '">' +
+        '<canvas class="tma-portal-sig-wizard__doc-canvas" data-sig-canvas="' + i + '"></canvas>' +
+        '<div class="tma-portal-sig-wizard__field-layer" data-sig-field-layer="' + i + '">' +
+        sigFieldsOnPage(i).map(sigPlacedField).join('') +
+        '</div>' +
+        '<span class="tma-portal-sig-wizard__page-marker">' + (i + 1) + '</span>' +
+        '</div>';
+    }
+    return out;
+  }
+
   function renderSignatureWizardFieldsStep(record) {
     var page = sig.wizardPage || 0;
     var docTitle = sigShortFilename(record.title.replace(/\.[^.]+$/, ''), 24);
@@ -3090,11 +3168,7 @@
         ' <button type="button" class="tma-portal-link" data-sig-doc-retry>Try again</button>')
       : !sig.doc
         ? '<div class="tma-portal-sig-wizard__doc-loading">' + ui().loading({ count: 1 }) + '</div>'
-        : '<div class="tma-portal-sig-wizard__doc-sheet" data-sig-page-host>' +
-          '<canvas class="tma-portal-sig-wizard__doc-canvas" data-sig-canvas></canvas>' +
-          '<div class="tma-portal-sig-wizard__field-layer" data-sig-field-layer>' +
-          sigFieldsOnPage(page).map(sigPlacedField).join('') +
-          '</div></div>';
+        : sigPageStack();
 
     return '<div class="tma-portal-sig-wizard__workspace">' +
       '<aside class="tma-portal-sig-wizard__fields-panel">' +
@@ -3450,11 +3524,14 @@
 
     wireSignatureEditor(root);
 
+    // Every page is on screen now, so a thumbnail scrolls to its page rather
+    // than swapping which one is drawn. Re-rendering here would also throw
+    // away the scroll position the reader just asked for.
     root.querySelectorAll('[data-sig-page]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        sig.wizardPage = parseInt(btn.getAttribute('data-sig-page'), 10) || 0;
-        sig.selectedFieldId = null;
-        renderSignatures();
+        var i = parseInt(btn.getAttribute('data-sig-page'), 10) || 0;
+        var sheet = root.querySelector('[data-sig-page-host="' + i + '"]');
+        if (sheet) sheet.scrollIntoView({ block: 'start', behavior: 'smooth' });
       });
     });
 

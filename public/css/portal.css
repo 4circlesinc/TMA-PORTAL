@@ -4491,6 +4491,25 @@ label.tma-portal-check-row:hover {
   color: var(--color-black);
 }
 
+/* Pages stack vertically and are scrolled through, the way the File Library's
+   viewer reads. The gap is what separates one page from the next. */
+.tma-portal-sig-wizard__doc-sheet + .tma-portal-sig-wizard__doc-sheet {
+  margin-top: var(--space-24);
+}
+
+.tma-portal-sig-wizard__page-marker {
+  position: absolute;
+  right: var(--space-8);
+  bottom: var(--space-8);
+  padding: 1px var(--space-6);
+  border-radius: var(--radius-4);
+  background: var(--color-hover);
+  font-size: var(--text-size-12);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
 /* Real document page: the canvas paints it, the layer holds the fields. */
 .tma-portal-sig-wizard__doc-canvas {
   display: block;

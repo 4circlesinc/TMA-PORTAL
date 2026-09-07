@@ -22,6 +22,17 @@ field placement and drawing, and computed CSS only exist in a browser.
   render() operations". Paints are now chained per canvas. Only a browser
   catches this - it surfaces as a `pageerror`, not a failed assertion.
 
+- **`signature-page-scroll.mjs`** — the editor reads like the File Library's
+  viewer: every page stacked in one scroller, rather than one page at a time
+  swapped by the thumbnail rail. It asserts a sheet and a painted canvas per
+  page, that the pane actually scrolls, that the rail's highlight follows the
+  scroll position, that a thumbnail click scrolls rather than re-renders, and
+  that a field placed while page 2 is in view lands on **page 2**.
+
+  That last one is why each page owns its own field layer and drop target: the
+  old single-layer editor placed onto whichever page was "current", so a drop
+  and the page under the pointer could disagree.
+
 - **`signature-field-typography.mjs`** — what a placed field *shows*. A field
   used to render its label ("Full name"), so an author could not tell whether
   the value would fit until after sending. It now draws the real value at the
@@ -1788,6 +1799,7 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log 
 node tests/Browser/signature-editor.mjs
 node tests/Browser/signature-zoom.mjs   # reads the sign-in code from the log
 node tests/Browser/signature-field-typography.mjs
+node tests/Browser/signature-page-scroll.mjs
 node tests/Browser/signing-flow.mjs     # expects a fresh database
 node tests/Browser/stamped-output.mjs   # expects a fresh database
 node tests/Browser/folder-shortcuts.mjs # needs the folder fixtures below
