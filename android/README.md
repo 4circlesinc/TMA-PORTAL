@@ -66,3 +66,5 @@ senderId=123456789012
 and set `FCM_PROJECT_ID` and `FCM_CREDENTIALS_JSON` (a service-account JSON, or
 a path to it) on the server. No `google-services.json` and no Gradle plugin
 are needed; `TmaApp` initialises Firebase from those four values.
+`php artisan push:status --test=you@firm.com` checks the server side and
+sends a test push.
