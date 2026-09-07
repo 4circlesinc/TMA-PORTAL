@@ -238,7 +238,7 @@ From `desktop/README.md`, `main.js`, `host-bridge.js`, `badge.js`, `notification
 **To switch it on:**
 
 1. Firebase console → create a project → add an Android app with package `com.tmantoinelaw.portal`. Note from its config: Project ID, App ID (`1:…:android:…`), API key, Sender ID (project number).
-2. `android/firebase.properties` (gitignored): `projectId=… appId=… apiKey=… senderId=…` — or pass `-Pfirebase.projectId=…` etc. Rebuild.
+2. Download its `google-services.json` into `android/app/` (gitignored; the build reads the four values from it, no plugin needed) — or write them to `android/firebase.properties`, or pass `-Pfirebase.projectId=…` etc. Rebuild.
 3. Firebase console → Project settings → Service accounts → generate a private key (JSON). On Laravel Cloud set `FCM_PROJECT_ID` and `FCM_CREDENTIALS_JSON` (the JSON itself, or a path). The queue worker must be running (it is on Cloud).
 4. Verify: sign in on the phone, background the app, have someone message you; the shade shows the notification and a call rings the phone.
 

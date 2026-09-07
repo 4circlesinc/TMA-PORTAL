@@ -24,7 +24,28 @@ val firebaseProps = Properties().apply {
     val f = rootProject.projectDir.resolve("firebase.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-fun firebase(key: String): String = (project.findProperty("firebase.$key") as String?) ?: firebaseProps.getProperty(key, "")
+/* The console's google-services.json, dropped into app/ (gitignored), is read directly: no plugin. */
+val googleServices: Map<String, String> = run {
+    val f = projectDir.resolve("google-services.json")
+    if (!f.exists()) return@run emptyMap()
+    runCatching {
+        val json = groovy.json.JsonSlurper().parse(f) as Map<*, *>
+        val info = json["project_info"] as Map<*, *>
+        val client = (json["client"] as List<*>).first() as Map<*, *>
+        val clientInfo = client["client_info"] as Map<*, *>
+        val apiKey = ((client["api_key"] as List<*>).first() as Map<*, *>)["current_key"] as String
+        mapOf(
+            "projectId" to info["project_id"] as String,
+            "senderId" to info["project_number"] as String,
+            "appId" to clientInfo["mobilesdk_app_id"] as String,
+            "apiKey" to apiKey,
+        )
+    }.getOrDefault(emptyMap())
+}
+fun firebase(key: String): String = (project.findProperty("firebase.$key") as String?)
+    ?: firebaseProps.getProperty(key)
+    ?: googleServices[key]
+    ?: ""
 
 android {
     namespace = "com.tmantoinelaw.portal"
