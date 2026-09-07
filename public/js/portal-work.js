@@ -2942,7 +2942,57 @@
       '</span>' +
       (readOnly ? '' : '<button type="button" class="tma-portal-link" data-sig-wizard-storage-edit>Edit</button>') +
       '</div></div>' +
+      sigSignedDocumentField(record) +
       '</div></section>';
+  }
+
+  /* Open the signed copy in the File Library's viewer, without leaving the
+     wizard. The signature payload only carries the file's id and name, and
+     the viewer needs a real library row (category, previewUrl, permissions),
+     so read it back from the files API - which also re-checks access. */
+  function sigOpenSignedInViewer(fileId, btn) {
+    if (!fileId) return;
+
+    var acts = window.TMAFileActions;
+    if (!acts || !acts.open) {
+      ui().toastError('The file viewer isn\'t available on this page.');
+      return;
+    }
+
+    if (btn) btn.disabled = true;
+
+    net().fetchJSON((window.__TMA_SITE_ROOT || '') +
+      '/portal/files/files/' + encodeURIComponent(fileId))
+      .then(function (file) {
+        // The endpoint returns the presented row itself, sometimes wrapped.
+        var row = file && file.id ? file : (file && file.file);
+        if (!row || !row.id) throw new Error('That document could not be opened.');
+        acts.open(row, null, [row]);
+      })
+      .catch(function (err) {
+        ui().toastError((err && err.message) || 'That document could not be opened.');
+      })
+      .then(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  /* Once it's signed there is a second document - the stamped copy - and this
+     is the only screen that shows it. Opening it in the File Library's own
+     viewer keeps one reader for every file in the portal. */
+  function sigSignedDocumentField(record) {
+    if (!record.signedDocument) return '';
+
+    return '<div class="tma-portal-field tma-portal-sig-wizard__storage-field">' +
+      '<span class="tma-portal-field__label">Signed document</span>' +
+      '<div class="tma-portal-sig-wizard__storage-row">' +
+      '<span class="tma-portal-sig-wizard__storage-pick">' +
+      '<img src="images/icons/phosphor/FilePdf.svg" alt="" width="20" height="20">' +
+      '<span>' + ui().esc(record.signedDocument.name) + '</span>' +
+      '</span>' +
+      '<button type="button" class="tma-portal-link" data-sig-view-signed="' +
+      ui().esc(record.signedDocument.id) + '">View</button>' +
+      '</div></div>';
   }
 
   function renderSignatureWizardStep(record) {
@@ -3175,6 +3225,13 @@
         renderSignatures();
       });
     });
+
+    var viewSigned = root.querySelector('[data-sig-view-signed]');
+    if (viewSigned) {
+      viewSigned.addEventListener('click', function () {
+        sigOpenSignedInViewer(viewSigned.getAttribute('data-sig-view-signed'), viewSigned);
+      });
+    }
 
     var storageEdit = root.querySelector('[data-sig-wizard-storage-edit]');
     if (storageEdit) {

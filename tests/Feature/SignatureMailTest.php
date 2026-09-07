@@ -6,10 +6,13 @@ use App\Mail\SignatureCompleted;
 use App\Mail\SignatureDeclined;
 use App\Mail\SignatureInvitation;
 use App\Mail\SignatureReminder;
+use App\Models\FileItem;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Files\Vault;
 use App\Support\Signatures\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -136,6 +139,46 @@ class SignatureMailTest extends TestCase
         $this->assertStringContainsString('still preparing', $withDoc);
         $this->assertStringContainsString('Dana Reed', $withDoc);
         $this->assertStringContainsString('TMA Contract.pdf', $withDoc);
+    }
+
+    /**
+     * Vault files are envelope-encrypted at rest, so attaching one straight
+     * off the disk mailed the ciphertext and every recipient got a "signed
+     * copy" their PDF reader refused to open. The bytes that leave must be a
+     * real PDF, not what is stored.
+     */
+    public function test_the_signed_copy_is_attached_as_a_readable_pdf(): void
+    {
+        $request = $this->request(['status' => Status::COMPLETED]);
+        $user = User::find($request->created_by);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'sig').'.pdf';
+        copy(base_path('tests/Browser/fixtures/contract.pdf'), $tmp);
+        $stored = Vault::store($tmp, 'pdf');
+
+        $signed = FileItem::create([
+            'uuid' => $stored['uuid'], 'name' => 'Contract (signed).pdf',
+            'extension' => 'pdf', 'mime_type' => 'application/pdf',
+            'size' => $stored['size'], 'disk' => $stored['disk'],
+            'storage_path' => $stored['path'], 'checksum' => $stored['checksum'],
+            'owner_id' => $user->id, 'uploaded_by' => $user->id,
+        ]);
+
+        // Whatever is on disk, the transmitted attachment must be a PDF.
+        $captured = null;
+        $mail = (new SignatureCompleted($request->fresh(), $signed, 'Dana Reed'))
+            ->to('dana@example.com')
+            ->withSymfonyMessage(function ($m) use (&$captured) { $captured = $m; });
+
+        Mail::to('dana@example.com')->sendNow($mail);
+
+        $bodies = [];
+        foreach ($captured->getAttachments() as $part) {
+            $bodies[] = $part->getBody();
+        }
+
+        $this->assertCount(1, $bodies, 'the signed copy should be attached');
+        $this->assertStringStartsWith('%PDF', $bodies[0], 'the attachment must be a readable PDF, not the encrypted bytes');
     }
 
     public function test_outcome_emails_never_carry_a_signing_link(): void

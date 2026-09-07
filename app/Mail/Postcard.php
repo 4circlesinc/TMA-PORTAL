@@ -60,16 +60,36 @@ class Postcard extends Mailable implements ShouldQueue
         return new Content(view: 'emails.postcard', with: $this->payload);
     }
 
-    /** @return array<int, Attachment> */
+    /**
+     * @return array<int, Attachment>
+     *
+     * Read through the Vault rather than off the disk: vault files are
+     * envelope-encrypted at rest, so fromStorageDisk() would attach the
+     * ciphertext and the recipient's PDF reader would refuse to open it.
+     */
     public function attachments(): array
     {
         if ($this->attachment === null) {
             return [];
         }
 
+        $path = \App\Support\Files\Vault::localCopy($this->attachment);
+        if (! $path) {
+            \Illuminate\Support\Facades\Log::error('Postcard attachment could not be read', [
+                'file' => $this->attachment->uuid,
+            ]);
+
+            return [];
+        }
+
+        try {
+            $bytes = (string) file_get_contents($path);
+        } finally {
+            \App\Support\Files\Vault::cleanupLocalCopy($path);
+        }
+
         return [
-            Attachment::fromStorageDisk($this->attachment->disk, $this->attachment->storage_path)
-                ->as($this->attachment->name)
+            Attachment::fromData(fn () => $bytes, $this->attachment->name)
                 ->withMime('application/pdf'),
         ];
     }

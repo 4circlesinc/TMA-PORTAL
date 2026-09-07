@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\FileItem;
 use App\Models\SignatureRequest;
+use App\Support\Files\Vault;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -11,6 +12,7 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The signed document, sent to everyone involved once it's fully signed.
@@ -60,16 +62,42 @@ class SignatureCompleted extends Mailable implements ShouldQueue
         );
     }
 
-    /** @return array<int, Attachment> */
+    /**
+     * @return array<int, Attachment>
+     *
+     * Vault files are envelope-encrypted at rest (a `TMAENC1` header, see
+     * App\Support\Security\Envelope), so attaching them straight off the disk
+     * with fromStorageDisk() mailed the *ciphertext* - every recipient got a
+     * "signed copy" their PDF reader refused to open. Read the bytes back
+     * through the Vault, which decrypts, and attach those.
+     */
     public function attachments(): array
     {
         if (! $this->signedFile) {
             return [];
         }
 
+        $path = Vault::localCopy($this->signedFile);
+        if (! $path) {
+            // The document is gone or unreadable. The rest of the message
+            // still tells them it was signed and where to find it; sending it
+            // without the attachment beats not sending it at all.
+            Log::error('Signed copy could not be read for the completion email', [
+                'request' => $this->signatureRequest->uuid,
+                'file' => $this->signedFile->uuid,
+            ]);
+
+            return [];
+        }
+
+        try {
+            $bytes = (string) file_get_contents($path);
+        } finally {
+            Vault::cleanupLocalCopy($path);
+        }
+
         return [
-            Attachment::fromStorageDisk($this->signedFile->disk, $this->signedFile->storage_path)
-                ->as($this->signedFile->name)
+            Attachment::fromData(fn () => $bytes, $this->signedFile->name)
                 ->withMime('application/pdf'),
         ];
     }
