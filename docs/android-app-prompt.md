@@ -229,22 +229,18 @@ From `desktop/README.md`, `main.js`, `host-bridge.js`, `badge.js`, `notification
 
 ---
 
-## 13. Push notifications (backend addition spec, clearly marked as new work)
+## 13. Push notifications — built (7 Sep 2026); needs a Firebase project to switch on
 
-**Status today: there is no push infrastructure.** A repo-wide search for FCM, Firebase, APNs, web-push, device tokens and push subscriptions finds nothing; the web and desktop hear events only while a window holds the websocket (appendix A8 §6). Without this addition the Android app cannot ring for a call or show a notification while it is not in the foreground. Build it in phase 13 under the rules of section 14.
+**Backend (in place):** migration `device_tokens`; `POST /me/devices {platform:'android', token, appVersion, deviceName}` (upsert by token, the last sign-in owns the device) and `DELETE /me/devices/{token}`; `App\Listeners\ForgetDeviceTokensOnLogout` drops what the ending session registered. `App\Support\Notifications\Push` sends **data-only** FCM messages with the same payload the websocket carries: `{kind:'notification', notification:<NotificationPresenter JSON>, unread}` beside every `notification.created`, gated like the desktop banner (groups whose `desktop` channel is on; `security` and `approvals` always), and `{kind:'call', signal:<call.signal JSON>}` to every unmuted recipient of a `ring`, TTL 30 s. `FcmClient` speaks the HTTP v1 API with a service account and drops tokens FCM reports as `UNREGISTERED`; `App\Jobs\SendPush` runs on the queue. Nothing is attempted while unconfigured. Tests: `tests/Feature/PushNotificationsTest.php`.
 
-**Backend (new):**
+**Android (in place):** `TmaApp` initialises Firebase from build values (no `google-services.json` needed); `web/PushRegistrar.kt` posts the token with the page's own cookies after a portal page loads with a session, and on rotation; `web/PushService.kt` shows `notification` pushes in the shade (the page's tap handling) and `call` pushes as the CallStyle notification with the foreground service — both only while the app is not in front, since in front the socket already has it.
 
-1. Migration `device_tokens`: `id, user_id (fk, cascade), platform ('android'), token (unique), app_version, device_name, last_seen_at, created_at, updated_at`.
-2. Routes inside the portal group: `POST /me/devices {platform, token, appVersion, deviceName}` (upsert by token, 201/200 `{ok:true}`), `DELETE /me/devices/{token}` (`{ok:true}`). Sign-out on the device deletes its token; a 401 on any push-driven fetch deletes it too.
-3. `app/Support/Notifications/Push.php`: sends **data-only** FCM messages (HTTP v1 API, service-account credentials from `FCM_CREDENTIALS_JSON` / `FCM_PROJECT_ID` env, never committed) with the **same payload the websocket carries**: for `notification.created` → `{kind:'notification', notification:{…NotificationPresenter}, unread}`; for a call `ring` → `{kind:'call', signalId, conversationId, fromUserId, fromName, fromPhoto, media}` with `priority: high` and a 30 s TTL; for `hangup`/`reject` → `{kind:'call-end', signalId, conversationId}`. Hook it where the websocket events are fired (`Notifier::notify` after `event(new PortalNotificationCreated)`, and `MessagingController::call` for `ring`/`hangup`/`reject`). Send **synchronously in the request** (like the account lifecycle emails), not through a queue, because the queue worker is not something the firm can rely on being alive; wrap in try/catch, log, never fail the request.
-4. Honour the user's notification preferences: only groups whose `desktop` channel is on get a push (the Android app maps `desktop` to Device); muted conversations never push; `security` and `approvals` always do.
-5. Remove tokens FCM reports as `UNREGISTERED`.
-6. PHPUnit: token upsert/delete, payload shape, preference gating, the call ring path.
+**To switch it on:**
 
-**Android:** `FirebaseMessagingService` registering the token after `/me` succeeds and on token rotation; `kind:'notification'` → store + OS notification via 11.14/12 rules (no fetch needed); `kind:'call'` → start the call foreground service and post the `CallStyle` full-screen notification, then connect the socket to receive `offer` and the rest of the signalling (the caller's 15 s timeout is short; make the socket connect fast on this path); `kind:'call-end'` → dismiss. Firebase project and `google-services.json` are the firm's; the file is gitignored and injected in CI.
-
----
+1. Firebase console → create a project → add an Android app with package `com.tmantoinelaw.portal`. Note from its config: Project ID, App ID (`1:…:android:…`), API key, Sender ID (project number).
+2. `android/firebase.properties` (gitignored): `projectId=… appId=… apiKey=… senderId=…` — or pass `-Pfirebase.projectId=…` etc. Rebuild.
+3. Firebase console → Project settings → Service accounts → generate a private key (JSON). On Laravel Cloud set `FCM_PROJECT_ID` and `FCM_CREDENTIALS_JSON` (the JSON itself, or a path). The queue worker must be running (it is on Cloud).
+4. Verify: sign in on the phone, background the app, have someone message you; the shade shows the notification and a call rings the phone.
 
 ## 14. Backend changes allowed and forbidden
 

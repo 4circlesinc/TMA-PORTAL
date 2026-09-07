@@ -47,5 +47,21 @@ curl -s http://localhost:9222/json     # page targets and their webSocketDebugge
 
 ## Not built yet
 
-Push notifications (FCM; needs the backend addition in `docs/android-app-prompt.md` §13),
 `assetlinks.json` for App Links, release signing and Play.
+
+## Push
+
+Push is built on both sides and off until Firebase is configured (see
+`docs/android-app-prompt.md` §13). Put the Firebase Android app's values in a
+gitignored `android/firebase.properties`:
+
+```
+projectId=tm-antoine-portal
+appId=1:123456789012:android:0123456789abcdef
+apiKey=AIza…
+senderId=123456789012
+```
+
+and set `FCM_PROJECT_ID` and `FCM_CREDENTIALS_JSON` (a service-account JSON, or
+a path to it) on the server. No `google-services.json` and no Gradle plugin
+are needed; `TmaApp` initialises Firebase from those four values.
