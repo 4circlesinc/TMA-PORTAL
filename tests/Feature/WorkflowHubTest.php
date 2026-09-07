@@ -339,6 +339,39 @@ class WorkflowHubTest extends TestCase
         $this->assertNotContains('Payroll.txt', $names);
     }
 
+    /**
+     * Firm-wide discussion is an administrator's list. An officer asking for
+     * Everything is quietly given Involving you, the same fallback a client
+     * already got, rather than every conversation on files they can open.
+     */
+    public function test_only_administrators_can_list_every_comment(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ben, 'Memo.txt');
+
+        $this->actingAs($ben)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Filing this.',
+        ])->assertCreated();
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', true)
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.body', 'Filing this.');
+
+        $this->actingAs($ben)->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', false)
+            ->assertJsonCount(1, 'items');
+
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
+        $this->actingAs($cara)->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', false)
+            ->assertJsonCount(0, 'items');
+    }
+
     /** The Workflows section is staff tooling; a generic client has no page for it. */
     public function test_the_workflows_page_is_closed_to_clients(): void
     {

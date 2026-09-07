@@ -52,9 +52,11 @@ final class Live
      *
      * One name for both because they are one surface: the tiles are built from
      * a single endpoint, so a comment and an approval both mean "ask again".
-     * Reach is the people the row concerns, never the staff room: every
-     * comment in the firm signalling every staff tab would have a board
-     * refetching all day for conversations it is not going to draw.
+     * Reach is the people the row concerns, plus every administrator — they
+     * list every conversation, so a comment they were never named in still
+     * has to move their board. Never the staff room: signalling every
+     * employee on every comment would have boards refetching all day for
+     * threads they are not going to draw.
      */
     public const WORKFLOWS = 'workflows';
 

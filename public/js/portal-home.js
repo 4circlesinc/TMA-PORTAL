@@ -1451,8 +1451,8 @@
   var homeWorkRetry = false;
   var homeWfExpanded = {};
 
-  /* Comments and requests are not broadcast on any live channel, so the board
-     polls, at the same cadence as presence and the inbox. */
+  /* Comments and requests ride TMALive (`workflows`). The 60-second timer
+     is the backstop for a portal that cannot reach Reverb. */
   var WORK_FRESH_MS = 60000;
 
   /* Short enough to sit at the end of a row: "just now", "12 min ago",
@@ -1592,7 +1592,9 @@
       panelHead('Comments', unread ? unread + ' unread' : ''),
       rows
         ? '<div class="tma-portal-work-list">' + rows + '</div>'
-        : '<p class="tma-portal-panel__note">No comments involving you yet.</p>',
+        : '<p class="tma-portal-panel__note">' +
+          (isAdminUser() ? 'No comments yet.' : 'No comments involving you yet.') +
+          '</p>',
       'tma-portal-panel--work'
     );
   }
@@ -2275,7 +2277,7 @@
      */
     { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', cipCard: true },
     { id: 'requests', label: 'Requests', desc: 'Reviews, approvals and signatures waiting on you.', preview: 'requests', cap: 'workflows.view' },
-    { id: 'comments', label: 'Comments', desc: 'The latest discussion on files that involve you.', preview: 'comments', cap: 'workflows.view' },
+    { id: 'comments', label: 'Comments', desc: 'Recent discussion on files. Administrators see every thread; everyone else sees what involves them.', preview: 'comments', cap: 'workflows.view' },
   ];
 
   // Shipped default board (3 equal columns, masonry):
@@ -2548,6 +2550,11 @@
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
     if (!me) return null;
     return !!(me.isAdmin || me.isStaff);
+  }
+
+  function isAdminUser() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    return !!(me && me.isAdmin);
   }
 
   var layoutHydrated = false;

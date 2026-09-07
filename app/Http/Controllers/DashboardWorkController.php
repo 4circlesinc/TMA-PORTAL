@@ -54,8 +54,13 @@ class DashboardWorkController extends Controller
         $requests = ($wantRequests || $wantFeed)
             ? Hub::requests($user, ['scope' => Hub::SCOPE_INBOX, 'limit' => self::LIMIT])
             : null;
+        // Administrators watch every conversation; everyone else only the
+        // threads that name them, answer them, or sit on their files.
+        $commentScope = Hub::canSeeAllComments($user)
+            ? Hub::COMMENTS_ALL
+            : Hub::COMMENTS_MINE;
         $comments = $wantComments
-            ? Hub::comments($user, ['scope' => Hub::COMMENTS_MINE, 'limit' => self::LIMIT])
+            ? Hub::comments($user, ['scope' => $commentScope, 'limit' => self::LIMIT])
             : null;
         $feedComments = $wantFeed
             ? Hub::comments($user, [

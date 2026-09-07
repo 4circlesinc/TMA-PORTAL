@@ -569,15 +569,87 @@ class DashboardWorkTest extends TestCase
     }
 
     /**
+     * Administrators see every comment on files they can open. Employees and
+     * service-provider contacts only see threads that involve them.
+     */
+    public function test_an_administrator_sees_every_comment_employees_and_providers_only_see_what_involves_them(): void
+    {
+        $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $dee = $this->user('Administrator', 'dee@example.com', 'Dee Admin');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($ben, 'Memo.txt');
+
+        $this->actingAs($ben)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Filing this.',
+        ])->assertCreated();
+
+        $this->actingAs($ada)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'comments')
+            ->assertJsonPath('comments.0.body', 'Filing this.');
+
+        $this->actingAs($dee)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'comments')
+            ->assertJsonPath('comments.0.body', 'Filing this.');
+
+        $this->actingAs($ben)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'comments');
+
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
+        $this->actingAs($cara)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonCount(0, 'comments');
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', true)
+            ->assertJsonCount(1, 'items');
+
+        $this->actingAs($cara)->getJson('/portal/files/workflows/comments?scope=all')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', false)
+            ->assertJsonCount(0, 'items');
+
+        config(['services.cip.enabled' => true]);
+        $gil = $this->user('Client', 'gil@example.com', 'Gil Contact');
+        $company = Company::create(['uid' => 'gal-comments', 'name' => 'Galaxy Firm']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $gil->id,
+            'name' => $gil->name,
+            'email' => $gil->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GCO', 'company_id' => $company->id,
+        ]);
+
+        $this->actingAs($gil)->getJson('/portal/dashboard/work?want=comments')
+            ->assertOk()
+            ->assertJsonPath('enabled', true)
+            ->assertJsonCount(0, 'comments');
+
+        // The strip is still work that concerns you, not the firm's chatter.
+        $this->actingAs($ada)->getJson('/portal/dashboard/work?want=feed,comments')
+            ->assertOk()
+            ->assertJsonCount(1, 'comments')
+            ->assertJsonCount(0, 'feed');
+    }
+
+    /**
      * The tiles are live, which means the writing half has to say so.
      *
      * Both tiles read one endpoint, so both ride one resource: a comment and
      * an approval each mean "ask again". The listening half is portal-home.js,
      * covered by dashboard-work.mjs.
      */
-    public function test_a_comment_signals_everybody_the_thread_concerns(): void
+    public function test_a_comment_signals_the_thread_and_every_administrator(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $dee = $this->user('Administrator', 'dee@example.com', 'Dee Admin');
         $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($ada);
@@ -590,14 +662,13 @@ class DashboardWorkTest extends TestCase
         });
 
         $this->assertArrayHasKey(Live::WORKFLOWS, $signals);
-        // The person named in it, and the author, whose own other tabs are
-        // showing the same board.
         $this->assertTrue($this->reached($signals, $ben), 'the person named should be signalled');
         $this->assertTrue($this->reached($signals, $ada), 'the author should be signalled');
+        $this->assertTrue($this->reached($signals, $dee), 'every administrator should be signalled');
         /*
-         * And nobody else. A signal per staff member on every comment written
-         * anywhere in the firm would have every open board refetching all day
-         * for conversations it is never going to draw.
+         * And not every colleague. A signal per staff member on every comment
+         * written anywhere in the firm would have every open board refetching
+         * all day for conversations it is never going to draw.
          */
         $this->assertFalse($this->reached($signals, $cara), 'an uninvolved colleague should not be');
     }

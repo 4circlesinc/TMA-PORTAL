@@ -8,7 +8,6 @@ use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Companies\ContactIdentity;
-use App\Support\Files\Workflow\Hub;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Collection;
@@ -353,7 +352,20 @@ class Comments
      */
     private static function signal(FileItem $file, FileComment $comment): void
     {
-        Live::users(Live::WORKFLOWS, self::reach($file, $comment));
+        $thread = self::reach($file, $comment);
+        // Administrators list every conversation, and a grant on the file
+        // (a share, a client team, the provider who filed it) is the other
+        // half of "this comment is yours". Both have to hear the doorbell
+        // or their board sits still until the 60-second poll. The File
+        // Library chip stays on the thread itself: refetching every admin
+        // listing on every comment in the firm is the storm WORKFLOWS is
+        // allowed to be, and FILES is not.
+        $lists = array_values(array_unique(array_merge(
+            $thread,
+            CommentAudience::forFile($file),
+        )));
+
+        Live::users(Live::WORKFLOWS, $lists);
 
         /*
          * And the indicators outside Workflows, which read the same numbers.
@@ -365,7 +377,7 @@ class Comments
          * WORKFLOWS is scoped to avoid, and a chip on a file nobody has open
          * is not worth it.
          */
-        Live::users(Live::FILES, self::reach($file, $comment));
+        Live::users(Live::FILES, $thread);
 
         /*
          * CIP is the exception, and staff-wide on purpose. The dot on the
@@ -382,15 +394,16 @@ class Comments
     }
 
     /**
-     * Everyone whose lists change when this comment does: the thread's other
-     * authors, the file's owner, and anybody named in it.
+     * Everyone on the thread itself: the other authors, the file's owner,
+     * and anybody named in it.
      *
-     * That is {@see Hub::concernsMe} said in ids
-     * rather than in SQL, and it is deliberately NOT access-checked the way
-     * notify()'s recipients are. The signal carries no rows, so the worst an
-     * over-wide reach can do is make somebody refetch a list that comes back
-     * exactly as it was. Checking would cost a User lookup and an access walk
-     * per participant on every comment written, to prevent nothing.
+     * Grant holders and administrators join in {@see self::signal} via
+     * {@see CommentAudience}, which already knows the personal-drive carve-out.
+     * This half is deliberately NOT access-checked the way notify()'s
+     * recipients are. The signal carries no rows, so the worst an over-wide
+     * reach can do is make somebody refetch a list that comes back exactly as
+     * it was. Checking would cost a User lookup and an access walk per
+     * participant on every comment written, to prevent nothing.
      *
      * @return list<int>
      */

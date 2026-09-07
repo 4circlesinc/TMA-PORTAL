@@ -72,7 +72,7 @@ final class Hub
     /** The same set, narrowed to threads nobody has closed off. */
     public const COMMENTS_UNRESOLVED = 'unresolved';
 
-    /** All recent discussion on files you can open, staff only. */
+    /** All recent discussion on files you can open, administrators only. */
     public const COMMENTS_ALL = 'all';
 
     public const COMMENT_SCOPES = [self::COMMENTS_MINE, self::COMMENTS_UNRESOLVED, self::COMMENTS_ALL];
@@ -88,6 +88,18 @@ final class Hub
     private const PAGE = 20;
 
     private const OVERSCAN = 60;
+
+    /**
+     * Firm-wide discussion: administrators, and only them.
+     *
+     * Employees, officers and service-provider contacts stay on threads that
+     * concern them. The Everything tab used to be any staff, which published
+     * every conversation on an ordinary org file to every colleague.
+     */
+    public static function canSeeAllComments(User $viewer): bool
+    {
+        return FileAccess::isAdmin($viewer);
+    }
 
     /**
      * @param  array{scope?:string,type?:string,state?:string,q?:string,cursor?:int,limit?:int}  $filters
@@ -151,7 +163,7 @@ final class Hub
             ? $filters['scope']
             : self::COMMENTS_MINE;
 
-        $canSeeAll = FileAccess::isStaff($viewer);
+        $canSeeAll = self::canSeeAllComments($viewer);
 
         if ($scope === self::COMMENTS_ALL && ! $canSeeAll) {
             $scope = self::COMMENTS_MINE;

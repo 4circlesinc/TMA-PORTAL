@@ -41,6 +41,7 @@
   var WF_COMMENT_TABS = [
     { key: 'mine', label: 'Involving you' },
     { key: 'unresolved', label: 'Open threads' },
+    // Shown when Hub::canSeeAllComments, which is administrators only.
     { key: 'all', label: 'Everything', staffOnly: true },
   ];
 
@@ -67,6 +68,11 @@
     submit_feedback: 'Send feedback',
     sign: 'Sign',
   };
+
+  function isAdminUser() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && me.isAdmin);
+  }
 
   var wf = {
     el: null, page: 'requests', tab: 'inbox', commentTab: 'mine',
@@ -97,6 +103,9 @@
       wf.error = null;
       wf.replyingTo = null;
       wf.expanded = {};
+      // Administrators land on every conversation; employees and providers
+      // stay on threads that involve them.
+      wf.commentTab = (page === 'comments' && isAdminUser()) ? 'all' : 'mine';
     }
 
     renderWorkflows();
@@ -4426,10 +4435,11 @@
       /*
        * Somebody else approving, commenting or replying happens in their
        * browser, and this page is precisely a list of what other people owe
-       * you, left alone it would go stale while you watched it.
+       * you, left alone it would go stale while you watched it. Requests and
+       * comments emit `workflows`, not `files`.
        */
       window.TMALive.register(
-        window.TMALive.RESOURCES.FILES,
+        window.TMALive.RESOURCES.WORKFLOWS,
         function () { return loadWorkflows({ silent: true }); },
         { active: function () { return !!wf.el && document.contains(wf.el); } }
       );
