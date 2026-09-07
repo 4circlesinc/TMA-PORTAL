@@ -64,13 +64,8 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:network"))
     implementation(project(":core:data"))
-    implementation(project(":feature:auth"))
-    implementation(project(":core:navigation"))
     implementation(libs.androidx.webkit)
     implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation(project(":core:database"))
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.browser)
 
     implementation(libs.androidx.core.ktx)

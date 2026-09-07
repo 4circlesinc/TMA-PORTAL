@@ -22,7 +22,6 @@ kotlin {
 dependencies {
     api(project(":core:common"))
     api(project(":core:network"))
-    api(project(":core:database"))
     api(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
     implementation(libs.hilt.android)

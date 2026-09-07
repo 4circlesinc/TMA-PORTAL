@@ -21,7 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tmantoinelaw.portal.core.ui.theme.TmaTheme
-import com.tmantoinelaw.portal.feature.auth.openCustomTab
+import com.tmantoinelaw.portal.web.openCustomTab
 import com.tmantoinelaw.portal.web.PortalWebHost
 import com.tmantoinelaw.portal.web.WebNotifications
 import dagger.hilt.android.AndroidEntryPoint
