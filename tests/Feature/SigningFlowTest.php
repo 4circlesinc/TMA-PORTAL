@@ -9,6 +9,7 @@ use App\Mail\SignatureReminder;
 use App\Models\FileItem;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Signatures\Sender;
 use App\Support\Signatures\SigningToken;
 use App\Support\Signatures\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -245,6 +246,42 @@ class SigningFlowTest extends TestCase
         $recipient = $request->recipients()->where('email', $email)->firstOrFail();
 
         return SigningToken::reveal($recipient);
+    }
+
+    /**
+     * Autofilled fields (name / email / date) are answered from the recipient
+     * record, so the signing page must show that answer straight away. They
+     * used to arrive empty, rendered as a required-looking box that ignored
+     * every click - a field the signer could neither fill nor escape.
+     */
+    public function test_autofilled_fields_are_resolved_when_the_page_is_opened(): void
+    {
+        $user = $this->approvedUser();
+        $request = $this->draft($user);
+        $recipient = $request->recipients()->firstOrFail();
+
+        $request->fields()->create([
+            'uuid' => (string) Str::uuid(),
+            'signature_recipient_id' => $recipient->id,
+            'type' => 'name', 'page' => 1,
+            'x' => 0.1, 'y' => 0.5, 'width' => 0.3, 'height' => 0.04,
+            'required' => true,
+        ]);
+
+        Sender::send($request, $user->id);
+        $token = $this->tokenFor($request->fresh(), 'dana@example.com');
+
+        $res = $this->get('/sign/'.$token)->assertOk();
+
+        // The recipient's own name, not a blank box, and not from any input.
+        $res->assertSee('Dana Reed');
+        $this->assertStringContainsString('"autofilled":true', $res->getContent());
+
+        // Nothing was written to the database just by looking at the page.
+        $this->assertNull(
+            $request->fields()->where('type', 'name')->value('value'),
+            'opening the page must not store the autofilled value',
+        );
     }
 
     public function test_a_recipient_can_open_and_sign_without_a_portal_account(): void

@@ -7,11 +7,11 @@
   .rev-bar__status { font-size:13px; color:var(--muted); }
   .rev-bar__status b { color:var(--ink); }
   .rev-wrap { max-width:920px; margin:0 auto; padding:20px; }
-  .rev-doc { width:100%; height:70vh; min-height:420px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  .rev-doc { width:100%; height:70vh; min-height:420px; border:1px solid var(--line); border-radius:var(--radius); background:#fff; }
   .rev-doc img { display:block; max-width:100%; margin:0 auto; }
-  .rev-card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; margin-top:18px; }
+  .rev-card { background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-top:18px; }
   .rev-card h2 { font-size:15px; margin:0 0 6px; }
-  .rev-comment { width:100%; min-height:96px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:14px; resize:vertical; }
+  .rev-comment { width:100%; min-height:96px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); font:inherit; font-size:14px; resize:vertical; background:var(--card); }
   .rev-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:14px; flex-wrap:wrap; }
   .btn--ok { background:var(--ok); }
   .rev-done { text-align:center; padding:36px 20px; }

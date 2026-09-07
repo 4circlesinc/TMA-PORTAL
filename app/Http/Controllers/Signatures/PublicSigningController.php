@@ -381,7 +381,14 @@ class PublicSigningController extends Controller
             'height' => (float) $f->height,
             'required' => (bool) $f->required,
             'autofilled' => FieldType::isAutofilled($f->type),
-            'value' => $f->value,
+            // Autofilled types are computed, not typed, and were only resolved
+            // when something was saved - so on first open the signer saw an
+            // empty "Full name" box that ignored every click and could never
+            // be completed. Resolve them here so the page shows the answer it
+            // will actually stamp. Still recomputed on submit; this is display.
+            'value' => FieldType::isAutofilled($f->type)
+                ? FieldValue::preview($f, $recipient)
+                : $f->value,
         ])->all();
     }
 

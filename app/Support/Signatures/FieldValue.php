@@ -28,11 +28,7 @@ class FieldValue
         // Autofilled types ignore whatever the client sent: the whole point is
         // that the signer can't put someone else's name or a false date there.
         if (FieldType::isAutofilled($field->type)) {
-            return match ($field->type) {
-                FieldType::NAME => $recipient->name,
-                FieldType::EMAIL => $recipient->email,
-                FieldType::DATE => now()->format('j M Y'),
-            };
+            return self::autofill($field, $recipient);
         }
 
         if ($raw === null || $raw === '') {
@@ -43,6 +39,28 @@ class FieldValue
             FieldType::SIGNATURE, FieldType::INITIALS => self::image($raw),
             FieldType::CHECKBOX => self::checkbox($raw),
             default => self::text($raw),
+        };
+    }
+
+    /**
+     * What an autofilled field will say, for showing it before anything is
+     * saved. Shares one body with normalize() so what the signer reads on the
+     * page is exactly what gets stored and stamped.
+     */
+    public static function preview(SignatureField $field, SignatureRecipient $recipient): ?string
+    {
+        return FieldType::isAutofilled($field->type)
+            ? self::autofill($field, $recipient)
+            : $field->value;
+    }
+
+    private static function autofill(SignatureField $field, SignatureRecipient $recipient): ?string
+    {
+        return match ($field->type) {
+            FieldType::NAME => $recipient->name,
+            FieldType::EMAIL => $recipient->email,
+            FieldType::DATE => now()->format('j M Y'),
+            default => null,
         };
     }
 

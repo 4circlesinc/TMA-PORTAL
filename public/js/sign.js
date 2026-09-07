@@ -151,9 +151,19 @@
       if (!layer) continue;
       var onPage = fields.filter(function (f) { return f.page === i + 1; });
       layer.innerHTML = onPage.map(function (f) {
-        var cls = 'sign-field' + (isFilled(f) ? ' is-done' : (f.required ? ' is-required' : ''));
-        return '<div class="' + cls + '" data-field="' + esc(f.id) + '" role="button" tabindex="0"' +
-          ' aria-label="' + esc(f.label) + (f.required ? ' (required)' : ' (optional)') + '"' +
+        // Autofilled fields (name, email, date) are filled in for the signer
+        // and can't be edited, so they must not look or behave like a button:
+        // no pointer, no focus stop, no required asterisk to chase.
+        var cls = 'sign-field' +
+          (f.autofilled ? ' is-auto' : '') +
+          (isFilled(f) ? ' is-done' : (f.required && !f.autofilled ? ' is-required' : ''));
+
+        var a11y = f.autofilled
+          ? ' aria-label="' + esc(f.label) + ' (filled in for you)"'
+          : ' role="button" tabindex="0" aria-label="' + esc(f.label) +
+            (f.required ? ' (required)' : ' (optional)') + '"';
+
+        return '<div class="' + cls + '" data-field="' + esc(f.id) + '"' + a11y +
           ' style="left:' + (f.x * 100) + '%;top:' + (f.y * 100) + '%;' +
           'width:' + (f.width * 100) + '%;height:' + (f.height * 100) + '%">' +
           fieldInner(f) + '</div>';
@@ -165,6 +175,11 @@
 
   function wireFields() {
     pagesHost.querySelectorAll('[data-field]').forEach(function (el) {
+      var f = fieldById(el.getAttribute('data-field'));
+      // Nothing to open for an autofilled field; leaving a handler on it is
+      // what made clicking one look broken.
+      if (!f || f.autofilled) return;
+
       function open() { openField(el.getAttribute('data-field')); }
       el.addEventListener('click', open);
       el.addEventListener('keydown', function (e) {
