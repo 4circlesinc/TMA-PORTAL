@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 import { execSync } from 'node:child_process';
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const b = await chromium.launch();
-const page = await b.newPage({ viewport: { width: 1500, height: 950 } });
+const page = await b.newPage({ viewport: { width: parseInt(process.env.VW||'1500',10), height: parseInt(process.env.VH||'950',10) } });
 const errs = [];
 const noise = t => t.includes('realtime disabled') || t.includes('Origin not allowed');
 page.on('pageerror', e => errs.push('pageerror: ' + e.message));
