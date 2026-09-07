@@ -4353,9 +4353,9 @@ label.tma-portal-check-row:hover {
   overflow: hidden;
 }
 
-/* Seven field types plus the selected field's settings outgrow a short
-   viewport. Scrolling the whole panel pushed the "Fields" heading and the
-   first cards off the top, so only this part moves. */
+/* One scroller for the panel's contents, under a heading that stays put.
+   This is the panel's own scroll - the document has its own, and the two
+   never move together. */
 .tma-portal-sig-wizard__fields-body {
   display: flex;
   flex-direction: column;
@@ -4368,21 +4368,14 @@ label.tma-portal-check-row:hover {
   margin-right: calc(var(--space-4) * -1);
 }
 
-/* The selected field's settings. Pinned below the palette rather than sitting
-   after it: seven field cards fill a short panel, and anything below them was
-   off the bottom where nobody looked for it. Scrolls itself if it has to. */
-.tma-portal-sig-wizard__fields-foot {
-  flex: 0 1 auto;
-  min-height: 0;
-  /* Enough for the whole settings block on a normal window; it scrolls on a
-     short one rather than pushing the palette out entirely. */
-  max-height: 68%;
-  overflow-y: auto;
-  padding-right: var(--space-4);
-  margin-right: calc(var(--space-4) * -1);
+/* The selected field's settings, at the top of that scroller. They lead
+   because selecting a field is what asks for them; below seven field cards
+   they sat off the bottom where nobody found them. */
+.tma-portal-sig-wizard__fields-tools {
+  flex: 0 0 auto;
 }
 
-.tma-portal-sig-wizard__fields-foot:empty { display: none; }
+.tma-portal-sig-wizard__fields-tools:empty { display: none; }
 
 .tma-portal-sig-wizard__fields-head {
   display: flex;
@@ -4650,10 +4643,10 @@ label.tma-portal-check-row:hover {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  /* Sits in the panel's pinned footer, which draws its own divider - the old
-     margin+padding here was pushing Alignment off the bottom. */
-  padding-top: var(--space-12);
-  border-top: 1px solid var(--color-border-soft);
+  /* Leads the panel now, so the rule goes underneath it to separate the
+     settings from the palette that follows.  */
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--color-border-soft);
 }
 
 .tma-portal-sig-wizard__assign-title {

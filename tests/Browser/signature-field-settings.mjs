@@ -71,6 +71,29 @@ await page.waitForTimeout(4200);
 await controls('[5] after save + reopening the editor:');
 
 // The real question: are they on screen without hunting?
+// The panel must scroll on its own, without moving the document.
+const scrolls = await page.evaluate(() => {
+  const body = document.querySelector('.tma-portal-sig-wizard__fields-body');
+  const pane = document.querySelector('[data-sig-canvas-scroll]');
+  const docBefore = pane.scrollTop;
+  body.scrollTop = body.scrollHeight;
+  return {
+    panelScrolled: body.scrollTop > 0,
+    panelScrollable: body.scrollHeight > body.clientHeight,
+    documentMoved: pane.scrollTop !== docBefore,
+    toolsAboveCards: (() => {
+      const t = document.querySelector('.tma-portal-sig-wizard__fields-tools');
+      const c = document.querySelector('.tma-portal-sig-wizard__field-list');
+      if (!t || !c) return null;
+      return t.getBoundingClientRect().top < c.getBoundingClientRect().top;
+    })(),
+  };
+});
+console.log('[7] panel scroll independent of the document:', JSON.stringify(scrolls));
+
+// Back to the top so the visibility check reflects a fresh selection.
+await page.evaluate(() => { document.querySelector('.tma-portal-sig-wizard__fields-body').scrollTop = 0; });
+
 const vis = await page.evaluate(() => {
   const out = {};
   const inView = (sel) => {
@@ -86,6 +109,7 @@ const vis = await page.evaluate(() => {
   return out;
 });
 console.log('[6] visible without scrolling:', JSON.stringify(vis));
+if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
 console.log('errors:', errs.length ? errs : 'none');
 
 await b.close();

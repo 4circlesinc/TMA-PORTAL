@@ -31,9 +31,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   replaces every field with a fresh server row carrying a new uuid.
 
   It walks the states that used to differ: nothing placed, just placed,
-  deselected, reselected, and saved-then-reopened. The last assertion is the
-  point — the slider and the alignment buttons are inside the viewport
-  without scrolling, which is what "I can't find it" actually meant.
+  deselected, reselected, and saved-then-reopened. The last assertions are the
+  point — the slider and the alignment buttons are inside the viewport without
+  scrolling, which is what "I can't find it" actually meant, and the panel
+  scrolls **without moving the document**, since the two scrollers sit side by
+  side and it is not obvious from the code that they are independent.
+
+  `VW`/`VH` set the viewport. Run it short (760) as well as tall: whether the
+  panel overflows at all depends on the window, and at a tall one the scroll
+  assertions pass without exercising anything.
 
 - **`signature-field-panel.mjs`** — the fields panel on a short viewport, and
   the date-format picker. The panel scrolled as a whole, which pushed the

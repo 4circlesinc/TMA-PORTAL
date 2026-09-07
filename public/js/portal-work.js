@@ -2367,11 +2367,11 @@
     // Fitting needs measured elements, so it runs after they're in the DOM.
     sigRestyleFieldPreviews(root);
 
-    // The selected field's settings live in the panel's pinned footer, so it
-    // is replaced wholesale rather than appended to the panel.
-    var foot = root.querySelector('.tma-portal-sig-wizard__fields-foot');
-    if (foot) {
-      foot.innerHTML = sigAssignPanel();
+    // The selected field's settings sit at the top of the panel's scroller,
+    // so that block is replaced wholesale rather than appended to the panel.
+    var tools = root.querySelector('.tma-portal-sig-wizard__fields-tools');
+    if (tools) {
+      tools.innerHTML = sigAssignPanel();
       sigWireAssignPanel(root);
     }
 
@@ -3233,12 +3233,16 @@
       '<div class="tma-portal-sig-wizard__fields-head">' +
       '<h3 class="tma-portal-sig-wizard__fields-title">Fields</h3>' +
       '</div>' +
-      // The heading stays put and the palette scrolls under it, but the
-      // selected field's settings are pinned below: seven field cards fill a
-      // short panel, and anything after them sat off the bottom where nobody
-      // found it.
-      '<div class="tma-portal-sig-wizard__fields-body">' + panel + '</div>' +
-      '<div class="tma-portal-sig-wizard__fields-foot">' + sigAssignPanel() + '</div>' +
+      // One scroller under the heading, holding the selected field's settings
+      // and then the palette. The settings come first because they are what
+      // you have just asked for by selecting a field; below seven field cards
+      // they sat off the bottom where nobody found them. This scrolls on its
+      // own - the document has its own scroller and the two never move
+      // together.
+      '<div class="tma-portal-sig-wizard__fields-body">' +
+      '<div class="tma-portal-sig-wizard__fields-tools">' + sigAssignPanel() + '</div>' +
+      panel +
+      '</div>' +
       '</aside>' +
       '<div class="tma-portal-sig-wizard__canvas">' +
       (sig.doc ? sigZoomBar() : '') +
