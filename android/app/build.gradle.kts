@@ -66,11 +66,8 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":feature:auth"))
     implementation(project(":core:navigation"))
-    implementation(project(":feature:shell"))
-    implementation(project(":feature:notifications"))
-    implementation(project(":feature:home"))
-    implementation(project(":feature:files"))
-    implementation(project(":feature:clients"))
+    implementation(libs.androidx.webkit)
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation(project(":core:database"))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
@@ -91,3 +88,20 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+
+/*
+ * The page-side bridge is the desktop app's own (desktop/host-bridge.js) so the
+ * two shells never drift: it is copied into the APK's assets before every build
+ * with the CommonJS wrapper stripped. signin-waiting.html rides along unchanged.
+ * Both copies are gitignored.
+ */
+val copyDesktopBridge = tasks.register<Copy>("copyDesktopBridge") {
+    val desktop = rootProject.projectDir.resolve("../desktop")
+    from(desktop.resolve("host-bridge.js")) {
+        filter { line -> line.replace("module.exports = `", "").replace(Regex("`;\\s*$"), "") }
+    }
+    from(desktop.resolve("signin-waiting.html"))
+    into(projectDir.resolve("src/main/assets"))
+}
+tasks.named("preBuild") { dependsOn(copyDesktopBridge) }

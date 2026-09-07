@@ -2,155 +2,85 @@ package com.tmantoinelaw.portal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tmantoinelaw.portal.core.data.identity.Identity
-import com.tmantoinelaw.portal.core.data.notifications.NotificationsRepository
-import com.tmantoinelaw.portal.core.data.replica.FilesReplica
-import com.tmantoinelaw.portal.core.data.queue.WriteQueue
-import com.tmantoinelaw.portal.core.database.WriteIntentEntity
-import com.tmantoinelaw.portal.core.network.Connectivity
-import com.tmantoinelaw.portal.feature.shell.SyncStatus
-import com.tmantoinelaw.portal.feature.shell.syncStatusFor
-import kotlinx.coroutines.flow.combine
+import com.tmantoinelaw.portal.core.data.auth.SignInHandoff
 import com.tmantoinelaw.portal.core.data.prefs.DevicePrefs
-import com.tmantoinelaw.portal.core.data.session.MeResult
-import com.tmantoinelaw.portal.core.data.session.SessionRepository
-import com.tmantoinelaw.portal.core.navigation.Route
+import com.tmantoinelaw.portal.core.network.Connectivity
 import com.tmantoinelaw.portal.core.network.PortalConfig
+import com.tmantoinelaw.portal.core.network.cookies.PersistentCookieJar
 import com.tmantoinelaw.portal.core.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import javax.inject.Inject
 
-/** The app's front door: who is signed in, and whether the loading layer may lift. */
-sealed interface AppState {
-    data object Booting : AppState
-    data object SignedOut : AppState
-    data class SignedIn(val identity: Identity) : AppState
-}
-
+/** What the host must do that the page cannot (desktop/main.js ipc + sign-in handoff). */
 sealed interface AppEvent {
-    /** `/me` answered with a wall: open it in a Custom Tab and ask again when the tab returns. */
-    data class FinishInBrowser(val url: String) : AppEvent
-    /** A portal link the app does not handle itself (prompt §8.4). */
-    data class OpenInBrowser(val url: String) : AppEvent
+    data class OpenOutside(val url: String) : AppEvent
+    data class ShowSignInWaiting(val providerLabel: String) : AppEvent
+    /** The browser signed in and the claim brought back cookies: hand them to the page and load the portal. */
+    data class SessionClaimed(val setCookieLines: List<String>) : AppEvent
+    data class LoadPortal(val path: String) : AppEvent
+    data class Notice(val title: String, val message: String) : AppEvent
 }
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    private val session: SessionRepository,
+    private val handoff: SignInHandoff,
+    private val jar: PersistentCookieJar,
     private val prefs: DevicePrefs,
-    private val config: PortalConfig,
-    notifications: NotificationsRepository,
-    private val downloads: com.tmantoinelaw.portal.files.PortalDownloads,
-    connectivity: Connectivity,
-    replica: FilesReplica,
-    private val queue: WriteQueue,
+    val config: PortalConfig,
+    val connectivity: Connectivity,
 ) : ViewModel() {
-    /** The header's sync pill (prompt §9.6). */
-    val syncStatus: StateFlow<SyncStatus?> = combine(connectivity.online, replica.progress, queue.summary) { online, p, q ->
-        syncStatusFor(online = online && q.online, replicaRunning = p.running, replicaTaken = p.taken, waiting = q.waiting, failed = q.failed, syncing = q.syncing)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    val queueEntries: StateFlow<List<WriteIntentEntity>> = queue.entries
-    val online: StateFlow<Boolean> = combine(connectivity.online, queue.summary) { n, q -> n && q.online }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    val replicaLine: StateFlow<String?> = replica.progress.map { p -> if (p.running) (if (p.taken > 0) "Syncing for offline, ${"%,d".format(p.taken)} records" else "Syncing for offline…") else null }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    /** "Your offline change has been synced" / "N offline changes have been synced" (portal-queue.js announce). */
-    val syncedToasts = queue.synced
-    fun retryQueued(id: Long) = viewModelScope.launch { queue.retry(id) }
-    fun discardQueued(id: Long) = viewModelScope.launch { queue.discard(id) }
-
-    /** The bell's badge (`/portal/notifications/count.unread`, kept absolute by the store). */
-    val unread: StateFlow<Int> = notifications.unread
-
-    private val _state = MutableStateFlow<AppState>(AppState.Booting)
-    val state: StateFlow<AppState> = _state.asStateFlow()
-
-    private val _events = MutableSharedFlow<AppEvent>(extraBufferCapacity = 4)
+    private val _events = MutableSharedFlow<AppEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<AppEvent> = _events.asSharedFlow()
 
-    /** A `tmaportal://auth?token=` that arrived; the sign-in screen consumes it. */
-    val pendingToken = MutableStateFlow<String?>(null)
-
-    /** A portal deep link that arrived; the signed-in shell consumes it. */
-    val pendingRoute = MutableStateFlow<Route?>(null)
-
-    /** Light unless the person chose otherwise (prompt §7.2). */
+    /** Light unless the person chose otherwise (prompt §7.2); the page's `data-theme` is the authority once it loads. */
     val themeMode: StateFlow<ThemeMode> = prefs.themeMode.map { it.toThemeMode() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.Light)
 
-    init {
-        viewModelScope.launch {
-            // Warm boot: the remembered account paints first, the network confirms behind it.
-            val cached = session.current()
-            if (cached != null) {
-                _state.value = AppState.SignedIn(cached)
-            } else if (!session.hasCookies()) {
-                _state.value = AppState.SignedOut
-            }
-            refreshNow()
-            if (_state.value is AppState.Booting) _state.value = AppState.SignedOut
-        }
-        viewModelScope.launch {
-            session.signedOut.collect { _state.value = AppState.SignedOut }
-        }
-        viewModelScope.launch {
-            session.identity.collect { identity ->
-                if (identity != null && _state.value !is AppState.Booting) _state.value = AppState.SignedIn(identity)
-            }
-        }
+    /** The system-browser URL of the current handoff (pendingBrowserSignInUrl). */
+    private var pendingBrowserSignInUrl: String? = null
+
+    /** desktop/main.js startBrowserSignIn: verifier + challenge, the browser opens /auth/desktop/start, the window waits. */
+    fun startBrowserSignIn(provider: String?) {
+        val url = handoff.startUrl(provider)
+        pendingBrowserSignInUrl = url
+        _events.tryEmit(AppEvent.OpenOutside(url))
+        _events.tryEmit(AppEvent.ShowSignInWaiting(when (provider) { "google" -> "Google"; "microsoft" -> "Microsoft"; else -> "" }))
     }
 
-    /** Ask the server who we are. Called at boot, on foreground, and after a browser wall closes. */
-    fun refresh() {
-        viewModelScope.launch { refreshNow() }
+    fun reopenBrowserSignIn() { pendingBrowserSignInUrl?.let { _events.tryEmit(AppEvent.OpenOutside(it)) } }
+
+    fun cancelBrowserSignIn() {
+        handoff.cancel()
+        pendingBrowserSignInUrl = null
+        _events.tryEmit(AppEvent.LoadPortal("/auth/login"))
     }
 
-    private suspend fun refreshNow() {
-        when (val result = session.refreshMe()) {
-            is MeResult.Ok -> _state.value = AppState.SignedIn(result.identity)
-            MeResult.SignedOut -> _state.value = AppState.SignedOut
-            is MeResult.NeedsBrowser -> _events.tryEmit(AppEvent.FinishInBrowser(result.url))
-            MeResult.Offline, is MeResult.Failed -> Unit // whatever we had stands
-        }
-    }
-
+    /** `tmaportal://auth?token=…` came back: claim it with the verifier (claimBrowserSession). */
     fun onAuthToken(token: String) {
-        pendingToken.value = token
-        if (_state.value is AppState.Booting) _state.value = AppState.SignedOut
-    }
-
-    fun onDeepLink(route: Route?, original: String) {
-        if (route == null) _events.tryEmit(AppEvent.OpenInBrowser(original)) else pendingRoute.value = route
-    }
-
-    fun toggleTheme() {
         viewModelScope.launch {
-            val next = if (themeMode.value == ThemeMode.Dark) "light" else "dark"
-            prefs.setThemeMode(next)
+            when (handoff.claim(token)) {
+                SignInHandoff.Claim.Success -> {
+                    pendingBrowserSignInUrl = null
+                    val lines = jar.loadForRequest(config.origin.toHttpUrl()).map { it.toString() }
+                    _events.tryEmit(AppEvent.SessionClaimed(lines))
+                }
+                SignInHandoff.Claim.NoVerifier -> _events.tryEmit(AppEvent.Notice("Sign-in could not be completed", "Start signing in from this window rather than from the browser, and finish in the tab it opens."))
+                SignInHandoff.Claim.Rejected -> _events.tryEmit(AppEvent.LoadPortal("/auth/login"))
+                SignInHandoff.Claim.Offline -> _events.tryEmit(AppEvent.Notice("Sign-in could not be completed", "The portal could not be reached. Try again when you have a connection."))
+            }
         }
     }
 
-    fun signOut() {
-        viewModelScope.launch { session.signOut() }
-    }
+    fun rememberTheme(dark: Boolean) { viewModelScope.launch { prefs.setThemeMode(if (dark) "dark" else "light") } }
 
-    fun download(context: android.content.Context, url: String, name: String) = downloads.enqueue(context, url, name)
-
-    /** Relative portal URLs (`/media/avatars/…`) need the origin; the cookie jar adds the session. */
-    fun absolute(url: String): String = if (url.startsWith("http")) url else config.url(url)
-
-    private fun String.toThemeMode() = when (this) {
-        "dark" -> ThemeMode.Dark
-        "system" -> ThemeMode.System
-        else -> ThemeMode.Light
-    }
+    private fun String.toThemeMode() = when (this) { "dark" -> ThemeMode.Dark; "system" -> ThemeMode.System; else -> ThemeMode.Light }
 }
