@@ -187,6 +187,63 @@ class CipBackgroundCheckTest extends TestCase
         $this->assertSame($first, count(Mail::queued(Postcard::class)));
     }
 
+    public function test_the_officers_message_rides_along_in_the_notice(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+        $application->provider->forceFill([
+            'contact_email' => 'notices@galaxy.example',
+            'contact_name' => 'Galaxy Notices',
+        ])->save();
+
+        $message = 'The Unit has the file; expect the check to run about six weeks.';
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-08-18',
+                'message' => $message,
+            ])
+            ->assertOk();
+
+        // The covering note is quoted under the standing copy, not instead
+        // of it: the acceptance date is still named in the details.
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($message) {
+            $details = collect($mail->payload['details'] ?? []);
+
+            return $mail->hasTo('notices@galaxy.example')
+                && str_contains((string) data_get($mail->payload, 'quote'), $message)
+                && $details->contains(fn ($row) => ($row[0] ?? null) === 'Accepted for processing');
+        });
+    }
+
+    public function test_an_acceptance_without_a_message_sends_the_notice_unquoted(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+        $application->provider->forceFill([
+            'contact_email' => 'notices@galaxy.example',
+            'contact_name' => 'Galaxy Notices',
+        ])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-08-18',
+                'message' => '   ',
+            ])
+            ->assertOk();
+
+        // Whitespace is not a message: an empty quote block would print as a
+        // blank panel in the letter.
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return $mail->hasTo('notices@galaxy.example')
+                && blank(data_get($mail->payload, 'quote'));
+        });
+    }
+
     public function test_the_accepted_date_is_required(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

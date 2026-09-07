@@ -231,6 +231,7 @@ class Notices
             ),
             Status::BACKGROUND_CHECK => Postcards::cipBackgroundCheck(
                 $facts, $url, $application->accepted_at?->toDateString(), $recipientName, $actor, $subject,
+                $message,
             ),
             Status::DELAYED => Postcards::cipDelayed(
                 $facts, $url, $application->accepted_at?->toDateString(), self::daysDelayed($application), $recipientName, $subject,

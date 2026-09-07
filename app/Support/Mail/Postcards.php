@@ -766,6 +766,7 @@ class Postcards
         ?string $recipientName = null,
         ?User $actor = null,
         ?string $subject = null,
+        ?string $message = null,
     ): Postcard {
         $subject ??= Notices::line($facts, Status::BACKGROUND_CHECK, $actor);
         $label = Status::label(Status::BACKGROUND_CHECK);
@@ -786,6 +787,9 @@ class Postcards
             'subject' => $subject,
             'url' => $url,
             'details' => $details,
+            // The officer's covering note, quoted under the standing copy
+            // rather than replacing it.
+            'quote' => $message ?: null,
         ]);
     }
 

@@ -10937,6 +10937,11 @@
         '<input type="date" id="cip-accepted" class="tma-dash__clients-field-input"' +
         ' data-cip-accepted value="' + esc(today) + '">' +
         '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-accept-message">Message to the service provider</label>' +
+        '<textarea id="cip-accept-message" class="tma-dash__clients-field-textarea" data-cip-accept-message' +
+        ' rows="4" maxlength="2000" placeholder="Anything the provider side should know"></textarea>' +
+        '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Background check.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
@@ -10960,6 +10965,9 @@
           }
 
           var body = { acceptedAt: date };
+          var messageEl = el.querySelector('[data-cip-accept-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
           if (override) {
             var reason = cipOverrideFieldsRead(el);
             if (reason === null) return;

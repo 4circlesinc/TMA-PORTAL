@@ -357,6 +357,9 @@ class CipTransitionController extends Controller
             // holds the gate and demands the reason.
             'override' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:2000'],
+            // Anything the provider side should know, in the officer's own
+            // words. It rides along in the §22 notice, not a second email.
+            'message' => ['nullable', 'string', 'max:2000'],
         ], [
             'acceptedAt.required' => 'Enter the accepted for processing date.',
         ]);
@@ -368,6 +371,7 @@ class CipTransitionController extends Controller
                 Carbon::parse($data['acceptedAt']),
                 $request->boolean('override'),
                 $data['note'] ?? null,
+                $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());

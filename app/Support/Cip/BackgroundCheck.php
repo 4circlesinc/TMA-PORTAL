@@ -39,6 +39,7 @@ class BackgroundCheck
         ?Carbon $acceptedAt = null,
         bool $override = false,
         ?string $note = null,
+        ?string $message = null,
     ): CipApplication {
         $acceptedAt ??= Carbon::now();
         $already = $application->status === Status::BACKGROUND_CHECK;
@@ -56,16 +57,23 @@ class BackgroundCheck
             );
         }
 
-        return DB::transaction(function () use ($application, $actor, $acceptedAt, $already, $edge, $note) {
+        $message = trim((string) $message) ?: null;
+
+        return DB::transaction(function () use ($application, $actor, $acceptedAt, $already, $edge, $note, $message) {
             $application->forceFill(['accepted_at' => $acceptedAt])->save();
 
             $meta = ['acceptedAt' => $acceptedAt->toDateString()];
 
+            // Carried to the notice, which is sent from Engine::write once
+            // the row has landed. Kept out of the event payload below: the
+            // covering note is the letter's, not the timeline's.
+            $notice = $message !== null ? ['message' => $message] : [];
+
             if (! $already) {
                 if ($edge) {
-                    Engine::apply($application, Status::BACKGROUND_CHECK, $actor, $meta);
+                    Engine::apply($application, Status::BACKGROUND_CHECK, $actor, $meta + $notice);
                 } else {
-                    Engine::set($application, Status::BACKGROUND_CHECK, $actor, $meta + ['note' => (string) $note]);
+                    Engine::set($application, Status::BACKGROUND_CHECK, $actor, $meta + $notice + ['note' => (string) $note]);
                 }
             }
 
