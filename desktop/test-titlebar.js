@@ -223,6 +223,43 @@ app.whenReady().then(async () => {
   `, true);
   check('it closes: the flag is cleared', await overlayFlag(), null);
 
+  await win.webContents.executeJavaScript(`
+    (() => {
+      document.documentElement.classList.add('tma-dash--signatures-wizard');
+      return ${settle};
+    })()
+  `, true);
+  check('signature wizard class: the shell is told', await overlayFlag(), '1');
+
+  await win.webContents.executeJavaScript(`
+    (() => {
+      document.documentElement.classList.remove('tma-dash--signatures-wizard');
+      return ${settle};
+    })()
+  `, true);
+  check('signature wizard class cleared: the flag is cleared', await overlayFlag(), null);
+
+  await win.webContents.executeJavaScript(`
+    (() => {
+      const wrap = document.createElement('div');
+      wrap.id = 'tb-test-sig-wrap';
+      const el = document.createElement('div');
+      el.className = 'tma-portal-sig-wizard';
+      wrap.appendChild(el);
+      document.body.appendChild(wrap);
+      return ${settle};
+    })()
+  `, true);
+  check('a nested signature wizard: the shell is told', await overlayFlag(), '1');
+
+  await win.webContents.executeJavaScript(`
+    (() => {
+      document.getElementById('tb-test-sig-wrap').remove();
+      return ${settle};
+    })()
+  `, true);
+  check('the nested wizard closes: the flag is cleared', await overlayFlag(), null);
+
   let buttonsThrew = false;
   try {
     titlebar.setWindowButtonsVisible(win, false);
@@ -487,6 +524,29 @@ app.whenReady().then(async () => {
   check(
     'windows: the viewer\'s own controls clear the caption buttons',
     viewer.toolsRight <= WIDTH - winMetrics.caption,
+    true,
+  );
+
+  const sigHead = await w.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const el = document.createElement('div');
+      el.className = 'tma-portal-sig-wizard';
+      el.innerHTML = '<header class="tma-portal-sig-wizard__head">'
+        + '<h2 class="tma-portal-sig-wizard__title">Signature request</h2>'
+        + '<button class="tma-portal-sig-wizard__close">x</button></header>';
+      document.body.appendChild(el);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const close = el.querySelector('.tma-portal-sig-wizard__close');
+        const r = close.getBoundingClientRect();
+        el.remove();
+        resolve({ closeRight: Math.round(r.right) });
+      }));
+    })
+  `, true);
+
+  check(
+    'windows: the signature wizard close clears the caption buttons',
+    sigHead.closeRight <= WIDTH - winMetrics.caption,
     true,
   );
 

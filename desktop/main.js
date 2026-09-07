@@ -1392,11 +1392,12 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('tma:call', (event, phase) => fromMainWindow(event) && applyCallPhase(phase));
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
     /*
-     * A file viewer covers the whole window, including the corner the window
-     * controls live in. They are the OS's, drawn above the page, so they
-     * cannot be layered under it: macOS takes its traffic lights off screen,
-     * and Windows — which has no way to hide its caption buttons — repaints
-     * the strip beneath them in the viewer's own colour.
+     * A file viewer or the signature-request wizard covers the whole window,
+     * including the corner the window controls live in. They are the OS's,
+     * drawn above the page, so they cannot be layered under it: macOS takes
+     * its traffic lights off screen, and Windows — which has no way to hide
+     * its caption buttons — repaints the strip beneath them in the viewer's
+     * own colour.
      */
     /*
      * The strip and the bar under it must agree on which blue: the injected

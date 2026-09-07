@@ -475,7 +475,8 @@ function buildCss(platform = process.platform) {
    */
   ${caption ? `.tma-portal-viewer__head,
   .tma-lightbox__bar,
-  .tma-portal-lightbox__head {
+  .tma-portal-lightbox__head,
+  .tma-portal-sig-wizard__head {
     padding-right: ${caption + 16}px !important;
   }` : '/* macOS: nothing to clear, the traffic lights are hidden instead. */'}
 
@@ -834,19 +835,21 @@ function script({ canGoBack, canGoForward }) {
      *
      * The traffic lights are AppKit's, not ours: they float above the web
      * content and no z-index reaches them, so when the portal opens a file
-     * viewer over everything they land on top of the file's name and its
-     * close button. The page cannot put them behind anything — but the main
-     * process can take them off screen while the viewer is up, so the state
-     * goes onto <html> and preload.js relays it (the same route the unread
-     * badge takes).
+     * viewer — or the signature-request wizard — over everything they land
+     * on top of the title and its close button. The page cannot put them
+     * behind anything — but the main process can take them off screen while
+     * the overlay is up, so the state goes onto <html> and preload.js relays
+     * it (the same route the unread badge takes).
      *
-     * Every one of these viewers is appended straight to <body>, which is why
-     * watching its direct children is enough.
+     * File viewers are appended straight to <body>. The signature wizard is
+     * not: it is painted inside the page, and the portal stamps
+     * tma-dash--signatures-wizard on <html> for that. Watch both.
      */
-    const OVERLAYS = '.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox';
+    const OVERLAYS = '.tma-portal-viewer, .tma-lightbox, .tma-portal-lightbox, .tma-portal-sig-wizard';
     const markOverlay = () => {
       const el = document.documentElement;
-      const open = !!document.querySelector(OVERLAYS);
+      const open = !!document.querySelector(OVERLAYS)
+        || el.classList.contains('tma-dash--signatures-wizard');
       if (open === (el.getAttribute('data-tma-overlay') === '1')) return;
       if (open) el.setAttribute('data-tma-overlay', '1');
       else el.removeAttribute('data-tma-overlay');
@@ -854,6 +857,10 @@ function script({ canGoBack, canGoForward }) {
     if (!document.documentElement.dataset.tmaTbOverlayWatch) {
       document.documentElement.dataset.tmaTbOverlayWatch = '1';
       new MutationObserver(markOverlay).observe(document.body, { childList: true });
+      new MutationObserver(markOverlay).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
     }
     markOverlay();
 

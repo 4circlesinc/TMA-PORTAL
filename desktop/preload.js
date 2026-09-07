@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('TMADesktop', {
  *   data-tma-badge   "7"                  unread notifications + new activity
  *   data-tma-call    "ringing" | "active" call phase, drives dock + sleep
  *   data-tma-focus   "<timestamp>"        page asked for the app to come forward
- *   data-tma-overlay "1"                  a full-screen viewer is covering the page
+ *   data-tma-overlay "1"                  a full-screen viewer or signature wizard is covering the page
  */
 const RELAYS = [
   {
@@ -34,8 +34,8 @@ const RELAYS = [
     },
   },
   { attribute: 'data-tma-call', channel: 'tma:call', read: (raw) => raw || '' },
-  // A full-screen file viewer is open. macOS draws its traffic lights above
-  // the page, so the shell takes them off screen while one is up.
+  // A full-screen file viewer or signature wizard is open. macOS draws its
+  // traffic lights above the page, so the shell takes them off screen while one is up.
   { attribute: 'data-tma-overlay', channel: 'tma:overlay', read: (raw) => raw === '1' },
   // The portal's theme (dashboard.js stamps <html>). Windows paints its own
   // caption buttons in titleBarOverlay.color, which only the main process can
