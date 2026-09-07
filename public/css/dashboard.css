@@ -36631,6 +36631,79 @@ span.tma-dash__messages-profile-avatar {
   gap: var(--space-12);
   padding: var(--space-24) var(--space-24) var(--space-8);
 }
+.tma-call__incoming-actions--slide {
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-16) var(--space-20) var(--space-12);
+}
+.tma-call__slide-row {
+  padding: 0 var(--space-24) var(--space-16);
+}
+.tma-call__slide {
+  --tma-slide: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  container-type: inline-size;
+  background: rgb(255 255 255 / 0.1);
+  outline: none;
+}
+.tma-call__slide:focus-visible {
+  box-shadow: 0 0 0 3px rgb(16 144 203 / 0.55);
+}
+.tma-call__slide.is-dragging { cursor: grabbing; }
+.tma-call__slide--answer { background: rgb(18 183 106 / 0.22); }
+.tma-call__slide--audio { background: rgb(255 255 255 / 0.12); }
+.tma-call__slide--decline,
+.tma-call__slide--end { background: rgb(240 68 56 / 0.22); }
+.tma-call__slide-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 72px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: rgb(255 255 255 / 0.82);
+  pointer-events: none;
+  opacity: calc(1 - var(--tma-slide) * 1.4);
+  transition: opacity 80ms linear;
+}
+.tma-call__slide.is-dragging .tma-call__slide-hint,
+.tma-call__slide.is-committed .tma-call__slide-hint { transition: none; }
+.tma-call__slide-thumb {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  color: #fff;
+  pointer-events: none;
+  transform: translateX(calc(var(--tma-slide) * (100cqw - 64px)));
+  transition: transform 140ms ease;
+}
+.tma-call__slide.is-dragging .tma-call__slide-thumb,
+.tma-call__slide.is-committed .tma-call__slide-thumb { transition: none; }
+.tma-call__slide--answer .tma-call__slide-thumb { background: #12b76a; }
+.tma-call__slide--audio .tma-call__slide-thumb { background: rgb(255 255 255 / 0.28); }
+.tma-call__slide--decline .tma-call__slide-thumb,
+.tma-call__slide--end .tma-call__slide-thumb { background: #f04438; }
+.tma-call__slide-thumb svg,
+.tma-call__slide-thumb .tma-call__ico { width: 22px; height: 22px; }
 
 /* ── Buttons and controls ───────────────────────────────────────── */
 .tma-call__btn {

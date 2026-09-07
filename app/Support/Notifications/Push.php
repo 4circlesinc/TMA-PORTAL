@@ -44,7 +44,7 @@ final class Push
             self::queue((int) $id, [
                 'kind' => 'call',
                 'signal' => json_encode($signal, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            ], urgent: true, ttlSeconds: 30);
+            ], urgent: true, ttlSeconds: 45); // delivery window, slightly above the 40s ring
         }
     }
 

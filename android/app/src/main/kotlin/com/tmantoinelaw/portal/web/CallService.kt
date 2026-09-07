@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.ServiceCompat
 
 /**
@@ -19,15 +21,32 @@ import androidx.core.app.ServiceCompat
  * call twice.
  */
 class CallService : Service() {
+    private val main = Handler(Looper.getMainLooper())
+    private var ringing = false
+    private val ringTimeout = Runnable {
+        if (!ringing) return@Runnable
+        CallSession.update("", null)
+        stopSelf()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val info = CallNotifications.Info.parse(intent?.getStringExtra(EXTRA_INFO))
-        val ringing = intent?.getBooleanExtra(EXTRA_RINGING, false) == true
+        ringing = intent?.getBooleanExtra(EXTRA_RINGING, false) == true
         val headsUp = intent?.getBooleanExtra(EXTRA_HEADS_UP, ringing && !AppForeground.resumed) == true
+        main.removeCallbacks(ringTimeout)
+        // Lock-screen / background FSI has no JS clock; match the page's 40s ring.
+        if (ringing && headsUp) main.postDelayed(ringTimeout, RING_TIMEOUT_MS)
         val notification = CallNotifications.forService(this, info, ringing, headsUp)
         startAsForeground(notification)
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        main.removeCallbacks(ringTimeout)
+        ringing = false
+        super.onDestroy()
     }
 
     private fun startAsForeground(notification: android.app.Notification) {
@@ -53,6 +72,7 @@ class CallService : Service() {
         private const val EXTRA_INFO = "info"
         private const val EXTRA_RINGING = "ringing"
         private const val EXTRA_HEADS_UP = "headsUp"
+        private const val RING_TIMEOUT_MS = 40_000L
 
         fun start(context: Context, infoJson: String?, ringing: Boolean) {
             CallNotifications.cancelIncoming(context)

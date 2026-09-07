@@ -379,13 +379,13 @@
   }
 
   /*
-   * An unanswered call gives up on its own: 15 seconds of ringing, then the
+   * An unanswered call gives up on its own: 40 seconds of ringing, then the
    * caller's side ends it as a missed call rather than ringing into the
    * void. The callee runs the same clock at double length as a failsafe —
    * normally the caller's hangup closes the pop-up, but a caller whose tab
    * died mid-ring can never send it.
    */
-  var RING_TIMEOUT_MS = 15000;
+  var RING_TIMEOUT_MS = 40000;
 
   function armRingTimeout() {
     if (!session) return;
@@ -1495,6 +1495,17 @@
       esc(initials(session && session.peerName)) + '</span>';
   }
 
+  function isAndroidShell() {
+    return !!(window.TMADesktop && window.TMADesktop.isAndroid);
+  }
+
+  function slideControl(action, kind, label, icon) {
+    return '<div class="tma-call__slide tma-call__slide--' + kind + '" data-call-slider="' + action + '" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="' + esc(label) + '">' +
+      '<span class="tma-call__slide-hint">' + esc(label) + '</span>' +
+      '<span class="tma-call__slide-thumb" aria-hidden="true">' + icon + '</span>' +
+      '</div>';
+  }
+
   /*
    * ── Incoming: a plain, centered call card (§1,§14) ──
    * Deliberately quiet before it is answered, photo, who is calling, and the
@@ -1532,15 +1543,19 @@
         : '') +
       '</div>' +
 
-      '<div class="tma-call__incoming-actions">' +
-      '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-action="decline">' +
-      iconHangup() + '<span>Decline</span></button>' +
-      (isVideo
-        ? '<button type="button" class="tma-call__btn tma-call__btn--audio" data-call-action="accept-audio">' +
-          iconPhone() + '<span>Voice only</span></button>'
-        : '') +
-      '<button type="button" class="tma-call__btn tma-call__btn--accept" data-call-action="accept">' +
-      (isVideo ? iconVideo() : iconPhone()) + '<span>Answer</span></button>' +
+      '<div class="tma-call__incoming-actions' + (isAndroidShell() ? ' tma-call__incoming-actions--slide' : '') + '">' +
+      (isAndroidShell()
+        ? slideControl('accept', 'answer', 'Slide to answer', isVideo ? iconVideo() : iconPhone()) +
+          (isVideo ? slideControl('accept-audio', 'audio', 'Slide for voice only', iconPhone()) : '') +
+          slideControl('decline', 'decline', 'Slide to decline', iconHangup())
+        : '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-action="decline">' +
+          iconHangup() + '<span>Decline</span></button>' +
+          (isVideo
+            ? '<button type="button" class="tma-call__btn tma-call__btn--audio" data-call-action="accept-audio">' +
+              iconPhone() + '<span>Voice only</span></button>'
+            : '') +
+          '<button type="button" class="tma-call__btn tma-call__btn--accept" data-call-action="accept">' +
+          (isVideo ? iconVideo() : iconPhone()) + '<span>Answer</span></button>') +
       '</div>' +
 
       renderErrorPanel() +
@@ -1600,9 +1615,11 @@
       '" data-call-action="more" aria-haspopup="menu" aria-expanded="' +
       (session.sheet ? 'true' : 'false') + '" aria-label="More options" title="More options">' +
       iconMore() + '</button>' +
+      (isAndroidShell() ? '' :
       '<button type="button" class="tma-call__ctrl tma-call__ctrl--end" data-call-action="hangup" ' +
-      'aria-label="End call">' + iconHangup() + '</button>' +
+      'aria-label="End call">' + iconHangup() + '</button>') +
       '</div>' +
+      (isAndroidShell() ? '<div class="tma-call__slide-row">' + slideControl('hangup', 'end', 'Slide to end', iconHangup()) + '</div>' : '') +
 
       renderMoreSheet() +
       renderDeviceSheet() +
@@ -2112,6 +2129,82 @@
       if (!sel) return;
       switchDevice(sel.getAttribute('data-call-device'), sel.value);
     });
+
+    wireSliders(root);
+  }
+
+  /*
+   * Phone-shell incoming/hangup uses a drag-to-commit slider, the same
+   * gesture as the lock-screen CallActivity. A tap is ignored: committing
+   * takes a travel of about 72% of the track so a brush of the thumb
+   * cannot answer or hang up.
+   */
+  function wireSliders(root) {
+    if (root.__tmaCallSliders) return;
+    root.__tmaCallSliders = true;
+
+    var sliding = null;
+
+    function setProgress(track, p) {
+      p = Math.max(0, Math.min(1, p));
+      track.style.setProperty('--tma-slide', String(p));
+      track.setAttribute('aria-valuenow', String(Math.round(p * 100)));
+      track.classList.toggle('is-armed', p > 0.08);
+    }
+
+    function commit(track) {
+      var action = track.getAttribute('data-call-slider');
+      var fn = ACTIONS[action];
+      if (fn && session) fn();
+    }
+
+    root.addEventListener('pointerdown', function (e) {
+      var track = e.target.closest('[data-call-slider]');
+      if (!track || !root.contains(track) || !track.classList.contains('tma-call__slide')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var rect = track.getBoundingClientRect();
+      sliding = { track: track, start: rect.left, width: Math.max(1, rect.width) };
+      track.classList.add('is-dragging');
+      try { track.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      setProgress(track, (e.clientX - sliding.start) / sliding.width);
+    });
+
+    root.addEventListener('pointermove', function (e) {
+      if (!sliding) return;
+      setProgress(sliding.track, (e.clientX - sliding.start) / sliding.width);
+    });
+
+    function endSlide(e) {
+      if (!sliding) return;
+      var track = sliding.track;
+      var p = parseFloat(track.style.getPropertyValue('--tma-slide') || '0') || 0;
+      sliding = null;
+      track.classList.remove('is-dragging');
+      if (p >= 0.72) {
+        track.classList.add('is-committed');
+        commit(track);
+        return;
+      }
+      setProgress(track, 0);
+      if (e && e.pointerId != null) {
+        try { track.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+    }
+
+    root.addEventListener('pointerup', endSlide);
+    root.addEventListener('pointercancel', endSlide);
+
+    root.addEventListener('keydown', function (e) {
+      var track = e.target.closest('[data-call-slider]');
+      if (!track || !root.contains(track) || !track.classList.contains('tma-call__slide')) return;
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight' || e.key === 'End') {
+        e.preventDefault();
+        setProgress(track, 1);
+        track.classList.add('is-committed');
+        commit(track);
+      }
+    });
   }
 
   function wireOverlay() {
@@ -2166,7 +2259,7 @@
     var root = hostEl();
     if (!root) return [];
     return Array.prototype.slice.call(root.querySelectorAll(
-      'button:not([disabled]), select:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      'button:not([disabled]), select:not([disabled]), [href], input:not([disabled]), [data-call-slider].tma-call__slide, [tabindex]:not([tabindex="-1"])'
     )).filter(function (el) { return el.offsetParent !== null; });
   }
 

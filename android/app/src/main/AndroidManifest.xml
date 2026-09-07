@@ -57,6 +57,15 @@
                 <data android:scheme="https" android:host="portal.tmantoinelaw.com" />
             </intent-filter>
         </activity>
+        <!-- Incoming call over the lock screen: slide to answer, slide to end. -->
+        <activity
+            android:name=".CallActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.TMA.Call" />
         <!-- Keeps the microphone and camera while a call rings or runs in the background (desktop: the process simply stays). -->
         <service
             android:name=".web.CallService"

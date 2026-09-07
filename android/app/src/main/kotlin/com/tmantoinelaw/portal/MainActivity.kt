@@ -1,11 +1,13 @@
 package com.tmantoinelaw.portal
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.WebChromeClient
 import androidx.activity.ComponentActivity
@@ -27,6 +29,7 @@ import com.tmantoinelaw.portal.web.WebNotifications
 import com.tmantoinelaw.portal.web.CallNotifications
 import com.tmantoinelaw.portal.web.CallService
 import com.tmantoinelaw.portal.web.AppForeground
+import com.tmantoinelaw.portal.web.CallSession
 import com.tmantoinelaw.portal.web.PushRegistrar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -51,6 +54,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     }
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         host.evaluate("window.__tmaNotificationPermission && __tmaNotificationPermission($granted)")
+        if (granted) ensureFullScreenCalls()
     }
     private var fileCallback: ((Array<Uri>?) -> Unit)? = null
     private val chooseFile = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -81,6 +85,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         }
         if (!handle(intent)) host.loadPortal()
         if (Build.VERSION.SDK_INT >= 33 && !notificationsAllowed()) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else ensureFullScreenCalls()
 
         setContent {
             val mode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -106,6 +111,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         when (intent.action) {
             CallNotifications.ACTION_ANSWER -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)"); intent.action = null; return true }
             CallNotifications.ACTION_DECLINE -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.decline()"); intent.action = null; return true }
+            CallNotifications.ACTION_HANGUP -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.end()"); intent.action = null; return true }
             CallNotifications.ACTION_OPEN -> { intent.action = null; return true }
         }
         intent.getIntExtra(WebNotifications.EXTRA_ID, 0).takeIf { it > 0 }?.let { id ->
@@ -140,9 +146,9 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         val onCall = phase == "ringing" || phase == "active"
         if (onCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         when (phase) {
-            "ringing" -> CallService.start(this, callInfo, ringing = true)
-            "active" -> CallService.start(this, callInfo, ringing = false)
-            else -> { CallService.stop(this); callInfo = null }
+            "ringing" -> { CallSession.update("ringing", callInfo); CallService.start(this, callInfo, ringing = true) }
+            "active" -> { CallSession.update("active", callInfo); CallService.start(this, callInfo, ringing = false) }
+            else -> { CallSession.update("", null); CallService.stop(this); callInfo = null }
         }
     }
     override fun onTheme(dark: Boolean) {
@@ -160,7 +166,22 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     override fun onCloseNotification(id: Int) = WebNotifications.close(this, id)
     override fun notificationsAllowed(): Boolean =
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    override fun requestNotifications() { if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
+    override fun requestNotifications() { if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) else ensureFullScreenCalls() }
+    /**
+     * Android 14+ holds full-screen incoming calls behind a separate grant.
+     * Asked once so a ring can take the lock screen the way a normal call does.
+     */
+    private fun ensureFullScreenCalls() {
+        if (Build.VERSION.SDK_INT < 34) return
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        if (nm.canUseFullScreenIntent()) return
+        val prefs = getSharedPreferences("calls", MODE_PRIVATE)
+        if (prefs.getBoolean("asked_fsi", false)) return
+        prefs.edit().putBoolean("asked_fsi", true).apply()
+        runCatching {
+            startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(Uri.parse("package:$packageName")))
+        }
+    }
     override fun requestPermissions(permissions: Array<String>, done: (Boolean) -> Unit) {
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) { done(true); return }
         permissionCallback = done

@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.graphics.drawable.IconCompat
+import com.tmantoinelaw.portal.CallActivity
 import com.tmantoinelaw.portal.MainActivity
 import com.tmantoinelaw.portal.core.ui.R
 import org.json.JSONObject
@@ -33,6 +34,7 @@ object CallNotifications {
     const val ONGOING_ID = 7002
     const val ACTION_ANSWER = "tma.call.answer"
     const val ACTION_DECLINE = "tma.call.decline"
+    const val ACTION_HANGUP = "tma.call.hangup"
     const val ACTION_OPEN = "tma.call.open"
     private val BRAND = Color.parseColor("#136DA0")
 
@@ -63,6 +65,17 @@ object CallNotifications {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
+    /** Lock-screen / background pop-up: slide to answer, slide to decline. */
+    private fun incomingScreen(context: Context, info: Info) = PendingIntent.getActivity(
+        context, 7010,
+        Intent(context, CallActivity::class.java)
+            .setAction(ACTION_OPEN)
+            .putExtra(CallActivity.EXTRA_NAME, info.name)
+            .putExtra(CallActivity.EXTRA_MEDIA, info.media)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     private fun markBitmap(context: Context) = BitmapFactory.decodeResource(context.resources, R.drawable.logo_mark)
 
     private fun brand(builder: NotificationCompat.Builder, context: Context): NotificationCompat.Builder {
@@ -84,8 +97,8 @@ object CallNotifications {
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer).setIsVideo(info.media == "video"))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setFullScreenIntent(activityIntent(context, ACTION_OPEN), true)
-            .setContentIntent(activityIntent(context, ACTION_OPEN))
+            .setFullScreenIntent(incomingScreen(context, info), true)
+            .setContentIntent(incomingScreen(context, info))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOngoing(true)
             .setSilent(true)
@@ -96,15 +109,21 @@ object CallNotifications {
     /** The foreground service's notification while a call rings in front or is already active. */
     fun ongoing(context: Context, info: Info?, ringing: Boolean): Notification {
         ensureChannel(context)
-        return brand(NotificationCompat.Builder(context, CHANNEL), context)
-            .setContentTitle(info?.name ?: "Call")
+        val resolved = info ?: Info("Call", "audio")
+        val builder = brand(NotificationCompat.Builder(context, CHANNEL), context)
+            .setContentTitle(resolved.name)
             .setContentText(if (ringing) "Ringing" else "Call in progress")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setContentIntent(activityIntent(context, ACTION_OPEN))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOngoing(true)
             .setSilent(true)
-            .build()
+        if (!ringing) {
+            val person = Person.Builder().setName(resolved.name).setImportant(true)
+                .setIcon(IconCompat.createWithResource(context, R.drawable.logo_mark)).build()
+            builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, activityIntent(context, ACTION_HANGUP)))
+        }
+        return builder.build()
     }
 
     fun forService(context: Context, info: Info?, ringing: Boolean, headsUp: Boolean): Notification =

@@ -37,6 +37,7 @@ class PushService : FirebaseMessagingService() {
                 if (signal.optString("type") != "ring") return
                 val payload = signal.optJSONObject("payload")
                 val info = JSONObject().put("name", payload?.optString("fromName")?.ifBlank { null } ?: "Unknown caller").put("media", payload?.optString("media")?.ifBlank { null } ?: "audio")
+                CallSession.update("ringing", info.toString())
                 CallService.start(this, info.toString(), ringing = true)
             }
         }

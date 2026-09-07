@@ -117,7 +117,7 @@ class PushNotificationsTest extends TestCase
         [, $data, $urgent, $ttl] = $this->transport->sent[0];
         $this->assertSame('call', $data['kind']);
         $this->assertTrue($urgent);
-        $this->assertSame(30, $ttl);
+        $this->assertSame(45, $ttl);
         $this->assertSame('Bob', json_decode($data['signal'], true)['payload']['fromName']);
     }
 
