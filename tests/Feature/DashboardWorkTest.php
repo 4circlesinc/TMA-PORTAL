@@ -585,6 +585,7 @@ class DashboardWorkTest extends TestCase
 
         $this->actingAs($ada)->getJson('/portal/dashboard/work?want=comments')
             ->assertOk()
+            ->assertJsonPath('commentScope', 'all')
             ->assertJsonCount(1, 'comments')
             ->assertJsonPath('comments.0.body', 'Filing this.');
 
@@ -600,6 +601,7 @@ class DashboardWorkTest extends TestCase
         $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $this->actingAs($cara)->getJson('/portal/dashboard/work?want=comments')
             ->assertOk()
+            ->assertJsonPath('commentScope', 'mine')
             ->assertJsonCount(0, 'comments');
 
         $this->actingAs($ada)->getJson('/portal/files/workflows/comments?scope=all')

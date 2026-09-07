@@ -370,6 +370,12 @@ class WorkflowHubTest extends TestCase
             ->assertOk()
             ->assertJsonPath('canSeeAll', false)
             ->assertJsonCount(0, 'items');
+
+        $this->actingAs($ada)->getJson('/portal/files/workflows/comments')
+            ->assertOk()
+            ->assertJsonPath('canSeeAll', true)
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.body', 'Filing this.');
     }
 
     /** The Workflows section is staff tooling; a generic client has no page for it. */

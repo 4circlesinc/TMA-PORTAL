@@ -76,6 +76,7 @@
 
   var wf = {
     el: null, page: 'requests', tab: 'inbox', commentTab: 'mine',
+    commentTabPicked: false,
     search: '', type: '', state: 'open',
     items: [], comments: [], counts: null, canSeeAll: false,
     cursor: null, loading: false, loadingMore: false, loaded: false,
@@ -103,6 +104,7 @@
       wf.error = null;
       wf.replyingTo = null;
       wf.expanded = {};
+      wf.commentTabPicked = false;
       // Administrators land on every conversation; employees and providers
       // stay on threads that involve them.
       wf.commentTab = (page === 'comments' && isAdminUser()) ? 'all' : 'mine';
@@ -125,8 +127,14 @@
 
     // The firm-wide tab is not merely hidden from clients, the server refuses
     // the scope, so offering it would be a button that quietly does something
-    // else.
-    return all.filter(function (t) { return !t.staffOnly || wf.canSeeAll; });
+    // else. Show Everything to an administrator before the first response
+    // lands too: hiding it made wfActiveTab fall back to Involving you, and
+    // the request went out as mine — which is why past comments vanished.
+    return all.filter(function (t) {
+      if (!t.staffOnly) return true;
+      if (wf.canSeeAll) return true;
+      return wf.page === 'comments' && t.key === 'all' && isAdminUser();
+    });
   }
 
   function wfActiveTab() {
@@ -286,7 +294,9 @@
     return ui().emptyState({
       illustration: 'Illustration06',
       title: wfActiveTab() === 'unresolved' ? 'No open threads' : 'No comments yet',
-      subtitle: 'Comments on files you own, threads you’re in, and anywhere you’re mentioned.',
+      subtitle: wfActiveTab() === 'all'
+        ? 'Comments on files across the library land here.'
+        : 'Comments on files you own, threads you’re in, and anywhere you’re mentioned.',
     });
   }
 
@@ -648,7 +658,11 @@
 
   function wfUrl(path, cursor) {
     var params = new URLSearchParams();
-    if (wf.page !== 'updates') params.set('scope', wfActiveTab());
+    // Comments use the intended tab, not wfActiveTab(): that helper falls
+    // back to Involving you while Everything is still hidden, which is how
+    // an administrator's first request loaded only threads that named them.
+    if (wf.page === 'comments') params.set('scope', wf.commentTab);
+    else if (wf.page !== 'updates') params.set('scope', wfActiveTab());
     if (wf.search) params.set('q', wf.search);
     if (wf.page === 'requests') {
       if (wf.type) params.set('type', wf.type);
@@ -698,6 +712,18 @@
         // still claiming work the reader just finished.
         publishWorkflowCounts(wf.counts);
         wf.canSeeAll = !!res.canSeeAll;
+        /*
+         * Identity can arrive after the first paint. An administrator who
+         * landed on Involving you because /me was not ready yet would
+         * otherwise keep that filtered list even after Everything appeared.
+         */
+        if (wf.page === 'comments' && wf.canSeeAll && !wf.commentTabPicked && wf.commentTab !== 'all') {
+          wf.commentTab = 'all';
+          wf.cursor = null;
+          wf.loading = false;
+          wf.loadingMore = false;
+          return loadWorkflows({ silent: true });
+        }
         wf.loading = false;
         wf.loadingMore = false;
         wf.loaded = true;
@@ -966,7 +992,10 @@
       var key = hit.getAttribute('data-tab-key');
       if (key === wfActiveTab()) return;
 
-      if (wf.page === 'comments') wf.commentTab = key;
+      if (wf.page === 'comments') {
+        wf.commentTab = key;
+        wf.commentTabPicked = true;
+      }
       else wf.tab = key;
       wf.cursor = null;
       wf.replyingTo = null;

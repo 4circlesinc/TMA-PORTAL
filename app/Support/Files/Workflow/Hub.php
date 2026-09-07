@@ -159,11 +159,11 @@ final class Hub
      */
     public static function comments(User $viewer, array $filters = []): array
     {
+        $canSeeAll = self::canSeeAllComments($viewer);
+
         $scope = in_array($filters['scope'] ?? '', self::COMMENT_SCOPES, true)
             ? $filters['scope']
-            : self::COMMENTS_MINE;
-
-        $canSeeAll = self::canSeeAllComments($viewer);
+            : ($canSeeAll ? self::COMMENTS_ALL : self::COMMENTS_MINE);
 
         if ($scope === self::COMMENTS_ALL && ! $canSeeAll) {
             $scope = self::COMMENTS_MINE;

@@ -250,6 +250,11 @@
 
     window.TMAStore.get('home:work').then(function (snap) {
       if (!snap || homeReal.work) return;
+      // An administrator's tile now lists every thread. A snapshot taken
+      // under the old "involving you" filter would hide comments that are
+      // already in the library, so throw it away and wait for the refetch.
+      var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+      if (me && me.isAdmin && snap.commentScope !== 'all') return;
       homeWork = snap;
       // Which lists the kept answer holds, or the tiles it does hold would
       // paint a skeleton over rows that are perfectly good until the
@@ -1586,10 +1591,11 @@
     var items = (homeWork && homeWork.comments) || [];
     var unread = homeWork && homeWork.counts ? (homeWork.counts.unread || 0) : 0;
     var rows = items.map(commentRow).join('');
+    var seeAll = '<button type="button" class="tma-portal-link" data-home-comments-all>See all</button>';
 
     return tileShell(
       'comments', 'panel-comments', 'Comments',
-      panelHead('Comments', unread ? unread + ' unread' : ''),
+      panelHead('Comments', unread ? unread + ' unread' : '', seeAll),
       rows
         ? '<div class="tma-portal-work-list">' + rows + '</div>'
         : '<p class="tma-portal-panel__note">' +
@@ -2560,10 +2566,11 @@
   var layoutHydrated = false;
   var layoutSaveTimer = null;
 
-  function panelHead(title, meta) {
+  function panelHead(title, meta, extra) {
     return '<div class="tma-portal-panel__head">' +
       '<h2 class="tma-portal-panel__title">' + ui().esc(title) + '</h2>' +
       (meta ? '<span class="tma-portal-panel__meta">' + ui().esc(meta) + '</span>' : '') +
+      (extra || '') +
       '</div>';
   }
 
@@ -3511,6 +3518,17 @@
     pick('[data-home-chat-open]').forEach(function (b) {
       b.addEventListener('click', function () {
         navigate({ navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' });
+      });
+    });
+
+    pick('[data-home-comments-all]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        navigate({
+          navId: 'workflows-feedback',
+          view: 'workflows',
+          title: 'Feedback and Comments',
+          crumb: 'Workflows / Feedback and Comments',
+        });
       });
     });
 

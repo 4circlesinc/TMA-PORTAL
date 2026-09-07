@@ -84,6 +84,9 @@ class DashboardWorkController extends Controller
             'want' => $want,
             'requests' => $wantRequests ? ($requests['items'] ?? []) : [],
             'comments' => $wantComments ? ($comments['items'] ?? []) : [],
+            // So a cached MINE answer from before administrators listed
+            // every thread is not painted as if it were the full list.
+            'commentScope' => $wantComments ? $commentScope : null,
             'feed' => $wantFeed ? self::feed(
                 $requests['items'] ?? [],
                 $feedComments['items'] ?? [],
