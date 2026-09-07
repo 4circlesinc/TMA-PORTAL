@@ -186,7 +186,7 @@ a browser tab cannot do, mirroring `desktop/main.js` piece by piece:
 | OS notifications | Chromium `Notification` | polyfill → `web/WebNotifications.kt` (channel "portal"); a tap brings the app forward and calls the page's `onclick` |
 | Media permissions | `setPermissionRequestHandler` | `onPermissionRequest` → RECORD_AUDIO / CAMERA runtime permissions |
 | Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
-| Call phase | `applyCallPhase` (panel, dock bounce, power blocker) | `data-tma-call` ringing/active keeps the screen on; CallStyle notification + foreground service still to do |
+| Call phase | `applyCallPhase` (panel, dock bounce, power blocker) | `data-tma-call` + `data-tma-call-info` → `web/CallNotifications.kt` (CallStyle, Accept/Decline) and `web/CallService.kt` (foreground service, microphone + camera); screen stays on |
 | Theme | `tma:theme` | `data-theme` → status bar icon colour |
 | Deep links | `tmaportal://auth`, argv | `tmaportal://auth` → claim; https App Links → `webView.loadUrl` |
 
@@ -269,7 +269,7 @@ From `desktop/README.md`, `main.js`, `host-bridge.js`, `badge.js`, `notification
 | Offline boot from the kept shell; page-side store and queue | done |
 | OS notifications from the page's `Notification` | done |
 | Downloads, uploads, camera/mic permissions, deep links, back | done |
-| Incoming-call notification (Accept/Decline → `TMAMessagingCalls.accept()/decline()`), ringtone, foreground service during calls | to do |
+| Incoming-call notification (Accept/Decline → `TMAMessagingCalls.accept()/decline()`), foreground service during calls | done (CallStyle notification when the app is not in front; the page rings itself) |
 | Push (§13 backend addition, FCM token registration) | to do |
 | `assetlinks.json`, release signing, Play internal track | to do |
 

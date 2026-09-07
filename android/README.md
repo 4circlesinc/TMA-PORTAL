@@ -32,6 +32,7 @@ Android SDK with `platforms;android-37`, and an emulator or device on API 26+.
 | OS notifications | Chromium `Notification` | `window.Notification` polyfill in `preload.js` → `web/WebNotifications.kt`; a tap hands the click back to the page |
 | Loading layer | `splash.js` | `core/ui/splash/BootSplash.kt` over the WebView until `onPageFinished` |
 | Media permissions | `setPermissionRequestHandler` | `WebChromeClient.onPermissionRequest` → runtime permissions |
+| Incoming call | `call-window.js` panel, power blocker | `web/CallNotifications.kt` CallStyle notification with Accept/Decline when the app is not in front; `web/CallService.kt` foreground service while ringing or active |
 | Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
 
 ## Debugging the page
@@ -47,5 +48,4 @@ curl -s http://localhost:9222/json     # page targets and their webSocketDebugge
 ## Not built yet
 
 Push notifications (FCM; needs the backend addition in `docs/android-app-prompt.md` §13),
-the incoming-call notification with Accept/Decline and a foreground service
-during calls, `assetlinks.json` for App Links, release signing and Play.
+`assetlinks.json` for App Links, release signing and Play.
