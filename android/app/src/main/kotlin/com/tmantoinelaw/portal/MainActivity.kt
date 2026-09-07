@@ -24,6 +24,8 @@ import com.tmantoinelaw.portal.core.ui.theme.TmaTheme
 import com.tmantoinelaw.portal.web.openCustomTab
 import com.tmantoinelaw.portal.web.PortalWebHost
 import com.tmantoinelaw.portal.web.WebNotifications
+import com.tmantoinelaw.portal.web.CallNotifications
+import com.tmantoinelaw.portal.web.CallService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -60,6 +62,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         var composed = false
         splash.setKeepOnScreenCondition { !composed }
         WebNotifications.ensureChannel(this)
+        CallNotifications.ensureChannel(this)
 
         host = PortalWebHost(this, viewModel.config.origin, BuildConfig.VERSION_NAME, okHttp, this)
         lifecycleScope.launch { viewModel.connectivity.online.collect { host.setOnline(it) } }
@@ -98,6 +101,11 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
      */
     private fun handle(intent: Intent?): Boolean {
         if (intent == null) return false
+        when (intent.action) {
+            CallNotifications.ACTION_ANSWER -> { CallNotifications.cancelIncoming(this); host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)"); intent.action = null; return true }
+            CallNotifications.ACTION_DECLINE -> { CallNotifications.cancelIncoming(this); host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.decline()"); intent.action = null; return true }
+            CallNotifications.ACTION_OPEN -> { intent.action = null; return true }
+        }
         intent.getIntExtra(WebNotifications.EXTRA_ID, 0).takeIf { it > 0 }?.let { id ->
             val url = intent.getStringExtra(WebNotifications.EXTRA_URL).orEmpty()
             host.evaluate("window.__tmaNotificationClick && __tmaNotificationClick($id)")
@@ -122,10 +130,21 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     override fun onSignInProvider(provider: String) = viewModel.startBrowserSignIn(provider)
     override fun onOpenOutside(url: String) = openCustomTab(url)
     override fun onBadge(count: Int) = Unit // launcher badges follow the shade on Android
+    private var callInfo: String? = null
+    override fun onCallInfo(json: String) { callInfo = json.takeIf { it.isNotBlank() } }
+
+    /** applyCallPhase: the panel when the window is not in front, the display awake, the process kept. */
     override fun onCallPhase(phase: String) {
-        // applyCallPhase: the display stays awake while a call rings or runs.
-        if (phase == "ringing" || phase == "active") window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val onCall = phase == "ringing" || phase == "active"
+        if (onCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        when (phase) {
+            "ringing" -> {
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) CallNotifications.showIncoming(this, CallNotifications.Info.parse(callInfo))
+                CallService.start(this, callInfo, ringing = true)
+            }
+            "active" -> { CallNotifications.cancelIncoming(this); CallService.start(this, callInfo, ringing = false) }
+            else -> { CallNotifications.cancelIncoming(this); CallService.stop(this); callInfo = null }
+        }
     }
     override fun onTheme(dark: Boolean) {
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !dark

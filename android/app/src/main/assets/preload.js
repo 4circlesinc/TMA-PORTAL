@@ -28,6 +28,7 @@
 
   var RELAYS = [
     { attribute: 'data-tma-badge', channel: 'badge', read: function (raw) { var n = raw == null ? 0 : parseInt(raw, 10); return isFinite(n) ? n : 0; } },
+    { attribute: 'data-tma-call-info', channel: 'call-info', read: function (raw) { return raw || ''; } },
     { attribute: 'data-tma-call', channel: 'call', read: function (raw) { return raw || ''; } },
     { attribute: 'data-tma-overlay', channel: 'overlay', read: function (raw) { return raw === '1' ? '1' : '0'; } },
     { attribute: 'data-theme', channel: 'theme', read: function (raw) { return raw === 'dark' ? 'dark' : 'light'; } },

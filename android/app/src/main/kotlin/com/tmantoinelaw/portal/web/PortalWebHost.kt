@@ -49,6 +49,7 @@ class PortalWebHost(
         fun onSignInProvider(provider: String)
         fun onOpenOutside(url: String)
         fun onBadge(count: Int)
+        fun onCallInfo(json: String)
         fun onCallPhase(phase: String)
         fun onTheme(dark: Boolean)
         fun onOverlay(open: Boolean)
@@ -171,6 +172,7 @@ class PortalWebHost(
             main.post {
                 when (channel) {
                     "badge" -> listener.onBadge(value.toIntOrNull() ?: 0)
+                    "call-info" -> listener.onCallInfo(value)
                     "call" -> listener.onCallPhase(value)
                     "overlay" -> listener.onOverlay(value == "1")
                     "theme" -> listener.onTheme(value == "dark")
