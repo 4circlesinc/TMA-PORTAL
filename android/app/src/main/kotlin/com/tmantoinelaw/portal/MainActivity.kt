@@ -29,6 +29,7 @@ import com.tmantoinelaw.portal.web.WebNotifications
 import com.tmantoinelaw.portal.web.CallNotifications
 import com.tmantoinelaw.portal.web.CallService
 import com.tmantoinelaw.portal.web.AppForeground
+import com.tmantoinelaw.portal.web.AppUpdater
 import com.tmantoinelaw.portal.web.CallSession
 import com.tmantoinelaw.portal.web.PushRegistrar
 import dagger.hilt.android.AndroidEntryPoint
@@ -46,7 +47,11 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
 
     private val viewModel: AppViewModel by viewModels()
     @Inject lateinit var okHttp: OkHttpClient
+    @Inject lateinit var updater: AppUpdater
     private lateinit var host: PortalWebHost
+    private var offeringUpdate = false
+    private var checkingUpdate = false
+    private var pendingUpdate: AppUpdater.Release? = null
 
     private var permissionCallback: ((Boolean) -> Unit)? = null
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -157,7 +162,12 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     }
     override fun onOverlay(open: Boolean) = Unit
     override fun onPortalPage(url: String) { if (host.shellCache.hasSessionCookie()) PushRegistrar.ensure(this, viewModel.config.origin, BuildConfig.VERSION_NAME) }
-    override fun onResume() { super.onResume(); AppForeground.resumed = true }
+    override fun onResume() {
+        super.onResume()
+        AppForeground.resumed = true
+        resumePendingUpdate()
+        checkForAppUpdate()
+    }
     override fun onPause() { AppForeground.resumed = false; super.onPause() }
     override fun onFocus() = Unit
     override fun onSignInReopen() = viewModel.reopenBrowserSignIn()
@@ -190,5 +200,68 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     override fun chooseFiles(intent: Intent, done: (Array<Uri>?) -> Unit) {
         fileCallback = done
         runCatching { chooseFile.launch(intent) }.onFailure { done(null); fileCallback = null }
+    }
+
+    /**
+     * Same feed as Mac/Windows (`/desktop/releases`). Android cannot install
+     * silently; the prompt is one sentence and Update opens the system installer.
+     */
+    private fun checkForAppUpdate() {
+        if (offeringUpdate || pendingUpdate != null || checkingUpdate) return
+        if (CallSession.phase == "ringing" || CallSession.phase == "active") return
+        checkingUpdate = true
+        lifecycleScope.launch {
+            try {
+                val release = updater.findNewer() ?: return@launch
+                if (offeringUpdate || isFinishing) return@launch
+                offeringUpdate = true
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("A new version is available")
+                    .setMessage("Version ${release.version} is ready to install.")
+                    .setPositiveButton("Update") { _, _ -> installUpdate(release) }
+                    .setNegativeButton("Later") { _, _ -> updater.defer(release.version); offeringUpdate = false }
+                    .setOnCancelListener { updater.defer(release.version); offeringUpdate = false }
+                    .show()
+            } finally {
+                checkingUpdate = false
+            }
+        }
+    }
+
+    private fun resumePendingUpdate() {
+        val release = pendingUpdate ?: return
+        if (!updater.canInstall()) return
+        pendingUpdate = null
+        installUpdate(release)
+    }
+
+    private fun installUpdate(release: AppUpdater.Release) {
+        offeringUpdate = true
+        if (!updater.canInstall()) {
+            pendingUpdate = release
+            runCatching { startActivity(updater.installPermissionIntent()) }
+            offeringUpdate = false
+            return
+        }
+        val progress = AlertDialog.Builder(this)
+            .setMessage("Downloading the update…")
+            .setCancelable(false)
+            .show()
+        lifecycleScope.launch {
+            try {
+                val apk = updater.ensureApk(release)
+                progress.dismiss()
+                startActivity(updater.installIntent(apk))
+            } catch (e: Exception) {
+                progress.dismiss()
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("That update couldn't be installed")
+                    .setMessage("${e.message ?: "The download failed."}\n\nYou can keep using this version, we'll try again later.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            } finally {
+                offeringUpdate = false
+            }
+        }
     }
 }

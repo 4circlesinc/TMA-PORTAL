@@ -33,6 +33,7 @@ Android SDK with `platforms;android-37`, and an emulator or device on API 26+.
 | Loading layer | `splash.js` | `core/ui/splash/BootSplash.kt` over the WebView until `onPageFinished` |
 | Media permissions | `setPermissionRequestHandler` | `WebChromeClient.onPermissionRequest` → runtime permissions |
 | Incoming call | `call-window.js` panel, power blocker | `web/CallService.kt` foreground service whose notification *is* the CallStyle (Accept/Decline) while ringing, then "in progress" once answered; TMA mark as the shade icon |
+| Auto-update | `updater.js` + `/desktop/releases` | `web/AppUpdater.kt` — same feed, APK download, system install prompt |
 | Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
 
 ## Debugging the page
