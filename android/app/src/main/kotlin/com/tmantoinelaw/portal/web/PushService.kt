@@ -8,8 +8,10 @@ import org.json.JSONObject
 /**
  * FCM data messages (app/Support/Notifications/Push.php): `notification`
  * carries the presenter's record, `call` the call.signal payload. In front,
- * the page already heard the socket and shows its own UI; otherwise the same
- * shade entries the page would have raised.
+ * the page already heard the socket and shows its own UI; otherwise FCM is
+ * the shade (notify-store.js does not also banner on Android). A ringing
+ * call starts the foreground service, whose notification *is* the incoming
+ * CallStyle — not a second tile beside it.
  */
 class PushService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
@@ -35,7 +37,6 @@ class PushService : FirebaseMessagingService() {
                 if (signal.optString("type") != "ring") return
                 val payload = signal.optJSONObject("payload")
                 val info = JSONObject().put("name", payload?.optString("fromName")?.ifBlank { null } ?: "Unknown caller").put("media", payload?.optString("media")?.ifBlank { null } ?: "audio")
-                CallNotifications.showIncoming(this, CallNotifications.Info.parse(info.toString()))
                 CallService.start(this, info.toString(), ringing = true)
             }
         }

@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
 
     <application
         android:name=".TmaApp"
@@ -22,6 +23,13 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.TMA.Splash">
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_tma" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/tma_brand" />
 
         <activity
             android:name=".MainActivity"
@@ -53,8 +61,8 @@
         <service
             android:name=".web.CallService"
             android:exported="false"
-            android:foregroundServiceType="microphone|camera" />
-        <!-- Push (FCM): the same records the websocket carries, while the app is not open. -->
+            android:foregroundServiceType="microphone|camera|phoneCall" />
+        <!-- Push (FCM): the same records the websocket carries, while the app is not open. Shade icon is the TMA mark. -->
         <service
             android:name=".web.PushService"
             android:exported="false">

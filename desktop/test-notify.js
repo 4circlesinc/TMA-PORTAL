@@ -87,6 +87,13 @@ app.whenReady().then(async () => {
   await js("window.TMADesktopNotify.applyPrefs({ enabled: false, preview: true })");
   check('willSound() is false when notifications are off', await js('window.TMADesktopNotify.willSound()'), false);
 
+  // The phone posts the same record from FCM; a page banner would be twice.
+  await js('document.hasFocus = function () { return false; }; void 0;');
+  await js("window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true })");
+  await js('window.TMADesktop = { isDesktop: true, isAndroid: true }; void 0;');
+  const beforeAndroid = await js('window.__raised.length');
+  check('android does not banner from the page', await raise('email', 'From phone', 'hi'), beforeAndroid);
+
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });

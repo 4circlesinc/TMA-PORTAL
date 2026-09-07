@@ -1,13 +1,17 @@
 package com.tmantoinelaw.portal.web
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import com.tmantoinelaw.portal.MainActivity
 import com.tmantoinelaw.portal.core.ui.R
 import org.json.JSONObject
@@ -18,6 +22,10 @@ import org.json.JSONObject
  * Accept and Decline land on the page's own `TMAMessagingCalls.accept()` /
  * `.decline()`, the same code paths as the in-page buttons. The page rings
  * with its own ringtone, so the notification itself is silent.
+ *
+ * One shade entry: the foreground service *is* this notification (CallStyle
+ * while it rings, "in progress" once answered). A second "Ringing" tile was
+ * the same call announced twice.
  */
 object CallNotifications {
     const val CHANNEL = "calls"
@@ -26,6 +34,7 @@ object CallNotifications {
     const val ACTION_ANSWER = "tma.call.answer"
     const val ACTION_DECLINE = "tma.call.decline"
     const val ACTION_OPEN = "tma.call.open"
+    private val BRAND = Color.parseColor("#136DA0")
 
     fun ensureChannel(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -54,37 +63,54 @@ object CallNotifications {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    fun showIncoming(context: Context, info: Info) {
+    private fun markBitmap(context: Context) = BitmapFactory.decodeResource(context.resources, R.drawable.logo_mark)
+
+    private fun brand(builder: NotificationCompat.Builder, context: Context): NotificationCompat.Builder {
+        builder.setSmallIcon(R.drawable.ic_stat_tma).setColor(BRAND).setOnlyAlertOnce(true)
+        markBitmap(context)?.let { builder.setLargeIcon(it) }
+        return builder
+    }
+
+    /** Incoming CallStyle, used as the ringing foreground-service notification. */
+    fun incoming(context: Context, info: Info): Notification {
         ensureChannel(context)
-        val person = Person.Builder().setName(info.name).setImportant(true).build()
-        val n = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_phone_call)
+        val person = Person.Builder().setName(info.name).setImportant(true)
+            .setIcon(IconCompat.createWithResource(context, R.drawable.logo_mark)).build()
+        val decline = activityIntent(context, ACTION_DECLINE)
+        val answer = activityIntent(context, ACTION_ANSWER)
+        return brand(NotificationCompat.Builder(context, CHANNEL), context)
             .setContentTitle(info.name)
             .setContentText(if (info.media == "video") "Incoming video call" else "Incoming call")
-            .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, activityIntent(context, ACTION_DECLINE), activityIntent(context, ACTION_ANSWER)).setIsVideo(info.media == "video"))
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer).setIsVideo(info.media == "video"))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setFullScreenIntent(activityIntent(context, ACTION_OPEN), true)
+            .setContentIntent(activityIntent(context, ACTION_OPEN))
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOngoing(true)
             .setSilent(true)
             .setAutoCancel(false)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(INCOMING_ID, n) }
     }
 
-    /** The foreground service's notification while a call rings or runs. */
-    fun ongoing(context: Context, info: Info?, ringing: Boolean): android.app.Notification {
+    /** The foreground service's notification while a call rings in front or is already active. */
+    fun ongoing(context: Context, info: Info?, ringing: Boolean): Notification {
         ensureChannel(context)
-        return NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_phone_call)
+        return brand(NotificationCompat.Builder(context, CHANNEL), context)
             .setContentTitle(info?.name ?: "Call")
             .setContentText(if (ringing) "Ringing" else "Call in progress")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setContentIntent(activityIntent(context, ACTION_OPEN))
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOngoing(true)
             .setSilent(true)
             .build()
     }
 
+    fun forService(context: Context, info: Info?, ringing: Boolean, headsUp: Boolean): Notification =
+        if (ringing && headsUp) incoming(context, info ?: Info("Incoming call", "audio"))
+        else ongoing(context, info, ringing)
+
+    /** Older builds posted CallStyle on a second id; drop any leftover. */
     fun cancelIncoming(context: Context) = NotificationManagerCompat.from(context).cancel(INCOMING_ID)
 }

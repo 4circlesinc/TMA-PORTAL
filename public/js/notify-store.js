@@ -560,6 +560,13 @@
 
     function notify(item) {
       if (!prefs.enabled || !item) return;
+      /*
+       * Android posts this same record from FCM (PushService) while the
+       * window is not in front. The WebView often stays alive in the
+       * background with the socket still up, so a banner here and the
+       * push would be the same alert twice. The phone's shade is FCM's.
+       */
+      if (window.TMADesktop && window.TMADesktop.isAndroid) return;
       if (permission() !== 'granted') return;
       if (!backgrounded()) return;
       // The per-module Desktop column in Settings → Notifications.

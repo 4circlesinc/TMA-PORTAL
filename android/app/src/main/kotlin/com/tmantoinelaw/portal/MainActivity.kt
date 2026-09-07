@@ -104,8 +104,8 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     private fun handle(intent: Intent?): Boolean {
         if (intent == null) return false
         when (intent.action) {
-            CallNotifications.ACTION_ANSWER -> { CallNotifications.cancelIncoming(this); host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)"); intent.action = null; return true }
-            CallNotifications.ACTION_DECLINE -> { CallNotifications.cancelIncoming(this); host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.decline()"); intent.action = null; return true }
+            CallNotifications.ACTION_ANSWER -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)"); intent.action = null; return true }
+            CallNotifications.ACTION_DECLINE -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.decline()"); intent.action = null; return true }
             CallNotifications.ACTION_OPEN -> { intent.action = null; return true }
         }
         intent.getIntExtra(WebNotifications.EXTRA_ID, 0).takeIf { it > 0 }?.let { id ->
@@ -140,12 +140,9 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         val onCall = phase == "ringing" || phase == "active"
         if (onCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         when (phase) {
-            "ringing" -> {
-                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) CallNotifications.showIncoming(this, CallNotifications.Info.parse(callInfo))
-                CallService.start(this, callInfo, ringing = true)
-            }
-            "active" -> { CallNotifications.cancelIncoming(this); CallService.start(this, callInfo, ringing = false) }
-            else -> { CallNotifications.cancelIncoming(this); CallService.stop(this); callInfo = null }
+            "ringing" -> CallService.start(this, callInfo, ringing = true)
+            "active" -> CallService.start(this, callInfo, ringing = false)
+            else -> { CallService.stop(this); callInfo = null }
         }
     }
     override fun onTheme(dark: Boolean) {
