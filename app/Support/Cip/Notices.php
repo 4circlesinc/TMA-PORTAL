@@ -50,8 +50,12 @@ class Notices
      * Called from {@see Engine::write} after the row and the event have both
      * landed, so nothing is announced that did not occur.
      */
-    public static function announce(CipApplication $application, string $to, ?User $actor): void
-    {
+    public static function announce(
+        CipApplication $application,
+        string $to,
+        ?User $actor,
+        ?string $message = null,
+    ): void {
         if ($to === Status::DRAFT) {
             return;
         }
@@ -63,7 +67,7 @@ class Notices
 
         self::fanOut(
             $application,
-            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name),
+            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name, $message),
             self::template($to),
             self::bellType($to),
             $actor,
@@ -207,6 +211,7 @@ class Notices
         ?User $actor,
         string $initials,
         ?string $recipientName = null,
+        ?string $message = null,
     ): Postcard {
         $subject = self::line($facts, $to, $actor, $initials);
 
@@ -222,6 +227,7 @@ class Notices
             Status::APPLY_FOR_COR => Postcards::cipApplyForCor($facts, $url, $recipientName, $subject),
             Status::NON_COMPLIANT => Postcards::cipNonCompliant(
                 $facts, $url, $application->query_received_at?->toDateString(), $recipientName, $actor, $subject,
+                $message,
             ),
             Status::BACKGROUND_CHECK => Postcards::cipBackgroundCheck(
                 $facts, $url, $application->accepted_at?->toDateString(), $recipientName, $actor, $subject,

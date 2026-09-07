@@ -424,7 +424,7 @@ class Engine
          * request for Stage 1 documents.
          */
         if ($enteringPost || $to !== Status::POST_APPROVAL) {
-            Notices::announce($application, $to, $actor);
+            Notices::announce($application, $to, $actor, is_string($meta['message'] ?? null) ? $meta['message'] : null);
         }
 
         return $application;

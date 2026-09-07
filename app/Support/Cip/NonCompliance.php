@@ -42,6 +42,7 @@ class NonCompliance
         ?Carbon $queryReceivedAt = null,
         bool $override = false,
         ?string $note = null,
+        ?string $message = null,
     ): CipApplication {
         $queryReceivedAt ??= Carbon::now();
         $already = $application->status === Status::NON_COMPLIANT;
@@ -59,7 +60,9 @@ class NonCompliance
             );
         }
 
-        $application = DB::transaction(function () use ($application, $actor, $queryReceivedAt, $already, $edge, $note) {
+        $message = trim((string) $message) ?: null;
+
+        $application = DB::transaction(function () use ($application, $actor, $queryReceivedAt, $already, $edge, $note, $message) {
             Tree::provisionAdditionalDrawers($application, $actor);
             $application->refresh();
 
@@ -67,11 +70,16 @@ class NonCompliance
 
             $meta = ['queryReceivedAt' => $queryReceivedAt->toDateString()];
 
+            // Carried to the notice, which is sent from Engine::write once
+            // the row has landed. Kept out of the event payload below: the
+            // covering note is the letter's, not the timeline's.
+            $notice = $message !== null ? ['message' => $message] : [];
+
             if (! $already) {
                 if ($edge) {
-                    Engine::apply($application, Status::NON_COMPLIANT, $actor, $meta);
+                    Engine::apply($application, Status::NON_COMPLIANT, $actor, $meta + $notice);
                 } else {
-                    Engine::set($application, Status::NON_COMPLIANT, $actor, $meta + ['note' => (string) $note]);
+                    Engine::set($application, Status::NON_COMPLIANT, $actor, $meta + $notice + ['note' => (string) $note]);
                 }
             }
 

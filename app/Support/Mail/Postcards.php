@@ -731,6 +731,7 @@ class Postcards
         ?string $recipientName = null,
         ?User $actor = null,
         ?string $subject = null,
+        ?string $message = null,
     ): Postcard {
         $subject ??= Notices::line($facts, Status::NON_COMPLIANT, $actor);
 
@@ -747,6 +748,9 @@ class Postcards
             'subject' => $subject,
             'url' => $url,
             'details' => $details,
+            // What the Unit asked for, in the officer's words, quoted under
+            // the standing copy rather than replacing it.
+            'quote' => $message ?: null,
         ]);
     }
 

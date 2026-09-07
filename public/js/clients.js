@@ -10774,6 +10774,11 @@
         '<input type="date" id="cip-query-received" class="tma-dash__clients-field-input"' +
         ' data-cip-query-received value="' + esc(today) + '">' +
         '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-query-message">Message to the service provider</label>' +
+        '<textarea id="cip-query-message" class="tma-dash__clients-field-textarea" data-cip-query-message' +
+        ' rows="4" maxlength="2000" placeholder="What the Unit has asked for"></textarea>' +
+        '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
@@ -10797,6 +10802,9 @@
           }
 
           var body = { queryReceivedAt: date };
+          var messageEl = el.querySelector('[data-cip-query-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
           if (override) {
             var reason = cipOverrideFieldsRead(el);
             if (reason === null) return;
