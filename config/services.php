@@ -143,4 +143,18 @@ return [
         'secret' => env('TURNSTILE_SECRET', ''),
     ],
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Firebase Cloud Messaging (the native apps' push)
+    |--------------------------------------------------------------------------
+    | A Firebase service account (JSON, or a path to it) and the project id.
+    | Both unset means no push is attempted; the apps still hear everything
+    | over the websocket while they are open. docs/android-app-prompt.md §13.
+    */
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID'),
+        'credentials' => env('FCM_CREDENTIALS_JSON'),
+    ],
+
 ];

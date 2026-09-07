@@ -243,11 +243,17 @@ final class Notifier
                 ->whereNull('read_at')
                 ->count();
 
+            $presented = NotificationPresenter::notification($notification);
             event(new PortalNotificationCreated(
                 (int) $notification->user_id,
-                NotificationPresenter::notification($notification),
+                $presented,
                 $unread,
             ));
+            // The phone hears the same record while the portal is not open.
+            $recipient = User::query()->find($notification->user_id);
+            if ($recipient) {
+                Push::notification($recipient, $presented, $unread);
+            }
         } catch (\Throwable $e) {
             Log::warning('Notifier.broadcast failed', ['error' => $e->getMessage()]);
         }

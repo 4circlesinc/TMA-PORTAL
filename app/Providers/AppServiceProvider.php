@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\Notifications\FcmClient;
+use App\Support\Notifications\PushTransport;
 use App\Mail\Transport\MicrosoftGraphTransport;
 use App\Support\Realtime;
 use App\Support\StaySignedIn;
@@ -27,7 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The native apps' push transport; tests bind a fake in its place.
+        $this->app->bind(PushTransport::class, FcmClient::class);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\CallSignal;
+use App\Support\Notifications\Push;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\InboxUpdated;
@@ -1107,13 +1108,26 @@ class MessagingController extends Controller
             ->pluck('user_id')
             ->all();
 
-        Broadcaster::toOthers(new CallSignal(
+        $signal = new CallSignal(
             $conversation->uuid,
             $user->id,
             $data['type'],
             $payload,
             $recipients,
-        ));
+        );
+        Broadcaster::toOthers($signal);
+
+        if ($data['type'] === 'ring') {
+            // Phones that are not holding the socket still ring; a muted conversation stays quiet.
+            $pushTo = $conversation->activeParticipants()
+                ->where('user_id', '!=', $user->id)
+                ->get()
+                ->reject(fn ($participant) => $participant->isMuted())
+                ->pluck('user_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            Push::callRing($pushTo, $signal->broadcastWith());
+        }
 
         // Persist a brief history line when a call ends or is missed.
         if (in_array($data['type'], ['hangup', 'reject'], true)) {

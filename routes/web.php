@@ -95,6 +95,7 @@ use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\MeSyncStatusController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationHistoryController;
@@ -243,6 +244,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
     Route::get('/me/sync-status', [MeSyncStatusController::class, 'show'])->name('me.sync-status');
+    // Native apps' push tokens (docs/android-app-prompt.md §13).
+    Route::post('/me/devices', [DeviceTokenController::class, 'store'])->name('me.devices.store');
+    Route::delete('/me/devices/{token}', [DeviceTokenController::class, 'destroy'])->name('me.devices.destroy');
     Route::post('/me/onedrive/pause', [MeOneDriveController::class, 'pause'])->name('me.onedrive.pause');
     Route::post('/me/onedrive/resume', [MeOneDriveController::class, 'resume'])->name('me.onedrive.resume');
 
