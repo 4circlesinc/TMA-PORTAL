@@ -987,9 +987,9 @@
    * App\Support\Cip\Buckets.
    *
    * Which set arrives is the server's decision and this card does not second
-   * guess it: an administrator gets the ten the firm reports on, a Reviewing
-   * Officer and a Compliance Officer get their four work queues, and a Service
-   * Provider contact gets the applicant-facing six. The card renders whatever
+     * guess it: an administrator gets the twelve the firm reports on, a Reviewing
+     * Officer and a Compliance Officer get their four work queues, and a Service
+     * Provider contact gets the applicant-facing eight. The card renders whatever
    * came back, in the order it came back in.
    *
    * A private client never sees this card. They share the service-provider set
@@ -1054,7 +1054,7 @@
      * not arrived. Ten grey slivers are what a *finished* card with nothing in
      * it would look like.
      *
-     * Four legend rows because the sets are four, six and ten long and how
+     * Four legend rows because the sets are four, eight and twelve long and how
      * many of them hold work is exactly what is unknown; four is roughly a
      * working day and being wrong costs a re-pack of the board. Warm boot
      * means a returning reader paints their real set and never sees this.

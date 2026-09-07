@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * WHICH BUCKETS ARE PERSONAL, AND WHICH ARE THE WHOLE SLICE
  *
- * The administrator's ten and the service provider's six are reports. They
+ * The administrator's twelve and the service provider's eight are reports. They
  * count everything the reader may see, and what that is has already been
  * decided by {@see ApplicationScope}, every application for an administrator,
  * one provider firm's book for a contact there, one applicant's own record for
@@ -130,6 +130,13 @@ class Buckets
             'statuses' => [Status::PENDING_REVIEW],
             'scope' => self::SCOPE_ALL,
         ],
+        'non_compliant' => [
+            'label' => 'Non-compliant',
+            // 'Non-compliant' is 14 characters; the legend column holds 12.
+            'short' => 'Non-comp',
+            'statuses' => [Status::NON_COMPLIANT],
+            'scope' => self::SCOPE_ALL,
+        ],
         'background_check' => [
             'label' => 'Background Check',
             'short' => 'Background',
@@ -228,16 +235,16 @@ class Buckets
     private const SETS = [
         self::ADMINISTRATOR => [
             'new', 'review_application', 'assessment_feedback', 'update_required',
-            'ready_to_submit', 'pending_review', 'background_check', 'delayed',
-            'approved', 'post_approval', 'denied',
+            'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+            'delayed', 'approved', 'post_approval', 'denied',
         ],
         self::REVIEWING_OFFICER => [
             'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
             'information_requests',
         ],
         self::SERVICE_PROVIDER => [
-            'update_required', 'ready_to_submit', 'pending_review', 'delayed',
-            'approved', 'post_approval', 'denied',
+            'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
+            'delayed', 'approved', 'post_approval', 'denied',
         ],
     ];
 
@@ -261,7 +268,7 @@ class Buckets
         }
 
         // A Service Provider contact or a Private Client: the same
-        // applicant-facing six, because ApplicationScope has already decided
+        // applicant-facing eight, because ApplicationScope has already decided
         // how much of the world each of them sees. A private client is the
         // same reader with a slice of one.
         return self::SERVICE_PROVIDER;
@@ -294,7 +301,7 @@ class Buckets
      * What it therefore means is "applications this dashboard is about": the
      * whole book for an administrator, the firm's book for a provider contact,
      * this officer's desk for a reviewer. It is not a pipeline figure — the
-     * administrator's ten include Approved and Denied, which have left the
+     * administrator's twelve include Approved and Denied, which have left the
      * pipeline — so nothing that draws it may call it one.
      *
      * Free: the tallies are already in hand, so no extra query is asked.
@@ -321,7 +328,7 @@ class Buckets
             /*
              * One grouped count per scope, not one per bucket.
              *
-             * Ten buckets over one slice is a single question, how many
+             * Twelve buckets over one slice is a single question, how many
              * applications sit at each status, and asking it ten times would
              * put ten round trips behind every dashboard load for numbers that
              * came out of the same rows. Keyed by scope because a personal
@@ -464,7 +471,7 @@ class Buckets
      * definition with the count: a bucket whose dot said one thing and whose
      * rows all wore a chip saying another would be two answers to "what kind
      * of work is this", and the reader has no way to tell which is the real
-     * one. Sixteen of the seventeen buckets cover a single status and simply
+     * one. Fourteen of the sixteen buckets cover a single status and simply
      * take its tone.
      *
      * THE MULTI-STATUS ONE

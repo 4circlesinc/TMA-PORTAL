@@ -181,8 +181,8 @@ class CipBucketTest extends TestCase
         $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
         $this->assertSame([
             'New Applications', 'Review Applications', 'Assessment Feedback', 'Updates Required',
-            'Ready to Submit', 'Pending Review', 'Background Check', 'Delayed', 'Approved',
-            'Post-Approval', 'Denied',
+            'Ready to Submit', 'Pending Review', 'Non-compliant', 'Background Check', 'Delayed',
+            'Approved', 'Post-Approval', 'Denied',
         ], array_column($body['buckets'], 'label'), 'The order is §9’s, not a renderer’s choice.');
     }
 
@@ -223,7 +223,7 @@ class CipBucketTest extends TestCase
         );
     }
 
-    public function test_the_service_provider_dashboard_is_the_applicant_facing_seven(): void
+    public function test_the_service_provider_dashboard_is_the_applicant_facing_eight(): void
     {
         [, $contact] = $this->providerWithContact('GAL');
 
@@ -231,14 +231,14 @@ class CipBucketTest extends TestCase
 
         $this->assertSame(Buckets::SERVICE_PROVIDER, $body['dashboard']);
         $this->assertSame([
-            'Updates Required', 'Ready to Submit', 'Pending Review', 'Delayed', 'Approved',
-            'Post-Approval', 'Denied',
+            'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant', 'Delayed',
+            'Approved', 'Post-Approval', 'Denied',
         ], array_column($body['buckets'], 'label'));
 
         // A provider firm has no queue of its own — what it sees is its whole
         // book, which ApplicationScope has already narrowed to its own files.
         $this->assertSame(
-            array_fill(0, 7, Buckets::SCOPE_ALL),
+            array_fill(0, 8, Buckets::SCOPE_ALL),
             array_column($body['buckets'], 'scope'),
         );
     }
@@ -248,7 +248,7 @@ class CipBucketTest extends TestCase
      * cover between them, counted over the statuses rather than by adding the
      * rows up.
      *
-     * The administrator's ten are ten separate statuses, so on that set the
+     * The administrator's twelve are twelve separate statuses, so on that set the
      * two answers agree and the test proves little on its own — it is here as
      * the control for the one below, where they must not agree.
      */
@@ -440,7 +440,7 @@ class CipBucketTest extends TestCase
          *
          * Both of these reach the module — they are promised their own
          * applications — and Buckets::setFor hands both of them the same
-         * SERVICE_PROVIDER six, so the dashboard name says nothing about which
+         * SERVICE_PROVIDER eight, so the dashboard name says nothing about which
          * side of the firm a reader is on. A home screen that inferred it from
          * the set would have drawn the firm's CIP card for every external
          * account in the portal.
@@ -511,6 +511,7 @@ class CipBucketTest extends TestCase
         // hangs off — work to pick up, a wait, and the two decisions.
         $this->assertSame('sky', $tones['new']);
         $this->assertSame('orange', $tones['pending_review']);
+        $this->assertSame('rose', $tones['non_compliant']);
         $this->assertSame('success', $tones['approved']);
         $this->assertSame('danger', $tones['denied']);
 
@@ -518,6 +519,7 @@ class CipBucketTest extends TestCase
         // Approved counts GRANTED under §9's word for it, so the bucket and
         // every chip inside it are coloured by the one mapping.
         $this->assertSame(Status::tone(Status::GRANTED), $tones['approved']);
+        $this->assertSame(Status::tone(Status::NON_COMPLIANT), $tones['non_compliant']);
 
         // The one bucket covering several statuses takes the first, which is
         // the state its name describes and the one work arrives in.
@@ -673,8 +675,10 @@ class CipBucketTest extends TestCase
         [, $contact] = $this->providerWithContact('GAL');
 
         $this->assertNotNull(Buckets::find($admin, 'background_check'));
-        // An administrator holds no queue of their own, a provider firm sees
-        // no compliance stage, and a plain employee has no dashboard at all.
+        $this->assertNotNull(Buckets::find($admin, 'non_compliant'));
+        $this->assertNotNull(Buckets::find($contact, 'non_compliant'));
+        // An administrator holds no queue of their own, a provider firm does
+        // not see Background check, and a plain employee has no dashboard at all.
         $this->assertNull(Buckets::find($admin, 'assigned_reviews'));
         $this->assertNull(Buckets::find($contact, 'background_check'));
         $this->assertNull(Buckets::find($employee, 'new'));
@@ -700,6 +704,25 @@ class CipBucketTest extends TestCase
         $this->assertSame('Approved', $approved['label']);
         $this->assertSame([Status::GRANTED], $approved['statuses']);
         $this->assertSame(1, $approved['count']);
+    }
+
+    public function test_non_compliant_is_counted_on_the_admin_and_provider_dashboards(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        [$galaxy, $contact] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::NON_COMPLIANT);
+
+        $adminBody = $this->actingAs($admin)->getJson('/portal/cip/dashboard')->assertOk()->json();
+        $bucket = collect($adminBody['buckets'])->firstWhere('key', 'non_compliant');
+
+        $this->assertSame('Non-compliant', $bucket['label']);
+        $this->assertSame('Non-comp', $bucket['short']);
+        $this->assertSame([Status::NON_COMPLIANT], $bucket['statuses']);
+        $this->assertSame(1, $bucket['count']);
+        $this->assertSame(1, $adminBody['total'], 'a non-compliant file is work, not a leftover the total drops');
+
+        $this->assertSame(1, $this->counts($contact)['non_compliant']);
     }
 
     public function test_a_draft_is_in_nobody_s_bucket(): void
@@ -729,7 +752,7 @@ class CipBucketTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->assertCount(11, $buckets);
-        $this->assertCount(1, $queries, 'Eleven buckets are one grouped count, not eleven questions.');
+        $this->assertCount(12, $buckets);
+        $this->assertCount(1, $queries, 'Twelve buckets are one grouped count, not twelve questions.');
     }
 }

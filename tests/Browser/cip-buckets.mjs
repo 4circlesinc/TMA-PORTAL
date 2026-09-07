@@ -175,7 +175,7 @@ try {
 
   /*
    * The figure the bar is a hundred per cent of, which lives in the heading
-   * beside the card's name. 32 across the ten buckets, and the DRAFT is the
+   * beside the card's name. 32 across the seeded buckets, and the DRAFT is the
    * evidence: it is the administrator's application too, so a total that
    * counted the book rather than the buckets would read 33.
    *

@@ -2818,7 +2818,7 @@
    *
    * Which set a reader gets is the server's to decide, an officer's four are
    * a work queue (CRO and Compliance share that view) and an administrator's
-   * ten are a report, and the difference is scope, not presentation.
+   * twelve are a report, and the difference is scope, not presentation.
    */
   var BUCKETS = { list: [], dashboard: null, loaded: false, loading: false, active: null };
 
