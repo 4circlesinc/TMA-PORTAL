@@ -31,6 +31,7 @@ junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version = "25.0.1" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version = "1.14.0" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }

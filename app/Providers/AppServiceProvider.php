@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
+use App\Mail\Transport\MicrosoftGraphTransport;
 use App\Support\Notifications\FcmClient;
 use App\Support\Notifications\PushTransport;
-use App\Mail\Transport\MicrosoftGraphTransport;
 use App\Support\Realtime;
 use App\Support\StaySignedIn;
 use Illuminate\Cache\RateLimiting\Limit;

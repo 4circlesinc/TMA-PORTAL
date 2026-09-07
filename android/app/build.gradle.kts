@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,6 +14,18 @@ plugins {
 //   ./gradlew assembleDebug -PportalOrigin=http://192.168.1.20:8001
 val portalOrigin: String? = (project.findProperty("portalOrigin") as String?)?.takeIf { it.isNotBlank() }
 
+/*
+ * Firebase for push (docs/android-app-prompt.md §13). The values come from
+ * the Firebase console's Android app (the same ones google-services.json
+ * carries) via android/firebase.properties or -Pfirebase.*; all blank means
+ * push is off and the app builds and runs without it.
+ */
+val firebaseProps = Properties().apply {
+    val f = rootProject.projectDir.resolve("firebase.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun firebase(key: String): String = (project.findProperty("firebase.$key") as String?) ?: firebaseProps.getProperty(key, "")
+
 android {
     namespace = "com.tmantoinelaw.portal"
     compileSdk = 37
@@ -23,6 +37,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Push (docs/android-app-prompt.md §13); all blank = off.
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebase("projectId")}\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${firebase("appId")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebase("apiKey")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebase("senderId")}\"")
     }
 
     buildTypes {
@@ -65,6 +84,7 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:data"))
     implementation(libs.androidx.webkit)
+    implementation(libs.firebase.messaging)
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation(libs.androidx.browser)
 

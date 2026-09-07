@@ -26,6 +26,8 @@ import com.tmantoinelaw.portal.web.PortalWebHost
 import com.tmantoinelaw.portal.web.WebNotifications
 import com.tmantoinelaw.portal.web.CallNotifications
 import com.tmantoinelaw.portal.web.CallService
+import com.tmantoinelaw.portal.web.AppForeground
+import com.tmantoinelaw.portal.web.PushRegistrar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -151,6 +153,9 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         viewModel.rememberTheme(dark)
     }
     override fun onOverlay(open: Boolean) = Unit
+    override fun onPortalPage(url: String) { if (host.shellCache.hasSessionCookie()) PushRegistrar.ensure(this, viewModel.config.origin, BuildConfig.VERSION_NAME) }
+    override fun onResume() { super.onResume(); AppForeground.resumed = true }
+    override fun onPause() { AppForeground.resumed = false; super.onPause() }
     override fun onFocus() = Unit
     override fun onSignInReopen() = viewModel.reopenBrowserSignIn()
     override fun onSignInCancel() = viewModel.cancelBrowserSignIn()

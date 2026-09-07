@@ -11,3 +11,5 @@ app/google-services.json
 # copied from ../desktop at build time (copyDesktopBridge)
 app/src/main/assets/host-bridge.js
 app/src/main/assets/signin-waiting.html
+# Firebase console values for push (see README)
+firebase.properties

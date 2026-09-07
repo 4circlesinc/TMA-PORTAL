@@ -62,6 +62,8 @@ class PortalWebHost(
         fun requestNotifications()
         fun requestPermissions(permissions: Array<String>, done: (Boolean) -> Unit)
         fun chooseFiles(intent: Intent, done: (Array<Uri>?) -> Unit)
+        /** A portal page finished loading (the moment to register for push once a session exists). */
+        fun onPortalPage(url: String)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -226,6 +228,7 @@ class PortalWebHost(
 
         override fun onPageFinished(view: WebView, url: String) {
             _loading.value = false
+            if (rules.isPortalUrl(url)) listener.onPortalPage(url)
             if (rules.isPortalUrl(url) && !shellCache.servingFromCache) {
                 val path = Uri.parse(url).path ?: "/"
                 io.execute { runCatching { shellCache.capture(path) } }
