@@ -4348,10 +4348,24 @@ label.tma-portal-check-row:hover {
   border-right: 1px solid var(--color-border-soft);
   background: var(--color-white);
   min-width: 0;
-  /* Seven field types plus the assign panel outgrow a short viewport; without
-     this the assignment control sits below the fold and can't be reached. */
+  min-height: 0;
+  /* The panel itself never scrolls - its body does, so the heading stays. */
+  overflow: hidden;
+}
+
+/* Seven field types plus the selected field's settings outgrow a short
+   viewport. Scrolling the whole panel pushed the "Fields" heading and the
+   first cards off the top, so only this part moves. */
+.tma-portal-sig-wizard__fields-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Room for the scrollbar so it doesn't sit on top of the cards. */
+  padding-right: var(--space-4);
+  margin-right: calc(var(--space-4) * -1);
 }
 
 .tma-portal-sig-wizard__fields-head {

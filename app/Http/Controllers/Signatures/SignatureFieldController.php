@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SignatureRequest;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Vault;
+use App\Support\Signatures\DateFormat;
 use App\Support\Signatures\FieldType;
 use App\Support\Signatures\Presenter;
 use App\Support\Signatures\Signable;
@@ -55,6 +56,9 @@ class SignatureFieldController extends Controller
                 'label' => FieldType::label($t),
                 'autofilled' => FieldType::isAutofilled($t),
             ], FieldType::ALL),
+            // Each labelled with the date it produces, so the editor offers a
+            // choice by example rather than by format code.
+            'dateFormats' => DateFormat::options(),
         ]);
     }
 
@@ -83,6 +87,8 @@ class SignatureFieldController extends Controller
             // height, left-aligned. Bounds match the stamper's own clamps.
             'fields.*.fontSize' => ['nullable', 'numeric', 'min:5', 'max:22'],
             'fields.*.align' => ['nullable', 'in:left,center,right'],
+            // A key from the allowlist, never a raw PHP format string.
+            'fields.*.dateFormat' => ['nullable', 'in:'.implode(',', DateFormat::keys())],
         ]);
 
         $signatureRequest = $this->findOwned($request, $uuid);
@@ -125,6 +131,9 @@ class SignatureFieldController extends Controller
                 'height' => $field['height'],
                 'font_size' => $field['fontSize'] ?? null,
                 'align' => $field['align'] ?? null,
+                'date_format' => $field['type'] === FieldType::DATE
+                    ? ($field['dateFormat'] ?? null)
+                    : null,
                 // Autofilled values always arrive, so "optional" is meaningless
                 // for them; anything else honours the author's choice.
                 'required' => FieldType::isAutofilled($field['type'])

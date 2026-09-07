@@ -149,6 +149,7 @@ class Presenter
             // Typography. Null means "fit to the field's height", left-aligned.
             'fontSize' => $f->font_size !== null ? (float) $f->font_size : null,
             'align' => $f->align,
+            'dateFormat' => $f->date_format,
             // What this field will actually say once stamped, so the editor can
             // show it at size instead of a label - an author could not
             // otherwise tell that a long name would be shrunk to fit.

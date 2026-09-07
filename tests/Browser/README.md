@@ -22,6 +22,16 @@ field placement and drawing, and computed CSS only exist in a browser.
   render() operations". Paints are now chained per canvas. Only a browser
   catches this - it surfaces as a `pageerror`, not a failed assertion.
 
+- **`signature-field-panel.mjs`** — the fields panel on a short viewport, and
+  the date-format picker. The panel scrolled as a whole, which pushed the
+  "Fields" heading and the first cards off the top; only its body scrolls now,
+  and the test asserts the heading's position is unchanged after scrolling to
+  the bottom while the alignment buttons become reachable. Run at 720px high —
+  at a tall viewport nothing overflows and the test proves nothing.
+
+  It also drives the date format: the options are labelled with the date they
+  produce, and picking one rewrites the field's on-document preview.
+
 - **`signature-page-scroll.mjs`** — the editor reads like the File Library's
   viewer: every page stacked in one scroller, rather than one page at a time
   swapped by the thumbnail rail. It asserts a sheet and a painted canvas per
@@ -1800,6 +1810,7 @@ node tests/Browser/signature-editor.mjs
 node tests/Browser/signature-zoom.mjs   # reads the sign-in code from the log
 node tests/Browser/signature-field-typography.mjs
 node tests/Browser/signature-page-scroll.mjs
+node tests/Browser/signature-field-panel.mjs
 node tests/Browser/signing-flow.mjs     # expects a fresh database
 node tests/Browser/stamped-output.mjs   # expects a fresh database
 node tests/Browser/folder-shortcuts.mjs # needs the folder fixtures below

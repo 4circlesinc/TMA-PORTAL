@@ -285,6 +285,61 @@ class SignatureStampingTest extends TestCase
         $this->assertNotNull($request->fresh()->signed_file_id);
     }
 
+    /**
+     * A date field writes the format the author chose, and the choice is a key
+     * from the allowlist - never a raw PHP format string, which would let a
+     * request dictate what date formatting runs.
+     */
+    public function test_a_date_field_uses_the_chosen_format(): void
+    {
+        $user = $this->approvedUser();
+
+        $request = $this->signThrough($user, $this->pdfFile($user), [
+            ['type' => 'date', 'page' => 1, 'x' => 0.1, 'y' => 0.2, 'width' => 0.3, 'height' => 0.04,
+                'dateFormat' => 'iso'],
+            ['type' => 'signature', 'page' => 1, 'x' => 0.1, 'y' => 0.6, 'width' => 0.3, 'height' => 0.06],
+        ]);
+
+        $date = $request->fields()->where('type', 'date')->firstOrFail();
+        $this->assertSame('iso', $date->date_format);
+        // Autofilled at signing time, so the stored value is the formatted date.
+        $this->assertSame(now()->format('Y-m-d'), $date->value);
+    }
+
+    /** No choice keeps the original format, so old fields are unaffected. */
+    public function test_a_date_field_without_a_format_keeps_the_original(): void
+    {
+        $user = $this->approvedUser();
+
+        $request = $this->signThrough($user, $this->pdfFile($user), [
+            ['type' => 'date', 'page' => 1, 'x' => 0.1, 'y' => 0.2, 'width' => 0.3, 'height' => 0.04],
+            ['type' => 'signature', 'page' => 1, 'x' => 0.1, 'y' => 0.6, 'width' => 0.3, 'height' => 0.06],
+        ]);
+
+        $date = $request->fields()->where('type', 'date')->firstOrFail();
+        $this->assertNull($date->date_format);
+        $this->assertSame(now()->format('j M Y'), $date->value);
+    }
+
+    /** An unknown format key is refused rather than silently ignored. */
+    public function test_an_unknown_date_format_is_refused(): void
+    {
+        $user = $this->approvedUser();
+        $file = $this->pdfFile($user);
+
+        $id = $this->actingAs($user)->postJson('/portal/signatures', ['fileId' => $file->uuid])
+            ->json('request.id');
+        $recipient = $this->actingAs($user)->patchJson('/portal/signatures/'.$id, [
+            'recipients' => [['name' => 'Dana Reed', 'email' => 'dana@example.com']],
+        ])->json('request.recipients.0.id');
+
+        $this->actingAs($user)->putJson('/portal/signatures/'.$id.'/fields', ['fields' => [
+            ['type' => 'date', 'recipient' => $recipient, 'page' => 1,
+                'x' => 0.1, 'y' => 0.2, 'width' => 0.3, 'height' => 0.04,
+                'dateFormat' => 'Y-m-d H:i:s'],
+        ]])->assertStatus(422);
+    }
+
     /** The author's size is clamped to what the stamper will actually draw. */
     public function test_an_out_of_range_font_size_is_refused(): void
     {

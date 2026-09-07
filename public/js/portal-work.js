@@ -2438,11 +2438,13 @@
     if (field.type === 'name') return r.name || r.email || null;
     if (field.type === 'email') return r.email || null;
     if (field.type === 'date') {
-      // 'j M Y', the format Stamper writes.
-      var d = new Date();
-      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+      // The server sends today's date already rendered in every offered
+      // format, so the preview reads the answer rather than reimplementing
+      // PHP's date formatting in JavaScript and drifting from it.
+      var opts = sig.dateFormats || [];
+      if (!opts.length) return null;
+      var chosen = opts.filter(function (o) { return o.key === field.dateFormat; })[0];
+      return (chosen || opts[0]).label;
     }
     return null;
   }
@@ -2563,6 +2565,7 @@
             // null = fit to the box / left, the server's own defaults.
             fontSize: f.fontSize || null,
             align: f.align || null,
+            dateFormat: f.dateFormat || null,
           };
         }),
       },
@@ -2584,6 +2587,7 @@
       .then(function (res) {
         sig.fields = res.fields || [];
         sig.fieldTypes = res.types || [];
+        sig.dateFormats = res.dateFormats || [];
         sig.fieldsDirty = false;
       });
 
@@ -2796,6 +2800,19 @@
         f.required = required.checked;
         sig.fieldsDirty = true;
         // Only the "opt" marker on the field changes; no page repaint.
+        sigRefreshFields();
+      });
+    }
+
+    var dateFormat = root.querySelector('[data-sig-field-date-format]');
+    if (dateFormat) {
+      dateFormat.addEventListener('change', function () {
+        var f = sigSelectedField();
+        if (!f) return;
+        f.dateFormat = dateFormat.value;
+        // The preview is the date itself, so it has to be rewritten.
+        f.preview = sigLocalPreview(f);
+        sig.fieldsDirty = true;
         sigRefreshFields();
       });
     }
@@ -3082,8 +3099,26 @@
         : '<label class="tma-portal-checkbox">' +
           '<input type="checkbox" data-sig-field-required' + (f.required ? ' checked' : '') + '>' +
           '<span>Required</span></label>') +
+      sigDateFormatControl(f) +
       sigTypographyControls(f) +
       '</div>';
+  }
+
+  /* "Date signed" writes a real date, and documents disagree about how a date
+     is written. Options are labelled with the date they produce, so the choice
+     is made by example rather than by a format code. */
+  function sigDateFormatControl(f) {
+    if (f.type !== 'date') return '';
+
+    var options = sig.dateFormats || [];
+    if (!options.length) return '';
+
+    return ui().field('Date format', ui().select(
+      options.map(function (o) { return { value: o.key, label: o.label }; }),
+      f.dateFormat || options[0].key,
+      'data-sig-field-date-format',
+      'Date format'
+    ));
   }
 
   /* Signatures and initials are drawn images, and a checkbox is a glyph sized
@@ -3175,7 +3210,9 @@
       '<div class="tma-portal-sig-wizard__fields-head">' +
       '<h3 class="tma-portal-sig-wizard__fields-title">Fields</h3>' +
       '</div>' +
-      panel +
+      // The heading stays put; only what's under it scrolls. Scrolling the
+      // whole panel pushed "Fields" and the first cards off the top.
+      '<div class="tma-portal-sig-wizard__fields-body">' + panel + '</div>' +
       '</aside>' +
       '<div class="tma-portal-sig-wizard__canvas">' +
       (sig.doc ? sigZoomBar() : '') +

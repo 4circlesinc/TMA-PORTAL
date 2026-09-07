@@ -59,7 +59,7 @@ class FieldValue
         return match ($field->type) {
             FieldType::NAME => $recipient->name,
             FieldType::EMAIL => $recipient->email,
-            FieldType::DATE => now()->format('j M Y'),
+            FieldType::DATE => DateFormat::format($field->date_format),
             default => null,
         };
     }
