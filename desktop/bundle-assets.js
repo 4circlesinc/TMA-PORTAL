@@ -27,11 +27,14 @@ const OUT = path.join(__dirname, 'webassets');
  * What the interface actually renders. Deliberately not all of public/:
  * images/design-system and images/components are ~15 MB of reference artwork
  * the app never puts on screen, and shipping them would be most of the weight
- * for none of the benefit.
+ * for none of the benefit. `build/` is the hashed CSS/JS the production
+ * shell actually requests (PortalShell rewrites the tags); without it an
+ * offline boot is a page of unstyled links.
  */
 const INCLUDE = [
   'css',
   'js',
+  'build',
   'audio',
   'images/icons',
   'images/brand',

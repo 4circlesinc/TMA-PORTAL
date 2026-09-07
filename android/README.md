@@ -1,43 +1,51 @@
 # TM ANTOINE Portal — Android app
 
-The native Android client of the portal in this repository. Kotlin + Jetpack Compose, the same backend as the web portal and the desktop app, no WebView. The spec is [docs/android-app-prompt.md](../docs/android-app-prompt.md); the endpoints are in [docs/android-api-catalogue.md](../docs/android-api-catalogue.md).
-
-## Build
-
-Android Studio opens `android/` directly. From a terminal (JDK 17+; Android Studio's bundled runtime works):
-
-```sh
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"   # macOS
-./gradlew assembleDebug        # -> app/build/outputs/apk/debug/app-debug.apk
-./gradlew test                 # unit tests
-./gradlew assembleDebug -PportalOrigin=http://192.168.1.20:8001   # point a debug build elsewhere
-```
-
-`local.properties` (gitignored) must name the SDK: `sdk.dir=/Users/you/Library/Android/sdk`.
-
-Reproducible build without a local SDK:
-
-```sh
-docker compose -f android/compose.yaml run --rm build
-```
-
-## Backend for the emulator
-
-```sh
-docker compose up -d           # from the repository root: app on :8001, Reverb proxied under /app/
-```
-
-Debug builds point at `http://10.0.2.2:8001` (the emulator's alias for the host) and rewrite a realtime host of `localhost` to `10.0.2.2`. Sign in with the seeded `admin@localhost` / `password`.
-
-## Layout
+The Android twin of the Mac app in `../desktop`. It is not a second copy of
+the portal: the window loads the portal origin in a WebView and this folder
+only adds what a browser tab cannot do — an offline boot, OS notifications, a
+sign-in that goes through the real browser, calls with the camera and
+microphone, downloads and uploads, deep links. The page is the portal's own
+HTML, CSS and JS, so the phone layout is the web's responsive layout.
 
 ```
-app/            application, navigation host, splash, deep links
-core/common     result types, time formatting, i18n
-core/ui         theme generated from design/tokens.json, design-system components, icons, skeletons
-core/network    OkHttp client, cookie jar, CSRF interceptor, Retrofit APIs, realtime socket
-core/database   Room: replica, write queue, snapshots, cursors
-core/data       offline-first repositories
-feature/*       one module per portal module
-tools/          gen_tokens.py regenerates core/ui/.../theme/Tokens.kt from design/tokens.json
+./gradlew :app:installDebug -PportalOrigin=http://10.0.2.2:8002   # against the Docker stack
+./gradlew :app:installDebug                                         # against http://10.0.2.2:8001 (php artisan serve)
+./gradlew :app:assembleRelease                                      # https://portal.tmantoinelaw.com
+./gradlew :core:network:testDebugUnitTest :core:data:testDebugUnitTest
 ```
+
+Needs JDK 17+ (`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`),
+Android SDK with `platforms;android-37`, and an emulator or device on API 26+.
+
+## How the pieces fit
+
+| Piece | Desktop original | Here |
+|---|---|---|
+| The window | `main.js` BrowserWindow | `app/.../web/PortalWebHost.kt` — one WebView over the origin |
+| Page → shell bridge | `preload.js` + `host-bridge.js` | `app/src/main/assets/preload.js` (+ `host-bridge.js`, copied from `../desktop` at build time by `copyDesktopBridge`) |
+| `window.TMADesktop` | `{isDesktop, platform, version, openInBrowser}` | same object, plus `isAndroid: true`; `isDesktop: true` turns on the page's IndexedDB tier |
+| `<html data-tma-*>` relays | badge, call, overlay, theme, focus, signin-reopen, signin-cancel | same attributes → `TMAAndroidHost.relay` → `MainActivity` |
+| Navigation rules | `attachNavigationRules`, `signin-provider.js` | `web/NavigationRules.kt` |
+| Sign-in handoff | `tmaportal://` + PKCE, `signin-waiting.html` | `core/data/auth/SignInHandoff.kt`, the same waiting page; claimed cookies go to `CookieManager` |
+| Offline boot | `shell-cache.js` | `web/ShellCache.kt` — the last served shell per `/desktop/build`, served for navigations while offline |
+| Offline / load-error pages | `showOffline`, `showLoadError` | `web/OfflinePages.kt`, verbatim |
+| OS notifications | Chromium `Notification` | `window.Notification` polyfill in `preload.js` → `web/WebNotifications.kt`; a tap hands the click back to the page |
+| Loading layer | `splash.js` | `core/ui/splash/BootSplash.kt` over the WebView until `onPageFinished` |
+| Media permissions | `setPermissionRequestHandler` | `WebChromeClient.onPermissionRequest` → runtime permissions |
+| Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
+
+## Debugging the page
+
+Debug builds enable `WebView.setWebContentsDebuggingEnabled`. Either open
+`chrome://inspect` on a desktop Chrome, or from the terminal:
+
+```
+adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.tmantoinelaw.portal)
+curl -s http://localhost:9222/json     # page targets and their webSocketDebuggerUrl
+```
+
+## Not built yet
+
+Push notifications (FCM; needs the backend addition in `docs/android-app-prompt.md` §13),
+the incoming-call notification with Accept/Decline and a foreground service
+during calls, `assetlinks.json` for App Links, release signing and Play.

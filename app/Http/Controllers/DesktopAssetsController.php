@@ -30,6 +30,7 @@ class DesktopAssetsController extends Controller
     private const INCLUDE = [
         'css',
         'js',
+        'build',
         'audio',
         'images/icons',
         'images/brand',

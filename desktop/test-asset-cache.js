@@ -91,6 +91,20 @@ app.whenReady().then(async () => {
   check('an unreachable navigation is still a 502 the app can name', nav.status, 502);
   check('and marked offline, not a portal outage', nav.headers.get('x-tma-offline'), '1');
 
+  check('the hashed shell bundle is a served prefix', assetCache.SERVED.includes('/build/'), true);
+  const cssHref = Object.keys(local.files).find((u) => /^\/build\/app-[a-f0-9]+\.css$/.test(u));
+  check('the package carries the hashed stylesheet', !!cssHref, true);
+  if (cssHref) {
+    const stale = cssHref.replace(/app-[a-f0-9]+/, 'app-deadbeefdead');
+    check('an old hashed name still resolves to the packaged stylesheet',
+      !!assetCache.bundledAssetFor(new URL(stale, 'https://example.test')), true);
+    const staleCss = await assetCache.handle(new Request(`${origin}${stale}`, {
+      headers: { accept: 'text/css,*/*;q=0.1' },
+    }));
+    check('offline, that stylesheet is served rather than rejected',
+      (staleCss.headers.get('content-type') || '').includes('text/css'), true);
+  }
+
   /* ── path safety ───────────────────────────────────────────────── */
 
   const url = (u) => new URL(u, 'https://example.test');

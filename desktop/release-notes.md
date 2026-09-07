@@ -1,1 +1,2 @@
-- Narrow windows lose the redundant search in the title bar — the menu drawer carries the search there — and the stray box behind the status and toolbar icons is gone; they sit flat on the blue like at full width
+- Offline now opens the portal as it looked, not a page of unstyled blue links — the hashed CSS and JavaScript the shell actually asks for now ship inside the app
+- A dead network no longer wipes who you are, so cached clients, files and the board still have an account to open under

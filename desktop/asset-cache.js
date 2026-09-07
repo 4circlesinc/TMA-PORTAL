@@ -32,7 +32,7 @@ const fileCache = require('./file-cache');
 const ROOT = path.join(__dirname, 'webassets');
 
 // Only these trees are bundled; anything else is the network's business.
-const SERVED = ['/css/', '/js/', '/audio/', '/images/'];
+const SERVED = ['/css/', '/js/', '/audio/', '/images/', '/build/'];
 
 const TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -282,6 +282,43 @@ function localFile(url, agreed) {
 }
 
 /*
+ * The hashed CSS/JS the production shell actually requests.
+ *
+ * PortalShell rewrites the page to `build/app-<hash>.{css,js}` and deletes
+ * last deploy's files. Those two URLs are what a cached shell asks for
+ * offline — not the individual `/css/` and `/js/` files this package has
+ * always carried. Serving the copy in the package, even when the hash in
+ * the URL is one deploy old, is the difference between the portal and a
+ * page of naked links.
+ */
+function packagedAppBundle(ext) {
+  const dir = path.join(ROOT, 'build');
+  try {
+    if (!fs.existsSync(dir)) return null;
+    const name = fs.readdirSync(dir).find((n) => (
+      n.startsWith('app-') && n.endsWith(ext) && !n.endsWith('.map')
+    ));
+    if (!name) return null;
+    const file = path.join(dir, name);
+    if (!file.startsWith(dir) || !fs.statSync(file).isFile()) return null;
+
+    return file;
+  } catch {
+    return null;
+  }
+}
+
+function bundledAssetFor(url) {
+  const exact = localFile(url, null);
+  if (exact) return exact;
+  if (!url.pathname.startsWith('/build/')) return null;
+  const ext = path.extname(url.pathname).toLowerCase();
+  if (ext !== '.css' && ext !== '.js') return null;
+
+  return packagedAppBundle(ext);
+}
+
+/*
  * The handler's shared state. One handler serves the app's whole life —
  * `protocol.handle` cannot be stacked — so re-installing (tests do; a portal
  * URL override could) retargets this rather than registering again.
@@ -452,6 +489,16 @@ async function handle(request) {
 
       return response;
     }
+
+    /*
+     * The production shell asks for `build/app-<hash>.{css,js}`, not the
+     * individual files. Online those come from the portal; offline the
+     * package is all there is — including when the hash in the URL is one
+     * deploy behind the copy we shipped. Without this the window is a
+     * page of blue links on a blank field.
+     */
+    const asset = bundledAssetFor(url);
+    if (asset) return fileResponse(asset);
 
     return Promise.reject(new Error('Failed to fetch'));
   }
@@ -658,6 +705,7 @@ module.exports = {
   handle,
   bundled,
   localFile,
+  bundledAssetFor,
   SERVED,
   ROOT,
   headerValueToByteString,
