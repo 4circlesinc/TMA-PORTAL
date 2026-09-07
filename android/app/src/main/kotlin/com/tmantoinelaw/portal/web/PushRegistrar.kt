@@ -3,6 +3,7 @@ package com.tmantoinelaw.portal.web
 import android.content.Context
 import android.os.Build
 import android.webkit.CookieManager
+import android.webkit.WebSettings
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import okhttp3.MediaType.Companion.toMediaType
@@ -24,6 +25,7 @@ object PushRegistrar {
     private val io = Executors.newSingleThreadExecutor()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
     private const val PREFS = "push"
+    @Volatile private var inFlight: String? = null
 
     fun ensure(context: Context, origin: String, versionName: String) {
         if (FirebaseApp.getApps(context).isEmpty()) return
@@ -37,15 +39,19 @@ object PushRegistrar {
         val sessionValue = cookies.split(";").map { it.trim() }.firstOrNull { it.startsWith("$session=") } ?: return
         val stamp = sha(token + "|" + sessionValue)
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getString("registered", null) == stamp) return
+        if (prefs.getString("registered", null) == stamp || inFlight == stamp) return
+        inFlight = stamp
         val xsrf = cookies.split(";").map { it.trim() }.firstOrNull { it.startsWith("XSRF-TOKEN=") }?.substringAfter("=")?.let { URLDecoder.decode(it, "UTF-8") }
         val body = JSONObject().put("platform", "android").put("token", token).put("appVersion", versionName)
             .put("deviceName", "${Build.MANUFACTURER} ${Build.MODEL}".trim()).toString()
+        // The page's own user agent: the session is the WebView's, and a session guard may compare it.
+        val userAgent = WebSettings.getDefaultUserAgent(context.applicationContext) + " TMAPortal/$versionName"
         io.execute {
             val request = Request.Builder().url("$origin/me/devices").post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                .header("Accept", "application/json").header("X-Requested-With", "XMLHttpRequest").header("Cookie", cookies)
+                .header("Accept", "application/json").header("X-Requested-With", "XMLHttpRequest").header("Cookie", cookies).header("User-Agent", userAgent)
                 .apply { xsrf?.let { header("X-XSRF-TOKEN", it) } }.build()
             runCatching { client.newCall(request).execute().use { if (it.isSuccessful) prefs.edit().putString("registered", stamp).apply() } }
+            if (inFlight == stamp) inFlight = null
         }
     }
 
