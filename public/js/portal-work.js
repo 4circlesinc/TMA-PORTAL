@@ -1727,7 +1727,16 @@
     // copy in `recipients`, which may hold unsaved typing).
     doc: null, docError: null, fields: [], fieldTypes: null,
     savedRecipients: [], selectedFieldId: null, fieldsDirty: false,
+    // Editor zoom. `null` means fit-to-width, the default: the sheet tracks
+    // the pane like it always did. A number is an explicit scale, and only
+    // then does the sheet grow past the pane and the scroller start panning.
+    zoom: null,
   };
+
+  /* Zoom stops, in the order the -/+ buttons walk through them. */
+  var SIG_ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+  var SIG_ZOOM_MIN = SIG_ZOOM_STEPS[0];
+  var SIG_ZOOM_MAX = SIG_ZOOM_STEPS[SIG_ZOOM_STEPS.length - 1];
 
   var SIG_WIZARD_STEPS = [
     { key: 'files', label: 'Files and recipients', icon: 'Users' },
@@ -2127,6 +2136,95 @@
       });
   }
 
+  /* The width one page occupies at the current zoom.
+     Fit-to-width (`zoom === null`) keeps the old behaviour exactly: the sheet
+     is whatever the CSS gives it. A numeric zoom multiplies that same fitted
+     width, so 100% means "as it looked before" rather than some absolute
+     pixel size that would differ between a laptop and a wide monitor. */
+  function sigFitWidth(root) {
+    var pane = (root || sig.el || document).querySelector('[data-sig-canvas-scroll]');
+    if (!pane) return 720;
+    // Mirrors .tma-portal-sig-wizard__canvas-scroll's padding and the sheet's
+    // 720px cap, so unzoomed stays pixel-identical to before.
+    var usable = pane.clientWidth - 48;
+    return Math.max(240, Math.min(720, usable));
+  }
+
+  /* Apply the zoom to the sheet. Only the sheet's width changes: the canvas is
+     width:100% of it and the field layer is inset from it, so both follow, and
+     every coordinate stays the page-relative fraction it always was. */
+  function sigApplyZoom(root) {
+    root = root || sig.el;
+    if (!root) return;
+
+    var sheet = root.querySelector('[data-sig-page-host]');
+    var label = root.querySelector('[data-sig-zoom-label]');
+    var out = root.querySelector('[data-sig-zoom-out]');
+    var into = root.querySelector('[data-sig-zoom-in]');
+    var fit = root.querySelector('[data-sig-zoom-fit]');
+
+    if (sheet) {
+      if (sig.zoom === null) {
+        // Hand the width back to the stylesheet.
+        sheet.style.width = '';
+      } else {
+        sheet.style.width = Math.round(sigFitWidth(root) * sig.zoom) + 'px';
+      }
+    }
+
+    if (label) label.textContent = Math.round((sig.zoom || 1) * 100) + '%';
+    if (out) out.disabled = sig.zoom !== null && sig.zoom <= SIG_ZOOM_MIN;
+    if (into) into.disabled = sig.zoom !== null && sig.zoom >= SIG_ZOOM_MAX;
+    if (fit) fit.classList.toggle('is-active', sig.zoom === null);
+
+    // The canvas is a bitmap: widening it without repainting just blurs the
+    // page, so re-rasterise at the new size.
+    var canvas = root.querySelector('[data-sig-canvas]');
+    if (canvas && sig.doc) sigPaintPage(canvas, sig.wizardPage || 0);
+  }
+
+  /* Move to the next stop in `dir`, keeping the point under the pointer put
+     where possible so zooming feels anchored rather than jumpy. */
+  function sigZoomBy(root, dir, anchor) {
+    var current = sig.zoom === null ? 1 : sig.zoom;
+    var next = current;
+
+    for (var i = 0; i < SIG_ZOOM_STEPS.length; i++) {
+      var step = SIG_ZOOM_STEPS[i];
+      if (dir > 0 && step > current + 0.001) { next = step; break; }
+      if (dir < 0 && step < current - 0.001) { next = step; }
+    }
+    if (dir < 0 && next === current) next = SIG_ZOOM_MIN;
+
+    sigZoomTo(root, next, anchor);
+  }
+
+  function sigZoomTo(root, value, anchor) {
+    root = root || sig.el;
+    var pane = root && root.querySelector('[data-sig-canvas-scroll]');
+    var before = null;
+
+    if (pane && anchor) {
+      var rect = pane.getBoundingClientRect();
+      before = {
+        // Where the anchor sits in the scrolled content, and where it sits in
+        // the visible pane. Both are needed to put it back afterwards.
+        x: (pane.scrollLeft + anchor.x - rect.left) / Math.max(1, pane.scrollWidth),
+        y: (pane.scrollTop + anchor.y - rect.top) / Math.max(1, pane.scrollHeight),
+        offsetX: anchor.x - rect.left,
+        offsetY: anchor.y - rect.top,
+      };
+    }
+
+    sig.zoom = value === null ? null : sigClamp(value, SIG_ZOOM_MIN, SIG_ZOOM_MAX);
+    sigApplyZoom(root);
+
+    if (pane && before) {
+      pane.scrollLeft = before.x * pane.scrollWidth - before.offsetX;
+      pane.scrollTop = before.y * pane.scrollHeight - before.offsetY;
+    }
+  }
+
   /* Paints one page into a canvas sized to the element's own width, so the
      document scales with the viewport while placement stays page-relative. */
   function sigPaintPage(canvas, pageIndex) {
@@ -2147,23 +2245,42 @@
       return Promise.resolve();
     }
 
-    return doc.pdf.getPage(pageIndex + 1).then(function (page) {
-      var unscaled = page.getViewport({ scale: 1 });
-      var viewport = page.getViewport({ scale: (cssWidth * dpr) / unscaled.width });
-      // Cancel a still-running paint for this canvas before starting another,
-      // or pdf.js throws when two renders share a canvas.
-      if (canvas._sigRenderTask) canvas._sigRenderTask.cancel();
-      var task = page.render({ canvas: canvas, viewport: viewport });
-      canvas._sigRenderTask = task;
-      return task.promise.then(
-        function () { canvas._sigRenderTask = null; },
-        function (err) {
-          canvas._sigRenderTask = null;
-          // A cancelled paint is expected when the user pages quickly.
-          if (!err || err.name !== 'RenderingCancelledException') throw err;
-        }
-      );
-    });
+    // Cancel any in-flight paint up front, then queue behind it. getPage() is
+    // async, so cancelling only *inside* that callback lets two calls (a zoom
+    // and the ResizeObserver it triggers) both get past the check before
+    // either registers its task - and pdf.js throws on the shared canvas.
+    if (canvas._sigRenderTask) {
+      try { canvas._sigRenderTask.cancel(); } catch (e) { /* already finished */ }
+      canvas._sigRenderTask = null;
+    }
+
+    var prior = canvas._sigPaintChain || Promise.resolve();
+    var chain = prior
+      .catch(function () { /* a cancelled predecessor must not stop us */ })
+      .then(function () {
+        // A newer paint queued up behind us while we waited: let it win.
+        if (canvas._sigPaintChain !== chain) return;
+
+        return doc.pdf.getPage(pageIndex + 1).then(function (page) {
+          if (canvas._sigPaintChain !== chain) return;
+
+          var unscaled = page.getViewport({ scale: 1 });
+          var viewport = page.getViewport({ scale: (canvas.width) / unscaled.width });
+          var task = page.render({ canvas: canvas, viewport: viewport });
+          canvas._sigRenderTask = task;
+          return task.promise.then(
+            function () { canvas._sigRenderTask = null; },
+            function (err) {
+              canvas._sigRenderTask = null;
+              // A cancelled paint is expected when the user pages or zooms quickly.
+              if (!err || err.name !== 'RenderingCancelledException') throw err;
+            }
+          );
+        });
+      });
+
+    canvas._sigPaintChain = chain;
+    return chain;
   }
 
   /* ── field placement ─────────────────────────────── */
@@ -2454,7 +2571,50 @@
       sigWireFieldLayer(layer);
     }
 
+    sigWireZoom(root);
     sigWireAssignPanel(root);
+  }
+
+  /* Zoom: the buttons, ctrl/⌘+scroll, and ⌘/Ctrl +/-/0. */
+  function sigWireZoom(root) {
+    var out = root.querySelector('[data-sig-zoom-out]');
+    var into = root.querySelector('[data-sig-zoom-in]');
+    var fit = root.querySelector('[data-sig-zoom-fit]');
+    var pane = root.querySelector('[data-sig-canvas-scroll]');
+
+    if (out) out.addEventListener('click', function () { sigZoomBy(root, -1, null); });
+    if (into) into.addEventListener('click', function () { sigZoomBy(root, 1, null); });
+    if (fit) fit.addEventListener('click', function () { sigZoomTo(root, null, null); });
+
+    if (pane) {
+      pane.addEventListener('wheel', function (e) {
+        // Only with the modifier held: a bare wheel must still scroll the page.
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        sigZoomBy(root, e.deltaY < 0 ? 1 : -1, { x: e.clientX, y: e.clientY });
+      }, { passive: false });
+    }
+
+    // Keyboard. Bound to the document because the pane isn't focusable, and
+    // removed when the wizard closes so it can't outlive the editor.
+    if (sig.zoomKeyHandler) document.removeEventListener('keydown', sig.zoomKeyHandler);
+    sig.zoomKeyHandler = function (e) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      // Gone from the DOM: the wizard closed without us hearing about it.
+      if (!sig.el || !document.contains(sig.el)) {
+        document.removeEventListener('keydown', sig.zoomKeyHandler);
+        sig.zoomKeyHandler = null;
+        return;
+      }
+      if (!sig.el.querySelector('[data-sig-canvas-scroll]')) return;
+
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); sigZoomBy(sig.el, 1, null); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); sigZoomBy(sig.el, -1, null); }
+      else if (e.key === '0') { e.preventDefault(); sigZoomTo(sig.el, null, null); }
+    };
+    document.addEventListener('keydown', sig.zoomKeyHandler);
+
+    sigApplyZoom(root);
   }
 
   function sigRemoveField(id) {
@@ -2712,13 +2872,31 @@
       panel +
       '</aside>' +
       '<div class="tma-portal-sig-wizard__canvas">' +
-      '<div class="tma-portal-sig-wizard__canvas-scroll">' + canvasInner + '</div>' +
+      (sig.doc ? sigZoomBar() : '') +
+      '<div class="tma-portal-sig-wizard__canvas-scroll" data-sig-canvas-scroll>' + canvasInner + '</div>' +
       '</div>' +
       '<aside class="tma-portal-sig-wizard__pages-panel">' +
       '<p class="tma-portal-sig-wizard__pages-title" title="' + ui().esc(record.title) + '">' + ui().esc(docTitle) + '</p>' +
       '<div class="tma-portal-sig-wizard__page-list">' +
       sigPageThumbs(pageCount, page) +
       '</div></aside></div>';
+  }
+
+  /* Zoom controls for the placement canvas. Fine print on a scanned contract
+     is unreadable at fit-width, and a field has to be placed exactly, so the
+     editor needs to magnify without ever changing the stored coordinates. */
+  function sigZoomBar() {
+    return '<div class="tma-portal-sig-wizard__zoombar">' +
+      '<button type="button" class="tma-portal-icon-btn" data-sig-zoom-out' +
+      ' title="Zoom out (Ctrl -)" aria-label="Zoom out">' +
+      '<img src="images/icons/phosphor/MagnifyingGlassMinus.svg" alt=""></button>' +
+      '<span class="tma-portal-sig-wizard__zoom-level" data-sig-zoom-label aria-live="polite">100%</span>' +
+      '<button type="button" class="tma-portal-icon-btn" data-sig-zoom-in' +
+      ' title="Zoom in (Ctrl +)" aria-label="Zoom in">' +
+      '<img src="images/icons/phosphor/MagnifyingGlassPlus.svg" alt=""></button>' +
+      '<button type="button" class="tma-portal-sig-wizard__zoom-fit" data-sig-zoom-fit' +
+      ' title="Fit to width (Ctrl 0)">Fit</button>' +
+      '</div>';
   }
 
   /* One thumbnail per real page, each painted from the document itself. */
@@ -3180,11 +3358,18 @@
     if (sig.doc && sig.doc.pdf && sig.doc.pdf.destroy) {
       try { sig.doc.pdf.destroy(); } catch (e) { /* already gone */ }
     }
+    if (sig.zoomKeyHandler) {
+      document.removeEventListener('keydown', sig.zoomKeyHandler);
+      sig.zoomKeyHandler = null;
+    }
     sig.doc = null;
     sig.docError = null;
     sig.fields = [];
     sig.selectedFieldId = null;
     sig.fieldsDirty = false;
+    // Back to fit-width: a zoom held over from the last document would apply
+    // to a page of a different size.
+    sig.zoom = null;
   }
 
   function openSignatureWizard(record) {

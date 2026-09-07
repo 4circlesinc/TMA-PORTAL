@@ -7,6 +7,21 @@ field placement and drawing, and computed CSS only exist in a browser.
 - **`signature-editor.mjs`** — log in, pick a library file, add recipients,
   place fields on the rendered PDF, drag one, confirm the coordinates persist
   as page-relative fractions.
+- **`signature-zoom.mjs`** — the placement canvas's zoom. Fit-to-width is the
+  default and must stay pixel-identical to the pre-zoom layout; the buttons,
+  ctrl/⌘+scroll and ⌘/Ctrl +/-/0 then walk the stops. It asserts the canvas
+  *re-rasterises* at each step (a widened bitmap without a repaint is just a
+  blurry page), that the sheet overflows and pans at high zoom, that a bare
+  wheel still scrolls rather than zooming, and that a placed field's stored
+  percentages are untouched by any of it.
+
+  It was written after zoom introduced a pdf.js render race: `sigPaintPage`
+  cancelled the in-flight task *inside* `getPage().then(...)`, so a zoom and
+  the ResizeObserver repaint it triggers both got past the check before either
+  registered, and pdf.js threw "Cannot use the same canvas during multiple
+  render() operations". Paints are now chained per canvas. Only a browser
+  catches this - it surfaces as a `pageerror`, not a failed assertion.
+
 - **`signing-flow.mjs`** — the whole round trip: the owner sends, a recipient
   opens the link in a *separate browser context* (no portal session), draws a
   signature, finishes; then the used link must be dead and the portal
@@ -1757,10 +1772,19 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log 
   php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
 
 node tests/Browser/signature-editor.mjs
+node tests/Browser/signature-zoom.mjs   # reads the sign-in code from the log
 node tests/Browser/signing-flow.mjs     # expects a fresh database
 node tests/Browser/stamped-output.mjs   # expects a fresh database
 node tests/Browser/folder-shortcuts.mjs # needs the folder fixtures below
 ```
+
+**Every fresh browser context is a new device.** Sign-in now emails a 6-digit
+code (`/auth/login-code`) and then asks "Stay signed in?", and Playwright gets
+a clean cookie jar on every launch, so a script that only fills the login form
+stops on the code screen. Device trust is a cookie, so it cannot be reused
+between contexts. `signature-zoom.mjs` handles both screens - it reads the code
+out of `storage/logs/laravel.log` (hence `MAIL_MAILER=log`) and submits the
+interstitial. The older scripts here predate the gate and still stop at it.
 
 `folder-shortcuts.mjs` wants a second user and a folder tree — it deletes a
 folder as its last step, so re-seed between runs:
