@@ -256,9 +256,12 @@ class CipAssignmentTest extends TestCase
             ->getJson('/portal/cip/applications/'.$application->uuid.'/assignments')
             ->assertOk()->json('assignable');
 
-        // Both officer types are offered; the administrator is not, reaching
-        // every application already.
-        $this->assertEqualsCanonicalizing([$colin->id, $rita->id], array_column($before, 'id'));
+        // Both officer types are offered, and the administrator too: the
+        // column says who is working the file, not who was let in.
+        $this->assertEqualsCanonicalizing(
+            [$admin->id, $colin->id, $rita->id],
+            array_column($before, 'id'),
+        );
 
         $this->assign($admin, $application, $rita)->assertCreated();
 
@@ -266,7 +269,7 @@ class CipAssignmentTest extends TestCase
             ->getJson('/portal/cip/applications/'.$application->uuid.'/assignments')
             ->assertOk()->json('assignable');
 
-        $this->assertSame([$colin->id], array_column($after, 'id'));
+        $this->assertEqualsCanonicalizing([$admin->id, $colin->id], array_column($after, 'id'));
     }
 
     public function test_assigning_names_the_officer_in_the_table_column(): void
@@ -312,7 +315,39 @@ class CipAssignmentTest extends TestCase
             ->json();
 
         $this->assertSame([$rita->id], array_column($body['assignments'], 'userId'));
-        $this->assertSame([$colin->id], array_column($body['assignable'], 'id'));
+        $this->assertEqualsCanonicalizing(
+            [$admin->id, $colin->id],
+            array_column($body['assignable'], 'id'),
+        );
+    }
+
+    public function test_an_administrator_may_put_themselves_on_the_file(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->filed($admin);
+
+        // The point is not access, which they hold already: it is telling the
+        // officers and the provider side that this person is working it too,
+        // and can be contacted about it.
+        $this->assign($admin, $application, $admin)->assertCreated();
+
+        $row = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame('Ada Admin', $row['assignedTo'][0]['name'] ?? null);
+        $this->assertDatabaseHas('cip_application_assignments', [
+            'application_id' => $application->id,
+            'user_id' => $admin->id,
+        ]);
+
+        // Once on, they are not offered again, the same rule everyone else
+        // gets.
+        $after = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/assignments')
+            ->assertOk()->json('assignable');
+        $this->assertNotContains($admin->id, array_column($after, 'id'));
     }
 
     public function test_assigning_emails_the_officer_in_the_compliance_format(): void

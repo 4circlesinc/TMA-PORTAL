@@ -8,6 +8,7 @@ use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CompanyStaffAssignment;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
@@ -62,8 +63,11 @@ class CipAssignmentController extends Controller
          * account type (CRO / Reviewing officer).
          */
         $role = $data['role'] ?? CipAccess::officerRoles($officer)[0] ?? CipAccess::REVIEWING_OFFICER;
+        // An administrator may be named in either job. They hold the access
+        // already; what the row adds is the fact that they are working it,
+        // which is the whole reason the column exists.
         abort_unless(
-            CipAccess::isOfficer($officer, $role),
+            Role::isAdmin($officer) || CipAccess::isOfficer($officer, $role),
             422,
             'That officer cannot take this application as '.mb_strtolower(Assignments::roleLabel($role)).'.',
         );
@@ -279,7 +283,9 @@ class CipAssignmentController extends Controller
                     'email' => $u->email,
                     'avatar' => $u->photoUrl(),
                     'accountType' => $u->account_type,
-                    'role' => CipAccess::officerRoles($u)[0] ?? null,
+                    'role' => Role::isAdmin($u)
+                        ? CipAccess::REVIEWING_OFFICER
+                        : (CipAccess::officerRoles($u)[0] ?? null),
                 ])->values()->all()
                 : [],
             'roles' => collect(Assignments::ROLES)

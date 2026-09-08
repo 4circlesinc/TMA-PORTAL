@@ -215,12 +215,15 @@ class Assignments
     /**
      * The officers this application could be handed to.
      *
-     * {@see Role::OFFICERS} is the list, and it is the right one twice over.
-     * An administrator is absent because they reach every application already
-     * (see {@see ApplicationScope}), so a row for them would grant nothing and
-     * imply they had been singled out for this one file; the parked Employee
-     * type is absent because those accounts cannot reach the portal at all,
-     * and offering one would promise work to somebody who could never open it.
+     * {@see Role::OFFICERS} plus administrators. An administrator's row grants
+     * no access they did not already have (see {@see ApplicationScope}), and
+     * for a long time that was the reason to leave them out. It was the wrong
+     * question: the column is not a list of who was let in, it is a list of
+     * who is working the file. An administrator is often an employee holding
+     * admin rights, and the officers and the provider side need to know they
+     * are on it and can be contacted. The parked Employee type is still
+     * absent, because those accounts cannot reach the portal at all, and
+     * offering one would promise work to somebody who could never open it.
      * Anybody already holding the file is excluded for the plainest reason —
      * the list would be offering work that is already theirs. "Holding" is
      * the same list §8's column draws: the client's live assignments, plus
@@ -243,7 +246,7 @@ class Assignments
         }
 
         return User::query()
-            ->whereIn('account_type', Role::OFFICERS)
+            ->whereIn('account_type', [...Role::OFFICERS, Role::ADMINISTRATOR])
             ->where('status', 'approved')
             ->whereNotIn('id', $held->unique()->all())
             ->orderBy('name')
