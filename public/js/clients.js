@@ -175,6 +175,9 @@
     { id: 'all_applications', label: 'All Applications', shortLabel: 'All' },
     { id: 'pre_approval', label: 'Pre-Approval Applications', shortLabel: 'Pre-Approval' },
     { id: 'post_approval', label: 'Post-Approval Applications', shortLabel: 'Post-Approval' },
+    // Appeals sit between the lanes and the archive: a file being appealed
+    // is still in flight, but it is no longer in the lane it was in.
+    { id: 'appeal', label: 'Appeals', shortLabel: 'Appeals' },
     { id: 'closed', label: 'Closed' },
     { id: 'providers', label: 'Service providers', shortLabel: 'Providers' },
     { id: 'people', label: 'Provider contacts', shortLabel: 'Contacts' },
@@ -207,6 +210,7 @@
         return tab.id === 'all_applications'
           || tab.id === 'pre_approval'
           || tab.id === 'post_approval'
+          || tab.id === 'appeal'
           || tab.id === 'closed';
       });
     }
@@ -253,7 +257,7 @@
     if (!state || state.screen !== 'list') return false;
     var tab = listTabOf(state);
     return tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval'
-      || tab === 'closed';
+      || tab === 'appeal' || tab === 'closed';
   }
 
   /** Which workflow lane the current application tab filters to, if any. */
@@ -261,8 +265,10 @@
     var tab = listTabOf(state);
     if (tab === 'pre_approval') return 'pre_approval';
     if (tab === 'post_approval') return 'post_approval';
-    // Not a lane: the server reads 'closed' as status = closed, the archive.
+    // Neither of these is a lane: the server reads 'closed' as status =
+    // closed, and 'appeal' as any of the three appeal statuses.
     if (tab === 'closed') return 'closed';
+    if (tab === 'appeal') return 'appeal';
     return null;
   }
 
@@ -289,6 +295,7 @@
     if (tab.id === 'pre_approval') return 'pre_approval';
     if (tab.id === 'post_approval') return 'post_approval';
     if (tab.id === 'closed') return 'closed';
+    if (tab.id === 'appeal') return 'appeal';
     return null;
   }
 

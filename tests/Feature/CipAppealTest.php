@@ -268,6 +268,51 @@ class CipAppealTest extends TestCase
         $this->assertDatabaseMissing('email_deliveries', ['template' => 'cip-message']);
     }
 
+    public function test_the_appeals_tab_lists_exactly_the_files_being_appealed(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $appealed = $this->decided($staff);
+        $this->lodge($staff, $appealed)->assertOk();
+
+        // A second file that was decided and left alone: it must not appear.
+        $quiet = CipApplication::create([
+            'provider_id' => $appealed->provider_id,
+            'status' => Status::DENIED,
+            'phase' => $appealed->phase,
+            'created_by' => $staff->id,
+        ]);
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=appeal')
+            ->assertOk()
+            ->json();
+
+        $ids = array_column($body['applications'], 'id');
+        $this->assertContains($appealed->uuid, $ids);
+        $this->assertNotContains($quiet->uuid, $ids);
+
+        // The tab's own badge, counted the same way the filter selects.
+        $this->assertSame(1, $body['phaseCounts']['appeal'] ?? null);
+    }
+
+    public function test_the_appeal_tab_is_not_a_phase(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff, Status::GRANTED);
+        $phase = $application->phase;
+
+        $this->lodge($staff, $application)->assertOk();
+
+        // Appealing does not move the file between lanes: it is still whatever
+        // phase it was, standing on an appeal status. The tab is a status
+        // filter, the way Closed is.
+        $this->assertSame($phase, $application->fresh()->phase);
+    }
+
     public function test_appeal_documents_is_the_only_drawer_open_during_an_appeal(): void
     {
         Mail::fake();

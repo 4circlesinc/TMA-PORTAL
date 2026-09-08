@@ -446,6 +446,14 @@ class CipApplicationController extends Controller
             if ($data['phase'] === 'closed') {
                 // The archive tab: finished files, whatever lane closed them.
                 $query->where('status', Status::CLOSED);
+            } elseif ($data['phase'] === 'appeal') {
+                /*
+                 * Not a lane either. An appeal runs after a decision and from
+                 * either phase, so a file being appealed is still pre- or
+                 * post-approval in the column; what makes it an appeal is the
+                 * status it is standing on.
+                 */
+                $query->whereIn('status', Status::APPEAL_LANE);
             } elseif (Phase::isValid($data['phase'])) {
                 $query->where('phase', $data['phase']);
 
@@ -558,7 +566,7 @@ class CipApplicationController extends Controller
      * Measured over the whole scoped set, not the current page or phase filter,
      * so tab badges stay honest while the table narrows.
      *
-     * @return array{all: int, pre_approval: int, post_approval: int}
+     * @return array{all: int, pre_approval: int, post_approval: int, closed: int, appeal: int}
      */
     private function phaseCounts(User $user): array
     {
@@ -567,12 +575,25 @@ class CipApplicationController extends Controller
             ->groupBy('phase')
             ->pluck('aggregate', 'phase');
 
-        // Its own count and its own tab: a closed file is phase post-approval
-        // in the column but archive to the reader, so the lane badge excludes
-        // it and the Closed badge carries it.
-        $closed = (int) ApplicationScope::query($user)
-            ->where('status', Status::CLOSED)
-            ->count();
+        /*
+         * Closed and Appeals are tabs of their own but not lanes of their own:
+         * a closed file is phase post-approval in the column, and an appealed
+         * one is still whichever phase it was. Both are answered by the status
+         * a file stands on, so ONE grouped read serves both badges — a second
+         * count() per tab is a query per listing, and this listing is already
+         * measured against a budget (see CipApplicationTableTest).
+         */
+        $byStatus = ApplicationScope::query($user)
+            ->whereIn('status', [Status::CLOSED, ...Status::APPEAL_LANE])
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $closed = (int) ($byStatus[Status::CLOSED] ?? 0);
+        $appeal = array_sum(array_map(
+            fn (string $status) => (int) ($byStatus[$status] ?? 0),
+            Status::APPEAL_LANE,
+        ));
 
         $pre = (int) ($counts[Phase::PRE_APPROVAL] ?? 0);
         $post = (int) ($counts[Phase::POST_APPROVAL] ?? 0);
@@ -582,6 +603,7 @@ class CipApplicationController extends Controller
             'pre_approval' => $pre,
             'post_approval' => max(0, $post - $closed),
             'closed' => $closed,
+            'appeal' => $appeal,
         ];
     }
 
