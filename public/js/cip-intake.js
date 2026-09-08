@@ -171,6 +171,7 @@
     passportBioPage: 'Passport bio page', birthCertificate: 'Birth certificate',
     investmentType: 'Investment type', investmentTypeOther: 'Specify investment type',
     sponsored: 'Sponsored', relationship: 'Relationship',
+    cipNumber: 'CIP application number',
   };
 
   /* The label for a path: the template's wording where there is one, else
@@ -200,6 +201,11 @@
   function requiredPaths() {
     var paths = ['providerId'].concat(PERSON_FIELDS)
       .concat(['investmentType', 'sponsored']);
+
+    // A file entered straight into post-approval was approved before the
+    // portal saw it, so the Unit's number is on the letter in front of the
+    // reader. Pre-approval has no such number yet.
+    if (isPostApprovalIntake()) paths.push('cipNumber');
 
     if (sponsored()) {
       paths = paths.concat(PERSON_FIELDS.map(function (f) { return 'sponsor.' + f; }));
@@ -685,6 +691,13 @@
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
       selectField('sponsored', [{ value: '0', label: 'No' }, { value: '1', label: 'Yes' }], 'Select') +
+      // The Unit's number, asked for only where it exists. A post-approval
+      // filing is a file the Unit already decided, so the number is on the
+      // letter being worked from; a pre-approval one gets its number at
+      // submission and the server refuses one sent early.
+      (isPostApprovalIntake()
+        ? textField('cipNumber', { placeholder: 'As printed on the approval letter' })
+        : '') +
       '</div>');
   }
 
@@ -1184,6 +1197,10 @@
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       // A sponsor's answers are not sent when there is no sponsor.
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      // The CIP number belongs to post-approval filings only, and the server
+      // refuses one on any other. A reader who started the form as
+      // post-approval and switched must not have it follow them.
+      if (path === 'cipNumber' && !(!state.applicationId && isPostApprovalIntake())) return;
       out.push({ name: bracketed(path), value: value });
     });
 

@@ -174,6 +174,18 @@ class Intake
             $editing ? [] : [
                 'providerId' => ['required', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+                /*
+                 * A post-approval filing arrives with the Unit's number
+                 * already on it: the file was approved before the portal saw
+                 * it, so there is a letter to read it off and no submission
+                 * step left that would ask for it. A pre-approval filing has
+                 * no such number yet — {@see Submission::record} is where
+                 * that one is entered — so the field is not offered there and
+                 * is not accepted if sent.
+                 */
+                'cipNumber' => self::filingPhase() === Phase::POST_APPROVAL
+                    ? ['required', 'string', 'max:'.Submission::MAX_LENGTH]
+                    : ['prohibited'],
                 // Minted once when the wizard opens, so a retry after a
                 // timeout names the submission it repeats — see store().
                 'submissionId' => ['nullable', 'string', 'max:64'],
@@ -416,6 +428,8 @@ class Intake
             'sponsor.dateOfBirth.before' => 'A date of birth has to be in the past.',
             'dependents.*.dateOfBirth.before' => 'A date of birth has to be in the past.',
             'investmentTypeOther.required' => 'Say which investment type this is.',
+            'cipNumber.required' => 'Enter the CIP application number from the Unit.',
+            'cipNumber.prohibited' => 'A CIP number is recorded when the application is submitted to the Unit.',
             'countryOfBirth.in' => 'Choose a country from the list.',
             'countryOfResidence.in' => 'Choose a country from the list.',
             'sponsor.countryOfBirth.in' => 'Choose a country from the list.',
@@ -504,6 +518,14 @@ class Intake
                     'status' => Status::POST_APPROVAL,
                     'post_approval_at' => now(),
                 ])->save();
+                /*
+                 * The Unit's number, adopted rather than minted: this file was
+                 * approved before it reached us, and every surface renders
+                 * displayNumber(), so writing it here is what stops a
+                 * post-approval file wearing an internal number it outgrew
+                 * before it was created.
+                 */
+                Submission::adopt($application, $creator, (string) $data['cipNumber']);
                 Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
                 Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
                 $announcePostApproval = true;

@@ -94,6 +94,38 @@ class Submission
     }
 
     /**
+     * Record the number a post-approval filing arrived with.
+     *
+     * A file entered straight into post-approval was approved by the Unit
+     * before the portal ever saw it, so its CIP number already exists on
+     * paper. {@see record} cannot be used for it: that is the pre-approval
+     * lifecycle's submission edge, and this application never travelled it.
+     * What is shared is the part that matters, the same cleaning and the same
+     * one-number-one-application rule, so a number adopted at intake cannot
+     * collide with one recorded through submission.
+     *
+     * No status moves and no capability is checked here: the caller is
+     * {@see Intake::create}, which has already established that this account
+     * may file under this provider.
+     *
+     * @throws ValidationException  the number is blank or already in use
+     */
+    public static function adopt(CipApplication $application, User $actor, string $cipNumber): CipApplication
+    {
+        $number = self::clean($cipNumber);
+        self::assertFree($number, $application);
+
+        $application->forceFill(['cip_number' => $number])->save();
+
+        Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
+            'cipNumber' => $number,
+            'internalNumber' => $application->internal_number,
+        ]);
+
+        return $application;
+    }
+
+    /**
      * Correct a number already recorded.
      *
      * A digit mistyped from a government letter is not a lifecycle event, and

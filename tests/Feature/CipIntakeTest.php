@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
+use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -332,6 +333,7 @@ class CipIntakeTest extends TestCase
 
         $body = $this->file($staff, $this->payload($provider, [
             'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
             'oathOfAllegiance' => $this->scan('oath.pdf'),
             'proofOfPayment' => $this->scan('payment.pdf'),
         ]))
@@ -382,7 +384,10 @@ class CipIntakeTest extends TestCase
         $this->assertNotContains(NicRequirements::R3_FORM, $keys);
         $this->assertNotContains(PassportRequirements::EPP_FORM, $keys);
 
-        $this->file($staff, $this->payload($provider, ['phase' => Phase::POST_APPROVAL]))
+        $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12663P',
+        ]))
             ->assertStatus(422)
             ->assertJsonValidationErrors(['oathOfAllegiance', 'proofOfPayment']);
     }
@@ -394,6 +399,7 @@ class CipIntakeTest extends TestCase
 
         $body = $this->file($staff, $this->payload($provider, [
             'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12662P',
             'investmentType' => InvestmentType::NATIONAL_ECONOMIC_FUND,
             'oathOfAllegiance' => $this->scan('oath.pdf'),
             'proofOfPayment' => $this->scan('payment.pdf'),
@@ -407,6 +413,96 @@ class CipIntakeTest extends TestCase
         $this->assertFalse(
             $main->documents()->where('type', CorRequirements::LETTER_OF_CONFIRMATION)->exists()
         );
+    }
+
+    /**
+     * Section 7: a post-approval filing is named by the Unit's number from the
+     * moment it exists.
+     *
+     * The file was approved before the portal saw it, so there is no
+     * submission step left to record the number and nothing would ever move
+     * it off the internal one.
+     */
+    public function test_post_approval_intake_records_the_cip_number(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            // Read off a letter, pasted with the spaces it came with.
+            'cipNumber' => ' 10T1G 12664P ',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame('10T1G12664P', $body['cipNumber']);
+        $this->assertSame('10T1G12664P', $body['number']);
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $this->assertSame('10T1G12664P', $application->cip_number);
+        $this->assertStringStartsWith('GAL', $application->internal_number);
+        $this->assertTrue(
+            $application->events()->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->exists(),
+            'Adopting the Unit’s number is an audited event like recording one.',
+        );
+    }
+
+    public function test_post_approval_intake_demands_the_cip_number(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cipNumber']);
+    }
+
+    /** One CIP number, one application — the rule submission already keeps. */
+    public function test_post_approval_intake_refuses_a_cip_number_already_in_use(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12665P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated();
+
+        $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            // Same number, different case: the same number to everyone but
+            // the database.
+            'cipNumber' => '10t1g12665p',
+            'firstName' => 'Mary',
+            'passportNumber' => 'Z9999999',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cipNumber']);
+    }
+
+    /**
+     * A pre-approval filing has no CIP number yet, so one sent early is a
+     * mistake worth refusing rather than storing.
+     */
+    public function test_pre_approval_intake_refuses_a_cip_number(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, ['cipNumber' => '10T1G12666P']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cipNumber']);
     }
 
     public function test_intake_defaults_to_pre_approval_when_phase_is_omitted(): void
