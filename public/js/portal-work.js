@@ -69,9 +69,23 @@
     sign: 'Sign',
   };
 
+  /*
+   * Is this reader an administrator?
+   *
+   * /me is the authority, but it answers over the network and this is asked
+   * at mount, before the first paint. The shell inlines the same fact, so a
+   * cold load — a phone on a poor connection, the first visit of a session —
+   * knows the answer immediately instead of guessing "no".
+   *
+   * Guessing "no" was the bug: an administrator landed on Involving you, the
+   * request went out as scope=mine, and a reader who is on none of the firm's
+   * threads got an empty page with the notification badge still lit.
+   */
   function isAdminUser() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
-    return !!(me && me.isAdmin);
+    if (me && typeof me.isAdmin === 'boolean') return me.isAdmin;
+
+    return window.TMABootIsAdmin === true || window.TMABootIsAdmin === 'true';
   }
 
   var wf = {

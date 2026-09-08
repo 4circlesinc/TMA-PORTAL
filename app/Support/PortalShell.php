@@ -96,6 +96,11 @@ final class PortalShell
         // can read from /me anyway.
         $cipReach = CipAccess::canReach($user) ? 'true' : 'false';
         $provider = CipAccess::isProviderContact($user) ? 'true' : 'false';
+        // Whether this reader is an administrator, before /me has answered.
+        // The Workflows comment tabs need it at mount: an administrator whose
+        // identity had not arrived yet asked the server for their OWN threads,
+        // and a firm-wide reader who is on none of them saw an empty page.
+        $admin = Role::isAdmin($user) ? 'true' : 'false';
         $token = json_encode((string) Session::token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
         // CSRF for shell sign-out (static HTML has no Blade @csrf). Capabilities
@@ -105,6 +110,7 @@ final class PortalShell
             .'window.TMABootUserId='.(int) $user->id.';'
             .'window.TMABootCipReach='.$cipReach.';'
             .'window.TMABootProviderContact='.$provider.';'
+            .'window.TMABootIsAdmin='.$admin.';'
             .'window.TMACsrfToken='.$token.';</script>'."\n  ";
     }
 }
