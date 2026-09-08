@@ -186,10 +186,27 @@ class CipTimelineTest extends TestCase
         DocumentEngine::apply($document, DocumentStatus::APPLICATION_REVIEW, $admin);
         Review::requestChanges($document->fresh(), $rita, 'The stamp is not visible.');
 
-        $this->assertContains(
-            'Rita Officer sent back Police certificate: The stamp is not visible.',
-            $this->lines($application, $admin),
-        );
+        // The sentence names the document; the reviewer's own words come back
+        // as their own field, so the tab can set them apart instead of running
+        // them into the line.
+        $rows = Timeline::for($application, $admin);
+        $this->assertContains('Rita Officer sent back Police certificate', array_column($rows, 'what'));
+
+        $sentBack = collect($rows)->firstWhere('what', 'Rita Officer sent back Police certificate');
+        $this->assertSame('The stamp is not visible.', $sentBack['reason']);
+    }
+
+    public function test_a_row_with_nothing_typed_carries_no_reason(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        // Every row has the key, so the tab never has to test for its
+        // existence — filing an application simply has nothing to quote.
+        foreach (Timeline::for($application, $admin) as $row) {
+            $this->assertArrayHasKey('reason', $row);
+            $this->assertNull($row['reason']);
+        }
     }
 
     public function test_an_action_nobody_has_taught_it_still_reads_as_something(): void

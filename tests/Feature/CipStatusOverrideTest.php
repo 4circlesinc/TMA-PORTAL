@@ -90,13 +90,17 @@ class CipStatusOverrideTest extends TestCase
         $this->assertSame(Status::ASSESSMENT_FEEDBACK, $event->to_status);
         $this->assertSame('The Unit asked for another scan.', $event->meta['note']);
 
+        // The sentence and the reason are separate fields. They used to be one
+        // string joined by a colon, which ran the fact and somebody's own
+        // words together into a line that was hard to read at a glance.
         $this->actingAs($admin)
             ->getJson('/portal/cip/applications/'.$application->uuid.'/events')
             ->assertOk()
             ->assertJsonPath(
                 'events.0.what',
-                'Ada Admin overrode the status from Approved to Assessment Feedback: The Unit asked for another scan.',
-            );
+                'Ada Admin overrode the status from Approved to Assessment Feedback',
+            )
+            ->assertJsonPath('events.0.reason', 'The Unit asked for another scan.');
     }
 
     public function test_an_override_without_a_reason_is_refused(): void

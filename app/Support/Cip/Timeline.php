@@ -92,6 +92,15 @@ class Timeline
                 'when' => $event->created_at?->toIso8601String(),
                 'who' => $who,
                 'what' => self::sentence($event, $who['name'], $documents),
+                /*
+                 * The typed reason, on its own rather than glued to the end of
+                 * the sentence after a colon. A reason is a person's own words
+                 * and runs as long as it needs to; inside the sentence it ran
+                 * the two together and the row became hard to read at a glance.
+                 * The tab draws it underneath, so the line above stays the
+                 * short statement of what happened.
+                 */
+                'reason' => self::reason($event),
             ];
         })->all();
     }
@@ -173,6 +182,25 @@ class Timeline
         return Str::ucfirst($line);
     }
 
+    /**
+     * The words a person typed to explain this row, if they typed any.
+     *
+     * `note` is the one key that carries free text, and it is written by two
+     * paths: the override strip on a status dialog (§26 demands a reason), and
+     * the comment when a document is sent back. Both are the same thing to a
+     * reader — somebody's own explanation of why — so both come out here.
+     *
+     * Everything else in meta is machine detail (dates, ids, the status that
+     * was cleared), and none of it belongs on the row as prose.
+     */
+    private static function reason(CipEvent $event): ?string
+    {
+        $meta = is_array($event->meta) ? $event->meta : [];
+        $reason = trim((string) ($meta['note'] ?? ''));
+
+        return $reason !== '' ? $reason : null;
+    }
+
     /** "moved it from Draft to New", the codes read through {@see Status}. */
     private static function statusSentence(CipEvent $event, string $who): string
     {
@@ -185,7 +213,6 @@ class Timeline
         }
 
         $meta = is_array($event->meta) ? $event->meta : [];
-        $reason = trim((string) ($meta['note'] ?? ''));
         $move = $event->from_status === null
             ? "{$who} moved it to ".Status::label($to)
             : "{$who} moved it from ".Status::label($event->from_status).' to '.Status::label($to);
@@ -194,12 +221,10 @@ class Timeline
             $from = $event->from_status !== null
                 ? Status::label($event->from_status)
                 : 'the previous status';
-            $line = "{$who} overrode the status from {$from} to ".Status::label($to);
-
-            return $reason !== '' ? $line.': '.$reason : $line;
+            return "{$who} overrode the status from {$from} to ".Status::label($to);
         }
 
-        return $reason !== '' ? $move.': '.$reason : $move;
+        return $move;
     }
 
     /**
@@ -349,12 +374,8 @@ class Timeline
             return "{$who} changed {$label}";
         }
 
-        $reason = trim((string) ($meta['note'] ?? ''));
-
         return match ($to) {
-            DocumentStatus::UPDATE_REQUIRED => $reason !== ''
-                ? "{$who} sent back {$label}: {$reason}"
-                : "{$who} sent back {$label}",
+            DocumentStatus::UPDATE_REQUIRED => "{$who} sent back {$label}",
             DocumentStatus::READY_FOR_SUBMISSION => "{$who} approved {$label}",
             // The only way into review is a file arriving: both edges the
             // engine allows into it come from an upload.

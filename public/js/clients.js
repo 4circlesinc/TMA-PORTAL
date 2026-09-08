@@ -7387,17 +7387,32 @@
     );
   }
 
+  /*
+   * One row: who, what happened, when — and underneath, if there is one, the
+   * reason somebody typed.
+   *
+   * The reason used to be appended to the sentence after a colon. A reason is
+   * free text of any length, so the row became one long run of words in which
+   * the fact and the explanation were hard to tell apart. It sits in its own
+   * line under the sentence now, in the same column, so the statement of what
+   * happened stays short and scannable and the quote reads as a quote.
+   */
   function renderActivityRow(e) {
     var who = e.who || {};
+    var reason = (e.reason || '').trim();
 
     return (
-      '<li class="tma-dash__cip-activity-row">' +
+      '<li class="tma-dash__cip-activity-row' + (reason ? ' is-quoted' : '') + '">' +
       '<span class="tma-dash__cip-activity-face">' +
       (who.avatar
         ? '<img src="' + esc(who.avatar) + '" alt="" width="24" height="24">'
         : esc(String(who.name || '?').charAt(0).toUpperCase())) +
       '</span>' +
-      '<span class="tma-dash__cip-activity-what">' + esc(e.what || '') + '</span>' +
+      '<span class="tma-dash__cip-activity-what">' + esc(e.what || '') +
+      (reason
+        ? '<span class="tma-dash__cip-activity-reason">' + esc(reason) + '</span>'
+        : '') +
+      '</span>' +
       '<span class="tma-dash__cip-activity-when">' + esc(fmtDateTime(e.when)) + '</span>' +
       '</li>'
     );
