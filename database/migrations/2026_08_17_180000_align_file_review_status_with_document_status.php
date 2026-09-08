@@ -5,7 +5,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Client documents now share §12's status vocabulary.
+ * Client documents now share section 12's status vocabulary.
  *
  * The File Library, the Documents tab and the CIP checklist were drawing
  * different words for the same fact — "Pending review" next to "Application

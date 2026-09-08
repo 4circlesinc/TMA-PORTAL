@@ -1,5 +1,5 @@
 /*
- * TMA - Notification realtime (§24, §25).
+ * TMA - Notification realtime (section 24, section 25).
  *
  * Rides the same Reverb websocket the messaging page uses. It listens on the
  * signed-in user's own private channel for `notification.created` and applies

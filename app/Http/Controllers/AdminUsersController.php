@@ -454,7 +454,7 @@ class AdminUsersController extends Controller
     }
 
     /**
-     * Deny a pending account (§18). The request is refused, the reason is
+     * Deny a pending account (section 18). The request is refused, the reason is
      * recorded, the user is notified, and it drops out of the pending count and
      * the administrators' outstanding approval notifications.
      */

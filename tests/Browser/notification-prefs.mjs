@@ -1,5 +1,5 @@
 /*
- * Verify read-management (§20) and notification preferences (§21):
+ * Verify read-management (section 20) and notification preferences (section 21):
  *   - dismissing a notification removes it and drops the unread count,
  *   - the "Unread" filter shows only unread items,
  *   - Settings → Notifications renders the per-module grid, locks Security's
@@ -34,7 +34,7 @@ await Promise.all([
 if (page.url().includes('/auth/login')) throw new Error('login failed');
 console.log('logged in');
 
-// ── dismiss removes an item and lowers the unread count (§20) ───────
+// ── dismiss removes an item and lowers the unread count (section 20) ───────
 await page.click('[data-action="toggle-notifications-popup"]');
 await page.waitForSelector('[data-popup-panel="notifications"]:not([hidden]) [data-notification-id]', { timeout: 8000 });
 const before = await page.evaluate(() => window.TMANotifications.state.unread);
@@ -44,7 +44,7 @@ await page.waitForTimeout(500);
 const afterUnread = await page.evaluate(async () => (await (await fetch('/portal/notifications/count', { headers: { Accept: 'application/json' } })).json()).unread);
 check(afterUnread === before - 1, `dismissing removed an unread item (${before} -> ${afterUnread})`);
 
-// ── Unread filter shows only unread (§20) ──────────────────────────
+// ── Unread filter shows only unread (section 20) ──────────────────────────
 // Mark the first item read (opening marks read), then filter to unread.
 const total = await page.evaluate(() => document.querySelectorAll('[data-popup-panel="notifications"] [data-notification-id]').length);
 await page.evaluate(async () => {
@@ -63,7 +63,7 @@ const unreadView = await page.evaluate(() => ({
 check(unreadView.allUnread && unreadView.shown < total, `Unread filter shows only unread items (${unreadView.shown}/${total})`);
 await page.click('[data-popup-action="toggle-unread"]'); // turn off
 
-// ── Settings → Notifications: per-module grid + persistence (§21) ──
+// ── Settings → Notifications: per-module grid + persistence (section 21) ──
 await page.evaluate(() => document.querySelector('.tma-dash')._portalNavigate('/account-settings?settings-page=notifications'));
 await page.waitForSelector('[data-notif-prefs] .tma-dash__notifprefs-row', { timeout: 10000 });
 const grid = await page.evaluate(() => {
@@ -76,7 +76,7 @@ const grid = await page.evaluate(() => {
   };
 });
 check(grid.rows >= 8, `preferences grid lists modules (${grid.rows})`);
-check(grid.securityLocked, 'Security portal delivery is locked on (§21)');
+check(grid.securityLocked, 'Security portal delivery is locked on (section 21)');
 check(grid.hasFiles, 'Files module row is present');
 
 // toggle Files → portal off and confirm it persisted server-side
@@ -86,7 +86,7 @@ const persisted = await page.evaluate(async () => {
   const d = await (await fetch('/portal/notifications/preferences', { headers: { Accept: 'application/json' } })).json();
   return d.preferences.files.portal;
 });
-check(persisted === false, 'toggling Files→Portal off persisted to the server (§21)');
+check(persisted === false, 'toggling Files→Portal off persisted to the server (section 21)');
 
 if (errors.length) fail.push('console/page errors: ' + errors.join(' | '));
 

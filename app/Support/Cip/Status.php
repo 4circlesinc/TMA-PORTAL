@@ -7,7 +7,7 @@ namespace App\Support\Cip;
  * though the transitions arrive over several build phases, so dashboards and
  * scope queries never need rework as statuses light up.
  *
- * The labels are the same words §9's buckets use, so a row's chip and the
+ * The labels are the same words section 9's buckets use, so a row's chip and the
  * queue it sits in cannot disagree. DRAFT remains a leftover code for
  * historical events and any row that has not yet been moved to NEW; nothing
  * is filed into it any more.
@@ -189,7 +189,7 @@ class Status
     ];
 
     /**
-     * The status token §22 puts in email subjects, not the chip/bucket label.
+     * The status token section 22 puts in email subjects, not the chip/bucket label.
      *
      * Chips say Review Applications and Approved; the filing format says
      * REVIEW APPLICATION and GRANTED, matching the brief's worked examples.

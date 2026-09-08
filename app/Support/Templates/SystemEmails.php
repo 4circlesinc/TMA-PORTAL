@@ -1144,11 +1144,11 @@ class SystemEmails
             'provider' => 'Service provider',
             'recipient' => 'First name of the person this copy is addressed to, when known',
         ];
-        $when = 'The subject keeps the §22 filing format and is not editable here.';
+        $when = 'The subject keeps the standard CIP filing format and is not editable here.';
         $sample = ['number' => 'GAL26-00001', 'applicant' => 'Chen Wei', 'provider' => 'Galaxy Consultants', 'recipient' => 'Priya'];
         $details = ['details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['Service provider', 'Galaxy Consultants']]];
 
-        // The plain status-change notice, one template per §22 status so each
+        // The plain status-change notice, one template per section 22 status so each
         // stage can be worded on its own. Shipped copy is identical for all
         // of them; the point of the split is that an edit to one stage's
         // email leaves the others alone. Postcards::cipStatus picks

@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The Granted and Denied letters (§23).
+ * The Granted and Denied letters (section 23).
  *
  * Ten templates, one pair per investment type. Reading is open to anyone who
  * may reach the module; rewriting is `cip.configure`, one edit is every

@@ -7,7 +7,7 @@ use App\Models\CipDecisionTemplate;
 use App\Models\User;
 
 /**
- * §23. Granted and Denied letters, one pair per investment type.
+ * Section 23. Granted and Denied letters, one pair per investment type.
  *
  * The filing subject is still {@see Notices::line}. This is the body the
  * administrator keeps: title and letter, with {{placeholders}} filled from

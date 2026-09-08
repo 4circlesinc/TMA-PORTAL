@@ -11,7 +11,7 @@ use App\Support\Notifications\Notifier;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Messaging's bridge into the notification system (§13).
+ * Messaging's bridge into the notification system (section 13).
  *
  * The Messages page has its own unread badge, so this exists for the moment
  * the user is *not* looking at it: a message or a missed call has to reach the

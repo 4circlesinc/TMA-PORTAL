@@ -17,14 +17,14 @@ use Illuminate\Support\Carbon;
  *
  * Visibility is enforced on every query through {@see ActivityLog::scopeVisibleTo}:
  * administrators see the whole firm, everyone else sees only their own actions
- * (§9, §28). IP, device, and the value diff are only serialised for viewers
+ * (section 9, section 28). IP, device, and the value diff are only serialised for viewers
  * allowed to see them.
  */
 class ActivityController extends Controller
 {
     private const PAGE = 25;
 
-    /** A filtered, searchable, paginated page of the audit trail (§8, §9, §10). */
+    /** A filtered, searchable, paginated page of the audit trail (section 8, section 9, section 10). */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -55,7 +55,7 @@ class ActivityController extends Controller
     }
 
     /**
-     * The activity badge count (§12): activity new since the viewer last opened
+     * The activity badge count (section 12): activity new since the viewer last opened
      * the panel, plus any failures needing attention. Never "every activity".
      */
     public function count(Request $request): JsonResponse
@@ -86,7 +86,7 @@ class ActivityController extends Controller
 
     /**
      * Record that the viewer has now seen the activity panel, resetting their
-     * "new since" baseline so the badge clears (§12). Stored in preferences to
+     * "new since" baseline so the badge clears (section 12). Stored in preferences to
      * avoid a dedicated column.
      */
     public function markSeen(Request $request): JsonResponse
@@ -100,7 +100,7 @@ class ActivityController extends Controller
     }
 
     /**
-     * The filter vocabulary the admin activity view offers (§9): which modules,
+     * The filter vocabulary the admin activity view offers (section 9): which modules,
      * actors, statuses and types actually appear in the visible trail.
      */
     public function filters(Request $request): JsonResponse

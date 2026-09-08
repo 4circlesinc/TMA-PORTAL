@@ -15,7 +15,7 @@ use Tests\TestCase;
 /**
  * Active viewers.
  *
- * The property these defend is §13's: presence is a heartbeat, never an
+ * The property these defend is section 13's: presence is a heartbeat, never an
  * inference. Somebody who looked at a file yesterday must not appear to be
  * looking at it now.
  */

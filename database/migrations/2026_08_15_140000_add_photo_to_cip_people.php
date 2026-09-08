@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The passport-sized photo §2 asks for, on the person it depicts.
+ * The passport-sized photo section 2 asks for, on the person it depicts.
  *
  * Two columns because the photo has two jobs and one file cannot do both. The
  * archival copy is what gets filed with the government, so it keeps the

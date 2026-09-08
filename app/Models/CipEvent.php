@@ -31,7 +31,7 @@ class CipEvent extends Model
     /**
      * The government's number arrived, or was corrected.
      *
-     * Its own action rather than a detail of the status change: §7 keeps two
+     * Its own action rather than a detail of the status change: section 7 keeps two
      * numbers for the life of the application, and which one a surface showed
      * on a given day is an audit question. The internal number rides in the
      * event's meta so an invoice can still be reconciled against a row that
@@ -49,7 +49,7 @@ class CipEvent extends Model
     public const ACTION_DECISION_RECORDED = 'decision_recorded';
 
     /**
-     * The service provider confirmed the original package (§15).
+     * The service provider confirmed the original package (section 15).
      *
      * Its own action rather than a detail of Ready to submit: the status
      * arrives when every document is accepted, and the lock arrives when the
@@ -85,7 +85,7 @@ class CipEvent extends Model
     public const ACTION_PASSPORT_DELIVERED = 'passport_delivered';
 
     /**
-     * The Unit asked for more information (§18).
+     * The Unit asked for more information (section 18).
      *
      * Its own action rather than a detail of the status change: the query
      * date lives on the application, and which day a report measures from is
@@ -94,16 +94,16 @@ class CipEvent extends Model
     public const ACTION_QUERY_RECEIVED = 'query_received';
 
     /**
-     * The Unit accepted the file for processing (§19).
+     * The Unit accepted the file for processing (section 19).
      *
      * Its own action rather than a detail of the status change: the accepted
-     * date lives on the application, and the delay clock (§20) measures from
+     * date lives on the application, and the delay clock (section 20) measures from
      * it — an audit question the status event alone does not answer.
      */
     public const ACTION_ACCEPTED_FOR_PROCESSING = 'accepted_for_processing';
 
     /**
-     * Staff moved an approved file into the post-approval lane (brief §1).
+     * Staff moved an approved file into the post-approval lane (brief section 1).
      *
      * Its own action rather than a detail of the status change: entering
      * post-approval provisions the COR checklist and sends the COR notice,
@@ -124,7 +124,7 @@ class CipEvent extends Model
     public const ACTION_MILESTONE_CORRECTED = 'milestone_corrected';
 
     /**
-     * The delay clock ran out (§20).
+     * The delay clock ran out (section 20).
      *
      * Its own action rather than a detail of the status change: the accepted
      * date lives on the application, and how many days passed before the

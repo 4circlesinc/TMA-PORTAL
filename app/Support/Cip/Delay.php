@@ -9,16 +9,16 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Delayed applications (§20). 180 days after Accepted for processing, with
+ * Delayed applications (section 20). 180 days after Accepted for processing, with
  * no decision, the file becomes Delayed.
  *
- * The clock starts when staff record the accepted date (§19). Nothing here
+ * The clock starts when staff record the accepted date (section 19). Nothing here
  * writes `accepted_at`; it only measures from it. The flip is a scheduled
  * job, not a picker: {@see Engine} already allows BACKGROUND CHECK → DELAYED
  * with a null actor (the system), and this is the caller that uses it.
  *
  * Idempotent on purpose. An already-delayed file is not in the due set, so a
- * second daily tick never re-notifies. Engine tells §22's four classes.
+ * second daily tick never re-notifies. Engine tells section 22's four classes.
  */
 class Delay
 {
@@ -81,7 +81,7 @@ class Delay
     }
 
     /**
-     * Move one file to Delayed and tell §22's four classes.
+     * Move one file to Delayed and tell section 22's four classes.
      *
      * Returns the refreshed application, or null when it was not due, already
      * delayed, already decided, or not on an edge the engine will walk.

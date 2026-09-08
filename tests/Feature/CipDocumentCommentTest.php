@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §13 — a checklist document carries a conversation.
+ * Section 13 — a checklist document carries a conversation.
  *
  * The thread hangs off the requirement, not off the file in it, so a question
  * about a document survives the answer to it arriving. And the provider side
@@ -195,7 +195,7 @@ class CipDocumentCommentTest extends TestCase
                 'body' => 'The original is in the post.',
             ])->assertCreated();
 
-        // §22's classes, each once, the author excepted.
+        // Section 22's classes, each once, the author excepted.
         foreach (['ada@example.com', 'rita@example.com', 'notices@galaxy.example'] as $mailbox) {
             Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo($mailbox)
                 && str_contains($mail->subjectLine, 'Gil Contact commented on Police certificate')
@@ -276,7 +276,7 @@ class CipDocumentCommentTest extends TestCase
         $this->assertSame([], $this->actingAs($staff)
             ->getJson('/portal/cip/documents/'.$slot->uuid.'/comments')->json('comments'));
 
-        // §13 retains these: a reviewer's reason for rejecting a document is
+        // Section 13 retains these: a reviewer's reason for rejecting a document is
         // exactly what somebody would want gone.
         $this->assertNotNull(CipDocumentComment::withTrashed()->where('uuid', $comment['id'])->first());
     }

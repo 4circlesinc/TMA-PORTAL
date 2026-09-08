@@ -6,7 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 
 /**
- * Qualified-dependent numbering (§5).
+ * Qualified-dependent numbering (section 5).
  *
  * The ordinal is computed, never typed. It is a position in a sorted list, so
  * letting anyone enter it would mean two dependents could both be QD2, or a
@@ -14,7 +14,7 @@ use App\Models\CipPerson;
  * Everything that adds, edits or removes a dependent calls renumber()
  * afterwards and the list is correct again by construction.
  *
- * Youngest first: §5's worked example numbers the youngest qualified
+ * Youngest first: section 5's worked example numbers the youngest qualified
  * dependent QD1. ⚠ The meeting transcript contradicts this once, "the oldest
  * person is always one", and that is open client question 13. It is one
  * comparison; {@see self::YOUNGEST_FIRST} is the switch, and flipping it

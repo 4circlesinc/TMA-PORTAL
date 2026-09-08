@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Recording a submission to the Unit (§16), and with it the switch from the
- * internal number to the CIP number (§7).
+ * Recording a submission to the Unit (section 16), and with it the switch from the
+ * internal number to the CIP number (section 7).
  *
- * §7 keeps two numbers for one application. The internal number is ours,
+ * Section 7 keeps two numbers for one application. The internal number is ours,
  * generated on creation and permanent, invoices, drafts, reviews and
  * assessment feedback all refer to it, and it stays stored and searchable
  * forever. The CIP number is the government's, and it does not exist until

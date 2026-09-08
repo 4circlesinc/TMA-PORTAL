@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  * append-only cip_events row. Nothing else writes cip_applications.status.
  *
  * The map is the whole lifecycle from day one. Notification fan-out attaches
- * at {@see write()}, every status change is one §22 notice, in the filing
+ * at {@see write()}, every status change is one section 22 notice, in the filing
  * subject format, to the four named classes. Special-case mailers must not
  * send a second copy of the same move.
  */
@@ -371,7 +371,7 @@ class Engine
             throw new \InvalidArgumentException(self::checklistRefusal($to));
         }
 
-        // §26: an administrator may type any listed status, but the audit
+        // Section 26: an administrator may type any listed status, but the audit
         // row has to say why. System writes (a null actor) skip this — the
         // checklist inferring Ready to submit is not a person changing a
         // label by hand.
@@ -452,7 +452,7 @@ class Engine
         });
 
         /*
-         * §22: every status change is a notice, in the filing subject format,
+         * Section 22: every status change is a notice, in the filing subject format,
          * to the four named classes. Sent after the row and the event have
          * both landed, so nothing is announced that did not occur.
          *

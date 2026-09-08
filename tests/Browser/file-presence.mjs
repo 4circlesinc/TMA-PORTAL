@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
  *
  * A single session can never demonstrate presence, so this runs two browser
  * contexts on the same file and checks that each sees the other's face appear
- * and then disappear when they leave. §13's rule — presence is a heartbeat,
+ * and then disappear when they leave. Section 13's rule — presence is a heartbeat,
  * never an inference from past activity — is what the disappearance proves.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';

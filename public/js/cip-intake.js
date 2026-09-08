@@ -1,4 +1,4 @@
-/* TMA. CIP application intake (§2–§6)
+/* TMA. CIP application intake (section 2–section 6)
  *
  * The form the firm actually files with: the government's own field set, in
  * the government's own order, so what is collected here is what gets
@@ -39,7 +39,7 @@
    * The document sections come from the requirement templates the admin
    * screen edits, the server sends them with the form options, so what this
    * wizard asks follows the settings without a deploy. Until the options
-   * land, the §2 trio stands in, which is also what an offline mount gets.
+   * land, the section 2 trio stands in, which is also what an offline mount gets.
    */
   function docFields(section) {
     var reqs = state.options && state.options.requirements;
@@ -273,7 +273,7 @@
   /*
    * Who is qualified dependent number what.
    *
-   * Drawn, not asked: §5 numbers qualified dependents by age and the server
+   * Drawn, not asked: section 5 numbers qualified dependents by age and the server
    * computes the same order on save. Showing it here means the reader sees
    * the answer the record will hold rather than discovering it afterwards.
    */
@@ -597,7 +597,7 @@
     });
   }
 
-  /* The eight fields §2 asks of a person, and §4 asks again of a sponsor. */
+  /* The eight fields section 2 asks of a person, and section 4 asks again of a sponsor. */
   function personFields(prefix) {
     var countries = countryOptions();
     var region = regionFor(state.draft[prefix + 'countryOfResidence']);
@@ -663,7 +663,7 @@
   }
 
   /*
-   * §4: a sponsored application has a sponsor, asked for now rather than
+   * Section 4: a sponsored application has a sponsor, asked for now rather than
    * later, the brief calls it part of the same save, and a step that comes
    * afterwards is a step somebody leaves undone.
    */
@@ -680,7 +680,7 @@
       documentsCard('sponsor.', 'sponsor');
   }
 
-  /* §5: one person per dependent, with the same photo and documents the
+  /* Section 5: one person per dependent, with the same photo and documents the
      settings ask of their type, spouse, under the cutoff, or over it. */
   function dependentsCard() {
     var numbers = ordinals();

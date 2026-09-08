@@ -6,7 +6,7 @@ use App\Jobs\SendPush;
 use App\Models\User;
 
 /**
- * What reaches a phone while the portal is not open (docs/android-app-prompt.md §13).
+ * What reaches a phone while the portal is not open (docs/android-app-prompt.md section 13).
  *
  * Two kinds, both carrying exactly what the websocket carries:
  * `notification` (the presenter's record and the unread count) and `call`

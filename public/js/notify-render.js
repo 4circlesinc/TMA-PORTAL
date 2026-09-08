@@ -1,7 +1,7 @@
 /*
  * TMA - Shared rendering for notifications & activity items.
  *
- * The one place the visual rules live (§3, §4, §5, §14):
+ * The one place the visual rules live (section 3, section 4, section 5, section 14):
  *   - A person did it  -> their photo, or an initials tile when there's none.
  *                         Never a broken <img>; a failed photo falls back to
  *                         the same initials tile.
@@ -79,7 +79,7 @@
       "onerror=\"this.onerror=null;this.removeAttribute('srcset');this.src='" + safeFallback + "'\">";
   }
 
-  /* §14 level -> existing design-system tone. No new colours are invented;
+  /* Section 14 level -> existing design-system tone. No new colours are invented;
      these all map to tokens the dashboard already ships. */
   var TONES = {
     info: 'blue', reminder: 'blue', success: 'green', warning: 'amber',
@@ -150,7 +150,7 @@
       '<img src="' + iconUrl(item.icon) + '" alt=""></span>';
   }
 
-  /* A notification's leading element. A person is anyone with an actor (§3);
+  /* A notification's leading element. A person is anyone with an actor (section 3);
      an explicit image (sender photo) also counts; email rows always show a
      face or initials, never the envelope glyph. */
   function notificationLeading(item, cfg) {
@@ -162,7 +162,7 @@
     return systemVisual(item, cfg);
   }
 
-  /* An activity's leading element follows the same rule (§4). */
+  /* An activity's leading element follows the same rule (section 4). */
   function activityLeading(item, cfg) {
     if (item.actor) return personVisual(item, cfg);
     return systemVisual(item, cfg);

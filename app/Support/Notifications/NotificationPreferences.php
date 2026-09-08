@@ -5,7 +5,7 @@ namespace App\Support\Notifications;
 use App\Models\User;
 
 /**
- * A user's per-module notification preferences (§21), persisted in the existing
+ * A user's per-module notification preferences (section 21), persisted in the existing
  * `users.preferences` JSON under the `notifications` key so it rides along with
  * every other personal setting.
  *
@@ -16,7 +16,7 @@ use App\Models\User;
  * ]
  *
  * Portal delivery of the security and approvals groups can never be switched
- * off, those are administrator-required alerts (§21). The UI reflects that by
+ * off, those are administrator-required alerts (section 21). The UI reflects that by
  * locking those toggles; the server enforces it here regardless of input.
  */
 final class NotificationPreferences

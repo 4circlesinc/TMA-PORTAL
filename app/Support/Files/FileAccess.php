@@ -47,7 +47,7 @@ class FileAccess
             'delete', 'restore', 'share', 'assign', 'link', 'comment'],
     ];
 
-    /** Writes against a confirmed original package (§15 / §17). */
+    /** Writes against a confirmed original package (section 15 / section 17). */
     private const PACKAGE_LOCKED = ['upload', 'rename', 'move', 'copy', 'delete', 'restore'];
 
     public static function isAdmin(User $user): bool
@@ -162,7 +162,7 @@ class FileAccess
      *  - **Clients are never covered.** `isStaff` excludes them, so this can
      *    never widen what a client account sees.
      *  - **Anything under a client folder** stays limited to that client's
-     *    assigned team. §2 and §21 are explicit that client-private documents
+     *    assigned team. Section 2 and section 21 are explicit that client-private documents
      *    are not shared with every organization member unless chosen, and a
      *    client's contracts leaking firm-wide is a different order of mistake
      *    from a colleague seeing a draft early.
@@ -593,7 +593,7 @@ class FileAccess
         }
 
         /*
-         * §17: a confirmed original package is view-only.
+         * Section 17: a confirmed original package is view-only.
          *
          * Checked after the role (so view/download/comment still pass) and
          * after the admin/owner short-circuit inside fileRole()/folderRole()
@@ -677,7 +677,7 @@ class FileAccess
         $perms = self::listingPerms($user, $file, [
             'preview', 'download', 'upload', 'rename', 'move', 'copy', 'delete', 'share', 'assign',
         ]);
-        // A review chip is a working label, not a rewrite of the file. §17
+        // A review chip is a working label, not a rewrite of the file. Section 17
         // freeze blocks upload/rename/delete so the original scans stay put;
         // it must not take the status picker away.
         $perms['review'] = Role::isStaff($user) && ($perms['preview'] ?? false);

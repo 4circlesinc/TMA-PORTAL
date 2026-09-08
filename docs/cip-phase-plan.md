@@ -20,7 +20,7 @@
 
 Derived from "CIP Portal Development Brief v1" (final functional requirements), cross-checked against the existing TMA-PORTAL codebase, then adversarially verified (coverage / ordering / codebase-claims critics). The brief's section numbers are requirement groupings, not build order; this plan re-sequences them into dependency-ordered phases. Every brief section maps to its owning phase in the traceability table at the end.
 
-**Ordering logic in one paragraph:** nothing can exist before the **data model, roles and numbering** (Phase 1). Applications must be **creatable** (Phase 2) before documents can hang off them (Phase 3). People need a **way to find and open applications** (Phase 4) before any workflow is usable. The **notification engine** (Phase 5) must exist before the first workflow phase, because the very first lifecycle transition — submission, DRAFT → NEW — already sends formatted email (§22's worked NEW APPLICATION subject). Then the lifecycle is built in the order an application actually travels: **review** (Phase 6), **submission to the Unit + locking + CIP number** (Phase 7), **post-submission compliance/decision** (Phase 8). Communication (Phase 9), reporting (Phase 10), and the admin console + Smartsheet cutover (Phase 11) sit on top of a working lifecycle.
+**Ordering logic in one paragraph:** nothing can exist before the **data model, roles and numbering** (Phase 1). Applications must be **creatable** (Phase 2) before documents can hang off them (Phase 3). People need a **way to find and open applications** (Phase 4) before any workflow is usable. The **notification engine** (Phase 5) must exist before the first workflow phase, because the very first lifecycle transition — submission, DRAFT → NEW — already sends formatted email (section 22's worked NEW APPLICATION subject). Then the lifecycle is built in the order an application actually travels: **review** (Phase 6), **submission to the Unit + locking + CIP number** (Phase 7), **post-submission compliance/decision** (Phase 8). Communication (Phase 9), reporting (Phase 10), and the admin console + Smartsheet cutover (Phase 11) sit on top of a working lifecycle.
 
 **Standing decision (from codebase recon):** the existing `/cbi` module is a one-way Smartsheet mirror whose 10-minute sync bulk-upserts ~60 columns — any portal-authored edit to `cbi_applications` is clobbered on the next tick. The CIP portal therefore gets its **own native `cip_*` tables** under a new `/cip` section and `FEATURE_CIP` flag; the mirror keeps running untouched until the Phase 11 cutover, when its ~11,000 historical applications migrate in as the opening caseload. The 64 referral-source companies the CBI importer already registered are the Service Provider firms.
 
@@ -41,7 +41,7 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 
 ### 1a. User types and access model
 - The portal has exactly three account types (Client / Employee / Administrator) and no per-user capability grants — so CIP roles are expressed as **grants, not new account types**:
-  - **Administrator** — holds everything via the existing admin short-circuit; no ownership restrictions (§26).
+  - **Administrator** — holds everything via the existing admin short-circuit; no ownership restrictions (section 26).
   - **CRO / Reviewing Officer** and **Compliance Officer** — stay `Employee`; officer-ness lives in a new per-user grant store (a `cip_officer_roles` table read by a `CipAccess` authority class, patterned on the existing `CompanyAccess`). Capabilities added to `Role::MATRIX`: `cip.view`, `cip.create`, `cip.review`, `cip.compliance`, `cip.assign`, `cip.decide`, `cip.configure`, `cip.report` — one capability per separable thing (documented past pain: a capability gating two things can never be closed for one of them).
   - A **minimal officer-grant form** ships in this phase (grant/revoke CRO / Compliance roles per user) — Phase 6 needs officers to assign; the polished management screen is Phase 11a.
   - **Service Provider contacts** — external accounts (`account_type = Client`) whose identity is a membership row on their provider firm, reusing the company-members machinery (membership-before-login, invitation-activated, per-member ability flags).
@@ -64,9 +64,9 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 - **The transition engine skeleton (`CipEngine`) is stubbed here too**: FROM→TO map + per-role permission checks + transactional `cip_events` write. No FROM→TO engine exists anywhere in the codebase (existing Status classes are vocabulary only), and both Phase 3 (document-slot edges) and Phase 6 (application edges) route through this one engine — building it once, here, prevents Phase 3 growing throwaway enforcement that Phase 6 rebuilds.
 
 ### 1d. Numbering service + display rule
-- Internal number format `[Provider Code][YY]-[Sequence]` (GAL26-00001), generated **immediately on creation** (§7) — inside the same transaction as the application insert. No sequence generator exists in the codebase (everything is ULIDs/UUIDs), so this is new: a counters table keyed (provider, year) locked with `SELECT … FOR UPDATE`, never max()+1.
-- The internal number is permanent: internal workflows, drafts, invoicing, reviews, assessment feedback — retained forever for audit/invoice tracking even after the CIP number takes over display (§7).
-- **`displayNumber()` is defined here, once**: returns the CIP number when set, else the internal number. Every consumer — Phase 4 tables and dashboards, Phase 5 email subjects, Phase 7 status screens, Phase 10 reports, search results — reads this one accessor, so §7's switching rule is a data change, not a UI hunt.
+- Internal number format `[Provider Code][YY]-[Sequence]` (GAL26-00001), generated **immediately on creation** (section 7) — inside the same transaction as the application insert. No sequence generator exists in the codebase (everything is ULIDs/UUIDs), so this is new: a counters table keyed (provider, year) locked with `SELECT … FOR UPDATE`, never max()+1.
+- The internal number is permanent: internal workflows, drafts, invoicing, reviews, assessment feedback — retained forever for audit/invoice tracking even after the CIP number takes over display (section 7).
+- **`displayNumber()` is defined here, once**: returns the CIP number when set, else the internal number. Every consumer — Phase 4 tables and dashboards, Phase 5 email subjects, Phase 7 status screens, Phase 10 reports, search results — reads this one accessor, so section 7's switching rule is a data change, not a UI hunt.
 
 **Exit criteria:** migrations deployed; capabilities resolve per role; officer grant form works; `ApplicationScope` proven by test (provider A cannot fetch provider B's row — 404); parallel-insert test yields gapless GAL26-0000N numbers; `displayNumber()` unit-tested for both regimes.
 
@@ -78,18 +78,18 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 **Goal:** Service Providers and Private Clients create a complete DRAFT application: main applicant, optional sponsor, dependents, auto-created folder tree, internal number visible.
 
 ### 2a. Create Application wizard
-- All main-applicant fields **required** (§2): first name, last name, gender (Male/Female), date of birth, country of birth, country of residence, occupation, passport number, passport-sized photo, passport bio page upload, birth certificate upload, investment type, sponsored yes/no.
-- Investment type (§3): single-select — Real Estate Project / National Action Bonds / National Economic Fund (Donation) / Enterprise Project / Other; choosing **Other reveals a required "Specify Investment Type" free-text field**.
+- All main-applicant fields **required** (section 2): first name, last name, gender (Male/Female), date of birth, country of birth, country of residence, occupation, passport number, passport-sized photo, passport bio page upload, birth certificate upload, investment type, sponsored yes/no.
+- Investment type (section 3): single-select — Real Estate Project / National Action Bonds / National Economic Fund (Donation) / Enterprise Project / Other; choosing **Other reveals a required "Specify Investment Type" free-text field**.
 - **The form mirrors the government CIP application form** (meeting: "we wanted to mimic the form they use on CIP so we're getting the exact information we need to submit") — field labels and order follow it; no "type of application" field.
 - **Region is derived, never asked** (meeting): the region input is removed — country of residence auto-derives the region from a lookup table (small research task: the country→region mapping).
 - Build: fuse the two existing wizard precedents — the signatures wizard stepper (in-SPA step rail, working-copy editing) for chrome, and the onboarding `ClientFlow` pattern (one STEPS definition drives order/validation/conditional steps; answers accumulate in a progress row and commit to real records only on completion) for the engine. The sponsor step `applies()` only when Sponsored = Yes; resumable-draft behaviour comes from the `onboarding_progress` pattern.
 
 ### 2b. Sponsor and dependents
-- Sponsored = Yes (§4) auto-generates the **sponsor record, sponsor folder, and sponsor document repository** in the same save — not a follow-up step the user can skip. Sponsor form duplicates the main-applicant mandatory field set (no investment-type/sponsored fields).
-- Dependents (§5): "Add Dependent" appends a record and **triggers a fresh per-dependent form** (meeting) — first name, last name, DOB, relationship (Spouse | Qualified Dependent). **Qualified Dependent numbering is computed, never typed: sort qualified dependents by age ascending — youngest = Qualified Dependent 1** (§5's worked example). Recompute ordinals on every add/edit/remove; spouses sit outside the numbering. ⚠ The transcript contradicts this once — "the oldest person is always one"; the plan follows the brief's worked example (client question 13).
+- Sponsored = Yes (section 4) auto-generates the **sponsor record, sponsor folder, and sponsor document repository** in the same save — not a follow-up step the user can skip. Sponsor form duplicates the main-applicant mandatory field set (no investment-type/sponsored fields).
+- Dependents (section 5): "Add Dependent" appends a record and **triggers a fresh per-dependent form** (meeting) — first name, last name, DOB, relationship (Spouse | Qualified Dependent). **Qualified Dependent numbering is computed, never typed: sort qualified dependents by age ascending — youngest = Qualified Dependent 1** (section 5's worked example). Recompute ordinals on every add/edit/remove; spouses sit outside the numbering. ⚠ The transcript contradicts this once — "the oldest person is always one"; the plan follows the brief's worked example (client question 13).
 - The wizard may open family information with a married / has-spouse prompt (meeting), but a spouse is stored as a dependent with relationship Spouse either way.
 
-### 2c. Auto folder structure (§6) — and where it anchors
+### 2c. Auto folder structure (section 6) — and where it anchors
 - On creation, build the tree: `Application → Main Applicant / Sponsor (if applicable) / Dependent 1 / … / Additional Documents` — one dedicated repository per individual. Adding a dependent later adds their folder; the structure is system-managed (no rename/delete by users).
 - **Anchor decision:** every application's main applicant gets a lightweight **client record auto-created at application creation** (the same move the CBI importer already makes — one client per applicant via `cbi_applications.client_id`), and the application tree is provisioned under that client's TYPE_CLIENT folder. This covers the majority Service-Provider path (the applicant is not a portal user) and the Private-Client path identically, and it means the firm-wide default org access (every staff member = downloader) never reaches application documents — the TYPE_CLIENT carve-out already excludes them.
 - Build on the real file library, not a parallel store — `FolderProvisioner::applySubfolders()` is idempotent and public, the exact primitive needed. Details that matter:
@@ -98,7 +98,7 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
   - External visibility is explicit: client accounts get **nothing** automatically in the file library — CIP maintains share grants (or a new FileAccess rule) for the applicant and provider contacts on their application tree.
 
 ### 2d. Intake uploads land in document slots from day one
-- A **minimal `cip_documents` slot table ships in this phase** (person + document type → file_id) seeded with the three intake requirements — passport-sized photo, passport bio page, birth certificate — so the §2 mandatory uploads are slot-addressed from the first save. Phase 3 generalises slots into the full requirement-template engine; nothing gets re-homed later.
+- A **minimal `cip_documents` slot table ships in this phase** (person + document type → file_id) seeded with the three intake requirements — passport-sized photo, passport bio page, birth certificate — so the section 2 mandatory uploads are slot-addressed from the first save. Phase 3 generalises slots into the full requirement-template engine; nothing gets re-homed later.
 - Bytes go through the existing `Vault` + `Versions` services (see Phase 3b), never a side path.
 
 **Exit criteria:** an SP account creates a sponsored DRAFT with 3 dependents; sponsor repo auto-exists; dependents auto-number youngest-first; folder trees verified for **both** a provider-created and a private-client-created application, each under the auto-created/existing client folder; all 13 mandatory fields enforced server-side; intake uploads addressable as slots; a second provider's account cannot see any of it; internal number visible on the draft.
@@ -110,45 +110,45 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 
 **Goal:** per-person checklists driven by admin-configurable requirements, uploads with version history, per-document status, comment threads, direct upload links.
 
-### 3a. Configurable requirement templates (§11)
+### 3a. Configurable requirement templates (section 11)
 - `cip_document_requirements`: document name, applicant type, mandatory flag, sort order. Applicant types exactly as briefed: **Principal Applicant, Spouse, Dependent Under 16, Dependent 16 and Over, Sponsor**.
-- **Content task, not just schema:** obtain the official CIP document standards per applicant type from the client and ship them as the seeded default templates (§11's example names Police Certificate, Medical Certificate, Proof of Address). Empty templates make every checklist meaningless — this is a Phase 3 deliverable and client question #9.
+- **Content task, not just schema:** obtain the official CIP document standards per applicant type from the client and ship them as the seeded default templates (section 11's example names Police Certificate, Medical Certificate, Proof of Address). Empty templates make every checklist meaningless — this is a Phase 3 deliverable and client question #9.
 - Each person materialises a checklist from the template matching their type (dependents pick Under-16 vs 16-and-over from DOB — cutoff date is client question #4). Admin-editable via a minimal form here (full console Phase 11). Whether template edits re-materialise checklists on in-flight applications is client question #10 — the brief's "dynamic requirements" doesn't say.
 
 ### 3b. Uploads, versions, statuses
 - Phase 2's minimal slot table grows into the general engine: `cip_documents` joins (application, person, requirement) → `file_id`. The library has files; the checklist semantics are the genuinely new concept.
 - **Version history comes free**: bytes through the existing `Vault` + `Versions` service (`Versions::addStored` appends to the `file_versions` chain; per-version download/preview/restore routes already exist; chunked upload supports "this is version N of file X"). One rule: re-uploads must go through the version endpoints — the library's name-conflict "replace" path soft-deletes and recreates, silently forking the chain.
-- Checklist UI shows ✓/☐ with **mandatory indicators** and **upload status** exactly like §11's example.
+- Checklist UI shows ✓/☐ with **mandatory indicators** and **upload status** exactly like section 11's example.
 - **At-a-glance state colours** (meeting): a document with open review comments reads as needs-action (danger tone); a clean/approved one reads settled (success/neutral) — providers must never have to click through documents to find what needs work. Review actions live inline on the application detail page (with an "open in library" affordance), never requiring a trip to the File Library.
-- Per-document status machine (§12) held on the slot row, **routed through the Phase 1 `CipEngine`** (not ad-hoc checks): PENDING UPLOAD → APPLICATION REVIEW → UPDATE REQUIRED → READY FOR SUBMISSION, **plus the re-upload back-edge UPDATE REQUIRED → APPLICATION REVIEW** that Phase 6's revision loop requires. The library's existing `review_status` is deliberately any-to-any — wrong vocabulary, wrong rules; not reused. In this phase only the upload-driven edges are exercisable (PENDING UPLOAD → APPLICATION REVIEW, and re-upload back-edges); reviewer verbs arrive in Phase 6.
+- Per-document status machine (section 12) held on the slot row, **routed through the Phase 1 `CipEngine`** (not ad-hoc checks): PENDING UPLOAD → APPLICATION REVIEW → UPDATE REQUIRED → READY FOR SUBMISSION, **plus the re-upload back-edge UPDATE REQUIRED → APPLICATION REVIEW** that Phase 6's revision loop requires. The library's existing `review_status` is deliberately any-to-any — wrong vocabulary, wrong rules; not reused. In this phase only the upload-driven edges are exercisable (PENDING UPLOAD → APPLICATION REVIEW, and re-upload back-edges); reviewer verbs arrive in Phase 6.
 
 ### 3c. Document comments and direct upload links
-- `cip_document_comments`: multiple comments per document (§13), reply-threaded, provider-visible, retained forever — modeled on the existing `file_comments` shape (parent/root threading).
-- **Direct upload links** (§11): the tokenized public `/r/{token}` file-request flow already handles expiry, passwords, extension allow-lists, and uploader identity capture — but it targets a *folder* and always creates a *new* file. Extend it with a request→document-slot link and a version-aware landing path so a link upload arrives as the slot's next version. First consumers are the Phase 6–8 notification emails; the lock interaction is defined in Phase 7c.
+- `cip_document_comments`: multiple comments per document (section 13), reply-threaded, provider-visible, retained forever — modeled on the existing `file_comments` shape (parent/root threading).
+- **Direct upload links** (section 11): the tokenized public `/r/{token}` file-request flow already handles expiry, passwords, extension allow-lists, and uploader identity capture — but it targets a *folder* and always creates a *new* file. Extend it with a request→document-slot link and a version-aware landing path so a link upload arrives as the slot's next version. First consumers are the Phase 6–8 notification emails; the lock interaction is defined in Phase 7c.
 
 **Exit criteria:** admin edits a template through the minimal form; a new application materialises correct per-person checklists against the seeded CIP-standard defaults (age split verified); uploading twice produces v1/v2 in one chain; upload-driven slot transitions run through the engine, write `cip_events`, and reject undefined edges; a direct link uploads into exactly one slot as a new version.
 
 ---
 
 ## Phase 4 — Application directory, search, and role dashboards
-*Brief sections: 8, 9, plus §7's search rules*
+*Brief sections: 8, 9, plus section 7's search rules*
 
 **Goal:** the working surface. Everyone sees exactly their slice; dashboards are action-driven buckets built once against the complete Phase 1 status enum (DRAFT included), so no rework as later phases light statuses up.
 
 ### 4a. Stand up the `/cip` section
 - Follow the proven 8-step shell recipe (the CBI module is the model): capability + page slug in `Role`, `SPA_PAGES` entry, sidebar row + hidden view container + script/css tags in the shell, `APPROVED_PRIMARY_NAV` + `NAV_SHELL_VERSION` bump in dashboard.js, `NAV_CAPABILITIES` in **both** copies of portal-access.js (web + desktop), masked nav icon rule, `cip.js` registering its mount, `Route::prefix('portal/cip')` API group.
 - `cip.js` copies the `cbi.js` architecture (state object, fetch wrapper with XSRF + monotonic request tokens, TMAMorph rendering, unwired/on wiring) — cbi.js is a pattern donor, not a base to extend.
-- **Real paths, not hash routes**: notification emails must carry direct portal links (§10), so `/cip/applications/{uuid}` needs the `clients.deep`-style deep route + explicit routeFromPath entries from day one.
+- **Real paths, not hash routes**: notification emails must carry direct portal links (section 10), so `/cip/applications/{uuid}` needs the `clients.deep`-style deep route + explicit routeFromPath entries from day one.
 - **This section hosts the merged main table** (standing decision above): it is the successor to *both* the `/cbi` table and the Clients-hub listing as the staff working surface for CIP — not a third sibling. `/cbi`'s nav entry retires at cutover.
 
-### 4b. Main application table (§8)
+### 4b. Main application table (section 8)
 - Columns exactly as briefed: Application Number (via `displayNumber()`), Applicant Name, Service Provider, Contact Person, Contact Email, Investment Type, Family Size, Status, Assigned To (via the Phase 1 assignment accessor). Toolbar/filters/pagination reuse the documented Users/CBI table recipe; assignee cells reuse the shared person-card component.
 - **Assigned To is an inline dropdown** for authorized staff (meeting) — assignment happens right in the table, not only on the detail page (the transition itself is Phase 6's engine edge).
-- **Family Size is computed** — main applicant + sponsor (if any) + dependents, displayed "F6" (§8's worked example: 1+1+4=6). One computer, reused by the email subject builder (Phase 5).
-- Search (§7): one box matching **Internal Number, CIP Number, or Applicant Name** — all three always hit regardless of which number is displayed.
+- **Family Size is computed** — main applicant + sponsor (if any) + dependents, displayed "F6" (section 8's worked example: 1+1+4=6). One computer, reused by the email subject builder (Phase 5).
+- Search (section 7): one box matching **Internal Number, CIP Number, or Applicant Name** — all three always hit regardless of which number is displayed.
 - Live refresh: register a `cip` resource on both sides of the existing signal-not-payload Live layer (each viewer refetches through their own scoped endpoint, so row scoping survives fan-out for free).
 
-### 4c. Action-driven dashboards (§9)
+### 4c. Action-driven dashboards (section 9)
 - **Administrator:** New Applications / Review Applications / Assessment Feedback / Updates Required / Ready to Submit / Pending Review / Background Check / Delayed / Approved / Denied. **CRO:** Assigned Reviews / Reviews Pending / Assessment Feedback Tasks / Additional Information Requests. **Service Provider:** Updates Required / Ready to Submit / Pending Review / Delayed / Approved / Denied.
 - Every bucket is a server-measured count clicking through to the pre-filtered table. Pattern: the dashboard-metrics controller pair (role decides scope in the constructor; honest empty states; non-staff gets a soft "not for you" payload, not 403) — but **skip its 5-minute cache** for officer queues; a work queue lagging status changes by 5 minutes reads as broken.
 - ⚠ Client question #1: dashboards say "Approved", the decision workflow says "GRANTED" — one bucket, confirm the label.
@@ -168,11 +168,11 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 ---
 
 ## Phase 5 — Notification engine and email standards
-*Brief sections: 22, plus the email-content rules embedded in §10, §14, §15, §18, §20*
+*Brief sections: 22, plus the email-content rules embedded in section 10, section 14, section 15, section 18, section 20*
 
 **Goal:** one notification service every workflow phase calls. Built *before* the workflows because the first transition (submission → NEW, Phase 6) already emails.
 
-### 5a. Subject format builder (§22)
+### 5a. Subject format builder (section 22)
 - `[OFFICER INITIALS] - [STATUS] - [APPLICATION NUMBER] - [MAIN APPLICANT NAME] (F[Family Size]) - [DD.MM.YYYY]` — e.g. `KM - NEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 12.08.2026`.
 - The application number is `displayNumber()` from Phase 1d — the switching rule is already centralised there (the brief's own examples switch at PENDING REVIEW). Family size from the Phase 4 computer; date as DD.MM.YYYY.
 - Delivery path: the existing `Postcard` mailable takes an arbitrary subject line — add `Postcards::cipStatus…()` factory methods and send through `Deliveries::send()` with the application as the related record, giving a **per-application email audit trail** (status/error/retry per recipient) in `email_deliveries` for free.
@@ -180,8 +180,8 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 - **Notification wording comes from the client** (meeting: Krishna pens each scenario's copy) — templates ship as placeholder scaffolds ready to take her text; the NEW APPLICATION body carries applicant name, submission date/time, application number, and the direct portal link (the meeting's suggested content).
 - ⚠ Client question #2: NEW APPLICATION fires before an officer is assigned — whose initials lead that subject?
 
-### 5b. Recipient resolution (§22)
-- §22 is a blanket rule: **every notification goes to all four classes — CIP Distribution Group + Assigned Officer + Administrators + Service Provider Contact.** One resolver used everywhere. Where later sections name recipients (§20 DELAYED, §18 NON-COMPLIANT), the plan reads them as emphasis on top of §22, **not** narrowing — whether any status should actually trim the list is client question #12, not a silent decision.
+### 5b. Recipient resolution (section 22)
+- section 22 is a blanket rule: **every notification goes to all four classes — CIP Distribution Group + Assigned Officer + Administrators + Service Provider Contact.** One resolver used everywhere. Where later sections name recipients (section 20 DELAYED, section 18 NON-COMPLIANT), the plan reads them as emphasis on top of section 22, **not** narrowing — whether any status should actually trim the list is client question #12, not a silent decision.
 - No group-email concept exists in the portal — the distribution group is a stored recipient list on CIP settings, fanned out **per member** so each send gets its own delivery row. A **minimal editor for that list ships in this phase** (compliance mail must not be DB-only-editable for six phases).
 - In-portal bell notifications ride the existing per-user notification store (new `cip.*` types registered with their own preference group); external recipients must hold portal accounts to get bells — email is the universal channel.
 
@@ -202,15 +202,15 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 ### 6a. Application-level transitions go live
 - The Phase 1 `CipEngine` (already carrying Phase 3's document-slot edges) gains its application-level edges: every transition validated against the FROM→TO map **and** the actor's role, wrapped in a transaction, writing `cip_events`, firing Phase 5 notifications. All later phases only add edges.
 
-### 6b. Submit + assignment (§10)
-- Provider (or private client) submits a complete draft → **DRAFT → NEW is an engine transition** — it fires the **NEW APPLICATION notification to all four §22 recipient classes** (the brief's first worked subject) and drops the application into the admin "New Applications" bucket. (Whether private clients may submit for processing themselves is client question #11 — §1 grants "submit for processing" only to Service Providers.)
-- Admin assigns an officer → assignment row written through `cip_application_assignments`, cache column updated → **REVIEW APPLICATION** → notification to the assigned officer containing application number, applicant name, service provider, **direct portal link** (the Phase 4 deep route). Reassignment allowed any time (§26).
+### 6b. Submit + assignment (section 10)
+- Provider (or private client) submits a complete draft → **DRAFT → NEW is an engine transition** — it fires the **NEW APPLICATION notification to all four section 22 recipient classes** (the brief's first worked subject) and drops the application into the admin "New Applications" bucket. (Whether private clients may submit for processing themselves is client question #11 — section 1 grants "submit for processing" only to Service Providers.)
+- Admin assigns an officer → assignment row written through `cip_application_assignments`, cache column updated → **REVIEW APPLICATION** → notification to the assigned officer containing application number, applicant name, service provider, **direct portal link** (the Phase 4 deep route). Reassignment allowed any time (section 26).
 
-### 6c. Document review (§12, §13)
+### 6c. Document review (section 12, section 13)
 - Reviewer works the checklists through the engine's reviewer verbs: approve → **READY FOR SUBMISSION**; request changes → **UPDATE REQUIRED** + comment. Providers view comments, **reply**, and **upload revised versions** (new version in the chain; the Phase 3 back-edge returns the slot to APPLICATION REVIEW for re-review).
 - Application-level **UPDATE REQUIRED** feeds the SP "Updates Required" bucket whenever any document needs provider action.
 
-### 6d. Assessment feedback (§14)
+### 6d. Assessment feedback (section 14)
 - All documents assessed → **ASSESSMENT FEEDBACK**. Updates required → SP notified (UPDATE REQUIRED loop). None → application proceeds toward submission (Phase 7). The all-clear branch carries its own copy (meeting): "assessment feedback complete — your file is ready to submit."
 - CRO dashboard buckets become live counts.
 
@@ -219,19 +219,19 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 ---
 
 ## Phase 7 — Ready to submit, confirmation, locking, CIP number
-*Brief sections: 15, 16, 17, and §7's switching rule*
+*Brief sections: 15, 16, 17, and section 7's switching rule*
 
 **Goal:** the hand-off to the government Unit: auto-ready, provider confirmation, immutable package, dual-number switchover.
 
-### 7a. Ready to Submit (§15)
+### 7a. Ready to Submit (section 15)
 - The moment **all** documents across **all** people reach READY FOR SUBMISSION → application auto-flips **READY TO SUBMIT** (event-driven on every slot status change, not a cron sweep). The **submitting party** — the SP contact, or the private client on PRI applications — is notified and must click **CONFIRM SUBMISSION**.
 - On confirm: the application **locks** — the original submission package can no longer be modified.
 
-### 7b. Submission recording + number switch (§16, §7)
+### 7b. Submission recording + number switch (section 16, section 7)
 - Staff record **Submission Date** and enter the **CIP Application Number** (e.g. `10T1G12661P`) → status **PENDING REVIEW**.
 - Because every surface already reads `displayNumber()` (Phase 1d), entering the CIP number flips dashboards, reports, status screens, email subjects and search results in one move. Internal number stays stored and searchable (audit + invoicing).
 
-### 7c. Locking rules (§17) — the part the file library can't do yet
+### 7c. Locking rules (section 17) — the part the file library can't do yet
 - Original per-person folders: **view only — no editing, no deletion, no replacement** — for providers *and* staff.
 - This needs a **new immutability gate** in the file-access layer: today's workflow lock only blocks *new versions* — rename, move, soft-delete and purge all still pass, and the owner/admin short-circuit grants `full` rights that ignore locks entirely. The CIP lock must be checked in the file/folder/bulk controllers **before** the ownership short-circuit. (Phase 2's system-account ownership narrows the blast radius.)
 - **Outstanding direct upload links** (Phase 3c) targeting original-package slots are invalidated on lock — the version-aware landing path re-checks the lock, so a link minted pre-lock cannot write into the frozen package.
@@ -246,21 +246,21 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 
 **Goal:** everything after the Unit has the file — Compliance Officer verbs plus the portal's one piece of time-based automation.
 
-### 8a. Non-compliance (§18)
-- Unit requests information → officer records **Query Received Date** → auto **NON-COMPLIANT** → notification (full §22 recipient set; the brief highlights the SP) → response documents through Additional Documents (Phase 7c allows this).
+### 8a. Non-compliance (section 18)
+- Unit requests information → officer records **Query Received Date** → auto **NON-COMPLIANT** → notification (full section 22 recipient set; the brief highlights the SP) → response documents through Additional Documents (Phase 7c allows this).
 - Response documents run the **same review loop** as everything else — APPLICATION REVIEW → UPDATE REQUIRED → READY FOR SUBMISSION ("every document at every stage goes through the same loop" — meeting); additional-information requests reuse the Phase 3c tokenized upload-link flow.
 - ⚠ Client question #5: the brief doesn't say which status follows a resolved non-compliance — assume return to the prior status; confirm.
 
-### 8b. Background check (§19)
+### 8b. Background check (section 19)
 - Accepted for processing → record **Accepted for Processing Date** → **BACKGROUND CHECK**.
 
-### 8c. Delayed automation (§20)
-- Daily scheduled command cloning the existing workflow-maintenance pattern (query non-terminal rows past threshold → transition → log → notify, `withoutOverlapping`): Accepted-for-Processing Date **180+ days old, no decision** → **DELAYED**, notifying at minimum the brief's named three (Administrator + Reviewing Officer + Service Provider; full §22 set unless client question #12 says otherwise). Idempotent — an already-DELAYED application never re-notifies. Depends on the scheduler verified in Phase 5.
+### 8c. Delayed automation (section 20)
+- Daily scheduled command cloning the existing workflow-maintenance pattern (query non-terminal rows past threshold → transition → log → notify, `withoutOverlapping`): Accepted-for-Processing Date **180+ days old, no decision** → **DELAYED**, notifying at minimum the brief's named three (Administrator + Reviewing Officer + Service Provider; full section 22 set unless client question #12 says otherwise). Idempotent — an already-DELAYED application never re-notifies. Depends on the scheduler verified in Phase 5.
 
-### 8d. Decision (§21, §23)
+### 8d. Decision (section 21, section 23)
 - Record **Decision Date** + **Decision Type** (GRANTED | DENIED) → terminal status → decision notification.
 - UI: **one-click date actions** (meeting) — a "Decision received" button opens a date picker; entering the date flips the status automatically. Same pattern for Query Received (8a) and Accepted for Processing (8b): "most status updates are triggered by dates" — the date is the trigger, statuses are never hand-picked.
-- **Ten decision templates** (§23): GRANTED and DENIED per investment type (Real Estate Project, National Action Bonds, National Economic Fund, Enterprise Project, Other), admin-configurable. **No admin-editable email template store exists in the portal** (all copy is hardcoded in the Postcards factory) — this needs a new `cip_email_templates` table + placeholder substitution + admin CRUD (minimal editor here, polished in 11a). Preview copies added to the design-mail gallery must be hand-mirrored in the server-side blade — the gallery and real sends are maintained-in-parallel twins.
+- **Ten decision templates** (section 23): GRANTED and DENIED per investment type (Real Estate Project, National Action Bonds, National Economic Fund, Enterprise Project, Other), admin-configurable. **No admin-editable email template store exists in the portal** (all copy is hardcoded in the Postcards factory) — this needs a new `cip_email_templates` table + placeholder substitution + admin CRUD (minimal editor here, polished in 11a). Preview copies added to the design-mail gallery must be hand-mirrored in the server-side blade — the gallery and real sends are maintained-in-parallel twins.
 
 **Exit criteria:** compliance loop records dates and flips statuses through product paths; time-travel test (accepted date seeded 181 days back, run the command) flips to DELAYED exactly once with the required notifications; a granted Real-Estate application sends the Real-Estate GRANTED template with correct subject; admin Background Check / Delayed / Approved / Denied and SP Delayed / Approved / Denied buckets now verified through product data.
 
@@ -273,10 +273,10 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 
 - **Build a light application-scoped thread model — do not bend the chat system.** Recon verdict: the conversations tables are entangled with "free-standing user container" (participant-row auth, one-direct-thread-per-pair, org-chat, calls baggage, a 9k-line UI). The right template is the per-record comment-thread shape (`file_comments`: record FK, parent/root threading) plus mechanisms lifted piecemeal from messaging:
   - **read/unread**: the per-participant high-water-mark columns;
-  - **email alerts for unread** (§24): a reminder command cloning the escalating-tier unread-reminder pattern;
+  - **email alerts for unread** (section 24): a reminder command cloning the escalating-tier unread-reminder pattern;
   - **realtime**: a `cip.application.{uuid}` private channel whose auth closure checks application access, events broadcast **signal-not-payload** — load-bearing here, because channel members have *different visibility rights* (next bullet) and the event must never carry message text; X-Socket-ID on writes so senders don't process their own echo.
 - Two visibility lanes on the message row: **internal** (staff-only — filtered server-side in the read query, never rendered to SP/client accounts) and **provider** (Service Provider communications). Nothing like per-message visibility exists anywhere in the portal; it's new, and it's why threads get their own tables.
-- Thread history retained as part of the application record (§24); message bodies plain text (portal-wide rule — formatting belongs to email templates, not stored markup).
+- Thread history retained as part of the application record (section 24); message bodies plain text (portal-wide rule — formatting belongs to email templates, not stored markup).
 - UI: the messaging tab on the application detail page (the file-detail comment pane is the UI precedent, not the Messages app).
 
 **Exit criteria:** internal note invisible to the SP account at the API level; unread badges correct; an unread SP message triggers exactly one alert email; realtime updates arrive without leaking content into the broadcast payload.
@@ -286,25 +286,25 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 ## Phase 10 — Reporting and analytics
 *Brief section: 25*
 
-**Goal:** the §26 "run reports" authority made real — admin reports filterable by **Status, Service Provider, Investment Type, Applicant, Assigned Officer, Submission Date, Decision Date, Date Range**, with the seven briefed examples as presets: Applications Pending Review / in Background Check / Delayed / Granted / Denied / by Service Provider / by Investment Type.
+**Goal:** the section 26 "run reports" authority made real — admin reports filterable by **Status, Service Provider, Investment Type, Applicant, Assigned Officer, Submission Date, Decision Date, Date Range**, with the seven briefed examples as presets: Applications Pending Review / in Background Check / Delayed / Granted / Denied / by Service Provider / by Investment Type.
 
 - Extend the existing reports pipeline (report row = request + stored answer; one compute path for page and scheduler; recurring windows; CSV export streaming already built): add CIP report types + a `filters` payload (the current schema has no filter parameters — a small schema addition) + a CIP report builder emitting the generic metrics-plus-breakdown shape the reporting page already renders.
 - Query discipline copied from the existing builder: raw query-builder reads that deliberately bypass soft-delete scopes, so withdrawn/binned applications still count in historical reports.
 - Reports show `displayNumber()` (CIP numbers post-submission) while staying searchable by internal number for invoicing. Date filters run against the recorded workflow dates from Phase 1c, not status-change timestamps.
-- Gated to administrators (§25).
+- Gated to administrators (section 25).
 
 **Exit criteria:** each preset returns correct rows against the accumulated product data plus fixtures; combined filters (provider × investment type × date range) verified; CSV export matches the on-screen result.
 
 ---
 
 ## Phase 11 — Administration console, audit, and Smartsheet cutover
-*Brief sections: 26 and §1 admin abilities, config surfaces from 1a/1b/3a/5b/8d, Purpose (Smartsheet replacement)*
+*Brief sections: 26 and section 1 admin abilities, config surfaces from 1a/1b/3a/5b/8d, Purpose (Smartsheet replacement)*
 
-### 11a. Admin console (§26, §1)
-- One place for every §26 verb: **view all applications** and **view all users**; **assign/reassign**; **view all role dashboards**; **manage users** — the officer-role grant store (1a) and provider-contact management get their finished screens here; **manage configurations** — document requirement templates (3a), decision templates (8d), provider registry + codes (1b), distribution group (5b), **manage notifications**; **update statuses manually** (with reason, through the engine so it's logged); **override permissions**; **run reports** links to the Phase 10 surface; **access audit history** is 11b. Settings screens clone the existing admin-overlay pattern (one settings row, managed-capability list, the JS mirror test keeps client and server in sync).
+### 11a. Admin console (section 26, section 1)
+- One place for every section 26 verb: **view all applications** and **view all users**; **assign/reassign**; **view all role dashboards**; **manage users** — the officer-role grant store (1a) and provider-contact management get their finished screens here; **manage configurations** — document requirement templates (3a), decision templates (8d), provider registry + codes (1b), distribution group (5b), **manage notifications**; **update statuses manually** (with reason, through the engine so it's logged); **override permissions**; **run reports** links to the Phase 10 surface; **access audit history** is 11b. Settings screens clone the existing admin-overlay pattern (one settings row, managed-capability list, the JS mirror test keeps client and server in sync).
 - No ownership restrictions on admin accounts — already structural (admin short-circuit).
 
-### 11b. Audit history (§26)
+### 11b. Audit history (section 26)
 - Per-application audit view over `cip_events` + document version chains + comments + messages + `email_deliveries` rows — the brief's "significantly improving auditability" made visible. (A per-application activity endpoint is new — the portal-wide activity API can't filter by subject.)
 
 ### 11c. Smartsheet / legacy CBI cutover (Purpose)
@@ -313,7 +313,7 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 - Run mirror and portal in parallel read-only for one verification cycle; the comment-dedupe unique index protects against duplication if a final catch-up sync runs during cutover; then pause the sync permanently (the pause switches exist) and point users at `/cip`.
 - **The surface merge completes here**: `/cbi`'s nav entry and the duplicated CIP listing are removed — one table remains ("we don't need Client Service and CBI"), and every historical application resolves to a client profile like a native one — dates card, Overview, Comments (migrated `cbi_comments`), and Activity (migrated `cbi_application_events`) all populated.
 
-**Exit criteria:** every §26 bullet demonstrable from an admin login; officer roles and provider contacts manageable end-to-end; a migrated legacy application shows a coherent history and correct provider/status mapping; Smartsheet sync paused with no data gap.
+**Exit criteria:** every section 26 bullet demonstrable from an admin login; officer roles and provider contacts manageable end-to-end; a migrated legacy application shows a coherent history and correct provider/status mapping; Smartsheet sync paused with no data gap.
 
 ---
 
@@ -336,7 +336,7 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 
 ## Traceability: brief section → phase
 
-| Brief § | Requirement | Phase |
+| Brief section | Requirement | Phase |
 |---|---|---|
 | Purpose | Smartsheet replacement, lifecycle platform | All; cutover 11c |
 | 1 | User types and abilities | 1a (manage users completed 11a) |
@@ -380,11 +380,11 @@ Derived from "CIP Portal Development Brief v1" (final functional requirements), 
 4. Age boundary for Under-16 vs 16-and-over document sets — age at application creation or at submission?
 5. After a NON-COMPLIANT query is resolved, what status does the application return to?
 6. Confirm one sponsor maximum per application.
-7. Spouse document set (§11) vs spouse-as-dependent (§5): confirm spouses take the Spouse document set and sit outside Qualified Dependent numbering.
+7. Spouse document set (section 11) vs spouse-as-dependent (section 5): confirm spouses take the Spouse document set and sit outside Qualified Dependent numbering.
 8. CIP Distribution Group — one mailbox/list of addresses? Who maintains it?
 9. Please provide the official **CIP document standards** — the required-document list per applicant type (Principal, Spouse, Dependent Under 16, Dependent 16+, Sponsor) — to seed the default checklists.
 10. When an admin edits document requirements, do the changes apply to applications **already in progress**, or only new ones?
-11. May **Private Clients** submit and confirm their own applications for processing? (§1 grants "submit for processing" to Service Providers only, yet PRI applications exist.)
-12. §22 says **all** notifications go to all four recipient classes, while §20 (Delayed) names only three — should any status use a narrower recipient list?
+11. May **Private Clients** submit and confirm their own applications for processing? (section 1 grants "submit for processing" to Service Providers only, yet PRI applications exist.)
+12. Section 22 says **all** notifications go to all four recipient classes, while section 20 (Delayed) names only three — should any status use a narrower recipient list?
 13. Dependent numbering: the brief's worked example makes the **youngest** dependent Qualified Dependent 1, but the meeting transcript says "the oldest person is always one". The plan follows the brief — confirm which rule is right.
 14. Post-approval stages (COR, NIC letter, passport tracking — in Smartsheet today, discussed in the meeting): in scope for this build, or a follow-on phase after GRANTED?

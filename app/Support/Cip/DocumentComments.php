@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * The conversation on one checklist document (§13).
+ * The conversation on one checklist document (section 13).
  *
  * A separate thread from {@see Comments}, which talks about
  * a file. This talks about a *requirement*: the slot outlives the file in it,
@@ -35,7 +35,7 @@ class DocumentComments
      * Who may read and write a document's thread.
      *
      * The same answer for both, and the same answer as "may you see this
-     * application at all". §13 exists so the provider side can be told what is
+     * application at all". Section 13 exists so the provider side can be told what is
      * wrong with a document and reply about it; a conversation only the firm
      * could join would be a notes field with extra steps.
      */

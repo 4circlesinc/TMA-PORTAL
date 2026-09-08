@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The checklist templates (§12): what each kind of applicant owes.
+ * The checklist templates (section 12): what each kind of applicant owes.
  *
  * Phase 2 opened slots from the constants in {@see \App\Support\Cip\DocumentTypes}
  * because the checklist had to mean the same thing before this table existed.

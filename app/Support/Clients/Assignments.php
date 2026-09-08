@@ -76,7 +76,7 @@ final class Assignments
         // A level or role change on a live assignment is a change, not a new
         // ask, the person is already working with this client and does not
         // need welcoming again. And a caller that carries its own notice —
-        // the CIP picker sends §10's formatted email about the same press —
+        // the CIP picker sends section 10's formatted email about the same press —
         // silences this one, or one assignment would arrive as two emails
         // saying different things.
         if (! $announce) {

@@ -18,7 +18,7 @@ return new class extends Migration
      * The load-bearing column is `file_version_id`. A workflow reviews a
      * specific revision, never "the file" in the abstract: without that, someone
      * uploading a new version mid-review would silently change what the
-     * approvers are agreeing to, which §6 forbids.
+     * approvers are agreeing to, which section 6 forbids.
      */
     public function up(): void
     {

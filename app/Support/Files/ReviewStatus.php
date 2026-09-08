@@ -59,7 +59,7 @@ final class ReviewStatus
     public const FINAL = [self::READY_FOR_SUBMISSION];
 
     /**
-     * Values this column used to store, before client documents shared §12's
+     * Values this column used to store, before client documents shared section 12's
      * vocabulary. A listing that has not been migrated yet still has to draw
      * a badge, so these are read as the status they became.
      *

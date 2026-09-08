@@ -1429,7 +1429,7 @@
 
     /*
      * Open a portal path in-place (no full reload), the destination a
-     * notification, activity, or client item points at (§15, §25). Resolves the
+     * notification, activity, or client item points at (section 15, section 25). Resolves the
      * path to an SPA view when this shell contains it, opening a specific record
      * where the module supports it (a client detail, the Overview activity tab).
      * Only genuinely cross-shell targets fall back to a real navigation.
@@ -3258,7 +3258,7 @@
       syncTabBarBadges();
     }
 
-    // Fill the right sidebar's three sections with live data (§1, §5).
+    // Fill the right sidebar's three sections with live data (section 1, section 5).
     if (window.TMARightSidebar) window.TMARightSidebar.mount(root);
 
     /*

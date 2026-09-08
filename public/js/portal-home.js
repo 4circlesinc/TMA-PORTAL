@@ -996,7 +996,7 @@
   /*
    * ── CIP Applications ──────────────────────────────────────────────
    *
-   * §9's buckets, counted, as one list. The applications table filters by
+   * Section 9's buckets, counted, as one list. The applications table filters by
    * exactly these keys through exactly this endpoint, so a row here and the
    * list it opens cannot end up disagreeing about what "Pending Review" means:
    * the count and the filter are one definition read twice, in
@@ -1108,7 +1108,7 @@
    * The buckets that are parts of the whole.
    *
    * A stacked bar can only be drawn from buckets that do not contain each
-   * other, and one of §9's does: the Reviewing Officer's Assigned Reviews is
+   * other, and one of section 9's does: the Reviewing Officer's Assigned Reviews is
    * deliberately the sum of the three queues under it. Given a share of the
    * bar alongside its own children it would draw every file on that officer's
    * desk twice and the segments would add up to 200%.
@@ -1175,7 +1175,7 @@
 
   /*
    * The bar: every stage holding work, as its share of the total, in the order
-   * §9 names them.
+   * Section 9 names them.
    *
    * Widths are shares and the numbers inside are counts, which is the division
    * of labour the whole layout rests on — the bar answers "how is the work
@@ -1326,7 +1326,7 @@
     /*
      * The order is the server's, top to bottom, and nothing here re-sorts it.
      *
-     * §9 lists the buckets in the order an application travels through them,
+     * Section 9 lists the buckets in the order an application travels through them,
      * and that order is the brief's rather than a renderer's choice. It is
      * also what makes the bar readable: the blocks run in the order work moves
      * through them, so a pipeline weighted toward the end looks different from

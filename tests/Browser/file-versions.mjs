@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
  * old bytes survive, that restore appends instead of rewinding, that a viewer
  * cannot write. What only a browser proves is the workflow the spec describes:
  * upload a version with a note, see the history, open an old one, restore it —
- * and (§29) that doing so never reloads the page or resets the viewer.
+ * and (section 29) that doing so never reloads the page or resets the viewer.
  *
  * Needs the seeded harness: e2e@example.com and a "Contracts" folder with a PDF.
  */
@@ -201,7 +201,7 @@ try {
   const sub2 = await page.textContent('.tma-portal-viewer__sub');
   check(/Version 3/.test(sub2), `header reads Version 3 (“${sub2.trim()}”)`);
 
-  step(10, '§29 — the viewer never reloaded through any of this');
+  step(10, 'section 29 — the viewer never reloaded through any of this');
   check(!!(await page.$('.tma-portal-viewer')), 'the viewer is still open');
   const tabActive = await page.$eval('[data-lb-tab="versions"]', (e) => e.classList.contains('is-active'));
   check(tabActive, 'the Versions tab is still selected');

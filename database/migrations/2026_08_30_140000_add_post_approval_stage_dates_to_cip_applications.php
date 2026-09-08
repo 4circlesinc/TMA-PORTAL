@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Dates that drive post-approval status (brief §6–§12).
+     * Dates that drive post-approval status (brief section 6–section 12).
      */
     public function up(): void
     {

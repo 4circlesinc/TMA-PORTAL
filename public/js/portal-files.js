@@ -2306,7 +2306,7 @@
    * The shell is painted ONCE per open. Only the region that actually changed
    * repaints, rebuilding the whole subtree would reset the preview's scroll
    * and zoom, drop the panel's scroll position, and re-collapse whatever the
-   * reader had expanded, which §29 of the spec forbids.
+   * reader had expanded, which section 29 of the spec forbids.
    *
    * Panels fetch on first view, not on open: a firm-wide access roll-up or a
    * long history must never delay the preview.
@@ -2538,7 +2538,7 @@
       // Same reasoning as the approval badge below: the tab counts say what is
       // worth opening, so they cannot wait for the reader to open something.
       loadTabCounts(f);
-      // Fetch the badge up front: §20 puts the approval status in the centre
+      // Fetch the badge up front: section 20 puts the approval status in the centre
       // header, which must not wait for the reader to open a tab.
       if (!entry(f).approvals) loadApprovals(f);
     }
@@ -3145,7 +3145,7 @@
     /*
      * Open by default.
      *
-     * §30 asked for this collapsed so the panel would not dump every field on
+     * Section 30 asked for this collapsed so the panel would not dump every field on
      * open. In practice the card above now carries the handful of facts people
      * actually came for, so what is left behind the disclosure is the detail
      * somebody opening a Details tab is looking for, and a closed <details>
@@ -3383,7 +3383,7 @@
      *
      * The event carries no body, only that something changed, so the panel
      * refetches the thread and patches it in. Nothing reloads, and the reader's
-     * scroll, open composer and half-typed reply all survive (§29).
+     * scroll, open composer and half-typed reply all survive (section 29).
      */
     function subscribeToFile(f) {
       realtimeConfig(function (cfg) {
@@ -3778,7 +3778,7 @@
         '<div class="tma-portal-viewer__composer-actions">' +
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-emoji title="Insert emoji" aria-label="Insert emoji">🙂</button>' +
           '<span class="tma-portal-viewer__composer-spacer"></span>' +
-          // Cancel and Send sit in a row with a gap. §16 asks specifically
+          // Cancel and Send sit in a row with a gap. Section 16 asks specifically
           // that the clear control never overlap the send control.
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-clear>Cancel</button>' +
           '<button type="button" class="tma-portal-viewer__btn" data-lb-send>Comment</button>' +
@@ -3787,7 +3787,7 @@
     }
 
     /* Draft survives a tab switch, losing half a typed comment because you
-     * checked the file's details is exactly what §29 is about. */
+     * checked the file's details is exactly what section 29 is about. */
     function restoreDraft(e) {
       var input = lb.querySelector('[data-lb-input]');
       if (input && e.draft) input.value = e.draft;
@@ -4149,7 +4149,7 @@
 
     /**
      * Uploading a new version. The note is asked for BEFORE the bytes go up,
-     * because §5 wants the reason recorded, and asking afterwards means a
+     * because section 5 wants the reason recorded, and asking afterwards means a
      * large upload finishes with nothing to say about it.
      */
     function pickNewVersion() {
@@ -4566,7 +4566,7 @@
           esc(sub.join(' · ')) +
         '</p>' +
         (w.message ? '<p class="tma-portal-viewer__version-note">' + esc(w.message) + '</p>' : '') +
-        // §6: when a newer version exists, say so rather than letting the
+        // Section 6: when a newer version exists, say so rather than letting the
         // badge imply the file as it stands today was approved.
         (w.supersededBy
           ? '<p class="tma-portal-viewer__lock">Version ' + w.supersededBy +
@@ -4716,7 +4716,7 @@
     }
 
     /**
-     * The send dialog. Everything §6 asks to be configurable is here, and every
+     * The send dialog. Everything section 6 asks to be configurable is here, and every
      * one of these settings is re-checked server-side when responses arrive —
      * "comments required" in particular is enforced, not merely suggested.
      */
@@ -5110,7 +5110,7 @@
       '</div>';
     }
 
-    // Hover reveals name, email, role and permission. §19.
+    // Hover reveals name, email, role and permission. Section 19.
     function personTitle(m) {
       return [m.name, m.email, m.jobTitle || m.accountType, m.role]
         .filter(Boolean).join(' · ');
@@ -5818,7 +5818,7 @@
       if (e.target.closest('[data-lb-input], [data-lb-replyinput]')) onComposerInput(e.target);
     });
 
-    // Enter sends, Shift+Enter makes a new line. §16.
+    // Enter sends, Shift+Enter makes a new line. Section 16.
     lb.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' || e.shiftKey) return;
       if (e.target.closest('[data-lb-input]')) { e.preventDefault(); sendComment(); }
@@ -6496,7 +6496,7 @@
 
   /**
    * `opts.prompt` adds a single free-text field and passes its value to
-   * onConfirm, used for version notes, where §5 asks that the reason a
+   * onConfirm, used for version notes, where section 5 asks that the reason a
    * version exists is recorded at the moment it is created.
    */
   function confirmModal(opts) {

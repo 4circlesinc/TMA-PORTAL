@@ -202,7 +202,7 @@ s = await callState(calleePage);
 check(s.cameraOff === false && s.muted === true, 'both toggles work independently');
 await calleePage.click('[data-call-action="mute"]');
 
-/* Device pickers are available before answering (§16). */
+/* Device pickers are available before answering (section 16). */
 await calleePage.click('[data-call-action="devices"]');
 await calleePage.waitForSelector('.tma-call__sheet--devices', { timeout: 5000 });
 const devices = await calleePage.evaluate(() => ({

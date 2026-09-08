@@ -14,7 +14,7 @@ return new class extends Migration
      * payload beyond a timestamp — and splitting them into four files would
      * say more about the file count than about the model.
      *
-     * Views are recorded per person rather than as a bare counter so §19 can
+     * Views are recorded per person rather than as a bare counter so section 19 can
      * answer "reach" (how many distinct people saw it) as well as "views". The
      * counter on feed_posts is kept in step for the card, which needs the
      * number without the join.

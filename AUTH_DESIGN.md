@@ -175,7 +175,7 @@ flowchart TD
 - **Spam-folder hints** on every "we sent you an email" screen; resend buttons always throttled with a visible countdown.
 - **Masked identifiers** where the viewer didn't just type them (`+1 ••• ••• ••89`).
 - **Password managers are first-class:** paste allowed, correct `autocomplete` attributes (`email`, `name`, `new-password`, `current-password`, `one-time-code`), no max-length traps.
-- **Loading / success / warning / disabled / empty / error** states exist for every interactive surface (see state list in §1; walk them via the `?state=` switcher).
+- **Loading / success / warning / disabled / empty / error** states exist for every interactive surface (see state list in section 1; walk them via the `?state=` switcher).
 
 ---
 

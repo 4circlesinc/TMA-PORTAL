@@ -7,8 +7,8 @@ import { deflateSync } from 'node:zlib';
  *
  * cip-intake.mjs pins that the form is wired to the endpoint. This pins what
  * the endpoint LEAVES BEHIND: a family of five on one application, each with
- * their own folder and their own checklist, numbered the way §5 says, with
- * §2's uploads answering slots and the photos become faces. The parts that
+ * their own folder and their own checklist, numbered the way section 5 says, with
+ * Section 2's uploads answering slots and the photos become faces. The parts that
  * only exist after a save are the parts nothing else was checking.
  *
  * Needs a fresh database — it counts folders and slots, and a second run's
@@ -75,7 +75,7 @@ try {
   await page.locator('[data-head-dropdown-item="create-new"]').click();
   await page.waitForSelector('[data-cip-form]', { timeout: 30000 });
 
-  step(1, 'Main applicant (§2)');
+  step(1, 'Main applicant (section 2)');
   await page.fill('[data-cip-field="firstName"]', 'Asem');
   await page.fill('[data-cip-field="lastName"]', 'Haddad');
   await page.selectOption('[data-cip-field="gender"]', 'Male');
@@ -94,14 +94,14 @@ try {
   check(!!(await page.locator('[data-cip-photo-btn="passportPhoto"]').getAttribute('data-has-image')),
     'passport photo accepted');
 
-  step(2, 'Investment (§3)');
+  step(2, 'Investment (section 3)');
   if (await page.locator('[data-cip-field="providerId"]').count()) {
     const v = await page.$eval('[data-cip-field="providerId"] option:nth-child(2)', o => o.value);
     await page.selectOption('[data-cip-field="providerId"]', v);
   }
   await page.selectOption('[data-cip-field="investmentType"]', 'real_estate');
 
-  step(3, 'Sponsor (§4)');
+  step(3, 'Sponsor (section 4)');
   await page.selectOption('[data-cip-field="sponsored"]', '1');
   await page.waitForTimeout(600);
   await page.fill('[data-cip-field="sponsor.firstName"]', 'Maryam');
@@ -117,7 +117,7 @@ try {
   await page.waitForTimeout(700);
   check(await page.locator('[data-cip-field="sponsor.firstName"]').inputValue() === 'Maryam', 'sponsor fields filled');
 
-  step(4, 'Dependants (§5) — added oldest first, numbered youngest first');
+  step(4, 'Dependants (section 5) — added oldest first, numbered youngest first');
   const family = [
     ['Omar',  '2008-01-20', 'qualified_dependent'],
     ['Sami',  '2013-03-03', 'qualified_dependent'],
@@ -176,7 +176,7 @@ try {
    * police certificate and the rest. What the wizard is answerable for is the
    * three it collects — each upload has to land in its slot and close it.
    */
-  step(8, 'Checklists (§2 uploads → document slots)');
+  step(8, 'Checklists (section 2 uploads → document slots)');
   const collected = [
     'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
     'Certified Copy of Passport Bio Data Page',

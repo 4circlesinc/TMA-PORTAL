@@ -1,5 +1,5 @@
 /*
- * Verify Overview → Activity is the complete, server-backed log (§8, §9, §10).
+ * Verify Overview → Activity is the complete, server-backed log (section 8, section 9, section 10).
  *
  * Reaches it through the Activities popup's "See all activities" (which must
  * land on the Activity tab, not an unrelated page), then checks the log shows
@@ -35,7 +35,7 @@ await Promise.all([
 if (page.url().includes('/auth/login')) throw new Error('login failed');
 console.log('logged in');
 
-// ── reach the log via "See all activities" (§7) ────────────────────
+// ── reach the log via "See all activities" (section 7) ────────────────────
 await page.waitForSelector('[data-action="toggle-activities-popup"]', { timeout: 10000 });
 await page.click('[data-action="toggle-activities-popup"]');
 await page.waitForSelector('[data-popup-action="see-all-activities"]', { timeout: 8000 });
@@ -46,9 +46,9 @@ const onActivityTab = await page.evaluate(() => {
   const tab = [...document.querySelectorAll('[data-overview-tab]')].find((b) => b.classList.contains('is-active'));
   return tab ? tab.getAttribute('data-overview-tab') : null;
 });
-check(onActivityTab === 'Activity', `"See all activities" opened the Activity tab (got ${onActivityTab}) (§7)`);
+check(onActivityTab === 'Activity', `"See all activities" opened the Activity tab (got ${onActivityTab}) (section 7)`);
 
-// ── real rows with a module column (§8) ────────────────────────────
+// ── real rows with a module column (section 8) ────────────────────────────
 const first = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('.tma-dash__actlog [data-actlog-row]')];
   return {
@@ -59,10 +59,10 @@ const first = await page.evaluate(() => {
   };
 });
 check(first.count >= 4, `activity log shows real rows (${first.count})`);
-check(first.hasModule, 'rows show a Module tag (§8)');
-check(/Tom uploaded|Sarah edited|synchronized/.test(first.text), 'rows carry real descriptions (§8)');
+check(first.hasModule, 'rows show a Module tag (section 8)');
+check(/Tom uploaded|Sarah edited|synchronized/.test(first.text), 'rows carry real descriptions (section 8)');
 
-// ── server-side search narrows the list without a full reload (§10) ─
+// ── server-side search narrows the list without a full reload (section 10) ─
 await page.evaluate(() => { window.__actProbe = 'alive'; });
 await page.fill('.tma-dash__actlog [data-actlog-search]', 'uploaded');
 await page.waitForTimeout(700);
@@ -71,7 +71,7 @@ const searched = await page.evaluate(() => ({
   rows: document.querySelectorAll('.tma-dash__actlog [data-actlog-row]').length,
   text: [...document.querySelectorAll('.tma-dash__actlog [data-actlog-row]')].map((r) => r.textContent).join(' | '),
 }));
-check(searched.probe === 'alive', 'search did not reload the page (§10)');
+check(searched.probe === 'alive', 'search did not reload the page (section 10)');
 check(searched.rows >= 1 && /uploaded/i.test(searched.text) && !/edited/i.test(searched.text), `search narrowed to matching rows (${searched.rows})`);
 
 // clear search, then filter by module = files
@@ -85,13 +85,13 @@ const filtered = await page.evaluate(() => {
   const tags = [...document.querySelectorAll('.tma-dash__actlog [data-actlog-row] .tma-dash__actlog-tag')].map((t) => t.textContent);
   return { rows: tags.length, allFiles: tags.length > 0 && tags.every((t) => /Files/i.test(t)) };
 });
-check(filtered.allFiles, `module filter shows only Files rows (${filtered.rows}) (§9)`);
+check(filtered.allFiles, `module filter shows only Files rows (${filtered.rows}) (section 9)`);
 
-// ── admin can expand a row's details (IP/status/diff) (§9) ─────────
+// ── admin can expand a row's details (IP/status/diff) (section 9) ─────────
 await page.selectOption('.tma-dash__actlog [data-actlog-filter-field="module"]', '');
 await page.waitForTimeout(500);
 const expandable = await page.$('.tma-dash__actlog [data-actlog-expand]');
-check(!!expandable, 'admin rows offer a details toggle (§9)');
+check(!!expandable, 'admin rows offer a details toggle (section 9)');
 if (expandable) {
   await expandable.click();
   await page.waitForTimeout(300);
@@ -99,7 +99,7 @@ if (expandable) {
     const d = document.querySelector('.tma-dash__actlog-detail');
     return d ? d.textContent : null;
   });
-  check(detail && /Type|Status|IP/.test(detail), 'expanded detail shows admin-only fields (§9)');
+  check(detail && /Type|Status|IP/.test(detail), 'expanded detail shows admin-only fields (section 9)');
 }
 
 if (errors.length) fail.push('console/page errors: ' + errors.join(' | '));

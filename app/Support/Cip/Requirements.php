@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The document checklist templates (§12), and putting them onto people.
+ * The document checklist templates (section 12), and putting them onto people.
  *
  * A template is a sentence about a kind of person, "every dependent under 16
  * owes a birth certificate". A slot, one `cip_documents` row, is that sentence
@@ -298,7 +298,7 @@ class Requirements
      * brought into line with the template if it is.
      *
      * `status` is never written from here. It belongs to the review
-     * conversation (§12), not to the template: re-wording a label must not
+     * conversation (section 12), not to the template: re-wording a label must not
      * throw a document in Update required back to Pending upload.
      */
     private static function openSlot(

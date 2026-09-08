@@ -5,7 +5,7 @@
  * surface that shows them: the right sidebar, the header popups, and the
  * Overview activity log. Surfaces subscribe and re-render; they never fetch on
  * their own, so counts stay consistent and a single event updates every view
- * at once (§11, §24, §25).
+ * at once (section 11, section 24, section 25).
  *
  * Globals: window.TMANotifyAPI, window.TMANotifications, window.TMAActivities
  */
@@ -266,7 +266,7 @@
     }
 
     /*
-     * Realtime with an authoritative unread total (§24, §25). Appends the new
+     * Realtime with an authoritative unread total (section 24, section 25). Appends the new
      * item smoothly and trusts the server's count rather than a local delta, so
      * a reconnecting socket that replays or drops the event stays correct.
      */

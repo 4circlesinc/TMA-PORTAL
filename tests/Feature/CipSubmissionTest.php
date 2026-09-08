@@ -21,7 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * §16 — recording a submission to the Unit.
+ * Section 16 — recording a submission to the Unit.
  *
  * After the provider has confirmed, staff enter the submission date and the
  * CIP application number. The file moves to Pending review, and every surface
@@ -56,7 +56,7 @@ class CipSubmissionTest extends TestCase
         return CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
     }
 
-    /** Confirmed and ready to submit — the door §16 opens. */
+    /** Confirmed and ready to submit — the door section 16 opens. */
     private function ready(User $staff, ?CipProvider $provider = null, string $clientName = 'Chen Wei'): CipApplication
     {
         $application = Applications::create($provider ?? $this->provider($staff), $staff);

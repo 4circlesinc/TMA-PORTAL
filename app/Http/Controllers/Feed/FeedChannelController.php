@@ -28,7 +28,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Channels: creating them, editing them, and who belongs to them (§2, §3, §20).
+ * Channels: creating them, editing them, and who belongs to them (section 2, section 3, section 20).
  *
  * Every route resolves a channel through FeedAccess, which 404s rather than
  * 403s for a channel the caller cannot see, a private channel's existence is
@@ -547,7 +547,7 @@ class FeedChannelController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /* ── Moderation (§20) ─────────────────────────────────────────── */
+    /* ── Moderation (section 20) ─────────────────────────────────────────── */
 
     /** Archive a channel: it stays readable, but takes no new posts. */
     public function archive(Request $request, string $uuid): JsonResponse

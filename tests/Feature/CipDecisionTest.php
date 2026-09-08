@@ -27,10 +27,10 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §21 — the Unit decided: record the date and Granted or Denied.
+ * Section 21 — the Unit decided: record the date and Granted or Denied.
  *
  * The dedicated verb exists so `decision` and `decided_at` cannot be left
- * empty by a bare status change. The file becomes terminal, and §22's four
+ * empty by a bare status change. The file becomes terminal, and section 22's four
  * classes are told.
  */
 class CipDecisionTest extends TestCase

@@ -70,7 +70,7 @@ class WorkflowPresenter
         ];
     }
 
-    /** The status badge for a file. §23. Null when nothing has been sent. */
+    /** The status badge for a file. Section 23. Null when nothing has been sent. */
     public static function badge(FileItem $file): ?array
     {
         $workflow = Engine::activeFor($file);
@@ -83,7 +83,7 @@ class WorkflowPresenter
             'label' => Status::label($workflow->status),
             'tone' => Status::tone($workflow->status),
             'type' => $workflow->type,
-            // §23: the badge must describe the CURRENT version. When a newer
+            // Section 23: the badge must describe the CURRENT version. When a newer
             // version has been uploaded since, the badge says so rather than
             // implying the file as it stands today was approved.
             'appliesToVersion' => $workflow->version?->version_number,
@@ -173,7 +173,7 @@ class WorkflowPresenter
         };
     }
 
-    /** The workflow's own audit trail, oldest first. §6 "Workflow History". */
+    /** The workflow's own audit trail, oldest first. Section 6 "Workflow History". */
     public static function history(FileWorkflow $workflow): array
     {
         return FileWorkflowEvent::where('workflow_id', $workflow->id)

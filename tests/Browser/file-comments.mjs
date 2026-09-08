@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
  * PHPUnit covers the API and every access rule (tests/Feature/FileCommentTest).
  * What only a browser proves is the part the spec actually asks for: comment
  * without leaving the viewer, mention someone from a live suggestion list,
- * reply/edit/delete/resolve in place — and (§29) that none of it reloads the
+ * reply/edit/delete/resolve in place — and (section 29) that none of it reloads the
  * page or resets the viewer.
  *
  * The second half opens a SECOND browser context on another account to prove
@@ -244,7 +244,7 @@ try {
   const activity = await page.textContent('.tma-portal-viewer__panel-body');
   check(/comment/i.test(activity), 'the Comments activity filter shows the comment events');
 
-  step(11, '§29 — the draft survives closing and reopening comments');
+  step(11, 'section 29 — the draft survives closing and reopening comments');
   // Ensure the floating comments column is open (activity opened the details panel).
   if (await page.$eval('[data-lb-comments-panel]', (e) => e.hidden)) {
     await page.click('[data-lb-act="comments"]');

@@ -3,7 +3,7 @@
 namespace App\Support\Cip;
 
 /**
- * The status vocabulary of one document slot (§12).
+ * The status vocabulary of one document slot (section 12).
  *
  * This is not a smaller copy of {@see Status}. An application's status says
  * where the whole file has reached; a slot's says whether this one piece of

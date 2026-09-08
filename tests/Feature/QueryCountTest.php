@@ -216,7 +216,7 @@ class QueryCountTest extends TestCase
      * every primed map is sparse, holding only the rows that HAVE a share, a
      * colour preference, a CIP slot. `$map[$id] ?? <lazy lookup>` read a
      * missing key as "not primed" rather than "primed, and this row has none",
-     * so the fallback fired on nearly every row; the §17 package check
+     * so the fallback fired on nearly every row; the section 17 package check
      * lazy-loaded a CIP slot five more times per row on top. Fifty files cost
      * 364 queries and 104 seconds, and the folder with eleven thousand clients
      * in it never returned at all.

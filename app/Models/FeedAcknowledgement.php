@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One person confirming they have read an announcement (§12). The row is the
+ * One person confirming they have read an announcement (section 12). The row is the
  * record — acknowledgements are never withdrawn, only made.
  */
 #[Fillable(['post_id', 'user_id', 'acknowledged_at'])]

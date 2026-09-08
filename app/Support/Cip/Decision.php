@@ -12,7 +12,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Recording the Unit's decision (§21), the Decision date, Granted or Denied,
+ * Recording the Unit's decision (section 21), the Decision date, Granted or Denied,
  * and the automatic move to that terminal status.
  *
  * The generic status endpoint refuses GRANTED and DENIED on purpose: both are

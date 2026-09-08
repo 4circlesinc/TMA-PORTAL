@@ -53,7 +53,7 @@ curl -s http://localhost:9222/json     # page targets and their webSocketDebugge
 ## Push
 
 Push is built on both sides and off until Firebase is configured (see
-`docs/android-app-prompt.md` §13). Drop the console's `google-services.json`
+`docs/android-app-prompt.md` section 13). Drop the console's `google-services.json`
 into `android/app/` (gitignored) — the build reads the four values from it, no
 Google services plugin — or put them in a gitignored `android/firebase.properties`:
 

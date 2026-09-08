@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Real actions across the portal must raise the right notifications and audit
- * entries (§13). These drive the actual HTTP endpoints so the controller wiring
+ * entries (section 13). These drive the actual HTTP endpoints so the controller wiring
  * — not just the services — is exercised.
  */
 class NotificationSourcesTest extends TestCase

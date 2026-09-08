@@ -146,7 +146,7 @@
       });
     },
 
-    /* ── Client-call recording (§ CallRecordingController) ──
+    /* ── Client-call recording (see CallRecordingController) ──
      * Start is a question, not an order: the server alone decides whether
      * this call records (a staff member talking to a client). Both sides ask
      * at connect; only the eligible one gets a recording id back. */

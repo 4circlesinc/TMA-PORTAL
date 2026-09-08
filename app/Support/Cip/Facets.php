@@ -9,7 +9,7 @@ use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * The values §8's filter menu offers, and how many rows sit behind each one.
+ * The values section 8's filter menu offers, and how many rows sit behind each one.
  *
  * Sibling to {@see Buckets}, and built on the same promise: the number beside
  * a value and the table that value opens are measured by one definition, so
@@ -74,7 +74,7 @@ class Facets
      *
      * WHO COUNTS AS HOLDING IT
      *
-     * Whoever is on the client, which is the one list §8's Assigned To column
+     * Whoever is on the client, which is the one list section 8's Assigned To column
      * draws and the profile's Assigned tab edits. The menu and the column used
      * to read different tables, and a facet that counts differently from the
      * cell beside it is the one thing this class exists to prevent.
@@ -284,7 +284,7 @@ class Facets
     /**
      * The scoped listing joined to the live assignments on each client.
      *
-     * The same rows §8's Assigned To column draws, one list, shared with the
+     * The same rows section 8's Assigned To column draws, one list, shared with the
      * profile's Assigned tab, so a count here and the names in the cell
      * cannot come apart.
      *

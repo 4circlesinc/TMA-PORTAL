@@ -887,7 +887,7 @@ class Presenter
         return CipDocument::query()
             ->whereIn('file_id', $fileIds)
             // Package::locksFile reads the slot's application to decide
-            // whether §17 has frozen it; without this each slot loads its own.
+            // whether section 17 has frozen it; without this each slot loads its own.
             ->with('application')
             ->get()
             ->keyBy('file_id')
@@ -898,7 +898,7 @@ class Presenter
      * Hand the slot map to the models themselves.
      *
      * `Package::locksFile`, reached five times per row, once per ability the
-     * §17 freeze covers, reads `cipDocument` off the file and falls back to
+     * Section 17 freeze covers, reads `cipDocument` off the file and falls back to
      * a query when the relation is not loaded. It has no presenter to ask, so
      * priming our own map left it querying: 250 round trips to draw 50 rows,
      * 70 of the 104 seconds Recent took. Setting the relation is exactly what

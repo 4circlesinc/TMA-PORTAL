@@ -14,7 +14,7 @@ use Illuminate\Auth\Access\AuthorizationException;
  * member has their own lane here.
  *
  * The vocabulary is intentionally small for now; administrators may set
- * any listed value directly (see spec §7). A transition map can tighten
+ * any listed value directly (see spec section 7). A transition map can tighten
  * employee choices once the final status list is confirmed.
  */
 class PersonStatus

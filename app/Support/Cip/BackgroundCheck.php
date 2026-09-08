@@ -10,12 +10,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Recording acceptance for processing (§19), the Accepted for processing
+ * Recording acceptance for processing (section 19), the Accepted for processing
  * date, and the automatic move to Background check.
  *
  * The generic status endpoint refuses BACKGROUND CHECK on purpose: a bare
  * transition would leave `accepted_at` empty, and the 180-day delay clock
- * (§20) would have nothing to measure from. This is the door that writes the
+ * (section 20) would have nothing to measure from. This is the door that writes the
  * day and then asks {@see Engine} to move the row.
  *
  * The status change goes through the engine, not around it: permission is

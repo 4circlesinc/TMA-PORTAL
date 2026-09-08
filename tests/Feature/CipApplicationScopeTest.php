@@ -107,7 +107,7 @@ class CipApplicationScopeTest extends TestCase
         $this->assertCount(2, ApplicationScope::query($admin)->get(), 'the administrator reads the book');
 
         /*
-         * §10: the administrator assigns, so a file nobody has been given is
+         * Section 10: the administrator assigns, so a file nobody has been given is
          * the administrator's and nobody else's. An officer reading the whole
          * table would be reading applications that are not yet, and may never
          * be, their work — which is what this pins after the scope was opened

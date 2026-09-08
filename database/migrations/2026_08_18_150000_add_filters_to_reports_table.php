@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * CIP reports (§25) need to remember more than a type and a window.
+ * CIP reports (section 25) need to remember more than a type and a window.
  *
  * The existing columns already name the date range. Status, service provider,
  * investment type, applicant, assigned officer, submission date and decision

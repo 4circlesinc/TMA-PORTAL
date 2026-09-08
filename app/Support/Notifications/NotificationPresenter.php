@@ -14,7 +14,7 @@ use App\Support\DeviceName;
  * popups, and the Overview activity log all read the same fields.
  *
  * Actors are serialised as `{ id, name, avatar }`, the avatar is a real photo
- * URL or null. When it is null the front-end draws an initials tile (§3, §4);
+ * URL or null. When it is null the front-end draws an initials tile (section 3, section 4);
  * we never hand it a stock or broken image path.
  */
 final class NotificationPresenter
@@ -49,7 +49,7 @@ final class NotificationPresenter
 
     /**
      * @param  bool  $includeSensitive  whether the viewer may see IP, device,
-     *                                   and the before/after value diff (§9, §28)
+     *                                   and the before/after value diff (section 9, section 28)
      * @return array<string, mixed>
      */
     public static function activity(ActivityLog $log, bool $includeSensitive): array

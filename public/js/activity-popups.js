@@ -5,7 +5,7 @@
  * stores (so they agree with the right sidebar and the badges to the item),
  * render through the shared render layer, and are mutually exclusive: opening
  * one closes the other, clicking outside or pressing Escape closes it, and the
- * two never overlap (§2, §6, §7, §11, §12).
+ * two never overlap (section 2, section 6, section 7, section 11, section 12).
  *
  * Global: window.TMAActivityPopups
  */
@@ -193,7 +193,7 @@
       }
       var anyOpen = state.notifications || state.activities;
       host.hidden = !anyOpen;
-      // Only ever one panel, they must never overlap (§2).
+      // Only ever one panel, they must never overlap (section 2).
       host.classList.toggle('tma-dash__header-popups--single', anyOpen);
       host.classList.remove('tma-dash__header-popups--both');
       if (notificationsPanel) notificationsPanel.hidden = !state.notifications;
@@ -306,7 +306,7 @@
       } else {
         ACT().ensureLoaded({ limit: 25 });
         renderActivities();
-        // Opening the panel means the user has now seen the activity (§12).
+        // Opening the panel means the user has now seen the activity (section 12).
         ACT().markSeen();
       }
       syncBadges();

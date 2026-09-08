@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Feed analytics for channel owners and administrators (§19).
+ * Feed analytics for channel owners and administrators (section 19).
  *
  * Scoped like everything else: without `feed.analytics` a person sees only the
  * channels they administer, and the totals are computed over exactly that set

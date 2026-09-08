@@ -9,10 +9,10 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * A fresh portal notification for one recipient (§24). It rides the recipient's
+ * A fresh portal notification for one recipient (section 24). It rides the recipient's
  * own private channel — already authorised in routes/channels.php — so the
  * bell badge, the header popup, and the right sidebar can update live without
- * refetching (§25). It carries the absolute unread count alongside the item so
+ * refetching (section 25). It carries the absolute unread count alongside the item so
  * a reconnecting socket that replays or drops the event still lands on the
  * right number.
  */

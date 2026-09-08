@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 /**
- * One line on an application's messaging centre (§24).
+ * One line on an application's messaging centre (section 24).
  *
  * Internal notes stay with staff. Provider messages are the side-channel
  * the email thread used to be. History is the application record: there is

@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The conversation beside one checklist row (§12).
+ * The conversation beside one checklist row (section 12).
  *
  * A separate table from file_comments rather than a column added to it: a
  * thread here is about the *requirement* — "this bio page expires in March,

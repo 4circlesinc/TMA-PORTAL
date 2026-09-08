@@ -10,7 +10,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Something changed on an application's messaging centre (§24).
+ * Something changed on an application's messaging centre (section 24).
  *
  * Signal, not payload: channel members have different visibility (staff see
  * internal notes; the provider side does not), so the event must never carry

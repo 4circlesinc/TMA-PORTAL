@@ -19,7 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Who is working an application (§10), and who could be.
+ * Who is working an application (section 10), and who could be.
  *
  * Sibling to {@see ClientAssignmentController}: the client hub has done this
  * shape for clients since the beginning, and the difference here is the
@@ -74,10 +74,10 @@ class CipAssignmentController extends Controller
 
         /*
          * Written to the CLIENT's assignment list, which is what the Assigned
-         * tab shows and what §8's column draws, one record, so somebody put
+         * tab shows and what section 8's column draws, one record, so somebody put
          * on here appears there and vice versa.
          *
-         * The CIP assignment is written too, because §10 hangs off it: the
+         * The CIP assignment is written too, because section 10 hangs off it: the
          * file being assigned is what moves it into review, and the reviewer
          * verbs are gated on holding it. The client row is the one anybody
          * looks at; this is the one the workflow reads.
@@ -220,7 +220,7 @@ class CipAssignmentController extends Controller
      * The application's own assignments answer only where there is no client
      * record to share with, see the matching note in
      * {@see CipApplicationController}. Kept in
-     * step with §8's column on purpose: the picker and the cell it opens from
+     * step with section 8's column on purpose: the picker and the cell it opens from
      * must never name different people.
      *
      * @return list<array<string, mixed>>
@@ -273,7 +273,7 @@ class CipAssignmentController extends Controller
             /*
              * Only somebody who may actually hand the file over is shown the
              * firm's officers. The provider side may see who has their
-             * application. §8's table tells them that already, but reading
+             * application. Section 8's table tells them that already, but reading
              * off every officer who could have had it is not theirs.
              */
             'assignable' => $canAssign

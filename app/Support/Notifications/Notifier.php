@@ -14,15 +14,15 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
- * The single entry point for raising a portal notification (§13, §23).
+ * The single entry point for raising a portal notification (section 13, section 23).
  *
  * Callers describe *what happened*; the Notifier fills in everything derivable
  * from the type registry (module, level, icon, priority, action label),
- * enforces the recipient's preferences (§21) and privacy rules, and collapses
+ * enforces the recipient's preferences (section 21) and privacy rules, and collapses
  * repeats via a dedupe key. It never throws into the caller's flow, a failed
- * notification must not fail the action that triggered it (§27).
+ * notification must not fail the action that triggered it (section 27).
  *
- * Real-time fan-out (§24) is layered on in Phase 10; this class stays the one
+ * Real-time fan-out (section 24) is layered on in Phase 10; this class stays the one
  * place a notification is born, so that hook has a single home.
  */
 final class Notifier
@@ -98,7 +98,7 @@ final class Notifier
 
     /**
      * Fan a notification out to every approved administrator, the recipient
-     * set for approval requests, security alerts, and failed system jobs (§16).
+     * set for approval requests, security alerts, and failed system jobs (section 16).
      *
      * @param  array<string, mixed>  $attrs
      * @return array<int, Notification>
@@ -127,14 +127,14 @@ final class Notifier
 
         $actorId = self::idOf($attrs['actor'] ?? null);
 
-        // Never tell someone about their own action (§13). System notifications
+        // Never tell someone about their own action (section 13). System notifications
         // (null actor) about the recipient, "your export is ready", still pass.
         if ($actorId !== null && $actorId === $recipient->id) {
             return null;
         }
 
         // Respect the recipient's preferences, except for alerts that can't be
-        // silenced (§21).
+        // silenced (section 21).
         if (! NotificationPreferences::portalEnabled($recipient, $type)) {
             return null;
         }
@@ -143,7 +143,7 @@ final class Notifier
         $dedupeKey = $attrs['dedupe_key'] ?? null;
 
         // Collapse repeats: a matching, still-unread row inside the window is
-        // refreshed instead of a second row being created (§23).
+        // refreshed instead of a second row being created (section 23).
         if (is_string($dedupeKey) && $dedupeKey !== '') {
             $existing = self::findDuplicate($recipient, $dedupeKey, (int) ($attrs['dedupe_minutes'] ?? self::DEFAULT_DEDUPE_MINUTES));
             if ($existing) {
@@ -231,7 +231,7 @@ final class Notifier
     }
 
     /**
-     * Push the notification to the recipient's open sessions (§24). Best-effort:
+     * Push the notification to the recipient's open sessions (section 24). Best-effort:
      * a broadcast failure (Reverb down, no driver) must never fail the caller.
      */
     private static function broadcast(Notification $notification): void

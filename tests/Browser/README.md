@@ -178,7 +178,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   Note that `client-referrals.mjs` and `clients.mjs` want the *opposite* — a
   near-empty directory. Run them against a fresh database, or the clients they
   create land on page 300 of the big one and every assertion reads `undefined`.
-- **`cip-intake.mjs`** — the CIP application form (§2–§6). PHPUnit pins the
+- **`cip-intake.mjs`** — the CIP application form (section 2–section 6). PHPUnit pins the
   endpoint; this pins that the form is wired to it: one page rather than steps,
   a missing answer named before the request is made, the region appearing from
   the country of residence, Other revealing its free-text field, the sponsor
@@ -196,7 +196,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   leaving a hole in the positional field paths.
 
   Finally it reads the POST response back: the photo became the applicant's
-  profile picture, §2's three uploads answered their document slots, the
+  profile picture, section 2's three uploads answered their document slots, the
   sponsor was filed in the same save, and the server numbered the dependents
   the same way the form drew them.
 
@@ -225,7 +225,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   It files one application carrying a main applicant, a sponsor, three
   qualified dependants and a spouse, then reads the response for all of it: the
   minted number, the draft status, a family size of six, both photos having
-  become profile pictures, §2's three uploads having answered the applicant's
+  become profile pictures, section 2's three uploads having answered the applicant's
   slots, the sponsor owing only the birth certificate that was deliberately
   skipped, and every dependant holding a checklist from the first save. It
   fetches the filed passport photo over HTTP to prove the archival copy serves.
@@ -240,7 +240,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-application-full.mjs
   ```
-- **`cip-milestone-dates.mjs`** — §4d's Timeline card, and correcting a day on
+- **`cip-milestone-dates.mjs`** — section 4d's Timeline card, and correcting a day on
   it. `CipMilestoneTest` pins the endpoint and its refusals; what only a browser
   can check is that the card is the way in and that the corrected day lands on
   the screen, not just in the database.
@@ -413,7 +413,7 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8901 node tests/Browser/owner-column.mjs
   ```
 - **`feed.mjs`** — the Feed module. PHPUnit covers the API
-  (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
+  (`tests/Feature/FeedTest.php`); what only a browser can check is section 22 — that
   posting, commenting, reacting, voting, bookmarking and pinning all *patch*
   the page instead of reloading it. So it plants a sentinel on `window` at the
   start and asserts it is still there at the end: a single navigation anywhere

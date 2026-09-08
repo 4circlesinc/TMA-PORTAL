@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * The provider side asking for an appeal.
  *
- * A request is not the appeal. §22 keeps the lifecycle in staff hands — a
+ * A request is not the appeal. Section 22 keeps the lifecycle in staff hands — a
  * service provider may create, edit and upload, but must not move a file
  * through it — so the button on their side records that they asked and tells
  * the firm, and an officer lodges it. Same split as Confirm submission, where

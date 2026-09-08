@@ -24,7 +24,7 @@ use Illuminate\Support\Str;
  *
  * Driven by Graph's delta feed, never by re-listing the library. The first run
  * walks everything; every run after that asks only "what changed since the
- * cursor I gave you". §1 is explicit that this must not repeatedly download and
+ * cursor I gave you". Section 1 is explicit that this must not repeatedly download and
  * compare the whole library, and on a real library it would be unusable.
  *
  * Four properties this is built to hold:
@@ -33,7 +33,7 @@ use Illuminate\Support\Str;
  *    by `graph_item_id` before anything is created. The unique index on
  *    (connection, graph_item_id) makes that a database guarantee, not a hope.
  *  - **One bad item never stops the sync.** Each item is processed in its own
- *    try/catch; a failure marks that row and the walk continues (§26).
+ *    try/catch; a failure marks that row and the walk continues (section 26).
  *  - **Renames are not new versions.** eTag changes on any edit, cTag only on
  *    content. Comparing cTag is what stops a rename creating a version.
  *  - **Nothing is destroyed.** A delete in SharePoint soft-deletes in the
@@ -249,7 +249,7 @@ class Synchroniser
                         try {
                             self::apply($connection, $item, $stats);
                         } catch (\Throwable $e) {
-                            // §26: record the failure against the item and keep
+                            // Section 26: record the failure against the item and keep
                             // going. One unreadable file must not stall a library.
                             $stats['failed']++;
                             self::markFailed($connection, $item, $e->getMessage());
@@ -360,7 +360,7 @@ class Synchroniser
      *
      * Only the folders delta reported as changed are examined, a delete or a
      * restore always modifies the parent. The library is never re-walked
-     * wholesale, which §1 forbids.
+     * wholesale, which section 1 forbids.
      */
     private static function reconcileDeletions(SharePointConnection $connection, array $folderGraphIds, array &$stats): void
     {
@@ -916,7 +916,7 @@ class Synchroniser
             'size' => $item['size'] ?? null,
             'graph_modified_at' => isset($item['lastModifiedDateTime']) ? Carbon::parse($item['lastModifiedDateTime']) : null,
             'graph_modified_by' => $item['lastModifiedBy']['user']['displayName'] ?? null,
-            // A successful pass clears an earlier failure. §26 says stale
+            // A successful pass clears an earlier failure. Section 26 says stale
             // failed statuses must not linger after things recover.
             'sync_status' => SharePointItem::SYNCED,
             'last_error' => null,

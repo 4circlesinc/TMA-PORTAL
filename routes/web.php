@@ -244,7 +244,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
     Route::get('/me/sync-status', [MeSyncStatusController::class, 'show'])->name('me.sync-status');
-    // Native apps' push tokens (docs/android-app-prompt.md §13).
+    // Native apps' push tokens (docs/android-app-prompt.md section 13).
     Route::post('/me/devices', [DeviceTokenController::class, 'store'])->name('me.devices.store');
     Route::delete('/me/devices/{token}', [DeviceTokenController::class, 'destroy'])->name('me.devices.destroy');
     Route::post('/me/onedrive/pause', [MeOneDriveController::class, 'pause'])->name('me.onedrive.pause');
@@ -408,7 +408,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/post-approval', [CipApplicationController::class, 'enterPostApproval'])
             ->name('applications.post-approval');
         /*
-         * §9: the buckets a reader opens their day on, counted.
+         * Section 9: the buckets a reader opens their day on, counted.
          *
          * Deliberately uncached — see App\Support\Cip\Buckets. A work queue
          * that lags a status change by five minutes reads as broken.
@@ -416,7 +416,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/dashboard', CipDashboardController::class)->name('dashboard');
 
         /*
-         * §6: the application moves.
+         * Section 6: the application moves.
          *
          * One endpoint for every edge, because the lifecycle is one machine —
          * Engine refuses an edge that is not in its map and an actor without
@@ -438,7 +438,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/submit', [CipTransitionController::class, 'submit'])
             ->name('applications.submit-draft');
         /*
-         * §15: the service provider confirms, and the original package freezes.
+         * Section 15: the service provider confirms, and the original package freezes.
          *
          * Not a status change — Ready to submit is reached automatically —
          * so it cannot ride the generic status route. Staff record the CIP
@@ -447,21 +447,21 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/confirm', [CipTransitionController::class, 'confirm'])
             ->name('applications.confirm');
         /*
-         * §21: the Unit decided. Its own verb because it writes `decision`
+         * Section 21: the Unit decided. Its own verb because it writes `decision`
          * and `decided_at` — a bare status change would leave both null on a
          * terminal file, and there is no edge back to fill them.
          */
         Route::post('/applications/{uuid}/decision', [CipTransitionController::class, 'decide'])
             ->name('applications.decision');
         /*
-         * §18: the Unit asked for more. Its own verb because it writes
+         * Section 18: the Unit asked for more. Its own verb because it writes
          * `query_received_at` and then moves the file to Non-compliant — a
          * bare status change would leave the date empty.
          */
         Route::post('/applications/{uuid}/query', [CipTransitionController::class, 'query'])
             ->name('applications.query');
         /*
-         * §19: the Unit accepted the file. Its own verb because it writes
+         * Section 19: the Unit accepted the file. Its own verb because it writes
          * `accepted_at` and then moves the file to Background check — a
          * bare status change would leave the delay clock with no start.
          */
@@ -488,7 +488,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/appeal-submitted', [CipTransitionController::class, 'appealSubmitted'])
             ->name('applications.appeal-submitted');
         /*
-         * Brief §6–§12: a post-approval date, then the status that date
+         * Brief section 6–section 12: a post-approval date, then the status that date
          * moves the file to. The generic status route refuses those targets
          * so a bare move cannot leave the day empty.
          */
@@ -496,14 +496,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.stage');
 
         /*
-         * §10: who is working on this application.
+         * Section 10: who is working on this application.
          *
          * Assignment is what starts a review — the first one drives NEW into
          * Review application — so it is a write of its own rather than a
          * transition somebody drives by hand.
          */
         /*
-         * §4d: the Activity tab — one application's history, as sentences.
+         * Section 4d: the Activity tab — one application's history, as sentences.
          *
          * Its own segment rather than a query on the application, because it
          * is a different read with a different size: a profile wants the
@@ -520,7 +520,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.assignments.destroy');
 
         /*
-         * §12: judging one document.
+         * Section 12: judging one document.
          *
          * Addressed by the document, because the brief is explicit that a
          * reviewer works the checklist where it is drawn and never by going to
@@ -539,7 +539,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('documents.file');
 
         /*
-         * §11: the document requirements the checklists are built from.
+         * Section 11: the document requirements the checklists are built from.
          *
          * Readable by anyone who may reach the module — the checklist needs
          * the labels — and changeable only by an administrator, because one
@@ -557,7 +557,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('requirements.restore');
 
         /*
-         * §23: Granted and Denied letters, one pair per investment type.
+         * Section 23: Granted and Denied letters, one pair per investment type.
          *
          * Readable by anyone who may reach the module; changeable only with
          * cip.configure, because one edit is every future decision letter.
@@ -568,7 +568,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('letters.restore');
 
         /*
-         * §22: the CIP Distribution Group. Membership is edited on People →
+         * Section 22: the CIP Distribution Group. Membership is edited on People →
          * Distribution groups; extra mailboxes that are not portal accounts
          * are kept here.
          */
@@ -578,7 +578,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('distribution.update');
 
         /*
-         * §13: the conversation on one checklist document.
+         * Section 13: the conversation on one checklist document.
          *
          * Addressed by the document, not by the file in it — the slot outlives
          * its file, and an empty requirement is the one most worth talking
@@ -595,7 +595,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/documents/{uuid}/comments/{commentUuid}/resolve', [CipDocumentCommentController::class, 'resolve'])
             ->name('documents.comments.resolve');
 
-        // §7/§16: the Unit has it — record the date and the CIP number, which
+        // Section 7/section 16: the Unit has it — record the date and the CIP number, which
         // is also what switches every surface off the internal number.
         Route::post('/applications/{uuid}/submission', [CipApplicationController::class, 'submit'])
             ->name('applications.submit');
@@ -603,7 +603,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/applications/{uuid}/cip-number', [CipApplicationController::class, 'correctNumber'])
             ->name('applications.cip-number');
         /*
-         * §4d: a day on the Timeline card recorded wrong, corrected in place.
+         * Section 4d: a day on the Timeline card recorded wrong, corrected in place.
          *
          * A correction, not a transition, so it does not belong on the status
          * routes above: the file has already been where the date says, and

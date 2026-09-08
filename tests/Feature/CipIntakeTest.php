@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * Intake (§2 Application Creation, §3 Investment Types).
+ * Intake (section 2 Application Creation, section 3 Investment Types).
  *
  * "All fields are required" is the brief's own sentence, so the interesting
  * cases are the refusals: a half-filled application must not reach the
@@ -140,7 +140,7 @@ class CipIntakeTest extends TestCase
         ], $overrides);
     }
 
-    /** The whole sponsor block §4 asks for when Sponsored is Yes. */
+    /** The whole sponsor block section 4 asks for when Sponsored is Yes. */
     private function sponsor(array $overrides = []): array
     {
         return ['sponsor' => array_merge([
@@ -173,7 +173,7 @@ class CipIntakeTest extends TestCase
             ->assertCreated()
             ->json('application');
 
-        // §7: numbered the moment it exists, and shown as the internal number
+        // Section 7: numbered the moment it exists, and shown as the internal number
         // until a CIP number arrives.
         $this->assertSame('GAL'.now()->format('y').'-00001', $body['internalNumber']);
         $this->assertSame($body['internalNumber'], $body['number']);
@@ -215,7 +215,7 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
-        // §2: "All fields are required."
+        // Section 2: "All fields are required."
         foreach ([
             'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
             'countryOfResidence', 'occupation', 'passportNumber', 'passportPhoto',
@@ -238,7 +238,7 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
 
-        // §3: choosing Other reveals a required "Specify Investment Type".
+        // Section 3: choosing Other reveals a required "Specify Investment Type".
         $this->file($staff,
             $this->payload($provider, [
                 'investmentType' => InvestmentType::OTHER,
@@ -298,7 +298,7 @@ class CipIntakeTest extends TestCase
         $this->assertSame(['GAL Provider'], collect($form['providers'])->pluck('name')->all());
         $this->assertTrue($form['providerFixed']);
 
-        // §1: Service Providers create applications.
+        // Section 1: Service Providers create applications.
         $this->file($contact,
             $this->payload($mine))
             ->assertCreated();
@@ -538,7 +538,7 @@ class CipIntakeTest extends TestCase
             $this->sponsor(),
         )))->assertCreated()->json('application');
 
-        // §4: the sponsor is not a follow-up step somebody can skip.
+        // Section 4: the sponsor is not a follow-up step somebody can skip.
         $this->assertSame('Maryam Haddad', $body['sponsor']['name']);
         $this->assertSame('Sponsor', $body['sponsor']['label']);
         $this->assertSame(2, $body['familySize']);
@@ -637,7 +637,7 @@ class CipIntakeTest extends TestCase
             ],
         ]))->assertCreated()->json('application');
 
-        // §5's worked example: youngest first. Lina (2016) is QD1.
+        // Section 5's worked example: youngest first. Lina (2016) is QD1.
         $numbered = collect($body['dependents'])
             ->filter(fn ($d) => $d['relationship'] === CipPerson::RELATIONSHIP_QUALIFIED)
             ->sortBy('dependentOrdinal')
@@ -696,7 +696,7 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * §5's worked example, run verbatim.
+     * Section 5's worked example, run verbatim.
      *
      * The brief prints a table — Child A aged 8, Child B 12, Child C 18,
      * classified 1, 2, 3 — under the rule "youngest dependent receives the
@@ -795,7 +795,7 @@ class CipIntakeTest extends TestCase
         $this->assertSame('John Smith', $client->name);
         $this->assertSame($company->id, $client->referred_by_company_id);
 
-        // §6's tree, hanging straight off the client's own folder rather than
+        // Section 6's tree, hanging straight off the client's own folder rather than
         // loose in the library — where the firm-wide downloader default would
         // reach it — and with no numbered folder in between: opening a client
         // shows the people.
@@ -823,7 +823,7 @@ class CipIntakeTest extends TestCase
         $body = $this->file($staff, $this->payload($provider))
             ->assertCreated()->json('application');
 
-        // §2's three uploads are answers to requirements from the first save,
+        // Section 2's three uploads are answers to requirements from the first save,
         // not loose files Phase 3 would have to find and re-home.
         $documents = collect($body['applicant']['documents']);
         $intake = [

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Publish one scheduled post when its time arrives (§6).
+ * Publish one scheduled post when its time arrives (section 6).
  *
  * Claimed by id rather than by model so a job that has waited in the queue
  * re-reads the post as it stands now: an author who cancelled or rescheduled

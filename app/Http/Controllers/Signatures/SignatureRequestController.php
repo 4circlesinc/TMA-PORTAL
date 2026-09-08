@@ -358,7 +358,7 @@ class SignatureRequestController extends Controller
     /**
      * Record that a signature request went out, and notify any recipients who
      * are portal users so their signature shows up as an action-required item
-     * in the bell (§13, §15). External recipients still get their email link.
+     * in the bell (section 13, section 15). External recipients still get their email link.
      */
     private function announceSent(Request $request, SignatureRequest $signatureRequest): void
     {

@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
  * where the faults are invisible. They only appear at production scale:
  *
  *  1. The presenter's primed maps are sparse, so "primed, and this row has
- *     none" read as "not primed" and every row re-queried; the §17 package
+ *     none" read as "not primed" and every row re-queried; the section 17 package
  *     check lazy-loaded a CIP slot five times per row on top. Fifty rows of
  *     Recent cost 364 queries — 104s against the remote database, past any
  *     request timeout, so the Dashboard's card sat empty for ever.

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * The passport-sized photo (§2), and the profile picture that comes with it.
+ * The passport-sized photo (section 2), and the profile picture that comes with it.
  *
  * A passport photo is 2×2 inches, square, and printed, so the rule here is
  * square at 600 pixels or better, which is two inches at 300dpi. Anything

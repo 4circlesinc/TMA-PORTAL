@@ -164,7 +164,7 @@ Latest stable Android Studio, Android SDK Platform 37.0, Build-Tools 37.0.0, And
 
 ## 4. Architecture as built (6 Sep 2026): the desktop shell's twin
 
-**This section replaces the original §4–§11, which described a native-Compose
+**This section replaces the original section 4–section 11, which described a native-Compose
 recreation of every screen. That approach was built through the CIP hub and
 rejected: it was "way different" from the web's responsive layout, which is
 the layout the firm wants on the phone. The app is now what the Mac app is.**
@@ -266,7 +266,7 @@ From `desktop/README.md`, `main.js`, `host-bridge.js`, `badge.js`, `notification
 | OS notifications from the page's `Notification` | done |
 | Downloads, uploads, camera/mic permissions, deep links, back | done |
 | Incoming-call notification (Accept/Decline → `TMAMessagingCalls.accept()/decline()`), foreground service during calls | done (CallStyle notification when the app is not in front; the page rings itself) |
-| Push (§13 backend addition, FCM token registration) | to do |
+| Push (section 13 backend addition, FCM token registration) | to do |
 | `assetlinks.json`, release signing, Play internal track | to do |
 
 ## 16. Field notes

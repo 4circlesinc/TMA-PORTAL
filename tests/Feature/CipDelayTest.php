@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §20 — 180 days after Accepted for processing, with no decision: Delayed.
+ * Section 20 — 180 days after Accepted for processing, with no decision: Delayed.
  *
  * The daily command is the door. It flips the status once, tells the three
  * named classes, and a second tick does not re-notify.

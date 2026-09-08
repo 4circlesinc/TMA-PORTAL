@@ -1184,7 +1184,7 @@ class MessagingController extends Controller
         return response()->json(['tabCounts' => TabCounts::for($request->user())]);
     }
 
-    /** Opening a tab is the act of seeing it (§ TabCounts). */
+    /** Opening a tab is the act of seeing it (see TabCounts). */
     public function markTabSeen(Request $request): JsonResponse
     {
         $data = $request->validate([

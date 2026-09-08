@@ -47,7 +47,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * "continuing" a previous row could only ever splice two incompatible
  * streams; a redial after a crash simply records again from zero.
  *
- * Consent is enforced by the client (§ messaging-calls.js): the recording
+ * Consent is enforced by the client (see messaging-calls.js): the recording
  * banner and the `state` signal go out before the recorder starts. This
  * controller records WHO was told by storing the participant list.
  */
@@ -288,7 +288,7 @@ class CallRecordingController extends Controller
 
         // Day boundaries in the READER's zone, the table renders dates on
         // their clock, and a filter that disagreed with the column it filters
-        // would look simply broken (§ UserTime).
+        // would look simply broken (see UserTime).
         $zone = UserTime::zone($user);
         foreach (['from' => '>=', 'to' => '<='] as $param => $op) {
             $raw = trim((string) $request->query($param, ''));
@@ -500,7 +500,7 @@ class CallRecordingController extends Controller
             'size' => (int) $r->size,
             'durationMs' => (int) $r->duration_ms,
             // ISO instants; the reading browser renders them in its own zone
-            // (§ mail-thread rule: never ship pre-formatted clock times).
+            // (see mail-thread rule: never ship pre-formatted clock times).
             'startedAt' => $r->started_at?->toIso8601String(),
             'endedAt' => $r->ended_at?->toIso8601String(),
             'conversationId' => $r->conversation?->uuid,

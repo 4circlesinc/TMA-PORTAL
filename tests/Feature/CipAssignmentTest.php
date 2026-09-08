@@ -25,8 +25,8 @@ use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * §10 — the administrator hands an application to an officer, and that is what
- * starts the review. §26 — they may hand it to somebody else at any time,
+ * Section 10 — the administrator hands an application to an officer, and that is what
+ * starts the review. Section 26 — they may hand it to somebody else at any time,
  * which must not drag a file that has moved on back to the beginning.
  *
  * The invariant behind all of it: cip_application_assignments is the
@@ -73,7 +73,7 @@ class CipAssignmentTest extends TestCase
         return $application;
     }
 
-    /** An application with a client, which is what §8's column actually reads. */
+    /** An application with a client, which is what section 8's column actually reads. */
     private function filed(User $creator): CipApplication
     {
         $application = $this->application($creator);
@@ -107,7 +107,7 @@ class CipAssignmentTest extends TestCase
             ->assertJsonPath('assignments.0.role', 'reviewing_officer');
 
         $fresh = $application->fresh();
-        $this->assertSame(Status::REVIEW_APPLICATION, $fresh->status, '§10: assignment is what starts the review');
+        $this->assertSame(Status::REVIEW_APPLICATION, $fresh->status, 'section 10: assignment is what starts the review');
         $this->assertSame($officer->id, $fresh->assigned_officer_id);
 
         $this->assertDatabaseHas('cip_application_assignments', [
@@ -147,7 +147,7 @@ class CipAssignmentTest extends TestCase
             ->assertJsonPath('assignments.0.userId', $sam->id);
 
         $fresh = $application->fresh();
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $fresh->status, '§26: a change of hands is not a reset');
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $fresh->status, 'section 26: a change of hands is not a reset');
         $this->assertSame($sam->id, $fresh->assigned_officer_id);
 
         // Rita's row is ended, not deleted — the file keeps everybody who held
@@ -224,7 +224,7 @@ class CipAssignmentTest extends TestCase
         $sam = $this->user(Role::REVIEWING_OFFICER, 'sam@example.com', 'Sam Reviewer');
         $application = $this->application($admin);
 
-        // §10 keeps assignment with the administrator. An officer HOLDING the
+        // Section 10 keeps assignment with the administrator. An officer HOLDING the
         // file still may not hand it on — they can see it, so the refusal is
         // a 403 about the verb, not a 404 about the file.
         Assignments::assign($application, $rita, $admin);
@@ -361,7 +361,7 @@ class CipAssignmentTest extends TestCase
         $this->assign($admin, $application, $officer)->assertCreated();
 
         /*
-         * §10 names the contents and §22 names the subject. These emails are
+         * Section 10 names the contents and section 22 names the subject. These emails are
          * filed, and a mailbox full of them is sorted by exactly the fields
          * the subject carries — so the format is pinned literally, not "some
          * subject mentioning the number".
@@ -411,7 +411,7 @@ class CipAssignmentTest extends TestCase
          * The picker writes the client assignment too (the Assigned tab and
          * the table are one list), and that path carries its own welcome
          * email. Left both on, one press arrived as two emails saying
-         * different things about the same fact. §22 fans the status notice
+         * different things about the same fact. Section 22 fans the status notice
          * to every named class; none of those copies is the client-assignment
          * welcome.
          */

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * A slot's requirement row, and where it has got to (§12).
+ * A slot's requirement row, and where it has got to (section 12).
  *
  * The slot keeps its `type` slug. That slug is what identifies the requirement
  * when there is no template row to point at — an application imported from the

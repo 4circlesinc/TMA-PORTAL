@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * The Reviewing Officer's verdicts on a checklist, and what the application
- * does about them (§14).
+ * does about them (section 14).
  *
  * Review is a per-document job. The officer reads one slot and either accepts
  * it or sends it back with a reason; {@see DocumentEngine} owns both of those
@@ -195,7 +195,7 @@ class Review
      *
      * The reason is not optional and cannot be made optional. "Update
      * required" on its own is a reviewer making the provider guess, and the
-     * guess costs a round trip of the turnaround time §14 is measured in, so
+     * guess costs a round trip of the turnaround time section 14 is measured in, so
      * the comment and the verdict are one transaction, and neither lands
      * without the other.
      *
@@ -309,7 +309,7 @@ class Review
         self::forgetTally($application);
 
         /*
-         * A plan rather than a single hop, because §14 and §15 are two
+         * A plan rather than a single hop, because section 14 and section 15 are two
          * sentences of one moment. After every required document has been
          * assessed the file always passes through Assessment feedback; then
          * either Updates required (and the firm is told) or Ready to submit
@@ -378,7 +378,7 @@ class Review
     }
 
     /**
-     * The checklist as numbers, for the dashboards §9 and phase 4c draw.
+     * The checklist as numbers, for the dashboards section 9 and phase 4c draw.
      *
      * Every status is present with a zero rather than only the ones in use: a
      * bar or a legend built from this must not lose a segment on the day
@@ -458,7 +458,7 @@ class Review
         }
 
         /*
-         * §14: after review of ALL documents.
+         * Section 14: after review of ALL documents.
          *
          * "Every" over an empty checklist is vacuously true, which is why the
          * count has to be positive as well as met. An application nobody has

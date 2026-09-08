@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * §8's filter menu: the values it offers, and how many rows sit behind each.
+ * Section 8's filter menu: the values it offers, and how many rows sit behind each.
  *
  * The promise under test is the one {@see Facets} inherits from
  * {@see Buckets} — the number beside a value and the table

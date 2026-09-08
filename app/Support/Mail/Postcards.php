@@ -619,9 +619,9 @@ class Postcards
     }
 
     /**
-     * §10's assignment notice: the file has been handed to this officer.
+     * Section 10's assignment notice: the file has been handed to this officer.
      *
-     * The subject is §22's compliance format, not prose, because these emails
+     * The subject is section 22's compliance format, not prose, because these emails
      * are filed, and a mailbox full of them is sorted and searched by exactly
      * those fields. It stays with the caller and is not editable copy.
      *
@@ -648,7 +648,7 @@ class Postcards
     }
 
     /**
-     * §14's notice to the provider side: documents have been sent back.
+     * Section 14's notice to the provider side: documents have been sent back.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      * @param  list<array{label:string, reason:?string}>  $sentBack
@@ -680,7 +680,7 @@ class Postcards
     }
 
     /**
-     * §15's notice to the provider side: the file is ready, confirm it.
+     * Section 15's notice to the provider side: the file is ready, confirm it.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -720,7 +720,7 @@ class Postcards
     }
 
     /**
-     * §18's notice to the provider side: the Unit has asked for more.
+     * Section 18's notice to the provider side: the Unit has asked for more.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -808,7 +808,7 @@ class Postcards
     }
 
     /**
-     * §19's notice: the Unit accepted the file and a background check is on.
+     * Section 19's notice: the Unit accepted the file and a background check is on.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -847,7 +847,7 @@ class Postcards
     }
 
     /**
-     * §20's notice: 180 days after acceptance, still no decision.
+     * Section 20's notice: 180 days after acceptance, still no decision.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
@@ -882,7 +882,7 @@ class Postcards
     }
 
     /**
-     * §21 / §23: the Unit decided. Subject stays §22's filing format.
+     * Section 21 / section 23: the Unit decided. Subject stays section 22's filing format.
      * Title and body come from the investment-type letter when one is given.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
@@ -934,7 +934,7 @@ class Postcards
     }
 
     /**
-     * A §22 status notice whose body is the move itself. New Application,
+     * A section 22 status notice whose body is the move itself. New Application,
      * Assessment Feedback, Pending Review. Background Check uses
      * {@see cipBackgroundCheck} so the accepted-for-processing date is named.
      *
@@ -945,7 +945,7 @@ class Postcards
         $subject ??= Notices::line($facts, $status);
         $label = Status::label($status);
 
-        // Each §22 stage is its own template on the Templates page; DRAFT
+        // Each section 22 stage is its own template on the Templates page; DRAFT
         // still files as NEW, and anything unmapped keeps the shared one.
         $key = 'cip-status-'.str_replace('_', '-', $status === Status::DRAFT ? Status::NEW : $status);
         if (! in_array($key, SystemEmails::keys(), true)) {

@@ -1,10 +1,10 @@
 /*
  * Client Call Recordings, the staff area for recordings of client calls.
  *
- * Portal-view-pattern module (§ cbi.js): registers with TMAPortalViews for
+ * Portal-view-pattern module (see cbi.js): registers with TMAPortalViews for
  * the SPA shell (/call-recordings). All data is live from
  * /portal/call-recordings, loading, empty and error states only, never mock
- * rows (§ the file-manager rule). Rendering is design-system components
+ * rows (see the file-manager rule). Rendering is design-system components
  * only: .tma-portal-head, the Users-table .tma-dash__toolbar, ui().table,
  * the documented pagination bar, ui().openModal.
  *

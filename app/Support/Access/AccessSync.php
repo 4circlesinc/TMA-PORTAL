@@ -88,7 +88,7 @@ final class AccessSync
              * `cip_applications.assigned_officer_id` is a copy of whoever holds
              * the file, and every screen reads the copy rather than the
              * assignments table. Ending the row without refreshing it left the
-             * §8 table and the officer's own work queue naming a suspended
+             * Section 8 table and the officer's own work queue naming a suspended
              * colleague, the file would have looked handled while nobody held
              * it.
              */

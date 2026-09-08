@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §11 — a direct upload link that fills exactly one checklist slot.
+ * Section 11 — a direct upload link that fills exactly one checklist slot.
  *
  * The tokenised flow already existed for folders. What is new is that a link
  * can be aimed at a REQUIREMENT, and that a second upload through it becomes
@@ -188,7 +188,7 @@ class CipDocumentRequestTest extends TestCase
 
         $this->send($link->token, 'first.pdf')->assertStatus(201);
 
-        // The reviewer sends it back — §12's update_required.
+        // The reviewer sends it back — section 12's update_required.
         \App\Support\Cip\DocumentEngine::apply(
             $slot->refresh(), DocumentStatus::UPDATE_REQUIRED, $staff, ['reason' => 'illegible'],
         );

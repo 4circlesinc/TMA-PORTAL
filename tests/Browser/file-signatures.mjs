@@ -137,7 +137,7 @@ try {
   check(/Dana Reed/.test(panel), 'the recipient is listed');
   check(/Signature/i.test(panel), 'it is labelled as a signature request');
 
-  step(6, 'The header badge reflects it (§20/§23)');
+  step(6, 'The header badge reflects it (section 20/section 23)');
   const sub = await page.textContent('.tma-portal-viewer__sub');
   check(/Awaiting signature/.test(sub), `header badge reads the status (“${sub.trim()}”)`);
 

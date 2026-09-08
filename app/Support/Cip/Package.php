@@ -12,9 +12,9 @@ use App\Support\Files\FileAccess;
 use App\Support\Files\FolderTree;
 
 /**
- * §17, what freezes when a package is confirmed, and what does not.
+ * Section 17, what freezes when a package is confirmed, and what does not.
  *
- * Confirm submission (§15) stamps `locked_at`. From that moment the original
+ * Confirm submission (section 15) stamps `locked_at`. From that moment the original
  * per-person folders. Main Applicant, Sponsor, Dependent N, and everything
  * inside them, are view-only for everyone, including administrators. The
  * Additional Documents drawer hanging off the same client stays writable:
@@ -489,7 +489,7 @@ class Package
      * The folder and its ancestors, self first.
      *
      * Reads FileAccess's chain cache rather than keeping a second one: the
-     * §17 check runs inside FileAccess::can, so by the time we are here that
+     * Section 17 check runs inside FileAccess::can, so by the time we are here that
      * chain has usually been fetched already, and when it has not, a listing
      * has warmed it for the whole page in one pass.
      *

@@ -10,8 +10,8 @@ use App\Models\CipDocumentRequirement;
  * have already been opened.
  *
  * COR slots appear when the file enters post-approval. NIC slots wait until
- * the COR received date has been recorded (brief §7). Passport slots wait
- * until the NIC received date (brief §9). A later pack must not be judged
+ * the COR received date has been recorded (brief section 7). Passport slots wait
+ * until the NIC received date (brief section 9). A later pack must not be judged
  * as part of the earlier one: leftover NIC blanks would otherwise block
  * Apply for COR, leftover passport blanks would block Apply for NIC, and a
  * confirmed COR tree must not freeze NIC or passport uploads.

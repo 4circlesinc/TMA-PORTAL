@@ -14,7 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * §26 — every administrator verb is reachable from an admin login, and the
+ * Section 26 — every administrator verb is reachable from an admin login, and the
  * ones that are administration stay closed to officers.
  *
  * The engines already live on Applications, Users, Reporting and CIP Console.

@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * §9 — the action-driven dashboards.
+ * Section 9 — the action-driven dashboards.
  *
  * Three things are being held to account here. Each role is offered exactly
  * the buckets the brief promises it and nobody else's; every count is measured
@@ -183,7 +183,7 @@ class CipBucketTest extends TestCase
             'New Applications', 'Review Applications', 'Assessment Feedback', 'Updates Required',
             'Ready to Submit', 'Pending Review', 'Non-compliant', 'Background Check', 'Delayed',
             'Approved', 'Post-Approval', 'Denied',
-        ], array_column($body['buckets'], 'label'), 'The order is §9’s, not a renderer’s choice.');
+        ], array_column($body['buckets'], 'label'), 'The order is section 9’s, not a renderer’s choice.');
     }
 
     public function test_the_reviewing_officer_dashboard_is_four_personal_queues(): void
@@ -518,7 +518,7 @@ class CipBucketTest extends TestCase
         $this->assertSame('danger', $tones['denied']);
 
         // And it is the status's own tone, not a second table kept beside it.
-        // Approved counts GRANTED under §9's word for it, so the bucket and
+        // Approved counts GRANTED under section 9's word for it, so the bucket and
         // every chip inside it are coloured by the one mapping.
         $this->assertSame(Status::tone(Status::GRANTED), $tones['approved']);
         $this->assertSame(Status::tone(Status::NON_COMPLIANT), $tones['non_compliant']);
@@ -622,7 +622,7 @@ class CipBucketTest extends TestCase
 
         Assignments::assign($application, $rita, $admin);
 
-        // §10: the assignment both hands the file over and starts the review,
+        // Section 10: the assignment both hands the file over and starts the review,
         // so one product action fills two of her buckets at once.
         $hers = $this->counts($rita);
         $this->assertSame(1, $hers['assigned_reviews']);

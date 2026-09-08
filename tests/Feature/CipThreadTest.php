@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §24 — the application messaging centre.
+ * Section 24 — the application messaging centre.
  *
  * A thread on the file, not a chat conversation. Internal notes never leave
  * staff. A provider message is one postcard per other-side mailbox, and the

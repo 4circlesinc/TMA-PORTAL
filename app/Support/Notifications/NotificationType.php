@@ -5,12 +5,12 @@ namespace App\Support\Notifications;
 use App\Models\Notification;
 
 /**
- * The registry of every notification type the portal can raise (§13–§15).
+ * The registry of every notification type the portal can raise (section 13–section 15).
  *
  * One place decides, per type: which module it belongs to, its semantic level
- * (§14, which drives the icon tone, never a bespoke colour), the fallback
- * system icon used when there is no human actor (§3), the default action label
- * (§15), the priority, and which user preference group can silence it (§21).
+ * (section 14, which drives the icon tone, never a bespoke colour), the fallback
+ * system icon used when there is no human actor (section 3), the default action label
+ * (section 15), the priority, and which user preference group can silence it (section 21).
  *
  * Icon names are Phosphor SVG basenames that exist in
  * public/images/icons/phosphor. Keep this list the source of truth: the
@@ -139,7 +139,7 @@ final class NotificationType
         'security.permission_changed' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'Key',            'priority' => 'high',   'pref' => 'security',  'action_label' => 'Review security activity'],
 
         // ── Feed ───────────────────────────────────────────────
-        // The internal communications feed (§8). These all sit in one
+        // The internal communications feed (section 8). These all sit in one
         // preference group, so someone who wants the Feed quiet silences it
         // once rather than type by type, except a mention, which is
         // addressed to them personally and rides the same 'At' icon the
@@ -170,7 +170,7 @@ final class NotificationType
     private const FALLBACK = ['module' => 'system', 'level' => Notification::LEVEL_INFO, 'icon' => 'Notification', 'priority' => 'normal', 'pref' => 'system', 'action_label' => null];
 
     /**
-     * The preference groups a user can toggle (§21). Security and approval
+     * The preference groups a user can toggle (section 21). Security and approval
      * groups are listed but the Notifier refuses to let them silence the
      * portal delivery of security/approval alerts.
      */
@@ -179,7 +179,7 @@ final class NotificationType
         'clients', 'groups', 'feed', 'approvals', 'security', 'system',
     ];
 
-    /** Groups whose portal notifications can never be fully switched off (§21). */
+    /** Groups whose portal notifications can never be fully switched off (section 21). */
     public const NON_SILENCEABLE = ['security', 'approvals'];
 
     public static function has(string $type): bool

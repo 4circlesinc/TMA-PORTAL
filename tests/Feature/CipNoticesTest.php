@@ -24,7 +24,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §22 — one subject format, four named classes, every status change.
+ * Section 22 — one subject format, four named classes, every status change.
  *
  * Chips still say Approved and Review Applications. Email subjects say
  * GRANTED and REVIEW APPLICATION. Engine is the only sender: a delay or a

@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Recording a Unit query (§18), the Query received date, and the automatic
+ * Recording a Unit query (section 18), the Query received date, and the automatic
  * move to Non-compliant.
  *
  * The generic status endpoint refuses NON-COMPLIANT on purpose: a bare
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  *
  * The status change goes through the engine, not around it: permission is
  * still `cip.compliance`, and the date is written before the row moves.
- * Response documents land in Additional Documents (§17), which stays writable
+ * Response documents land in Additional Documents (section 17), which stays writable
  * after the original package is frozen.
  */
 class NonCompliance

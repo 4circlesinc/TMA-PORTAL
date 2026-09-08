@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Recordings of calls between staff and clients (§ CallRecordingController).
+ * Recordings of calls between staff and clients (see CallRecordingController).
  *
  * One row per recorded call. The row is created the moment recording is
  * arranged (status `recording`), fed by sequenced chunk uploads while the

@@ -10,11 +10,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 
 /**
- * The single entry point for recording an audit-trail entry (§22).
+ * The single entry point for recording an audit-trail entry (section 22).
  *
  * Callers describe an action; this fills in module/action from the type when
  * omitted, captures IP and user agent from the current request (when there is
- * one), and, critically, redacts secrets before anything is persisted (§22:
+ * one), and, critically, redacts secrets before anything is persisted (section 22:
  * passwords, tokens, and file contents must never reach the log). Like the
  * Notifier, it swallows its own failures so auditing never breaks the action.
  */

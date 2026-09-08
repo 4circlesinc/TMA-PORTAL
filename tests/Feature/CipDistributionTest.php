@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §22 — CIP Console → Distribution group.
+ * Section 22 — CIP Console → Distribution group.
  *
  * Membership stays on People → Distribution groups. Extra mailboxes that
  * are not portal accounts are kept here so compliance mail is not env-only.

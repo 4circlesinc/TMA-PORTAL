@@ -18,7 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Search across the Feed, and the composer's @/# autocomplete (§14, §16, §17).
+ * Search across the Feed, and the composer's @/# autocomplete (section 14, section 16, section 17).
  *
  * Every result set is constrained to the channels the caller may read, which
  * is resolved once as a list of ids rather than re-derived per row. Without
@@ -222,7 +222,7 @@ class FeedSearchController extends Controller
     }
 
     /**
-     * The composer's @ autocomplete: people first, then groups (§16).
+     * The composer's @ autocomplete: people first, then groups (section 16).
      *
      * Returns the same token shape the sanitiser expects on the way back in —
      * "user:{id}" or "group:{uuid}", so the client never has to construct it.
@@ -287,7 +287,7 @@ class FeedSearchController extends Controller
         ]);
     }
 
-    /** The # autocomplete: tags already in use, most used first (§17). */
+    /** The # autocomplete: tags already in use, most used first (section 17). */
     public function hashtagSuggestions(Request $request): JsonResponse
     {
         Role::authorize($request->user(), 'feed.view');

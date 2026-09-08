@@ -1,5 +1,5 @@
 /*
- * TMA - Overview → Activity tab: the complete activity log (§8, §9, §10).
+ * TMA - Overview → Activity tab: the complete activity log (section 8, section 9, section 10).
  *
  * Server-backed audit trail. Administrators see the whole firm; everyone else
  * sees only their own actions, the server enforces both (ActivityController).
@@ -102,7 +102,7 @@
       }).catch(function () {});
     }
 
-    // Mark the log seen so the header activity badge clears (§12).
+    // Mark the log seen so the header activity badge clears (section 12).
     function markSeen() { if (window.TMAActivities) window.TMAActivities.markSeen(); }
 
     /* ── rendering ────────────────────────────────────────────── */

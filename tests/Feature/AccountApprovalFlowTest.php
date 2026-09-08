@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * The account approval flow (§16–§19): a new registration alerts the admins,
+ * The account approval flow (section 16–section 19): a new registration alerts the admins,
  * approving or denying notifies the user and audits the action, and the
  * outstanding approval notification clears so it can't be processed twice.
  */

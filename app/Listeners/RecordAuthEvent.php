@@ -34,7 +34,7 @@ class RecordAuthEvent
         $this->record('registered', $event->user->getAuthIdentifier());
 
         // A self-registered account starts pending. Tell the administrators it
-        // needs review, and drop it into the audit trail (§16).
+        // needs review, and drop it into the audit trail (section 16).
         $user = $event->user;
         if ($user instanceof User && $user->status === User::STATUS_PENDING) {
             ActivityLogger::log([

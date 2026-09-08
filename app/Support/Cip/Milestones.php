@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * The dates one application has reached, in the order it travels through them
- *, what §4d's Timeline card on Overview draws.
+ *, what section 4d's Timeline card on Overview draws.
  *
  * Every step is answered, including the ones still ahead of the file: a
  * milestone that has not happened comes back with no date rather than being
@@ -61,7 +61,7 @@ class Milestones
      * key => [the column it reads, what it is called, who may correct it].
      *
      * The order of this array is the order of the timeline, and the timeline is
-     * the journey: filed with us, submitted to the Unit (§16), the Unit's query
+     * the journey: filed with us, submitted to the Unit (section 16), the Unit's query
      * back, accepted for processing, decided.
      *
      * The capability is the one held by the verb that writes the date in the
@@ -72,7 +72,7 @@ class Milestones
      */
     private const STEPS = [
         self::FILED => ['created_at', 'Filed', 'cip.compliance'],
-        // §15's confirm-submission: the moment the original package froze and
+        // Section 15's confirm-submission: the moment the original package froze and
         // stopped being editable by anybody, provider or staff. It sits before
         // the submission because it is what makes the submission possible, and
         // "when did this stop being changeable" is the first question asked of
@@ -205,14 +205,14 @@ class Milestones
      * kept before this portal existed, is not a lifecycle event, and making
      * somebody unwind a status to fix one would be worse than the mistake.
      * Every one of these dates is measured from somewhere — the delay clock
-     * from Accepted (§20), the compliance window from Query received (§18),
+     * from Accepted (section 20), the compliance window from Query received (section 18),
      * every report from the decision — so a wrong day is not cosmetic.
      *
      * ONLY A DATE THAT ALREADY EXISTS
      *
      * Refusing an empty step is what keeps this a correction rather than a
      * second, quieter way to drive the lifecycle. Each of these columns means
-     * something happened: `locked_at` freezes the original package (§15),
+     * something happened: `locked_at` freezes the original package (section 15),
      * `accepted_at` starts the 180-day clock, `decided_at` sits beside an
      * outcome. Writing one by hand onto a file that has not been there would
      * put the portal into a state no transition produced — a package locked

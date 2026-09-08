@@ -1347,7 +1347,7 @@
       '</section>';
   }
 
-  /* Per-module notification preferences (§21), backed by the server. Portal
+  /* Per-module notification preferences (section 21), backed by the server. Portal
      delivery of Security and Approval alerts can't be switched off. */
   var NOTIF_PREF_MODULES = [
     { id: 'email', label: 'Email' },

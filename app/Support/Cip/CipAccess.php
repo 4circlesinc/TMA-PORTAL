@@ -87,7 +87,7 @@ class CipAccess
 
     /**
      * May this account start an application? Staff need the capability;
-     * both external types are promised it by §1 of the brief.
+     * both external types are promised it by section 1 of the brief.
      */
     public static function canCreate(?User $user): bool
     {

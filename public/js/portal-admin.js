@@ -1027,7 +1027,7 @@
     }
   }
 
-  /* §26 — one place for every administrator verb. The engines already live
+  /* Section 26 — one place for every administrator verb. The engines already live
      on Applications, Users, Reporting and the screens below; this page is
      the directory, not a second copy of any of them. */
   PAGES['cip-admin'] = {
@@ -1490,7 +1490,7 @@
     },
   };
 
-  /* ── CIP document requirements (§11) ───────────────────────────────
+  /* ── CIP document requirements (section 11) ───────────────────────────────
    *
    * The checklists every applicant is measured against, one list per
    * applicant type, editable by administrators. The server already enforces
@@ -2172,10 +2172,10 @@
     },
   };
 
-  /* ── CIP Granted / Denied letters (§23) ─────────────────────────────
+  /* ── CIP Granted / Denied letters (section 23) ─────────────────────────────
    *
    * Ten templates, one pair per investment type. The filing subject is
-   * still §22; this screen is the body the administrator keeps. Tokens
+   * still section 22; this screen is the body the administrator keeps. Tokens
    * are filled from the application when the letter is sent.
    */
   var CIPLETTERS = { loaded: false, loading: false, error: '', data: null };
@@ -2330,7 +2330,7 @@
     },
   };
 
-  /* ── CIP Distribution group (§22) ───────────────────────────────────
+  /* ── CIP Distribution group (section 22) ───────────────────────────────────
    *
    * Membership is the People group of this name. Extra mailboxes that
    * are not portal accounts are kept here.

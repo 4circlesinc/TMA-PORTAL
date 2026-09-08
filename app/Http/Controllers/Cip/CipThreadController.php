@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The application messaging centre (§24).
+ * The application messaging centre (section 24).
  *
  * 404 rather than 403 for a file the reader may not see. Internal notes are
  * dropped in the read query for anyone who is not staff — they never leave

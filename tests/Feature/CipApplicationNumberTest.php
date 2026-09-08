@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
- * §7 — the two application numbers, and the rule that switches between them.
+ * Section 7 — the two application numbers, and the rule that switches between them.
  *
  * The internal number is ours and permanent; the CIP number is the Unit's and
  * arrives at submission. What is pinned here is the switching rule itself: one
@@ -48,7 +48,7 @@ class CipApplicationNumberTest extends TestCase
         return CipProvider::create(['name' => $name, 'code' => $code, 'company_id' => $company->id]);
     }
 
-    /** An application parked at Ready to submit, which is where §16 begins. */
+    /** An application parked at Ready to submit, which is where section 16 begins. */
     private function ready(User $staff, CipProvider $provider, string $clientName = 'Chen Wei'): CipApplication
     {
         $application = Applications::create($provider, $staff);
@@ -63,7 +63,7 @@ class CipApplicationNumberTest extends TestCase
             Engine::apply($application, $to, $staff);
         }
 
-        // §16 begins after the provider has confirmed: the original package
+        // Section 16 begins after the provider has confirmed: the original package
         // is frozen, and staff then record the CIP number.
         $application->forceFill(['locked_at' => now()])->save();
 
@@ -205,7 +205,7 @@ class CipApplicationNumberTest extends TestCase
         $staff = $this->staff();
         $application = Applications::create($this->provider($staff), $staff);
 
-        // Straight from New Applications. §16 begins at Ready to Submit after
+        // Straight from New Applications. Section 16 begins at Ready to Submit after
         // the provider has confirmed, and the engine owns that edge — recording
         // a number is not a way around it.
         $application->forceFill(['locked_at' => now()])->save();

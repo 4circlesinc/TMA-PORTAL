@@ -19,9 +19,9 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §23 — Granted and Denied letters, one pair per investment type.
+ * Section 23 — Granted and Denied letters, one pair per investment type.
  *
- * The filing subject stays §22. These tests hold the body: administrators
+ * The filing subject stays section 22. These tests hold the body: administrators
  * rewrite it, placeholders fill from the file, and a Real Estate grant does
  * not send the Bonds letter.
  */

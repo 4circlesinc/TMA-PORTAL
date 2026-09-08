@@ -6,7 +6,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * §23 — one Granted letter and one Denied letter per investment type.
+ * Section 23 — one Granted letter and one Denied letter per investment type.
  *
  * The ten rows are the whole set. Administrators rewrite the copy; they do
  * not add an eleventh route or delete Real Estate. Re-seeding uses

@@ -26,9 +26,9 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §18 — a Unit query: record the date, move to Non-compliant, tell the firm.
+ * Section 18 — a Unit query: record the date, move to Non-compliant, tell the firm.
  *
- * Response documents land in Additional Documents, which §17 already leaves
+ * Response documents land in Additional Documents, which section 17 already leaves
  * writable after the original package is frozen. This file is the inbound
  * half: the date, the status, and the notice.
  */

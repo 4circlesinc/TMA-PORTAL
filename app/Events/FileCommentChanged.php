@@ -21,7 +21,7 @@ use Illuminate\Queue\SerializesModels;
  * The payload deliberately carries no comment body. What each reader may do
  * with a comment differs — edit, delete, resolve — so the client refetches the
  * thread and patches it in. This event only says *what* changed and *where*,
- * which is what lets §29 hold: the viewer never reloads or reopens.
+ * which is what lets section 29 hold: the viewer never reloads or reopens.
  *
  * `action` is one of: created | updated | deleted.
  */

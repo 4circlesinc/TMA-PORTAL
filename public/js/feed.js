@@ -7,7 +7,7 @@
  * Two rules shape everything here:
  *
  *  1. **Nothing reloads the feed.** Posting, commenting, reacting, voting and
- *     publishing all patch the affected card and nothing else (§22). Rendering
+ *     publishing all patch the affected card and nothing else (section 22). Rendering
  *     goes through TMAMorph, so the DOM is reconciled rather than replaced —
  *     which is what keeps scroll position, open comment boxes and half-typed
  *     replies alive across a redraw.
@@ -33,7 +33,7 @@
     { id: 'announcement', label: 'Announcement', icon: 'Megaphone', tone: 'announcement' },
   ];
 
-  /* The sidebar's non-channel views, in the order §1 lists them. */
+  /* The sidebar's non-channel views, in the order section 1 lists them. */
   var VIEWS = [
     { id: 'all', label: 'All channels', icon: 'Newspaper' },
     { id: 'mine', label: 'My channels', icon: 'UsersThree' },
@@ -112,7 +112,7 @@
     filters: { type: '', author: '', hashtag: '', from: '', to: '', hasAttachments: false, hasPoll: false },
     search: '',
 
-    // Sidebar memory (§1). Persisted, so the page opens where it was left.
+    // Sidebar memory (section 1). Persisted, so the page opens where it was left.
     sidebarOpen: true,
     groups: { views: true, channels: true, admin: true },
     sidebarScroll: 0,
@@ -242,7 +242,7 @@
     return count + ' ' + (count === 1 ? one : (many || one + 's'));
   }
 
-  /* ── sidebar memory (§1) ─────────────────────────────────── */
+  /* ── sidebar memory (section 1) ─────────────────────────────────── */
 
   /*
    * Remembered per account, so two people sharing a browser profile do not
@@ -533,7 +533,7 @@
     );
   }
 
-  /* ── sidebar (§1) ────────────────────────────────────────── */
+  /* ── sidebar (section 1) ────────────────────────────────────────── */
 
   function sidebarHtml() {
     return (
@@ -714,7 +714,7 @@
   }
 
   /*
-   * A channel's header (§3), or a plain title for the cross-channel views.
+   * A channel's header (section 3), or a plain title for the cross-channel views.
    *
    * The cover is only drawn when the channel actually has one, an empty band
    * of grey says "this is broken", not "this channel has no cover".
@@ -814,7 +814,7 @@
     }[view] || '';
   }
 
-  /* Search and filters (§14), above the stream. */
+  /* Search and filters (section 14), above the stream. */
   function toolbarHtml() {
     var active = activeFilterCount();
 
@@ -857,7 +857,7 @@
     return state.channels.some(function (c) { return c.can && c.can.post; });
   }
 
-  /* ── composer (§4) ───────────────────────────────────────── */
+  /* ── composer (section 4) ───────────────────────────────────────── */
 
   /*
    * Collapsed, the composer is a single prompt. Opening it builds a draft in
@@ -999,7 +999,7 @@
   }
 
   /*
-   * The rich-text surface (§4).
+   * The rich-text surface (section 4).
    *
    * A contenteditable with an explicit toolbar rather than a third-party
    * editor: the server's sanitiser allow-list is narrow and known, and every
@@ -1048,7 +1048,7 @@
   }
 
   /*
-   * The @ and # autocomplete list (§16, §17), drawn under whichever field is
+   * The @ and # autocomplete list (section 16, section 17), drawn under whichever field is
    * being typed in: `host` is 'post' for the editor, or 'comment:<postId>'
    * for a comment box, so only the field with the caret shows the list.
    */
@@ -1087,7 +1087,7 @@
   }
 
   /*
-   * Staged files, with their upload progress (§18).
+   * Staged files, with their upload progress (section 18).
    *
    * Photos tile at the size they will take in the post, a file still on its
    * way up shows its own local preview under the progress bar, so nothing
@@ -1162,7 +1162,7 @@
     return 'File';
   }
 
-  /* The poll builder (§13). */
+  /* The poll builder (section 13). */
   function pollBuilderHtml(draft) {
     var poll = draft.poll;
 
@@ -1224,7 +1224,7 @@
     );
   }
 
-  /* Scheduling, announcements and the email audience (§6, §7, §12). */
+  /* Scheduling, announcements and the email audience (section 6, section 7, section 12). */
   function composerOptionsHtml(draft) {
     var channel = draft.channelId ? findChannel(draft.channelId) : state.channel;
     var canModerate = !!(channel && channel.can && channel.can.moderate);
@@ -1333,7 +1333,7 @@
   }
 
   /*
-   * Empty states (§23). Each says what is missing *and* what to do about it —
+   * Empty states (section 23). Each says what is missing *and* what to do about it —
    * a bare "No posts" leaves someone looking for the button.
    *
    * Nothing here is ever a sample post.
@@ -1371,7 +1371,7 @@
     );
   }
 
-  /* ── one post card (§4) ──────────────────────────────────── */
+  /* ── one post card (section 4) ──────────────────────────────────── */
 
   function postCardHtml(post, inPinnedBand) {
     var isAnnouncement = post.isAnnouncement && !post.isExpired;
@@ -1534,7 +1534,7 @@
    * The post body.
    *
    * `post.body` is server-sanitised HTML, it is inserted as markup on purpose,
-   * because rich text is the point (§4). Nothing reaches this that has not
+   * because rich text is the point (section 4). Nothing reaches this that has not
    * been through FeedContent::sanitise, and no client-side value is ever
    * concatenated into it.
    */
@@ -1551,7 +1551,7 @@
    * Images tile, video and audio play in place, and documents are cards with
    * a real preview: a PDF's first page is painted in the browser by
    * TMAFileThumbs (the server cannot rasterise one), anything else shows its
-   * type mark. Every one of them opens the viewer (§18).
+   * type mark. Every one of them opens the viewer (section 18).
    */
   function attachmentGridHtml(post) {
     var images = post.attachments.filter(function (a) { return a.kind === 'image'; });
@@ -1630,7 +1630,7 @@
       '</div>';
   }
 
-  /* A live poll (§13). */
+  /* A live poll (section 13). */
   function pollHtml(post) {
     var poll = post.poll;
     var total = poll.totalVotes || 0;
@@ -1699,7 +1699,7 @@
     );
   }
 
-  /* An announcement that asks to be acknowledged (§12). */
+  /* An announcement that asks to be acknowledged (section 12). */
   function acknowledgeBarHtml(post) {
     if (post.acknowledged) {
       return (
@@ -1718,7 +1718,7 @@
     );
   }
 
-  /* Reactions, comment count and view count (§4, §10). */
+  /* Reactions, comment count and view count (section 4, section 10). */
   function postFooterHtml(post) {
     return (
       '<footer class="tma-dash__feed-post-foot">' +
@@ -1822,7 +1822,7 @@
     );
   }
 
-  /* ── comments (§9) ───────────────────────────────────────── */
+  /* ── comments (section 9) ───────────────────────────────────────── */
 
   /*
    * The thread under a card. The same pieces are drawn again inside the
@@ -1975,7 +1975,7 @@
     );
   }
 
-  /* ── the photo viewer (§18) ──────────────────────────────── */
+  /* ── the photo viewer (section 18) ──────────────────────────────── */
 
   /*
    * One attachment full-size on the left, the post it belongs to on the
@@ -2190,7 +2190,7 @@
     mountGalleryDoc(root);
   }
 
-  /* ── analytics (§19) ─────────────────────────────────────── */
+  /* ── analytics (section 19) ─────────────────────────────────────── */
 
   function analyticsHtml() {
     if (!state.analytics) {
@@ -2339,7 +2339,7 @@
     );
   }
 
-  /* ── search results (§14) ────────────────────────────────── */
+  /* ── search results (section 14) ────────────────────────────────── */
 
   function searchResultsHtml() {
     var results = state.searchResults;
@@ -2449,7 +2449,7 @@
     );
   }
 
-  /* Create or edit a channel (§2). */
+  /* Create or edit a channel (section 2). */
   function channelFormHtml(modal) {
     var form = modal.form;
     var editing = !!modal.channelId;
@@ -2715,7 +2715,7 @@
     }).join('');
   }
 
-  /* Acknowledgement statistics (§12), including who has *not* replied. */
+  /* Acknowledgement statistics (section 12), including who has *not* replied. */
   function acksModalHtml(modal) {
     if (modal.loading) return '<div class="tma-dash__feed-comment-skel" aria-hidden="true"></div>';
     if (modal.error) return '<p class="tma-dash__feed-error">' + esc(modal.error) + '</p>';
@@ -3320,7 +3320,7 @@
   }
 
   /*
-   * Watch for an @ or # being typed and open the right autocomplete (§16, §17).
+   * Watch for an @ or # being typed and open the right autocomplete (section 16, section 17).
    *
    * The trigger is read from the text immediately before the caret rather than
    * from the whole body, so a '#' that was typed ten minutes ago does not
@@ -3525,7 +3525,7 @@
     API.deleteAttachment(id).catch(function () {});
   }
 
-  /* ── autosave (§5) ───────────────────────────────────────── */
+  /* ── autosave (section 5) ───────────────────────────────────────── */
 
   var autosaveTimer = null;
 
@@ -3658,7 +3658,7 @@
   /*
    * Put a post into the stream, or replace the copy already there.
    *
-   * This is what keeps §22 true: a new or edited post patches into place, and
+   * This is what keeps section 22 true: a new or edited post patches into place, and
    * the rest of the feed is not touched.
    */
   function upsertPost(post, prepend) {
@@ -4681,7 +4681,7 @@
       });
   }
 
-  /* ── realtime (§22) ──────────────────────────────────────── */
+  /* ── realtime (section 22) ──────────────────────────────────────── */
 
   /*
    * Subscribe to the open channel's live updates.

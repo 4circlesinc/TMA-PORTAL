@@ -8,8 +8,8 @@ return new class extends Migration
 {
     /**
      * "Sponsored (Yes / No)" is one of the main applicant's mandatory answers
-     * (§2), and it decides whether the application carries a sponsor at all
-     * (§4). A sponsor row is the consequence, not the answer: an application
+     * (section 2), and it decides whether the application carries a sponsor at all
+     * (section 4). A sponsor row is the consequence, not the answer: an application
      * can be marked sponsored the moment the wizard asks, before anybody has
      * typed the sponsor's name, so the two are stored separately.
      */

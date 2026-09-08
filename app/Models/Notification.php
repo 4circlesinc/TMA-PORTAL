@@ -23,7 +23,7 @@ class Notification extends Model
 {
     protected $table = 'portal_notifications';
 
-    /** Semantic levels (§14) — drive icon tone, never a bespoke colour. */
+    /** Semantic levels (section 14) — drive icon tone, never a bespoke colour. */
     public const LEVEL_INFO = 'info';
     public const LEVEL_SUCCESS = 'success';
     public const LEVEL_WARNING = 'warning';
@@ -87,7 +87,7 @@ class Notification extends Model
 
     /**
      * Action-required and approval-required items stay easy to find until the
-     * underlying task is done, even after they're marked read (§20).
+     * underlying task is done, even after they're marked read (section 20).
      */
     public function requiresAction(): bool
     {

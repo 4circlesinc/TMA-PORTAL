@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
  * auto-flips here (see {@see Review::settle()}). The submitting party, the
  * service provider contact, or the private client on a PRI file, is told,
  * and must press Confirm submission. That press freezes the package for the
- * current lane: person folders on Ready to submit (§17), the Certificate of
+ * current lane: person folders on Ready to submit (section 17), the Certificate of
  * Registration tree on Apply for COR. Additional Documents stays writable.
  * Status stays on the ready label until staff take the next recorded step.
  */
@@ -76,8 +76,8 @@ class Confirmation
     /**
      * Freeze the current lane's package, on the day it was confirmed.
      *
-     * The day is asked for rather than assumed, the way §16's submission and
-     * §21's decision are: "when did this stop being changeable" is the first
+     * The day is asked for rather than assumed, the way section 16's submission and
+     * Section 21's decision are: "when did this stop being changeable" is the first
      * question asked of a package the Unit later queries, and a firm entering
      * a file it confirmed last week would have had today stamped on it with
      * nothing to say otherwise. Defaults to today when the caller does not

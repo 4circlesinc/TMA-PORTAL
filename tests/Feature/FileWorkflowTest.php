@@ -313,7 +313,7 @@ class FileWorkflowTest extends TestCase
     }
 
     /**
-     * The rule §6 is explicit about: a new version must not silently replace
+     * The rule section 6 is explicit about: a new version must not silently replace
      * the version under approval.
      */
     public function test_a_new_version_supersedes_but_never_moves_the_request(): void

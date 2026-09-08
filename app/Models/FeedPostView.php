@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * One person's viewing of one post. Repeat views bump the counter rather than
  * adding a row, so the row count is the post's *reach* while `view_count`
- * sums to its views (§19).
+ * sums to its views (section 19).
  */
 #[Fillable(['post_id', 'user_id', 'last_viewed_at', 'view_count'])]
 class FeedPostView extends Model

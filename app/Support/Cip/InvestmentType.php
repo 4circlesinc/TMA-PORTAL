@@ -3,11 +3,11 @@
 namespace App\Support\Cip;
 
 /**
- * The investment options an application is filed under (§3).
+ * The investment options an application is filed under (section 3).
  *
  * Exactly one is chosen, and choosing "Other" makes the free-text
  * specification required, an application whose route the firm cannot name
- * is one nobody can price, template or report on later (§23 keeps a separate
+ * is one nobody can price, template or report on later (section 23 keeps a separate
  * decision template per option, so "Other" without the detail has no
  * template to resolve).
  */

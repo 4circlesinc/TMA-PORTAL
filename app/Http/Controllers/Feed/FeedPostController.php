@@ -34,7 +34,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Posts: writing them, scheduling them, publishing them, and everything a
- * reader does to one (§4, §5, §6, §11, §12, §15).
+ * reader does to one (section 4, section 5, section 6, section 11, section 12, section 15).
  *
  * A draft, a scheduled post and a published post are the same row in three
  * states, so most of this file is shared between them. `store` writes a draft
@@ -147,7 +147,7 @@ class FeedPostController extends Controller
             ->whereIn('feed_posts.channel_id', $channelIds);
 
         return match ($view) {
-            // Drafts and scheduled posts are private to their author (§5).
+            // Drafts and scheduled posts are private to their author (section 5).
             'drafts' => $query
                 ->where('feed_posts.author_id', $user->id)
                 ->where('feed_posts.status', FeedPost::STATUS_DRAFT),
@@ -279,7 +279,7 @@ class FeedPostController extends Controller
         return $state;
     }
 
-    /** One post. Opening it is what records a view (§19). */
+    /** One post. Opening it is what records a view (section 19). */
     public function show(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -468,7 +468,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * Autosave a draft (§5).
+     * Autosave a draft (section 5).
      *
      * Separate from update() because it runs on a timer while someone types:
      * it touches only the body and title, never the status or the schedule,
@@ -505,7 +505,7 @@ class FeedPostController extends Controller
         ]);
     }
 
-    /** Publish a draft or scheduled post straight away (§6). */
+    /** Publish a draft or scheduled post straight away (section 6). */
     public function publish(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -539,7 +539,7 @@ class FeedPostController extends Controller
         return response()->json(['post' => FeedPresenter::post($this->reload($post), $user)]);
     }
 
-    /** Duplicate a post as a fresh draft (§5). */
+    /** Duplicate a post as a fresh draft (section 5). */
     public function duplicate(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -597,7 +597,7 @@ class FeedPostController extends Controller
         return response()->json(['post' => FeedPresenter::post($this->reload($copy), $user)], 201);
     }
 
-    /** Delete a post. Its author, or a moderator of its channel (§20). */
+    /** Delete a post. Its author, or a moderator of its channel (section 20). */
     public function destroy(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -627,7 +627,7 @@ class FeedPostController extends Controller
 
     /* ── Moderation and reader actions ────────────────────────────── */
 
-    /** Pin or unpin a post (§11). */
+    /** Pin or unpin a post (section 11). */
     public function togglePin(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -656,7 +656,7 @@ class FeedPostController extends Controller
         return response()->json(['post' => FeedPresenter::post($this->reload($post), $user)]);
     }
 
-    /** Lock or unlock a post's comments (§20). */
+    /** Lock or unlock a post's comments (section 20). */
     public function toggleLock(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -680,7 +680,7 @@ class FeedPostController extends Controller
         return response()->json(['post' => FeedPresenter::post($this->reload($post), $user)]);
     }
 
-    /** Bookmark or un-bookmark a post (§15). */
+    /** Bookmark or un-bookmark a post (section 15). */
     public function toggleBookmark(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -705,7 +705,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * Record that a post's link was taken (§4).
+     * Record that a post's link was taken (section 4).
      *
      * Deliberately just a counter: the portal has no way to know where a
      * copied link then goes, so this counts the act of sharing rather than
@@ -724,7 +724,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * Acknowledge an announcement (§12).
+     * Acknowledge an announcement (section 12).
      *
      * firstOrCreate rather than create: acknowledging twice is a double-click,
      * not an error, and it must not 500 on the unique index.
@@ -756,7 +756,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * Who has acknowledged an announcement, and who has not (§12).
+     * Who has acknowledged an announcement, and who has not (section 12).
      *
      * The "not yet" side is what makes this useful, an administrator needs to
      * know who to chase, which a list of the compliant cannot tell them.
@@ -1005,7 +1005,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * Record that this person has seen the post (§19).
+     * Record that this person has seen the post (section 19).
      *
      * A repeat view bumps the row rather than adding one, so the row count is
      * the post's reach while the summed counter is its views. Never throws:

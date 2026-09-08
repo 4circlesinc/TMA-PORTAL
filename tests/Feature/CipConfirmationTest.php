@@ -26,7 +26,7 @@ use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
- * §15 — Ready to submit, confirm, lock.
+ * Section 15 — Ready to submit, confirm, lock.
  *
  * Approving the last document auto-flips the application. The service provider
  * then confirms, which freezes the original package so nobody — provider or

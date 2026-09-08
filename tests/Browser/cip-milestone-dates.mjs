@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 /*
- * §4d — correcting a day on the Timeline card.
+ * Section 4d — correcting a day on the Timeline card.
  *
  * CipMilestoneTest pins the endpoint and its refusals; what only a browser can
  * check is that the card is the way in. The dates a reader may fix have to be

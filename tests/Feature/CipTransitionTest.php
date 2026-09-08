@@ -22,7 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * §6 — the lifecycle over HTTP.
+ * Section 6 — the lifecycle over HTTP.
  *
  * The engine's own rules are proved in {@see CipEngineTest}; what is proved
  * here is that the endpoint is a door to them and not a second set of them: a

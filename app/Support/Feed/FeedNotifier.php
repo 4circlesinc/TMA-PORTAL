@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
- * Who hears about what happens in the Feed, and how (§7, §8).
+ * Who hears about what happens in the Feed, and how (section 7, section 8).
  *
  * Publishing a post can raise portal notifications and send email, and the two
  * have deliberately different defaults: portal notifications go to the channel
@@ -153,7 +153,7 @@ final class FeedNotifier
 
     /**
      * Tell the post's author, the thread's participants and anyone mentioned
-     * that a comment landed (§8, §9).
+     * that a comment landed (section 8, section 9).
      *
      * Each person hears once, at the most specific level that applies: being
      * named beats being replied to, which beats owning the post.
@@ -306,7 +306,7 @@ final class FeedNotifier
         }
     }
 
-    /* ── Email (§7) ───────────────────────────────────────────────── */
+    /* ── Email (section 7) ───────────────────────────────────────────────── */
 
     /**
      * Send the post's email notification, if the author chose an audience.
@@ -401,7 +401,7 @@ final class FeedNotifier
 
     /**
      * The email itself, the portal's one postcard design, never a bespoke
-     * layout. §7 fixes its contents: channel, title or opening lines, author,
+     * layout. Section 7 fixes its contents: channel, title or opening lines, author,
      * publish date, and a link that opens the post.
      */
     private static function postcard(FeedPost $post, FeedChannel $channel, User $recipient, string $url): Postcard

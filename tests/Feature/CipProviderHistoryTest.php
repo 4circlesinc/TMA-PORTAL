@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * §12 — Service Provider history hangs off the contact, not the login.
+ * Section 12 — Service Provider history hangs off the contact, not the login.
  *
  * A comment, workflow step, document or activity written by a provider
  * contact must still be there — and still named as them — after that

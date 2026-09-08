@@ -15,7 +15,7 @@ use Tests\TestCase;
  * Client-call recording: the rule that only the staff side of a direct
  * staff↔client call ever records, and the area's scoping.
  *
- * The rule lives server-side on purpose (§ CallRecordingController): a
+ * The rule lives server-side on purpose (see CallRecordingController): a
  * browser asks, it never decides — so most of these tests are about who is
  * told "no".
  */

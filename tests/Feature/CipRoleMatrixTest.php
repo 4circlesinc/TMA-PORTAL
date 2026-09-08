@@ -65,8 +65,8 @@ class CipRoleMatrixTest extends TestCase
 
     public function test_only_administrators_assign_configure_and_report(): void
     {
-        // §10: "The Administrator assigns the file." Configuration and
-        // reporting are §26 administrator powers.
+        // Section 10: "The Administrator assigns the file." Configuration and
+        // reporting are section 26 administrator powers.
         foreach ([Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER, Role::EMPLOYEE, Role::CLIENT] as $type) {
             $user = $this->user($type);
             foreach (['cip.assign', 'cip.configure', 'cip.report'] as $capability) {
@@ -118,7 +118,7 @@ class CipRoleMatrixTest extends TestCase
         $application = Applications::create($provider, $admin);
         $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
 
-        // §21 Decision workflow: GRANTED / DENIED — held by the joined officer.
+        // Section 21 Decision workflow: GRANTED / DENIED — held by the joined officer.
         $this->assertTrue(Engine::allows($cro, $application, Status::GRANTED));
         $this->assertTrue(Engine::allows($cro, $application, Status::DENIED));
         $this->assertFalse(Engine::allows($employee, $application, Status::GRANTED));

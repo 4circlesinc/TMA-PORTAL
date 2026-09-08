@@ -1,5 +1,5 @@
 /*
- * Verify notifications arrive live over Reverb (§24, §25).
+ * Verify notifications arrive live over Reverb (section 24, section 25).
  *
  * Opens the portal, waits for the websocket, then creates a notification for
  * the signed-in user from a *separate* server process (tinker). The bell badge
@@ -80,7 +80,7 @@ const after = await page.evaluate(() => ({
 }));
 check(after.unread === before + 1, `unread incremented by one (${before} -> ${after.unread})`);
 check(after.hasItem, 'the new item is in the store (smooth append, no refetch)');
-check(after.probe === 'alive', 'no page reload — the live update was applied in place (§25)');
+check(after.probe === 'alive', 'no page reload — the live update was applied in place (section 25)');
 check(String(after.badge || '').trim() === String(after.unread), `bell badge reflects the new count (${after.badge})`);
 
 if (errors.length) fail.push('console/page errors: ' + errors.join(' | '));

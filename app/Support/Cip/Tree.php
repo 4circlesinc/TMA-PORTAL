@@ -12,9 +12,9 @@ use App\Support\Files\FolderTree;
 use Illuminate\Support\Str;
 
 /**
- * The application's folder tree (§6), and the client record it hangs from.
+ * The application's folder tree (section 6), and the client record it hangs from.
  *
- * §6 asks for one repository per individual, and they hang off the client:
+ * Section 6 asks for one repository per individual, and they hang off the client:
  *
  *     Asem Haddad
  *       ├── Main Applicant
@@ -50,7 +50,7 @@ class Tree
 {
     public const ADDITIONAL = 'Additional Documents';
 
-    /** §17 — what still accepts paper after the original package is frozen. */
+    /** Section 17 — what still accepts paper after the original package is frozen. */
     public const ADDITIONAL_QUERIES = 'Queries';
 
     public const ADDITIONAL_NON_COMPLIANCE = 'Non-Compliance Requests';
@@ -112,7 +112,7 @@ class Tree
         }
 
         // One shared drawer for everything that belongs to the file rather
-        // than to a person on it, plus the §17 purpose folders inside it.
+        // than to a person on it, plus the section 17 purpose folders inside it.
         self::provisionAdditionalDrawers($application, $actor, $root);
 
         if ($application->folder_id !== $root->id) {
@@ -125,7 +125,7 @@ class Tree
     }
 
     /**
-     * Additional Documents and the four drawers §17 names for paper that
+     * Additional Documents and the four drawers section 17 names for paper that
      * arrives after confirm: queries, non-compliance, supplementary files,
      * and Unit requests. Safe to call again; missing drawers are filled in.
      */
@@ -344,7 +344,7 @@ class Tree
      * What a person's folder is called.
      *
      * Not {@see Dependents::label}, which answers the government's question —
-     * "Qualified Dependent 2", or "Spouse", the classification §5 computes
+     * "Qualified Dependent 2", or "Spouse", the classification section 5 computes
      * from the dates of birth. A folder answers a simpler one: which of the
      * dependants is this. So they run 1, 2, 3 down the tree in the order the
      * classification puts them, and a spouse is a dependant like the rest.

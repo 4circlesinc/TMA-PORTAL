@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Uploading and serving post/comment attachments (§18).
+ * Uploading and serving post/comment attachments (section 18).
  *
  * Files are staged before the post exists so the composer can preview and
  * remove them while it is still being written, then claimed on save. Bytes are

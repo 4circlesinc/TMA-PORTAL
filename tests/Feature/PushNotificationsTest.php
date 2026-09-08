@@ -12,7 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * docs/android-app-prompt.md §13: a phone registers its token, hears the
+ * docs/android-app-prompt.md section 13: a phone registers its token, hears the
  * same record the websocket carries, only for groups whose desktop banner is
  * on, always for security, and stops hearing anything once it signs out or
  * FCM forgets it.

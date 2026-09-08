@@ -26,7 +26,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | CIP Distribution Group (§22)
+    | CIP Distribution Group (section 22)
     |--------------------------------------------------------------------------
     |
     | Every CIP notice fans out to this People group (by name), plus any extra

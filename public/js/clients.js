@@ -1436,7 +1436,7 @@
 
   /*
    * Open this folder the next time the Documents panel mounts. Recording a
-   * query (§18) sends the reader to Additional Documents instead of leaving
+   * query (section 18) sends the reader to Additional Documents instead of leaving
    * them on Overview.
    */
   var OPEN_FOLDER_AFTER_MOVE = null;
@@ -2727,7 +2727,7 @@
   }
 
   /*
-   * §8, the main application table.
+   * Section 8, the main application table.
    *
    * Nine columns about an APPLICATION: its number, who it is for, who filed
    * it, how to reach them, what they are investing in, how many people travel
@@ -2818,7 +2818,7 @@
   ];
 
   /*
-   * §9's buckets, what the applications table can be narrowed to.
+   * Section 9's buckets, what the applications table can be narrowed to.
    *
    * They were a row of counting chips above the table and are now the Status
    * field in its filter menu, which is where the reader already goes to narrow
@@ -3583,7 +3583,7 @@
 
   /*
    * Staff on a client. When the client has a CIP application, assignment must
-   * go through the CIP endpoint so §10 can move a NEW file into review;
+   * go through the CIP endpoint so section 10 can move a NEW file into review;
    * the client hub endpoint only writes client_assignments.
    */
   function assignStaffForClient(clientUid, userId) {
@@ -3655,7 +3655,7 @@
     var list = people || [];
 
     /*
-     * Assignment happens in the table (§8).
+     * Assignment happens in the table (section 8).
      *
      * The brief puts it here rather than only on the detail page, and it is
      * the transition that starts a review, so leaving it to the profile
@@ -6183,7 +6183,7 @@
   }
 
   /*
-   * The journey, as CBI's Timeline card (§4d).
+   * The journey, as CBI's Timeline card (section 4d).
    *
    * It used to sit as a row of dates under every tab, which put the file's
    * progress on screens that were about a person. It is a card of label/date
@@ -6460,7 +6460,7 @@
    * about us. Received went back to the Timeline card below — it is our own
    * filing date, and four dates in a row stopped being a glance. The three
    * that are left are the ones a file is chased on, and the two gaps between
-   * them are what §20's delay is measured across.
+   * them are what section 20's delay is measured across.
    *
    * The number on the strip is ours until the Unit assigns one. Application
    * number is the internal file (GAL26-00004). Once a CIP number is recorded
@@ -6575,7 +6575,7 @@
    * Recording the submission, which is what enters the CIP number.
    *
    * Offered only from Ready to submit, because that is the one edge the server
-   * accepts (§16), an action that could be pressed from anywhere and then
+   * accepts (section 16), an action that could be pressed from anywhere and then
    * refused would be the interface hiding a rule it could have simply not
    * shown. A number already recorded stays; it is not edited from here.
    */
@@ -6620,7 +6620,7 @@
    * The appeal verbs, which are two different things to two audiences.
    *
    * The provider side asks: they may not move a file through the lifecycle
-   * (§22 keeps that with the firm), so their button records the ask and tells
+   * (section 22 keeps that with the firm), so their button records the ask and tells
    * the firm. The firm reads the standing request and lodges it, which is the
    * status change. Neither side is offered the other's verb.
    *
@@ -6653,7 +6653,7 @@
   }
 
   /*
-   * §18: the Unit asked for more. Offered from the statuses a query can
+   * Section 18: the Unit asked for more. Offered from the statuses a query can
    * actually land on. Pending review, Background check, Delayed, because
    * that is the edge the server accepts. Pressing it from anywhere else and
    * then being refused would be the interface hiding a rule it could have
@@ -6668,7 +6668,7 @@
   }
 
   /*
-   * §19: the Unit accepted the file. Offered from Pending review and
+   * Section 19: the Unit accepted the file. Offered from Pending review and
    * Non-compliant, the two edges the server accepts into Background check.
    */
   function renderAcceptanceAction(app) {
@@ -6680,7 +6680,7 @@
   }
 
   /*
-   * §21: the Unit decided. Offered from Background check and Delayed, the
+   * Section 21: the Unit decided. Offered from Background check and Delayed, the
    * two edges the server accepts into Approved or Denied. Date and type
    * are both asked for; either one without the other would leave a terminal
    * file whose reports cannot say when, or which way.
@@ -7251,7 +7251,7 @@
   /*
    * One requirement, and where it has got to.
    *
-   * §11 asks for the mandatory ones to be marked and §12 for the state to be
+   * Section 11 asks for the mandatory ones to be marked and section 12 for the state to be
    * legible, and the meeting was explicit that a provider must never have to
    * click through documents to find what needs work. So the state is the
    * status chip's own colour: something sent back reads as danger, something
@@ -7383,7 +7383,7 @@
   }
 
   /*
-   * The Activity tab (§4d): what has happened to this application.
+   * The Activity tab (section 4d): what has happened to this application.
    *
    * The sentences are the server's, cip_events holds actions and status
    * codes, and turning "status_changed / review_application" into English in
@@ -9452,7 +9452,7 @@
     }
 
     bind('[data-clients-row]', 'client', 'data-clients-row');
-    // §8's table draws its own rows, so they carry their own hook, but the
+    // Section 8's table draws its own rows, so they carry their own hook, but the
     // menu, its actions and its permissions are the ones every other row uses.
     bind('[data-cip-open]', 'application', 'data-cip-open');
     bind('[data-clients-open-company]', 'company', 'data-clients-open-company');
@@ -9922,7 +9922,7 @@
   }
 
   /*
-   * §15: the service provider locks the original package.
+   * Section 15: the service provider locks the original package.
    *
    * Said before they commit, because this is the moment documents stop being
    * editable, staff recording the CIP number afterwards is a different verb.
@@ -10001,7 +10001,7 @@
   }
 
   /*
-   * Entering the CIP number (§7, §16).
+   * Entering the CIP number (section 7, section 16).
    *
    * Two jobs, one dialog, because they are the same field: recording the
    * submission (which also moves the application to Pending review) and
@@ -10130,7 +10130,7 @@
   function clientsContextItems(kind, extra, clientUid) {
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
-      // On §8's table the row IS an application, so Edit means the
+      // On section 8's table the row IS an application, so Edit means the
       // application, the client's contact form is a different record and
       // sending somebody there from here would be answering a question they
       // did not ask.
@@ -10830,7 +10830,7 @@
   }
 
   /*
-   * §18: the day the Unit asked, which is what moves the file to Non-compliant.
+   * Section 18: the day the Unit asked, which is what moves the file to Non-compliant.
    *
    * The date is asked for rather than assumed. Staff record a query after the
    * fact as often as on the day, and quietly stamping today would put the
@@ -11226,7 +11226,7 @@
   }
 
   /*
-   * Brief §6–§12: a post-approval date, which is what moves the file to the
+   * Brief section 6–section 12: a post-approval date, which is what moves the file to the
    * next status. Asked for rather than assumed, staff record it after the
    * fact as often as on the day.
    */
@@ -11297,7 +11297,7 @@
   }
 
   /*
-   * §19: the day the Unit accepted the file, which is what moves it to
+   * Section 19: the day the Unit accepted the file, which is what moves it to
    * Background check. Asked for rather than assumed, staff record it after
    * the fact as often as on the day.
    */
@@ -11395,7 +11395,7 @@
   }
 
   /*
-   * §4d: a day on the Timeline card recorded wrong, corrected in place.
+   * Section 4d: a day on the Timeline card recorded wrong, corrected in place.
    *
    * A correction, not a step. The status does not move and no notice goes
    * out, because nothing happened to the file that its readers have not
@@ -12255,7 +12255,7 @@
 
   function refreshDirectoryFromSearch(root, state) {
     state.page = 1;
-    // §8's table pages on the server, so a new term is a new first page.
+    // Section 8's table pages on the server, so a new term is a new first page.
     APP_TABLE.page = 1;
     /*
      * The full-width list repaints whole.
@@ -14529,7 +14529,7 @@
   }
 
   /*
-   * The same for the CIP module. §8's table, §9's chips, and whichever
+   * The same for the CIP module. Section 8's table, section 9's chips, and whichever
    * application is open beside them.
    *
    * Its own entry rather than a second job on the directory's: a client
@@ -14648,7 +14648,7 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
-    // Filter the applications table to one of §9's buckets. The Dashboard's
+    // Filter the applications table to one of section 9's buckets. The Dashboard's
     // CIP card navigates here and then calls this; an unknown key is ignored.
     openBucket: openBucket,
     listDirectory: function (opts) { return ClientsAPI.list(opts); },

@@ -117,7 +117,7 @@ try {
   check(/File locked/.test(panel), 'the lock setting is stated');
   check(/Reviewing version 1/.test(panel), 'it says which version is under review');
 
-  step(4, 'The header carries the status badge (§20)');
+  step(4, 'The header carries the status badge (section 20)');
   const sub = await page.textContent('.tma-portal-viewer__sub');
   check(/Awaiting approval/.test(sub), `header badge reads the status (“${sub.trim()}”)`);
 
@@ -240,7 +240,7 @@ try {
   check(/requested changes/.test(activity), 'the changes-request is described');
   check(!/approval sent/.test(activity), 'no raw action slugs leak into the timeline');
 
-  step(11, '§29 — none of this reloaded the page');
+  step(11, 'section 29 — none of this reloaded the page');
   check(!!(await page.$('.tma-portal-viewer')), 'the viewer is still open');
 
   await other.close();

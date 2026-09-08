@@ -115,7 +115,7 @@ final class ClientDirectory
     }
 
     /**
-     * Widen a client search to the application numbers §7 promises.
+     * Widen a client search to the application numbers section 7 promises.
      *
      * "Users may search using either: Internal Number, CIP Number, Applicant
      * Name", and a number is not a property of the client row, so the name

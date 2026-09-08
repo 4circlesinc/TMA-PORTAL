@@ -15,7 +15,7 @@ return new class extends Migration
      * checklist reads from Settings rather than from hardcoded form rules.
      *
      * Also moves existing post-approval files off the Approved chip onto
-     * Post-Approval, matching brief §1: the reviewer changes the status
+     * Post-Approval, matching brief section 1: the reviewer changes the status
      * from Approved to Post Approval.
      */
     public function up(): void

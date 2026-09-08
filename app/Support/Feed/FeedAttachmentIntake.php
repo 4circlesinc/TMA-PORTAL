@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Takes an uploaded file and stages it as a post or comment attachment (§18).
+ * Takes an uploaded file and stages it as a post or comment attachment (section 18).
  *
  * Storage and validation are the File Library's, not a parallel set: the same
  * Vault (so the disk switch to R2 applies here too) and the same FileType

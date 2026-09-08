@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 
 /**
- * Who a CIP notice writes to. §22's four classes, unique by mailbox.
+ * Who a CIP notice writes to. Section 22's four classes, unique by mailbox.
  *
  * A member whose mailbox is also the registry contact is one recipient, not
  * two, and a private client with no firm behind them is their own provider
@@ -48,7 +48,7 @@ class Contacts
     }
 
     /**
-     * §22's four classes: CIP Distribution Group + Assigned Officer +
+     * Section 22's four classes: CIP Distribution Group + Assigned Officer +
      * Administrators + Service Provider Contact, unique by mailbox.
      *
      * @return list<array{email:string, name:?string, userId:?int}>
@@ -130,7 +130,7 @@ class Contacts
 
     /**
      * Everyone currently holding this file, reviewing officer and, when one
-     * is named, the compliance officer. §22 says "Assigned Officer".
+     * is named, the compliance officer. Section 22 says "Assigned Officer".
      *
      * @return list<array{email:string, name:?string, userId:?int}>
      */

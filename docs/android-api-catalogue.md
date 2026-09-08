@@ -57,7 +57,7 @@ All paths are relative to `/Users/vernonfrancis/Github/TMA-PORTAL`. Everything b
 | `Cookie` | session + remember + `XSRF-TOKEN` (+ `tma_device_trust`, `tma_trusted_device` if received) | session guard; `StaySignedIn::COOKIE` `app/Support/StaySignedIn.php:22`; `TrustedDevices::COOKIE` `app/Support/TrustedDevices.php:22` |
 | `Accept: application/json` | always, on every XHR-style call | `wantsJson()` = first Accept type contains `/json` (`vendor/.../Http/Concerns/InteractsWithContentTypes.php:34-39`); `expectsJson()` = that OR (`X-Requested-With: XMLHttpRequest` AND Accept `*/*`) (`:24-27`). JSON errors are rendered when `expectsJson()` (`bootstrap/app.php:60-62`). |
 | `X-Requested-With: XMLHttpRequest` | always | matches every web helper (`current-user.js:146`, `portal-queue.js:286`) |
-| `X-XSRF-TOKEN` | URL-decoded `XSRF-TOKEN` cookie value | §2 |
+| `X-XSRF-TOKEN` | URL-decoded `XSRF-TOKEN` cookie value | section 2 |
 | `Content-Type: application/json` | JSON bodies (`current-user.js:144`); multipart for uploads | — |
 | `X-Socket-ID` | Reverb `socket_id` on every write while connected | `public/js/portal-live.js:52-70`; without it `toOthers()` echoes the actor's own change back |
 | `User-Agent` | anything containing `Android` | `app/Support/DeviceName.php:7-27` produces "Browser on Android" labels for Security settings and trusted devices; a new UA/IP pair also triggers the "New sign-in to your account" notification for returning users (`app/Listeners/RecordAuthEvent.php:82-127`) |
@@ -103,7 +103,7 @@ Post-login web-only detour: `StaySignedIn::afterAuthenticated` (`app/Support/Sta
 
 - `GET /auth/social/{google|microsoft}/redirect` (`routes/web.php:1409`), `GET /auth/social/{provider}/callback` (`:1425`), `POST /auth/social/{provider}/disconnect` (`auth`,`verified`, `:1428`), `GET /connect/{provider}` (`auth`, `:1420-1423`) for mailbox/calendar connects. Providers: `['google','microsoft']` (`app/Http/Controllers/SocialAuthController.php:37`). Missing `services.{provider}.client_id` → back to login with `social_error` "… sign-in is not configured yet." (`:76-78`).
 - The callback signs in via `login()` (`:489-518`): 2FA users without a trusted device go to `/auth/two-factor-challenge`; otherwise `Auth::login($user,false)`, regenerate, then Stay-signed-in.
-- OAuth **must not run inside an embedded webview** — the desktop comment and `signin-provider.js` say Google refuses it (`desktop/main.js:641-648`). That is the reason the handoff in §7 exists; Android must use it too.
+- OAuth **must not run inside an embedded webview** — the desktop comment and `signin-provider.js` say Google refuses it (`desktop/main.js:641-648`). That is the reason the handoff in section 7 exists; Android must use it too.
 
 ### 7. The desktop handoff — reuse it verbatim on Android
 
@@ -130,7 +130,7 @@ Desktop client reference (`desktop/main.js:651-762`, `desktop/signin-handoff.js`
 2. Launch a **Chrome Custom Tab** at `https://<portal>/auth/desktop/start?challenge=…&provider=google|microsoft` (omit `provider` for the password/login page). Show a native "Continue in your browser" screen mirroring `desktop/signin-waiting.html` copy with "Open in browser" (relaunch the same URL) and "Back to sign in" (forget verifier).
 3. Declare an `<intent-filter>` for scheme `tmaportal`, host `auth` (`android:launchMode="singleTask"`); on `onNewIntent`/`onCreate` read `token` (exactly 64 chars).
 4. With the app's OkHttp `CookieJar` (empty or stale), `GET /auth/desktop/claim?token=…&verifier=…` with `followRedirects=false`. Delete the stored verifier immediately. Treat `302 Location: /` (+ `Set-Cookie` session and `remember_web_*`) as success; `302 Location: /auth/login` as failure — the reason text is only in the flashed session, so show a generic "That sign-in could not be completed. Try again." and offer retry (the token is burnt either way).
-5. Immediately `GET /me` with the headers in §3 to hydrate identity (`app/Http/Controllers/MeController.php:23-73` — keys `id,name,firstName,lastName,email,phone,jobTitle,company,linkedin,avatar,hasAvatar,accountType,isAdmin,isStaff,cipReach,isProviderContact,isPrivateClient,capabilities[],providerPhoto,realtime{enabled,key,host,port,scheme},toasts,desktopNotifications{enabled,preview},workStatus,availability`). Persist the JSON as the offline identity, exactly as the desktop keeps `localStorage tma.me` (`current-user.js:280-298,338-347`): a non-OK reply deletes it; a network failure falls back to it (`:352-372`).
+5. Immediately `GET /me` with the headers in section 3 to hydrate identity (`app/Http/Controllers/MeController.php:23-73` — keys `id,name,firstName,lastName,email,phone,jobTitle,company,linkedin,avatar,hasAvatar,accountType,isAdmin,isStaff,cipReach,isProviderContact,isPrivateClient,capabilities[],providerPhoto,realtime{enabled,key,host,port,scheme},toasts,desktopNotifications{enabled,preview},workStatus,availability`). Persist the JSON as the offline identity, exactly as the desktop keeps `localStorage tma.me` (`current-user.js:280-298,338-347`): a non-OK reply deletes it; a network failure falls back to it (`:352-372`).
 6. Any later **401** → clear cookies + cached `/me`, return to step 1. Any 302 from `/me` → open `Location` in a Custom Tab, then poll `/auth/pending-status` or re-run `/me` when the tab returns.
 7. Sign-out: `POST /auth/logout` with CSRF (retry once on 419 like `sign-out.js:103-110`); on 204/200/302 clear the cookie jar, the replica and the write queue (`sign-out.js:19-43,112-126`).
 
@@ -140,7 +140,7 @@ The claim path never triggers `EnsureStaySignedInChoice` (it never calls `StaySi
 
 - Connection details come from `/me.realtime` (`app/Support/RealtimeConfig.php:16-31`): `wss://{host}:{port}/app/{key}?protocol=7&client=tma-portal&version=1.0&flash=false` (`public/js/messaging-realtime.js:18-21,279-286`). Wait for `pusher:connection_established` → `data.socket_id` (`:349-356`; Reverb sends `data` as a JSON string, `:336-343`).
 - Private channels: `POST /broadcasting/auth` (registered by `withRouting(channels:)`, `bootstrap/app.php:24`, `vendor/.../ApplicationBuilder.php:128-139`, `web` middleware → needs session cookie + `X-XSRF-TOKEN`) with JSON `{socket_id, channel_name}`; reply `{auth, channel_data}` sent in `pusher:subscribe` (`messaging-realtime.js:439-466`). Channels and authorisers in `routes/channels.php`: `App.Models.User.{id}`, `portal.staff` (staff only — a client asking gets 403, `portal-live.js:194-201`), `messaging.user.{id}`, `conversation.{uuid}`, `file.{uuid}`, etc.
-- Send `X-Socket-ID` on writes (§3).
+- Send `X-Socket-ID` on writes (section 3).
 
 ### 9. Security settings endpoints the app may mirror
 
@@ -148,7 +148,7 @@ The claim path never triggers `EnsureStaySignedInChoice` (it never calls `StaySi
 
 ### 10. Auth screen design
 
-`AUTH_DESIGN.md` is the spec: screen list with paths and states (§1 table, lines 20-42), flow diagrams (§3), copy rules — neutral errors, "Done / Optional / Recommended" pills, no fear language, autocomplete hints (§4), breakpoints 960/760/720/560 px and `data-theme="dark"`. Live Blade views: `resources/views/auth/` (`login`, `register`, `two-factor-challenge`, `stay-signed-in`, `forgot-password`, `reset-password`, `verify-email`, `pending`, `role-pending`, `profile-setup`, `getting-started`, `setup/`). The login view shows provider buttons first with an email form behind "data-show-email" (`login.blade.php:47-73`) and renders `session('social_error')` as an alert (`:40-43`). Prototype behaviours (OTP auto-advance, countdowns, password meter) live in `public/js/auth-flow.js`. Because the handoff runs sign-in in the browser, the native app only needs: the waiting screen, the claim/failure states, and (optionally) a native password form posting to `/auth/login` + `/auth/two-factor-challenge` as JSON.
+`AUTH_DESIGN.md` is the spec: screen list with paths and states (section 1 table, lines 20-42), flow diagrams (section 3), copy rules — neutral errors, "Done / Optional / Recommended" pills, no fear language, autocomplete hints (section 4), breakpoints 960/760/720/560 px and `data-theme="dark"`. Live Blade views: `resources/views/auth/` (`login`, `register`, `two-factor-challenge`, `stay-signed-in`, `forgot-password`, `reset-password`, `verify-email`, `pending`, `role-pending`, `profile-setup`, `getting-started`, `setup/`). The login view shows provider buttons first with an email form behind "data-show-email" (`login.blade.php:47-73`) and renders `session('social_error')` as an alert (`:40-43`). Prototype behaviours (OTP auto-advance, countdowns, password meter) live in `public/js/auth-flow.js`. Because the handoff runs sign-in in the browser, the native app only needs: the waiting screen, the claim/failure states, and (optionally) a native password form posting to `/auth/login` + `/auth/two-factor-challenge` as JSON.
 
 ### 11. Not found / open questions
 
@@ -194,9 +194,9 @@ Every path below is relative to the portal origin. All of it lives in `routes/we
 | `toasts` | `{enabled:true, position:'bottom-right'|'top-right'|'bottom-left', durationSec:3|5|8|10, stickyImportant, sound, previewText, groupSimilar}` — `app/Support/Notifications/ToastSettings.php` |
 | `desktopNotifications` | `{enabled, preview}` from MessagingSettings `desktopNotifications`/`notificationPreview` (defaults true) |
 | `workStatus` | today's public work plan `{status,label,startsAt:'HH:MM',endsAt,location}` or null — `app/Models/WorkDay.php::publicFromPlan` |
-| `availability` | `AvailabilityService::selfPayload` (see §6) |
+| `availability` | `AvailabilityService::selfPayload` (see section 6) |
 
-Capability names (the matrix, `Role.php:150-330`): `clients.view/viewAll/manage/invite/assign`, `cbi.view`, `cip.view/create/review/compliance/assign/decide/configure/report`, `users.view/manage`, `directory.view`, `presence.view`, `mail.use`, `feed.view/createChannel/moderate/analytics`, `messaging.contactAll`, `files.viewOrg/admin/settings`, `signatures.create`, `templates.view/email`, `workflows.view`, `callRecordings.view`, `overview.view`, `activity.viewAll`, `calendar.staff/admin`, `groups.view/manage`, `recyclebin.admin`, `settings.security/operations/reporting/branding/clientHub/storage/advanced`. Employee baseline for `clients.*` and `directory.view` is admin-editable (§9). Page→capability map `Role.php:334-380`, settings-rail map `Role.php:396-430`.
+Capability names (the matrix, `Role.php:150-330`): `clients.view/viewAll/manage/invite/assign`, `cbi.view`, `cip.view/create/review/compliance/assign/decide/configure/report`, `users.view/manage`, `directory.view`, `presence.view`, `mail.use`, `feed.view/createChannel/moderate/analytics`, `messaging.contactAll`, `files.viewOrg/admin/settings`, `signatures.create`, `templates.view/email`, `workflows.view`, `callRecordings.view`, `overview.view`, `activity.viewAll`, `calendar.staff/admin`, `groups.view/manage`, `recyclebin.admin`, `settings.security/operations/reporting/branding/clientHub/storage/advanced`. Employee baseline for `clients.*` and `directory.view` is admin-editable (section 9). Page→capability map `Role.php:334-380`, settings-rail map `Role.php:396-430`.
 
 Web-client behaviour to replicate (`public/js/current-user.js`): one `/me` in flight at a time; desktop keeps the last answer in `localStorage['tma.me']` and paints it before the network answers; a non-OK response **deletes** the cached copy (signed out/suspended); a network failure keeps it. `applyMe` then scopes the offline store/write-queue to `id`, applies toast/desktop prefs, and runs catch-up syncs (files/CIP/clients). Branding is loaded separately via `GET /admin/branding` (readable by everyone).
 
@@ -239,7 +239,7 @@ Avatars: `GET /media/avatars/{uuid}.jpg` and `GET /media/branding/{uuid}.{ext}` 
 | `dashboardTiles` | all ten `true` | `{tileId: bool}`; ids `recentFiles,email,cipStatus,favorites,road,shortcuts,employees,messages,requests,comments` |
 | `dashboardLayout` | `{order:[recentFiles,email,cipStatus,favorites,road,shortcuts,employees,messages,requests,comments]}` | unknown ids dropped, missing ids appended; server stamps `dashboardLayoutVersion` (currently **13**) and re-seeds the default board on GET when the version is older |
 
-Not returned by this endpoint but stored in the same `users.preferences` JSON: `notifications` (§5), `toasts`, `security_alerts` (§7), `activity_seen_at` (§5), `accountSetupStep`/`accountsSetupComplete` (onboarding), messaging settings.
+Not returned by this endpoint but stored in the same `users.preferences` JSON: `notifications` (section 5), `toasts`, `security_alerts` (section 7), `activity_seen_at` (section 5), `accountSetupStep`/`accountsSetupComplete` (onboarding), messaging settings.
 
 ### 4. Dashboard
 
@@ -603,13 +603,13 @@ The five `clients.*` employee grants are **admin-editable** via `GET/PUT /admin/
 | Method + path | Gate | Request | Response |
 |---|---|---|---|
 | `GET /portal/clients` | clients.view | — | `{clients: [directoryRow], customFields: [field]}`; cached 60 s per viewer (`ClientDirectory.php:26,45-58`). No `profile`. |
-| `GET /portal/clients/sync?since&after` | clients.view | see §2.3 | `{clients:[record|tombstone], cursor:{since,after}, more}` |
+| `GET /portal/clients/sync?since&after` | clients.view | see section 2.3 | `{clients:[record|tombstone], cursor:{since,after}, more}` |
 | `GET /portal/clients/preview?limit=10&sort=name|latest` | clients.view | limit clamped 1–20 | `{clients:[directoryRow]}` |
 | `GET /portal/clients/search?q=&limit=` | clients.view | `q` < 2 chars returns empty; `limit>0` returns records (cap 50) else ids | `{query, ids:[uid]}` or `{query, clients:[directoryRow]}` |
 | `GET /portal/clients/assigned-to-me` | clients.view | — | `{clients:[{id,name,folderUuid}]}`; admins get every client (`ClientAssignmentController.php:47-70`). |
-| `POST /portal/clients` | clients.manage | §2.2 body, `uid` required | `{client: record}` |
+| `POST /portal/clients` | clients.manage | section 2.2 body, `uid` required | `{client: record}` |
 | `GET /portal/clients/{uid}` | clients.view | — | `{client: record}` (404 if out of scope) |
-| `PATCH /portal/clients/{uid}` | clients.manage | §2.2 body, `uid` optional | `{client: record}` |
+| `PATCH /portal/clients/{uid}` | clients.manage | section 2.2 body, `uid` optional | `{client: record}` |
 | `DELETE /portal/clients/{uid}` | clients.manage | — | `{status:"ok"}` (soft delete; ends assignments/invites via `AccessSync::clientArchived`) |
 | `POST /portal/clients/bulk-delete` | clients.manage | `{uids:[string]}` | `{deleted: n}` |
 | `POST /portal/clients/{uid}/duplicate` | clients.manage | — | `{client: record}` (uid `-copy`, name ` (copy)`) |
@@ -680,7 +680,7 @@ Scope (`app/Support/Cip/ApplicationScope.php`): admin = all; officer = applicati
 |---|---|---|---|
 | `GET /portal/cip/dashboard` | reach | — | `{cip:false,buckets:[]}` or `{cip:true, staff, card, dashboard(administrator|reviewing_officer|service_provider), buckets:[{key,label,short,count,statuses,scope(all|mine),tone,filter:{bucket},aggregate}], total}` (`Buckets.php:304-360`). Never cached. |
 | `GET /portal/cip/applications` | reach | `q`≤120, `status`, `bucket`, `assignee`, `provider` (comma lists ≤400), `page`, `perPage`≤200 (default 50), `sort` ∈ `number,applicant,provider,contact,email,investment,family,status,assigned`, `dir`, `phase` ∈ `pre_approval,post_approval,closed` | `{applications:[row], page, lastPage, perPage, total, statuses:[{value,label,tone}], personStatuses, assignees, providers, phaseCounts:{all,pre_approval,post_approval,closed}}`. Unknown bucket = **404**. |
-| `GET /portal/cip/applications/sync?since&after` | reach | same pair-cursor contract as §2.3, page **50**, full `record`s | `{applications:[record], cursor:{since,after}, more}` |
+| `GET /portal/cip/applications/sync?since&after` | reach | same pair-cursor contract as section 2.3, page **50**, full `record`s | `{applications:[record], cursor:{since,after}, more}` |
 | `GET /portal/cip/applications/{uuid}` | scope | — | `{application: record}` (materialises checklist; provisions folder) |
 | `GET /portal/cip/clients/{uid}/application` | reach | — | `{application: record|null, client: clientRecord|null}` — the door for provider contacts who get 403 on `/portal/clients/{uid}` |
 | `GET /portal/cip/applications/form?phase=` | create | — | `{providers:[{id,name,code}], providerFixed, countries:[{value,label,region}], investmentTypes:[{value,label}], genders:["Male","Female"], requirements:{principal,sponsor,spouse,dependent_under_16,dependent_16_over:[{key,field,label,help,required,realEstateOnly,atFiling}]}, phase, photoRequired{...}, dependentAgeCutoff}` |
@@ -701,7 +701,7 @@ Statuses (`app/Support/Cip/Status.php`): `draft, new, review_application, assess
 
 | Method + path | Gate | Body | Response |
 |---|---|---|---|
-| `POST /portal/cip/applications` | create | **multipart** (§5.3) | **201** `{application}`; **200** on idempotent replay; **409** `{duplicate:{id,internalNumber,name}}` for admins (resend with `allowDuplicate=1`), **422** for others |
+| `POST /portal/cip/applications` | create | **multipart** (section 5.3) | **201** `{application}`; **200** on idempotent replay; **409** `{duplicate:{id,internalNumber,name}}` for admins (resend with `allowDuplicate=1`), **422** for others |
 | `POST …/{uuid}` (update, not PATCH) | create; 422 if locked | multipart, same fields optional | `{application}` |
 | `POST …/{uuid}/status` | engine decides | `{status, note≤2000}` | `{application}` — **reduced** shape (`CipTransitionController.php:236-270`), re-read the full record after |
 | `POST …/{uuid}/submit` (draft→new) | reach | — | `{application}` or 422 `{message, outstanding:[label]}` |
@@ -801,23 +801,23 @@ All paths relative to `/Users/vernonfrancis/Github/TMA-PORTAL`. Facts come from 
 | `POST /portal/mail/messages/{uuid}/labels` | `{label: uuid, applied: bool}` | `{message: Row}` | 1385–1413 |
 | `POST /portal/mail/bulk` | `{ids:[uuid] (≤100), action: read\|unread\|star\|unstar\|pin\|unpin\|archive\|trash\|spam\|inbox\|delete}` | `{applied, failed, folders}` | Applied one by one; failures counted not thrown (1318–1383). |
 | `POST /portal/mail/hydrate-attachments` | `{ids:[uuid] (≤40)}` | `{messages:[{id, attachmentsPreview:[Attachment], attachmentCount}]}` | Fills chips for rows with `hasAttachments && attachmentsPreview.length==0` (1274–1316; client `email.js:3020–3035`). |
-| `GET /portal/mail/attachments/{uuid}` | `?inline=1` optional | bytes | See §6. |
+| `GET /portal/mail/attachments/{uuid}` | `?inline=1` optional | bytes | See section 6. |
 | `GET /portal/mail/sender-photo/{sha256hex}` | – | image bytes, `Cache-Control: private, max-age=86400`; 404 = draw initials | Never blocks on provider (510–550). `avatarUrl` in rows already points here or to a portal photo. |
 | `POST /portal/mail/labels` | `{name (≤100), tone: blue\|green\|purple\|orange\|red\|indigo\|gray}` | 201 `{label: Label}`; 422 `You already have a label with that name.` | Portal-only labels (`remote_id` prefixed `local:`), 1415–1450 |
 | `PATCH /portal/mail/labels/{uuid}` | `{name?, tone?}` | `{label}` | 1452–1497 |
 | `DELETE /portal/mail/labels/{uuid}` | – | `{deleted:true}` | 1499–1527 |
 | `GET /portal/mail/suggest?q=` | `q` ≤200 | `{suggestions:[Suggestion]}` | ≤12 rows (`RecipientSuggester.php:33`). |
-| `POST /portal/mail/send` | see §7 | `{sent:true, message: Row\|null}`; 502 `{message}` on provider failure; 409 on dead grant | 1544–1683 |
+| `POST /portal/mail/send` | see section 7 | `{sent:true, message: Row\|null}`; 502 `{message}` on provider failure; 409 on dead grant | 1544–1683 |
 | `GET /portal/mail/drafts` | – | `{drafts:[Draft]}` | Defined but **not called by email.js** (only continue/save/delete are). |
-| `POST /portal/mail/drafts` | see §7 | `{draft: Draft}` | Autosave; creates on first call (1750–1835). |
+| `POST /portal/mail/drafts` | see section 7 | `{draft: Draft}` | Autosave; creates on first call (1750–1835). |
 | `POST /portal/mail/messages/{uuid}/continue` | – | `{draft: Draft + attachments:[{name,mime,content(base64),size}]}`; 422 `Only drafts can be continued.` | Opens a Drafts-folder row in compose (1837–1891). |
 | `DELETE /portal/mail/drafts/{uuid}` | – | `{deleted:true}` | 1929–1946 |
 | `POST /portal/mail/sync` | `?fast=1` optional | fast: `{synced:int, fast:true, folders}` or `{synced:0, fast:true, error:'unavailable'}`; full: `{synced:0, queued:true, folders, syncedAt}` | Fast = one inbox request via `quickCheck` (`MailSynchronizer.php:101–141`); full is queued (2090–2120). Dead grant → 409 even on fast. |
-| `GET /portal/mail/sync-status` | – | see §8 | 245–315 |
+| `GET /portal/mail/sync-status` | – | see section 8 | 245–315 |
 | `POST /portal/mail/sync/retry` | – | same as sync-status | 437–468 |
 | `POST /portal/mail/sign-out` | – | `{signedOut:true, provider}`; 422 `No mailbox is connected.` | Sets `sync_email=false` only; imported mail kept (470–508). |
 | `GET /portal/mail/settings` | – | `{accounts:[{provider,email,name,syncEnabled,canWrite,status,error,syncedAt}], preferences}` | 2122–2142 |
-| `PUT /portal/mail/settings` | `{provider?, syncEnabled?, preferences?:{…}}` | same as GET | Preference keys/limits in §9 (2144–2216). |
+| `PUT /portal/mail/settings` | `{provider?, syncEnabled?, preferences?:{…}}` | same as GET | Preference keys/limits in section 9 (2144–2216). |
 | `POST /portal/mail/settings/import-signature` | – | `{choices:[{name,html}], reconnect, preferences}`; 422 with `choices:[]` and message `No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.` | 2218–2252 |
 | `POST /portal/mail/settings/import-signature/apply` | `{html (≤4,000,000), name? (≤80)}` | `{signature, preferences}`; 422 `That signature could not be used. Pick another, or paste it into the editor.` | 2254–2333 |
 | `GET /portal/mail/templates` | – | `{templates:[{id,name,subject,bodyHtml,shared}]}` | Compose templates (firm + own), `ComposeTemplates::mailboxRecord` (`app/Support/Templates/ComposeTemplates.php:86–97`). |
@@ -960,7 +960,7 @@ Role ladder, weakest first: `availability` < `titles` < `details` < `contributor
 | DELETE `/calendars/{uuid}/members/{userId}` (numeric) / `/group-members/{groupUuid}` | `manage_sharing` | — | `{status:'ok'}` `:442-499` |
 | GET `/calendars/{uuid}/history` | `manage_sharing` | — | `{history:[{id,action,label,actor,calendar,event,context,at}]}` last 100; actions listed in `app/Support/Calendar/CalendarAudit.php:19-57` |
 | GET `/events?from&to[&calendars[]=uuid]` | any | `from*`,`to*` dates (≤400 days apart, else 422) | `{events:[EventRecord]}` sorted by `startsAt`; overlap semantics (`starts_at < to && ends_at > from`); recurring masters expanded server-side into virtual occurrences. `CalendarEventController.php:42-166` |
-| POST `/events` | `add_events` on target calendar (defaults to personal) | see §1.4 | `{event}` `:168-203` |
+| POST `/events` | `add_events` on target calendar (defaults to personal) | see section 1.4 | `{event}` `:168-203` |
 | GET `/events/{uuid}` | any role | — | `{event}` with `attendees` and `myInvitation` `:376-385` |
 | PATCH `/events/{uuid}` | canWrite | partial body + optional `scope` (`this|following|all`, default all) | `{event}` `:205-311` |
 | DELETE `/events/{uuid}` | canWrite | optional JSON body `{scope}` | `{status:'ok'}` `:313-355` |
@@ -1112,7 +1112,7 @@ All paths are relative to `/Users/vernonfrancis/Github/TMA-PORTAL`. Everything b
 | POST `/messages/{uuid}/reactions` | `{emoji}` (≤32 chars, must be emoji) | `{message}` | One reaction per user per message: same emoji toggles off, different replaces. `:870-909` |
 | POST `/messages/{uuid}/star` | – | `{starred:bool,id}` | Per-viewer. `:981-1015` |
 | POST `/messages/{uuid}/forward` | `{conversationId}` | `{message, conversation}` | Text only, prefixed `Forwarded: `; attachments not copied. `:1021-1067` |
-| POST `/conversations/{uuid}/call` | `{type, payload?, media?, initiatorId?, answered?}` | `{ok:true}` | Call signalling relay (see §5). `:1078-1163` |
+| POST `/conversations/{uuid}/call` | `{type, payload?, media?, initiatorId?, answered?}` | `{ok:true}` | Call signalling relay (see section 5). `:1078-1163` |
 | POST `/conversations/{uuid}/read` | – | `{unread:0}` | Advances read mark, clears bell notifications, broadcasts `conversation.read` only if `readReceipts` on. `:1264-1291` |
 | POST `/conversations/{uuid}/delivered` | – | `{delivered:seq}` | Delivery ack (not gated by privacy). `:1300-1320` |
 | POST `/delivered` | – | `{delivered:n}` | Bulk ack for all conversations; call after loading the list. `:1332-1375` |
@@ -1132,14 +1132,14 @@ All paths are relative to `/Users/vernonfrancis/Github/TMA-PORTAL`. Everything b
 | GET `/calls` | – | `{calls:[{id,conversationId,name,photo,label,event,media,answered,initiatorId,actorId,actorName,time}]}` | Last 50 call system lines (`call_ended`/`call_missed`/`call_started`). `:1191-1260` |
 | GET `/tab-counts` / POST `/tab-counts/seen` `{tab:'calls'}` | – | `{tabCounts:{calls:int}}` | Missed calls not placed by me since marker stored in `users.preferences.messagingSeen.callId`. `app/Support/Messaging/TabCounts.php` |
 | GET/PUT `/settings` | PUT: any subset of Settings | `{settings}` | Stored in `users.preferences.messaging`. `app/Support/Messaging/MessagingSettings.php` |
-| POST `/heartbeat` | – | `{ok:true}` | Presence touch (see §6). `:1673-1678` |
+| POST `/heartbeat` | – | `{ok:true}` | Presence touch (see section 6). `:1673-1678` |
 | POST `/groups` | `{name≤120, description?≤1000, memberIds:[int]}` | 201 `{conversation}` | Creator becomes `admin`. Max 256 members. `MessagingGroupController.php:26-83` |
 | PATCH `/groups/{uuid}` | `{name?, description?}` | `{conversation}` | Admin only (403). `:89-127` |
 | POST `/groups/{uuid}/photo` | multipart `photo` ≤10 MB image | `{conversation}` | `:129-171` |
 | POST `/groups/{uuid}/members` | `{memberIds:[int]}` | `{conversation}` | Org chat accepts staff only. `:175-244` |
 | PATCH `/groups/{uuid}/members/{userId}` | `{role:'member'|'admin'}` | `{conversation}` | Cannot demote last admin (422). `:266-297` |
 | DELETE `/groups/{uuid}/members/{userId}` | – | `{conversation}` | `:246-264` |
-| POST `/conversations/{uuid}/recordings` | `{media?:'audio'|'video'}` | 201 `{recording:{id}}` **or** 200 `{recording:null}` | See §7. `app/Http/Controllers/CallRecordingController.php:74-135` |
+| POST `/conversations/{uuid}/recordings` | `{media?:'audio'|'video'}` | 201 `{recording:{id}}` **or** 200 `{recording:null}` | See section 7. `app/Http/Controllers/CallRecordingController.php:74-135` |
 | POST `/recordings/{uuid}/chunks` | multipart `seq` (0..100000), `chunk` (≤16 MB) | `{ok:true}` | Duplicate seq overwrites harmlessly. `:142-166` |
 | POST `/recordings/{uuid}/finish` | `{durationMs?, media?, failed?:bool}` | `{ok:true}` | Assembles chunks into the Vault. `:169-207` |
 
@@ -1148,7 +1148,7 @@ Recordings area (`routes/web.php:1266-1269`, capability `callRecordings.view`, *
 ### 3. Payload shapes (verbatim keys)
 
 **Conversation** (`MessagingPresenter.php:168-243`): `id(uuid), type:'direct'|'group', name, subtitle, subject:'provider'|'person'|null, about:{kind,clientUid,clientName,companyName}|null, photo, members:[{id,name,photo,online,lastSeenAt}] (groups, ≤5), memberCount, preview, reactionNote, time, timestamp(ISO), unread, pinned, archived, muted, markedUnread, draft, role:'member'|'admin', presence, workStatus, counterpartId, description, isDefault, canManage, canLeave, blocked`.
-`presence` for a direct thread = availability shape (§6); for a group = `{label:'N online'|'N members', onlineCount}`.
+`presence` for a direct thread = availability shape (section 6); for a group = `{label:'N online'|'N members', onlineCount}`.
 
 **Message** (`:246-285`): `id(uuid), seq(int, monotonic — page & dedupe on this), type:'text'|'voice'|'attachment'|'system', direction:'in'|'out', body, deleted, edited, sender:{id,name,photo}|null, sentAt(ISO), time, replyTo:{id,seq,senderName,preview,type,attachmentName,thumbUrl}|null, attachments:[Attachment], reactions:[{emoji,count,mine,users:[{id,name}]}], starred, systemEvent:{event,...}|null, status:'sent'|'delivered'|'read'|null (own messages only; group needs everyone), can:{edit,delete}`.
 System events (`:517-537`): `group_created, case_opened, member_added, member_removed, member_left, admin_granted, admin_revoked, name_changed, photo_changed, call_ended, call_missed, call_started`; call events carry `{actorName, actorId, label:'Voice call'|'Video call', media, answered, initiatorId}` (`MessagingController.php:1130-1141`).
@@ -1189,7 +1189,7 @@ Sequence (A = caller, B = callee):
 2. B (on `ring`/`offer`, session created from `ring`; `offer.payload.sdp` stored as `remoteOffer`): shows incoming UI + OS notification, starts a local-only preview, timeout 30 s, replies **`state`** `{payload:{ringing:true}}` so A shows "Ringing…" (`:3181-3205`).
 3. B accepts: **`accept`** `{media}` (A stops ringing, "Connecting…"), then `setRemoteDescription(offer)` → `createAnswer` → **`answer`** `{media, payload:{sdp}}` (`:3040-3160`). Decline = **`reject`** `{media, initiatorId, answered:false}` (`:3113-3125`).
 4. Both: `onicecandidate` → **`ice`** `{payload:{candidate:RTCIceCandidateInit}}`; remote candidates buffered until a remote description exists (`:703-716,767-770,3226-3231`).
-5. On `connectionState==='connected'`: timer starts, **`state`** `{payload:{muted,cameraOff,media,screenSharing,recording}}` published (also on every toggle), and `maybeStartRecording()` asks the server (§7) (`:838-870,514-524`).
+5. On `connectionState==='connected'`: timer starts, **`state`** `{payload:{muted,cameraOff,media,screenSharing,recording}}` published (also on every toggle), and `maybeStartRecording()` asks the server (section 7) (`:838-870,514-524`).
 6. Mid-call: mute/camera toggles send `state`; voice→video = **`upgrade`** `{media:'video'}` → peer **`upgrade-accept`** or **`upgrade-decline`**; video→voice = **`downgrade`** `{media:'audio'}`; screen share = `replaceTrack` on the video sender + `state.screenSharing` (`:2281-2380,2650-2775`). Disconnected → "Reconnecting…"; `failed` → error (`:773-793`).
 7. End: **`hangup`** `{media, initiatorId, answered:bool}` (`:493-506`); recorder stopped **before** `pc.close()`. Ring timeout on A sends hangup with `answered:false` (missed). Reporting on-call to availability: `POST /me/availability/call {active}` (`presence-status.js:1012-1014,1084-1100`).
 
@@ -1303,7 +1303,7 @@ Route wiring: `bootstrap/app.php:24` passes `channels:` to `withRouting`, which 
 
 - No session / expired session: `retrieveUser` is null, so `AccessDeniedHttpException` → **403**, not 401/419 (`PusherBroadcaster.php:82-95`). A 403 on auth therefore means "signed out OR not allowed"; re-check `/me` (401 → re-login) before deciding.
 - Channel rule false → 403 (`vendor/.../Broadcaster.php:109-121`; browser test asserts 403 for a foreign conversation, `tests/Browser/messaging-realtime.mjs:151-172`).
-- The XSRF header is harmless but not required on this one route. It IS required on every other POST/PUT/PATCH/DELETE (see §7).
+- The XSRF header is harmless but not required on this one route. It IS required on every other POST/PUT/PATCH/DELETE (see section 7).
 
 Channel rules (`routes/channels.php`; wire names carry the `private-` prefix, the patterns do not):
 
@@ -1382,7 +1382,7 @@ Session and CSRF for a native client: the session cookie is named `Str::slug(APP
 
 ### 8. Recommended Android implementation
 
-1. **Transport**: either `com.pusher:pusher-java-client` (`PusherOptions().setHost(host).setWsPort(port).setWssPort(port).setUseTLS(scheme=="https")`; bind event names exactly as in §4, no dot prefix) or a hand-rolled OkHttp `WebSocket` mirroring `messaging-realtime.js` (six frame types). Build the URL exactly as §2; Reverb ignores `client`/`version`/`flash`.
+1. **Transport**: either `com.pusher:pusher-java-client` (`PusherOptions().setHost(host).setWsPort(port).setWssPort(port).setUseTLS(scheme=="https")`; bind event names exactly as in section 4, no dot prefix) or a hand-rolled OkHttp `WebSocket` mirroring `messaging-realtime.js` (six frame types). Build the URL exactly as section 2; Reverb ignores `client`/`version`/`flash`.
 2. **Authorizer**: implement `com.pusher.client.util.Authorizer` (or the OkHttp equivalent) that POSTs JSON `{socket_id, channel_name}` to `{baseUrl}/broadcasting/auth` through the **same OkHttp client and CookieJar** as the REST layer, with `Accept: application/json`, `X-Requested-With: XMLHttpRequest`, and returns the raw body `{"auth":"..."}`. Treat 403 as "not allowed or signed out"; confirm with `GET /me` (401 → re-authenticate).
 3. **Bootstrap**: read `me.realtime`; if `enabled` is false, run the poll fallbacks only. Restart the socket if `key` changes on a later `/me` (`notify-realtime.js:57-66`).
 4. **Always-on subscriptions**: `private-App.Models.User.{id}` (`data.changed`, `notification.created`, `presence.status`), `private-messaging.user.{id}` (`messaging.inbox`, `call.signal`), and `private-portal.staff` only when `me.isStaff`. Subscribe per-conversation channels for every conversation in the inbox (the web subscribes all rows, `messages.js:5941-5943`), and per-file / per-feed-channel / per-CIP-application channels while that screen is open, leaving them on exit (`feed.js:4823-4825`, `portal-files.js:6088-6090`, `clients.js:8869-8877`).

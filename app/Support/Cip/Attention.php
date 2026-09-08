@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  *              {@see CommentReads} owns the definition, so
  *              a client marked here has a file marked when you open it.
  *   messages — unread correspondence about this file: the application thread
- *              (§24) plus a direct DM with the person the firm deals with on
+ *              (section 24) plus a direct DM with the person the firm deals with on
  *              that client. Not "the client is talking to anybody", which
  *              would light the dot for conversations this reader is not
  *              part of and cannot open. Internal notes never count for an

@@ -36,7 +36,7 @@ await Promise.all([
 if (page.url().includes('/auth/login')) throw new Error('login failed');
 console.log('logged in ->', page.url());
 
-// ── right sidebar sections load real data (§1, §5) ─────────────────
+// ── right sidebar sections load real data (section 1, section 5) ─────────────────
 await page.waitForSelector('[data-rb-body="notifications"] .tma-dash__notice', { timeout: 20000 });
 const sidebar = await page.evaluate(() => ({
   notif: [...document.querySelectorAll('[data-rb-body="notifications"] .tma-dash__notice')].map((n) => n.textContent),
@@ -49,11 +49,11 @@ const sidebar = await page.evaluate(() => ({
 check(sidebar.notif.some((t) => /Tom shared/.test(t)), 'sidebar Notifications shows the real "Tom shared" item');
 check(sidebar.acts >= 1, `sidebar Activities has rows (${sidebar.acts})`);
 check(sidebar.clients.some((t) => /Bruce Wayne/.test(t)), 'sidebar Clients shows a real client');
-check(sidebar.systemIcon, 'a system notification renders a circular icon (§3)');
-check(sidebar.actorAvatar, 'a person notification renders an avatar (§3)');
-check(!sidebar.brokenImg, 'no broken images in the sidebar (§3)');
+check(sidebar.systemIcon, 'a system notification renders a circular icon (section 3)');
+check(sidebar.actorAvatar, 'a person notification renders an avatar (section 3)');
+check(!sidebar.brokenImg, 'no broken images in the sidebar (section 3)');
 
-// ── bell badge = real unread count (§11) ───────────────────────────
+// ── bell badge = real unread count (section 11) ───────────────────────────
 await page.waitForFunction(() => {
   const b = document.querySelector('[data-action="toggle-notifications-popup"] .tma-dash__icon-btn-badge');
   return b && !b.hidden && b.textContent.trim() !== '';
@@ -61,7 +61,7 @@ await page.waitForFunction(() => {
 const badge = await page.$eval('[data-action="toggle-notifications-popup"] .tma-dash__icon-btn-badge', (b) => b.textContent.trim());
 check(badge === '6', `bell badge shows unread count (got "${badge}", expected 6)`);
 
-// ── open notifications popup: person vs system rendering (§3, §6) ──
+// ── open notifications popup: person vs system rendering (section 3, section 6) ──
 await page.click('[data-action="toggle-notifications-popup"]');
 await page.waitForSelector('[data-popup-panel="notifications"]:not([hidden]) [data-notification-id]', { timeout: 8000 });
 const popup = await page.evaluate(() => {
@@ -75,12 +75,12 @@ const popup = await page.evaluate(() => {
   };
 });
 check(popup.items >= 6, `popup lists notifications (${popup.items})`);
-check(popup.hasSystemIcon, 'popup shows a circular system icon (§3)');
-check(popup.hasAvatar, 'popup shows a person avatar (§3)');
-check(popup.seeAll, 'popup has "See all notifications" (§6)');
+check(popup.hasSystemIcon, 'popup shows a circular system icon (section 3)');
+check(popup.hasAvatar, 'popup shows a person avatar (section 3)');
+check(popup.seeAll, 'popup has "See all notifications" (section 6)');
 check(popup.markAll, 'popup has "Mark all as read"');
 
-// ── single open: clicking Activities closes Notifications (§2) ─────
+// ── single open: clicking Activities closes Notifications (section 2) ─────
 await page.click('[data-action="toggle-activities-popup"]');
 await page.waitForTimeout(300);
 const single = await page.evaluate(() => ({
@@ -88,16 +88,16 @@ const single = await page.evaluate(() => ({
   actsShown: !document.querySelector('[data-popup-panel="activities"]').hidden,
   both: document.querySelector('[data-header-popups]').classList.contains('tma-dash__header-popups--both'),
 }));
-check(single.notifHidden, 'opening Activities closed the Notifications popup (§2)');
-check(single.actsShown, 'Activities popup is now open (§2)');
-check(!single.both, 'the two popups never share the "--both" state (§2)');
+check(single.notifHidden, 'opening Activities closed the Notifications popup (section 2)');
+check(single.actsShown, 'Activities popup is now open (section 2)');
+check(!single.both, 'the two popups never share the "--both" state (section 2)');
 
 // clicking the open icon again closes it
 await page.click('[data-action="toggle-activities-popup"]');
 await page.waitForTimeout(200);
-check(await page.evaluate(() => document.querySelector('[data-header-popups]').hidden), 'clicking the open icon again closes the popup (§2)');
+check(await page.evaluate(() => document.querySelector('[data-header-popups]').hidden), 'clicking the open icon again closes the popup (section 2)');
 
-// ── mark all read clears the badge (§11) ───────────────────────────
+// ── mark all read clears the badge (section 11) ───────────────────────────
 await page.click('[data-action="toggle-notifications-popup"]');
 await page.waitForSelector('[data-popup-action="mark-notifications-read"]:not([disabled])', { timeout: 5000 });
 await page.click('[data-popup-action="mark-notifications-read"]');
@@ -108,7 +108,7 @@ await page.waitForFunction(() => {
 const unreadAfter = await page.evaluate(async () => (await (await fetch('/portal/notifications/count', { headers: { Accept: 'application/json' } })).json()).unread);
 check(unreadAfter === 0, `mark-all-read set unread to 0 on the server (got ${unreadAfter})`);
 
-// ── clicking a notification opens its record without a reload (§15,§25) ──
+// ── clicking a notification opens its record without a reload (section 15,section 25) ──
 await page.evaluate(() => { window.__navProbe = 'alive'; });
 // Ensure the notifications popup is open (mark-all left it open; be robust either way).
 const popupOpen = await page.evaluate(() => !document.querySelector('[data-popup-panel="notifications"]').hidden);
@@ -129,8 +129,8 @@ const nav = await page.evaluate(() => ({
   clientsView: !document.querySelector('.tma-dash__view[data-view="clients"]')?.hidden,
   popupClosed: document.querySelector('[data-header-popups]').hidden,
 }));
-check(nav.probe === 'alive', 'no full page reload — the SPA navigated in place (§25)');
-check(nav.clientsView, 'the Clients view opened from the notification (§15)');
+check(nav.probe === 'alive', 'no full page reload — the SPA navigated in place (section 25)');
+check(nav.clientsView, 'the Clients view opened from the notification (section 15)');
 check(nav.popupClosed, 'the popup closed after navigating');
 
 if (errors.length) fail.push('console/page errors: ' + errors.join(' | '));

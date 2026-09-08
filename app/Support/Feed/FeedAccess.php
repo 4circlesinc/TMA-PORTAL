@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  *     they may create channels or read firm-wide analytics.
  *  2. Inside the Feed, a channel's `visibility` plus the reader's membership
  *     row decides everything else. A portal administrator is treated as a
- *     channel administrator everywhere, because moderation (§20) has to work
+ *     channel administrator everywhere, because moderation (section 20) has to work
  *     on a channel nobody remembered to add them to.
  *
  * Every check funnels through `member()` and `rank()` so a new action is one
@@ -252,7 +252,7 @@ final class FeedAccess
         return $user !== null && $post->author_id === $user->id;
     }
 
-    /** Delete a post: its author, or a moderator of its channel (§20). */
+    /** Delete a post: its author, or a moderator of its channel (section 20). */
     public static function canDeletePost(FeedChannel $channel, FeedPost $post, ?User $user): bool
     {
         if ($user === null) {

@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
 import { deflateSync } from 'node:zlib';
 
-// The CIP intake wizard (§2, §3). PHPUnit pins the endpoint; this pins that
+// The CIP intake wizard (section 2, section 3). PHPUnit pins the endpoint; this pins that
 // the form is wired to it — the steps advance, a missing answer stops the
 // step, the region appears from the country, and filing lands a numbered
 // draft. Needs an account that may create applications and FEATURE_CIP on.
@@ -189,7 +189,7 @@ try {
   check(!!(await page.locator('[data-cip-photo-btn="passportPhoto"]').getAttribute('data-has-image')),
     'a 2×2 photo is accepted and previewed');
 
-  step('4c', 'The other two §2 uploads');
+  step('4c', 'The other two section 2 uploads');
   await page.setInputFiles('[data-cip-file="passportBioPage"]', {
     name: 'bio.pdf', mimeType: 'application/pdf', buffer: pdf(),
   });
@@ -263,7 +263,7 @@ try {
     await page.selectOption('[data-cip-field="providerId"]', value);
   }
 
-  step('5b', 'Sponsored = Yes asks for the sponsor there and then (§4)');
+  step('5b', 'Sponsored = Yes asks for the sponsor there and then (section 4)');
   await page.selectOption('[data-cip-field="sponsored"]', '1');
   await page.waitForTimeout(500);
   check(await page.locator('[data-cip-field="sponsor.firstName"]').count() > 0,
@@ -329,7 +329,7 @@ try {
   });
   await page.waitForTimeout(600);
 
-  step('5c', 'Dependents number themselves as they are added (§5)');
+  step('5c', 'Dependents number themselves as they are added (section 5)');
   // Added oldest first on purpose: if the form echoed the order they were
   // typed in rather than computing it, this would read 1, 2, 3.
   const family = [
@@ -384,7 +384,7 @@ try {
     'Certified Copy of Birth Record',
   ];
   check(collected.every(label => !stillOwed.includes(label)),
-    '§2’s three uploads answered their slots');
+    'section 2’s three uploads answered their slots');
   check(body?.application?.sponsor?.name === 'Maryam Haddad', 'the sponsor was filed with it');
   const filed = (body?.application?.dependents || [])
     .filter(d => d.relationship === 'qualified_dependent')

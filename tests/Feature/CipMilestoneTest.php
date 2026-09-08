@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * §4d — the Timeline card on Overview.
+ * Section 4d — the Timeline card on Overview.
  *
  * The card is a timeline, so the two things worth guarding are the order it
  * reads in and the holes in it: a step still ahead of the file has to come back
@@ -183,7 +183,7 @@ class CipMilestoneTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
         $application = $this->application($admin);
 
-        // locked_at freezes the original package (§15). Writing it by hand
+        // locked_at freezes the original package (section 15). Writing it by hand
         // here would lock a package nobody confirmed, which is exactly the
         // state no transition produces.
         $this->actingAs($admin)

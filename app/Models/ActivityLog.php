@@ -69,7 +69,7 @@ class ActivityLog extends Model
     }
 
     /**
-     * Scope the log to what a viewer is permitted to see (§9, §28).
+     * Scope the log to what a viewer is permitted to see (section 9, section 28).
      *
      * Administrators see the whole firm's trail. Everyone else sees only the
      * activity they performed — the privacy-first default; a stray uid must

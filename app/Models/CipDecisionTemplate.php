@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 /**
- * One Granted or Denied letter for one investment type (§23).
+ * One Granted or Denied letter for one investment type (section 23).
  *
  * Ten rows, one per (investment type × outcome). The firm rewrites the copy
- * in Account settings; the filing subject stays §22's and is not stored here.
+ * in Account settings; the filing subject stays section 22's and is not stored here.
  */
 #[Fillable([
     'uuid', 'investment_type', 'decision', 'title', 'body', 'updated_by',

@@ -1003,7 +1003,7 @@
         '<button type="button" class="tma-dash__messages-nav-btn' + (active ? ' is-active' : '') + '"' +
         ' ' + item.attr +
         // The badge is a number beside an icon: without it in the label, a
-        // screen reader announces "Calls" and stops (§ colour and shape are
+        // screen reader announces "Calls" and stops (see colour and shape are
         // never the only carrier of state).
         ' aria-label="' + esc(item.label + (item.count ? ', ' + item.countLabel : '')) + '"' +
         ' title="' + esc(item.label) + '"' +
@@ -3104,7 +3104,7 @@
    *
    * A missed call is deliberately *not* an unread message server-side, it has
    * no read state of its own, and counting system lines put a badge on threads
-   * nobody had written in (§ ConversationParticipant::unreadCount). But the
+   * nobody had written in (see ConversationParticipant::unreadCount). But the
    * sidebar badge answers a broader question than the Chats one: "what is
    * waiting for me in Messages". A call nobody picked up is waiting there as
    * much as an unread message is, so it belongs in that number.
@@ -8162,7 +8162,7 @@
         var row = findThread(state.selectedId);
         if (!row || !window.TMAMessagingCalls) return;
         // Whichever icon was pressed, the kind is chosen in the dialog, one
-        // prompt owns the decision (§ openCallChooser).
+        // prompt owns the decision (see openCallChooser).
         openCallChooser(root, row);
       });
     });

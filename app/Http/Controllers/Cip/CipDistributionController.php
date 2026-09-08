@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The CIP Distribution Group (§22).
+ * The CIP Distribution Group (section 22).
  *
  * Membership is edited on People → Distribution groups. Extra mailboxes that
  * are not portal accounts are kept here so compliance mail is not env-only.

@@ -194,7 +194,7 @@ class Role
         'cip.create' => [self::REVIEWING_OFFICER],
         'cip.review' => [self::REVIEWING_OFFICER],
         'cip.compliance' => [self::REVIEWING_OFFICER],
-        // Assigning files to officers stays with administrators (§10: "The
+        // Assigning files to officers stays with administrators (section 10: "The
         // Administrator assigns the file").
         'cip.assign' => [],
         'cip.decide' => [self::REVIEWING_OFFICER],
@@ -268,7 +268,7 @@ class Role
         'workflows.view' => [self::EMPLOYEE],
         // The Client Call Recordings area. Employees hold it but see only the
         // calls they recorded, the wider view is the administrator's
-        // (§ CallRecordingController::index). Clients never hold it: their
+        // (see CallRecordingController::index). Clients never hold it: their
         // calls are recorded FOR the firm, not shared back as media.
         'callRecordings.view' => [self::EMPLOYEE],
         // The Overview page. Staff-wide: what it opens with, the metrics,

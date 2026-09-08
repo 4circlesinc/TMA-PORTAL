@@ -73,7 +73,7 @@ class Appeal
      * The provider side starting an appeal on their own file.
      *
      * It lodges: the status moves to New Appeal, Appeal Documents opens, and
-     * the §22 list is told, exactly as if an officer had done it. The firm
+     * the section 22 list is told, exactly as if an officer had done it. The firm
      * used to have to lodge it for them, which put a queue in front of the
      * one action that is entirely the provider's — they are the party that
      * disagrees with the decision.

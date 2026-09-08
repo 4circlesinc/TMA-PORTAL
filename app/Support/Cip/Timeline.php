@@ -186,7 +186,7 @@ class Timeline
      * The words a person typed to explain this row, if they typed any.
      *
      * `note` is the one key that carries free text, and it is written by two
-     * paths: the override strip on a status dialog (§26 demands a reason), and
+     * paths: the override strip on a status dialog (section 26 demands a reason), and
      * the comment when a document is sent back. Both are the same thing to a
      * reader — somebody's own explanation of why — so both come out here.
      *
@@ -231,7 +231,7 @@ class Timeline
      * The government's number arriving, or being corrected.
      *
      * Told apart by the meta {@see Submission} writes, a correction carries
-     * what the number was before. Both are the same action on purpose (§7), so
+     * what the number was before. Both are the same action on purpose (section 7), so
      * without this a typo being fixed would read as a second submission.
      *
      * @param  array<string, mixed>  $meta

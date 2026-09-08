@@ -13,18 +13,18 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Handing an application to an officer (§10), and taking it back again.
+ * Handing an application to an officer (section 10), and taking it back again.
  *
  * cip_application_assignments is the authority and this is its one writer: a
  * file is held by one person per role at a time, an assignment ends rather
  * than disappears so the record keeps everybody who ever held it, and
  * cip_applications.assigned_officer_id is only a cache of the live row, kept
- * so §8's table can name the officer without a join per line.
+ * so section 8's table can name the officer without a join per line.
  *
- * §10 makes assignment a lifecycle event as well as a piece of bookkeeping:
+ * Section 10 makes assignment a lifecycle event as well as a piece of bookkeeping:
  * giving a NEW application to an officer is what starts the review. That half
  * goes through {@see Engine} like every other status change, nothing here
- * writes cip_applications.status, and it happens only from NEW. §26 lets an
+ * writes cip_applications.status, and it happens only from NEW. Section 26 lets an
  * administrator reassign at any time, and a file that has reached assessment
  * feedback has not gone back to the beginning because it changed hands.
  *
@@ -49,13 +49,13 @@ class Assignments
     /**
      * Who may hand a file to an officer.
      *
-     * §10 gives this to the Administrator, and the matrix agrees, in the way
+     * Section 10 gives this to the Administrator, and the matrix agrees, in the way
      * the matrix says it. `cip.assign => []` looks like a grant to nobody, but
      * an empty row means administrators only: {@see Role::can} answers true
      * for an administrator before it ever reads the row. Both halves are
      * written out here anyway. The capability is the live test, so the day the
      * firm widens that row to an officer type the screens follow without an
-     * edit; naming the administrator beside it keeps §10 true whatever the row
+     * edit; naming the administrator beside it keeps section 10 true whatever the row
      * says. The enabled() guard is what the isAdmin half would otherwise walk
      * straight past, while FEATURE_CIP is off the module does not exist for
      * anyone, administrators included.
@@ -72,8 +72,8 @@ class Assignments
      *
      * Whoever held it in the same job stops holding it, in the same
      * transaction that hands it on, so a file is never held twice or by
-     * nobody. Reassignment is allowed at any point of the lifecycle (§26) —
-     * only the move out of NEW is conditional, because that one is §10's
+     * nobody. Reassignment is allowed at any point of the lifecycle (section 26) —
+     * only the move out of NEW is conditional, because that one is section 10's
      * "assignment starts the review" and not a property of assignment itself.
      */
     public static function assign(
@@ -117,7 +117,7 @@ class Assignments
             Engine::record($application, CipEvent::ACTION_ASSIGNED, $actor, $meta);
 
             /*
-             * §10 in one line: the file being assigned is what puts it into
+             * Section 10 in one line: the file being assigned is what puts it into
              * review. Only from NEW, an application further down the
              * lifecycle is changing hands, and driving it back to REVIEW
              * APPLICATION to record that would throw away the reviewer's work
@@ -144,7 +144,7 @@ class Assignments
 
         /*
          * NEW → REVIEW APPLICATION is announced by Engine. A file already
-         * underway is only changing hands, so the four §22 classes still hear
+         * underway is only changing hands, so the four section 22 classes still hear
          * that a new officer holds it, in the filing subject for where the
          * file actually stands.
          */
@@ -226,7 +226,7 @@ class Assignments
      * offering one would promise work to somebody who could never open it.
      * Anybody already holding the file is excluded for the plainest reason —
      * the list would be offering work that is already theirs. "Holding" is
-     * the same list §8's column draws: the client's live assignments, plus
+     * the same list section 8's column draws: the client's live assignments, plus
      * the application's own when there is no client. Excluding only the CIP
      * row left an officer who was already named in the cell as a person to
      * add, which is the click that appeared to work and changed nothing.
@@ -262,7 +262,7 @@ class Assignments
      * Put the cache column back in step with the table that owns the answer.
      *
      * assigned_officer_id is written here and nowhere else. The reviewing
-     * officer wins when a file is held in both jobs, because §8's column asks
+     * officer wins when a file is held in both jobs, because section 8's column asks
      * who is working it; a file nobody holds reads null rather than keeping
      * the last person who did.
      */

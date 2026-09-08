@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * §14 — the officer works the checklist, and the application follows.
+ * Section 14 — the officer works the checklist, and the application follows.
  *
  * The two halves of that sentence are what these tests hold apart. A verdict
  * is on ONE document, and the application's status is never typed in beside
@@ -107,7 +107,7 @@ class CipReviewTest extends TestCase
      * The reviewing officer, on the file.
      *
      * On it explicitly, because holding the file is what seeing it means now:
-     * officers read only the applications they have been given (§10 — the
+     * officers read only the applications they have been given (section 10 — the
      * administrator assigns, and an unassigned file is the administrator's).
      * These tests are about the review verbs, and a reviewer exercises them
      * on a file that is theirs.
@@ -204,7 +204,7 @@ class CipReviewTest extends TestCase
             ->postJson('/portal/cip/documents/'.$birth->uuid.'/approve')
             ->assertOk()->json();
 
-        // §14 then §15: every document assessed, so Assessment feedback, and
+        // Section 14 then section 15: every document assessed, so Assessment feedback, and
         // nothing sent back, so the file proceeds to Ready to submit.
         $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
         $this->assertSame(Status::READY_TO_SUBMIT, $body['application']['status']);
@@ -551,7 +551,7 @@ class CipReviewTest extends TestCase
         $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
 
         /*
-         * §14: the provider is told, in §22's filing format, with the reason
+         * Section 14: the provider is told, in section 22's filing format, with the reason
          * in the body — the promise is that nobody has to click through
          * documents to learn what needs work.
          */

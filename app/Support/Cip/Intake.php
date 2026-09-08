@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
- * Creating an application from the intake form (§2–§6).
+ * Creating an application from the intake form (section 2–section 6).
  *
  * One request files the whole thing: the application, its number, the main
  * applicant, a sponsor when there is one, every dependent, the folder tree
@@ -48,13 +48,13 @@ class Intake
     /** How many files one requirement may be answered with in a single filing. */
     public const MAX_DOCUMENTS_PER_SLOT = 10;
 
-    /** The §2 uploads that take a list rather than a single file. */
+    /** The section 2 uploads that take a list rather than a single file. */
     /**
-     * §2's own three, by template key.
+     * Section 2's own three, by template key.
      *
      * The wizard's document fields come from the requirement templates now,
      * so what the form ASKS follows the admin screen, but what filing
-     * DEMANDS stays §2's list. The brief makes exactly these three the
+     * DEMANDS stays section 2's list. The brief makes exactly these three the
      * intake requirements; everything else on the checklist is completed
      * after filing, which is what the whole document-management phase is
      * for. A firm can still loosen even these: retire one, or mark it
@@ -92,7 +92,7 @@ class Intake
                 'required' => (bool) $t->required,
                 'realEstateOnly' => (bool) $t->real_estate_only,
                 // Only the main applicant's uploads gate filing, and
-                // pre-approval only §2's three: the official checklist runs to
+                // pre-approval only section 2's three: the official checklist runs to
                 // thirty-odd rows, and demanding every required one before the
                 // application may exist would mean no application exists. The
                 // rest of the checklist is what the document-management phase
@@ -152,7 +152,7 @@ class Intake
         return self::photoRequirement($applicantType, $phase);
     }
 
-    /** The shared person field set. §2's list, which §4 says a sponsor repeats. */
+    /** The shared person field set. Section 2's list, which section 4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
         'countryOfResidence', 'occupation', 'passportNumber',
@@ -161,7 +161,7 @@ class Intake
     /**
      * @param  bool  $editing  an update, where the uploads are already on file
      *
-     * Editing keeps every answer required. §2 does not stop applying once a
+     * Editing keeps every answer required. Section 2 does not stop applying once a
      * draft exists, but stops demanding the files, because they were handed
      * over at creation and are sitting in the person's folder. Sending one
      * replaces it; sending nothing leaves it alone. The provider is not in the
@@ -186,7 +186,7 @@ class Intake
         );
     }
 
-    /** The main applicant, straight from §2. */
+    /** The main applicant, straight from section 2. */
     private static function personRules(string $prefix = ''): array
     {
         $required = $prefix === '' ? 'required' : 'required_with:'.rtrim($prefix, '.');
@@ -204,7 +204,7 @@ class Intake
     }
 
     /**
-     * §2's three uploads. The photo has shape rules; the scans have limits.
+     * Section 2's three uploads. The photo has shape rules; the scans have limits.
      *
      * A scan is a LIST. One requirement is not always one sheet of paper, a
      * bio page can be a passport's two pages, a birth certificate can arrive
@@ -310,7 +310,7 @@ class Intake
     {
         return [
             'investmentType' => ['required', Rule::in(array_keys(InvestmentType::ALL))],
-            // §3: "If Other is selected, the portal shall display a Specify
+            // Section 3: "If Other is selected, the portal shall display a Specify
             // Investment Type free-text field", required exactly then.
             'investmentTypeOther' => [
                 'nullable', 'string', 'max:191',
@@ -321,11 +321,11 @@ class Intake
     }
 
     /**
-     * §4: sponsored means a sponsor, asked for now rather than later.
+     * Section 4: sponsored means a sponsor, asked for now rather than later.
      *
      * The sponsor repeats the applicant's personal fields and their photo, so
      * they have a face in the portal like everyone else. Their bio page and
-     * birth certificate are offered but optional. §2's upload list is the
+     * birth certificate are offered but optional. Section 2's upload list is the
      * main applicant's, and making six files the price of starting a draft
      * would leave the sponsor as the reason nobody finishes one. The slots
      * are opened either way, so what is skipped here is still asked for.
@@ -344,7 +344,7 @@ class Intake
             ? ['nullable', 'file', self::photoRule()]
             : [Rule::requiredIf($sponsored), 'file', self::photoRule()];
 
-        // The sponsor's scans are offered, never demanded at filing (§2): a
+        // The sponsor's scans are offered, never demanded at filing (section 2): a
         // sponsor is often added before their paperwork is in hand, and the
         // checklist holds the door.
         foreach (self::documentFields(ApplicantType::SPONSOR, self::filingPhase()) as $doc) {
@@ -355,7 +355,7 @@ class Intake
         return $rules;
     }
 
-    /** §5: each dependent is a name, a date of birth, a relationship, and the same uploads the settings ask of their type. */
+    /** Section 5: each dependent is a name, a date of birth, a relationship, and the same uploads the settings ask of their type. */
     private static function dependentRules(bool $editing = false): array
     {
         $rules = [
@@ -719,7 +719,7 @@ class Intake
      * One individual on the application.
      *
      * Tolerant of a partial field set on purpose: a dependent is four answers
-     * (§5) where a main applicant or a sponsor is eight, and both come
+     * (section 5) where a main applicant or a sponsor is eight, and both come
      * through here so nobody ends up with a second way to write a person.
      *
      * @param  array<string, mixed>  $data
@@ -754,7 +754,7 @@ class Intake
     /**
      * The uploads, once everyone has a folder to put them in.
      *
-     * The photo answers two things at once, a document slot, because §2
+     * The photo answers two things at once, a document slot, because section 2
      * requires it, and the person's likeness, because that is the profile
      * picture every list draws. One upload, recorded in both places.
      *

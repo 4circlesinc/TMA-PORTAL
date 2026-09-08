@@ -56,7 +56,7 @@ use Illuminate\Support\Str;
  * CIP applications: what the intake wizard needs, and filing one.
  *
  * The gate is CipAccess, not the capability matrix alone. Service Provider
- * contacts and Private Clients are promised application creation by §1 and
+ * contacts and Private Clients are promised application creation by section 1 and
  * hold no matrix capability by design. 404 rather than 403 throughout, the
  * portal's convention for anything a reader may not see.
  */
@@ -72,7 +72,7 @@ class CipApplicationController extends Controller
      */
     private const SYNC_PAGE = 50;
 
-    /** Rows in one page of the main application table (§8). */
+    /** Rows in one page of the main application table (section 8). */
     private const LIST_PAGE = 50;
 
     /**
@@ -346,7 +346,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The main application table (§8).
+     * The main application table (section 8).
      *
      * Its own endpoint rather than a widening of the client directory, for two
      * reasons. The directory answers with every client the reader may see —
@@ -359,7 +359,7 @@ class CipApplicationController extends Controller
      *
      * Paged on the server, and every column is either a column of the row or
      * an eager-loaded relation, no per-row query. Family size in particular
-     * is `withCount`, because §8 puts it on every line and `people()->count()`
+     * is `withCount`, because section 8 puts it on every line and `people()->count()`
      * would be one query per application to answer it.
      */
     public function index(Request $request): JsonResponse
@@ -423,7 +423,7 @@ class CipApplicationController extends Controller
                  * not-yet-started ones are excluded here rather than filtered
                  * after: an assignment that has run out is not a lighter shade
                  * of assigned, it is somebody who has stopped working on this
-                 * client, and §8's column asks who is.
+                 * client, and section 8's column asks who is.
                  */
                 'client.assignments' => fn ($q) => $q->live()
                     ->with('user:id,name,email,avatar_url,provider_avatar_url')
@@ -630,7 +630,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * §7's search, on the table it lists: either number, or the applicant.
+     * Section 7's search, on the table it lists: either number, or the applicant.
      *
      * The numbers are matched from the start, a number is typed to find one
      * record, while a name is matched anywhere, because people search on a
@@ -778,7 +778,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * One row of §8, and only what §8 asks for.
+     * One row of section 8, and only what section 8 asks for.
      *
      * Deliberately not {@see record()}: that is the whole application with
      * every person and their checklists, which is the right answer for a
@@ -799,11 +799,11 @@ class CipApplicationController extends Controller
             // Null unless something on this client's file is waiting for this
             // reader — see Cip\Attention. Absent means "draw nothing".
             'attention' => $client ? ($attention[$client->id] ?? null) : null,
-            // §7: the CIP number once it exists, the internal one until then.
+            // Section 7: the CIP number once it exists, the internal one until then.
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
-            // Not a column §8 draws: it is how the status picker tells a first
+            // Not a column section 8 draws: it is how the status picker tells a first
             // submission from a file going back to the Unit with its query
             // answered, and asks for the CIP number and the day only for the
             // first. Read off the row, so it costs nothing.
@@ -820,7 +820,7 @@ class CipApplicationController extends Controller
              * The client record's own contact, which for a provider-referred
              * application is the person the firm deals with there and for a
              * private client is the applicant. Not `unit_contact`, that is
-             * the government's officer, a different question that §8 does not
+             * the government's officer, a different question that section 8 does not
              * ask on this row.
              */
             'contactPerson' => $client?->name,
@@ -829,7 +829,7 @@ class CipApplicationController extends Controller
                 $application->investment_type,
                 $application->investment_type_other,
             ),
-            // "1 Main Applicant + 1 Sponsor + 4 Dependents = F6" (§8).
+            // "1 Main Applicant + 1 Sponsor + 4 Dependents = F6" (section 8).
             'familySize' => (int) $application->people_count,
             'familyLabel' => 'F'.max(1, (int) $application->people_count),
             'status' => $application->status,
@@ -978,7 +978,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * Who §8's "Assigned To" column names.
+     * Who section 8's "Assigned To" column names.
      *
      * Two sources, and the order matters. An application will carry its own
      * officer once the review workflow assigns one (phase 6); until then the
@@ -1007,7 +1007,7 @@ class CipApplicationController extends Controller
          * They are now the same rows: assign in either place and both follow.
          *
          * Live only. An assignment that has ended is not a lighter shade of
-         * assigned, that person has stopped working on this, and §8's column
+         * assigned, that person has stopped working on this, and section 8's column
          * asks who is.
          */
         $person = fn ($a, string $role) => [
@@ -1206,7 +1206,7 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The Unit has it: record the date and the CIP number (§16, §7).
+     * The Unit has it: record the date and the CIP number (section 16, section 7).
      *
      * The number is the point. Every surface renders `displayNumber()`, so
      * writing it here is what flips dashboards, reports, status screens, email
@@ -1269,7 +1269,7 @@ class CipApplicationController extends Controller
     /**
      * Fix a milestone date recorded wrong. The status does not move.
      *
-     * §4d's Timeline card is the only place these six days are all visible at
+     * Section 4d's Timeline card is the only place these six days are all visible at
      * once, so it is the place a wrong one gets noticed — and, until this,
      * the place nothing could be done about it. The rules are
      * {@see Milestones::correct()}'s, including the one that matters most:
@@ -1385,7 +1385,7 @@ class CipApplicationController extends Controller
 
         return [
             'id' => $application->uuid,
-            // §7: the internal number until the CIP number takes over.
+            // Section 7: the internal number until the CIP number takes over.
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
@@ -1428,7 +1428,7 @@ class CipApplicationController extends Controller
             'applicant' => $main ? $this->person($main, $presenter, $phase) : null,
             'sponsor' => $sponsor ? $this->person($sponsor, $presenter, $phase) : null,
             'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter, $phase))->all(),
-            // §4d's Timeline card on Overview: how far the file has travelled,
+            // Section 4d's Timeline card on Overview: how far the file has travelled,
             // and, because the steps it has not reached are answered too —
             // how far it has left to go.
             'milestones' => Milestones::for($application, $viewer),
@@ -1599,7 +1599,7 @@ class CipApplicationController extends Controller
              * that would quietly lose a button.
              */
             'photoFile' => $photoFile ? $presenter->file($photoFile) : null,
-            // §11's applicant types decide which checklist this person owes.
+            // Section 11's applicant types decide which checklist this person owes.
             'applicantType' => ApplicantType::for($person),
             'applicantTypeLabel' => ApplicantType::label(ApplicantType::for($person)),
             'documents' => $person->documents
@@ -1636,7 +1636,7 @@ class CipApplicationController extends Controller
                             && $slot->requirement->carry_forward,
                         'uploaded' => $slot->isFilled(),
                         /*
-                     * §12's own status, not the file library's review_status.
+                     * Section 12's own status, not the file library's review_status.
                      * They are different vocabularies with different rules, a
                      * document waiting for a reviewer is not the same idea as a
                      * library file marked "pending review", and conflating them

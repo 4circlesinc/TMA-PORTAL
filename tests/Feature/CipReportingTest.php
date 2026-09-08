@@ -19,7 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * §25 — administrators generate CIP reports by the brief's filters, and the
+ * Section 25 — administrators generate CIP reports by the brief's filters, and the
  * seven named examples are those filters already filled in.
  *
  * The existing reporting pipeline (request row + stored answer + CSV) is the

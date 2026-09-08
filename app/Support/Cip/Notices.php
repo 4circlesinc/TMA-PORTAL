@@ -13,7 +13,7 @@ use App\Support\Signatures\Presenter as SignaturePresenter;
 use Illuminate\Support\Str;
 
 /**
- * §22, one subject format, one recipient list, every status change.
+ * Section 22, one subject format, one recipient list, every status change.
  *
  * The postcard IS the email. Bells go to portal accounts with the email
  * channel off so the Notifier cannot send a second, differently-worded copy.
@@ -45,7 +45,7 @@ class Notices
     }
 
     /**
-     * Tell every §22 recipient that this application now stands at `$to`.
+     * Tell every section 22 recipient that this application now stands at `$to`.
      *
      * Called from {@see Engine::write} after the row and the event have both
      * landed, so nothing is announced that did not occur.
@@ -112,9 +112,9 @@ class Notices
     /**
      * A comment on a checklist document, to everyone on the application.
      *
-     * §13's thread exists so the provider side can be told what is wrong
+     * Section 13's thread exists so the provider side can be told what is wrong
      * and answer; a reply nobody is told about is a note left in a drawer.
-     * Everyone but the author: the same §22 list a status change writes to.
+     * Everyone but the author: the same section 22 list a status change writes to.
      */
     public static function documentComment(CipDocument $document, User $author, string $body): void
     {
@@ -142,7 +142,7 @@ class Notices
     /**
      * The provider side has asked the firm to appeal a decision.
      *
-     * Addressed to the same §22 list as everything else on this file, minus
+     * Addressed to the same section 22 list as everything else on this file, minus
      * the person who asked — they know. It is a request, not a status change,
      * so it says who wants what and leaves the lodging to whoever reads it.
      */
@@ -173,7 +173,7 @@ class Notices
     /**
      * The one delivery loop every CIP notice walks.
      *
-     * A postcard to every §22 mailbox, built per recipient so the greeting
+     * A postcard to every section 22 mailbox, built per recipient so the greeting
      * carries their name, and a bell for the ones with a portal account. The
      * bell goes with the email channel off, so the Notifier cannot send a
      * second, differently-worded copy of the same fact.

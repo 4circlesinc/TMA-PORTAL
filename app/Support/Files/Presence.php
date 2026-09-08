@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Who has a file open, right now.
  *
- * The rule §13 states plainly: never claim somebody is viewing a document
+ * The rule section 13 states plainly: never claim somebody is viewing a document
  * because of something they did earlier. Presence here is only ever a session
  * that has sent a heartbeat within the last {@see FilePresenceSession::
  * STALE_SECONDS} seconds. Nothing infers it from activity, from a share, or

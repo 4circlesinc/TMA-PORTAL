@@ -7,7 +7,7 @@ use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * §9's action-driven dashboards: what this reader should pick up today, and
+ * Section 9's action-driven dashboards: what this reader should pick up today, and
  * how much of it there is.
  *
  * A bucket is one definition read twice. {@see self::for()} counts it and
@@ -55,7 +55,7 @@ class Buckets
     /** Counted over the applications this officer holds. */
     public const SCOPE_MINE = 'mine';
 
-    /** §9's three sets, named as the brief names them. */
+    /** Section 9's three sets, named as the brief names them. */
     public const ADMINISTRATOR = 'administrator';
 
     public const REVIEWING_OFFICER = 'reviewing_officer';
@@ -85,7 +85,7 @@ class Buckets
      * statuses over different slices, and defining them twice is how the two
      * dashboards would drift apart the first time one status was renamed.
      *
-     * Each carries a short name as well as the one §9 gives it. That is not a
+     * Each carries a short name as well as the one section 9 gives it. That is not a
      * renderer's abbreviation to invent: "Additional Information Requests" and
      * "Assessment Feedback Tasks" have to fit a legend beside a chart, and a
      * browser shortening them by rule would be guessing where a name can be
@@ -150,7 +150,7 @@ class Buckets
             'scope' => self::SCOPE_ALL,
         ],
         /*
-         * §9's dashboards say "Approved" and the engine stores GRANTED; they
+         * Section 9's dashboards say "Approved" and the engine stores GRANTED; they
          * are the same applications. Status::label() is "Approved" too, so the
          * chip on the row and this bucket cannot disagree.
          */
@@ -217,7 +217,7 @@ class Buckets
             'scope' => self::SCOPE_MINE,
         ],
         // Sent back, and waiting on the provider side. Still the officer's to
-        // watch: an update nobody chases is the round trip §14 measures.
+        // watch: an update nobody chases is the round trip section 14 measures.
         'information_requests' => [
             'label' => 'Additional Information Requests',
             'short' => 'Requests',
@@ -227,7 +227,7 @@ class Buckets
     ];
 
     /**
-     * Which buckets each dashboard shows, in the order §9 lists them, the
+     * Which buckets each dashboard shows, in the order section 9 lists them, the
      * order is part of the brief, not a detail for a renderer to choose.
      *
      * @var array<string, list<string>>
@@ -249,7 +249,7 @@ class Buckets
     ];
 
     /**
-     * Which of §9's dashboards this reader gets, or null for somebody the
+     * Which of section 9's dashboards this reader gets, or null for somebody the
      * module is not for.
      */
     public static function setFor(?User $user): ?string

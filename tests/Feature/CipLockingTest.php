@@ -35,7 +35,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §17 — after confirm, original person folders and the application root are
+ * Section 17 — after confirm, original person folders and the application root are
  * view-only; Additional Documents stays writable, with versioning still on.
  */
 class CipLockingTest extends TestCase

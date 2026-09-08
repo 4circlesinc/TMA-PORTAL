@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
  * The Feed module end to end in a real browser.
  *
  * PHPUnit already covers the API (tests/Feature/FeedTest.php). What only a
- * browser can check is the part §22 is actually about: that posting,
+ * browser can check is the part section 22 is actually about: that posting,
  * commenting, reacting and voting patch the page instead of reloading it. So
  * this script plants a sentinel on `window` and asserts it is still there at
  * the end — if anything triggered a navigation, it is gone.
@@ -82,7 +82,7 @@ try {
     'the sidebar lists Bookmarks');
 
   /*
-   * §23: an empty Feed says so rather than showing invented posts. Only
+   * Section 23: an empty Feed says so rather than showing invented posts. Only
    * meaningful on a fresh database, so the count is read first — re-running
    * against a database that already has channels must not fail here.
    */
@@ -284,7 +284,7 @@ try {
   step(12, 'Nothing reloaded the page');
   const sentinel = await page.evaluate(() => window.__feedSentinel);
   check(sentinel === 'alive',
-    'the whole session ran without a page reload (§22)');
+    'the whole session ran without a page reload (section 22)');
 
   step(13, 'The sidebar remembers where it was left');
   await page.click(`[data-feed-channel]:has-text("${channelName}")`);

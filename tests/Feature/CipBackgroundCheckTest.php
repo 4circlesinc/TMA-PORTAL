@@ -24,9 +24,9 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * §19 — accepted for processing: record the date, move to Background check.
+ * Section 19 — accepted for processing: record the date, move to Background check.
  *
- * The delay clock (§20) measures from this date, so the dedicated verb exists
+ * The delay clock (section 20) measures from this date, so the dedicated verb exists
  * to make sure `accepted_at` is never left empty by a bare status change.
  */
 class CipBackgroundCheckTest extends TestCase

@@ -9,7 +9,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Something happened to a post in a channel (§22).
+ * Something happened to a post in a channel (section 22).
  *
  * Broadcast *Now* rather than queued, for the same reason messaging does it:
  * the portal's queue worker is not always running, and a feed that updates
@@ -19,7 +19,7 @@ use Illuminate\Queue\SerializesModels;
  * The payload carries no rendered content on purpose. Each reader's view of a
  * post differs — their own reaction, whether they may edit or pin it — so the
  * client refetches just the affected post and patches it into place. This
- * event only says *what* changed and *where*, which is what lets §22 hold:
+ * event only says *what* changed and *where*, which is what lets section 22 hold:
  * nothing reloads the whole feed.
  *
  * `action` is one of: created | updated | deleted | commented | reacted | voted.

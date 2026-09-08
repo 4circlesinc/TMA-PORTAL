@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
  * **portal wins for portal-originated files.** A file the portal authored is
  * pushed even if SharePoint has moved on; a file SharePoint authored is never
  * overwritten behind its back, it is flagged as a conflict for a person to
- * resolve. §25 forbids silently discarding either side's changes, and this is
+ * resolve. Section 25 forbids silently discarding either side's changes, and this is
  * where that promise is kept or broken.
  *
  * Recursion guard: inbound sync creates and updates portal rows, and those

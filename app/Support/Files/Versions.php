@@ -182,7 +182,7 @@ class Versions
      * This APPENDS: the restored content becomes a brand-new highest version,
      * and everything uploaded after the one being restored stays in the
      * history. Rewinding by deleting later versions would silently destroy
-     * work, which §5 forbids.
+     * work, which section 5 forbids.
      */
     public static function restore(FileItem $file, FileVersion $version, User $author, ?string $note = null): FileVersion
     {

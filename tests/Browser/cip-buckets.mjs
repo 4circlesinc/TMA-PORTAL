@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 /*
- * §9's counts, in the two places they are shown: one card on the portal home,
+ * Section 9's counts, in the two places they are shown: one card on the portal home,
  * and the applications table's own filter.
  *
  * The harness seeds a different number into every bucket — 3, 1, 4, 2, 5, 6,
@@ -25,7 +25,7 @@ const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
 const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
 
 /**
- * What the harness seeded, in the order §9 names them: the full label, the
+ * What the harness seeded, in the order section 9 names them: the full label, the
  * short one the card's legend uses, and the count.
  *
  * Both names are here because both are the server's — App\Support\Cip\Buckets

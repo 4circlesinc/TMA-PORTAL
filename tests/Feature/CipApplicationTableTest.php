@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * §8 — the main application table.
+ * Section 8 — the main application table.
  *
  * Nine columns, one row per application, and a family size the portal works
  * out rather than one somebody types.
@@ -98,7 +98,7 @@ class CipApplicationTableTest extends TestCase
             'number', 'applicantName', 'provider', 'contactPerson', 'contactEmail',
             'investmentType', 'familyLabel', 'statusLabel', 'assignedTo',
         ] as $column) {
-            $this->assertArrayHasKey($column, $row, $column.' is one of §8’s columns.');
+            $this->assertArrayHasKey($column, $row, $column.' is one of section 8’s columns.');
         }
 
         $this->assertSame('Chen Wei', $row['applicantName']);
@@ -169,7 +169,7 @@ class CipApplicationTableTest extends TestCase
         $staff = $this->staff();
         $provider = $this->provider($staff);
 
-        // §8's own worked example: 1 main + 1 sponsor + 4 dependents = F6.
+        // Section 8's own worked example: 1 main + 1 sponsor + 4 dependents = F6.
         $this->application($staff, $provider, 4, true);
 
         $row = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications.0');
@@ -204,7 +204,7 @@ class CipApplicationTableTest extends TestCase
 
         // Five applications of six people each. A per-row family count or a
         // per-row provider lookup would put this in the dozens. The budget
-        // includes one grouped read for the application thread (§24), the
+        // includes one grouped read for the application thread (section 24), the
         // same shape as the document-comment unread query.
         $this->assertLessThan(22, $count, 'The table must not scale its queries with its rows.');
     }

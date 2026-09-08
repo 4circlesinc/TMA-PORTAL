@@ -30,7 +30,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
- * Moving an application through its lifecycle (§6).
+ * Moving an application through its lifecycle (section 6).
  *
  * {@see Engine} has held the map and the rules since phase 1; this is the door
  * to them. One endpoint drives any edge, because the lifecycle is one machine
@@ -95,11 +95,11 @@ class CipTransitionController extends Controller
      *
      *  - NEW is submit(), which refuses a leftover draft whose main applicant
      *    still owes required documents. Reachable from here, an unassessable
-     *    application lands in the officers' queue and §14's first read cannot
+     *    application lands in the officers' queue and section 14's first read cannot
      *    begin. New files already start at NEW, so this door is only for rows
      *    that have not yet been moved.
      *  - PENDING REVIEW is {@see Submission::record()}, which
-     *    records the CIP number and the submission date. Driven bare, §7's
+     *    records the CIP number and the submission date. Driven bare, section 7's
      *    dual-numbering rule fails silently, every surface goes on showing the
      *    internal number for an application the Unit already holds, and since
      *    there is no edge back, the proper door is then shut for good. Judged
@@ -119,7 +119,7 @@ class CipTransitionController extends Controller
      *    Query received date. Driven bare, the status flips and the date the
      *    Unit asked is never stored.
      *  - BACKGROUND CHECK is {@see BackgroundCheck::record()}, which writes
-     *    the Accepted for processing date. Driven bare, the delay clock (§20)
+     *    the Accepted for processing date. Driven bare, the delay clock (section 20)
      *    has nothing to measure from.
      *  - DELAYED is {@see Delay::flag()}, the daily job that measures 180
      *    days from that accepted date. Driven bare, a file can be labelled
@@ -161,7 +161,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * File a leftover draft: Draft → New Applications (§6).
+     * File a leftover draft: Draft → New Applications (section 6).
      *
      * New files start at NEW, so this door is only for rows that have not yet
      * been moved. Its own endpoint because of the document guard below.
@@ -204,7 +204,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Confirm submission: freeze the original package (§15) or the
+     * Confirm submission: freeze the original package (section 15) or the
      * Certificate of Registration package (Apply for COR).
      *
      * Its own verb because it is not a status change. Ready to submit and
@@ -242,7 +242,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Record the Unit's decision: Approved or Denied (§21).
+     * Record the Unit's decision: Approved or Denied (section 21).
      *
      * Its own endpoint because of the columns below, and open only to
      * `cip.decide`, that grant lives in {@see Engine::allows()}, where the
@@ -294,7 +294,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Record a Unit query: the Query received date, then Non-compliant (§18).
+     * Record a Unit query: the Query received date, then Non-compliant (section 18).
      *
      * Its own endpoint because of the column below. The generic status route
      * refuses NON-COMPLIANT so a bare move cannot leave `query_received_at`
@@ -314,7 +314,7 @@ class CipTransitionController extends Controller
             'override' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:2000'],
             // What the Unit actually asked for, in the officer's own words.
-            // It rides along in the §22 notice rather than as a second email.
+            // It rides along in the section 22 notice rather than as a second email.
             'message' => ['nullable', 'string', 'max:2000'],
         ], [
             'queryReceivedAt.required' => 'Enter the query received date.',
@@ -339,7 +339,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Record acceptance for processing: the date, then Background check (§19).
+     * Record acceptance for processing: the date, then Background check (section 19).
      *
      * Its own endpoint because of the column below. The generic status route
      * refuses BACKGROUND CHECK so a bare move cannot leave `accepted_at`
@@ -359,7 +359,7 @@ class CipTransitionController extends Controller
             'override' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:2000'],
             // Anything the provider side should know, in the officer's own
-            // words. It rides along in the §22 notice, not a second email.
+            // words. It rides along in the section 22 notice, not a second email.
             'message' => ['nullable', 'string', 'max:2000'],
         ], [
             'acceptedAt.required' => 'Enter the accepted for processing date.',
@@ -521,7 +521,7 @@ class CipTransitionController extends Controller
     }
 
     /**
-     * Record a post-approval date and move the file (brief §6–§12).
+     * Record a post-approval date and move the file (brief section 6–section 12).
      *
      * Its own endpoint because each hop carries the day the Unit or the firm
      * recorded. The generic status route refuses those targets so a bare
@@ -642,7 +642,7 @@ class CipTransitionController extends Controller
     {
         return [
             'id' => $application->uuid,
-            // §7: the CIP number once it exists, the internal one until then.
+            // Section 7: the CIP number once it exists, the internal one until then.
             'number' => $application->displayNumber(),
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),

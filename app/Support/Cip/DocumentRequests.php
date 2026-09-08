@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * A direct upload link aimed at ONE checklist slot (§11).
+ * A direct upload link aimed at ONE checklist slot (section 11).
  *
  * The tokenised public flow already exists and already handles the hard parts
  *, expiry, passwords, extension allow-lists, sniffed MIME, uploader identity.

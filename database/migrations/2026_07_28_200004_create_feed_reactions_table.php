@@ -12,7 +12,7 @@ return new class extends Migration
      * One row per person per target, not per emoji: the unique key is
      * (target, user), so reacting again *changes* the reaction rather than
      * adding a second one, and reacting with the emoji already chosen removes
-     * it. That is the behaviour §10 asks for — add, change, remove — and
+     * it. That is the behaviour section 10 asks for — add, change, remove — and
      * enforcing it in the index means a double-click cannot leave two rows.
      *
      * The target is polymorphic over posts and comments only. Storing the

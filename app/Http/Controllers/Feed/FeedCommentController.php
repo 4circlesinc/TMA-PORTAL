@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Comments and replies (§9).
+ * Comments and replies (section 9).
  *
  * Threads are one level deep, a reply to a reply keeps the same `root_id` —
  * so a post's whole comment tree loads in one query and is assembled here

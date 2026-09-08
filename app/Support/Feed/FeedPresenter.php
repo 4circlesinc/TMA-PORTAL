@@ -365,7 +365,7 @@ final class FeedPresenter
                 'emoji' => $emoji,
                 'count' => $rows->count(),
                 'mine' => $rows->contains('user_id', $viewer->id),
-                // Names for the "who reacted" popover (§10). Capped, because a
+                // Names for the "who reacted" popover (section 10). Capped, because a
                 // company-wide announcement can gather hundreds.
                 'people' => $rows->take(12)
                     ->map(fn ($r) => $r->relationLoaded('user') ? self::person($r->user) : null)

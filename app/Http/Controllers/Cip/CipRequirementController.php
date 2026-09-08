@@ -16,9 +16,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
- * The requirement templates (§11), and the minimal form behind them.
+ * The requirement templates (section 11), and the minimal form behind them.
  *
- * §11 calls the document list admin-configurable, and until this existed the
+ * Section 11 calls the document list admin-configurable, and until this existed the
  * only way to ask an applicant for one more piece of paper was a deploy. This
  * is the server side of that; the full administration console is phase 11.
  *

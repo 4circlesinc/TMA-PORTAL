@@ -116,7 +116,7 @@ class CipTimelineTest extends TestCase
 
         $lines = $this->lines($application, $admin);
         $this->assertContains('Ada Admin assigned Rita Officer', $lines);
-        // §10's other half: the assignment is what started the review, and the
+        // Section 10's other half: the assignment is what started the review, and the
         // history says so in its own line rather than implying it.
         $this->assertContains('Ada Admin moved it from New Applications to Review Applications', $lines);
 
@@ -160,7 +160,7 @@ class CipTimelineTest extends TestCase
         $application = $this->application($admin);
         $document = $this->document($application, 'Police certificate');
 
-        // Up for review, sent back, up again, accepted — the revision loop §12
+        // Up for review, sent back, up again, accepted — the revision loop section 12
         // describes, which is the whole of what this tab shows for a document.
         DocumentEngine::apply($document, DocumentStatus::APPLICATION_REVIEW, $admin);
         DocumentEngine::apply($document->fresh(), DocumentStatus::UPDATE_REQUIRED, $rita);

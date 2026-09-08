@@ -171,7 +171,7 @@ class FileVersionTest extends TestCase
 
     /**
      * Restoring must APPEND. Rewinding by deleting v2 and v3 would silently
-     * destroy work — §5 is explicit that later history stays.
+     * destroy work — section 5 is explicit that later history stays.
      */
     public function test_restoring_appends_a_new_version_and_keeps_later_history(): void
     {

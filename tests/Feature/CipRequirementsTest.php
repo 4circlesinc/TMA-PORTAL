@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * The checklist templates (§12) and what happens when they change under an
+ * The checklist templates (section 12) and what happens when they change under an
  * application that is already being worked on.
  *
  * The interesting cases are all about time passing: a template written after

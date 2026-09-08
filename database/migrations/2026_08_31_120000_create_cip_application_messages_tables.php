@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * §24 — the application messaging centre.
+ * Section 24 — the application messaging centre.
  *
  * A thread on the file, not a chat conversation. Chat is a free-standing
  * container (participants, DMs, calls); this is a record that belongs to the

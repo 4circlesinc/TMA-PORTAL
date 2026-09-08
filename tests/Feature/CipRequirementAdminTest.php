@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * §11 — the firm keeps its own document standards.
+ * Section 11 — the firm keeps its own document standards.
  *
  * The point of the whole phase: asking an applicant for one more piece of
  * paper is an edit in the portal, not a deploy. So the tests that matter are
@@ -75,7 +75,7 @@ class CipRequirementAdminTest extends TestCase
             'label' => 'Proof of marriage',
         ])->assertCreated();
 
-        // The whole reason §11 is configurable: the firm changed their mind
+        // The whole reason section 11 is configurable: the firm changed their mind
         // after the application was filed, and the checklist caught up.
         $this->assertContains('Proof of marriage', $person->documents()->pluck('label')->all());
     }
@@ -383,7 +383,7 @@ class CipRequirementAdminTest extends TestCase
      * Since the official checklist arrived, being required is not the same as
      * gating filing: the guide's principal list runs to thirty-odd rows, and a
      * wizard that demanded every required one before the application could
-     * exist would mean no application exists. Only §2's intake documents gate
+     * exist would mean no application exists. Only section 2's intake documents gate
      * a pre-approval filing; everything else is offered on the form and
      * collected once the file is open.
      */

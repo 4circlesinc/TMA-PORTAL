@@ -182,7 +182,7 @@ class ShareController extends BaseFilesController
         Activity::log($user->id, $type, $item->id, 'assign', ['to' => $email, 'role' => $data['role']]);
 
         // Portal-wide audit entry (feeds the Overview log) and a notification to
-        // the person the item was shared with, when they're a real account (§13).
+        // the person the item was shared with, when they're a real account (section 13).
         ActivityLogger::log([
             'actor' => $user,
             'type' => $type === 'folder' ? 'folder.shared' : 'file.shared',

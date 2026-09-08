@@ -15,7 +15,7 @@ return new class extends Migration
      * "Online" is never stored as a flag — it is derived from `last_heartbeat_at`
      * being recent, exactly as user_presence does it. A tab that closes without
      * telling us simply stops renewing and ages out on its own, which is the
-     * only way this can stay honest. §13 is explicit that presence must not be
+     * only way this can stay honest. Section 13 is explicit that presence must not be
      * inferred from historic activity.
      */
     public function up(): void

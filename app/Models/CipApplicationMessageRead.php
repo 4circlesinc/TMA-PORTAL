@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * How far this reader has got in an application's thread (§24).
+ * How far this reader has got in an application's thread (section 24).
  *
  * A high-water mark, the same idea as conversation_participants.last_read_message_id:
  * everything at or below last_read_id has been on their screen.

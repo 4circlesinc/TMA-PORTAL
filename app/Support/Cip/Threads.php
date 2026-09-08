@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The application messaging centre (§24).
+ * The application messaging centre (section 24).
  *
  * One thread per file, two lanes on the row. Internal notes are filtered
  * out of every read the provider side makes. Provider messages replace the
@@ -87,7 +87,7 @@ class Threads
      * File a message the portal is already sending by another route.
      *
      * The covering note on a status dialog — "the Unit wants the spouse's
-     * police certificate" — goes out inside that status change's own §22
+     * police certificate" — goes out inside that status change's own section 22
      * letter. It is also the firm talking to the provider side about this
      * file, which is exactly what the thread is for, and a reader who opens
      * Messages a week later should find it there rather than only in their

@@ -127,13 +127,13 @@ Artisan::command('files:workflow-maintenance', function () {
 Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping(120);
 
 /*
- * CIP delayed applications (§20).
+ * CIP delayed applications (section 20).
  *
  * If 180 days have passed since the Accepted for processing date and the
  * Unit has recorded no decision, the file is Delayed. Notices go to the
  * Administrator, the Reviewing Officer, and the Service Provider.
  * Idempotent: an already-delayed file is never re-notified. The delay
- * clock starts when acceptance is recorded (§19).
+ * clock starts when acceptance is recorded (section 19).
  */
 Artisan::command('cip:flag-delayed', function () {
     if (! CipAccess::enabled()) {
@@ -461,7 +461,7 @@ Schedule::command('files:refresh-folder-stats')
     ->withoutOverlapping(10);
 
 /*
- * Publish scheduled Feed posts whose time has come (§6).
+ * Publish scheduled Feed posts whose time has come (section 6).
  *
  * The tick only *finds* due posts; the job does the publishing and claims each
  * row conditionally, so a slow queue, a retry, or an author hitting "publish

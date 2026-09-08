@@ -45,7 +45,7 @@ class ApplicationScope
          * An officer sees the files they hold. Nothing else, not the
          * unassigned pool, and not even applications they filed themselves.
          *
-         * §10 is the reason: the administrator assigns, and the assignment is
+         * Section 10 is the reason: the administrator assigns, and the assignment is
          * what starts the review, so a file nobody has been given is the
          * administrator's to see and nobody else's. A creator exception was
          * tried here and taken out on the firm's own instruction: an officer
@@ -54,7 +54,7 @@ class ApplicationScope
          * assigned to them.
          *
          * "Holds" is either assignment record, the client's list, which is
-         * what the Assigned tab and §8's column read, or the application's own
+         * what the Assigned tab and section 8's column read, or the application's own
          * workflow row; the picker writes both together, but a file must not
          * vanish from its officer because one half was written by an older
          * path.

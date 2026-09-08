@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
  * PHPUnit covers the panel endpoints (tests/Feature/FileViewerPanelTest.php).
  * What only a browser can show is the thing the spec actually asks for: three
  * regions, a permission-gated toolbar, panels that load real data lazily, and
- * — §29 — a viewer whose state survives interaction instead of resetting.
+ * — section 29 — a viewer whose state survives interaction instead of resetting.
  *
  * Needs the seeded harness (see the File Library browser-testing notes):
  * an administrator e2e@example.com and a real PDF in a "Contracts" folder.
@@ -94,7 +94,7 @@ try {
   check(/TMA Contract\.pdf/.test(panel), 'panel shows the real file name');
   check(/Contracts/.test(panel), 'panel shows the real folder');
   check(/More details/.test(panel), '"More details" is present');
-  // §30 asked for this collapsed; the viewer now deliberately opens it (the
+  // Section 30 asked for this collapsed; the viewer now deliberately opens it (the
   // summary card above carries the headline facts, and a closed <details>
   // over an empty panel was just an extra click — see moreDetailsHtml).
   // What must survive is that it is still a real disclosure.
@@ -227,7 +227,7 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
 
-  step(11, '§29 — viewer state survives, nothing resets');
+  step(11, 'section 29 — viewer state survives, nothing resets');
   // Favourite the file, then confirm the panel kept its tab and scroll.
   await page.click('[data-lb-tab="activity"]');
   await page.waitForTimeout(900);

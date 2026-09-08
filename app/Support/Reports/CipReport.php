@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CIP application reports (§25).
+ * CIP application reports (section 25).
  *
  * One builder, seven presets. The filters are the brief's list, status,
  * service provider, investment type, applicant, assigned officer, submission

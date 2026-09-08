@@ -17,7 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Emoji reactions on posts and comments (§10).
+ * Emoji reactions on posts and comments (section 10).
  *
  * One endpoint covers add, change and remove, because from the reader's side
  * they are one gesture: tapping an emoji you already chose takes it back,
@@ -96,7 +96,7 @@ class FeedReactionController extends Controller
     }
 
     /**
-     * Who reacted, grouped by emoji (§10).
+     * Who reacted, grouped by emoji (section 10).
      *
      * Everyone who reacted is named, reactions are public by design, unlike
      * an anonymous poll vote.

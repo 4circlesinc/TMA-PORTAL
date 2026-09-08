@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * The CIP Distribution Group and extra mailboxes (§22).
+ * The CIP Distribution Group and extra mailboxes (section 22).
  *
  * Membership lives on the People group of this name so the existing
  * Distribution groups screen is the editor for who is on it. Extra addresses

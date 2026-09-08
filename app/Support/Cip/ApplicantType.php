@@ -5,7 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipPerson;
 
 /**
- * Which checklist a person on an application owes (§12).
+ * Which checklist a person on an application owes (section 12).
  *
  * `cip_document_requirements` is keyed on these five values, so a person's
  * type decides every document they are asked for. That makes this the one

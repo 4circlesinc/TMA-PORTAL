@@ -144,7 +144,7 @@ class PublicUploadController extends Controller
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
         /*
-         * A link aimed at a checklist slot lands differently (§11).
+         * A link aimed at a checklist slot lands differently (section 11).
          *
          * The ordinary path below makes a NEW file every time, which is right
          * for "send me your invoices" and wrong for "send me your police

@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The conversation on a checklist document (§13).
+ * The conversation on a checklist document (section 13).
  *
  * Sibling to {@see FileCommentController}, and
  * deliberately the same shape, the difference is the subject, not the idea.
@@ -86,7 +86,7 @@ class CipDocumentCommentController extends Controller
     /**
      * Take a comment out of the thread.
      *
-     * Soft, always. §13 says these are retained, and a reviewer's reason for
+     * Soft, always. Section 13 says these are retained, and a reviewer's reason for
      * rejecting a document is exactly the thing somebody would want gone.
      */
     public function destroy(Request $request, string $uuid, string $commentUuid): JsonResponse

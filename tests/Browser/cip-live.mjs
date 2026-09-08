@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 
 /*
- * Live updates in the CIP module (§8's table, §9's chips, and the file open
+ * Live updates in the CIP module (section 8's table, section 9's chips, and the file open
  * beside them).
  *
  * Every CIP write raises a signal, and until this suite existed nothing in the
@@ -72,7 +72,7 @@ try {
   const NUM = await page.evaluate(() =>
     document.querySelector('.tma-cip-table tbody tr td:first-child')?.innerText.trim().split(/\s+/)[0] || '');
   check(/^[A-Z]{2,8}\d{2}-\d{5}$/.test(NUM), `the top row is ${NUM}`);
-  // Either column, because the row shows whichever number the file has (§7):
+  // Either column, because the row shows whichever number the file has (section 7):
   // ours until the Unit issues theirs, and theirs from then on.
   const app = `App\\Models\\CipApplication::where('internal_number', '${NUM}')`
     + `->orWhere('cip_number', '${NUM}')->firstOrFail()`;

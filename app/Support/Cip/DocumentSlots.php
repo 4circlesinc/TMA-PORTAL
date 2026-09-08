@@ -251,7 +251,7 @@ class DocumentSlots
     }
 
     /**
-     * An upload is what moves a slot along (§12).
+     * An upload is what moves a slot along (section 12).
      *
      * Filling an empty requirement takes it from Pending upload into
      * Application review; re-uploading against one a reviewer sent back takes

@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Date-driven hops after Apply for COR (brief §6–§12).
+ * Date-driven hops after Apply for COR (brief section 6–section 12).
  *
  * Each step is a date the Unit or the firm recorded, and the status that
  * date moves the file to. The generic status picker refuses these targets

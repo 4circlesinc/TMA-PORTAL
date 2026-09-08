@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * §9's dashboard: the buckets this reader opens their day on, counted.
+ * Section 9's dashboard: the buckets this reader opens their day on, counted.
  *
  * Somebody the module is not for is told so. `cip: false` and an empty list —
  * rather than refused. The dashboard-metrics controller answers a client
@@ -19,7 +19,7 @@ use Illuminate\Http\Request;
  * simply not offered a row can drop it without knowing why.
  *
  * `card` is whether the home screen draws this payload as the CIP Applications
- * tile. Staff get it, and so does a Service Provider contact. §9's six are
+ * tile. Staff get it, and so does a Service Provider contact. Section 9's six are
  * their day-opening view. A private client reaches the module through their
  * own application and is not offered a summary of a book; they share the
  * service-provider *set* with the contact, so the dashboard name cannot decide
@@ -67,7 +67,7 @@ class CipDashboardController extends Controller
              * would hang a firm's summary on an applicant's home screen.
              */
             'card' => Role::isStaff($user) || CipAccess::isProviderContact($user),
-            // Which of §9's three dashboards this is. The counts alone do not
+            // Which of section 9's three dashboards this is. The counts alone do not
             // say whether they describe a firm's whole book or one officer's
             // desk, and a heading that got that wrong would be the difference
             // between a report and a to-do list.

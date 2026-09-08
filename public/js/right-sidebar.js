@@ -1,5 +1,5 @@
 /*
- * TMA - Right sidebar sections (§1, §5).
+ * TMA - Right sidebar sections (section 1, section 5).
  *
  * Fills the existing right sidebar's three sections. Notifications, Activities,
  * Clients, with real data from the shared stores (notifications, activity) and
@@ -8,8 +8,8 @@
  *
  * Re-renders are per-section and scroll-preserving: a new notification updates
  * just that list, never the whole panel, and never resets the scroll position
- * (§25). Items are clickable and open their record in place via the shell's
- * SPA navigator (§5).
+ * (section 25). Items are clickable and open their record in place via the shell's
+ * SPA navigator (section 5).
  *
  * Global: window.TMARightSidebar
  */
@@ -166,7 +166,7 @@
       var name = c.name || 'Client';
       var company = (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
       // Real client photo (an upload or provider URL) if there is one; the
-      // initials tile only stands in when there isn't (§5).
+      // initials tile only stands in when there isn't (section 5).
       var initials = R().initialsUri(name);
       var photo = c.profile && c.profile.photo;
       var src = (photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo)) ? photo : initials;

@@ -13,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
  * Somebody opened or left a file.
  *
  * Carries no roster: who each viewer may see differs, so the client refetches
- * the list. This only says "the set changed", which is what keeps §29 true —
+ * the list. This only says "the set changed", which is what keeps section 29 true —
  * nothing reloads and the reader's place is never lost.
  */
 class FilePresenceChanged implements ShouldBroadcastNow

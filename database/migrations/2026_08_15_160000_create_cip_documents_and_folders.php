@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The application's folder tree (§6) and its document slots (§2, §11).
+ * The application's folder tree (section 6) and its document slots (section 2, section 11).
  *
  * Folders are addressed by id, never by name. Client folders rename
  * themselves to follow the client, and a tree keyed on "Main Applicant" would

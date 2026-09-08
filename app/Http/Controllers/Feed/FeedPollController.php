@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Voting in polls, and closing them (§13).
+ * Voting in polls, and closing them (section 13).
  *
  * Anonymity is about who is *named*, never about what is counted: an
  * anonymous poll still stores the voter id, because without it one person

@@ -15,7 +15,7 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * Which of the five checklists a person owes (§12).
+ * Which of the five checklists a person owes (section 12).
  *
  * Every requirement anyone is shown hangs off this answer, so the cases worth
  * pinning are the ones where it could quietly come out wrong: the spouse who

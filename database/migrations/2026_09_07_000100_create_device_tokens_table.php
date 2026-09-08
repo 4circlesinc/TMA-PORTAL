@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /*
- * Push tokens for the native apps (docs/android-app-prompt.md §13). One row
+ * Push tokens for the native apps (docs/android-app-prompt.md section 13). One row
  * per installed app; a token is unique across users because FCM hands it to
  * the device, not the account. session_id remembers which sign-in registered
  * it, so signing out on that device drops its token and nothing else.
