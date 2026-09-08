@@ -573,6 +573,36 @@ class Intake
             Notices::announce($application, Status::POST_APPROVAL, $creator);
         }
 
+        /*
+         * An officer who files an application is already working it.
+         *
+         * Section 10 makes assignment what starts the review, so handing the
+         * file to its own author is not bookkeeping tidied up after the fact:
+         * it is the true statement that somebody has it, and the move out of
+         * NEW that {@see Assignments::assign} makes for us follows from that.
+         * Left out, every officer would file an application and immediately
+         * assign it to themselves by hand, and the ones who forgot would sit
+         * in New Applications looking like nobody's work.
+         *
+         * Only a creator who may actually hold a file. A service provider
+         * contact and a private client file applications and never carry
+         * them, so theirs stay unassigned for an administrator to route,
+         * which is the queue New Applications exists to be. An administrator
+         * filing on somebody's behalf is doing the same routing job, so their
+         * filing stays unassigned too and they hand it to an officer.
+         *
+         * Outside the transaction, deliberately: assign() opens its own and
+         * announces the status change, the same reason the post-approval
+         * announcement above waits for the commit.
+         */
+        if ($application->status === Status::NEW
+            && Assignments::mayHold($creator)
+            && in_array($creator->account_type, Role::OFFICERS, true)) {
+            Assignments::assign($application, $creator, $creator,
+                CipAccess::REVIEWING_OFFICER, systemStatusMove: true);
+            $application = $application->fresh();
+        }
+
         return $application;
     }
 

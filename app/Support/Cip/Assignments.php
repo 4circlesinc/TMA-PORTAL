@@ -81,6 +81,7 @@ class Assignments
         User $officer,
         User $actor,
         string $role = CipAccess::REVIEWING_OFFICER,
+        bool $systemStatusMove = false,
     ): CipApplicationAssignment {
         $held = self::live($application)->firstWhere('role', $role);
 
@@ -94,7 +95,7 @@ class Assignments
 
         $fromStatus = $application->status;
 
-        $assignment = DB::transaction(function () use ($application, $officer, $actor, $role, $held) {
+        $assignment = DB::transaction(function () use ($application, $officer, $actor, $role, $held, $systemStatusMove) {
             $held?->end($actor);
 
             $assignment = CipApplicationAssignment::create([
@@ -124,7 +125,22 @@ class Assignments
              * and tell every dashboard the file had started again.
              */
             if ($application->status === Status::NEW) {
-                Engine::apply($application, Status::REVIEW_APPLICATION, $actor, [
+                /*
+                 * $systemStatusMove drives that edge as the system instead of
+                 * the actor, and is for one caller: an officer filing their
+                 * own application ({@see Intake::create}).
+                 *
+                 * cip.assign is the administrator's, so an officer cannot
+                 * drive NEW -> REVIEW APPLICATION, and without this the whole
+                 * filing died on a 403 from a status change nobody asked for.
+                 * Nobody gains a permission: the assignment above is still
+                 * recorded as the officer's own act, only the status move
+                 * that automatically follows is the system's, the null actor
+                 * {@see Engine::allows} already treats a scheduled job as. An
+                 * officer assigning a file by hand passes false and is
+                 * refused exactly as before.
+                 */
+                Engine::apply($application, Status::REVIEW_APPLICATION, $systemStatusMove ? null : $actor, [
                     'officer' => $officer->name,
                     'role' => $role,
                 ]);
@@ -246,11 +262,29 @@ class Assignments
         }
 
         return User::query()
+            // The same rule {@see mayHold} applies to one person.
             ->whereIn('account_type', [...Role::OFFICERS, Role::ADMINISTRATOR])
-            ->where('status', 'approved')
+            ->where('status', User::STATUS_APPROVED)
             ->whereNotIn('id', $held->unique()->all())
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type']);
+    }
+
+    /**
+     * May this account hold a file at all?
+     *
+     * The account-type half of {@see assignable}, asked of one person instead
+     * of queried over everybody, so the two cannot drift into two answers to
+     * the same question. Holding a file is a job, and only an approved officer
+     * or administrator has it: a service provider contact and a private client
+     * file applications but never carry them, and a suspended account must not
+     * be handed work it cannot open.
+     */
+    public static function mayHold(?User $user): bool
+    {
+        return $user !== null
+            && $user->status === User::STATUS_APPROVED
+            && in_array($user->account_type, [...Role::OFFICERS, Role::ADMINISTRATOR], true);
     }
 
     public static function roleLabel(?string $role): string

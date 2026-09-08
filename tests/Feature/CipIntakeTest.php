@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipEvent;
@@ -16,6 +17,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
@@ -23,6 +25,7 @@ use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\NicRequirements;
+use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\PassportRequirements;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
@@ -326,6 +329,93 @@ class CipIntakeTest extends TestCase
         $this->assertStringStartsWith('PRI', $body['internalNumber']);
     }
 
+    /**
+     * Section 10, applied to the person who filed it: an officer's own
+     * application is already theirs, and assignment is what starts the review.
+     */
+    public function test_an_officer_who_files_an_application_is_given_it(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($officer, $this->payload($provider))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        // They hold it, in the reviewing job, and the row says they gave it
+        // to themselves rather than that it arrived from nowhere.
+        $assignment = CipApplicationAssignment::query()
+            ->where('application_id', $application->id)
+            ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+            ->firstOrFail();
+        $this->assertSame($officer->id, $assignment->user_id);
+        $this->assertSame(CipAccess::REVIEWING_OFFICER, $assignment->role);
+        $this->assertSame($officer->id, $assignment->assigned_by);
+
+        // The cache section 8's table reads agrees with the table that owns the answer.
+        $this->assertSame($officer->id, $application->assigned_officer_id);
+
+        // And the file is under way, not sitting in New Applications
+        // pretending nobody has it.
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->status);
+    }
+
+    /**
+     * The queue New Applications exists to be.
+     *
+     * A service provider files applications and never carries one, so theirs
+     * waits for an administrator to route it rather than being handed back to
+     * the person outside the firm who sent it in.
+     */
+    public function test_a_provider_contacts_application_waits_to_be_assigned(): void
+    {
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = $this->provider('GAL', $company);
+
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $body = $this->file($contact, $this->payload($provider))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        $this->assertSame(0, CipApplicationAssignment::query()
+            ->where('application_id', $application->id)->count());
+        $this->assertNull($application->assigned_officer_id);
+        $this->assertSame(Status::NEW, $application->status);
+    }
+
+    /**
+     * An administrator filing on somebody's behalf is doing the routing, not
+     * the reviewing, so the file stays theirs to hand out.
+     */
+    public function test_an_administrators_filing_is_not_assigned_to_themselves(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($admin, $this->payload($provider))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        $this->assertSame(0, CipApplicationAssignment::query()
+            ->where('application_id', $application->id)->count());
+        $this->assertSame(Status::NEW, $application->status);
+    }
+
     public function test_a_post_approval_application_can_be_created_at_intake(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
@@ -565,7 +655,7 @@ class CipIntakeTest extends TestCase
         Storage::disk(config('filesystems.avatar_disk', 'public'))->assertExists($person->photo_path);
 
         [$width] = getimagesizefromstring(
-            (string) (\App\Support\Cip\PassportPhoto::read($person)['body'] ?? '')
+            (string) (PassportPhoto::read($person)['body'] ?? '')
         );
         $this->assertSame(600, $width, 'the filed photo keeps the resolution it arrived at');
     }
