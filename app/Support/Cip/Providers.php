@@ -18,6 +18,96 @@ use Illuminate\Validation\ValidationException;
 class Providers
 {
     /**
+     * The code a provider of this name should get, free for the taking.
+     *
+     * Three letters of the name, which is what the firm says and what an
+     * application number wears: LEVERA gives LEV. A code is never reissued,
+     * so when LEV is spoken for the name gives up a fourth letter — LEVE —
+     * and a fifth after that, before falling back to a numbered suffix. PRI
+     * is reserved for the private-clients bucket and is never derived here.
+     *
+     * A name with too little in it to make three letters still gets a code:
+     * two is enough to be a prefix, and 'SP' catches a name with no letters
+     * at all rather than returning something empty.
+     */
+    public static function suggestCode(string $name): string
+    {
+        $squash = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $name));
+
+        // Too little to make a prefix out of: 'X' is not a code anyone can
+        // read in an application number. Pad rather than refuse the name.
+        if (strlen($squash) < 2) {
+            $squash = str_pad($squash, 2, 'SP');
+        }
+
+        /*
+         * Three first, then a letter at a time. The shortest free code is the
+         * one the firm finds easiest to say, and a longer slice of a name
+         * that has run out of letters is the same slice again — so the walk
+         * stops at the name's own length rather than retrying it.
+         */
+        $longest = min(8, max(2, strlen($squash)));
+
+        for ($length = min(3, $longest); $length <= $longest; $length++) {
+            $candidate = substr($squash, 0, $length);
+
+            if ($candidate === CipProvider::PRIVATE_CLIENT_CODE) {
+                continue;
+            }
+
+            if (! self::codeTaken($candidate)) {
+                return $candidate;
+            }
+        }
+
+        // Every slice of the name is spoken for — number it rather than
+        // refuse, so creating a provider never dead-ends on its own name.
+        $stem = substr($squash, 0, 3);
+        for ($i = 2; $i < 1000; $i++) {
+            $candidate = substr($stem, 0, max(1, 8 - strlen((string) $i))).$i;
+            if (! self::codeTaken($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $stem.random_int(1000, 9999);
+    }
+
+    /**
+     * Is this code spoken for?
+     *
+     * withTrashed, because a code is never reissued: it prefixes filed
+     * application numbers and names a folder in the library long after its
+     * provider is retired.
+     */
+    public static function codeTaken(string $code): bool
+    {
+        return CipProvider::withTrashed()
+            ->whereRaw('UPPER(code) = ?', [strtoupper(trim($code))])
+            ->exists();
+    }
+
+    /**
+     * Register a company as a service provider, deriving its code when the
+     * firm did not type one.
+     *
+     * Separate from syncCode because a blank there means "leave it alone",
+     * which is what protects a code that already prefixes filed application
+     * numbers. Only the act of creating a provider may mint one, and only
+     * from its own name.
+     */
+    public static function register(Company $company, ?string $code): ?CipProvider
+    {
+        $code = strtoupper(trim((string) $code));
+
+        if ($code === '' && ! CipProvider::where('company_id', $company->id)->exists()) {
+            $code = self::suggestCode($company->name);
+        }
+
+        return self::syncCode($company, $code);
+    }
+
+    /**
      * Set or change the company's CIP code. An empty code is a no-change —
      * codes prefix minted application numbers, so they are never silently
      * cleared, and never changed once numbers exist under them.

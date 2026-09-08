@@ -680,6 +680,10 @@
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid));
     },
     create: function (payload) { return clientsFetch(COMPANIES_BASE, { method: 'POST', json: payload }); },
+    // What code a provider of this name would be given.
+    suggestCode: function (name) {
+      return clientsFetch(COMPANIES_BASE + '/suggest-code?name=' + encodeURIComponent(name));
+    },
     update: function (uid, payload) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
     },
@@ -705,6 +709,42 @@
 
   function emptyCompanyDraft() {
     return { name: '', website: '', notes: '', cipCode: '' };
+  }
+
+  /*
+   * Ask the server what code a provider of this name would get.
+   *
+   * Not worked out in the browser: it holds only the companies it has
+   * loaded, and a code belonging to a provider outside that slice — or to a
+   * retired one, which still owns its code — is invisible here. Guessing
+   * from that list showed codes that were already taken.
+   *
+   * Debounced, because it runs on every keystroke, and answers are dropped
+   * unless they are the newest one asked for.
+   */
+  var codeSuggestSeq = 0;
+  var codeSuggestTimer = null;
+
+  function suggestCipCode(name, done) {
+    var wanted = String(name || '').trim();
+    var seq = ++codeSuggestSeq;
+
+    if (codeSuggestTimer) clearTimeout(codeSuggestTimer);
+
+    if (!wanted) {
+      done('');
+      return;
+    }
+
+    codeSuggestTimer = setTimeout(function () {
+      CompaniesAPI.suggestCode(wanted)
+        .then(function (res) {
+          // A stale answer is worse than none: the name has moved on.
+          if (seq !== codeSuggestSeq) return;
+          done((res && res.code) || '');
+        })
+        .catch(function () {});
+    }, 250);
   }
 
   var clientsLoaded = false;
@@ -5397,7 +5437,8 @@
         '<div class="tma-dash__clients-form-grid">' +
         renderFormField('Service provider name', 'companyName', draft.name) +
         renderFormField('Website', 'companyWebsite', draft.website, { type: 'url', placeholder: 'https://' }) +
-        renderFormField('CIP code', 'companyCipCode', draft.cipCode, { placeholder: 'GAL' }) +
+        // Filled in from the name as it is typed; still editable.
+        renderFormField('CIP code', 'companyCipCode', draft.cipCode, { placeholder: 'From the name' }) +
         '</div>' +
         '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
         '<span class="tma-dash__clients-form-label">Notes</span>' +
@@ -12882,6 +12923,40 @@
         state.prefillCompanyId = state.companyId || '';
         navigate('add');
       });
+    }
+
+    /*
+     * The code follows the name until somebody takes it over.
+     *
+     * Only while creating, and only while the box still holds what we put
+     * there: the moment a reader edits the code it is theirs, and an existing
+     * provider's code is never rewritten by a name change — it prefixes every
+     * application already filed under it.
+     */
+    if (state.screen === 'add-company') {
+      var nameField = unwiredClientsChrome(root, '[data-clients-field="companyName"]');
+      if (nameField) {
+        nameField.addEventListener('input', function () {
+          var codeField = root.querySelector('[data-clients-field="companyCipCode"]');
+          if (!codeField || codeField.dataset.touched === '1') return;
+          suggestCipCode(nameField.value, function (code) {
+            // Re-read: the answer arrives a moment later, and by then the
+            // reader may have taken the field over or left the form.
+            var field = root.querySelector('[data-clients-field="companyCipCode"]');
+            if (!field || field.dataset.touched === '1') return;
+            field.value = code;
+          });
+        });
+      }
+
+      var codeFieldWire = unwiredClientsChrome(root, '[data-clients-field="companyCipCode"]');
+      if (codeFieldWire) {
+        codeFieldWire.addEventListener('input', function () {
+          // Emptying it hands the field back: the name drives it again, and
+          // saving blank lets the server derive one anyway.
+          codeFieldWire.dataset.touched = codeFieldWire.value.trim() ? '1' : '';
+        });
+      }
     }
 
     var saveCompanyBtn = unwiredClientsChrome(root, '[data-clients-save-company]');

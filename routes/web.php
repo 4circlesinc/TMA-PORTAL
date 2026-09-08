@@ -872,6 +872,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/', [CompaniesController::class, 'store'])->name('store');
         // Before /{uid}: a literal segment loses to a wildcard declared first.
         Route::get('/search', [CompaniesController::class, 'search'])->name('search');
+        Route::get('/suggest-code', [CompaniesController::class, 'suggestCode'])->name('suggest-code');
         Route::get('/{uid}', [CompaniesController::class, 'show'])->name('show');
         Route::patch('/{uid}', [CompaniesController::class, 'update'])->name('update');
         Route::delete('/{uid}', [CompaniesController::class, 'destroy'])->name('destroy');

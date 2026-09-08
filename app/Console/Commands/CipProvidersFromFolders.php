@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CipProvider;
 use App\Models\Folder;
+use App\Support\Cip\Providers;
 use Illuminate\Console\Command;
 
 /**
@@ -87,48 +88,18 @@ class CipProvidersFromFolders extends Command
      * application numbers already wear — unique among providers. PRI stays
      * reserved for the private-clients bucket, which is the one folder
      * allowed to generate it.
+     *
+     * The derivation itself lives in Providers::suggestCode, so a provider
+     * born from a folder is numbered exactly like one created in the hub.
      */
     private function uniqueCode(string $name): string
     {
         $isPrivate = in_array(mb_strtolower($name), ['private', 'private client', 'private clients'], true);
-        if ($isPrivate && ! $this->codeTaken(CipProvider::PRIVATE_CLIENT_CODE)) {
+
+        if ($isPrivate && ! Providers::codeTaken(CipProvider::PRIVATE_CLIENT_CODE)) {
             return CipProvider::PRIVATE_CLIENT_CODE;
         }
 
-        $squash = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $name)) ?: 'SP';
-        $initials = strtoupper(implode('', array_map(
-            fn (string $w) => mb_substr($w, 0, 1),
-            preg_split('/[^A-Za-z0-9]+/', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [],
-        )));
-
-        $candidates = array_values(array_filter(
-            array_unique([substr($squash, 0, 3), substr($squash, 0, 4), $initials, substr($squash, 0, 5)]),
-            fn (string $c) => strlen($c) >= 2
-                && ($isPrivate || $c !== CipProvider::PRIVATE_CLIENT_CODE),
-        ));
-
-        foreach ($candidates as $candidate) {
-            if (! $this->codeTaken($candidate)) {
-                return $candidate;
-            }
-        }
-
-        for ($i = 2; $i < 100; $i++) {
-            $candidate = substr($squash, 0, 3).$i;
-            if (! $this->codeTaken($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return substr($squash, 0, 3).random_int(100, 999);
-    }
-
-    private function codeTaken(string $code): bool
-    {
-        // withTrashed: a code must never be reissued — it prefixes filed
-        // application numbers even after its provider is retired.
-        return CipProvider::withTrashed()
-            ->whereRaw('UPPER(code) = ?', [strtoupper($code)])
-            ->exists();
+        return Providers::suggestCode($name);
     }
 }

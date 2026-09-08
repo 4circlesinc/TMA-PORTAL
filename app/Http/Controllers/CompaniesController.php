@@ -244,7 +244,7 @@ class CompaniesController extends Controller
             'address' => ['nullable', 'array'],
             'billing' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,prospect,archived'],
-            'cipCode' => ['nullable', 'string', 'max:8', 'alpha'],
+            'cipCode' => ['nullable', 'string', 'max:8', 'alpha_num'],
         ]);
 
         $base = $data['uid'] ?? Str::slug($data['name']);
@@ -254,9 +254,13 @@ class CompaniesController extends Controller
             'created_by' => $request->user()->id,
         ], $this->profileColumns($data)));
 
-        if (array_key_exists('cipCode', $data)) {
-            Providers::syncCode($company, $data['cipCode']);
-        }
+        /*
+         * Everything created here is a service provider — that is what the
+         * form is — so every one of them gets a code. A blank or absent one
+         * is not "no code", it is "give it the usual one": three letters of
+         * the name, a fourth if those are spoken for.
+         */
+        Providers::register($company, $data['cipCode'] ?? null);
 
         // An employee's directory is their assignments, without this row the
         // provider they just created would vanish from their own list.
@@ -328,6 +332,28 @@ class CompaniesController extends Controller
         ]);
     }
 
+    /**
+     * The CIP code a provider of this name would be given.
+     *
+     * The create form asks as the name is typed. It cannot work this out for
+     * itself: the browser holds only the companies it has loaded, and a code
+     * belonging to a provider outside that slice — or to a retired one, which
+     * still owns its code — would not be in the list. The answer is a
+     * suggestion, not a reservation; the code is settled on save.
+     */
+    public function suggestCode(Request $request): JsonResponse
+    {
+        $this->authorizeStaff($request);
+
+        $name = trim((string) $request->query('name', ''));
+
+        if ($name === '') {
+            return response()->json(['code' => '']);
+        }
+
+        return response()->json(['code' => Providers::suggestCode($name)]);
+    }
+
     public function show(Request $request, string $uid): JsonResponse
     {
         $this->authorizeStaff($request);
@@ -377,7 +403,7 @@ class CompaniesController extends Controller
             'address' => ['nullable', 'array'],
             'billing' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,prospect,archived'],
-            'cipCode' => ['nullable', 'string', 'max:8', 'alpha'],
+            'cipCode' => ['nullable', 'string', 'max:8', 'alpha_num'],
         ]);
 
         if (array_key_exists('name', $data)) {

@@ -233,6 +233,119 @@ class CompaniesTest extends TestCase
         $this->assertNotSoftDeleted('companies', ['id' => $company->id]);
     }
 
+    public function test_a_new_provider_takes_three_letters_of_its_name(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Levera Group'])
+            ->assertCreated()
+            ->assertJsonPath('company.cipCode', 'LEV');
+    }
+
+    public function test_a_clashing_name_takes_a_fourth_letter(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Levera Group'])
+            ->assertCreated()->assertJsonPath('company.cipCode', 'LEV');
+
+        // LEV is spoken for, so the name gives up a fourth letter.
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Leverage Ltd'])
+            ->assertCreated()->assertJsonPath('company.cipCode', 'LEVE');
+
+        // And a fifth after that.
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Leverest Inc'])
+            ->assertCreated()->assertJsonPath('company.cipCode', 'LEVER');
+    }
+
+    public function test_a_typed_code_still_wins(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        // The box is prefilled, not locked: what the firm types is the code.
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Levera Group', 'cipCode' => 'ZED'])
+            ->assertCreated()
+            ->assertJsonPath('company.cipCode', 'ZED');
+    }
+
+    public function test_a_derived_code_never_takes_the_private_client_code(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        // PRI belongs to the private-clients bucket, so Pristine goes on to
+        // four letters rather than claiming it.
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Pristine Advisors'])
+            ->assertCreated()
+            ->assertJsonPath('company.cipCode', 'PRIS');
+    }
+
+    public function test_a_code_is_never_reissued_from_a_retired_provider(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $gone = Company::create(['uid' => 'levera-old', 'name' => 'Levera Group']);
+        \App\Support\Cip\Providers::syncCode($gone, 'LEV');
+        \App\Models\CipProvider::where('code', 'LEV')->delete();
+
+        // The retired provider still owns LEV: it prefixes numbers already
+        // filed and names a folder in the library.
+        $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Levera Group'])
+            ->assertCreated()
+            ->assertJsonPath('company.cipCode', 'LEVE');
+    }
+
+    public function test_renaming_a_company_does_not_rewrite_its_code(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $uid = $this->actingAs($staff)->postJson('/portal/companies', ['name' => 'Levera Group'])
+            ->assertCreated()->json('company.id');
+
+        $this->actingAs($staff)->patchJson('/portal/companies/'.$uid, ['name' => 'Northwind Traders'])
+            ->assertOk()
+            ->assertJsonPath('company.cipCode', 'LEV');
+    }
+
+    public function test_editing_a_plain_company_does_not_make_it_a_provider(): void
+    {
+        $staff = $this->staff();
+
+        $company = Company::create(['uid' => 'plain-co', 'name' => 'Plain Company']);
+
+        // A blank code on update means "leave it alone", not "mint one".
+        $this->actingAs($staff)->patchJson('/portal/companies/'.$company->uid, ['name' => 'Plain Company', 'cipCode' => ''])
+            ->assertOk()
+            ->assertJsonPath('company.cipCode', null);
+
+        $this->assertDatabaseMissing('cip_providers', ['company_id' => $company->id]);
+    }
+
+    public function test_the_form_can_ask_what_code_a_name_would_get(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->getJson('/portal/companies/suggest-code?name='.urlencode('Levera Group'))
+            ->assertOk()
+            ->assertJsonPath('code', 'LEV');
+
+        // Asking does not reserve it — only saving does.
+        $this->assertDatabaseMissing('cip_providers', ['code' => 'LEV']);
+
+        $company = Company::create(['uid' => 'levera', 'name' => 'Levera Group']);
+        \App\Support\Cip\Providers::syncCode($company, 'LEV');
+
+        $this->actingAs($staff)->getJson('/portal/companies/suggest-code?name='.urlencode('Leverage Ltd'))
+            ->assertOk()
+            ->assertJsonPath('code', 'LEVE');
+    }
+
     public function test_the_header_search_finds_a_provider_by_its_cip_code(): void
     {
         config(['services.cip.enabled' => true]);
