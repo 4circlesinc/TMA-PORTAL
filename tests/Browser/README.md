@@ -1844,6 +1844,36 @@ between contexts. `signature-zoom.mjs` handles both screens - it reads the code
 out of `storage/logs/laravel.log` (hence `MAIL_MAILER=log`) and submits the
 interstitial. The older scripts here predate the gate and still stop at it.
 
+- **`sidebar-submenu-first-click.mjs`** — a submenu must open on the FIRST
+  click. Written for a report that Templates needed two, and it is worth
+  keeping for what it rules out: it walks all four groups (Templates,
+  Workflows, People, Folders) with a real pointer that starts off the sidebar,
+  travels in, and presses — the sequence that moves focus INTO the rail for
+  the first time and fires `focusout` on whatever held it, which is what
+  `onHoverRailClosed` defers `collapseAllSubnavs()` behind. It also drives the
+  keyboard toggle and checks an open group survives the pointer leaving.
+
+  All of it passes in a browser, in the collapsed rail and hover-expanded, so
+  the double-click is NOT in `dashboard.js`'s toggle. The report was from the
+  **desktop app**, which is where it still needs chasing: same JS, different
+  runtime, plus `desktop/titlebar.js` injecting CSS and a 64px bar. Injecting
+  that same stylesheet into a browser page does not reproduce it either
+  (tried: the rail geometry stays sound and `elementFromPoint` at the button
+  resolves to the button).
+
+  It signs in through the new-device code, so it wants `MAIL_MAILER=log`, and
+  it dismisses any modal over the shell before touching the rail:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= SESSION_DRIVER=database \
+    MAIL_MAILER=log php artisan serve --host=127.0.0.1 --port=8913 --no-reload &
+  TMA_BASE=http://127.0.0.1:8913 node tests/Browser/sidebar-submenu-first-click.mjs
+  ```
+
+  The account must be approved AND carry `email_verified_at`,
+  `profile_completed_at` and `onboarding_completed_at`, or sign-in lands on
+  `/auth/email/verify` and there is no sidebar to test.
+
 `folder-shortcuts.mjs` wants a second user and a folder tree — it deletes a
 folder as its last step, so re-seed between runs:
 
