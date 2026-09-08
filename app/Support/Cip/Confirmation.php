@@ -37,7 +37,7 @@ class Confirmation
     /**
      * What a screen needs to offer (or hide) the confirm verb.
      *
-     * @return array{locked:bool, lockedAt:?string, corLocked:bool, corLockedAt:?string, canConfirm:bool}
+     * @return array{locked:bool, lockedAt:?string, corLocked:bool, corLockedAt:?string, canConfirm:bool, canEditPeople:bool, editsPeopleDirectly:bool, pendingChanges:list<array<string,mixed>>}
      */
     public static function payload(CipApplication $application, ?User $actor): array
     {
@@ -47,6 +47,22 @@ class Confirmation
             'corLocked' => $application->isCorLocked(),
             'corLockedAt' => $application->cor_locked_at?->toIso8601String(),
             'canConfirm' => $actor !== null && self::allows($actor, $application),
+            /*
+             * The freeze protects the package that went to the Unit. It was
+             * never meant to stop the firm correcting a person's details on a
+             * file that has moved past it, but it did: every control on Edit
+             * application rendered as static text once locked_at was stamped.
+             *
+             * So it travels beside `locked`, from the same place, and the
+             * form reads both — the scans stay frozen either way, the fields
+             * do not.
+             */
+            'canEditPeople' => PersonEdits::mayPropose($actor, $application),
+            // Whether their save lands or waits, so the form can say which.
+            'editsPeopleDirectly' => PersonEdits::editsDirectly($actor, $application),
+            'pendingChanges' => PersonEdits::open($application)
+                ? PersonEdits::pending($application)
+                : [],
         ];
     }
 

@@ -848,6 +848,7 @@ class CipApplicationController extends Controller
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
+            'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
             'assignedTo' => $this->assignees($application),
             'familyMembers' => $this->familyMembersForRow($application, $viewer),
         ];
@@ -900,6 +901,7 @@ class CipApplicationController extends Controller
                     ...$status,
                     'availableStatuses' => PersonStatus::availableTransitions($person, $viewer),
                     'availableStatusOverrides' => PersonStatus::availableOverrides($person, $viewer),
+                    'lockedStatuses' => PersonStatus::lockedStatuses($person, $viewer),
                     ...$progress,
                 ];
             })
@@ -975,7 +977,28 @@ class CipApplicationController extends Controller
      */
     private function overrides($application, User $viewer, bool $forListing = false): array
     {
-        return collect(Engine::availableOverrides($application, $viewer, $forListing))
+        return $this->statusChoices(Engine::availableOverrides($application, $viewer, $forListing));
+    }
+
+    /**
+     * The same jumps, for an officer, who sees the whole lifecycle but may
+     * only drive the mapped next step. Empty for administrators, who get
+     * these as {@see overrides()} instead.
+     *
+     * @return list<array{value:string,label:string,tone:string}>
+     */
+    private function lockedStatuses($application, User $viewer, bool $forListing = false): array
+    {
+        return $this->statusChoices(Engine::lockedStatuses($application, $viewer, $forListing));
+    }
+
+    /**
+     * @param  list<string>  $statuses
+     * @return list<array{value:string,label:string,tone:string}>
+     */
+    private function statusChoices(array $statuses): array
+    {
+        return collect($statuses)
             ->map(fn (string $status) => [
                 'value' => $status,
                 'label' => Status::label($status),
@@ -1426,6 +1449,7 @@ class CipApplicationController extends Controller
             'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
+            'lockedStatuses' => $this->lockedStatuses($application, $viewer),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
@@ -1703,6 +1727,9 @@ class CipApplicationController extends Controller
                 : [],
             'availableStatusOverrides' => $applicationPhase === Phase::POST_APPROVAL
                 ? PersonStatus::availableOverrides($person, $presenter->viewer())
+                : [],
+            'lockedStatuses' => $applicationPhase === Phase::POST_APPROVAL
+                ? PersonStatus::lockedStatuses($person, $presenter->viewer())
                 : [],
         ];
     }

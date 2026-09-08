@@ -147,6 +147,15 @@ class CipEvent extends Model
      * own event: it says who asked and why, and the lodging that may follow
      * is a separate row written by whoever acted on it.
      */
+    /**
+     * A person's details corrected on a post-approval file, and the ask that
+     * may precede it. An administrator's edit writes only the first; everyone
+     * else's writes the request, then the change when it is approved.
+     */
+    public const ACTION_PERSON_CHANGED = 'person_changed';
+
+    public const ACTION_PERSON_CHANGE_REQUESTED = 'person_change_requested';
+
     public const ACTION_APPEAL_REQUESTED = 'appeal_requested';
 
     public const ACTION_APPEAL_LODGED = 'appeal_lodged';

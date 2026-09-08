@@ -151,8 +151,9 @@ class Engine
      * order is the lifecycle's own, which is the order a reader expects to
      * see the choices in.
      *
-     * Officers only see these mapped next steps. Administrators also receive
-     * {@see availableOverrides()} for pulling a file backwards.
+     * Officers only DRIVE these mapped next steps. Administrators also
+     * receive {@see availableOverrides()} for pulling a file backwards;
+     * officers receive the same list, locked, from {@see lockedStatuses()}.
      *
      * @return list<string>
      */
@@ -172,7 +173,9 @@ class Engine
      * Statuses an administrator may set that are not the next mapped step.
      *
      * Empty for everyone else: pulling Approved back to Assessment Feedback
-     * is an override, not ordinary workflow.
+     * is an override, not ordinary workflow. Officers still SEE this list,
+     * through {@see lockedStatuses()}, so the picker reads the same for
+     * everyone; only an administrator may pick from it.
      *
      * @return list<string>
      */
@@ -182,6 +185,48 @@ class Engine
             return [];
         }
 
+        return self::offMapStatuses($application, $actor, $forListing);
+    }
+
+    /**
+     * The same off-map statuses, for staff who may not drive them.
+     *
+     * An officer used to see one or two next steps and nothing else, which
+     * read as though the lifecycle stopped there: where the file could go
+     * next was information only administrators had. So officers are shown
+     * the whole list, with the off-map part shown as locked rather than
+     * clickable. Seeing where a file can go is not the same as moving it,
+     * and the override stays administrator-only, at the picker and at
+     * {@see set()} both.
+     *
+     * Empty for an administrator, whose copy of this list is actionable and
+     * arrives through {@see availableOverrides()}, and for anyone who may
+     * not change status at all.
+     *
+     * @return list<string>
+     */
+    public static function lockedStatuses(CipApplication $application, ?User $actor, bool $forListing = false): array
+    {
+        if ($actor === null || CipAccess::canOverrideStatus($actor)) {
+            return [];
+        }
+
+        if (! CipAccess::canChangeApplicationStatus($actor)) {
+            return [];
+        }
+
+        return self::offMapStatuses($application, $actor, $forListing);
+    }
+
+    /**
+     * Every listed status that is not where the file stands and not one of
+     * this actor's mapped next steps — the override column's contents,
+     * whether the reader may act on them or only read them.
+     *
+     * @return list<string>
+     */
+    private static function offMapStatuses(CipApplication $application, ?User $actor, bool $forListing = false): array
+    {
         $next = self::availableTransitions($application, $actor, $forListing);
 
         return array_values(array_filter(

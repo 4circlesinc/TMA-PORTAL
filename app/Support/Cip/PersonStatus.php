@@ -170,13 +170,48 @@ class PersonStatus
             return [];
         }
 
+        return self::present(self::offMap($person));
+    }
+
+    /**
+     * The same off-map statuses, for staff who may see them but not set them.
+     *
+     * The person picker reads the same for an officer as for an
+     * administrator — the whole vocabulary, so where a person's paperwork can
+     * go is not administrator-only knowledge — with the off-map part locked
+     * rather than clickable. Empty for an administrator, whose copy is
+     * actionable, and for anyone who may not change status at all.
+     *
+     * @return list<array{value:string,label:string,tone:string}>
+     */
+    public static function lockedStatuses(CipPerson $person, ?User $actor): array
+    {
+        if ($actor === null || CipAccess::canOverrideStatus($actor)) {
+            return [];
+        }
+
+        if (! CipAccess::canChangeApplicationStatus($actor)) {
+            return [];
+        }
+
+        return self::present(self::offMap($person));
+    }
+
+    /**
+     * Every status that is neither where the person stands nor a mapped next
+     * step from it.
+     *
+     * @return list<string>
+     */
+    private static function offMap(CipPerson $person): array
+    {
         $current = self::current($person);
         $next = self::TRANSITIONS[$current] ?? [];
 
-        return self::present(array_values(array_filter(
+        return array_values(array_filter(
             self::ALL,
             fn (string $status) => $status !== $current && ! in_array($status, $next, true),
-        )));
+        ));
     }
 
     public static function assertMayMove(CipPerson $person, string $to, ?User $actor): void

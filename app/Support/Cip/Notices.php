@@ -5,6 +5,8 @@ namespace App\Support\Cip;
 use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
+use App\Models\CipPerson;
+use App\Models\CipPersonChangeRequest;
 use App\Models\User;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -168,6 +170,102 @@ class Notices
             $message,
             $author->email,
         );
+    }
+
+    /**
+     * Somebody has asked to correct a person on a post-approval file.
+     *
+     * Goes to the administrators, because they are the only ones who can
+     * answer it. The other section 22 classes are not told: a proposal that may
+     * be declined is not news about the file, and telling the provider side
+     * about a correction the firm has not accepted yet would be.
+     */
+    public static function personChangeRequested(
+        CipApplication $application,
+        CipPerson $person,
+        User $author,
+        CipPersonChangeRequest $request,
+    ): void {
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $who = trim(($person->first_name ?? '').' '.($person->last_name ?? '')) ?: 'somebody on the file';
+        $title = $facts['number'].': change requested for '.$who;
+        $fields = implode(', ', array_keys(PersonEdits::describe($request)));
+        $message = $author->name.' asked to change '.($fields !== '' ? $fields : 'these details').'.';
+
+        foreach (Contacts::administrators() as $admin) {
+            if (mb_strtolower($admin['email']) === mb_strtolower((string) $author->email)) {
+                continue;
+            }
+
+            Deliveries::send(
+                Postcards::notification(
+                    $title, $message, $url, 'Review the request',
+                    $admin['name'] ? (strtok($admin['name'], ' ') ?: $admin['name']) : null,
+                    'CIP Applications',
+                ),
+                $admin['email'],
+                $application,
+                'cip-person-change',
+            );
+
+            if ($admin['userId'] === null) {
+                continue;
+            }
+
+            Notifier::send([
+                'user' => User::find($admin['userId']),
+                'actor' => $author,
+                'type' => 'cip.person-change',
+                'title' => $title,
+                'message' => $message,
+                'subject' => $application,
+                'action_url' => Contacts::path($application),
+                'email' => false,
+            ]);
+        }
+    }
+
+    /** The answer, to whoever asked. */
+    public static function personChangeDecided(CipPersonChangeRequest $request, User $actor): void
+    {
+        $application = $request->application;
+        $requester = $request->requester;
+
+        if ($application === null || $requester === null || $requester->id === $actor->id) {
+            return;
+        }
+
+        $facts = Contacts::facts($application);
+        $approved = $request->status === CipPersonChangeRequest::STATUS_APPROVED;
+        $title = $facts['number'].': change '.($approved ? 'approved' : 'declined');
+        $message = trim((string) $request->decision_note) !== ''
+            ? trim((string) $request->decision_note)
+            : ($approved
+                ? 'Your correction has been applied.'
+                : 'Your correction was not applied.');
+
+        Deliveries::send(
+            Postcards::notification(
+                $title, $message, Contacts::url($application), 'Open the application',
+                strtok($requester->name, ' ') ?: $requester->name,
+                'CIP Applications',
+            ),
+            $requester->email,
+            $application,
+            'cip-person-change',
+        );
+
+        Notifier::send([
+            'user' => $requester,
+            'actor' => $actor,
+            'type' => 'cip.person-change',
+            'title' => $title,
+            'message' => $message,
+            'subject' => $application,
+            'action_url' => Contacts::path($application),
+            'email' => false,
+        ]);
     }
 
     /**

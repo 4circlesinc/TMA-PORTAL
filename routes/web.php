@@ -28,6 +28,7 @@ use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipThreadController;
+use App\Http\Controllers\Cip\CipPeopleController;
 use App\Http\Controllers\Cip\CipTransitionController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientConversationController;
@@ -479,6 +480,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          * NOT a status change: the lifecycle stays with the firm, so this
          * records the ask and notifies, and an officer lodges it below.
          */
+        /*
+         * Correcting a person on a post-approval file. An administrator's
+         * edit lands on the record; everyone else's is a request they answer.
+         */
+        Route::post('/applications/{uuid}/people/{person}/details', [CipPeopleController::class, 'update'])
+            ->name('applications.people.details');
+        Route::post('/applications/{uuid}/change-requests/{request}', [CipPeopleController::class, 'decide'])
+            ->name('applications.change-requests.decide');
         Route::post('/applications/{uuid}/appeal-request', [CipTransitionController::class, 'appealRequest'])
             ->name('applications.appeal-request');
         Route::post('/applications/{uuid}/appeal', [CipTransitionController::class, 'appeal'])

@@ -313,12 +313,38 @@
    * filing; everyone else's required flags show on the form but the checklist
    * holds the door until those uploads arrive.
    */
+  /*
+   * Is the submitted package frozen?
+   *
+   * This is the document question: once confirm stamps locked_at, the scans
+   * the Unit was handed cannot be replaced from here, and that never changes.
+   */
   function packageLocked() {
     return !!(state.record && state.record.locked);
   }
 
+  /*
+   * Are this person's DETAILS frozen too?
+   *
+   * They used to be the same question, and that was wrong. The freeze exists
+   * to protect the package that went to the Unit — the scans — and it was
+   * quietly also freezing every name, date and passport number on the file.
+   * On a post-approval file that left the firm with no way to correct a
+   * misspelt name at all: every control on Edit application rendered as
+   * static text, whatever the reader's permission.
+   *
+   * So the server says who may edit the people (canEditPeople), and that
+   * answer overrides the freeze for fields only. Documents keep asking
+   * packageLocked() and stay exactly as frozen as they were.
+   */
+  function fieldsLocked() {
+    if (state.record && state.record.canEditPeople) return false;
+
+    return packageLocked();
+  }
+
   function isRequired(path) {
-    if (packageLocked()) return false;
+    if (fieldsLocked()) return false;
     if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
 
     return requiredPaths().indexOf(path) !== -1
@@ -358,7 +384,7 @@
 
   function textField(path, opts) {
     opts = opts || {};
-    if (packageLocked()) return lockedField(path, state.draft[path] || '', opts);
+    if (fieldsLocked()) return lockedField(path, state.draft[path] || '', opts);
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
       '<input class="tma-portal-input" type="' + (opts.type || 'text') + '"' +
@@ -374,7 +400,7 @@
 
   function selectField(path, options, placeholder, opts) {
     opts = opts || {};
-    if (packageLocked()) return lockedField(path, selectShown(path, options), opts);
+    if (fieldsLocked()) return lockedField(path, selectShown(path, options), opts);
     var list = [{ value: '', label: placeholder }].concat(options);
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
@@ -396,7 +422,7 @@
      to judge the scan on, not an avatar disc. */
   function photoField(path) {
     var preview = state.previews[path];
-    if (packageLocked()) {
+    if (fieldsLocked()) {
       return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport is-locked">' +
         fieldLabel(path, labelFor(path)) +
         '<div class="tma-dash__clients-photo-wrap">' +
@@ -690,7 +716,7 @@
       rows += dependentRow(i, numbers[i]);
     }
 
-    var add = !packageLocked() && state.dependents < MAX_DEPENDENTS
+    var add = !fieldsLocked() && state.dependents < MAX_DEPENDENTS
       ? '<div class="tma-dash__clients-intake-add"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>' +
         'Add dependent</button></div>'
       : '';
@@ -698,7 +724,7 @@
     if (!state.dependents) {
       return titledCard('Dependents',
         '<p class="tma-portal-note tma-portal-note--empty">No dependents on this application.</p>' +
-        (packageLocked()
+        (fieldsLocked()
           ? ''
           : '<div class="tma-portal-form-actions">' +
             '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>Add dependent</button>' +
@@ -719,7 +745,7 @@
       '<h3 class="tma-portal-section__title tma-portal-repeat__title">' + esc(title) + '</h3>' +
       '<div class="tma-portal-section__card">' +
       '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
-      (packageLocked()
+      (fieldsLocked()
         ? ''
         : '<div class="tma-portal-repeat__head">' +
           '<button type="button" class="tma-portal-repeat__remove" data-cip-dependent-remove="' + i + '"' +
@@ -781,10 +807,14 @@
     MORPH.patch(root,
       '<div class="tma-dash__clients-form" data-cip-form data-cip-intake-phase="' +
       esc(state.phase || 'pre_approval') + '"' +
-      (packageLocked() ? ' data-cip-locked="1"' : '') + '>' +
-      (packageLocked()
+      (fieldsLocked() ? ' data-cip-locked="1"' : '') + '>' +
+      // Two different notices, because they are two different situations. A
+      // reader who may still fix a name must not be told nothing can change.
+      (fieldsLocked()
         ? '<p class="tma-portal-note">The original submission is locked. Submitted details and primary documents can be viewed but not changed. New files go in Additional Documents.</p>'
-        : '') +
+        : (packageLocked()
+          ? '<p class="tma-portal-note">The submitted documents are locked. Details can still be corrected; new files go in Additional Documents.</p>'
+          : '')) +
       // One summary at the top: a reader who pressed Add and nothing
       // happened deserves to be told why without hunting the page.
       (count
@@ -1227,7 +1257,7 @@
   function submit() {
     var root = state.root;
     if (!root || state.saving) return;
-    if (packageLocked()) {
+    if (fieldsLocked()) {
       ui().toastError('This application’s original submission package is locked and cannot be modified.');
       return;
     }

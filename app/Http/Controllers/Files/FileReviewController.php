@@ -83,6 +83,8 @@ class FileReviewController extends BaseFilesController
                         ->map($option)->values()->all(),
                     'availableOverrides' => collect(Engine::availableOverrides($application, $user))
                         ->map($option)->values()->all(),
+                    'lockedStatuses' => collect(Engine::lockedStatuses($application, $user))
+                        ->map($option)->values()->all(),
                 ];
             }
             if ($to === DocumentStatus::UPDATE_REQUIRED && $note !== '') {

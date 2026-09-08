@@ -3264,7 +3264,13 @@
     var access = window.TMAPortalAccess;
     if (!(access && access.can && access.can('cip.review'))) return false;
 
-    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length) {
+    /*
+     * No next step is not nothing to show: an officer's picker still lists
+     * the rest of the lifecycle, locked. Only a payload offering neither
+     * closes the menu.
+     */
+    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length
+      && !(person.lockedStatuses && person.lockedStatuses.length)) {
       return false;
     }
 
@@ -4554,7 +4560,10 @@
     var access = window.TMAPortalAccess;
     if (!(access && access.can && access.can('cip.review'))) return false;
 
-    if (app && Array.isArray(app.availableTransitions) && !app.availableTransitions.length) {
+    // As above: a file with no mapped next step still shows the officer
+    // where it could go, locked.
+    if (app && Array.isArray(app.availableTransitions) && !app.availableTransitions.length
+      && !(app.lockedStatuses && app.lockedStatuses.length)) {
       return false;
     }
 
@@ -4608,7 +4617,7 @@
     record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
     record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
     if (extra) {
-      ['availableTransitions', 'availableOverrides', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
+      ['availableTransitions', 'availableOverrides', 'lockedStatuses', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
         .forEach(function (k) {
           if (extra[k] !== undefined) record[k] = extra[k];
         });
@@ -4726,6 +4735,7 @@
       incoming.statusTone = held.statusTone;
       if (held.availableTransitions !== undefined) incoming.availableTransitions = held.availableTransitions;
       if (held.availableOverrides !== undefined) incoming.availableOverrides = held.availableOverrides;
+      if (held.lockedStatuses !== undefined) incoming.lockedStatuses = held.lockedStatuses;
     }
     return incoming;
   }
@@ -4807,7 +4817,13 @@
     var access = window.TMAPortalAccess;
     if (!(access && access.can && access.can('cip.review'))) return false;
 
-    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length) {
+    /*
+     * No next step is not nothing to show: an officer's picker still lists
+     * the rest of the lifecycle, locked. Only a payload offering neither
+     * closes the menu.
+     */
+    if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length
+      && !(person.lockedStatuses && person.lockedStatuses.length)) {
       return false;
     }
 
@@ -7193,6 +7209,7 @@
 
       return '<div class="tma-dash__clients-card">' +
         renderCipPersonCardHead(person, app) +
+        renderCipPersonDetailsEdit(person, app) +
         drops +
         '</div>';
     }).join('');
@@ -7203,6 +7220,65 @@
       '<div class="tma-dash__clients-cards">' +
       (cards || '<div class="tma-dash__clients-assigned-empty">Nobody is on this application yet.</div>') +
       '</div></div></div>';
+  }
+
+  /*
+   * A person's own details on the post-approval Edit screen.
+   *
+   * They were not here at all: the screen showed each person's upload slots
+   * and nothing else, so a misspelt name on a file past the decision could
+   * not be fixed anywhere in the portal. The freeze that made that true is
+   * about the SCANS the Unit was handed, not about who somebody is.
+   *
+   * Two shapes, decided by the server. An administrator gets fields that
+   * save on the spot. Everyone else gets the same fields and a Request
+   * changes button, because the value moving is an administrator's call.
+   */
+  var CIP_PERSON_EDIT_FIELDS = [
+    { key: 'firstName', label: 'First name' },
+    { key: 'lastName', label: 'Last name' },
+    { key: 'dateOfBirth', label: 'Date of birth', type: 'date' },
+    { key: 'passportNumber', label: 'Passport number' },
+    { key: 'countryOfBirth', label: 'Country of birth' },
+    { key: 'countryOfResidence', label: 'Country of residence' },
+    { key: 'occupation', label: 'Occupation' },
+  ];
+
+  function renderCipPersonDetailsEdit(person, app) {
+    if (!person || !app || !app.canEditPeople) return '';
+
+    var direct = !!app.editsPeopleDirectly;
+    var pending = (app.pendingChanges || []).filter(function (r) {
+      return r.person === person.id;
+    })[0];
+
+    var fields = CIP_PERSON_EDIT_FIELDS.map(function (f) {
+      return '<label class="tma-portal-field">' +
+        '<span class="tma-portal-field__label">' + esc(f.label) + '</span>' +
+        '<input class="tma-portal-input" type="' + (f.type || 'text') + '"' +
+        ' data-cip-person-field="' + esc(f.key) + '"' +
+        ' data-cip-person="' + esc(person.id) + '"' +
+        ' value="' + esc(person[f.key] == null ? '' : person[f.key]) + '"' +
+        ' autocomplete="off">' +
+        '</label>';
+    }).join('');
+
+    // An open request is the answer to "why has my change not landed", so it
+    // is said here rather than left for somebody to wonder about.
+    var waiting = pending
+      ? '<p class="tma-portal-note">' +
+        esc((pending.by || 'Somebody') + ' asked to change ' +
+          Object.keys(pending.changes || {}).join(', ') + '.') +
+        ' Waiting on an administrator.</p>'
+      : '';
+
+    return '<div class="tma-dash__clients-person-edit">' +
+      '<div class="tma-portal-form-grid">' + fields + '</div>' +
+      waiting +
+      '<div class="tma-portal-form-actions">' +
+      '<button type="button" class="tma-no-data__btn" data-cip-person-save="' + esc(person.id) + '">' +
+      (direct ? 'Save details' : 'Request changes') + '</button>' +
+      '</div></div>';
   }
 
   function cipDocFileIcon(name) {
@@ -10414,6 +10490,7 @@
       : CIP_STATUSES;
     var nextValues = statusValues(source && source.availableTransitions);
     var overrideValues = statusValues(source && source.availableOverrides);
+    var lockedValues = statusValues(source && source.lockedStatuses);
 
     var next = all.filter(function (status) {
       return nextValues.indexOf(status.value) !== -1;
@@ -10421,16 +10498,21 @@
     var overrides = all.filter(function (status) {
       return overrideValues.indexOf(status.value) !== -1;
     });
+    var locked = all.filter(function (status) {
+      return lockedValues.indexOf(status.value) !== -1;
+    });
 
     if (cipDocumentsBlockReadyToSubmit(source) || cipDocumentsBlockReadyToSubmit(applicationFor(clientUid))) {
       next = next.filter(function (status) { return status.value !== 'ready_to_submit'; });
       overrides = overrides.filter(function (status) { return status.value !== 'ready_to_submit'; });
+      locked = locked.filter(function (status) { return status.value !== 'ready_to_submit'; });
     }
 
     next = next.filter(function (status) { return status.value !== 'delayed'; });
     overrides = overrides.filter(function (status) { return status.value !== 'delayed'; });
+    locked = locked.filter(function (status) { return status.value !== 'delayed'; });
 
-    return { next: next, overrides: overrides, current: source && source.status };
+    return { next: next, overrides: overrides, locked: locked, current: source && source.status };
   }
 
   function renderCipStatusSub(list, current) {
@@ -10447,7 +10529,24 @@
     }).join('');
   }
 
-  function renderCipStatusGroup(title, list, current) {
+  /*
+   * The statuses an officer can see but not set. Same rows, same dots, same
+   * order — a span rather than a button, so the whole lifecycle reads the
+   * same for everyone while only an administrator can pick from this part.
+   */
+  function renderCipStatusLocked(list, current) {
+    return list.map(function (status) {
+      var on = status.value === current;
+      var tone = status.tone || 'neutral';
+
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static"' +
+        ' role="presentation"' + (on ? ' aria-current="true"' : '') + '>' +
+        '<i class="tma-portal-cip__dot tma-portal-cip__dot--' + esc(tone) + '" aria-hidden="true"></i>' +
+        '<span class="tma-portal-context-menu__label">' + esc(status.label) + '</span></div>';
+    }).join('');
+  }
+
+  function renderCipStatusGroup(title, list, current, locked) {
     if (!list.length) return '';
 
     return (
@@ -10455,19 +10554,25 @@
         ? '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static" role="presentation">' +
           '<span class="tma-portal-context-menu__note">' + esc(title) + '</span></div>'
         : '') +
-      renderCipStatusSub(list, current)
+      (locked ? renderCipStatusLocked(list, current) : renderCipStatusSub(list, current))
     );
   }
 
   function renderCipStatusPickerHtml(menu) {
     var next = menu.next || menu.list || [];
     var overrides = menu.overrides || [];
+    var locked = menu.locked || [];
 
-    if (!overrides.length) return renderCipStatusSub(next, menu.current);
+    if (!overrides.length && !locked.length) return renderCipStatusSub(next, menu.current);
+
+    // An administrator's rest-of-list is actionable, an officer's is not, so
+    // only one of the two is ever populated and the heading names which.
+    var rest = overrides.length ? overrides : locked;
+    var isLocked = !overrides.length;
 
     return renderCipStatusGroup(next.length ? 'Next' : '', next, menu.current) +
       (next.length ? '<div class="tma-portal-context-menu__sep" role="separator"></div>' : '') +
-      renderCipStatusGroup('Admin override', overrides, menu.current);
+      renderCipStatusGroup(isLocked ? 'Administrator only' : 'Admin override', rest, menu.current, isLocked);
   }
 
   function openCipStatusSub(parentBtn, kind, id, extra) {
@@ -10557,6 +10662,7 @@
     var all = cipPersonStatusList(app);
     var nextValues = statusValues(person && person.availableStatuses);
     var overrideValues = statusValues(person && person.availableStatusOverrides);
+    var lockedValues = statusValues(person && person.lockedStatuses);
 
     var next = all.filter(function (status) {
       return nextValues.indexOf(status.value) !== -1;
@@ -10564,8 +10670,11 @@
     var overrides = all.filter(function (status) {
       return overrideValues.indexOf(status.value) !== -1;
     });
+    var locked = all.filter(function (status) {
+      return lockedValues.indexOf(status.value) !== -1;
+    });
 
-    return { next: next, overrides: overrides, current: person && person.status };
+    return { next: next, overrides: overrides, locked: locked, current: person && person.status };
   }
 
   function openCipPersonStatusPicker(anchor, extra, clientUid) {
@@ -13406,6 +13515,36 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openQueryDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-person-save]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        var personId = btn.getAttribute('data-cip-person-save');
+        var body = {};
+        root.querySelectorAll('[data-cip-person="' + personId + '"]').forEach(function (input) {
+          body[input.getAttribute('data-cip-person-field')] = input.value.trim();
+        });
+
+        var direct = !!app.editsPeopleDirectly;
+        btn.disabled = true;
+        btn.textContent = direct ? 'Saving…' : 'Sending…';
+
+        clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) +
+          '/people/' + encodeURIComponent(personId) + '/details', { method: 'POST', json: body })
+          .then(function (res) {
+            clientsToast(res && res.requested
+              ? 'Change requested. An administrator will review it.'
+              : 'Details saved.', 'positive');
+            refreshAfterCipMove(app.clientUid);
+          })
+          .catch(function (err) {
+            btn.disabled = false;
+            btn.textContent = direct ? 'Save details' : 'Request changes';
+            clientsToast((err && err.message) || 'Could not save these details.', 'negative');
+          });
       });
     });
 
