@@ -3362,8 +3362,13 @@
     if (store.get('tma.sidebarList', 'main') === 'shortcuts') {
       showList('shortcuts');
     }
-    var savedToday = store.get('tma.today', '');
-    if (savedToday && todayLabel) {
+    /* The picker's resting state. Nothing stored means the default the shell
+       ships in its own markup — kept in step with portal-home's
+       METRICS_DEFAULT, or the head would name one window while the cards
+       counted another. Marking the row active matters either way: without it
+       the open menu showed no tick at all until the reader picked something. */
+    var savedToday = store.get('tma.today', '') || (todayLabel && todayLabel.textContent.trim()) || 'This month';
+    if (todayLabel) {
       todayLabel.textContent = savedToday;
       var match = todayMenu && todayMenu.querySelector('[data-today="' + savedToday + '"]');
       if (match) match.classList.add('tma-dash__menu-item--active');

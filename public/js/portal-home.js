@@ -285,14 +285,25 @@
   /*
    * The head's Today / This week / This month / This year picker. dashboard.js
    * owns the control and stores the label it shows; the server wants the key.
-   * The label is the default the shell ships with, so "nothing stored" is Today.
+   * The label is the default the shell ships with, so "nothing stored" is the
+   * same month the markup names. Both must agree, or the head says one window
+   * and the cards count another.
+   *
+   * The default is a month rather than a day because a day is usually empty
+   * and an empty day is indistinguishable from a broken card. Work filed
+   * yesterday evening is yesterday's — a file created at 23:04 in a UTC-4
+   * timezone is on the previous date — so a reader opening the portal in the
+   * morning met a row of zeros and a "-100.0%" under it, and read the board
+   * as broken rather than as quiet. Today is still one click away.
    */
   var METRICS_PERIODS = { 'Today': 'today', 'This week': 'week', 'This month': 'month', 'This year': 'year' };
+
+  var METRICS_DEFAULT = 'month';
 
   function metricsPeriod() {
     var label = '';
     try { label = localStorage.getItem('tma.today') || ''; } catch (e) {}
-    return METRICS_PERIODS[label] || 'today';
+    return METRICS_PERIODS[label] || METRICS_DEFAULT;
   }
 
   /*
