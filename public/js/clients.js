@@ -7218,7 +7218,44 @@
       '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
       (note || '') +
       '<div class="tma-dash__clients-cards">' +
+      renderCipNumberEdit(app) +
       (cards || '<div class="tma-dash__clients-assigned-empty">Nobody is on this application yet.</div>') +
+      '</div></div></div>';
+  }
+
+  /*
+   * The Unit's number on the post-approval Edit screen.
+   *
+   * A post-approval file arrives already numbered, read off an approval
+   * letter, so a mistyped digit is among the likeliest things on it to need
+   * fixing — and this screen is where somebody looking at that letter
+   * already is. It was the one detail Edit application could not touch: the
+   * cards below it edit people, and the number belongs to the application,
+   * not to any one person.
+   *
+   * The Edit CIP number dialog already knew how to do this and had no way in
+   * from anywhere; this is its entry point. Shown only to a reader the
+   * server says may change it, because the number is the reviewing officer's
+   * to correct even though the whole firm may fix a name on the same screen.
+   */
+  function renderCipNumberEdit(app) {
+    if (!app || app.phase !== 'post_approval' || !app.canEditCipNumber) return '';
+
+    return '<div class="tma-dash__clients-card">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">CIP application number</h3>' +
+      '</header>' +
+      '<div class="tma-dash__clients-person-edit">' +
+      '<div class="tma-portal-form-grid">' +
+      '<label class="tma-portal-field">' +
+      '<span class="tma-portal-field__label">Number from the Unit</span>' +
+      '<input class="tma-portal-input" type="text" readonly' +
+      ' value="' + esc(app.cipNumber || '') + '"' +
+      ' placeholder="Not recorded yet" autocomplete="off" spellcheck="false">' +
+      '</label>' +
+      '</div>' +
+      '<div class="tma-portal-form-actions">' +
+      '<button type="button" class="tma-no-data__btn" data-cip-edit-number>Edit number</button>' +
       '</div></div></div>';
   }
 
@@ -13515,6 +13552,14 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openQueryDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-edit-number]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openSubmissionDialog(state, render, true, app);
       });
     });
 
