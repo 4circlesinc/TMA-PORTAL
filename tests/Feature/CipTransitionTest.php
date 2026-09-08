@@ -410,6 +410,58 @@ class CipTransitionTest extends TestCase
         $this->assertNotContains(Status::CLOSED, Engine::availableOverrides($apply, $admin));
     }
 
+    public function test_an_officer_sees_the_whole_lifecycle_but_may_only_drive_the_next_step(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $employee = $this->user(Role::EMPLOYEE);
+
+        // Pre-approval. Whatever the administrator may jump to, the officer
+        // sees — as the same list, locked.
+        $granted = $this->at($this->application($admin), Status::GRANTED);
+
+        $this->assertSame(
+            Engine::availableOverrides($granted, $admin),
+            Engine::lockedStatuses($granted, $officer),
+        );
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
+
+        // Seeing is not setting: the override endpoint still refuses.
+        $this->assertFalse(CipAccess::canOverrideStatus($officer));
+
+        // The administrator's copy is actionable, so it is not sent twice.
+        $this->assertSame([], Engine::lockedStatuses($granted, $admin));
+
+        // Post-approval reads the same way, and stays inside its own lane.
+        $post = $this->at($this->application($admin), Status::POST_APPROVAL);
+        $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $this->assertSame(
+            Engine::availableOverrides($post, $admin),
+            Engine::lockedStatuses($post, $officer),
+        );
+        // Pulling a post-approval file back to the pre-decision lifecycle is
+        // the override an officer can now SEE. The lane's own steps belong to
+        // the stage buttons, so neither list offers them.
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
+        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($post, $officer));
+
+        // A locked status is never one the officer could already drive, so
+        // the picker cannot list the same status twice.
+        $this->assertSame(
+            [],
+            array_intersect(
+                Engine::availableTransitions($post, $officer),
+                Engine::lockedStatuses($post, $officer),
+            ),
+        );
+
+        // A parked employee may not change status at all, so there is
+        // nothing to show them either.
+        $this->assertSame([], Engine::lockedStatuses($granted, $employee));
+        $this->assertSame([], Engine::lockedStatuses($post, $employee));
+    }
+
     public function test_the_payload_says_what_this_reader_may_do_next(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
