@@ -474,6 +474,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          * opens the Appeal Documents drawer the provider side is then told
          * to use. Ready carries no date, but it belongs with its siblings.
          */
+        /*
+         * The provider side asking for an appeal. Its own verb because it is
+         * NOT a status change: the lifecycle stays with the firm, so this
+         * records the ask and notifies, and an officer lodges it below.
+         */
+        Route::post('/applications/{uuid}/appeal-request', [CipTransitionController::class, 'appealRequest'])
+            ->name('applications.appeal-request');
         Route::post('/applications/{uuid}/appeal', [CipTransitionController::class, 'appeal'])
             ->name('applications.appeal');
         Route::post('/applications/{uuid}/appeal-ready', [CipTransitionController::class, 'appealReady'])

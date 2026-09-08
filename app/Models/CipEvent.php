@@ -140,6 +140,15 @@ class CipEvent extends Model
      * the fact, which is the point of it — the provider side is being asked
      * to confirm, and the confirmation is the next event, not this one.
      */
+    /**
+     * The provider side asking for an appeal, which is not the appeal.
+     *
+     * They may not move a file through the lifecycle, so the request is its
+     * own event: it says who asked and why, and the lodging that may follow
+     * is a separate row written by whoever acted on it.
+     */
+    public const ACTION_APPEAL_REQUESTED = 'appeal_requested';
+
     public const ACTION_APPEAL_LODGED = 'appeal_lodged';
 
     public const ACTION_APPEAL_READY = 'appeal_ready';

@@ -4557,7 +4557,7 @@
     record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
     record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
     if (extra) {
-      ['availableTransitions', 'availableOverrides', 'locked', 'corLocked', 'canConfirm', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
+      ['availableTransitions', 'availableOverrides', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealRequested', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
         .forEach(function (k) {
           if (extra[k] !== undefined) record[k] = extra[k];
         });
@@ -6563,6 +6563,9 @@
     if (postApproval) parts.push(postApproval);
     var stage = renderStageAction(app);
     if (stage) parts.push(stage);
+    // Last: an appeal is what happens after everything above has finished.
+    var appeal = renderAppealAction(state, app);
+    if (appeal) parts.push(appeal);
     if (!parts.length) return '';
 
     return '<div class="tma-dash__clients-appbar">' + parts.join('') + '</div>';
@@ -6611,6 +6614,42 @@
     }
 
     return '';
+  }
+
+  /*
+   * The appeal verbs, which are two different things to two audiences.
+   *
+   * The provider side asks: they may not move a file through the lifecycle
+   * (§22 keeps that with the firm), so their button records the ask and tells
+   * the firm. The firm reads the standing request and lodges it, which is the
+   * status change. Neither side is offered the other's verb.
+   *
+   * Both are drawn from the same fields, so the two screens cannot disagree
+   * about whether a request is open.
+   */
+  function renderAppealAction(state, app) {
+    var requested = app.appealRequested;
+
+    if (app.canRequestAppeal) {
+      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-request-appeal>' +
+        'Request an appeal</button>';
+    }
+
+    if (!requested) return '';
+
+    // Whoever asked already sees their own ask; the firm sees who wants what.
+    var who = requested.by || 'The service provider';
+    var note = canLodgeAppeal(app)
+      ? esc(who) + ' asked to appeal this decision.'
+      : 'Appeal requested. The firm will lodge it.';
+
+    return '<p class="tma-dash__clients-appbar-note">' + note + '</p>';
+  }
+
+  /** Is New Appeal a move this reader is actually offered on this file? */
+  function canLodgeAppeal(app) {
+    return statusValues(app && app.availableTransitions).indexOf('new_appeal') !== -1
+      || statusValues(app && app.availableOverrides).indexOf('new_appeal') !== -1;
   }
 
   function canRecordSubmission() {
@@ -10891,6 +10930,64 @@
   }
 
   /*
+   * The provider side asking the firm to appeal.
+   *
+   * No date, and no status: this is not the lodging, it is the ask. The date
+   * belongs to the appeal itself and is recorded by whoever lodges it, which
+   * is why the reason is the only field here.
+   */
+  function openAppealRequestDialog(applicationId, clientUid) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    ui.openModal({
+      title: 'Request an appeal',
+      body:
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-req">Why this decision should be appealed</label>' +
+        '<textarea id="cip-appeal-req" class="tma-dash__clients-field-textarea" data-cip-appeal-req' +
+        ' rows="4" maxlength="2000" placeholder="What the decision got wrong"></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The firm will be told and will lodge the appeal.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-req>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-req>Send request</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-req]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-req]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var reasonEl = el.querySelector('[data-cip-appeal-req]');
+          var reason = reasonEl && reasonEl.value ? reasonEl.value.trim() : '';
+
+          save.disabled = true;
+          save.textContent = 'Sending…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-request', {
+            method: 'POST',
+            json: reason ? { reason: reason } : {},
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast('Appeal requested. The firm has been told.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = 'Send request';
+              clientsToast((err && err.message) || 'Could not send this request.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
    * The appeal lane, step 1: lodging an appeal against the decision.
    *
    * The date is asked for rather than assumed, the same reasoning as every
@@ -13224,6 +13321,14 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openQueryDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-request-appeal]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openAppealRequestDialog(app.id, app.clientUid);
       });
     });
 

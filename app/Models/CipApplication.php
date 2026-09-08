@@ -50,6 +50,7 @@ class CipApplication extends Model
             'accepted_at' => 'date',
             'decided_at' => 'date',
             'appeal_lodged_at' => 'date',
+            'appeal_requested_at' => 'datetime',
             'appeal_submitted_at' => 'date',
             'locked_at' => 'datetime',
             'cor_locked_at' => 'datetime',
@@ -96,6 +97,12 @@ class CipApplication extends Model
     public function isPostApproval(): bool
     {
         return $this->phase === Phase::POST_APPROVAL;
+    }
+
+    /** Who asked the firm to appeal, when one has. */
+    public function appealRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'appeal_requested_by');
     }
 
     public function provider(): BelongsTo

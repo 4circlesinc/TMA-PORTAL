@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipDocument;
 use App\Models\User;
+use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
@@ -125,6 +126,7 @@ class CipReviewController extends Controller
                 'statusLabel' => Status::label($application->status),
                 'statusTone' => Status::tone($application->status),
                 ...Confirmation::payload($application, $user),
+                ...Appeal::payload($application, $user),
             ],
             // Counted on the server rather than in the browser: the checklist
             // in front of the officer is one person's, and an application's

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipApplicationMessage;
+use App\Models\CompanyMember;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -266,6 +267,169 @@ class CipAppealTest extends TestCase
 
         // Three steps, three status letters, and no thread postcard on top.
         $this->assertDatabaseMissing('email_deliveries', ['template' => 'cip-message']);
+    }
+
+    /** A provider contact on the application's own company. */
+    private function providerContact(User $staff, CipApplication $application): User
+    {
+        $contact = User::create([
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'password' => bcrypt('password12345'),
+        ]);
+        $contact->forceFill([
+            'email_verified_at' => now(), 'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(), 'status' => 'approved',
+            'account_type' => Role::CLIENT,
+        ])->save();
+
+        CompanyMember::create([
+            'company_id' => $application->provider->company_id,
+            'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $staff->id,
+        ]);
+
+        return $contact;
+    }
+
+    public function test_the_provider_side_can_ask_the_firm_to_appeal(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+        $contact = $this->providerContact($staff, $application);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [
+                'reason' => 'The refusal misread our source of funds letter.',
+            ])
+            ->assertOk();
+
+        $fresh = $application->fresh();
+
+        // The ask is recorded and the firm is told — but the file has NOT
+        // moved. §22 keeps the lifecycle with the firm.
+        $this->assertNotNull($fresh->appeal_requested_at);
+        $this->assertSame($contact->id, $fresh->appeal_requested_by);
+        $this->assertSame(Status::DENIED, $fresh->status);
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_APPEAL_REQUESTED,
+        ]);
+
+        // Their words reach the firm where the firm reads everything else.
+        $this->assertDatabaseHas('cip_application_messages', [
+            'application_id' => $application->id,
+            'body' => 'The refusal misread our source of funds letter.',
+        ]);
+    }
+
+    public function test_a_provider_cannot_lodge_the_appeal_themselves(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+        $contact = $this->providerContact($staff, $application);
+
+        // The verb that MOVES the file stays with the firm. Asking is theirs;
+        // lodging is not, and the endpoint must say so rather than rely on the
+        // button being hidden.
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal', [
+                'appealLodgedAt' => '2026-08-25',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(Status::DENIED, $application->fresh()->status);
+    }
+
+    public function test_a_stranger_cannot_request_an_appeal(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+
+        $outsider = User::create([
+            'name' => 'Nobody', 'email' => 'nobody@example.com',
+            'password' => bcrypt('password12345'),
+        ]);
+        $outsider->forceFill([
+            'email_verified_at' => now(), 'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(), 'status' => 'approved',
+            'account_type' => Role::CLIENT,
+        ])->save();
+
+        // Not 403: being refused would confirm the file exists.
+        $this->actingAs($outsider)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [])
+            ->assertNotFound();
+
+        $this->assertNull($application->fresh()->appeal_requested_at);
+    }
+
+    public function test_asking_twice_is_the_same_one_request(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+        $contact = $this->providerContact($staff, $application);
+
+        $url = '/portal/cip/applications/'.$application->uuid.'/appeal-request';
+        $this->actingAs($contact)->postJson($url, ['reason' => 'First ask.'])->assertOk();
+        $this->actingAs($contact)->postJson($url, ['reason' => 'Second ask.'])->assertOk();
+
+        // A double press is the request they already made, not a queue: the
+        // firm must not be told twice about one ask.
+        $this->assertSame(1, CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_APPEAL_REQUESTED)
+            ->count());
+        $this->assertSame('First ask.', $application->fresh()->appeal_request_reason);
+    }
+
+    public function test_lodging_clears_the_standing_request(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+        $contact = $this->providerContact($staff, $application);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [])
+            ->assertOk();
+
+        $this->lodge($staff, $application->fresh())->assertOk();
+
+        // The ask has been answered by the thing it asked for; leaving it
+        // standing would have the file say "appeal requested" for the whole
+        // appeal.
+        $fresh = $application->fresh();
+        $this->assertSame(Status::NEW_APPEAL, $fresh->status);
+        $this->assertNull($fresh->appeal_requested_at);
+        $this->assertNull($fresh->appeal_requested_by);
+    }
+
+    public function test_a_file_with_no_decision_cannot_be_appeal_requested(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+        $contact = $this->providerContact($staff, $application);
+        $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [])
+            ->assertStatus(422);
+
+        $this->assertNull($application->fresh()->appeal_requested_at);
     }
 
     public function test_the_appeals_tab_lists_exactly_the_files_being_appealed(): void

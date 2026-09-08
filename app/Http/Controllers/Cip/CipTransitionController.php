@@ -384,6 +384,34 @@ class CipTransitionController extends Controller
     }
 
     /**
+     * The provider side asking the firm to appeal (before the lane starts).
+     *
+     * Deliberately not a status change. ApplicationScope::findOrFail already
+     * refuses a file this reader cannot reach, and Appeal::request refuses
+     * anyone who is not the submitting party, so a staff account pressing it
+     * is a 403 rather than a quiet no-op.
+     */
+    public function appealRequest(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $application = Appeal::request($application, $user, $data['reason'] ?? null);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
      * Lodge an appeal against the decision (Appeal lane, step 1).
      *
      * Its own endpoint because of the column and the folder: a bare status
@@ -620,6 +648,7 @@ class CipTransitionController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             ...Confirmation::payload($application, $actor),
+                ...Appeal::payload($application, $actor),
             'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),

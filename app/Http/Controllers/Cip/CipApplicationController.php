@@ -11,6 +11,7 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
+use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
@@ -1404,6 +1405,7 @@ class CipApplicationController extends Controller
                 ? PersonStatus::listed()
                 : [],
             ...Confirmation::payload($application, $viewer),
+            ...Appeal::payload($application, $viewer),
             ...Stages::into($application, $viewer),
             'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
             'availableTransitions' => $this->transitions($application, $viewer),

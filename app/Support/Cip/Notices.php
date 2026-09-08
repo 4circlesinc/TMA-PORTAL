@@ -140,6 +140,37 @@ class Notices
     }
 
     /**
+     * The provider side has asked the firm to appeal a decision.
+     *
+     * Addressed to the same §22 list as everything else on this file, minus
+     * the person who asked — they know. It is a request, not a status change,
+     * so it says who wants what and leaves the lodging to whoever reads it.
+     */
+    public static function appealRequested(CipApplication $application, User $author, ?string $reason): void
+    {
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $title = $facts['number'].': appeal requested';
+        $message = trim((string) $reason) !== ''
+            ? Str::limit(trim((string) $reason), 140)
+            : $author->name.' asked the firm to appeal this decision.';
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => Postcards::notification(
+                $title, $message, $url, 'Open the application',
+                $name ? (strtok($name, ' ') ?: $name) : null, 'CIP Applications',
+            ),
+            'cip-appeal-requested',
+            'cip.appeal-requested',
+            $author,
+            $title,
+            $message,
+            $author->email,
+        );
+    }
+
+    /**
      * The one delivery loop every CIP notice walks.
      *
      * A postcard to every §22 mailbox, built per recipient so the greeting
