@@ -1894,6 +1894,65 @@ class CipPostApprovalTest extends TestCase
         $this->assertFalse(Engine::canTransition($application->fresh(), Status::POST_APPROVAL));
     }
 
+    public function test_a_file_filed_into_post_approval_gets_one_set_of_person_folders(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $this->mainApplicant($application);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Kid', 'last_name' => 'Haddad',
+            'date_of_birth' => now()->subYears(8),
+        ]);
+
+        PostApproval::prepare($application->fresh()->load('people'), $staff);
+
+        $fresh = $application->fresh();
+        $root = Folder::find($fresh->folder_id);
+        $postRoot = Folder::find($fresh->post_approval_folder_id);
+
+        $loose = Folder::where('parent_id', $root->id)->pluck('name')->all();
+        $inside = Folder::where('parent_id', $postRoot->id)->pluck('name')->all();
+
+        /*
+         * The people belong to the post-approval drawer, and ONLY there. They
+         * used to be created in both places, so every person on the file was
+         * listed twice in the client folder with one of each pair permanently empty.
+         */
+        $this->assertContains('Main Applicant', $inside);
+        $this->assertNotContains('Main Applicant', $loose);
+        $this->assertNotContains('Dependent 1', $loose);
+
+        // The shared drawer is still out here: it is not post-approval paper.
+        $this->assertContains(Tree::ADDITIONAL, $loose);
+        $this->assertContains(Tree::POST_APPROVAL, $loose);
+    }
+
+    public function test_a_file_that_reached_post_approval_keeps_its_pre_approval_folders(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $this->mainApplicant($application);
+
+        // Filed and submitted the ordinary way first.
+        Tree::provision($application->fresh()->load('people'), $staff);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'submitted_at' => now()->subMonth(),
+        ])->save();
+
+        PostApproval::prepare($application->fresh()->load('people'), $staff);
+
+        $root = Folder::find($application->fresh()->folder_id);
+        $loose = Folder::where('parent_id', $root->id)->pluck('name')->all();
+
+        // Those folders hold the package that went to the Unit. Reaching
+        // post-approval does not make them go away.
+        $this->assertContains('Main Applicant', $loose);
+    }
+
     private function seedCor(): void
     {
         (new CipDocumentRequirementSeeder)->syncPostApproval();

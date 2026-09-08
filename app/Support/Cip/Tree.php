@@ -107,8 +107,21 @@ class Tree
         $client = self::client($application, $actor);
         $root = $client->folder ?: FolderProvisioner::provisionClientFolder($client, $actor);
 
-        foreach ($application->people as $person) {
-            self::personFolder($person, $root, $actor);
+        /*
+         * A file filed straight into post-approval has no pre-approval paper,
+         * so it gets no person folders out here. Its people live under
+         * Post-Approval Documents, which provisionPostApproval builds, and
+         * making them in both places left every person listed twice in the
+         * client folder — one of each pair permanently empty.
+         *
+         * A file that REACHED post-approval the ordinary way keeps its
+         * pre-approval folders: they hold the package that was submitted.
+         * The test is what the application carries, not where it stands now.
+         */
+        if (! self::filedIntoPostApproval($application)) {
+            foreach ($application->people as $person) {
+                self::personFolder($person, $root, $actor);
+            }
         }
 
         // One shared drawer for everything that belongs to the file rather
@@ -122,6 +135,23 @@ class Tree
         self::stampClient($root, $client);
 
         return $root;
+    }
+
+    /**
+     * Was this application filed directly into post-approval?
+     *
+     * Not "is it post-approval now": a file that walked the ordinary lane has
+     * pre-approval folders full of the package it submitted, and those stay.
+     * A file created in the post-approval phase never had that paper, so the
+     * only tree it needs is the one under Post-Approval Documents.
+     *
+     * `submitted_at` is the marker, because it is stamped when a file goes to
+     * the Unit and is null on a file that was entered after that happened.
+     */
+    private static function filedIntoPostApproval(CipApplication $application): bool
+    {
+        return ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && $application->submitted_at === null;
     }
 
     /**
