@@ -238,6 +238,18 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(1, $find('Chen'));
         $this->assertSame(1, $find('Wei'));
         $this->assertSame(0, $find('Nobody at all'));
+
+        // The provider is the third handle on a file: its name, matched
+        // anywhere, and its code, matched whole.
+        $this->assertSame(1, $find('Galaxy'));
+        $this->assertSame(1, $find('GAL'));
+        $this->assertSame(1, $find('gal'));
+
+        // A code that belongs to nobody finds nothing — the code match is
+        // whole-value, so a provider is not reached by half of one. ("GA"
+        // would still hit, but through the internal number GAL26-…, which is
+        // matched from the start and is a fair answer to typing it.)
+        $this->assertSame(0, $find('XYZ'));
     }
 
     public function test_it_can_be_filtered_by_status(): void

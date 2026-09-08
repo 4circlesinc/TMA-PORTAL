@@ -232,4 +232,39 @@ class CompaniesTest extends TestCase
 
         $this->assertNotSoftDeleted('companies', ['id' => $company->id]);
     }
+
+    public function test_the_header_search_finds_a_provider_by_its_cip_code(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy Advisors']);
+        \App\Support\Cip\Providers::syncCode($galaxy, 'GAL');
+        $other = Company::create(['uid' => 'northwind', 'name' => 'Northwind']);
+        \App\Support\Cip\Providers::syncCode($other, 'NWD');
+
+        // By code, in the case a reader types it.
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=gal')
+            ->assertOk()
+            ->assertJsonCount(1, 'companies')
+            ->assertJsonPath('companies.0.name', 'Galaxy Advisors')
+            ->assertJsonPath('companies.0.cipCode', 'GAL');
+
+        // And by name, which is the other handle the same record has.
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=northwind')
+            ->assertOk()
+            ->assertJsonCount(1, 'companies')
+            ->assertJsonPath('companies.0.cipCode', 'NWD');
+    }
+
+    public function test_provider_search_needs_two_characters(): void
+    {
+        $staff = $this->staff();
+        Company::create(['uid' => 'galaxy', 'name' => 'Galaxy Advisors']);
+
+        // One letter would return the whole directory a keystroke at a time.
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=g')
+            ->assertOk()
+            ->assertJsonCount(0, 'companies');
+    }
 }

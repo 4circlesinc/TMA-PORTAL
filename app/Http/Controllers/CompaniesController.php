@@ -71,15 +71,21 @@ class CompaniesController extends Controller
     /** The listing payload for whichever slice of companies the query holds. */
     private function directoryPayload(Builder $query, User $viewer): array
     {
-        $companies = $query->with(['clients' => fn ($q) => $q
+        $companies = $query->with([
+            // toRecord() prints the provider's CIP code, and the Service
+            // providers tab now has a column for it. Unloaded, that is one
+            // SELECT per company on the firm's whole book.
+            'cipProvider:id,company_id,code',
             // Only the columns toRecord() prints for a person. Unconstrained,
             // this pulls each member's whole `data` blob, harmless while one
             // client belongs to a company, and a second copy of the clients
             // problem the moment the firm starts using membership.
-            ->select(self::PERSON_COLUMNS)
-            ->with('user:id')
-            ->orderBy('name')
-            ->orderBy('id')])
+            'clients' => fn ($q) => $q
+                ->select(self::PERSON_COLUMNS)
+                ->with('user:id')
+                ->orderBy('name')
+                ->orderBy('id'),
+        ])
             // Every count the record prints, aggregated in the listing query.
             // toRecord() falls back to a query per count when the figure is
             // absent, which for member counts meant one round trip per company.
@@ -275,6 +281,53 @@ class CompaniesController extends Controller
         ], 201);
     }
 
+    /**
+     * Service providers matching a typed term, for the header search.
+     *
+     * A lean row rather than a full record: the header prints a name, a code
+     * and a link, and the directory payload is the whole book with previews
+     * and counts attached to every company.
+     *
+     * The code is matched from the start rather than anywhere, because it is
+     * three or four characters — matched anywhere, "pri" would pull in every
+     * provider whose code merely contains those letters.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $this->authorizeStaff($request);
+
+        $term = trim((string) $request->query('q', ''));
+
+        if (mb_strlen($term) < 2) {
+            return response()->json(['companies' => []]);
+        }
+
+        $limit = min(max((int) $request->query('limit', 8), 1), 25);
+        $anywhere = '%'.mb_strtolower(addcslashes($term, '\\%_')).'%';
+        $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
+
+        $companies = CompanyScope::query($request->user())
+            ->with('cipProvider:id,company_id,code')
+            ->where(function (Builder $q) use ($anywhere, $prefix) {
+                $q->whereRaw('LOWER(companies.name) LIKE ?', [$anywhere])
+                    ->orWhereRaw('LOWER(companies.email) LIKE ?', [$anywhere])
+                    ->orWhereHas('cipProvider', fn (Builder $p) => $p
+                        ->whereRaw('LOWER(cip_providers.code) LIKE ?', [$prefix]));
+            })
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'uid', 'name', 'email']);
+
+        return response()->json([
+            'companies' => $companies->map(fn (Company $c) => [
+                'id' => $c->uid,
+                'name' => $c->name,
+                'email' => $c->email,
+                'cipCode' => $c->cipProvider?->code,
+            ])->values()->all(),
+        ]);
+    }
+
     public function show(Request $request, string $uid): JsonResponse
     {
         $this->authorizeStaff($request);
@@ -288,6 +341,7 @@ class CompaniesController extends Controller
         $company = CompanyScope::query(
             $request->user(),
             Company::with([
+                'cipProvider:id,company_id,code',
                 'clients' => fn ($q) => $this->viewerClients($request->user(), $q)
                     ->orderBy('name')->orderBy('id'),
                 'referredClients' => fn ($q) => $this->viewerClients($request->user(), $q)

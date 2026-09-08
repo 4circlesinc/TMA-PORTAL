@@ -2183,7 +2183,9 @@
   function companyMatchesSearch(company, query) {
     var q = String(query || '').trim().toLowerCase();
     if (!q) return true;
-    return [company.name, company.email, company.website, company.industry]
+    // The code is the shortest name a provider has — GAL finds Galaxy — so it
+    // belongs in the haystack alongside the long one.
+    return [company.name, company.cipCode, company.email, company.website, company.industry]
       .filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
   }
 
@@ -2361,6 +2363,8 @@
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
       '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">Company</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--code"><span class="tma-dash__cc-truncate">' +
+      esc(company.cipCode || '-') + '</span></div>' +
       // Its own name belongs in the first column, not repeated here; what the
       // reader wants of a company at a glance is how many people it holds.
       '<div class="tma-dash__cc tma-dash__cc--referral"><span class="tma-dash__cc-truncate">' +
@@ -2444,7 +2448,8 @@
 
   function renderTableSkeletonRows(state, count) {
     var people = onPeopleTab(state);
-    var noselect = people || onProvidersTab(state);
+    var providers = onProvidersTab(state);
+    var noselect = people || providers;
     var rows = '';
     for (var i = 0; i < (count || SKELETON_ROW_COUNT); i++) {
       rows +=
@@ -2454,6 +2459,7 @@
         '<span class="tma-skeleton tma-skeleton--avatar tma-dash__clients-skeleton-avatar"></span>' +
         skeletonBar(skeletonWidth(i)) + '</div>' +
         (people ? '' : '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>') +
+        (providers ? '<div class="tma-dash__cc tma-dash__cc--code">' + skeletonBar(skeletonWidth(i + 5, 0.5)) + '</div>' : '') +
         '<div class="tma-dash__cc tma-dash__cc--referral">' + skeletonBar(skeletonWidth(i + 7, 0.9)) + '</div>' +
         '<div class="tma-dash__cc tma-dash__cc--contact">' + skeletonBar(skeletonWidth(i + 2)) + '</div>' +
         '</div>';
@@ -4049,7 +4055,7 @@
       // sideways drags the whole shell with it.
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
       '<div class="tma-dash__ctable tma-dash__ctable--clients tma-dash__ctable--noselect' +
-      (people ? ' tma-dash__ctable--people' : '') +
+      (people ? ' tma-dash__ctable--people' : ' tma-dash__ctable--providers') +
       '" role="table" aria-label="' +
       (people ? 'Provider contacts' : 'Service providers') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
@@ -4059,6 +4065,11 @@
       (people ? 'Person' : 'Service provider') + '</div>' +
       (people ? ''
         : '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>') +
+      // The CIP code is how the firm refers to a provider in an application
+      // number, so it earns a column of its own rather than living only in
+      // the profile.
+      (people ? ''
+        : '<div class="tma-dash__cc tma-dash__cc--code tma-dash__cc--head" role="columnheader">CIP code</div>') +
       '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">' +
       (people ? 'Service provider' : 'People') + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
@@ -9682,7 +9693,11 @@
           ' data-cip-filter="' + esc(field) + '" data-cip-value="' + esc(item.id) + '">' +
           '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
           filterItemArt(field, item) +
-          '<span class="tma-filter-popover__item-label">' + esc(item.name) + '</span>' +
+          // A provider carries its code beside its name here for the same
+          // reason the table has a column for it: the code is what the firm
+          // says out loud, and two firms can share a first word.
+          '<span class="tma-filter-popover__item-label">' + esc(item.name) +
+          (item.code ? ' (' + esc(item.code) + ')' : '') + '</span>' +
           '<span class="tma-filter-popover__item-meta">' + esc(String(item.count)) + '</span>' +
           '</button>';
       }).join('') +

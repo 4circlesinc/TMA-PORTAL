@@ -646,7 +646,6 @@ class CipApplicationController extends Controller
 
         $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
         $anywhere = '%'.mb_strtolower(addcslashes($term, '\\%_')).'%';
-
         $code = mb_strtolower(trim($term));
 
         $query->where(function (Builder $q) use ($prefix, $anywhere, $code) {

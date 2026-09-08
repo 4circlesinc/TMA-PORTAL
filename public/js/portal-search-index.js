@@ -632,6 +632,45 @@
       });
   }
 
+  /*
+   * Service providers, by name or by CIP code.
+   *
+   * The code is the shortest handle the firm has for a provider — an
+   * application number opens with it — so typing "GAL" into the header ought
+   * to reach Galaxy, not only the applications it filed.
+   */
+  function fetchProviders(q) {
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    var term = String(q || '').trim();
+    if (term.length < 2) return Promise.resolve([]);
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.holds === 'function' && !access.holds('clients.view')) {
+      return Promise.resolve([]);
+    }
+    return a.api(root() + '/portal/companies/search?q=' + encodeURIComponent(term) + '&limit=8')
+      .then(function (data) {
+        return ((data && data.companies) || []).map(function (company) {
+          var code = company.cipCode || '';
+          return {
+            type: 'user',
+            label: company.name,
+            title: company.name,
+            subtitle: code ? ('Service provider · ' + code) : 'Service provider',
+            companyId: company.id,
+            navId: 'clients',
+            view: 'clients',
+            href: '/citizenship-applications/companies/' + encodeURIComponent(company.id),
+            keywords: [company.name, code, company.email, 'provider', 'service provider', 'cip']
+              .filter(Boolean),
+          };
+        });
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
   function fetchLiveResults(query) {
     var q = String(query || '').trim();
     if (q.length < 2) return Promise.resolve([]);
@@ -645,6 +684,7 @@
       settle(fetchMessaging(q)),
       settle(fetchCipDocuments(q)),
       settle(fetchCipApplications(q)),
+      settle(fetchProviders(q)),
     ]).then(function (chunks) {
       var merged = [];
       var seen = Object.create(null);

@@ -870,6 +870,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::prefix('portal/companies')->name('companies.')->group(function () {
         Route::get('/', [CompaniesController::class, 'index'])->name('index');
         Route::post('/', [CompaniesController::class, 'store'])->name('store');
+        // Before /{uid}: a literal segment loses to a wildcard declared first.
+        Route::get('/search', [CompaniesController::class, 'search'])->name('search');
         Route::get('/{uid}', [CompaniesController::class, 'show'])->name('show');
         Route::patch('/{uid}', [CompaniesController::class, 'update'])->name('update');
         Route::delete('/{uid}', [CompaniesController::class, 'destroy'])->name('destroy');

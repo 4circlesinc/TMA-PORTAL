@@ -19116,12 +19116,23 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   grid-template-columns: minmax(160px, 1.3fr) minmax(160px, 1fr) minmax(180px, 1.1fr);
 }
 
+/*
+ * Service providers carry one track more than the tabs above: the CIP code.
+ * It is three or four characters wide and never wraps, so it takes a fixed
+ * track rather than a share of the row.
+ */
+.tma-dash__ctable--clients.tma-dash__ctable--providers .tma-dash__ctr--head,
+.tma-dash__ctable--clients.tma-dash__ctable--providers .tma-dash__ctr--body {
+  grid-template-columns: minmax(160px, 1.3fr) 96px 96px minmax(140px, 1fr) minmax(160px, 1.1fr);
+}
+
 .tma-dash__ctable--clients .tma-dash__cc--empty {
   grid-column: 1 / -1;
 }
 
 .tma-dash__ctable--clients .tma-dash__cc--user,
 .tma-dash__ctable--clients .tma-dash__cc--type,
+.tma-dash__ctable--clients .tma-dash__cc--code,
 .tma-dash__ctable--clients .tma-dash__cc--referral,
 .tma-dash__ctable--clients .tma-dash__cc--contact {
   flex: unset;
@@ -21113,15 +21124,43 @@ button.tma-file-status-chip:focus-visible,
  *
  * A full-width Details card stacked four short rows down its left edge and
  * left the rest of the width empty. They read as a row of figures — a company
- * has one type and one set of counts, and they belong on one line where they
- * can be compared at a glance. Auto-fit wraps them onto a second line only
- * when the card is genuinely too narrow.
+ * has one type, one code and one set of counts, and they belong on one line
+ * where they can be compared at a glance.
+ *
+ * The list has to span the card before any of that is possible. The card's
+ * body is a two-column grid, so the facts were laid out inside a 516px half
+ * of a 1092px card: room for six of them, which put the CIP code — the
+ * seventh — alone on a second line while the rest sat together, reading as
+ * though it belonged to something else. Half the card was empty beside it.
  */
+.tma-dash__clients-card .tma-dash__clients-profile-body > .tma-dash__clients-list--facts {
+  grid-column: 1 / -1;
+}
+
 .tma-dash__clients-list--facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: var(--space-8) var(--space-16);
+  /*
+   * A track per fact, laid out from the count rather than from a minimum
+   * width: `auto-fit` sizes tracks off the card, so however wide the card
+   * got, the last facts wrapped as soon as the list grew past what its floor
+   * allowed. Equal tracks keep every fact on the one line instead, and the
+   * long values — a URL, an address — ellipsis rather than push the row past
+   * the card's edge.
+   */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-8) var(--space-20);
   align-items: start;
+}
+
+/* Below the tablet break ten equal tracks are too narrow to read, so the
+   facts wrap — the only honest layout at that width. */
+@media (max-width: 900px) {
+  .tma-dash__clients-list--facts {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
 }
 
 /* The row padding exists to give a hover target down a list; across a row it
@@ -21133,6 +21172,16 @@ button.tma-file-status-chip:focus-visible,
 }
 
 .tma-dash__clients-list--facts .tma-dash__clients-list-main { min-width: 0; }
+
+/* Each fact is one line of its own: a label above a value, neither wrapping.
+   Overflow is clipped rather than allowed to widen the row past the card. */
+.tma-dash__clients-list--facts .tma-dash__clients-list-label,
+.tma-dash__clients-list--facts .tma-dash__clients-list-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
 
 /* No icon on a stats row. It bought nothing — four glyphs nobody reads — and
    it indented every label 28px so the card's heading hung out to the left of
@@ -24134,6 +24183,11 @@ a.tma-dash__clients-edit-btn--accent:visited {
   .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--head,
   .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--body {
     grid-template-columns: minmax(120px, 1fr) minmax(120px, 0.9fr) minmax(120px, 1fr);
+  }
+
+  .tma-dash__ctable--clients.tma-dash__ctable--providers .tma-dash__ctr--head,
+  .tma-dash__ctable--clients.tma-dash__ctable--providers .tma-dash__ctr--body {
+    grid-template-columns: minmax(120px, 1fr) 80px 76px minmax(100px, 0.9fr) minmax(100px, 1fr);
   }
 
   .tma-dash__clients-form-row--dates {
