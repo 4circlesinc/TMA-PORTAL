@@ -1307,6 +1307,12 @@
   --tma-status-plum: #6b21a8;
   --tma-status-mint: #0f766e;
   --tma-status-stone: #57534e;
+  /* The appeal lane. Three distinct hues, deliberately not reusing the
+     queue colours above: a file being appealed must not read as a file
+     sitting in Non-compliant or Delayed. */
+  --tma-status-clay: #b91c1c;
+  --tma-status-sand: #a16207;
+  --tma-status-moss: #4d7c0f;
 }
 .tma-portal-status--sky    { background: var(--tma-status-sky); }
 .tma-portal-status--indigo { background: var(--tma-status-indigo); }
@@ -1325,6 +1331,9 @@
 .tma-portal-status--plum   { background: var(--tma-status-plum); }
 .tma-portal-status--mint   { background: var(--tma-status-mint); }
 .tma-portal-status--stone  { background: var(--tma-status-stone); }
+.tma-portal-status--clay   { background: var(--tma-status-clay); }
+.tma-portal-status--sand   { background: var(--tma-status-sand); }
+.tma-portal-status--moss   { background: var(--tma-status-moss); }
 
 /* Send-for-review dialog */
 .tma-portal-wf-form { display: block; }

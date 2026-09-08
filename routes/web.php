@@ -468,6 +468,19 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/acceptance', [CipTransitionController::class, 'accept'])
             ->name('applications.acceptance');
         /*
+         * The appeal lane. Three verbs rather than the bare status route,
+         * for the same reason as the two above: lodging and submitting each
+         * write a date the generic route would leave empty, and lodging also
+         * opens the Appeal Documents drawer the provider side is then told
+         * to use. Ready carries no date, but it belongs with its siblings.
+         */
+        Route::post('/applications/{uuid}/appeal', [CipTransitionController::class, 'appeal'])
+            ->name('applications.appeal');
+        Route::post('/applications/{uuid}/appeal-ready', [CipTransitionController::class, 'appealReady'])
+            ->name('applications.appeal-ready');
+        Route::post('/applications/{uuid}/appeal-submitted', [CipTransitionController::class, 'appealSubmitted'])
+            ->name('applications.appeal-submitted');
+        /*
          * Brief §6–§12: a post-approval date, then the status that date
          * moves the file to. The generic status route refuses those targets
          * so a bare move cannot leave the day empty.

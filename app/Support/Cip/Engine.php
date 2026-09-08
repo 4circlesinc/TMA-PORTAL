@@ -34,7 +34,7 @@ class Engine
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],
         Status::DELAYED => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
-        Status::GRANTED => [Status::POST_APPROVAL],
+        Status::GRANTED => [Status::POST_APPROVAL, Status::NEW_APPEAL],
         Status::POST_APPROVAL => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
         Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVAL, Status::PENDING_COR],
         Status::PENDING_COR => [Status::APPLY_FOR_NIC],
@@ -42,7 +42,24 @@ class Engine
         Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
         Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
         Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
+        Status::DENIED => [Status::NEW_APPEAL],
         Status::READY_FOR_DELIVERY => [Status::CLOSED],
+
+        /*
+         * The appeal lane. It opens from either decision — a denial is the
+         * obvious one, but an approval can be appealed too (a grant on the
+         * wrong terms, a family member left off) — and from the post-approval
+         * lane, because a file that has moved on is still a file whose
+         * decision can be disputed.
+         *
+         * It ends where the first decision ended, GRANTED or DENIED, rather
+         * than in a won/lost pair of its own. Appeal ready goes back to New
+         * appeal so a file made ready too early can be walked back without an
+         * administrator override.
+         */
+        Status::NEW_APPEAL => [Status::APPEAL_READY],
+        Status::APPEAL_READY => [Status::APPEAL_SUBMITTED, Status::NEW_APPEAL],
+        Status::APPEAL_SUBMITTED => [Status::GRANTED, Status::DENIED],
     ];
 
     /**
@@ -71,6 +88,11 @@ class Engine
         Status::GRANTED => 'cip.decide',
         Status::POST_APPROVAL => 'cip.review',
         Status::DENIED => 'cip.decide',
+        // Lodging and preparing an appeal is compliance work, the same hands
+        // that record a query. The outcome stays with cip.decide above.
+        Status::NEW_APPEAL => 'cip.compliance',
+        Status::APPEAL_READY => 'cip.compliance',
+        Status::APPEAL_SUBMITTED => 'cip.compliance',
     ];
 
     /** Is this edge in the lifecycle at all, whoever is asking? */

@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Package;
 use App\Support\Companies\CompanyAccess;
@@ -798,6 +799,16 @@ class FileAccess
      */
     public static function canUploadTo(User $user, ?Folder $folder): bool
     {
+        /*
+         * A file under appeal takes uploads in one drawer only. This sits
+         * above the permission questions on purpose: it is not about who the
+         * reader is — staff and the provider side are held to it alike —
+         * but about which drawer the appeal's paper belongs in.
+         */
+        if (CipAccess::enabled() && ! Confirmation::appealAllowsUpload($folder)) {
+            return false;
+        }
+
         if (self::isProviderContact($user)) {
             return $folder !== null
                 && self::inClientTree($folder)

@@ -133,6 +133,19 @@ class CipEvent extends Model
      */
     public const ACTION_DELAYED = 'delayed';
 
+    /**
+     * The appeal lane's three steps.
+     *
+     * Lodged and submitted carry the day they happened; ready carries only
+     * the fact, which is the point of it — the provider side is being asked
+     * to confirm, and the confirmation is the next event, not this one.
+     */
+    public const ACTION_APPEAL_LODGED = 'appeal_lodged';
+
+    public const ACTION_APPEAL_READY = 'appeal_ready';
+
+    public const ACTION_APPEAL_SUBMITTED = 'appeal_submitted';
+
     protected function casts(): array
     {
         return [

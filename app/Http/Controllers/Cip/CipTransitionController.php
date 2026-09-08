@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
+use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
@@ -369,6 +370,115 @@ class CipTransitionController extends Controller
                 $application,
                 $user,
                 Carbon::parse($data['acceptedAt']),
+                $request->boolean('override'),
+                $data['note'] ?? null,
+                $data['message'] ?? null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Lodge an appeal against the decision (Appeal lane, step 1).
+     *
+     * Its own endpoint because of the column and the folder: a bare status
+     * change would leave `appeal_lodged_at` empty and would not open the
+     * Appeal Documents drawer the notice then tells the provider side to use.
+     */
+    public function appeal(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'appealLodgedAt' => ['required', 'date'],
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'message' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'appealLodgedAt.required' => 'Enter the date the appeal was lodged.',
+        ]);
+
+        try {
+            $application = Appeal::lodge(
+                $application,
+                $user,
+                Carbon::parse($data['appealLodgedAt']),
+                $request->boolean('override'),
+                $data['note'] ?? null,
+                $data['message'] ?? null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json([
+            'application' => $this->record($application, $user),
+            'appealFolder' => Tree::appealFolder($application)?->uuid,
+        ]);
+    }
+
+    /**
+     * The appeal is ready; ask the provider side to confirm (step 2).
+     *
+     * No date. This is the firm saying the papers are together, and the
+     * notice is a question rather than a record.
+     */
+    public function appealReady(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'message' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $application = Appeal::ready(
+                $application,
+                $user,
+                $request->boolean('override'),
+                $data['note'] ?? null,
+                $data['message'] ?? null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /** The appeal has gone to the Unit (step 3), on the day it went. */
+    public function appealSubmitted(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'appealSubmittedAt' => ['required', 'date'],
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'message' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'appealSubmittedAt.required' => 'Enter the date the appeal was submitted.',
+        ]);
+
+        try {
+            $application = Appeal::submit(
+                $application,
+                $user,
+                Carbon::parse($data['appealSubmittedAt']),
                 $request->boolean('override'),
                 $data['note'] ?? null,
                 $data['message'] ?? null,

@@ -2795,6 +2795,9 @@
     { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint' },
     { value: 'closed', label: 'Closed', tone: 'stone' },
     { value: 'denied', label: 'Denied', tone: 'danger' },
+    { value: 'new_appeal', label: 'New Appeal', tone: 'clay' },
+    { value: 'appeal_ready', label: 'Appeal Ready', tone: 'sand' },
+    { value: 'appeal_submitted', label: 'Appeal Submitted', tone: 'moss' },
   ];
 
   var CIP_PERSON_STATUSES = [
@@ -10684,6 +10687,24 @@
       return;
     }
 
+    if (to === 'new_appeal') {
+      openAppealDialog(applicationId, clientUid, pickedAsOverride);
+
+      return;
+    }
+
+    if (to === 'appeal_ready') {
+      openAppealReadyDialog(applicationId, clientUid, pickedAsOverride);
+
+      return;
+    }
+
+    if (to === 'appeal_submitted') {
+      openAppealSubmittedDialog(applicationId, clientUid, pickedAsOverride);
+
+      return;
+    }
+
     if (to === 'delayed') {
       clientsToast('Delayed files are flagged automatically after 180 days with no decision.', 'neutral');
 
@@ -10841,6 +10862,249 @@
               save.disabled = false;
               save.textContent = 'Record query';
               clientsToast((err && err.message) || 'Could not record this query.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * The appeal lane, step 1: lodging an appeal against the decision.
+   *
+   * The date is asked for rather than assumed, the same reasoning as every
+   * other CIP date — staff record an appeal after the fact as often as on the
+   * day, and stamping today would put the wrong date on an audit trail.
+   */
+  function openAppealDialog(applicationId, clientUid, override) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: 'Lodge an appeal',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-lodged">Appeal lodged date</label>' +
+        '<input type="date" id="cip-appeal-lodged" class="tma-dash__clients-field-input"' +
+        ' data-cip-appeal-lodged value="' + esc(today) + '">' +
+        '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-message">Message to the service provider</label>' +
+        '<textarea id="cip-appeal-message" class="tma-dash__clients-field-textarea" data-cip-appeal-message' +
+        ' rows="4" maxlength="2000" placeholder="What is being appealed"></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The application will move to New Appeal. Appeal papers go in Appeal Documents, ' +
+        'which is the only folder open for uploads while the appeal runs.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-appeal>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-appeal>Lodge appeal</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-appeal]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-appeal]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-appeal-lodged]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the date the appeal was lodged.', 'negative');
+            return;
+          }
+
+          var body = { appealLodgedAt: date };
+          var messageEl = el.querySelector('[data-cip-appeal-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Lodging…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal', {
+            method: 'POST',
+            json: body,
+          })
+            .then(function (res) {
+              queueFolderOpen(res && res.appealFolder, 'Appeal Documents');
+              ui.closeModal();
+              clientsToast('Appeal lodged. Upload the appeal papers in Appeal Documents.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              // Same door as the query dialog: a refused plain record reopens
+              // with the confirmation strip for a reader who may override.
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openAppealDialog(applicationId, clientUid, true);
+                return;
+              }
+              save.disabled = false;
+              save.textContent = 'Lodge appeal';
+              clientsToast((err && err.message) || 'Could not lodge this appeal.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * Step 2: the appeal is ready, which asks the provider side to confirm.
+   *
+   * No date. This is the firm saying the papers are together; the notice that
+   * goes out is a question, and the answer is the provider side confirming.
+   */
+  function openAppealReadyDialog(applicationId, clientUid, override) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    ui.openModal({
+      title: 'Mark the appeal ready',
+      body:
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-ready-message">Message to the service provider</label>' +
+        '<textarea id="cip-appeal-ready-message" class="tma-dash__clients-field-textarea"' +
+        ' data-cip-appeal-ready-message rows="4" maxlength="2000"' +
+        ' placeholder="Anything they should check before confirming"></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The service provider will be asked to confirm the appeal is ready on their end.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-ready>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-ready>Mark ready</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-ready]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-ready]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var body = {};
+          var messageEl = el.querySelector('[data-cip-appeal-ready-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Saving…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-ready', {
+            method: 'POST',
+            json: body,
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast('The service provider has been asked to confirm.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openAppealReadyDialog(applicationId, clientUid, true);
+                return;
+              }
+              save.disabled = false;
+              save.textContent = 'Mark ready';
+              clientsToast((err && err.message) || 'Could not mark this appeal ready.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /* Step 3: the appeal has gone to the Unit, on the day it went. */
+  function openAppealSubmittedDialog(applicationId, clientUid, override) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: 'Record appeal submitted',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-submitted">Appeal submitted date</label>' +
+        '<input type="date" id="cip-appeal-submitted" class="tma-dash__clients-field-input"' +
+        ' data-cip-appeal-submitted value="' + esc(today) + '">' +
+        '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-appeal-sub-message">Message to the service provider</label>' +
+        '<textarea id="cip-appeal-sub-message" class="tma-dash__clients-field-textarea"' +
+        ' data-cip-appeal-sub-message rows="4" maxlength="2000"' +
+        ' placeholder="Anything the provider side should know"></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The appeal will move to Appeal Submitted.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-sub>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-sub>Record submission</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-sub]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-sub]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-appeal-submitted]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the date the appeal was submitted.', 'negative');
+            return;
+          }
+
+          var body = { appealSubmittedAt: date };
+          var messageEl = el.querySelector('[data-cip-appeal-sub-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
+          save.disabled = true;
+          save.textContent = 'Recording…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-submitted', {
+            method: 'POST',
+            json: body,
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast('Appeal submitted to the Unit.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openAppealSubmittedDialog(applicationId, clientUid, true);
+                return;
+              }
+              save.disabled = false;
+              save.textContent = 'Record submission';
+              clientsToast((err && err.message) || 'Could not record this submission.', 'negative');
             });
         });
       },

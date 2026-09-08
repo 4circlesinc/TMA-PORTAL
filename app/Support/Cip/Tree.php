@@ -69,6 +69,14 @@ class Tree
 
     public const POST_APPROVAL = 'Post-Approval Documents';
 
+    /*
+     * Where an appeal's paper goes, and the only drawer open while the file
+     * is in the appeal lane. The original package is frozen by then and the
+     * Additional Documents drawers belong to the Unit's queries on the first
+     * decision; an appeal answers the decision itself, so it gets its own.
+     */
+    public const APPEAL = 'Appeal Documents';
+
     /**
      * Give the application a client record, a folder tree, and one folder per
      * person. Safe to call again: it fills in what is missing.
@@ -137,6 +145,39 @@ class Tree
         }
 
         return $additional;
+    }
+
+    /**
+     * Open the Appeal Documents drawer, creating the tree if it is missing.
+     *
+     * Same shape as {@see provisionAdditionalDrawers}: called when the file
+     * enters the appeal lane, so the folder exists before anybody is told to
+     * upload into it.
+     */
+    public static function provisionAppeal(
+        CipApplication $application,
+        ?User $actor = null,
+        ?Folder $root = null,
+    ): Folder {
+        $root ??= $application->folder_id ? Folder::find($application->folder_id) : null;
+        if ($root === null) {
+            $root = self::provision($application, $actor);
+        }
+
+        return self::childNamed($root, self::APPEAL, $actor);
+    }
+
+    /** The Appeal Documents drawer, if this application already has a tree. */
+    public static function appealFolder(CipApplication $application): ?Folder
+    {
+        if (! $application->folder_id) {
+            return null;
+        }
+
+        return Folder::query()
+            ->where('parent_id', $application->folder_id)
+            ->where('name', self::APPEAL)
+            ->first();
     }
 
     /** The Additional Documents drawer, if this application already has a tree. */

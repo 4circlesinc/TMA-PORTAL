@@ -229,6 +229,17 @@ class Notices
                 $facts, $url, $application->query_received_at?->toDateString(), $recipientName, $actor, $subject,
                 $message,
             ),
+            Status::NEW_APPEAL => Postcards::cipAppeal(
+                $facts, $url, $to, $application->appeal_lodged_at?->toDateString(),
+                $recipientName, $actor, $subject, $message,
+            ),
+            Status::APPEAL_READY => Postcards::cipAppeal(
+                $facts, $url, $to, null, $recipientName, $actor, $subject, $message,
+            ),
+            Status::APPEAL_SUBMITTED => Postcards::cipAppeal(
+                $facts, $url, $to, $application->appeal_submitted_at?->toDateString(),
+                $recipientName, $actor, $subject, $message,
+            ),
             Status::BACKGROUND_CHECK => Postcards::cipBackgroundCheck(
                 $facts, $url, $application->accepted_at?->toDateString(), $recipientName, $actor, $subject,
                 $message,
@@ -296,6 +307,9 @@ class Notices
             Status::POST_APPROVAL => 'cip-status-post-approval',
             Status::DENIED => 'cip-denied',
             Status::REVIEW_APPLICATION => 'cip-assigned',
+            Status::NEW_APPEAL => 'cip-new-appeal',
+            Status::APPEAL_READY => 'cip-appeal-ready',
+            Status::APPEAL_SUBMITTED => 'cip-appeal-submitted',
             default => 'cip-status',
         };
     }
@@ -313,6 +327,9 @@ class Notices
             Status::POST_APPROVAL => 'cip.post-approval',
             Status::DENIED => 'cip.denied',
             Status::REVIEW_APPLICATION => 'cip.assigned',
+            Status::NEW_APPEAL => 'cip.new-appeal',
+            Status::APPEAL_READY => 'cip.appeal-ready',
+            Status::APPEAL_SUBMITTED => 'cip.appeal-submitted',
             default => 'cip.status',
         };
     }

@@ -322,9 +322,15 @@ class Package
 
             $rootIds = $original->pluck('folder_id')->filter()->map(fn ($id) => (int) $id)->all();
 
+            // Appeal Documents joins Additional Documents as a drawer the
+            // package freeze does not reach: both exist to take paper AFTER
+            // the originals were handed over, which is the whole point of
+            // them. Whether the appeal drawer may be written to at any given
+            // moment is a separate question, and Confirmation::appealAllowsUpload
+            // answers it.
             $additional = $rootIds === [] ? [] : Folder::query()
                 ->whereIn('parent_id', $rootIds)
-                ->where('name', Tree::ADDITIONAL)
+                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
                 ->pluck('id')
                 ->all();
 
@@ -374,7 +380,7 @@ class Package
                 $additional,
                 Folder::query()
                     ->whereIn('parent_id', $closedRoots)
-                    ->where('name', Tree::ADDITIONAL)
+                    ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
                     ->pluck('id')
                     ->all(),
             );

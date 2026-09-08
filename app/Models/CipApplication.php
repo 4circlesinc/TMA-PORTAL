@@ -49,6 +49,8 @@ class CipApplication extends Model
             'query_received_at' => 'date',
             'accepted_at' => 'date',
             'decided_at' => 'date',
+            'appeal_lodged_at' => 'date',
+            'appeal_submitted_at' => 'date',
             'locked_at' => 'datetime',
             'cor_locked_at' => 'datetime',
             'cor_submitted_at' => 'date',

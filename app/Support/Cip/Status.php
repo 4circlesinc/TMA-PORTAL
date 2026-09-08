@@ -56,6 +56,24 @@ class Status
 
     public const DENIED = 'denied';
 
+    /*
+     * The appeal lane. A decision is not always the end of a file: the
+     * applicant, the provider side or the firm may disagree with it, and the
+     * appeal that follows is its own small lifecycle, lodged, made ready,
+     * submitted. It runs after GRANTED or DENIED and from either phase, so it
+     * is not part of LANE, which is the post-approval lane after a grant.
+     *
+     * An appeal ends in the SAME Approved / Denied the first decision uses.
+     * There is no won/lost pair: the question a reader asks of a file is what
+     * the outcome IS, and a second vocabulary for it would mean every filter,
+     * chip and report had to know about two ways of being approved.
+     */
+    public const NEW_APPEAL = 'new_appeal';
+
+    public const APPEAL_READY = 'appeal_ready';
+
+    public const APPEAL_SUBMITTED = 'appeal_submitted';
+
     public const ALL = [
         self::DRAFT,
         self::NEW,
@@ -78,6 +96,20 @@ class Status
         self::READY_FOR_DELIVERY,
         self::CLOSED,
         self::DENIED,
+        self::NEW_APPEAL,
+        self::APPEAL_READY,
+        self::APPEAL_SUBMITTED,
+    ];
+
+    /**
+     * The appeal lane, in its own order.
+     *
+     * @return list<string>
+     */
+    public const APPEAL_LANE = [
+        self::NEW_APPEAL,
+        self::APPEAL_READY,
+        self::APPEAL_SUBMITTED,
     ];
 
     /**
@@ -151,6 +183,9 @@ class Status
         self::READY_FOR_DELIVERY => 'Ready for Delivery',
         self::CLOSED => 'Closed',
         self::DENIED => 'Denied',
+        self::NEW_APPEAL => 'New Appeal',
+        self::APPEAL_READY => 'Appeal Ready',
+        self::APPEAL_SUBMITTED => 'Appeal Submitted',
     ];
 
     /**
@@ -181,6 +216,9 @@ class Status
         self::READY_FOR_DELIVERY => 'READY FOR DELIVERY',
         self::CLOSED => 'FILE CLOSED',
         self::DENIED => 'DENIED',
+        self::NEW_APPEAL => 'NEW APPEAL',
+        self::APPEAL_READY => 'APPEAL READY',
+        self::APPEAL_SUBMITTED => 'APPEAL SUBMITTED',
     ];
 
     /**
@@ -215,6 +253,11 @@ class Status
         self::READY_FOR_DELIVERY => 'mint',
         self::CLOSED => 'stone',
         self::DENIED => 'danger',
+        // The lane reads as one family, warm and distinct from the queues it
+        // sits after. There is no purple in the design system.
+        self::NEW_APPEAL => 'clay',
+        self::APPEAL_READY => 'sand',
+        self::APPEAL_SUBMITTED => 'moss',
     ];
 
     public static function isValid(string $status): bool

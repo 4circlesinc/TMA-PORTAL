@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
@@ -279,6 +280,71 @@ class Confirmation
         if ($application?->isLocked()) {
             throw new \InvalidArgumentException(self::LOCKED_MESSAGE);
         }
+    }
+
+    /**
+     * While a file is being appealed, Appeal Documents is the only way in.
+     *
+     * The original package was frozen when it was submitted, and the
+     * Additional Documents drawers answer the Unit's queries on the FIRST
+     * decision. An appeal answers the decision itself, so its paper is kept
+     * apart — both so the bundle that goes to the Unit is exactly what was
+     * meant to go, and so a reader opening the file later can see what was
+     * filed for the appeal without sifting the original submission.
+     *
+     * Answers true when the folder is inside the appeal drawer, or when the
+     * file is not in the appeal lane at all (in which case this rule has
+     * nothing to say and the ordinary permissions decide).
+     */
+    public static function appealAllowsUpload(?Folder $folder): bool
+    {
+        if ($folder === null) {
+            return true;
+        }
+
+        $application = self::applicationOwning($folder);
+
+        if (! Appeal::inLane($application)) {
+            return true;
+        }
+
+        $appeal = Tree::appealFolder($application);
+
+        if ($appeal === null) {
+            return true;
+        }
+
+        // The drawer itself or anything under it. Walking up is the cheap
+        // direction: an appeal tree is shallow, and the alternative is
+        // listing every descendant of the drawer on each upload.
+        for ($node = $folder; $node !== null; $node = $node->parent_id ? Folder::find($node->parent_id) : null) {
+            if ($node->id === $appeal->id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The CIP application a folder belongs to, if any.
+     *
+     * Walks up rather than joining: a folder deep in an application's tree
+     * has no column pointing back at it, and the root does.
+     */
+    private static function applicationOwning(Folder $folder): ?CipApplication
+    {
+        for ($node = $folder, $hops = 0; $node !== null && $hops < 12; $hops++) {
+            $application = CipApplication::query()->where('folder_id', $node->id)->first();
+
+            if ($application !== null) {
+                return $application;
+            }
+
+            $node = $node->parent_id ? Folder::find($node->parent_id) : null;
+        }
+
+        return null;
     }
 
     /**

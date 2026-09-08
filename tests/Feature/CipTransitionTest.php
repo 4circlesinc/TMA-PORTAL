@@ -375,10 +375,18 @@ class CipTransitionTest extends TestCase
         $this->assertSame([], Engine::availableTransitions($ready, $employee));
 
         // A grant can still move into post-approval; that is the next lane,
-        // not an undo of the decision. Officers and administrators both drive it.
+        // not an undo of the decision. Officers and administrators both drive
+        // it. New appeal sits beside it: an approval can be disputed too, on
+        // its terms or over somebody left off the file.
         $granted = $this->at($this->application($admin), Status::GRANTED);
-        $this->assertSame([Status::POST_APPROVAL], Engine::availableTransitions($granted, $admin));
-        $this->assertSame([Status::POST_APPROVAL], Engine::availableTransitions($granted, $officer));
+        $this->assertSame(
+            [Status::POST_APPROVAL, Status::NEW_APPEAL],
+            Engine::availableTransitions($granted, $admin),
+        );
+        $this->assertSame(
+            [Status::POST_APPROVAL, Status::NEW_APPEAL],
+            Engine::availableTransitions($granted, $officer),
+        );
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
         $this->assertSame([], Engine::availableOverrides($granted, $officer));
 

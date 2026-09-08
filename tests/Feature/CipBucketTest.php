@@ -482,6 +482,8 @@ class CipBucketTest extends TestCase
             'success', 'danger', 'pending', 'action', 'neutral',
             'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper', 'emerald',
             'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'stone',
+            // The appeal lane.
+            'clay', 'sand', 'moss',
         ];
 
         foreach ([$admin, $rita, $contact] as $reader) {

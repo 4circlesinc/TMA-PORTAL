@@ -755,6 +755,59 @@ class Postcards
     }
 
     /**
+     * The appeal lane's three notices.
+     *
+     * One method rather than three: the lane's letters differ only in which
+     * template they fill and which day, if any, they name. The copy itself
+     * lives in SystemEmails where it can be edited, which is the point of the
+     * catalog.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipAppeal(
+        array $facts,
+        string $url,
+        string $status,
+        ?string $date = null,
+        ?string $recipientName = null,
+        ?User $actor = null,
+        ?string $subject = null,
+        ?string $message = null,
+    ): Postcard {
+        $subject ??= Notices::line($facts, $status, $actor);
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+        ];
+
+        if ($date) {
+            $details[] = [
+                $status === Status::APPEAL_SUBMITTED ? 'Appeal submitted' : 'Appeal lodged',
+                $date,
+            ];
+        }
+
+        $template = match ($status) {
+            Status::APPEAL_READY => 'cip-appeal-ready',
+            Status::APPEAL_SUBMITTED => 'cip-appeal-submitted',
+            default => 'cip-new-appeal',
+        };
+
+        return self::postcard($template, self::cipVars($facts, $recipientName) + [
+            'url' => $url,
+            'status' => Status::label($status),
+        ], [
+            'subject' => $subject,
+            'url' => $url,
+            'details' => $details,
+            // The officer's covering note, quoted under the standing copy.
+            'quote' => $message ?: null,
+        ]);
+    }
+
+    /**
      * §19's notice: the Unit accepted the file and a background check is on.
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts

@@ -38608,6 +38608,9 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--gold, .tma-portal-cip__tone--gold { --tma-cip-tone: var(--tma-status-gold, #b45309); }
 .tma-portal-cip__dot--plum, .tma-portal-cip__tone--plum { --tma-cip-tone: var(--tma-status-plum, #6b21a8); }
 .tma-portal-cip__dot--mint, .tma-portal-cip__tone--mint { --tma-cip-tone: var(--tma-status-mint, #0f766e); }
+.tma-portal-cip__dot--clay, .tma-portal-cip__tone--clay { --tma-cip-tone: var(--tma-status-clay, #b91c1c); }
+.tma-portal-cip__dot--sand, .tma-portal-cip__tone--sand { --tma-cip-tone: var(--tma-status-sand, #a16207); }
+.tma-portal-cip__dot--moss, .tma-portal-cip__tone--moss { --tma-cip-tone: var(--tma-status-moss, #4d7c0f); }
 .tma-portal-cip__dot--stone, .tma-portal-cip__tone--stone { --tma-cip-tone: var(--tma-status-stone, #57534e); }
 
 /* The short name, and one line of it. A legend column is half a third-width
