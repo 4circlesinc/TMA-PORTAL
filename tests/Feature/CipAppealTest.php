@@ -14,6 +14,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use App\Support\Files\FileAccess;
@@ -293,7 +294,7 @@ class CipAppealTest extends TestCase
         return $contact;
     }
 
-    public function test_the_provider_side_can_ask_the_firm_to_appeal(): void
+    public function test_the_provider_side_can_appeal_their_own_decided_file(): void
     {
         Mail::fake();
 
@@ -309,11 +310,14 @@ class CipAppealTest extends TestCase
 
         $fresh = $application->fresh();
 
-        // The ask is recorded and the firm is told — but the file has NOT
-        // moved. §22 keeps the lifecycle with the firm.
+        // The press lodges it: the file moves, and who started it is kept.
+        $this->assertSame(Status::NEW_APPEAL, $fresh->status);
         $this->assertNotNull($fresh->appeal_requested_at);
         $this->assertSame($contact->id, $fresh->appeal_requested_by);
-        $this->assertSame(Status::DENIED, $fresh->status);
+        $this->assertNotNull($fresh->appeal_lodged_at);
+
+        // Their appeal is the same appeal an officer's would be: same drawer.
+        $this->assertNotNull(Tree::appealFolder($fresh));
 
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
@@ -327,7 +331,7 @@ class CipAppealTest extends TestCase
         ]);
     }
 
-    public function test_a_provider_cannot_lodge_the_appeal_themselves(): void
+    public function test_the_carve_out_is_the_first_step_only(): void
     {
         Mail::fake();
 
@@ -335,16 +339,53 @@ class CipAppealTest extends TestCase
         $application = $this->decided($staff);
         $contact = $this->providerContact($staff, $application);
 
-        // The verb that MOVES the file stays with the firm. Asking is theirs;
-        // lodging is not, and the endpoint must say so rather than rely on the
-        // button being hidden.
         $this->actingAs($contact)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal', [
-                'appealLodgedAt' => '2026-08-25',
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [])
+            ->assertOk();
+
+        /*
+         * Starting the appeal is theirs. Every step AFTER it is the firm's:
+         * the carve-out in Engine::allows names one status, not the lane.
+         *
+         * Refused, not a particular code: the engine raises an authorization
+         * failure and the verb's own precondition can speak first depending
+         * on where the file stands. What must hold is that neither call
+         * moves it, which is asserted below.
+         */
+        $ready = $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-ready', []);
+        $this->assertContains($ready->status(), [403, 422]);
+
+        $submitted = $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-submitted', [
+                'appealSubmittedAt' => '2026-09-01',
+            ]);
+        $this->assertContains($submitted->status(), [403, 422]);
+
+        $this->assertSame(Status::NEW_APPEAL, $application->fresh()->status);
+
+        // And the engine itself, which is the rule the endpoints inherit.
+        $this->assertFalse(Engine::allows($contact, $application->fresh(), Status::APPEAL_READY));
+        $this->assertFalse(Engine::allows($contact, $application->fresh(), Status::APPEAL_SUBMITTED));
+    }
+
+    public function test_a_provider_cannot_drive_any_other_status(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff, Status::GRANTED);
+        $contact = $this->providerContact($staff, $application);
+
+        // The carve-out must not have opened the lifecycle generally: the
+        // ordinary status endpoint is still refused.
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::POST_APPROVAL,
             ])
             ->assertForbidden();
 
-        $this->assertSame(Status::DENIED, $application->fresh()->status);
+        $this->assertSame(Status::GRANTED, $application->fresh()->status);
     }
 
     public function test_a_stranger_cannot_request_an_appeal(): void
@@ -372,7 +413,7 @@ class CipAppealTest extends TestCase
         $this->assertNull($application->fresh()->appeal_requested_at);
     }
 
-    public function test_asking_twice_is_the_same_one_request(): void
+    public function test_pressing_twice_is_the_same_one_appeal(): void
     {
         Mail::fake();
 
@@ -384,36 +425,14 @@ class CipAppealTest extends TestCase
         $this->actingAs($contact)->postJson($url, ['reason' => 'First ask.'])->assertOk();
         $this->actingAs($contact)->postJson($url, ['reason' => 'Second ask.'])->assertOk();
 
-        // A double press is the request they already made, not a queue: the
-        // firm must not be told twice about one ask.
+        // A double press is the appeal they already started, not a second
+        // one: nobody is told twice and the lane does not restart.
         $this->assertSame(1, CipEvent::query()
             ->where('application_id', $application->id)
             ->where('action', CipEvent::ACTION_APPEAL_REQUESTED)
             ->count());
         $this->assertSame('First ask.', $application->fresh()->appeal_request_reason);
-    }
-
-    public function test_lodging_clears_the_standing_request(): void
-    {
-        Mail::fake();
-
-        $staff = $this->user(Role::ADMINISTRATOR);
-        $application = $this->decided($staff);
-        $contact = $this->providerContact($staff, $application);
-
-        $this->actingAs($contact)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-request', [])
-            ->assertOk();
-
-        $this->lodge($staff, $application->fresh())->assertOk();
-
-        // The ask has been answered by the thing it asked for; leaving it
-        // standing would have the file say "appeal requested" for the whole
-        // appeal.
-        $fresh = $application->fresh();
-        $this->assertSame(Status::NEW_APPEAL, $fresh->status);
-        $this->assertNull($fresh->appeal_requested_at);
-        $this->assertNull($fresh->appeal_requested_by);
+        $this->assertSame(Status::NEW_APPEAL, $application->fresh()->status);
     }
 
     public function test_a_file_with_no_decision_cannot_be_appeal_requested(): void

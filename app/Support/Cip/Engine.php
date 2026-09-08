@@ -117,6 +117,21 @@ class Engine
             return false;
         }
 
+        /*
+         * The one edge an external account may drive.
+         *
+         * Everything else in the lifecycle belongs to the firm, and that is
+         * still true below. But an appeal is the provider side disagreeing
+         * with a decision, and making them ask the firm for permission to
+         * disagree put a queue in front of the one action that is entirely
+         * theirs. Narrow on purpose: this status only, from a decided file,
+         * and only for the party that filed it — every later step of the
+         * appeal (Ready, Submitted, the outcome) is the firm's as before.
+         */
+        if ($to === Status::NEW_APPEAL && Appeal::mayLodge($actor, $application)) {
+            return true;
+        }
+
         if (! CipAccess::canChangeApplicationStatus($actor)) {
             return false;
         }

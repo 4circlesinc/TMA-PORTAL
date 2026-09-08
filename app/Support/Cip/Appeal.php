@@ -40,37 +40,51 @@ use Illuminate\Support\Facades\DB;
 class Appeal
 {
     /**
-     * May this account ask the firm to appeal, and is there anything to ask?
+     * May this external account lodge an appeal on this file itself?
      *
-     * The submitting party's own decided file, and only while no request is
-     * already open — a second press is the same request, not a queue. Staff
-     * are excluded on purpose: they do not ask, they lodge.
+     * The carve-out {@see Engine::allows} reads. Deliberately the narrowest
+     * question that answers the need: the party that filed this application,
+     * on a file the Unit has decided. Not staff (they hold the verb through
+     * the ordinary capability), not another firm's contact, and not a file
+     * still in flight.
      */
-    public static function canRequest(?User $user, ?CipApplication $application): bool
+    public static function mayLodge(?User $user, ?CipApplication $application): bool
     {
         if ($user === null || $application === null || ! CipAccess::enabled()) {
             return false;
         }
 
-        if (! Confirmation::isSubmittingParty($user, $application)) {
-            return false;
-        }
-
-        return $application->appeal_requested_at === null
+        return Confirmation::isSubmittingParty($user, $application)
             && in_array($application->status, Status::TERMINAL, true);
     }
 
     /**
-     * The provider side asking the firm to appeal a decision.
+     * May this account start an appeal from the button on their own file?
      *
-     * This does NOT move the file, and that is the whole point of it. §22
-     * keeps the lifecycle with the firm — a service provider may create, edit
-     * and upload, but an application's status is not theirs to change — so the
-     * button on their side records the ask and tells the firm, and an officer
-     * lodges it. The same split Confirm submission already makes: the provider
-     * freezes their package, the firm records the submission.
+     * The provider side's version of the verb. Staff are excluded because
+     * their route in is the status picker, which already offers New Appeal.
+     */
+    public static function canRequest(?User $user, ?CipApplication $application): bool
+    {
+        return self::mayLodge($user, $application);
+    }
+
+    /**
+     * The provider side starting an appeal on their own file.
      *
-     * Idempotent: pressing it twice is the one request they already made.
+     * It lodges: the status moves to New Appeal, Appeal Documents opens, and
+     * the §22 list is told, exactly as if an officer had done it. The firm
+     * used to have to lodge it for them, which put a queue in front of the
+     * one action that is entirely the provider's — they are the party that
+     * disagrees with the decision.
+     *
+     * The lifecycle is otherwise unchanged: every later step of the appeal
+     * (Ready, Submitted, and the outcome) is still the firm's, and this is
+     * the only edge {@see Engine::allows} opens to an external account.
+     *
+     * The columns are still written, because "who asked, and why" is a fact
+     * about the appeal that the lodging alone does not carry. Idempotent: a
+     * second press on a file already in the lane is the appeal they started.
      *
      * @throws \InvalidArgumentException the file has no decision to appeal
      * @throws AuthorizationException
@@ -81,40 +95,38 @@ class Appeal
         ?string $reason = null,
     ): CipApplication {
         if (! Confirmation::isSubmittingParty($actor, $application)) {
-            throw new AuthorizationException('You cannot ask for an appeal on this application.');
+            throw new AuthorizationException('You cannot appeal this application.');
+        }
+
+        if (in_array($application->status, Status::APPEAL_LANE, true)) {
+            return $application;
         }
 
         if (! in_array($application->status, Status::TERMINAL, true)) {
             throw new \InvalidArgumentException(
-                'An appeal can only be asked for once the Unit has decided.',
+                'An appeal can only be started once the Unit has decided.',
             );
-        }
-
-        if ($application->appeal_requested_at !== null) {
-            return $application;
         }
 
         $reason = trim((string) $reason) ?: null;
 
-        return DB::transaction(function () use ($application, $actor, $reason) {
-            $application->forceFill([
-                'appeal_requested_at' => Carbon::now(),
-                'appeal_requested_by' => $actor->id,
-                'appeal_request_reason' => $reason,
-            ])->save();
+        $application->forceFill([
+            'appeal_requested_at' => Carbon::now(),
+            'appeal_requested_by' => $actor->id,
+            'appeal_request_reason' => $reason,
+        ])->save();
 
-            Engine::record($application, CipEvent::ACTION_APPEAL_REQUESTED, $actor, array_filter([
-                'reason' => $reason,
-            ]));
+        Engine::record($application, CipEvent::ACTION_APPEAL_REQUESTED, $actor, array_filter([
+            'reason' => $reason,
+        ]));
 
-            // Their words go in the thread the same way a covering note does,
-            // so the firm reads the ask where they read everything else about
-            // this file. Notices::appealRequested carries the letter.
-            Threads::record($application, $actor, $reason);
-            Notices::appealRequested($application, $actor, $reason);
-
-            return $application->refresh();
-        });
+        /*
+         * Then the ordinary lodging, so the provider's appeal and an
+         * officer's are the same appeal: same date, same drawer, same notice.
+         * Their reason rides along as the covering message, which puts it in
+         * the letter and the thread the way every other one goes.
+         */
+        return self::lodge($application->refresh(), $actor, null, false, null, $reason);
     }
 
     /**
@@ -171,16 +183,13 @@ class Appeal
 
             Engine::record($application, CipEvent::ACTION_APPEAL_LODGED, $actor, $meta);
 
-            // An open request has been answered by the thing it asked for.
-            // Cleared here rather than left standing, or the provider's file
-            // would go on saying "appeal requested" through the whole appeal.
-            if ($application->appeal_requested_at !== null) {
-                $application->forceFill([
-                    'appeal_requested_at' => null,
-                    'appeal_requested_by' => null,
-                    'appeal_request_reason' => null,
-                ])->save();
-            }
+            /*
+             * The request columns are NOT cleared. They stopped meaning "a
+             * pending ask" the moment the provider's press began lodging the
+             * appeal itself, and now mean who started it and why — which is
+             * worth keeping for the life of the appeal. Screens read the
+             * status for the lane and these for the attribution.
+             */
 
             // The covering note is also the firm talking to the provider side
             // about this file, so it belongs in the thread. Recorded, not
@@ -295,12 +304,12 @@ class Appeal
     /**
      * What a screen needs to draw the appeal verbs.
      *
-     * Two audiences, one shape: the provider side gets `canRequestAppeal` and
-     * presses it; the firm gets the standing request and acts on it. Both
-     * read the same row, so neither can be told something the other's screen
-     * would contradict.
+     * `canRequestAppeal` offers the button to the party that may press it.
+     * `appealStartedBy` says who started the appeal this file is in, which is
+     * the firm's answer to "why is this here" and is worth carrying for the
+     * life of the lane.
      *
-     * @return array{canRequestAppeal:bool, appealRequested:?array{at:string, by:?string, reason:?string}}
+     * @return array{canRequestAppeal:bool, appealStartedBy:?array{at:string, by:?string, reason:?string}}
      */
     public static function payload(CipApplication $application, ?User $viewer): array
     {
@@ -308,7 +317,7 @@ class Appeal
 
         return [
             'canRequestAppeal' => self::canRequest($viewer, $application),
-            'appealRequested' => $requested === null ? null : [
+            'appealStartedBy' => $requested === null ? null : [
                 'at' => $requested->toIso8601String(),
                 'by' => $application->appealRequestedBy?->name,
                 'reason' => $application->appeal_request_reason,
