@@ -84,6 +84,61 @@ class Threads
     }
 
     /**
+     * File a message the portal is already sending by another route.
+     *
+     * The covering note on a status dialog — "the Unit wants the spouse's
+     * police certificate" — goes out inside that status change's own §22
+     * letter. It is also the firm talking to the provider side about this
+     * file, which is exactly what the thread is for, and a reader who opens
+     * Messages a week later should find it there rather than only in their
+     * mailbox.
+     *
+     * So the row is written and the announcement is NOT: create() emails
+     * every provider mailbox and rings every bell, and doing that here would
+     * mean two emails and two notifications for one action. The status
+     * notice has already said it.
+     *
+     * Returns null when there is nothing to file, so callers can hand this
+     * an optional field without guarding first.
+     */
+    public static function record(
+        CipApplication $application,
+        User $author,
+        ?string $body,
+        string $lane = CipApplicationMessage::LANE_PROVIDER,
+    ): ?CipApplicationMessage {
+        $body = trim((string) $body);
+
+        if ($body === '') {
+            return null;
+        }
+
+        $application->loadMissing('provider');
+        $stamp = ContactIdentity::stamp($author, $application->provider?->company_id);
+
+        $message = CipApplicationMessage::create([
+            'application_id' => $application->id,
+            'author_id' => $author->id,
+            'company_member_id' => $stamp['company_member_id'],
+            'author_name' => $stamp['actor_name'] ?: $author->name,
+            'lane' => self::normaliseLane($lane, $author),
+            'body' => $body,
+        ]);
+
+        // The author has plainly read what they just typed; without this the
+        // thread would come back with an unread badge for its own writer.
+        self::markRead($application, $author, $message->id);
+
+        // The signal, but not the letter: screens showing this thread should
+        // repaint, and the status change's own notice is the email.
+        CipThreadChanged::dispatch($application, 'created');
+        Live::staff(Live::CIP);
+        Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
+
+        return $message;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public static function listed(CipApplication $application, User $viewer): array

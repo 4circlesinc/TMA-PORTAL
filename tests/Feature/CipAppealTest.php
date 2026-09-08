@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\Postcard;
 use App\Models\CipApplication;
+use App\Models\CipApplicationMessage;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -233,6 +234,38 @@ class CipAppealTest extends TestCase
             return $mail->hasTo('notices@galaxy.example')
                 && str_contains(mb_strtolower($mail->payload['lead'] ?? ''), 'confirm');
         });
+    }
+
+    public function test_every_step_files_its_message_in_the_thread(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->decided($staff);
+
+        $this->lodge($staff, $application, ['message' => 'The refusal misread the source of funds.'])->assertOk();
+        $this->actingAs($staff)->postJson(
+            '/portal/cip/applications/'.$application->uuid.'/appeal-ready',
+            ['message' => 'Counsel opinion is in; please confirm.'],
+        )->assertOk();
+        $this->actingAs($staff)->postJson(
+            '/portal/cip/applications/'.$application->uuid.'/appeal-submitted',
+            ['appealSubmittedAt' => '2026-09-01', 'message' => 'Lodged with the Unit this morning.'],
+        )->assertOk();
+
+        // The lane's whole conversation reads back in one place, in order.
+        $this->assertSame([
+            'The refusal misread the source of funds.',
+            'Counsel opinion is in; please confirm.',
+            'Lodged with the Unit this morning.',
+        ], CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->orderBy('id')
+            ->pluck('body')
+            ->all());
+
+        // Three steps, three status letters, and no thread postcard on top.
+        $this->assertDatabaseMissing('email_deliveries', ['template' => 'cip-message']);
     }
 
     public function test_appeal_documents_is_the_only_drawer_open_during_an_appeal(): void

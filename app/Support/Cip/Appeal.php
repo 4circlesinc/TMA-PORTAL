@@ -93,6 +93,11 @@ class Appeal
 
             Engine::record($application, CipEvent::ACTION_APPEAL_LODGED, $actor, $meta);
 
+            // The covering note is also the firm talking to the provider side
+            // about this file, so it belongs in the thread. Recorded, not
+            // announced: the status notice above already carries it.
+            Threads::record($application, $actor, $message);
+
             return $application->refresh();
         });
     }
@@ -137,6 +142,11 @@ class Appeal
             }
 
             Engine::record($application, CipEvent::ACTION_APPEAL_READY, $actor, []);
+
+            // The covering note is also the firm talking to the provider side
+            // about this file, so it belongs in the thread. Recorded, not
+            // announced: the status notice above already carries it.
+            Threads::record($application, $actor, $message);
 
             return $application->refresh();
         });
@@ -183,6 +193,11 @@ class Appeal
             }
 
             Engine::record($application, CipEvent::ACTION_APPEAL_SUBMITTED, $actor, $meta);
+
+            // The covering note is also the firm talking to the provider side
+            // about this file, so it belongs in the thread. Recorded, not
+            // announced: the status notice above already carries it.
+            Threads::record($application, $actor, $message);
 
             return $application->refresh();
         });

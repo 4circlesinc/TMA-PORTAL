@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\Postcard;
 use App\Models\CipApplication;
+use App\Models\CipApplicationMessage;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -206,6 +207,57 @@ class CipNonComplianceTest extends TestCase
                 && str_contains((string) data_get($mail->payload, 'quote'), $message)
                 && str_contains($mail->payload['lead'], 'Additional Documents');
         });
+    }
+
+    public function test_the_officers_message_is_filed_in_the_application_thread(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+
+        $message = 'The Unit wants a police certificate for the spouse.';
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+                'message' => $message,
+            ])
+            ->assertOk();
+
+        // Messages is where somebody looks a week later; the mailbox is not.
+        $this->assertDatabaseHas('cip_application_messages', [
+            'application_id' => $application->id,
+            'author_id' => $staff->id,
+            'lane' => CipApplicationMessage::LANE_PROVIDER,
+            'body' => $message,
+        ]);
+
+        // ONE letter for one action. Threads::create would have sent the
+        // thread's own cip-message postcard on top of the status notice.
+        $this->assertDatabaseMissing('email_deliveries', ['template' => 'cip-message']);
+        $this->assertSame(
+            1,
+            CipApplicationMessage::where('application_id', $application->id)->count(),
+        );
+    }
+
+    public function test_a_query_without_a_message_files_nothing_in_the_thread(): void
+    {
+        Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->pending($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-08-18',
+            ])
+            ->assertOk();
+
+        // An empty covering note is not a message; a blank row in the thread
+        // would be worse than no row.
+        $this->assertSame(0, CipApplicationMessage::where('application_id', $application->id)->count());
     }
 
     public function test_a_query_without_a_message_sends_the_notice_unquoted(): void

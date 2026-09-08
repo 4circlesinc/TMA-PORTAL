@@ -79,6 +79,11 @@ class BackgroundCheck
 
             Engine::record($application, CipEvent::ACTION_ACCEPTED_FOR_PROCESSING, $actor, $meta);
 
+            // The covering note is also the firm talking to the provider side
+            // about this file, so it belongs in the thread. Recorded, not
+            // announced: the status notice above already carries it.
+            Threads::record($application, $actor, $message);
+
             return $application->refresh();
         });
     }
