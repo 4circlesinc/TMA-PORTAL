@@ -630,11 +630,13 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * Section 7's search, on the table it lists: either number, or the applicant.
+     * Section 7's search, on the table it lists: number, applicant, or provider.
      *
      * The numbers are matched from the start, a number is typed to find one
      * record, while a name is matched anywhere, because people search on a
-     * surname as readily as a first name.
+     * surname as readily as a first name. A provider code is matched exactly:
+     * it is three or four characters, and matching it anywhere would have
+     * every code hit half the table.
      */
     private function applyListSearch($query, string $term): void
     {
@@ -645,13 +647,18 @@ class CipApplicationController extends Controller
         $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
         $anywhere = '%'.mb_strtolower(addcslashes($term, '\\%_')).'%';
 
-        $query->where(function (Builder $q) use ($prefix, $anywhere) {
+        $code = mb_strtolower(trim($term));
+
+        $query->where(function (Builder $q) use ($prefix, $anywhere, $code) {
             $q->whereRaw('LOWER(cip_applications.internal_number) LIKE ?', [$prefix])
                 ->orWhereRaw('LOWER(cip_applications.cip_number) LIKE ?', [$prefix])
                 ->orWhereHas('client', fn (Builder $c) => $c
                     ->whereRaw('LOWER(clients.name) LIKE ?', [$anywhere]))
                 ->orWhereHas('people', fn (Builder $p) => $p
-                    ->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$anywhere]));
+                    ->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$anywhere]))
+                ->orWhereHas('provider', fn (Builder $v) => $v
+                    ->whereRaw('LOWER(cip_providers.name) LIKE ?', [$anywhere])
+                    ->orWhereRaw('LOWER(cip_providers.code) = ?', [$code]));
         });
     }
 
@@ -1169,7 +1176,17 @@ class CipApplicationController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
-        abort_unless(CipAccess::canCreate($user), 404);
+
+        /*
+         * A post-approval file is the firm's working file, so the whole firm
+         * may correct the people on it — not only the officers who hold
+         * cip.create. Before the decision it is still the filing party's
+         * application and the narrower gate stands.
+         */
+        $mayEdit = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            ? CipAccess::canEditPostApprovalPeople($user) || CipAccess::canCreate($user)
+            : CipAccess::canCreate($user);
+        abort_unless($mayEdit, 404);
         abort_if($application->isLocked(), 422, Confirmation::LOCKED_MESSAGE);
 
         Intake::normaliseDocuments($request);

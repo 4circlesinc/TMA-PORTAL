@@ -29,6 +29,7 @@ use App\Support\Cip\NicRequirements;
 use App\Support\Cip\Pack;
 use App\Support\Cip\Package;
 use App\Support\Cip\PassportRequirements;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
@@ -1951,6 +1952,54 @@ class CipPostApprovalTest extends TestCase
         // Those folders hold the package that went to the Unit. Reaching
         // post-approval does not make them go away.
         $this->assertContains('Main Applicant', $loose);
+    }
+
+    public function test_the_whole_firm_may_correct_people_on_a_post_approval_file(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $this->mainApplicant($application);
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $employee = User::create([
+            'name' => 'Emma Employee', 'email' => 'emma@example.com',
+            'password' => bcrypt('password12345'),
+        ]);
+        $employee->forceFill([
+            'email_verified_at' => now(), 'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(), 'status' => 'approved',
+            'account_type' => Role::EMPLOYEE,
+        ])->save();
+
+        /*
+         * An Employee holds no cip.create, so filing is not theirs. Correcting
+         * a name on a file the firm is already working through is, and it
+         * should not wait for whoever happens to hold that capability.
+         */
+        $this->assertFalse(CipAccess::canCreate($employee));
+        $this->assertTrue(CipAccess::canEditPostApprovalPeople($employee));
+    }
+
+    public function test_the_provider_side_may_not_edit_a_post_approval_file(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $contact = User::create([
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'password' => bcrypt('password12345'),
+        ]);
+        $contact->forceFill([
+            'email_verified_at' => now(), 'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(), 'status' => 'approved',
+            'account_type' => Role::CLIENT,
+        ])->save();
+
+        // Not an omission: they filed the application, the firm carries it
+        // from the decision on, and a field changing under them is exactly
+        // what this prevents.
+        $this->assertFalse(CipAccess::canEditPostApprovalPeople($contact));
     }
 
     private function seedCor(): void

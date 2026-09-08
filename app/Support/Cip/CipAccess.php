@@ -100,6 +100,31 @@ class CipAccess
             : self::canReach($user);
     }
 
+    /**
+     * May this account edit the people on a post-approval file?
+     *
+     * Wider than {@see canCreate} on purpose. Filing an application is a
+     * considered act and stays with the officers who own the lifecycle; a
+     * post-approval file is one the firm is working through together, and
+     * correcting a name or a date of birth on it is ordinary work that should
+     * not wait for whoever happens to hold cip.create. So the whole firm may
+     * do it — administrators, officers, and employees.
+     *
+     * The service provider side may not, and that is the point of the rule
+     * rather than an omission: they filed the application, the firm carries it
+     * from the decision onward, and a field changing under the firm without
+     * their knowing is exactly what this keeps from happening. They still
+     * edit their own pre-approval work through {@see canCreate}.
+     */
+    public static function canEditPostApprovalPeople(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isStaff($user);
+    }
+
     /** An active member of a firm registered as a CIP service provider. */
     public static function isProviderContact(User $user): bool
     {
