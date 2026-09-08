@@ -204,8 +204,10 @@
 
     // A file entered straight into post-approval was approved before the
     // portal saw it, so the Unit's number is on the letter in front of the
-    // reader. Pre-approval has no such number yet.
-    if (isPostApprovalIntake()) paths.push('cipNumber');
+    // reader. Pre-approval has no such number yet. An edit does not demand
+    // one: the number is already recorded, and clearing the box is not a way
+    // to remove it.
+    if (!state.applicationId && isPostApprovalIntake()) paths.push('cipNumber');
 
     if (sponsored()) {
       paths = paths.concat(PERSON_FIELDS.map(function (f) { return 'sponsor.' + f; }));
@@ -695,7 +697,7 @@
       // filing is a file the Unit already decided, so the number is on the
       // letter being worked from; a pre-approval one gets its number at
       // submission and the server refuses one sent early.
-      (isPostApprovalIntake()
+      (showsCipNumber()
         ? textField('cipNumber', { placeholder: 'As printed on the approval letter' })
         : '') +
       '</div>');
@@ -782,6 +784,23 @@
      and what they are filing for, then the people on it. */
   function isPostApprovalIntake() {
     return state.phase === 'post_approval';
+  }
+
+  /*
+   * Is the CIP number this form's to ask for?
+   *
+   * On a new filing, only a post-approval one: pre-approval has no number
+   * yet. On an edit, the record says which phase the file is in — state.phase
+   * is null there, because an existing application's phase is not the form's
+   * to choose — and only a reader the server says may change it is offered
+   * the control, since Submission::correct would turn anyone else away.
+   */
+  function showsCipNumber() {
+    if (!state.applicationId) return isPostApprovalIntake();
+
+    return !!(state.record
+      && state.record.phase === 'post_approval'
+      && state.record.canEditCipNumber);
   }
 
   function preApprovalFormBody() {
@@ -1197,10 +1216,10 @@
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       // A sponsor's answers are not sent when there is no sponsor.
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
-      // The CIP number belongs to post-approval filings only, and the server
-      // refuses one on any other. A reader who started the form as
-      // post-approval and switched must not have it follow them.
-      if (path === 'cipNumber' && !(!state.applicationId && isPostApprovalIntake())) return;
+      // The CIP number goes up only when this form drew the control. The
+      // server refuses one on a pre-approval file, and a reader who was never
+      // offered the field must not post the value the record came with.
+      if (path === 'cipNumber' && !showsCipNumber()) return;
       out.push({ name: bracketed(path), value: value });
     });
 
@@ -1551,6 +1570,7 @@
     };
 
     state.draft.providerId = app.providerId || '';
+    state.draft.cipNumber = app.cipNumber || '';
     state.draft.investmentType = app.investmentTypeValue || '';
     state.draft.investmentTypeOther = app.investmentTypeOther || '';
     state.draft.sponsored = app.sponsored ? '1' : '0';

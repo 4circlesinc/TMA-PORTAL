@@ -29,12 +29,14 @@ use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\PassportRequirements;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
+use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -165,6 +167,63 @@ class CipIntakeTest extends TestCase
     {
         return $this->actingAs($actor)
             ->post('/portal/cip/applications', $payload, ['Accept' => 'application/json']);
+    }
+
+    /**
+     * The form's answers without the uploads.
+     *
+     * The real Edit application posts a filed slot as nothing at all — the
+     * scan is already in the person's folder, and sending one is how a
+     * replacement is offered. A test that re-posted the whole intake payload
+     * would be refused for trying to replace a photo it never chose.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function edits(CipProvider $provider, array $overrides = []): array
+    {
+        $payload = $this->payload($provider, $overrides);
+
+        foreach (['passportPhoto', 'passportBioPage', 'birthCertificate', 'policeCertificate',
+            'proofOfAddress', 'oathOfAllegiance', 'proofOfPayment'] as $upload) {
+            unset($payload[$upload]);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * A reviewing officer holding this file.
+     *
+     * Holding it explicitly, because that is what seeing it means: an officer
+     * reads only the applications assigned to them (section 10), so a test
+     * about the edit form has to hand them the file first.
+     */
+    private function holder(CipApplication $application): User
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        CipApplicationAssignment::firstOrCreate([
+            'application_id' => $application->id,
+            'user_id' => $officer->id,
+            'status' => CipApplicationAssignment::STATUS_ACTIVE,
+        ], [
+            'role' => 'reviewing_officer',
+            'assigned_by' => $officer->id,
+            'starts_at' => now(),
+        ]);
+
+        return $officer;
+    }
+
+    /** The same form, posted back at an application that already exists. */
+    private function edit(User $actor, CipApplication $application, array $payload)
+    {
+        return $this->actingAs($actor)->post(
+            '/portal/cip/applications/'.$application->uuid,
+            $payload,
+            ['Accept' => 'application/json'],
+        );
     }
 
     public function test_a_complete_application_is_filed_as_a_numbered_draft(): void
@@ -593,6 +652,158 @@ class CipIntakeTest extends TestCase
         $this->file($staff, $this->payload($provider, ['cipNumber' => '10T1G12666P']))
             ->assertStatus(422)
             ->assertJsonValidationErrors(['cipNumber']);
+    }
+
+    /**
+     * A number typed wrong at intake is fixed on the same form that took it.
+     *
+     * Post-approval files arrive numbered, so the digit read off a letter is
+     * the one thing on them most likely to be a typo, and Edit application is
+     * where somebody looking at the letter already is.
+     */
+    public function test_editing_a_post_approval_application_corrects_the_cip_number(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12670P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $officer = $this->holder($application);
+
+        // The form is told it may ask, and put the recorded number back.
+        $record = $this->actingAs($officer)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()->json('application');
+        $this->assertSame('10T1G12670P', $record['cipNumber']);
+        $this->assertTrue($record['canEditCipNumber']);
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12671P',
+        ]))->assertOk();
+
+        $this->assertSame('10T1G12671P', $application->fresh()->cip_number);
+        $this->assertTrue(
+            $application->events()
+                ->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)
+                ->get()
+                ->contains(fn ($e) => ($e->meta['previous'] ?? null) === '10T1G12670P'),
+            'A correction is audited with the number it replaced.',
+        );
+    }
+
+    /**
+     * The whole firm may correct people on a post-approval file; the Unit's
+     * identifier stays with the capability that owns it.
+     *
+     * Nothing reachable today sits in the gap — the scope keeps a plain
+     * employee off CIP rows entirely, and every account type that can open
+     * the form holds cip.compliance. This pins the guard rather than the
+     * gap, so widening who may edit a post-approval file later cannot
+     * quietly widen who may renumber it: {@see Submission::correct} is the
+     * only way in, and it asks.
+     */
+    public function test_correcting_the_cip_number_needs_the_compliance_capability(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12672P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $employee = $this->user(Role::EMPLOYEE);
+
+        $this->assertFalse(
+            CipAccess::can($employee, 'cip.compliance'),
+            'An employee holds no compliance capability, so the form must not offer them the field.',
+        );
+
+        $this->expectException(HttpException::class);
+        $this->expectExceptionMessage('You cannot change this application’s CIP number.');
+        Submission::correct($application, $employee, '10T1G12673P');
+    }
+
+    /** Re-posting the number the form was drawn with is not a change. */
+    public function test_editing_without_touching_the_cip_number_leaves_it_alone(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12674P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $officer = $this->holder($application);
+        $before = $application->events()->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->count();
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12674P',
+            'occupation' => 'Architect',
+        ]))->assertOk();
+
+        $this->assertSame('10T1G12674P', $application->fresh()->cip_number);
+        $this->assertSame('Architect', $application->fresh()->people()
+            ->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first()->occupation);
+        $this->assertSame(
+            $before,
+            $application->events()->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->count(),
+            'An unchanged number must not write an audit row on every save.',
+        );
+    }
+
+    /** An empty box does not un-number a file the Unit has numbered. */
+    public function test_editing_with_a_blank_cip_number_does_not_clear_it(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12675P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $officer = $this->holder($application);
+
+        $this->edit($officer, $application, $this->edits($provider, ['cipNumber' => '']))
+            ->assertOk();
+
+        $this->assertSame('10T1G12675P', $application->fresh()->cip_number);
+    }
+
+    /** A pre-approval file gets its number at submission, not on this form. */
+    public function test_editing_a_pre_approval_application_refuses_a_cip_number(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider))
+            ->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $officer = $this->holder($application);
+
+        $record = $this->actingAs($officer)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()->json('application');
+        $this->assertNull($record['cipNumber']);
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12676P',
+        ]))->assertStatus(422);
+
+        $this->assertNull($application->fresh()->cip_number);
     }
 
     public function test_intake_defaults_to_pre_approval_when_phase_is_omitted(): void

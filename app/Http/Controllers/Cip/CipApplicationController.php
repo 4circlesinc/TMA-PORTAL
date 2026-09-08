@@ -1428,6 +1428,15 @@ class CipApplicationController extends Controller
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
+            /*
+             * Whether this reader may change the number, which is a narrower
+             * question than whether they may open the form. The whole firm
+             * corrects people on a post-approval file; the Unit's identifier
+             * is the reviewing officer's to fix, and {@see Submission::correct}
+             * refuses anyone else. The flag lets the form ask instead of
+             * offering a control that would be turned away.
+             */
+            'canEditCipNumber' => CipAccess::can($viewer, 'cip.compliance'),
             'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),

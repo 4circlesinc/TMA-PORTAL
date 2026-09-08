@@ -171,7 +171,17 @@ class Intake
     public static function rules(bool $editing = false): array
     {
         return array_merge(
-            $editing ? [] : [
+            $editing ? [
+                /*
+                 * Correcting the Unit's number on a file already in
+                 * post-approval. Optional, because most edits are not about
+                 * the number and most readers may not change it at all: the
+                 * form only offers the field to a reviewing officer, and
+                 * {@see Submission::correct} refuses the write from anyone
+                 * else rather than trusting that.
+                 */
+                'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+            ] : [
                 'providerId' => ['required', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
                 /*
@@ -632,6 +642,7 @@ class Intake
     {
         return DB::transaction(function () use ($application, $actor, $data) {
             Confirmation::guard($application);
+            self::syncCipNumber($application, $actor, $data);
             $application->forceFill([
                 'investment_type' => $data['investmentType'],
                 'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
@@ -669,6 +680,56 @@ class Intake
 
             return $application->fresh();
         });
+    }
+
+    /**
+     * The Unit's number after an edit: changed, or left exactly alone.
+     *
+     * Three ways this does nothing, and they are all the common case. The
+     * field is not sent at all, by a reader the form never offered it to. It
+     * is sent unchanged, because the form posts every control it drew whether
+     * or not this one was touched. Or the file is still pre-approval, where
+     * the number does not exist yet and {@see Submission::record} is the only
+     * thing that may write one.
+     *
+     * What is left is somebody who typed a different number, and that goes
+     * through {@see Submission::correct}, which is where the capability is
+     * checked, the number is cleaned, uniqueness is enforced and the change is
+     * audited with what it was before. Deliberately not a second
+     * implementation of any of that: a number corrected here and one corrected
+     * from the file's own screen must be the same act.
+     *
+     * @param  array<string, mixed>  $data  already validated by self::rules(editing: true)
+     */
+    private static function syncCipNumber(CipApplication $application, User $actor, array $data): void
+    {
+        if (! array_key_exists('cipNumber', $data)) {
+            return;
+        }
+
+        $given = trim((string) ($data['cipNumber'] ?? ''));
+
+        /*
+         * Blank clears nothing. A file that has a number keeps it: emptying
+         * the box is how a reader without the capability sees the field, and
+         * an application the Unit has numbered does not go back to being
+         * unnumbered.
+         */
+        if ($given === '') {
+            return;
+        }
+
+        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+            abort(422, 'A CIP number is recorded when the application is submitted to the Unit.');
+        }
+
+        // Compared the way the number is stored, so re-posting the same value
+        // with the spaces it was pasted with is not a change.
+        if (preg_replace('/\s+/u', '', $given) === (string) $application->cip_number) {
+            return;
+        }
+
+        Submission::correct($application, $actor, $given);
     }
 
     /**
