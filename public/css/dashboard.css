@@ -18977,6 +18977,22 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * A person's editable details, and the CIP number card above them.
+ *
+ * The block was written with no rule of its own, so the button that follows
+ * the fields sat directly against them: the grid's own gap spaces the fields
+ * from each other and stops at its last row, and .tma-portal-form-actions is
+ * only a flex row. Whatever comes after the grid needs its own separation.
+ */
+.tma-dash__clients-person-edit > .tma-portal-form-actions,
+.tma-dash__clients-person-edit > .tma-portal-note {
+  margin-top: var(--space-16);
+}
+
+/* The drop targets under a person's fields are a new group, not a next row. */
+.tma-dash__clients-person-edit + .tma-portal-drops { margin-top: var(--space-16); }
+
 /* Inside a card the empty state is a small marker, not a hero. */
 .tma-dash__clients-card .tma-portal-empty { padding: var(--space-16) 0; }
 .tma-dash__clients-card .tma-portal-empty__illustration { width: 72px; height: 72px; }
