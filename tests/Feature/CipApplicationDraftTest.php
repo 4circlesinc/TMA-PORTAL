@@ -129,6 +129,29 @@ class CipApplicationDraftTest extends TestCase
         );
     }
 
+    /** A resumed draft says which slots it already holds a scan for. */
+    public function test_a_resumed_draft_names_the_files_it_kept(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $filed = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/draft')
+            ->assertOk()
+            ->json('draft.filed');
+
+        $this->assertContains('passportPhoto', $filed);
+        $this->assertContains('passportBioPage', $filed);
+        $this->assertNotContains('birthCertificate', $filed, 'A slot nobody filled is not claimed as kept.');
+    }
+
     /**
      * Throwing a draft away takes its folder to the recycle bin.
      *

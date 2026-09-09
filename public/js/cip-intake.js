@@ -192,8 +192,8 @@
        and after filing. Silence is the promise: a form that says "Saved" and
        is not is worse than one that never claimed to be. */
     draftOff: false,
-    /* Paths the resumed draft asked for scans on. The files themselves cannot
-       be kept, so the form says which ones have to be chosen again. */
+    /* Slots a resumed draft is still waiting on. The scans that were chosen
+       come back with it; this is what did not. */
     draftMissingFiles: [],
     /* A draft was found and put back. Drives the notice at the top. */
     draftResumed: false,
@@ -882,10 +882,9 @@
   /*
    * What a resumed form owes the reader.
    *
-   * Two things, and the second is the important one: this is where they were,
-   * and the scans are not in it. A form that silently came back with eight
-   * fields filled and no documents would read as a bug or, worse, as a
-   * checklist that had already been answered.
+   * Two things: this is where they were, and what is still outstanding. The
+   * scans come back with the draft now, so the second half is only said when
+   * something is genuinely missing.
    */
   function resumedNotice() {
     if (!state.draftResumed) return '';
@@ -893,7 +892,7 @@
 
     return '<p class="tma-portal-note" data-cip-draft-resumed>' +
       esc('Picked up where you left off.' +
-        (missing ? ' Choose the documents and photos again — files aren’t saved in a draft.' : '')) +
+        (missing ? ' Some documents still need choosing.' : '')) +
       ' <button type="button" class="tma-portal-link" data-cip-draft-discard>Start over</button></p>';
   }
 
@@ -1817,17 +1816,22 @@
     state.dependents = Math.min(Number(draft.dependents) || 0, MAX_DEPENDENTS);
     state.draftSavedAt = draft.savedAt ? new Date(draft.savedAt) : null;
     state.draftResumed = true;
+
+    // The scans that came back with it, so the form marks those slots
+    // answered rather than asking for them again.
+    (draft.filed || []).forEach(function (path) { state.filed[path] = true; });
+
     /*
-     * The scans this form is going to ask for, none of which a draft can
-     * hold. Asked of the requirement templates rather than requiredPaths(),
-     * which names the TYPED answers only — reading it here quietly produced
-     * an empty list, and a resume notice that never mentioned the files was
-     * exactly the silence the notice exists to break.
+     * What the form is still short of. Asked of the requirement templates
+     * rather than requiredPaths(), which names the TYPED answers only —
+     * reading it there quietly produced an empty list, and a resume notice
+     * that never mentioned the files was exactly the silence it exists to
+     * break.
      */
     noteMissingFiles();
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
-    state.draftSent = JSON.stringify(draftBody());
+    state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
 
     return true;
   }
@@ -1841,16 +1845,25 @@
    * silence the notice exists to break.
    */
   function noteMissingFiles() {
+    /*
+     * What the resumed draft is still short of.
+     *
+     * A draft keeps its scans now, so this asks what came back rather than
+     * assuming nothing did: state.filed is the server's answer, slot by slot.
+     * Listing every field regardless would tell a reader to choose six
+     * documents again that are sitting there already.
+     */
     state.draftMissingFiles = [];
-    docFields('principal').forEach(function (d) {
-      state.draftMissingFiles.push(d.field);
-    });
+
+    var want = function (path) {
+      if (!state.filed[path]) state.draftMissingFiles.push(path);
+    };
+
+    docFields('principal').forEach(function (d) { want(d.field); });
     if (sponsored()) {
-      docFields('sponsor', 'sponsor.').forEach(function (d) {
-        state.draftMissingFiles.push('sponsor.' + d.field);
-      });
+      docFields('sponsor', 'sponsor.').forEach(function (d) { want('sponsor.' + d.field); });
     }
-    if (photoRequiredFor('passportPhoto')) state.draftMissingFiles.push('passportPhoto');
+    if (photoRequiredFor('passportPhoto')) want('passportPhoto');
   }
 
   /* When the draft was last saved, in the reader’s own words. */
@@ -2289,7 +2302,7 @@
         state.draftResumed = true;
         state.draftSavedAt = state.record.updatedAt ? new Date(state.record.updatedAt) : null;
         noteMissingFiles();
-        state.draftSent = JSON.stringify(draftBody());
+        state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
       }
       /*
        * The saved draft goes in last, over the provider the form filled in

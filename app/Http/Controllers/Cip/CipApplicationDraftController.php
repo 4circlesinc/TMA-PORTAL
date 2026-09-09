@@ -15,6 +15,7 @@ use App\Support\Files\FolderTree;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * The intake wizard's autosave: a real application, saved as it is typed.
@@ -44,11 +45,20 @@ use Illuminate\Http\Request;
  * list would be wrong however unfinished the form is. The filing step asks
  * the real questions, where a reader can still do something about the answer.
  *
- * NO FILES
+ * IT KEEPS ITS SCANS, AND THROWING IT AWAY RECYCLES THEM
  *
- * A draft holds answers only. Uploading a scan into an application nobody has
- * filed would put an unreviewed document in a client's folders, so the wizard
- * says plainly which scans have to be chosen again on resume.
+ * A draft held answers only at first, on the reasoning that an unfiled
+ * application should not put an unreviewed document in a client's folders.
+ * That cost more than it saved: a reader who uploaded six passports and shut
+ * the tab lost the part of the work that took longest. The scans are kept
+ * now, in the same folders and slots a filed application uses, because a
+ * draft IS the application and a second home would only have to be moved
+ * later.
+ *
+ * The folder question is answered at the other end instead. Discarding a
+ * draft removes the form outright — nobody refers to an unfiled one — and
+ * soft-deletes its folder, so the paper sits in the recycle bin and a reader
+ * who threw away the wrong draft can get it back.
  */
 class CipApplicationDraftController extends Controller
 {
@@ -221,6 +231,41 @@ class CipApplicationDraftController extends Controller
         return Folder::query()->whereIn('id', $ids)->get()->all();
     }
 
+    /**
+     * The document field names this draft already has a file for, in the same
+     * dotted paths the form keys its controls on.
+     *
+     * @param  \Illuminate\Support\Collection<int, CipPerson>  $dependents
+     * @return list<string>
+     */
+    private function filedSlots(CipApplication $draft, $dependents): array
+    {
+        $paths = [];
+
+        $of = function (?CipPerson $person, string $prefix) use (&$paths) {
+            if (! $person) {
+                return;
+            }
+
+            if ($person->photo_path) {
+                $paths[] = $prefix.'passportPhoto';
+            }
+
+            foreach ($person->documents()->whereNotNull('file_id')->pluck('type') as $type) {
+                $paths[] = $prefix.Str::camel($type);
+            }
+        };
+
+        $of($draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT), '');
+        $of($draft->people->firstWhere('role', CipPerson::ROLE_SPONSOR), 'sponsor.');
+
+        foreach ($dependents as $i => $dependent) {
+            $of($dependent, 'dependents.'.$i.'.');
+        }
+
+        return array_values(array_unique($paths));
+    }
+
     /** Did the reader type anything the provider was not filled in for them? */
     private function hasAnswers(array $data): bool
     {
@@ -317,6 +362,13 @@ class CipApplicationDraftController extends Controller
             'phase' => $draft->phase,
             'answers' => $answers,
             'dependents' => $dependents->count(),
+            /*
+             * Which slots already hold a scan, so the resumed form marks them
+             * answered and the notice names only what is genuinely still
+             * missing. Without this every document read as absent and the
+             * reader was told to choose six files that were sitting there.
+             */
+            'filed' => $this->filedSlots($draft, $dependents),
             'savedAt' => $draft->updated_at?->toIso8601String(),
         ];
     }
