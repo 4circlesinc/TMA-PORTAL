@@ -177,6 +177,52 @@ try {
   // is told where they are and what, if anything, is still outstanding.
   check(/where you left off/i.test(notice), `the resume is announced ("${notice.replace(/\s+/g, ' ').slice(0, 90)}")`);
 
+  /*
+   * The photo is answered by its SLOT, not by the picture on screen.
+   *
+   * `photo` on the record is a display URL that falls back to the client's
+   * avatar, so reading it asked the wrong question: a person wearing the
+   * client's face counted as answered, and the reader saw a face in the
+   * control beside "The passport photo field is required" — a form showing
+   * the photo and demanding it in the same breath.
+   */
+  step(5.6, 'A filed photo is not asked for again');
+  await page.setInputFiles('[data-cip-photo="passportPhoto"]', {
+    name: 'face.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 600;
+      c.height = 600;
+      const x = c.getContext('2d');
+      x.fillStyle = '#cde';
+      x.fillRect(0, 0, 600, 600);
+
+      return c.toDataURL('image/png').split(',')[1];
+    }), 'base64'),
+  });
+  await page.waitForTimeout(3500);
+
+  // Reopened from its row, the photo the draft kept must come back answered.
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(4000);
+  await page.locator('tr[data-cip-draft], [data-cip-draft]').first().click();
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  await page.waitForTimeout(2500);
+
+  const photoShown = await page.evaluate(() => {
+    const btn = document.querySelector('[data-cip-photo-btn="passportPhoto"]');
+
+    return btn ? btn.getAttribute('data-has-image') === 'true' : null;
+  });
+  check(photoShown === true, 'the photo that was kept is on the form');
+
+  await page.locator('[data-cip-save]').first().click();
+  await page.waitForTimeout(1500);
+  const demanded = await page.evaluate(() => [...document.querySelectorAll('.tma-portal-field__error')]
+    .map(e => e.innerText.trim()).some(t => /passport photo/i.test(t)));
+  check(!demanded, 'and it is not demanded a second time');
+
   step(5.55, 'Back from a draft returns to the table it was opened from');
   /*
    * Every other application belongs to a client, so Back means their profile.

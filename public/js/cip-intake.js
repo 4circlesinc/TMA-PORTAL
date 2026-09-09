@@ -2147,8 +2147,33 @@
     var into = function (prefix, person) {
       if (!person) return;
       PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
-      if (person.photo) state.previews[prefix + 'passportPhoto'] = person.photo;
-      state.filed[prefix + 'passportPhoto'] = !!person.photo;
+      /*
+       * The photo is answered by its SLOT, not by the picture on screen.
+       *
+       * `photo` is a display URL and falls back to the client's avatar when
+       * the person has no passport photo of their own, so reading it here
+       * asked the wrong question twice over: a person wearing the client's
+       * face counted as answered, and a filed photo whose slot the record
+       * described but whose URL was absent counted as missing — which is the
+       * form showing the picture and demanding it in the same breath.
+       */
+      var photoSlot = (person.documents || []).filter(function (d) {
+        return d.type === 'passport_photo';
+      })[0];
+
+      /*
+       * And the picture only when the slot holds one. Showing the client's
+       * avatar in the passport-photo control put a face on screen beside
+       * "The passport photo field is required" — the reader sees a photo and
+       * is told there is none, which reads as a bug in the form rather than
+       * as the honest answer: that picture is not this document.
+       */
+      var photoFiled = !!(photoSlot && photoSlot.uploaded);
+
+      if (photoFiled && (person.passportPhotoUrl || person.photo)) {
+        state.previews[prefix + 'passportPhoto'] = person.passportPhotoUrl || person.photo;
+      }
+      state.filed[prefix + 'passportPhoto'] = photoFiled;
       docFields(sectionForPath(prefix || 'x')).forEach(function (doc) {
         var slot = (person.documents || []).filter(function (d) {
           return d.type === doc.key;
