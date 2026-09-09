@@ -34,12 +34,9 @@ class CipRequirementController extends Controller
     {
         abort_unless(CipAccess::canReach($request->user()), 404);
 
-        // A-Z by the wording, the same order the checklist reads in, so a
-        // document is looked for by its name rather than remembered by its
-        // seat. Names repeat across applicant types, so id settles ties.
         $all = CipDocumentRequirement::withTrashed()
             ->orderBy('applicant_type')
-            ->orderByRaw('lower(label)')
+            ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
 
@@ -207,6 +204,29 @@ class CipRequirementController extends Controller
         return response()->json(['requirement' => $this->record($requirement->fresh())]);
     }
 
+    /** The order the checklist reads in, for one applicant type. */
+    public function reorder(Request $request): JsonResponse
+    {
+        $this->authorizeManage($request);
+
+        $data = $request->validate([
+            'applicantType' => ['required', 'string', 'max:32'],
+            'order' => ['required', 'array'],
+            'order.*' => ['string', 'max:64'],
+        ]);
+
+        abort_unless(ApplicantType::isValid($data['applicantType']), 422, 'That is not an applicant type.');
+
+        foreach (array_values($data['order']) as $position => $uuid) {
+            CipDocumentRequirement::withTrashed()
+                ->where('applicant_type', $data['applicantType'])
+                ->where('uuid', $uuid)
+                ->update(['sort_order' => $position]);
+        }
+
+        return $this->index($request);
+    }
+
     /* ── internals ─────────────────────────────────── */
 
     private function authorizeManage(Request $request): void
@@ -349,6 +369,7 @@ class CipRequirementController extends Controller
             'carryForward' => (bool) $requirement->carry_forward,
             'realEstateOnly' => (bool) $requirement->real_estate_only,
             'femaleOnly' => (bool) $requirement->female_only,
+            'sortOrder' => (int) $requirement->sort_order,
             'retired' => $requirement->trashed() || ! $requirement->active,
         ];
     }

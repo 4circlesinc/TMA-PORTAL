@@ -1493,13 +1493,11 @@
   /* ── CIP document requirements (section 11) ───────────────────────────────
    *
    * The checklists every applicant is measured against, one list per
-   * applicant type, editable by administrators. Each list reads A-Z by the
-   * document's name — there is no hand-set order to keep, so a document is
-   * looked for by its wording rather than remembered by its seat. The server
-   * already enforces the rules that matter, a retired requirement is a soft
-   * delete because filed documents key on it, re-adding one restores it, and
-   * renaming changes the label never the key, so this screen is honest chrome
-   * over /portal/cip/requirements.
+   * applicant type, editable by administrators. The server already enforces
+   * the rules that matter, a retired requirement is a soft delete because
+   * filed documents key on it, re-adding one restores it, and renaming
+   * changes the label never the key, so this screen is honest chrome over
+   * /portal/cip/requirements.
    */
   var CIPDOCS = { loaded: false, loading: false, error: '', types: null };
 
@@ -1511,6 +1509,81 @@
    */
   function cipDocsRepaint() {
     (CIPDOCS.repaint || render)();
+  }
+
+  /*
+   * How the lists are read: the firm's own arrangement, or A-Z.
+   *
+   * A view preference, and only that. The saved order still belongs to the
+   * drag and the carets, so turning A-Z off hands the arrangement back
+   * exactly as it was rather than having quietly overwritten it. Kept on the
+   * account (settings.js writes it through to /me/preferences) so the choice
+   * survives a reload and follows the reader to another browser, and read
+   * from localStorage so the first paint already has it.
+   */
+  var CIPDOC_SORT_KEY = 'tma.cip.documentSort';
+
+  function cipDocSort() {
+    try {
+      return localStorage.getItem(CIPDOC_SORT_KEY) === 'alpha' ? 'alpha' : 'manual';
+    } catch (e) {
+      return 'manual';
+    }
+  }
+
+  function setCipDocSort(mode) {
+    var prev = cipDocSort();
+    if (mode === prev) return;
+    try { localStorage.setItem(CIPDOC_SORT_KEY, mode); } catch (e) {}
+    if (window.TMAPrefs && window.TMAPrefs.push) {
+      try { window.TMAPrefs.push(CIPDOC_SORT_KEY, mode, prev); } catch (e) {}
+    }
+    // A discrete click: flush rather than wait out the debounce, so a reload
+    // moments later cannot hydrate the stale value back over it.
+    if (window.TMAPrefs && window.TMAPrefs.flush) {
+      try { window.TMAPrefs.flush(); } catch (e) {}
+    }
+    cipDocsRepaint();
+  }
+
+  /*
+   * The rows of one applicant type in reading order.
+   *
+   * Retired rows keep the tail in both modes — they are history, not
+   * something to be looked up — and sorting is applied within each group so
+   * A-Z never lifts a retired row back among the live ones.
+   */
+  function cipDocOrdered(requirements) {
+    var live = requirements.filter(function (r) { return !r.retired; });
+    var retired = requirements.filter(function (r) { return r.retired; });
+
+    if (cipDocSort() === 'alpha') {
+      var byLabel = function (a, b) {
+        return String(a.label || '').localeCompare(String(b.label || ''), undefined, { sensitivity: 'base' });
+      };
+      // Sorting copies, never the state: the server's order is still the
+      // saved order, and the carets go on writing to it.
+      live = live.slice().sort(byLabel);
+      retired = retired.slice().sort(byLabel);
+    }
+
+    return live.concat(retired);
+  }
+
+  function cipDocSortToggle() {
+    var mode = cipDocSort();
+    var opt = function (value, label, title) {
+      return '<button type="button" class="tma-portal-type-pill' + (mode === value ? ' is-active' : '') +
+        '" data-cipdoc-sort="' + value + '" title="' + ui().esc(title) + '"' +
+        ' aria-pressed="' + (mode === value ? 'true' : 'false') + '">' +
+        '<span class="tma-portal-type-pill__label">' + ui().esc(label) + '</span></button>';
+    };
+
+    return '<div class="tma-portal-cipdocs-sort">' +
+      '<span class="tma-portal-cipdocs-sort__label">Order</span>' +
+      opt('manual', 'Custom', 'The order you have arranged, by dragging or the arrows') +
+      opt('alpha', 'A–Z', 'Read alphabetically, without changing the saved order') +
+      '</div>';
   }
 
   function loadCipDocs() {
@@ -1675,7 +1748,7 @@
   }
 
   function cipDocRow(r, canEdit) {
-    // A retired row sits below the live ones and drops to the muted ink —
+    // A retired row keeps its place in the list but drops to the muted ink —
     // the same grey the table already uses, so the eye reads it as history.
     var name = r.retired
       ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
@@ -1730,7 +1803,20 @@
       ? '<span class="tma-portal-table__muted">Filed in “' + ui().esc(r.folder) + '”</span>'
       : '';
 
-    return '<tr>' +
+    /*
+     * Live rows drag to reorder; retired rows keep their seat at the bottom.
+     *
+     * Only while the screen IS the saved order. Read A-Z, the rows are not
+     * where the firm put them, so dragging one would write positions taken
+     * from a list nobody is looking at — the grip, the carets and the drag
+     * all stand down until Custom is back.
+     */
+    var arranging = canEdit && cipDocSort() === 'manual';
+    var drag = (arranging && !r.retired)
+      ? ' data-cipdoc-row="' + ui().esc(r.id) + '"'
+      : '';
+
+    return '<tr' + drag + '>' +
       '<td class="tma-portal-table__check">' + tick + '</td>' +
       '<td class="tma-portal-table__check">' + pre + '</td>' +
       '<td class="tma-portal-table__check">' + post + '</td>' +
@@ -1746,7 +1832,12 @@
         ? '<div class="tma-portal-row-actions">' +
           (r.retired
             ? '<button type="button" class="tma-portal-icon-btn" data-cipdoc-restore="' + ui().esc(r.id) + '" title="Bring it back" aria-label="Bring it back"><img src="images/icons/phosphor/ArrowCounterClockwise.svg" alt=""></button>'
-            : '<button type="button" class="tma-portal-icon-btn" data-cipdoc-folder="' + ui().esc(r.id) + '" title="Choose a folder" aria-label="Choose a folder"><img src="images/icons/phosphor/FolderSimple.svg" alt=""></button>' +
+            : (arranging
+              ? '<span class="tma-portal-icon-btn tma-portal-icon-btn--grip" title="Drag to reorder" aria-hidden="true"><img src="images/icons/phosphor/DotsSixVertical.svg" alt=""></span>' +
+                '<button type="button" class="tma-portal-icon-btn" data-cipdoc-up="' + ui().esc(r.id) + '" title="Move up" aria-label="Move up"><img src="images/icons/phosphor/CaretUp.svg" alt=""></button>' +
+                '<button type="button" class="tma-portal-icon-btn" data-cipdoc-down="' + ui().esc(r.id) + '" title="Move down" aria-label="Move down"><img src="images/icons/phosphor/CaretDown.svg" alt=""></button>'
+              : '') +
+              '<button type="button" class="tma-portal-icon-btn" data-cipdoc-folder="' + ui().esc(r.id) + '" title="Choose a folder" aria-label="Choose a folder"><img src="images/icons/phosphor/FolderSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-edit="' + ui().esc(r.id) + '" title="Edit name and description" aria-label="Edit name and description"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
               '<button type="button" class="tma-portal-icon-btn" data-cipdoc-retire="' + ui().esc(r.id) + '" title="Retire" aria-label="Retire"><img src="images/icons/phosphor/Trash.svg" alt=""></button>') +
           '</div>'
@@ -1761,18 +1852,16 @@
       var canEdit = true;
 
       return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval. The pencil edits the name and the description shown under it on the application.</p>' +
+        cipDocSortToggle() +
         cipDocKey() +
         CIPDOCS.types.map(function (t) {
-          var live = t.requirements.filter(function (r) { return !r.retired; });
-          var retired = t.requirements.filter(function (r) { return r.retired; });
-
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
             (t.requirements.length
               ? ui().table(
                 CIPDOC_COLUMNS.map(function (col) {
                   return { label: col.label, attrs: ' class="tma-portal-table__check" title="' + ui().esc(col.title) + '"' };
                 }).concat(['Document', '']),
-                live.concat(retired).map(function (r) { return cipDocRow(r, canEdit); }).join(''),
+                cipDocOrdered(t.requirements).map(function (r) { return cipDocRow(r, canEdit); }).join(''),
                 { cls: 'tma-portal-table--cipdocs' },
               )
               : '<p class="tma-portal-note">Nothing required of this person yet.</p>') +
@@ -1786,6 +1875,15 @@
       // The Templates mount marks its host; wiring from anywhere else hands
       // the repaint back to the settings pane.
       CIPDOCS.repaint = el.__cipDocsRepaint || null;
+
+      // The order pills paint before the rows arrive, so they are wired
+      // ahead of the early return — the choice is answerable while loading.
+      el.querySelectorAll('[data-cipdoc-sort]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          setCipDocSort(b.getAttribute('data-cipdoc-sort'));
+        });
+      });
+
       if (!CIPDOCS.loaded) { loadCipDocs(); return; }
 
       function req(id) {
@@ -1929,6 +2027,221 @@
         });
       });
 
+      function persistOrder(type, order) {
+        filelibJson('POST', '/portal/cip/requirements/reorder', { applicantType: type.value, order: order })
+          .then(function (d) { CIPDOCS.types = d.types || CIPDOCS.types; cipDocsRepaint(); })
+          // A failed save re-renders from the unchanged state, so a row
+          // dropped somewhere the server never recorded snaps back.
+          .catch(function (e) { failed(e); cipDocsRepaint(); });
+      }
+
+      function move(id, delta) {
+        var f = req(id);
+        if (!f) return;
+        var live = f.type.requirements.filter(function (r) { return !r.retired; });
+        var at = live.indexOf(f.r);
+        var to = at + delta;
+        if (at === -1 || to < 0 || to >= live.length) return;
+        live.splice(at, 1);
+        live.splice(to, 0, f.r);
+        persistOrder(f.type, live.concat(f.type.requirements.filter(function (r) { return r.retired; }))
+          .map(function (r) { return r.id; }));
+      }
+
+      el.querySelectorAll('[data-cipdoc-up]').forEach(function (b) {
+        b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-up'), -1); });
+      });
+      el.querySelectorAll('[data-cipdoc-down]').forEach(function (b) {
+        b.addEventListener('click', function () { move(b.getAttribute('data-cipdoc-down'), 1); });
+      });
+
+      /*
+       * Drag to reorder — pointer-driven, not HTML5 drag-and-drop.
+       *
+       * The native drag ghost is an OS-composited snapshot that trails the
+       * cursor, and re-inserting the row on every dragover made the list
+       * jump a whole slot at a time. Here the row itself rides the pointer
+       * on a transform, the rows it passes glide aside on eased transforms
+       * of their own, and the DOM is reordered exactly once, on release —
+       * the order saved is the same persistOrder the carets use.
+       *
+       * One binding per type's table so a row can never be dropped into
+       * another person's checklist. Retired rows carry no data-cipdoc-row,
+       * so they neither drag nor make way, and the tail stays theirs.
+       * A mouse picks a row up anywhere that is not a control; touch and
+       * pen must use the grip, so a finger can still scroll the page.
+       */
+      el.querySelectorAll('.tma-portal-table--cipdocs tbody').forEach(function (body) {
+        body.addEventListener('pointerdown', function (down) {
+          if (down.button !== 0) return;
+          var row = down.target && down.target.closest ? down.target.closest('[data-cipdoc-row]') : null;
+          if (!row || row.parentNode !== body || body.classList.contains('is-row-drag')) return;
+          if (down.target.closest('button, input, a, select, textarea')) return;
+          if (down.pointerType !== 'mouse' && !down.target.closest('.tma-portal-icon-btn--grip')) return;
+
+          var scroller = body.closest('.tma-portal-admin__content')
+            || body.closest('.tma-dash__main')
+            || document.scrollingElement;
+          var startScroll = scroller.scrollTop;
+          var pointerY = down.clientY;
+          var active = false;
+          var raf = 0;
+          var others = [];
+          var dragH = 0;
+          var startCenter = 0;
+          var minDy = 0;
+          var maxDy = 0;
+
+          /*
+           * Geometry is taken once, at pick-up, in scroller space so a
+           * mid-drag edge-scroll does not move the goalposts. Every later
+           * frame is transforms only — no reads, no layout.
+           */
+          function engage() {
+            active = true;
+            var scrollTop = scroller.scrollTop;
+            body.querySelectorAll('[data-cipdoc-row]').forEach(function (r) {
+              var box = r.getBoundingClientRect();
+              var center = box.top + box.height / 2 + scrollTop;
+              if (r === row) { dragH = box.height; startCenter = center; return; }
+              others.push({ el: r, center: center, height: box.height, above: false, shift: 0 });
+            });
+            others.forEach(function (o) { o.above = o.center < startCenter; });
+            minDy = 0;
+            maxDy = 0;
+            others.forEach(function (o) {
+              minDy = Math.min(minDy, o.center - startCenter);
+              maxDy = Math.max(maxDy, o.center - startCenter);
+            });
+            // Half a row of slack, so the last centre line can be crossed.
+            minDy -= dragH / 2;
+            maxDy += dragH / 2;
+            body.classList.add('is-row-drag');
+            row.classList.add('is-dragging');
+            document.body.classList.add('tma-cipdoc-dragging');
+            try { row.setPointerCapture(down.pointerId); } catch (err) {}
+            raf = requestAnimationFrame(loop);
+          }
+
+          function loop() {
+            if (!active) return;
+
+            // Ride the pane's edges and a long list keeps coming.
+            var edge = scroller.getBoundingClientRect();
+            if (pointerY < edge.top + 56) {
+              scroller.scrollTop -= Math.min(18, (edge.top + 56 - pointerY) / 3);
+            } else if (pointerY > edge.bottom - 56) {
+              scroller.scrollTop += Math.min(18, (pointerY - (edge.bottom - 56)) / 3);
+            }
+
+            var dy = (pointerY - down.clientY) + (scroller.scrollTop - startScroll);
+            dy = Math.max(minDy, Math.min(maxDy, dy));
+            var center = startCenter + dy;
+
+            /*
+             * A neighbour makes way the moment the dragged row's centre
+             * crosses its resting centre — resting, not shifted, so the
+             * comparison never chases its own effect and the row cannot
+             * flap between two slots under a still pointer.
+             */
+            others.forEach(function (o) {
+              var shift = o.above
+                ? (center < o.center ? dragH : 0)
+                : (center > o.center ? -dragH : 0);
+              if (shift !== o.shift) {
+                o.shift = shift;
+                o.el.style.transform = shift ? 'translate3d(0,' + shift + 'px,0)' : '';
+              }
+            });
+            row.style.transform = 'translate3d(0,' + dy + 'px,0)';
+
+            raf = requestAnimationFrame(loop);
+          }
+
+          function onMove(e) {
+            pointerY = e.clientY;
+            if (!active && Math.abs(pointerY - down.clientY) >= 4) engage();
+            if (active) e.preventDefault();
+          }
+
+          function onUp() { settle(true); }
+
+          function onCancel() { settle(false); }
+
+          function onKey(e) { if (e.key === 'Escape') settle(false); }
+
+          function squelchClick(e) { e.stopPropagation(); e.preventDefault(); }
+
+          function settle(commit) {
+            document.removeEventListener('pointermove', onMove, true);
+            document.removeEventListener('pointerup', onUp, true);
+            document.removeEventListener('pointercancel', onCancel, true);
+            document.removeEventListener('keydown', onKey, true);
+            if (!active) return;
+            active = false;
+            if (raf) cancelAnimationFrame(raf);
+            document.body.classList.remove('tma-cipdoc-dragging');
+
+            // The row was picked up, so the release is not also a click on
+            // whatever the pointer happens to be over.
+            body.addEventListener('click', squelchClick, true);
+            setTimeout(function () { body.removeEventListener('click', squelchClick, true); }, 0);
+
+            // Land the row in its slot — the offset is the height of what it
+            // passed — with the same ease its neighbours used, then touch the
+            // DOM exactly once.
+            var dyFinal = 0;
+            others.forEach(function (o) { if (o.shift) dyFinal += o.above ? -o.height : o.height; });
+            if (!commit) dyFinal = 0;
+
+            var done = false;
+            function finish() {
+              if (done) return;
+              done = true;
+              row.style.transition = '';
+              row.style.transform = '';
+              others.forEach(function (o) { o.el.style.transform = ''; });
+              body.classList.remove('is-row-drag');
+              row.classList.remove('is-dragging');
+              if (!commit) return;
+
+              // The first row still after the dragged one, in the settled
+              // order; none left means the slot just above the retired tail.
+              var nextEl = null;
+              var moved = false;
+              for (var i = 0; i < others.length; i++) {
+                var o = others[i];
+                if (o.shift) moved = true;
+                var stillBefore = (o.above && !o.shift) || (!o.above && o.shift);
+                if (!stillBefore && !nextEl) nextEl = o.el;
+              }
+              if (!moved) return;
+              body.insertBefore(row, nextEl || (others.length ? others[others.length - 1].el.nextSibling : null));
+
+              var f = req(row.getAttribute('data-cipdoc-row'));
+              if (!f) return;
+              var live = Array.prototype.map.call(
+                body.querySelectorAll('[data-cipdoc-row]'),
+                function (r) { return r.getAttribute('data-cipdoc-row'); },
+              );
+              persistOrder(f.type, live.concat(
+                f.type.requirements.filter(function (r) { return r.retired; })
+                  .map(function (r) { return r.id; }),
+              ));
+            }
+
+            row.style.transition = 'transform 140ms cubic-bezier(0.2, 0, 0, 1)';
+            row.style.transform = 'translate3d(0,' + dyFinal + 'px,0)';
+            row.addEventListener('transitionend', finish, { once: true });
+            setTimeout(finish, 180);
+          }
+
+          document.addEventListener('pointermove', onMove, true);
+          document.addEventListener('pointerup', onUp, true);
+          document.addEventListener('pointercancel', onCancel, true);
+          document.addEventListener('keydown', onKey, true);
+        });
+      });
     },
   };
 

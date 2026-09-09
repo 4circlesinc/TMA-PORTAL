@@ -1679,12 +1679,8 @@ class CipApplicationController extends Controller
 
                     return in_array((int) $slot->requirement_id, $allowedRequirements, true);
                 })
-                // A-Z by the wording on the slot, so a document is found
-                // where its name says it will be. A slot carries its own
-                // label, so one opened without a requirement behind it sorts
-                // with the rest rather than falling to the end.
                 ->sortBy(fn ($slot) => [
-                    mb_strtolower((string) ($slot->label ?? '')),
+                    $slot->requirement?->sort_order ?? 10000,
                     $slot->id,
                 ])
                 ->values()

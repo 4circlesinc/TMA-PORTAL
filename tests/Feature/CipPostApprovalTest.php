@@ -156,10 +156,8 @@ class CipPostApprovalTest extends TestCase
         $pre = Requirements::forPhase(ApplicantType::PRINCIPAL_APPLICANT, Phase::PRE_APPROVAL)->pluck('key')->all();
         $post = Requirements::forPhase(ApplicantType::PRINCIPAL_APPLICANT, Phase::POST_APPROVAL)->pluck('key')->all();
 
-        // Each phase reads A-Z by label: 'Carried doc' before 'Pre only',
-        // and before 'Post only'.
-        $this->assertSame(['carried', 'pre_only'], $pre);
-        $this->assertSame(['carried', 'post_only'], $post);
+        $this->assertSame(['pre_only', 'carried'], $pre);
+        $this->assertSame(['post_only', 'carried'], $post);
     }
 
     public function test_enter_post_approval_keeps_carried_forward_file_reference(): void

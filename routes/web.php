@@ -571,6 +571,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::get('/requirements', [CipRequirementController::class, 'index'])->name('requirements.index');
         Route::post('/requirements', [CipRequirementController::class, 'store'])->name('requirements.store');
+        Route::post('/requirements/reorder', [CipRequirementController::class, 'reorder'])
+            ->name('requirements.reorder');
         Route::patch('/requirements/{uuid}', [CipRequirementController::class, 'update'])
             ->name('requirements.update');
         Route::delete('/requirements/{uuid}', [CipRequirementController::class, 'destroy'])

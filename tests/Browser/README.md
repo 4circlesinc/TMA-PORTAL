@@ -322,6 +322,37 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline.mjs
   ```
+- **`cip-document-sort.mjs`** — the Order control on Templates → Document
+  requirements. The checklists are kept in the firm's own arrangement, and
+  this reads the same rows A-Z without disturbing it.
+
+  `PersonalPreferencesTest` pins the preference round-tripping; what only a
+  browser can show is that the toggle is a *view*. After switching to A-Z the
+  script asks `/portal/cip/requirements` what the saved order still is — a
+  toggle that had quietly renumbered `sort_order` would look perfectly right
+  on screen and have destroyed the arrangement, and nobody would notice until
+  it was already gone. It then switches back and checks the arrangement
+  returns exactly as it was, and that the ticks are untouched throughout.
+
+  It also checks the grip and carets stand down under A-Z: they write
+  positions taken from the rows as displayed, so leaving them live under a
+  sorted view invites overwriting the arrangement by dragging.
+
+  The seed's manual order is deliberately **not** alphabetical (Zebra, Apple,
+  Mango) — seeded in an order that happens to be alphabetical, the test agrees
+  with a broken toggle.
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true php artisan tinker --execute="
+    foreach ([['zebra_form','Zebra form',1],['apple_letter','Apple letter',2],['mango_deed','Mango deed',3]] as [\$k,\$l,\$o]) {
+      \$r = new App\Models\CipDocumentRequirement;
+      \$r->forceFill(['uuid'=>(string) Str::uuid(),'applicant_type'=>'principal_applicant','key'=>\$k,
+        'label'=>\$l,'required'=>true,'active'=>true,'sort_order'=>\$o,
+        'at_pre_approval'=>true,'at_post_approval'=>false])->save();
+    }
+  "
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-document-sort.mjs
+  ```
 - **`missing-art.mjs`** — a sweep, not a test. Walks 29 screens with the
   network watched and reports three things that all read as "an icon is
   missing" and none of which a grep can find: an `<img>` whose file 404s, a

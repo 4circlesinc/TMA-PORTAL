@@ -64,6 +64,15 @@ class PreferencesController extends Controller
         'fileSyncNoticeDismissed' => false,
         // Dashboard workflow strip under the KPI row. On until they hide it.
         'dashboardWorkflowStrip' => true,
+        /*
+         * How the CIP document requirements are listed.
+         *
+         * 'manual' is the firm's own arrangement, the one the drag and the
+         * carets write to sort_order; 'alpha' reads the same rows A-Z. A
+         * view preference only: sorting never rewrites the saved order, so
+         * turning it off gives the arrangement back untouched.
+         */
+        'cipDocumentSort' => 'manual',
     ];
 
     private const RULES = [
@@ -89,6 +98,7 @@ class PreferencesController extends Controller
         'calendarSidebarOpen' => ['boolean'],
         'fileSyncNoticeDismissed' => ['boolean'],
         'dashboardWorkflowStrip' => ['boolean'],
+        'cipDocumentSort' => ['string', 'in:manual,alpha'],
         // Nested toast prefs, validated + cleaned by ToastSettings.
         'toasts' => ['array'],
         'toasts.enabled' => ['boolean'],

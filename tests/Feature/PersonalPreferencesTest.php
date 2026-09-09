@@ -55,6 +55,30 @@ class PersonalPreferencesTest extends TestCase
             ->assertJsonPath('dashboardWorkflowStrip', false);
     }
 
+    public function test_cip_document_sort_round_trips_and_defaults_to_the_firms_order(): void
+    {
+        $user = $this->user();
+
+        // The arrangement the firm made is what a fresh account reads.
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('cipDocumentSort', 'manual');
+
+        $this->actingAs($user)->putJson('/me/preferences', [
+            'cipDocumentSort' => 'alpha',
+        ])->assertOk()
+            ->assertJsonPath('cipDocumentSort', 'alpha');
+
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('cipDocumentSort', 'alpha');
+
+        // Only the two readings exist.
+        $this->actingAs($user)->putJson('/me/preferences', [
+            'cipDocumentSort' => 'sideways',
+        ])->assertStatus(422);
+    }
+
     public function test_theme_preferences_round_trip(): void
     {
         $user = $this->user();

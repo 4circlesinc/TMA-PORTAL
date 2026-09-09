@@ -405,6 +405,7 @@
     'tma.privacy.historyDays': 'historyDays',
     'tma.plugins.list': 'plugins',
     'tma.files.syncNoticeDismissed': 'fileSyncNoticeDismissed',
+    'tma.cip.documentSort': 'cipDocumentSort',
   };
 
   /* localStorage only holds strings, but the API is typed. Keys listed here

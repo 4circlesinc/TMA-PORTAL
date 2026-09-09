@@ -67,16 +67,13 @@ class CipDocumentRequirement extends Model
      *
      * The ordering belongs to the scope rather than to each caller: a list
      * that came back in whatever order the database felt like would reshuffle
-     * itself between two reads of the same page. It reads A-Z by the wording
-     * on the page, so a document is found where its name says it will be.
-     * Folded to lower case first: this Postgres collates capitals ahead of
-     * every lower-case letter, which would file a stray lower-case name
-     * after Z. Two documents can share a name across types; id settles them.
+     * itself between two reads of the same page. `sort_order` is hand-set, so
+     * ties are ordinary and id settles them.
      */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('active', true)
-            ->orderByRaw('lower(label)')
+            ->orderBy('sort_order')
             ->orderBy('id');
     }
 

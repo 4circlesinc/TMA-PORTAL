@@ -139,9 +139,8 @@ class CipRequirementsTest extends TestCase
         $this->template('principal_applicant', 'passport_bio_page', 'Passport bio page', ['sort_order' => 1]);
         $this->template('principal_applicant', 'birth_certificate', 'Birth certificate', ['sort_order' => 2]);
 
-        // The checklist reads A-Z, whatever order the templates were made in.
         $first = Requirements::materialise($person);
-        $this->assertSame(['Birth certificate', 'Passport bio page'], $first->pluck('label')->all());
+        $this->assertSame(['Passport bio page', 'Birth certificate'], $first->pluck('label')->all());
 
         $before = $this->stamps();
         $this->travel(5)->minutes();
