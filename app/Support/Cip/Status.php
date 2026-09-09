@@ -54,6 +54,22 @@ class Status
 
     public const CLOSED = 'closed';
 
+    /*
+     * The post-approval lane's own outcomes.
+     *
+     * Separate constants rather than reusing GRANTED / DENIED, because the
+     * two lanes are two processes. The pre-approval pair records the Unit's
+     * decision on the application and is only reachable from Background
+     * check or Delayed; these record the outcome of the post-approval work
+     * and are reachable from where that work actually ends. They carry their
+     * own letters (see {@see Letters::defaults()}), so a file approved after
+     * COR, NIC and the passport office is not written to as though it had
+     * just been granted.
+     */
+    public const POST_APPROVED = 'post_approved';
+
+    public const POST_DENIED = 'post_denied';
+
     public const DENIED = 'denied';
 
     /*
@@ -95,6 +111,8 @@ class Status
         self::PENDING_PASSPORT,
         self::READY_FOR_DELIVERY,
         self::CLOSED,
+        self::POST_APPROVED,
+        self::POST_DENIED,
         self::DENIED,
         self::NEW_APPEAL,
         self::APPEAL_READY,
@@ -126,6 +144,8 @@ class Status
         self::APPLY_FOR_PASSPORT,
         self::PENDING_PASSPORT,
         self::READY_FOR_DELIVERY,
+        self::POST_APPROVED,
+        self::POST_DENIED,
         self::CLOSED,
     ];
 
@@ -181,6 +201,8 @@ class Status
         self::APPLY_FOR_PASSPORT => 'Apply for Passport',
         self::PENDING_PASSPORT => 'Pending Passport',
         self::READY_FOR_DELIVERY => 'Ready for Delivery',
+        self::POST_APPROVED => 'Approved',
+        self::POST_DENIED => 'Denied',
         self::CLOSED => 'Closed',
         self::DENIED => 'Denied',
         self::NEW_APPEAL => 'New Appeal',
@@ -214,6 +236,8 @@ class Status
         self::APPLY_FOR_PASSPORT => 'APPLY FOR PASSPORT',
         self::PENDING_PASSPORT => 'PENDING PASSPORT',
         self::READY_FOR_DELIVERY => 'READY FOR DELIVERY',
+        self::POST_APPROVED => 'APPROVED',
+        self::POST_DENIED => 'DENIED',
         self::CLOSED => 'FILE CLOSED',
         self::DENIED => 'DENIED',
         self::NEW_APPEAL => 'NEW APPEAL',
@@ -251,6 +275,11 @@ class Status
         self::APPLY_FOR_PASSPORT => 'gold',
         self::PENDING_PASSPORT => 'plum',
         self::READY_FOR_DELIVERY => 'mint',
+        // The lane's own colours: read as approved and denied, but not the
+        // same dots the pre-approval pair wears — see CipBucketTest, which
+        // holds every listed status to its own colour.
+        self::POST_APPROVED => 'laurel',
+        self::POST_DENIED => 'garnet',
         self::CLOSED => 'stone',
         self::DENIED => 'danger',
         // The lane reads as one family, warm and distinct from the queues it
@@ -268,6 +297,34 @@ class Status
     public static function isTerminal(string $status): bool
     {
         return in_array($status, self::TERMINAL, true);
+    }
+
+    /**
+     * The outcome pair belonging to one lane.
+     *
+     * Two pairs, because the lanes are two processes. Asking for the pair by
+     * lane is what lets one decision verb serve both without either
+     * borrowing the other's rules.
+     *
+     * @return array{0:string,1:string} approved, then denied
+     */
+    public static function outcomesFor(string $phase): array
+    {
+        return $phase === Phase::POST_APPROVAL
+            ? [self::POST_APPROVED, self::POST_DENIED]
+            : [self::GRANTED, self::DENIED];
+    }
+
+    /** Is this an outcome of either lane? */
+    public static function isOutcome(string $status): bool
+    {
+        return in_array($status, [self::GRANTED, self::DENIED, self::POST_APPROVED, self::POST_DENIED], true);
+    }
+
+    /** Has this file already been decided in the lane it is standing in? */
+    public static function isOutcomeOf(string $status, string $phase): bool
+    {
+        return in_array($status, self::outcomesFor($phase), true);
     }
 
     public static function isDecided(string $status): bool
@@ -292,19 +349,21 @@ class Status
     {
         /*
          * Shared by both lanes, so the picker shows them wherever the file
-         * stands rather than filing them under the other lifecycle:
+         * stands rather than filing them under the other lifecycle: Updates
+         * Required means the same thing on either side — the provider side
+         * has work to do — and the appeal steps run after a decision from
+         * either.
          *
-         *  - Updates Required means the same thing on either side: the
-         *    provider side has work to do.
-         *  - The appeal steps run after a decision, from either lane.
-         *  - Approved and Denied are outcomes, not steps. A post-approval
-         *    file reaches them through its own route (an appeal, or the end
-         *    of the lane), and burying them under "Pre-approval override"
-         *    would tell a reader they belong to the other process.
+         * The outcomes are NOT shared. Each lane has its own pair, because
+         * each is a different act with different rules: GRANTED / DENIED are
+         * the Unit's decision on the application, reachable only from
+         * Background check or Delayed; POST_APPROVED / POST_DENIED are the
+         * outcome of the post-approval work, reachable from where that work
+         * ends. Treating one pair as belonging to both lanes is what put a
+         * post-approval file in front of the pre-approval rule.
          */
         if (in_array($status, self::APPEAL_LANE, true)
-            || $status === self::UPDATE_REQUIRED
-            || self::isTerminal($status)) {
+            || $status === self::UPDATE_REQUIRED) {
             return null;
         }
 

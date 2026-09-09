@@ -145,6 +145,13 @@ class Letters
          */
         $phase = self::phaseFor($application);
 
+        /*
+         * The rows are keyed by the outcome, not by the lane's status name.
+         * The phase already says which lane, so a second name for the same
+         * two answers would mean four keys where two do.
+         */
+        $decision = self::outcomeKey($decision);
+
         $copy = self::defaults()[$type][$phase][$decision]
             ?? self::defaults()[InvestmentType::OTHER][$phase][$decision];
 
@@ -159,6 +166,20 @@ class Letters
                 'body' => $copy['body'],
             ],
         );
+    }
+
+    /**
+     * The stored key for an outcome, whichever lane's name it arrived under.
+     *
+     * The post-approval lane has its own statuses so it can have its own
+     * transitions and its own refusals; the letter rows only care whether
+     * the answer was yes or no.
+     */
+    public static function outcomeKey(string $decision): string
+    {
+        return in_array($decision, [Status::POST_APPROVED, Status::GRANTED], true)
+            ? Status::GRANTED
+            : Status::DENIED;
     }
 
     /** Which lane's letters this application's decision should use. */

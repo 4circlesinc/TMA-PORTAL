@@ -258,7 +258,12 @@ class CipTransitionController extends Controller
         $firstDecision = ! Status::isTerminal($application->status);
 
         $data = $request->validate([
-            'decision' => ['required', 'string', Rule::in([Status::GRANTED, Status::DENIED])],
+            // Either lane's names. Decision::record maps whichever arrives
+            // onto the pair belonging to the file's own lane, so the dialog
+            // can keep posting one vocabulary.
+            'decision' => ['required', 'string', Rule::in([
+                Status::GRANTED, Status::DENIED, Status::POST_APPROVED, Status::POST_DENIED,
+            ])],
             // Recorded, not assumed: a decision letter is dated, and staff
             // enter it after the fact as often as on the day.
             'decidedAt' => ['required', 'date'],

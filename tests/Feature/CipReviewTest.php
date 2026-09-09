@@ -196,16 +196,20 @@ class CipReviewTest extends TestCase
         $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::APPLY_FOR_COR));
         $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::CLOSED));
 
-        /*
-         * Shared by both, so the picker lists them wherever the file stands.
-         * Approved and Denied are outcomes rather than steps — a
-         * post-approval file reaches them by its own route, and filing them
-         * under the other lane would say they belong to that process.
-         */
+        // Shared by both, so the picker lists them wherever the file stands.
         $this->assertNull(Status::laneOf(Status::UPDATE_REQUIRED));
         $this->assertNull(Status::laneOf(Status::NEW_APPEAL));
-        $this->assertNull(Status::laneOf(Status::GRANTED));
-        $this->assertNull(Status::laneOf(Status::DENIED));
+
+        /*
+         * The outcomes are NOT shared: each lane has its own pair, because
+         * each is a different act with different rules. Granted / Denied are
+         * the Unit's decision on the application; Approved / Denied in the
+         * lane are the outcome of the post-approval work.
+         */
+        $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::GRANTED));
+        $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::DENIED));
+        $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::POST_APPROVED));
+        $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::POST_DENIED));
     }
 
     public function test_a_file_at_the_lane_entry_may_still_be_pulled_back_into_pre_approval(): void

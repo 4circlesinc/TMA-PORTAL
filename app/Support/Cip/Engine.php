@@ -64,9 +64,17 @@ class Engine
         Status::APPLY_FOR_NIC => [Status::PENDING_NIC, Status::UPDATE_REQUIRED],
         Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
         Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
-        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
+        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY, Status::POST_DENIED],
+        /*
+         * The post-approval lane's own decision, recorded where the work
+         * ends rather than borrowed from the pre-approval lifecycle. Ready
+         * for Delivery is the natural point — the passport is in hand — and
+         * Pending Passport is the other, for a file the office refuses.
+         */
+        Status::POST_APPROVED => [Status::CLOSED],
+        Status::POST_DENIED => [Status::CLOSED, Status::NEW_APPEAL],
         Status::DENIED => [Status::NEW_APPEAL],
-        Status::READY_FOR_DELIVERY => [Status::CLOSED],
+        Status::READY_FOR_DELIVERY => [Status::POST_APPROVED, Status::POST_DENIED, Status::CLOSED],
 
         /*
          * The appeal lane. It opens from either decision — a denial is the
@@ -109,6 +117,8 @@ class Engine
         Status::BACKGROUND_CHECK => 'cip.compliance',
         Status::DELAYED => 'cip.compliance',
         Status::GRANTED => 'cip.decide',
+        Status::POST_APPROVED => 'cip.decide',
+        Status::POST_DENIED => 'cip.decide',
         Status::POST_APPROVAL => 'cip.review',
         Status::DENIED => 'cip.decide',
         // Lodging and preparing an appeal is compliance work, the same hands

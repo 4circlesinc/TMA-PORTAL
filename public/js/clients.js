@@ -2830,10 +2830,11 @@
   /*
    * `lane` says which lifecycle owns the status, so the picker can group by
    * it. Null where both lanes share one: Updates Required means the same
-   * thing on either side, the appeal statuses run after a decision from
-   * either, and Approved / Denied are outcomes rather than steps. Mirrors
-   * Status::laneOf, which is what the table actually sends — this list is
-   * the fallback until it arrives.
+   * thing on either side, and the appeal statuses run after a decision from
+   * either. The outcomes are NOT shared — each lane has its own pair, which
+   * is why post_approved / post_denied exist. Mirrors Status::laneOf, which
+   * is what the table actually sends; this list is the fallback until it
+   * arrives.
    */
   var CIP_STATUSES = [
     { value: 'new', label: 'New Applications', tone: 'sky', lane: 'pre_approval' },
@@ -2845,7 +2846,7 @@
     { value: 'non_compliant', label: 'Non-compliant', tone: 'rose', lane: 'pre_approval' },
     { value: 'background_check', label: 'Background Check', tone: 'cyan', lane: 'pre_approval' },
     { value: 'delayed', label: 'Delayed', tone: 'copper', lane: 'pre_approval' },
-    { value: 'granted', label: 'Approved', tone: 'success', lane: null },
+    { value: 'granted', label: 'Approved', tone: 'success', lane: 'pre_approval' },
     { value: 'post_approval', label: 'Post-Approval', tone: 'action', lane: 'post_approval' },
     { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald', lane: 'post_approval' },
     { value: 'pending_cor', label: 'Pending COR', tone: 'slate', lane: 'post_approval' },
@@ -2854,8 +2855,12 @@
     { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold', lane: 'post_approval' },
     { value: 'pending_passport', label: 'Pending Passport', tone: 'plum', lane: 'post_approval' },
     { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint', lane: 'post_approval' },
+    /* The post-approval lane decides with its own pair: same two answers,
+       its own rules and its own letters. See Status::outcomesFor. */
+    { value: 'post_approved', label: 'Approved', tone: 'laurel', lane: 'post_approval' },
+    { value: 'post_denied', label: 'Denied', tone: 'garnet', lane: 'post_approval' },
     { value: 'closed', label: 'Closed', tone: 'stone', lane: 'post_approval' },
-    { value: 'denied', label: 'Denied', tone: 'danger', lane: null },
+    { value: 'denied', label: 'Denied', tone: 'danger', lane: 'pre_approval' },
     { value: 'new_appeal', label: 'New Appeal', tone: 'clay', lane: null },
     { value: 'appeal_ready', label: 'Appeal Ready', tone: 'sand', lane: null },
     { value: 'appeal_submitted', label: 'Appeal Submitted', tone: 'moss', lane: null },
@@ -11068,8 +11073,18 @@
       return;
     }
 
-    if (to === 'granted' || to === 'denied') {
-      openDecisionDialog(applicationId, clientUid, to);
+    /*
+     * Either lane's outcome opens the decision dialog. The lane has its own
+     * pair — post_approved / post_denied — because it decides under its own
+     * rules; the dialog asks the same two questions either way, and the
+     * server records the pair belonging to the file's own lane.
+     */
+    if (to === 'granted' || to === 'denied' || to === 'post_approved' || to === 'post_denied') {
+      openDecisionDialog(
+        applicationId,
+        clientUid,
+        (to === 'granted' || to === 'post_approved') ? 'granted' : 'denied'
+      );
 
       return;
     }

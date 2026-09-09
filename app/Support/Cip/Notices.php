@@ -344,7 +344,7 @@ class Notices
     ): Postcard {
         $subject = self::line($facts, $to, $actor, $initials);
 
-        $letter = in_array($to, [Status::GRANTED, Status::DENIED], true)
+        $letter = Status::isOutcome($to)
             ? $application->decisionLetterFile
             : null;
 
@@ -376,7 +376,7 @@ class Notices
             Status::DELAYED => Postcards::cipDelayed(
                 $facts, $url, $application->accepted_at?->toDateString(), self::daysDelayed($application), $recipientName, $subject,
             ),
-            Status::GRANTED, Status::DENIED => Postcards::cipDecision(
+            Status::GRANTED, Status::DENIED, Status::POST_APPROVED, Status::POST_DENIED => Postcards::cipDecision(
                 $facts, $url, $to, $application->decided_at?->toDateString(), $recipientName, $actor, $subject,
                 Letters::copy($application, $to, $recipientName),
                 $letter,
@@ -432,9 +432,9 @@ class Notices
             Status::NON_COMPLIANT => 'cip-non-compliant',
             Status::BACKGROUND_CHECK => 'cip-status-background-check',
             Status::DELAYED => 'cip-delayed',
-            Status::GRANTED => 'cip-granted',
+            Status::GRANTED, Status::POST_APPROVED => 'cip-granted',
             Status::POST_APPROVAL => 'cip-status-post-approval',
-            Status::DENIED => 'cip-denied',
+            Status::DENIED, Status::POST_DENIED => 'cip-denied',
             Status::REVIEW_APPLICATION => 'cip-assigned',
             Status::NEW_APPEAL => 'cip-new-appeal',
             Status::APPEAL_READY => 'cip-appeal-ready',
@@ -452,9 +452,9 @@ class Notices
             Status::NON_COMPLIANT => 'cip.non-compliant',
             Status::BACKGROUND_CHECK => 'cip.background-check',
             Status::DELAYED => 'cip.delayed',
-            Status::GRANTED => 'cip.granted',
+            Status::GRANTED, Status::POST_APPROVED => 'cip.granted',
             Status::POST_APPROVAL => 'cip.post-approval',
-            Status::DENIED => 'cip.denied',
+            Status::DENIED, Status::POST_DENIED => 'cip.denied',
             Status::REVIEW_APPLICATION => 'cip.assigned',
             Status::NEW_APPEAL => 'cip.new-appeal',
             Status::APPEAL_READY => 'cip.appeal-ready',
@@ -476,6 +476,8 @@ class Notices
             Status::BACKGROUND_CHECK => 'The Unit has accepted this file for processing. A background check is underway.',
             Status::DELAYED => self::daysDelayed($application).' days have passed since acceptance with no decision.',
             Status::GRANTED => 'The Unit has granted this application.',
+            Status::POST_APPROVED => 'The post-approval application has been approved.',
+            Status::POST_DENIED => 'The post-approval application has been denied.',
             Status::POST_APPROVAL => 'Stage 1 (Certificate of Registration) documents are now required. Soft copies only.',
             Status::APPLY_FOR_NIC => 'Stage 2 (National Insurance Card) documents are now required. Soft copies only, one PDF per person aged 16 and over.',
             Status::APPLY_FOR_PASSPORT => 'Stage 3 (passport) documents are now required. Hard copy originals only, sent to T.M. Antoine Partners by courier.',

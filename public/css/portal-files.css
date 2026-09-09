@@ -1313,6 +1313,12 @@
   --tma-status-clay: #b91c1c;
   --tma-status-sand: #a16207;
   --tma-status-moss: #4d7c0f;
+
+  /* The post-approval lane's own outcomes. Green and red read as approved
+     and denied at a glance, but darker than the pre-approval pair's
+     success/danger, because they end a different process. */
+  --tma-status-laurel: #15803d;
+  --tma-status-garnet: #9f1239;
 }
 .tma-portal-status--sky    { background: var(--tma-status-sky); }
 .tma-portal-status--indigo { background: var(--tma-status-indigo); }
@@ -1334,6 +1340,8 @@
 .tma-portal-status--clay   { background: var(--tma-status-clay); }
 .tma-portal-status--sand   { background: var(--tma-status-sand); }
 .tma-portal-status--moss   { background: var(--tma-status-moss); }
+.tma-portal-status--laurel { background: var(--tma-status-laurel); }
+.tma-portal-status--garnet { background: var(--tma-status-garnet); }
 
 /* Send-for-review dialog */
 .tma-portal-wf-form { display: block; }

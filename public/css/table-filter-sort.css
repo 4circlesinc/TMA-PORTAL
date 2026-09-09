@@ -633,6 +633,8 @@
 .tma-filter-popover__dot--clay   { background: var(--tma-status-clay, #b91c1c); }
 .tma-filter-popover__dot--sand   { background: var(--tma-status-sand, #a16207); }
 .tma-filter-popover__dot--moss   { background: var(--tma-status-moss, #4d7c0f); }
+.tma-filter-popover__dot--laurel { background: var(--tma-status-laurel, #15803d); }
+.tma-filter-popover__dot--garnet { background: var(--tma-status-garnet, #9f1239); }
 .tma-filter-popover__dot--stone  { background: var(--tma-status-stone, #57534e); }
 
 .tma-filter-popover__item--clear {

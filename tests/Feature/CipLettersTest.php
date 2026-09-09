@@ -11,12 +11,15 @@ use App\Models\Company;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Decision;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Letters;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -140,6 +143,67 @@ class CipLettersTest extends TestCase
         // them, so it must not carry the stage checklists.
         $this->assertStringContainsString('STAGE 1', $pre->body);
         $this->assertStringNotContainsString('STAGE 1', $post->body);
+    }
+
+    /**
+     * Each lane decides with its own pair of statuses.
+     *
+     * The two lanes are two processes, so the post-approval one records
+     * POST_APPROVED / POST_DENIED from where its work ends rather than
+     * borrowing GRANTED / DENIED, which are only reachable from Background
+     * check or Delayed. Sharing one pair is what put a post-approval file in
+     * front of the pre-approval rule and refused it.
+     */
+    public function test_a_post_approval_file_records_the_lane_own_outcome(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'status' => Status::READY_FOR_DELIVERY,
+        ])->save();
+
+        $decided = Decision::record(
+            $application->fresh(),
+            $admin,
+            Status::GRANTED,
+            null,
+            '',
+            UploadedFile::fake()->create('letter.pdf', 40, 'application/pdf'),
+        );
+
+        $this->assertSame(Status::POST_APPROVED, $decided->status);
+        $this->assertSame('Approved', Status::label($decided->status));
+        $this->assertSame(Phase::POST_APPROVAL, $decided->phase);
+
+        // And it uses the lane's own letter.
+        $this->assertSame(
+            Phase::POST_APPROVAL,
+            Letters::for($decided->fresh(), Status::GRANTED)->phase,
+        );
+    }
+
+    /** The lane's outcome is not reachable before its work is finished. */
+    public function test_a_post_approval_decision_waits_for_the_passport_stage(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'status' => Status::APPLY_FOR_COR,
+        ])->save();
+
+        try {
+            Decision::record($application->fresh(), $admin, Status::GRANTED);
+            $this->fail('A post-approval file was decided before its work finished.');
+        } catch (\InvalidArgumentException $e) {
+            // The refusal names the lane the reader is actually in, rather
+            // than sending them to look for Background check.
+            $this->assertStringContainsString('passport stage', $e->getMessage());
+        }
     }
 
     /** Rewriting one lane's letter leaves the other alone. */

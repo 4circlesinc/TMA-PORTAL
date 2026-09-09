@@ -48,10 +48,29 @@ class Decision
         string $note = '',
         ?UploadedFile $letter = null,
     ): CipApplication {
-        if (! Status::isTerminal($decision)) {
+        if (! Status::isOutcome($decision)) {
             throw ValidationException::withMessages([
                 'decision' => 'A decision is Approved or Denied.',
             ]);
+        }
+
+        /*
+         * Each lane decides with its own pair.
+         *
+         * A post-approval file records POST_APPROVED / POST_DENIED, which are
+         * reachable from where its work ends; a pre-approval one records
+         * GRANTED / DENIED from Background check or Delayed. Sending the
+         * other lane's outcome here is what produced "a decision can only be
+         * recorded on an application in Background check or Delayed" on a
+         * file that had never been near Background check.
+         */
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+        [$approved, $denied] = Status::outcomesFor($phase);
+
+        if (! in_array($decision, [$approved, $denied], true)) {
+            $decision = $decision === Status::GRANTED || $decision === Status::POST_APPROVED
+                ? $approved
+                : $denied;
         }
 
         $decidedAt ??= Carbon::now();
@@ -61,13 +80,15 @@ class Decision
         if ($already) {
             // Same outcome again: the date can move. The other outcome cannot
             // overwrite this one through this door.
-        } elseif (Status::isTerminal($application->status)) {
+        } elseif (Status::isOutcomeOf($application->status, $phase)) {
             throw new \InvalidArgumentException(
                 'This application has already been decided.',
             );
         } elseif (! Engine::canTransition($application, $decision)) {
             throw new \InvalidArgumentException(
-                'A decision can only be recorded on an application in Background check or Delayed.',
+                $phase === Phase::POST_APPROVAL
+                    ? 'A post-approval decision can only be recorded once the passport stage is finished.'
+                    : 'A decision can only be recorded on an application in Background check or Delayed.',
             );
         }
 
