@@ -392,8 +392,10 @@ class CipTransitionTest extends TestCase
 
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        // The decision gates the lane: a file that has just crossed over is
+        // approved or denied before it collects any COR paper.
         $this->assertSame(
-            [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
+            [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::POST_DENIED],
             Engine::availableTransitions($post, $officer),
         );
         $this->assertNotContains(Status::ASSESSMENT_FEEDBACK, Engine::availableTransitions($post, $officer));
@@ -402,7 +404,7 @@ class CipTransitionTest extends TestCase
         $apply = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $apply->forceFill(['phase' => Phase::POST_APPROVAL])->save();
         $this->assertSame(
-            [Status::UPDATE_REQUIRED, Status::POST_APPROVAL],
+            [Status::UPDATE_REQUIRED, Status::POST_APPROVED],
             Engine::availableTransitions($apply, $officer),
         );
         $this->assertNotContains(Status::PENDING_COR, Engine::availableTransitions($apply, $admin));

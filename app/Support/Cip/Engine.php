@@ -58,23 +58,27 @@ class Engine
         Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],
         Status::DELAYED => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
         Status::GRANTED => [Status::POST_APPROVAL, Status::NEW_APPEAL],
-        Status::POST_APPROVAL => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
-        Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVAL, Status::PENDING_COR],
+        /*
+         * The lane's decision comes FIRST, not last.
+         *
+         * Approved or Denied is what decides whether this file works the
+         * post-approval process at all: approved, it goes on to collect COR,
+         * NIC and passport paper; denied, it stops. Putting the decision at
+         * the end had it arrive after all that work was already done, which
+         * is the wrong way round — and refused the reader at the only point
+         * they actually wanted it.
+         */
+        Status::POST_APPROVAL => [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::POST_DENIED],
+        Status::POST_APPROVED => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
+        Status::POST_DENIED => [Status::CLOSED, Status::NEW_APPEAL],
+        Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::PENDING_COR],
         Status::PENDING_COR => [Status::APPLY_FOR_NIC],
         Status::APPLY_FOR_NIC => [Status::PENDING_NIC, Status::UPDATE_REQUIRED],
         Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
         Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
-        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY, Status::POST_DENIED],
-        /*
-         * The post-approval lane's own decision, recorded where the work
-         * ends rather than borrowed from the pre-approval lifecycle. Ready
-         * for Delivery is the natural point — the passport is in hand — and
-         * Pending Passport is the other, for a file the office refuses.
-         */
-        Status::POST_APPROVED => [Status::CLOSED],
-        Status::POST_DENIED => [Status::CLOSED, Status::NEW_APPEAL],
+        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
         Status::DENIED => [Status::NEW_APPEAL],
-        Status::READY_FOR_DELIVERY => [Status::POST_APPROVED, Status::POST_DENIED, Status::CLOSED],
+        Status::READY_FOR_DELIVERY => [Status::CLOSED],
 
         /*
          * The appeal lane. It opens from either decision — a denial is the

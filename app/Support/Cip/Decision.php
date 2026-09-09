@@ -87,7 +87,7 @@ class Decision
         } elseif (! Engine::canTransition($application, $decision)) {
             throw new \InvalidArgumentException(
                 $phase === Phase::POST_APPROVAL
-                    ? 'A post-approval decision can only be recorded once the passport stage is finished.'
+                    ? 'A post-approval decision is recorded when the file enters the lane, before the COR stage begins.'
                     : 'A decision can only be recorded on an application in Background check or Delayed.',
             );
         }

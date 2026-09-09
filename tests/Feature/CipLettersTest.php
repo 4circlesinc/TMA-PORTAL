@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Decision;
+use App\Support\Cip\Engine;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Letters;
 use App\Support\Cip\Phase;
@@ -163,7 +164,7 @@ class CipLettersTest extends TestCase
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
         $application->forceFill([
             'phase' => Phase::POST_APPROVAL,
-            'status' => Status::READY_FOR_DELIVERY,
+            'status' => Status::POST_APPROVAL,
         ])->save();
 
         $decided = Decision::record(
@@ -186,24 +187,44 @@ class CipLettersTest extends TestCase
         );
     }
 
-    /** The lane's outcome is not reachable before its work is finished. */
-    public function test_a_post_approval_decision_waits_for_the_passport_stage(): void
+    /**
+     * The decision gates the lane rather than closing it.
+     *
+     * Approved is what lets a file go on to collect COR, NIC and passport
+     * paper; the stages are not reachable until it is recorded.
+     */
+    public function test_the_stages_open_only_after_the_decision(): void
     {
+        Mail::fake();
+        Storage::fake('local');
+
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
         $application->forceFill([
             'phase' => Phase::POST_APPROVAL,
-            'status' => Status::APPLY_FOR_COR,
+            'status' => Status::POST_APPROVAL,
         ])->save();
 
-        try {
-            Decision::record($application->fresh(), $admin, Status::GRANTED);
-            $this->fail('A post-approval file was decided before its work finished.');
-        } catch (\InvalidArgumentException $e) {
-            // The refusal names the lane the reader is actually in, rather
-            // than sending them to look for Background check.
-            $this->assertStringContainsString('passport stage', $e->getMessage());
-        }
+        $this->assertNotContains(
+            Status::APPLY_FOR_COR,
+            Engine::availableTransitions($application->fresh(), $admin),
+            'The COR stage waits on the decision.',
+        );
+
+        $decided = Decision::record(
+            $application->fresh(),
+            $admin,
+            Status::GRANTED,
+            null,
+            '',
+            UploadedFile::fake()->create('letter.pdf', 40, 'application/pdf'),
+        );
+
+        $this->assertContains(
+            Status::APPLY_FOR_COR,
+            Engine::availableTransitions($decided->fresh(), $admin),
+            'Once approved, the file collects its COR documents.',
+        );
     }
 
     /** Rewriting one lane's letter leaves the other alone. */
