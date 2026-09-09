@@ -2232,7 +2232,14 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
-    state.phase = state.applicationId ? null : (opts.phase === 'post_approval' ? 'post_approval' : 'pre_approval');
+    /*
+     * A draft names its phase even though it is opened by id, because the
+     * document requirements are fetched on it. Only an edit of a FILED
+     * application has no phase here — it reads one off the record it loads.
+     */
+    state.phase = (state.applicationId && !opts.phase)
+      ? null
+      : (opts.phase === 'post_approval' ? 'post_approval' : 'pre_approval');
     // One key for this filing, however many times Add is pressed or retried.
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
@@ -2257,7 +2264,10 @@
     // than filling in under the reader.
     var formUrl = '/portal/cip/applications/form';
     if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
-    var wants = [held('cip:form', formUrl)];
+    // Keyed by phase: the two phases ask for different document
+    // requirements, and one cache key for both served whichever was fetched
+    // first to the other.
+    var wants = [held('cip:form:' + (state.phase || 'pre_approval'), formUrl)];
 
     /*
      * A new application is a NEW application.

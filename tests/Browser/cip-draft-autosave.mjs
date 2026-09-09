@@ -66,6 +66,14 @@ async function openWizard(phase = 'pre-approval') {
   await page.waitForTimeout(600);
 }
 
+/* The document slots this form is asking for, by field name. */
+async function docSlots() {
+  const names = await page.locator('[data-cip-file]')
+    .evaluateAll(els => els.map(e => e.getAttribute('data-cip-file')));
+
+  return names.filter(Boolean);
+}
+
 /* Throw away whatever an earlier run or step left on the server. */
 async function clearDraft() {
   if (!(await page.locator('[data-cip-draft-discard]').count())) return;
@@ -211,6 +219,27 @@ try {
   });
   check(drafts.includes('pre_approval') && drafts.includes('post_approval'),
     `the two phases keep separate drafts (${drafts.join(',') || 'none'})`);
+
+  step(6.5, 'A resumed draft asks for ITS OWN phase’s documents');
+  /*
+   * The wizard fetches its document requirements as it opens, keyed on the
+   * phase — and a draft opened by id carried no phase, so a post-approval
+   * draft was drawn with the thirty-slot PRE-approval checklist instead of
+   * its own short post-approval one. The two lists barely overlap, so
+   * comparing what a reopened draft asks for against what a NEW form of the
+   * same phase asks for is what catches it.
+   */
+  const newPostDocs = await docSlots();
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3500);
+  const postRow = page.locator('[data-cip-draft]').filter({ hasText: /postapproval/i }).first();
+  check(await postRow.count() > 0, 'the post-approval draft is in the table');
+  await postRow.click();
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  await page.waitForTimeout(2000);
+  const resumedPostDocs = await docSlots();
+  check(resumedPostDocs.length > 0 && resumedPostDocs.join() === newPostDocs.join(),
+    `it asks for the same documents a new post-approval form asks for (${resumedPostDocs.length} vs ${newPostDocs.length})`);
 
   step(7, 'The draft is in the applications table, wearing a Draft chip');
   /*

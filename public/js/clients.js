@@ -13037,7 +13037,20 @@
       intakeMount._cipEditing = editing;
       window.TMACipIntake.open(intakeMount, {
         applicationId: editing ? state.applicationId : null,
-        phase: editing ? null : (state.applicationPhase || 'pre_approval'),
+        /*
+         * A draft's phase travels with it.
+         *
+         * The wizard asks the server for its document requirements as it
+         * opens, and that ask is keyed on the phase — so a post-approval
+         * draft opened without one was drawn with the PRE-approval
+         * checklist. An edit of a filed application still passes null: it
+         * reads the phase off the record it is loading anyway.
+         */
+        phase: editing
+          ? ((applicationRecord(state) || {}).status === 'draft'
+            ? ((applicationRecord(state) || {}).phase || 'pre_approval')
+            : null)
+          : (state.applicationPhase || 'pre_approval'),
         onReady: function (application) {
           state.applicationLocked = !!(application && application.locked);
           var btn = document.querySelector('[data-cip-save]');
