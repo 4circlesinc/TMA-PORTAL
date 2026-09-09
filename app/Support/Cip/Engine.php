@@ -22,6 +22,29 @@ use Illuminate\Support\Facades\DB;
  */
 class Engine
 {
+    /**
+     * Statuses that belong to the pre-approval lifecycle and nowhere else.
+     *
+     * The counterpart of {@see Status::LANE}. Neither list mentions the
+     * appeal statuses, which are reachable from both lanes, or Updates
+     * Required, which both lanes use to mean the same thing: the provider
+     * side has work to do.
+     *
+     * @var list<string>
+     */
+    private const PRE_APPROVAL_ONLY = [
+        Status::NEW,
+        Status::REVIEW_APPLICATION,
+        Status::ASSESSMENT_FEEDBACK,
+        Status::READY_TO_SUBMIT,
+        Status::PENDING_REVIEW,
+        Status::NON_COMPLIANT,
+        Status::BACKGROUND_CHECK,
+        Status::DELAYED,
+        Status::GRANTED,
+        Status::DENIED,
+    ];
+
     /** from => the statuses it may move to. */
     private const TRANSITIONS = [
         Status::DRAFT => [Status::NEW],
@@ -310,20 +333,7 @@ class Engine
             return $post;
         }
 
-        $preApprovalLane = [
-            Status::NEW,
-            Status::REVIEW_APPLICATION,
-            Status::ASSESSMENT_FEEDBACK,
-            Status::READY_TO_SUBMIT,
-            Status::PENDING_REVIEW,
-            Status::NON_COMPLIANT,
-            Status::BACKGROUND_CHECK,
-            Status::DELAYED,
-            Status::GRANTED,
-            Status::DENIED,
-        ];
-
-        if ($post && in_array($to, $preApprovalLane, true)) {
+        if ($post && in_array($to, self::PRE_APPROVAL_ONLY, true)) {
             return false;
         }
 
@@ -331,10 +341,23 @@ class Engine
     }
 
     /**
-     * Administrators may still pull a post-approval file back into the
-     * pre-decision lifecycle. Apply for COR and Ready to Submit are working
-     * labels for one lane each, so the override picker does not offer the
-     * other lane's destination.
+     * The two lanes keep their own vocabularies.
+     *
+     * Pre-approval and post-approval are separate processes with separate
+     * statuses, and a picker that mixes them asks a reader to tell one
+     * lifecycle's labels from the other's at a glance. So a file working the
+     * post-approval lane — collecting COR, NIC or passport paper — is not
+     * offered New Applications, Review Applications, Assessment Feedback,
+     * Pending Review, Non-compliant or Background Check, and a pre-approval
+     * file is not offered the lane's own labels.
+     *
+     * The exception is a file still sitting AT the decision. Granted is where
+     * a grant issued in error is undone, and that pull-back takes the file's
+     * phase back to pre-approval with it (see {@see set()}), so the statuses
+     * it lands on are the ones it will then be wearing. Once the file has
+     * moved past Granted into the lane's own work, that door is closed: it
+     * has a COR application in progress, and sending it back to Background
+     * Check would put it in a queue for a decision it already holds.
      */
     private static function overrideFits(CipApplication $application, string $to): bool
     {
@@ -350,6 +373,16 @@ class Engine
 
         if (Status::inLane($to)) {
             return $post;
+        }
+
+        // The appeal lane belongs to neither: a decision can be disputed from
+        // wherever the file has reached, so it stays on offer throughout.
+        if (in_array($to, Status::APPEAL_LANE, true)) {
+            return true;
+        }
+
+        if ($post && $application->status !== Status::GRANTED) {
+            return ! in_array($to, self::PRE_APPROVAL_ONLY, true);
         }
 
         return true;
@@ -414,6 +447,22 @@ class Engine
 
         if (! self::checklistAllows($application, $to)) {
             throw new \InvalidArgumentException(self::checklistRefusal($to));
+        }
+
+        /*
+         * The lanes stay apart at the write too, not only in the picker.
+         *
+         * A hidden option that the endpoint still accepts is not a rule, it is
+         * a rule the UI happens to be observing. The one door left open is the
+         * same one {@see overrideFits} draws: a file still at Granted, where
+         * undoing a grant issued in error carries the phase back with it.
+         */
+        if ($actor !== null && ! self::overrideFits($application, $to)) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s belongs to the other lane; this application is in %s.',
+                Status::label($to),
+                Phase::label($application->phase ?? Phase::PRE_APPROVAL),
+            ));
         }
 
         // Section 26: an administrator may type any listed status, but the audit

@@ -175,18 +175,74 @@ class CipReviewTest extends TestCase
             Status::DELAYED,
         ];
 
+        $reader = $this->user(Role::REVIEWING_OFFICER, 'ro@example.com');
+
         foreach ([Status::POST_APPROVAL, Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC] as $at) {
             $application->forceFill(['status' => $at])->save();
-            $offered = Engine::availableTransitions($application->fresh(), $staff);
+            $fresh = $application->fresh();
+
+            // The next step, the administrator's jumps, and the same list an
+            // officer reads as locked: none of them names the other lane.
+            $everywhere = array_merge(
+                Engine::availableTransitions($fresh, $staff),
+                Engine::availableOverrides($fresh, $staff),
+                Engine::lockedStatuses($fresh, $reader),
+            );
 
             foreach ($preApprovalOnly as $status) {
                 $this->assertNotContains(
                     $status,
-                    $offered,
+                    $everywhere,
                     $status.' is a pre-approval status and must not be offered at '.$at.'.',
                 );
             }
         }
+    }
+
+    /**
+     * The one door between the lanes: undoing a grant issued in error.
+     *
+     * It is offered at Granted, where the decision itself is being taken
+     * back, and the pull-back carries the file's phase to pre-approval with
+     * it — so the statuses it lands on are the ones it will then wear. Once
+     * the file is working the lane, the door is shut.
+     */
+    public function test_a_granted_file_may_still_be_pulled_back_into_the_pre_approval_lane(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::GRANTED);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+        ])->save();
+
+        $this->assertContains(
+            Status::ASSESSMENT_FEEDBACK,
+            Engine::availableOverrides($application->fresh(), $staff),
+        );
+
+        $moved = Engine::set($application->fresh(), Status::ASSESSMENT_FEEDBACK, $staff, [
+            'note' => 'Granted in error.',
+        ]);
+
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $moved->status);
+        $this->assertSame(Phase::PRE_APPROVAL, $moved->fresh()->phase);
+    }
+
+    /** Hidden from the picker is not enough; the write refuses it too. */
+    public function test_the_write_refuses_a_pre_approval_status_on_a_working_post_approval_file(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::APPLY_FOR_COR);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+        ])->save();
+
+        $this->expectException(\InvalidArgumentException::class);
+        Engine::set($application->fresh(), Status::BACKGROUND_CHECK, $staff, ['note' => 'why not']);
     }
 
     public function test_approving_a_document_sent_back_marks_it_ready_for_submission(): void

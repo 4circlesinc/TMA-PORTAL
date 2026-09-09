@@ -440,10 +440,16 @@ class CipTransitionTest extends TestCase
             Engine::availableOverrides($post, $admin),
             Engine::lockedStatuses($post, $officer),
         );
-        // Pulling a post-approval file back to the pre-decision lifecycle is
-        // the override an officer can now SEE. The lane's own steps belong to
-        // the stage buttons, so neither list offers them.
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
+        /*
+         * The two lanes keep their own vocabularies. A file working the
+         * post-approval lane is not offered the pre-decision lifecycle's
+         * labels — not as a jump, and not as a locked row an officer reads
+         * as "where this file could go". The lane's own steps belong to the
+         * stage buttons, so neither list offers those either.
+         */
+        $this->assertNotContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
+        $this->assertNotContains(Status::PENDING_REVIEW, Engine::lockedStatuses($post, $officer));
+        $this->assertNotContains(Status::BACKGROUND_CHECK, Engine::lockedStatuses($post, $officer));
         $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($post, $officer));
 
         // A locked status is never one the officer could already drive, so
