@@ -40,8 +40,18 @@
    * screen edits, the server sends them with the form options, so what this
    * wizard asks follows the settings without a deploy. Until the options
    * land, the section 2 trio stands in, which is also what an offline mount gets.
+   *
+   * Narrowed to one person when the caller says whose. Two templates carry a
+   * condition the form can answer before the server ever sees the filing:
+   * real_estate_only against the chosen investment, female_only against that
+   * person's gender. Both are filtered live, as the answers change, because
+   * the form is drawn once at the top and filled in afterwards.
+   *
+   * `prefix` is omitted where the caller wants the vocabulary rather than one
+   * person's list — the validator's field names, for instance, which must
+   * cover every control the form could draw.
    */
-  function docFields(section) {
+  function docFields(section, prefix) {
     var reqs = state.options && state.options.requirements;
     var list = reqs && reqs[section];
     if (!list || list.length === undefined) {
@@ -57,7 +67,15 @@
     }
 
     return list.filter(function (d) {
-      return !d.realEstateOnly || state.draft.investmentType === 'real_estate';
+      if (d.realEstateOnly && state.draft.investmentType !== 'real_estate') return false;
+      // Only when the caller named a person: with no gender to judge, the
+      // field stays on the list rather than being hidden from everybody.
+      if (d.femaleOnly && prefix !== undefined
+        && String(state.draft[prefix + 'gender'] || '').toLowerCase() !== 'female') {
+        return false;
+      }
+
+      return true;
     });
   }
 
@@ -664,7 +682,7 @@
      template the settings ask of that person. One to a row: two columns of
      targets fought the fields for width. */
   function documentsCard(prefix, section) {
-    var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'));
+    var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'), prefix);
     if (!fields.length) return '';
 
     return card('Documents',
@@ -874,9 +892,10 @@
         state.draft[path] = el.value;
         delete state.errors[path];
         // These change what the form shows: the derived region, the "Other"
-        // free text, whether there is a sponsor at all, and the dependent
-        // numbering that follows a date of birth or a relationship.
-        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|dateOfBirth$/.test(path)) {
+        // free text, whether there is a sponsor at all, the dependent
+        // numbering that follows a date of birth or a relationship, and the
+        // documents asked only of women.
+        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|dateOfBirth$|gender$/.test(path)) {
           render(root);
         }
       });

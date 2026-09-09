@@ -20,6 +20,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\CorRequirements;
+use App\Support\Cip\Intake;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -284,6 +285,75 @@ class CipPostApprovalTest extends TestCase
             ->assertJsonPath('requirement.atPreApproval', false)
             ->assertJsonPath('requirement.atPostApproval', true)
             ->assertJsonPath('requirement.femaleOnly', true);
+    }
+
+    /**
+     * The Settings catalogue is one catalogue: what the wizard asks a person
+     * for and what that person's checklist opens are the same list.
+     *
+     * A female-only row is the case that could disagree. The checklist has
+     * always judged it against the person; the wizard drew its fields from a
+     * call that was never handed one, so a template asked only of women would
+     * have been offered to a man — a document his own slot would never open,
+     * and an upload with nowhere to be filed.
+     */
+    public function test_a_female_only_requirement_is_asked_of_the_same_people_on_both_screens(): void
+    {
+        $staff = $this->staff();
+        $this->template('female_cor', 'Female COR doc', [
+            'key' => 'female_cor',
+            'required' => false,
+            'female_only' => true,
+            'at_pre_approval' => false,
+            'at_post_approval' => true,
+        ]);
+
+        $application = $this->application($staff);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'status' => Status::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+
+        $man = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Asem',
+            'last_name' => 'Haddad',
+            'gender' => 'Male',
+            'date_of_birth' => now()->subYears(40),
+        ]);
+        $woman = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Rana',
+            'last_name' => 'Haddad',
+            'gender' => 'Female',
+            'date_of_birth' => now()->subYears(38),
+        ]);
+
+        // The wizard's list, per person.
+        $asked = fn (CipPerson $person) => Intake::documentFields(
+            ApplicantType::for($person),
+            Phase::POST_APPROVAL,
+            $application,
+            $person,
+        )->pluck('key')->all();
+
+        $this->assertNotContains('female_cor', $asked($man));
+        $this->assertContains('female_cor', $asked($woman));
+
+        // The checklist each of them actually owes.
+        Requirements::materialiseApplication($application->fresh());
+
+        $this->assertFalse(
+            $man->documents()->where('type', 'female_cor')->exists(),
+            'A man is not asked for it, so no slot opens for him.',
+        );
+        $this->assertTrue(
+            $woman->documents()->where('type', 'female_cor')->exists(),
+            'A woman is asked for it, and her checklist says so.',
+        );
     }
 
     public function test_form_endpoint_filters_requirements_by_phase(): void

@@ -73,13 +73,25 @@ class Intake
      * field name is the template key in camel case, which lands the legacy
      * three on exactly the names the endpoint has always documented.
      *
-     * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, realEstateOnly:bool, atFiling:bool}>
+     * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, realEstateOnly:bool, femaleOnly:bool, atFiling:bool}>
      */
-    public static function documentFields(string $applicantType, string $phase = Phase::PRE_APPROVAL, ?CipApplication $application = null): Collection
-    {
+    public static function documentFields(
+        string $applicantType,
+        string $phase = Phase::PRE_APPROVAL,
+        ?CipApplication $application = null,
+        ?CipPerson $person = null,
+    ): Collection {
         $investment = $application?->investment_type ?? request()->input('investmentType');
 
-        return Requirements::forPhase($applicantType, $phase, $application)
+        /*
+         * The person travels through when there is one, so a template that
+         * asks only of some people is judged the same way here as it is on
+         * the checklist itself. Without them, {@see Requirements::catalogue}
+         * cannot apply female_only and the wizard would offer a document the
+         * person's own slot would never open — see the Settings screen, which
+         * is where such a row gets added.
+         */
+        return Requirements::forPhase($applicantType, $phase, $application, $person)
             ->reject(fn ($t) => $t->key === DocumentTypes::PASSPORT_PHOTO)
             ->reject(fn ($t) => $t->real_estate_only
                 && $investment
@@ -91,6 +103,10 @@ class Intake
                 'help' => $t->help,
                 'required' => (bool) $t->required,
                 'realEstateOnly' => (bool) $t->real_estate_only,
+                // Sent for the same reason realEstateOnly is: the form is
+                // drawn before anybody's gender is chosen, so the filtering
+                // has to happen live in the wizard as the answer changes.
+                'femaleOnly' => (bool) $t->female_only,
                 // Only the main applicant's uploads gate filing, and
                 // pre-approval only section 2's three: the official checklist runs to
                 // thirty-odd rows, and demanding every required one before the
@@ -916,7 +932,7 @@ class Intake
     {
         $phase = $person->application?->phase ?? Phase::PRE_APPROVAL;
 
-        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application)
+        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application, $person)
             ->mapWithKeys(fn ($doc) => [$doc['key'] => $data[$doc['field']] ?? []])
             ->all() as $type => $uploads) {
             $existing = CipDocument::query()
