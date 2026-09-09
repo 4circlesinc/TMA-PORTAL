@@ -162,6 +162,19 @@ class Stages
             return null;
         }
 
+        /*
+         * A denied file has no stages left.
+         *
+         * It still closes — that edge is on the map — but not by recording
+         * the delivery of a passport nobody was issued. Every step here is a
+         * thing that happened to a file working its way through; a refused
+         * one skipped all of them, so it is closed from the status picker
+         * instead.
+         */
+        if ($application->status === Status::POST_DENIED || $application->status === Status::DENIED) {
+            return null;
+        }
+
         foreach (self::STEPS as $key => $step) {
             if (! Engine::canTransition($application, $step['to'])) {
                 continue;

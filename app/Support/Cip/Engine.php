@@ -309,13 +309,30 @@ class Engine
 
         $next = self::availableTransitions($application, $actor, $forListing);
 
+        /*
+         * A dated step is normally the date verb's to drive, so it is kept
+         * out of the picker. The one exception is a denied file: it closes,
+         * but not by recording the delivery of a passport nobody was issued,
+         * so Stages offers it no verb at all. Closed has to come from the
+         * picker there or the file has nowhere left to go.
+         *
+         * Deliberately narrow. Testing "no verb is available" instead would
+         * have opened every dated step wherever a verb happened to be
+         * waiting on something else — Pending COR while the package is
+         * unconfirmed, for one.
+         */
+        $denied = in_array($application->status, [Status::POST_DENIED, Status::DENIED], true);
+        $strandedStage = fn (string $to) => $denied
+            && $to === Status::CLOSED
+            && self::canTransition($application, $to);
+
         return array_values(array_filter(
             Status::listed(),
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
                 && self::checklistAllows($application, $to, $forListing)
                 && self::overrideFits($application, $to)
-                && ! Stages::owns($to)
+                && (! Stages::owns($to) || $strandedStage($to))
                 && ! Delay::owns($to),
         ));
     }

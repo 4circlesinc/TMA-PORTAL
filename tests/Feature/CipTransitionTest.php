@@ -17,6 +17,7 @@ use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Phase;
+use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -410,6 +411,47 @@ class CipTransitionTest extends TestCase
         $this->assertNotContains(Status::PENDING_COR, Engine::availableTransitions($apply, $admin));
         $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($apply, $admin));
         $this->assertNotContains(Status::CLOSED, Engine::availableOverrides($apply, $admin));
+    }
+
+    /**
+     * A denied file is offered no stage buttons.
+     *
+     * Every stage records something that happened to a file working its way
+     * through — a COR sent, a passport received. A refused one skipped all of
+     * them, so "Record passport delivered" on a DENIED file was offering to
+     * record the delivery of a passport nobody was issued. It still closes,
+     * from the picker.
+     */
+    public function test_a_denied_file_has_no_stage_button_but_can_still_close(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $denied = $this->at($this->application($admin), Status::POST_DENIED);
+        $denied->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $this->assertNull(
+            Stages::payload($denied->fresh(), $admin),
+            'A denied file has no stage left to record.',
+        );
+        $this->assertContains(
+            Status::CLOSED,
+            Engine::availableOverrides($denied->fresh(), $admin),
+            'It still has to be closable.',
+        );
+
+        // A file actually working the lane keeps its stage button, and Closed
+        // stays the verb's rather than the picker's.
+        $working = $this->at($this->application($admin), Status::READY_FOR_DELIVERY);
+        $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $this->assertSame(
+            'Record passport delivered',
+            Stages::payload($working->fresh(), $admin)['label'] ?? null,
+        );
+        $this->assertNotContains(
+            Status::CLOSED,
+            Engine::availableOverrides($working->fresh(), $admin),
+        );
     }
 
     public function test_an_officer_sees_the_whole_lifecycle_but_may_only_drive_the_next_step(): void
