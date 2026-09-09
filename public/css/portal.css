@@ -836,6 +836,21 @@
   padding: var(--space-16) 0;
 }
 
+/*
+ * The autosave's own line, under the form's notices and above the cards.
+ *
+ * Quieter than a note that is telling the reader something they have to act
+ * on: "Draft saved a minute ago" is reassurance, and it is written to every
+ * few seconds. It keeps its height when empty so the cards below it do not
+ * jump the first time it has something to say.
+ */
+.tma-portal-note--quiet {
+  min-height: var(--text-lh-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
 .tma-portal-section__card ul,
 .tma-portal-section__card ol {
   margin: 0;

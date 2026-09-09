@@ -17,6 +17,7 @@ use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
+use App\Http\Controllers\Cip\CipApplicationDraftController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDistributionController;
@@ -395,6 +396,20 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Above `/applications/{uuid}`, or the wildcard swallows it and the
         // catch-up read becomes a lookup for an application called "sync".
         Route::get('/applications/sync', [CipApplicationController::class, 'sync'])->name('applications.sync');
+        /*
+         * The wizard's autosave, for the same reason and above the wildcard:
+         * a draft is not an application and must not be looked up as one.
+         *
+         * One unfinished filing per reader per phase. Kept on the server
+         * rather than in the tab so a closed laptop is not a lost afternoon,
+         * and holding answers only — never files, see the controller.
+         */
+        Route::get('/applications/draft', [CipApplicationDraftController::class, 'show'])
+            ->name('applications.draft.show');
+        Route::post('/applications/draft', [CipApplicationDraftController::class, 'store'])
+            ->name('applications.draft.store');
+        Route::delete('/applications/draft', [CipApplicationDraftController::class, 'destroy'])
+            ->name('applications.draft.destroy');
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');

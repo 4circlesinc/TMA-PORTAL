@@ -118,9 +118,11 @@
     return names;
   }
 
-  /* One draft per mount. Deliberately not persisted yet: until the form can
-     save a partial application server-side, a "resume" that lived only in
-     this tab would promise more than it keeps. */
+  /* One draft per mount, and one on the server behind it.
+     A half-typed application used to live in this tab alone, so a closed
+     laptop lost an afternoon of it. It is now saved as it is typed, keyed to
+     the reader and the phase, and reopened the next time this form is opened
+     on anything. See saveDraft() below for what is kept and what is not. */
   function emptyDraft() {
     return {
       providerId: '', firstName: '', lastName: '', gender: '',
@@ -171,6 +173,30 @@
     submissionKey: null,
     /* An administrator said "file it anyway" to the duplicate warning. */
     allowDuplicate: false,
+    /* ── the autosave ──────────────────────────────────────────────
+       New filings only. Editing a filed application is deliberately not
+       autosaved: a resumed edit would lay hours-old answers over a record
+       that has moved on, and there is no version of that a reader can check. */
+    /* Pending timer, so typing saves once when it pauses rather than per key. */
+    draftTimer: null,
+    /* A save is in flight; another waits for it rather than racing it. */
+    draftSaving: false,
+    /* Something changed while that one was in flight. */
+    draftDirty: false,
+    /* What was last sent, so an unchanged form does not re-post every few
+       seconds for the life of the page. */
+    draftSent: '',
+    /* When the server last acknowledged, for the line under the toolbar. */
+    draftSavedAt: null,
+    /* The autosave is off after a failure the reader can do nothing about,
+       and after filing. Silence is the promise: a form that says "Saved" and
+       is not is worse than one that never claimed to be. */
+    draftOff: false,
+    /* Paths the resumed draft asked for scans on. The files themselves cannot
+       be kept, so the form says which ones have to be chosen again. */
+    draftMissingFiles: [],
+    /* A draft was found and put back. Drives the notice at the top. */
+    draftResumed: false,
   };
 
   function esc(s) { return ui().esc(s); }
@@ -845,6 +871,24 @@
     return preApprovalFormBody();
   }
 
+  /*
+   * What a resumed form owes the reader.
+   *
+   * Two things, and the second is the important one: this is where they were,
+   * and the scans are not in it. A form that silently came back with eight
+   * fields filled and no documents would read as a bug or, worse, as a
+   * checklist that had already been answered.
+   */
+  function resumedNotice() {
+    if (!state.draftResumed) return '';
+    var missing = state.draftMissingFiles.length;
+
+    return '<p class="tma-portal-note" data-cip-draft-resumed>' +
+      esc('Picked up where you left off.' +
+        (missing ? ' Choose the documents and photos again — files aren’t saved in a draft.' : '')) +
+      ' <button type="button" class="tma-portal-link" data-cip-draft-discard>Start over</button></p>';
+  }
+
   function render(root) {
     if (state.loading) { root.innerHTML = ui().loading(); return; }
     if (state.error) {
@@ -874,6 +918,14 @@
           esc(count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.') +
           '</p>'
         : '') +
+      resumedNotice() +
+      // Where the autosave says when it last saved, and nothing until it has.
+      // Its own node so it can be written to without re-rendering the form
+      // under somebody's hands.
+      (draftable()
+        ? '<p class="tma-portal-note tma-portal-note--quiet" data-cip-draft-status>' +
+          esc(state.draftSavedAt ? 'Draft saved ' + savedAgo() : '') + '</p>'
+        : '') +
       formBody() +
       '</div>');
     wire(root);
@@ -887,10 +939,12 @@
       el.addEventListener('input', function () {
         state.draft[path] = el.value;
         delete state.errors[path];
+        touchDraft();
       });
       el.addEventListener('change', function () {
         state.draft[path] = el.value;
         delete state.errors[path];
+        touchDraft();
         // These change what the form shows: the derived region, the "Other"
         // free text, whether there is a sponsor at all, the dependent
         // numbering that follows a date of birth or a relationship, and the
@@ -904,6 +958,62 @@
     wirePhotos(root);
     wireDocuments(root);
     wireDependents(root);
+    wireDraft(root);
+  }
+
+  /*
+   * Throwing the resumed draft away.
+   *
+   * Asked about first: the whole point of the draft is that work is not lost
+   * by accident, and a one-press Start over next to the notice explaining the
+   * resume is exactly where a misclick would land.
+   */
+  function wireDraft(root) {
+    MORPH.unwired(root, '[data-cip-draft-discard]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        confirmDiscard(root);
+      });
+    });
+  }
+
+  /* The same modal shape the duplicate warning uses, for the same reason:
+     one destructive answer, named by what it does rather than "OK". */
+  function confirmDiscard(root) {
+    ui().openModal({
+      title: 'Start over',
+      body: '<p class="tma-portal-modal__text">This clears the saved draft and empties the form.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-draft-keep>Keep it</button>' +
+        '<button type="button" class="tma-no-data__btn" data-draft-discard>Start over</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-draft-keep]').addEventListener('click', function () {
+          ui().closeModal();
+        });
+        host.querySelector('[data-draft-discard]').addEventListener('click', function () {
+          ui().closeModal();
+          discardDraft(root);
+        });
+      },
+    });
+  }
+
+  /* Back to an empty form, with the saved draft gone from the server too —
+     otherwise the next open would resume the work just thrown away. */
+  function discardDraft(root) {
+    clearDraft();
+    state.draft = emptyDraft();
+    state.files = {};
+    state.previews = {};
+    state.documents = {};
+    state.dependents = 0;
+    state.errors = {};
+    // The one answer the form fills in for itself, put back.
+    if (state.options && state.options.providers && state.options.providers.length === 1) {
+      state.draft.providerId = state.options.providers[0].id;
+    }
+    render(root);
   }
 
   /*
@@ -1096,6 +1206,9 @@
         state.draft['dependents.' + state.dependents + '.relationship'] = 'qualified_dependent';
         state.dependents += 1;
         render(root);
+        // A dependent added or dropped changes the shape of the draft, not
+        // just an answer in it, so it is saved like any other change.
+        touchDraft();
       });
     }
 
@@ -1103,6 +1216,7 @@
       btn.addEventListener('click', function () {
         removeDependent(Number(btn.getAttribute('data-cip-dependent-remove')));
         render(root);
+        touchDraft();
       });
     });
   }
@@ -1309,6 +1423,203 @@
     return parts[0] + parts.slice(1).map(function (p) { return '[' + p + ']'; }).join('');
   }
 
+  /* ── the autosave ──────────────────────────────────────────────── */
+
+  /* How long the typing has to stop before the form saves. Long enough that
+     a name is one save rather than nine, short enough that a laptop closed
+     mid-thought loses a sentence and not a section. */
+  var DRAFT_IDLE_MS = 1200;
+
+  var DRAFT_URL = '/portal/cip/applications/draft';
+
+  /* Only a new filing autosaves — see the note on state.draftOff. */
+  function draftable() {
+    return !state.applicationId && !state.draftOff && !fieldsLocked();
+  }
+
+  /*
+   * What the server is asked to keep: the typed answers, and nothing else.
+   *
+   * Deliberately NOT the files. A scan cannot be stored without uploading it,
+   * and uploading one into an application nobody has filed would put an
+   * unreviewed document in a client's folders. What the reader gets instead
+   * is a plain sentence naming the scans they have to choose again.
+   */
+  function draftAnswers() {
+    var out = {};
+    Object.keys(state.draft).forEach(function (path) {
+      var value = state.draft[path];
+      if (value === '' || value === null || value === undefined) return;
+      // Dependents past the visible count are leftovers from a removal, the
+      // same rule parts() applies to a filing.
+      if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
+      out[path] = String(value);
+    });
+
+    return out;
+  }
+
+  /* Save when the typing stops. Every field change calls this; the timer is
+     what turns a burst of them into one write. */
+  function touchDraft() {
+    if (!draftable()) return;
+    state.draftDirty = true;
+    if (state.draftTimer) clearTimeout(state.draftTimer);
+    state.draftTimer = setTimeout(function () {
+      state.draftTimer = null;
+      saveDraft();
+    }, DRAFT_IDLE_MS);
+  }
+
+  /*
+   * Put the unfinished application on the server.
+   *
+   * Quiet on the way out and quiet on the way back: an autosave the reader
+   * did not ask for must never take over the screen. The one thing it does
+   * say is when it last succeeded, and it stops saying anything at all the
+   * moment it stops being true.
+   */
+  function saveDraft() {
+    if (!draftable()) return;
+    // One in flight at a time. The one that finishes will see the flag and
+    // send the newer answers itself, so nothing is lost by waiting.
+    if (state.draftSaving) { state.draftDirty = true; return; }
+
+    var answers = draftAnswers();
+    var payload = JSON.stringify({
+      phase: state.phase || 'pre_approval',
+      answers: answers,
+      dependents: state.dependents,
+    });
+    // Nothing has changed since the last save, so there is nothing to write.
+    if (payload === state.draftSent) { state.draftDirty = false; return; }
+
+    state.draftSaving = true;
+    state.draftDirty = false;
+
+    fetch(DRAFT_URL, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: payload,
+    }).then(function (res) {
+      state.draftSaving = false;
+      if (!res.ok) {
+        /*
+         * The server refused. Not shouted about — the reader is mid-form and
+         * can still file — but the autosave goes quiet rather than carry on
+         * failing, and the line that said their work was safe is removed,
+         * because by now it is not.
+         */
+        state.draftOff = true;
+        state.draftSavedAt = null;
+        paintDraftStatus();
+
+        return;
+      }
+      state.draftSent = payload;
+      state.draftSavedAt = new Date();
+      paintDraftStatus();
+      // Answers changed while that was in the air.
+      if (state.draftDirty) saveDraft();
+    }).catch(function () {
+      /*
+       * Never delivered — the offline case. The autosave is not queued: the
+       * write queue is for work the reader asked for and is told about, and
+       * filling it with a copy of a half-typed form every few seconds would
+       * bury the filings that matter. It simply tries again on the next
+       * change, and says nothing it cannot stand behind in the meantime.
+       */
+      state.draftSaving = false;
+      state.draftSavedAt = null;
+      paintDraftStatus();
+      if (state.draftDirty) return;
+    });
+  }
+
+  /*
+   * The application was filed, or the reader threw the form away.
+   *
+   * Fire and forget: the filing has already landed and a draft that outlives
+   * it would offer to resume work that is now an application. A failure here
+   * is picked up by the next save, which overwrites it anyway.
+   */
+  function clearDraft() {
+    if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
+    var phase = state.phase || 'pre_approval';
+    state.draftSent = '';
+    state.draftSavedAt = null;
+    state.draftResumed = false;
+    state.draftMissingFiles = [];
+    if (state.applicationId) return;
+
+    fetch(DRAFT_URL + '?phase=' + encodeURIComponent(phase), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: headers({ 'Content-Type': 'application/json' }),
+    }).catch(function () {});
+  }
+
+  /*
+   * Put a saved draft back into the form.
+   *
+   * The answers are the wizard's own field paths, so this is a copy rather
+   * than a translation. The scans are the part that cannot come back, so
+   * every path the draft holds an answer for that is a document or a photo is
+   * collected and named to the reader instead of quietly missing.
+   */
+  function restoreDraft(draft) {
+    if (!draft || !draft.answers) return false;
+    var paths = Object.keys(draft.answers);
+    if (!paths.length) return false;
+
+    paths.forEach(function (path) { state.draft[path] = draft.answers[path]; });
+    state.dependents = Math.min(Number(draft.dependents) || 0, MAX_DEPENDENTS);
+    state.draftSavedAt = draft.savedAt ? new Date(draft.savedAt) : null;
+    state.draftResumed = true;
+    state.draftMissingFiles = requiredPaths().filter(function (path) {
+      var tail = path.split('.').pop();
+
+      return !!allDocFields()[tail] || tail === 'passportPhoto';
+    });
+    // What was just put back is what the server holds, so an untouched
+    // resume does not immediately re-post the same answers.
+    state.draftSent = JSON.stringify({
+      phase: state.phase || 'pre_approval',
+      answers: draftAnswers(),
+      dependents: state.dependents,
+    });
+
+    return true;
+  }
+
+  /* When the draft was last saved, in the reader’s own words. */
+  function savedAgo() {
+    if (!state.draftSavedAt) return '';
+    var seconds = Math.round((Date.now() - state.draftSavedAt.getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) return minutes === 1 ? 'a minute ago' : minutes + ' minutes ago';
+    if (window.TMAUserTime && window.TMAUserTime.time) return 'at ' + window.TMAUserTime.time(state.draftSavedAt);
+
+    return 'earlier';
+  }
+
+  /*
+   * The one line the autosave is allowed to write on the screen.
+   *
+   * Patched in place rather than re-rendered: a render while somebody is
+   * typing rebuilds the controls under them, and this fires every few
+   * seconds. There is no line at all until there is something true to say.
+   */
+  function paintDraftStatus() {
+    var root = state.root;
+    if (!root) return;
+    var slot = root.querySelector('[data-cip-draft-status]');
+    if (!slot) return;
+    slot.textContent = state.draftSavedAt ? 'Draft saved ' + savedAgo() : '';
+  }
+
   function submit() {
     var root = state.root;
     if (!root || state.saving) return;
@@ -1377,6 +1688,12 @@
           return;
         }
 
+        /*
+         * Filed. The draft is thrown away here rather than left to expire:
+         * it is now an application with a number, and a wizard that offered
+         * to resume it would invite the reader to file the same person twice.
+         */
+        clearDraft();
         // The caller announces this, it knows where the reader lands next.
         if (state.onDone) state.onDone(json.application);
       });
@@ -1460,6 +1777,14 @@
       invalidate: ['cip:application:', 'cip:application-record:', 'files:listing:', 'clients:'],
     }).then(function () {
       done();
+      /*
+       * Queued counts as filed for the draft's purposes: the write is on the
+       * device and will land, so resuming it later would file it twice. The
+       * DELETE this sends is not delivered either — the reader is offline —
+       * so the server drops the draft itself when the queued filing lands,
+       * see CipApplicationController::store.
+       */
+      clearDraft();
       if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });
     }).catch(function () {
       done();
@@ -1629,6 +1954,14 @@
     // One key for this filing, however many times Add is pressed or retried.
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
+    if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
+    state.draftSaving = false;
+    state.draftDirty = false;
+    state.draftSent = '';
+    state.draftSavedAt = null;
+    state.draftOff = false;
+    state.draftResumed = false;
+    state.draftMissingFiles = [];
     state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
@@ -1643,6 +1976,22 @@
     if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
     var wants = [held('cip:form', formUrl)];
 
+    /*
+     * The unfinished application, asked for with the options.
+     *
+     * New filings only, and never cached: a draft is the newest answer there
+     * is by definition, and a held copy would resume a version of the form
+     * the reader had already moved past on another machine. It resolves to
+     * null rather than rejecting, because failing to find a draft must not
+     * stop the form from opening.
+     */
+    var wantDraft = state.applicationId
+      ? Promise.resolve(null)
+      : api('GET', DRAFT_URL + '?phase=' + encodeURIComponent(state.phase || 'pre_approval'))
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (json) { return (json && json.draft) || null; })
+        .catch(function () { return null; });
+
     if (state.applicationId) {
       wants.push(held(
         'cip:application-record:' + state.applicationId,
@@ -1650,7 +1999,8 @@
       ).then(function (json) { return json.application; }));
     }
 
-    Promise.all(wants).then(function (answers) {
+    Promise.all([Promise.all(wants), wantDraft]).then(function (both) {
+      var answers = both[0];
       state.options = answers[0];
       // Nothing to choose means the answer is already known.
       if (state.options.providers && state.options.providers.length === 1) {
@@ -1660,6 +2010,12 @@
       // builds what the record will say by laying the draft over this.
       state.record = answers[1] || null;
       if (answers[1]) prefill(answers[1]);
+      /*
+       * The saved draft goes in last, over the provider the form filled in
+       * for itself and after the options are in hand — restoreDraft() reads
+       * the requirement templates to work out which scans it could not keep.
+       */
+      if (both[1]) restoreDraft(both[1]);
       state.loading = false;
       render(root);
       if (state.onReady) state.onReady(state.record);

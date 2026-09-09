@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
+use App\Models\CipApplicationDraft;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\ClientAssignment;
@@ -222,6 +223,19 @@ class CipApplicationController extends Controller
                 'application' => $this->record($landed, $user),
             ], 200);
         }
+
+        /*
+         * The filing landed, so the draft it was typed into is finished with.
+         *
+         * Dropped here rather than only by the wizard's own DELETE, because
+         * an application filed from the offline queue replays this request
+         * with nobody at the screen — and a draft that outlived its filing
+         * would invite the reader to file the same person a second time.
+         */
+        CipApplicationDraft::query()
+            ->where('user_id', $user->id)
+            ->where('phase', $application->phase)
+            ->delete();
 
         Live::staff(Live::CIP);
 
