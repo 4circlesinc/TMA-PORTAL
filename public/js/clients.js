@@ -2869,6 +2869,11 @@
     { value: 'ready_for_submission', label: 'Ready for submission', tone: 'teal' },
     { value: 'processing', label: 'Processing', tone: 'indigo' },
     { value: 'completed', label: 'Completed', tone: 'success' },
+    /* One person's own outcome. Not the application's decision — nothing is
+       sent when these are set; see PersonStatus. */
+    { value: 'approved', label: 'Approved', tone: 'success' },
+    { value: 'denied', label: 'Denied', tone: 'danger' },
+    { value: 'closed', label: 'Closed', tone: 'stone' },
   ];
 
   /*

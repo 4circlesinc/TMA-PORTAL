@@ -14,6 +14,7 @@ use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class CipPersonStatusTest extends TestCase
@@ -148,6 +149,74 @@ class CipPersonStatusTest extends TestCase
             'from_status' => PersonStatus::NOT_STARTED,
             'to_status' => PersonStatus::DOCUMENTS_PENDING,
         ]);
+    }
+
+    /**
+     * A person's own outcome, and nothing sent.
+     *
+     * Approved, Denied and Closed here are about one member of the family —
+     * a dependant refused while the rest of the household goes through, a
+     * person's part of the file closed off. They are not the application's
+     * decision: no decision columns are written and no letter goes out. The
+     * firm writes to the applicant once, about the application.
+     */
+    public function test_a_person_outcome_is_recorded_and_sends_nothing(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalApplication($staff);
+        $person = $application->people->first();
+
+        // Faked after the setup: entering post-approval sends the COR notice,
+        // which is the application's business. What is being measured here is
+        // whether a PERSON's outcome sends anything.
+        Mail::fake();
+
+        foreach ([PersonStatus::APPROVED, PersonStatus::DENIED, PersonStatus::CLOSED] as $outcome) {
+            $body = $this->actingAs($staff)
+                ->postJson('/portal/cip/people/'.$person->uuid.'/status', ['status' => $outcome])
+                ->assertOk()
+                ->json('application');
+
+            $this->assertSame($outcome, $body['applicant']['status']);
+            $this->assertSame(PersonStatus::label($outcome), $body['applicant']['statusLabel']);
+        }
+
+        $this->assertDatabaseHas('cip_people', [
+            'id' => $person->id,
+            'post_approval_status' => PersonStatus::CLOSED,
+        ]);
+
+        // The application's own decision is untouched by any of it: a person
+        // being denied is not the file being denied.
+        $fresh = $application->fresh();
+        $this->assertSame($application->decision, $fresh->decision);
+        $this->assertSame($application->status, $fresh->status);
+        $this->assertNull($fresh->decision_letter_file_id);
+
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    /** The picker offers them, so a reader can reach an outcome. */
+    public function test_the_person_picker_offers_the_outcomes(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalApplication($staff);
+        $person = $application->people->first();
+
+        $offered = array_column(PersonStatus::listed(), 'value');
+
+        $this->assertContains(PersonStatus::APPROVED, $offered);
+        $this->assertContains(PersonStatus::DENIED, $offered);
+        $this->assertContains(PersonStatus::CLOSED, $offered);
+
+        // And they are reachable from where a finished person stands.
+        $person->forceFill(['post_approval_status' => PersonStatus::COMPLETED])->save();
+        $next = array_column(PersonStatus::availableTransitions($person->fresh(), $staff), 'value');
+
+        $this->assertContains(PersonStatus::APPROVED, $next);
+        $this->assertContains(PersonStatus::DENIED, $next);
+        $this->assertContains(PersonStatus::CLOSED, $next);
     }
 
     public function test_person_status_cannot_be_changed_before_post_approval(): void

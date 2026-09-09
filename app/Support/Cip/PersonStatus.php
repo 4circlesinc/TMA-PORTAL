@@ -33,6 +33,22 @@ class PersonStatus
 
     public const COMPLETED = 'completed';
 
+    /*
+     * The outcomes one person's paperwork can end on.
+     *
+     * Deliberately not the application's Granted / Denied: those record the
+     * Unit's decision on the whole file, write decision columns and send a
+     * letter. These say what happened to this member of the family — a
+     * dependant refused while the rest of the household went through, a
+     * person's part of the file closed off — and send nothing at all. The
+     * firm writes to the applicant once, about the application.
+     */
+    public const APPROVED = 'approved';
+
+    public const DENIED = 'denied';
+
+    public const CLOSED = 'closed';
+
     public const ALL = [
         self::NOT_STARTED,
         self::DOCUMENTS_PENDING,
@@ -41,6 +57,9 @@ class PersonStatus
         self::READY_FOR_SUBMISSION,
         self::PROCESSING,
         self::COMPLETED,
+        self::APPROVED,
+        self::DENIED,
+        self::CLOSED,
     ];
 
     private const LABELS = [
@@ -51,6 +70,9 @@ class PersonStatus
         self::READY_FOR_SUBMISSION => 'Ready for submission',
         self::PROCESSING => 'Processing',
         self::COMPLETED => 'Completed',
+        self::APPROVED => 'Approved',
+        self::DENIED => 'Denied',
+        self::CLOSED => 'Closed',
     ];
 
     private const TONES = [
@@ -61,6 +83,9 @@ class PersonStatus
         self::READY_FOR_SUBMISSION => 'teal',
         self::PROCESSING => 'indigo',
         self::COMPLETED => 'success',
+        self::APPROVED => 'success',
+        self::DENIED => 'danger',
+        self::CLOSED => 'stone',
     ];
 
     /** from => the statuses an officer may move to. Admins may set any. */
@@ -70,8 +95,11 @@ class PersonStatus
         self::DOCUMENTS_IN_REVIEW => [self::UPDATE_REQUIRED, self::READY_FOR_SUBMISSION],
         self::UPDATE_REQUIRED => [self::DOCUMENTS_IN_REVIEW],
         self::READY_FOR_SUBMISSION => [self::PROCESSING],
-        self::PROCESSING => [self::COMPLETED],
-        self::COMPLETED => [],
+        self::PROCESSING => [self::COMPLETED, self::APPROVED, self::DENIED],
+        self::COMPLETED => [self::APPROVED, self::DENIED, self::CLOSED],
+        self::APPROVED => [self::CLOSED],
+        self::DENIED => [self::CLOSED],
+        self::CLOSED => [],
     ];
 
     public static function isValid(string $status): bool
