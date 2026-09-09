@@ -17,6 +17,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -143,6 +144,49 @@ class CipReviewTest extends TestCase
         ]);
 
         return $contact;
+    }
+
+    /**
+     * Section 1: post-approval is its own lane, so the picker on a
+     * post-approval file offers post-approval statuses and nothing from the
+     * pre-decision lifecycle.
+     *
+     * The administrator override is deliberately not this: pulling a file
+     * back to Assessment feedback is a documented recovery from a grant
+     * issued in error, and it moves the file's phase with it.
+     */
+    public function test_the_post_approval_picker_offers_only_post_approval_statuses(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::POST_APPROVAL);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+        ])->save();
+
+        $preApprovalOnly = [
+            Status::NEW,
+            Status::REVIEW_APPLICATION,
+            Status::ASSESSMENT_FEEDBACK,
+            Status::READY_TO_SUBMIT,
+            Status::PENDING_REVIEW,
+            Status::NON_COMPLIANT,
+            Status::BACKGROUND_CHECK,
+            Status::DELAYED,
+        ];
+
+        foreach ([Status::POST_APPROVAL, Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC] as $at) {
+            $application->forceFill(['status' => $at])->save();
+            $offered = Engine::availableTransitions($application->fresh(), $staff);
+
+            foreach ($preApprovalOnly as $status) {
+                $this->assertNotContains(
+                    $status,
+                    $offered,
+                    $status.' is a pre-approval status and must not be offered at '.$at.'.',
+                );
+            }
+        }
     }
 
     public function test_approving_a_document_sent_back_marks_it_ready_for_submission(): void

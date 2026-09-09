@@ -278,19 +278,39 @@ class DocumentSlots
         ]);
 
         /*
+         * The application follows the checklist, whichever way the slot came.
+         *
          * A re-upload against a refused slot is the provider side answering
-         * Updates Required. Once nothing on the checklist is still refused,
-         * the application is the officer's to read again, and it goes back to
-         * Review Applications without anybody typing it, see Review::settle.
+         * Updates Required: once nothing is still refused, the file is the
+         * officer's to read again and goes back without anybody typing it.
+         * That was the only case this handled.
+         *
+         * A FIRST upload matters too, but only in post-approval, where the
+         * file may already be sitting on a "ready to go" label. An optional
+         * document filed after the required ones were cleared left the file
+         * on Apply for COR / Apply for NIC carrying a scan nobody had read —
+         * a package that calls itself ready while holding an unassessed
+         * document. Section 5 is about EVERY document being marked Ready for
+         * submission, not only the required ones, so the file steps back to
+         * collecting until this one is read.
+         *
+         * Pre-approval is deliberately left alone: there the officer drives
+         * Review Applications → Assessment feedback by hand, and settling on
+         * a fresh upload would walk the file forward under them.
          */
-        if ($from === DocumentStatus::UPDATE_REQUIRED) {
-            try {
-                Review::settle($slot->loadMissing('application')->application, $actor);
-            } catch (\InvalidArgumentException|AuthorizationException $e) {
-                // The slot already moved. Application inference must not
-                // undo the upload that just landed.
-                report($e);
-            }
+        $application = $slot->loadMissing('application')->application;
+        $post = ($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+
+        if ($from !== DocumentStatus::UPDATE_REQUIRED && ! $post) {
+            return;
+        }
+
+        try {
+            Review::settle($application, $actor);
+        } catch (\InvalidArgumentException|AuthorizationException $e) {
+            // The slot already moved. Application inference must not
+            // undo the upload that just landed.
+            report($e);
         }
     }
 

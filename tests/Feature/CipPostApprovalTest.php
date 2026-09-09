@@ -764,6 +764,70 @@ class CipPostApprovalTest extends TestCase
         });
     }
 
+    /**
+     * "All documents READY FOR SUBMISSION" counts the optional ones somebody
+     * actually filed.
+     *
+     * The brief's COR list is three required documents and three Real Estate
+     * ones marked (opt). An optional slot nobody filled is not a document
+     * anybody is waiting on, and must not hold the package. One that WAS
+     * filed is a piece of paper going to the Unit, so the file is not ready
+     * while a reviewer still has it open.
+     */
+    public function test_an_uploaded_optional_document_holds_apply_for_cor_until_it_is_read(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        // Real Estate, because that is what the brief's optional COR trio
+        // belongs to.
+        $application->forceFill(['investment_type' => InvestmentType::REAL_ESTATE])->save();
+        Requirements::flush();
+        Requirements::materialiseApplication($application->fresh(['people']));
+
+        $person = $application->fresh(['people'])->people->first();
+        $optional = $person->documents()
+            ->where('required', false)
+            ->whereNotNull('requirement_id')
+            ->first();
+        $this->assertNotNull($optional, 'The Real Estate COR list carries optional documents.');
+
+        // Every required document cleared; the optional one left untouched.
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $this->assertSame(
+            Status::APPLY_FOR_COR,
+            $application->fresh()->status,
+            'An optional document nobody filed is not one the package waits for.',
+        );
+
+        // Now somebody files that optional document. It is going to the Unit,
+        // so it has to be read before the package is ready again.
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            $optional->type,
+            UploadedFile::fake()->create($optional->type.'.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $this->assertSame(
+            DocumentStatus::APPLICATION_REVIEW,
+            $optional->fresh()->status,
+            'A filed document waits on a reviewer, optional or not.',
+        );
+        $this->assertSame(
+            Status::POST_APPROVAL,
+            $application->fresh()->status,
+            'A filed document nobody has read yet takes the file off Apply for COR.',
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$optional->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+    }
+
     public function test_leftover_pre_approval_slots_do_not_block_apply_for_cor(): void
     {
         $staff = $this->staff();
