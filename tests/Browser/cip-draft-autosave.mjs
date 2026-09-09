@@ -175,7 +175,7 @@ try {
   const notice = await page.locator('[data-cip-draft-resumed]').innerText().catch(() => '');
   // Worded by whatever the draft actually kept — the point is that the reader
   // is told where they are and what, if anything, is still outstanding.
-  check(/picked up where you left off/i.test(notice), `the resume is announced ("${notice.replace(/\s+/g, ' ').slice(0, 90)}")`);
+  check(/where you left off/i.test(notice), `the resume is announced ("${notice.replace(/\s+/g, ' ').slice(0, 90)}")`);
 
   step(5.55, 'Back from a draft returns to the table it was opened from');
   /*
@@ -195,6 +195,38 @@ try {
   await page.locator('[data-cip-draft]').first().click();
   await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
   await page.waitForTimeout(1500);
+
+  step(5.58, 'A scan chosen with nothing else typed is still saved');
+  /*
+   * The autosave was wired to the text fields and the dependent buttons
+   * only, so choosing a photo or a document changed nothing it noticed. The
+   * photo appeared to survive because a later keystroke flushed it; a
+   * document chosen last — which is what filling a form from paper looks
+   * like — was never saved at all, and the reopened draft asked for it
+   * again. Nothing is typed here on purpose: the file must be the whole
+   * change.
+   */
+  draftPosts.length = 0;
+  const slots = await docSlots();
+  if (slots.length) {
+    await page.setInputFiles(`[data-cip-file="${slots[0]}"]`, {
+      name: 'scan.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n'),
+    });
+    await page.waitForTimeout(3000);
+    check(draftPosts.filter(m => m === 'POST').length > 0,
+      'choosing a document saves the draft on its own');
+    const filed = await page.evaluate(async () => {
+      const res = await fetch('/portal/cip/applications/draft?phase=pre_approval', {
+        credentials: 'same-origin', headers: { Accept: 'application/json' },
+      });
+      const json = await res.json();
+
+      return (json.draft && json.draft.filed) || [];
+    });
+    check(filed.includes(slots[0]), `and the server keeps it (${filed.join(',') || 'nothing filed'})`);
+  }
 
   step(5.6, 'A reopened draft goes on saving itself');
   draftPosts.length = 0;

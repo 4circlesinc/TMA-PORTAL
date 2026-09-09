@@ -129,6 +129,46 @@ class CipApplicationDraftTest extends TestCase
         );
     }
 
+    /**
+     * Autosaving twice does not fight the first save.
+     *
+     * The wizard posts the whole form each time, so the second save re-sends
+     * a photo the first one filed. DocumentSlots refuses a second upload
+     * against a filled slot — rightly, that is what forces Upload new version
+     * — so without a skip here every keystroke after choosing a photo
+     * answered with a 500.
+     */
+    public function test_saving_a_draft_twice_with_the_same_photo_does_not_error(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $body = $this->answers($provider, [
+            'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
+        ]);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $body, ['Accept' => 'application/json'])
+            ->assertOk();
+
+        // The same form again, as the autosave sends it.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
+                'occupation' => 'Engineer',
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        // One photo, and the answer typed after it was kept.
+        $this->assertSame(1, $main->documents()->where('type', 'passport_photo')->count());
+        $this->assertSame('ENGINEER', $main->occupation === null ? '' : mb_strtoupper($main->occupation));
+    }
+
     /** A resumed draft says which slots it already holds a scan for. */
     public function test_a_resumed_draft_names_the_files_it_kept(): void
     {

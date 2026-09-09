@@ -192,9 +192,6 @@
        and after filing. Silence is the promise: a form that says "Saved" and
        is not is worse than one that never claimed to be. */
     draftOff: false,
-    /* Slots a resumed draft is still waiting on. The scans that were chosen
-       come back with it; this is what did not. */
-    draftMissingFiles: [],
     /* A draft was found and put back. Drives the notice at the top. */
     draftResumed: false,
     /* Save as draft was pressed while a silent save was already in flight,
@@ -888,11 +885,9 @@
    */
   function resumedNotice() {
     if (!state.draftResumed) return '';
-    var missing = state.draftMissingFiles.length;
 
     return '<p class="tma-portal-note" data-cip-draft-resumed>' +
-      esc('Picked up where you left off.' +
-        (missing ? ' Some documents still need choosing.' : '')) +
+      esc('Pick up where you left off.') +
       ' <button type="button" class="tma-portal-link" data-cip-draft-discard>Start over</button></p>';
   }
 
@@ -1048,6 +1043,11 @@
               state.files[path] = file;
               state.previews[path] = dataUrl;
               delete state.errors[path];
+              // A chosen scan is a change to the draft like any other, and
+              // the ONLY change on a form somebody is filling from paper —
+              // without this the photo waited for the next keystroke to be
+              // saved, and a document chosen last was never saved at all.
+              touchDraft();
             }
             render(root);
           });
@@ -1072,6 +1072,7 @@
         delete state.files[path];
         delete state.previews[path];
         render(root);
+        touchDraft();
       });
     });
   }
@@ -1101,6 +1102,7 @@
         list.splice(Number(btn.getAttribute('data-cip-file-index')), 1);
         if (!list.length) delete state.documents[path];
         render(root);
+        touchDraft();
       });
     });
 
@@ -1203,6 +1205,7 @@
     if (list.length) state.documents[path] = list;
     if (input) input.value = '';
     render(root);
+    touchDraft();
   }
 
   function wireDependents(root) {
@@ -1785,7 +1788,6 @@
     state.draftSent = '';
     state.draftSavedAt = null;
     state.draftResumed = false;
-    state.draftMissingFiles = [];
     // A filed application has no draft to discard; a draft discards itself
     // by name, whichever way the form was opened.
     if (state.applicationId && !draftId) return;
@@ -1828,7 +1830,6 @@
      * that never mentioned the files was exactly the silence it exists to
      * break.
      */
-    noteMissingFiles();
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
     state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
@@ -1836,35 +1837,6 @@
     return true;
   }
 
-  /*
-   * The scans this form is going to ask for, none of which a draft can hold.
-   *
-   * Asked of the requirement templates rather than requiredPaths(), which
-   * names the TYPED answers only — reading it there quietly produced an empty
-   * list, and a resume notice that never mentioned the files was exactly the
-   * silence the notice exists to break.
-   */
-  function noteMissingFiles() {
-    /*
-     * What the resumed draft is still short of.
-     *
-     * A draft keeps its scans now, so this asks what came back rather than
-     * assuming nothing did: state.filed is the server's answer, slot by slot.
-     * Listing every field regardless would tell a reader to choose six
-     * documents again that are sitting there already.
-     */
-    state.draftMissingFiles = [];
-
-    var want = function (path) {
-      if (!state.filed[path]) state.draftMissingFiles.push(path);
-    };
-
-    docFields('principal').forEach(function (d) { want(d.field); });
-    if (sponsored()) {
-      docFields('sponsor', 'sponsor.').forEach(function (d) { want('sponsor.' + d.field); });
-    }
-    if (photoRequiredFor('passportPhoto')) want('passportPhoto');
-  }
 
   /* When the draft was last saved, in the reader’s own words. */
   function savedAgo() {
@@ -2251,7 +2223,6 @@
     state.draftOff = false;
     state.draftResumed = false;
     state.draftAnnounce = false;
-    state.draftMissingFiles = [];
     state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
@@ -2311,8 +2282,7 @@
         state.submissionKey = state.submissionKey || mintKey();
         state.draftResumed = true;
         state.draftSavedAt = state.record.updatedAt ? new Date(state.record.updatedAt) : null;
-        noteMissingFiles();
-        state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
+            state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
       }
       /*
        * The saved draft goes in last, over the provider the form filled in

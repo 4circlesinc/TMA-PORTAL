@@ -1232,6 +1232,26 @@ class Intake
             return;
         }
 
+        /*
+         * A photo already filed stays filed.
+         *
+         * The same rule fileDocuments has kept all along, and the photo
+         * needed it once a draft began keeping its scans: the wizard posts
+         * the whole form on every autosave, so the second save re-sent a
+         * photo the first had filed and DocumentSlots::fill threw — a 500 on
+         * a keystroke. Replacing a filed answer is the file viewer's Upload
+         * new version, not a side effect of typing a surname.
+         */
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->first();
+
+        if ($slot?->file_id
+            && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
+            return;
+        }
+
         // The slot first: Vault::store consumes the temp file, so the bytes
         // for the avatar have to be read before the file is moved.
         $binary = (string) file_get_contents($upload->getRealPath());

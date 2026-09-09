@@ -87,6 +87,17 @@ class CipApplicationDraftController extends Controller
         $user = $request->user();
         abort_unless(CipAccess::canCreate($user), 404);
 
+        /*
+         * One scan on its own is still a list of one.
+         *
+         * The wizard posts `passportBioPage[]`, but a slot holding a single
+         * file arrives as a bare upload, and the rules below expect an array
+         * — so without this the file failed its rule and was quietly dropped
+         * while the photo, which is not a list, went through. The reader saw
+         * a draft that had kept the photo and still demanded every document.
+         */
+        Intake::normaliseDocuments($request);
+
         $data = $request->validate(Intake::draftRules(), Intake::messages());
         $draft = $this->mine($request);
 
