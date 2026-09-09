@@ -197,6 +197,9 @@
     draftMissingFiles: [],
     /* A draft was found and put back. Drives the notice at the top. */
     draftResumed: false,
+    /* Save as draft was pressed while a silent save was already in flight,
+       so the answer that save gets is owed to the reader. */
+    draftAnnounce: false,
   };
 
   function esc(s) { return ui().esc(s); }
@@ -1479,11 +1482,35 @@
    * say is when it last succeeded, and it stops saying anything at all the
    * moment it stops being true.
    */
-  function saveDraft() {
-    if (!draftable()) return;
+  /*
+   * `opts.announce` is the difference between the timer and the button.
+   *
+   * The timer is meant to go unnoticed: it says nothing on the way out, and
+   * on failure it goes quiet rather than interrupt somebody mid-sentence. A
+   * reader who PRESSED Save as draft asked a question and is owed an answer,
+   * either way — so an announced save toasts, and an announced failure says
+   * plainly that the draft is not saved rather than leaving them to infer it
+   * from a line that stopped updating.
+   */
+  function saveDraft(opts) {
+    opts = opts || {};
+    var announce = !!opts.announce;
+    if (!draftable()) {
+      // Pressed on a form that cannot be drafted at all. Only reachable if
+      // the button outlives the state that drew it; say so rather than
+      // appear to have worked.
+      if (announce) ui().toastError('This form isn’t saved as a draft.');
+
+      return;
+    }
     // One in flight at a time. The one that finishes will see the flag and
     // send the newer answers itself, so nothing is lost by waiting.
-    if (state.draftSaving) { state.draftDirty = true; return; }
+    if (state.draftSaving) {
+      state.draftDirty = true;
+      if (announce) state.draftAnnounce = true;
+
+      return;
+    }
 
     var answers = draftAnswers();
     var payload = JSON.stringify({
@@ -1491,11 +1518,36 @@
       answers: answers,
       dependents: state.dependents,
     });
-    // Nothing has changed since the last save, so there is nothing to write.
-    if (payload === state.draftSent) { state.draftDirty = false; return; }
+    /*
+     * Nothing typed at all. The timer simply does nothing; a reader who
+     * pressed the button is told why rather than shown a "Draft saved" for
+     * an empty form — and an empty save would clear the draft they may be
+     * trying to keep.
+     */
+    if (announce && Object.keys(answers).length === 0) {
+      ui().toastError('Fill in something to save first.');
+
+      return;
+    }
+    /*
+     * Unchanged since the last save. The timer stops here — there is nothing
+     * to write. The button does not: the answer to "is my work saved?" is
+     * yes, and it should say so rather than appear to have done nothing.
+     */
+    if (payload === state.draftSent) {
+      state.draftDirty = false;
+      if (announce) {
+        state.draftSavedAt = state.draftSavedAt || new Date();
+        paintDraftStatus();
+        ui().toast('Draft saved');
+      }
+
+      return;
+    }
 
     state.draftSaving = true;
     state.draftDirty = false;
+    if (announce) setDraftButtonBusy(opts.button, true);
 
     fetch(DRAFT_URL, {
       method: 'POST',
@@ -1504,22 +1556,27 @@
       body: payload,
     }).then(function (res) {
       state.draftSaving = false;
+      if (announce) setDraftButtonBusy(opts.button, false);
       if (!res.ok) {
         /*
-         * The server refused. Not shouted about — the reader is mid-form and
-         * can still file — but the autosave goes quiet rather than carry on
-         * failing, and the line that said their work was safe is removed,
-         * because by now it is not.
+         * The server refused. Not shouted about when it was the timer — the
+         * reader is mid-form and can still file — but the autosave goes quiet
+         * rather than carry on failing, and the line that said their work was
+         * safe is removed, because by now it is not.
          */
         state.draftOff = true;
         state.draftSavedAt = null;
         paintDraftStatus();
+        if (announce || state.draftAnnounce) ui().toastError('Could not save this draft');
+        state.draftAnnounce = false;
 
         return;
       }
       state.draftSent = payload;
       state.draftSavedAt = new Date();
       paintDraftStatus();
+      if (announce || state.draftAnnounce) ui().toast('Draft saved');
+      state.draftAnnounce = false;
       // Answers changed while that was in the air.
       if (state.draftDirty) saveDraft();
     }).catch(function () {
@@ -1529,12 +1586,31 @@
        * filling it with a copy of a half-typed form every few seconds would
        * bury the filings that matter. It simply tries again on the next
        * change, and says nothing it cannot stand behind in the meantime.
+       *
+       * A pressed save is different: the reader asked, so they are told the
+       * draft is on no server yet rather than left believing it is.
        */
       state.draftSaving = false;
       state.draftSavedAt = null;
       paintDraftStatus();
-      if (state.draftDirty) return;
+      if (announce) setDraftButtonBusy(opts.button, false);
+      if (announce || state.draftAnnounce) {
+        ui().toastError('Could not reach the server. This draft isn’t saved yet.');
+      }
+      state.draftAnnounce = false;
     });
+  }
+
+  /* The pressed button, while its save is in the air. */
+  function setDraftButtonBusy(button, busy) {
+    if (!button) return;
+    button.disabled = !!busy;
+    if (busy) {
+      button.dataset.cipDraftLabel = button.textContent;
+      button.textContent = 'Saving…';
+    } else {
+      button.textContent = button.dataset.cipDraftLabel || 'Save as draft';
+    }
   }
 
   /*
@@ -1577,11 +1653,23 @@
     state.dependents = Math.min(Number(draft.dependents) || 0, MAX_DEPENDENTS);
     state.draftSavedAt = draft.savedAt ? new Date(draft.savedAt) : null;
     state.draftResumed = true;
-    state.draftMissingFiles = requiredPaths().filter(function (path) {
-      var tail = path.split('.').pop();
-
-      return !!allDocFields()[tail] || tail === 'passportPhoto';
+    /*
+     * The scans this form is going to ask for, none of which a draft can
+     * hold. Asked of the requirement templates rather than requiredPaths(),
+     * which names the TYPED answers only — reading it here quietly produced
+     * an empty list, and a resume notice that never mentioned the files was
+     * exactly the silence the notice exists to break.
+     */
+    state.draftMissingFiles = [];
+    docFields('principal').forEach(function (d) {
+      state.draftMissingFiles.push(d.field);
     });
+    if (sponsored()) {
+      docFields('sponsor', 'sponsor.').forEach(function (d) {
+        state.draftMissingFiles.push('sponsor.' + d.field);
+      });
+    }
+    if (photoRequiredFor('passportPhoto')) state.draftMissingFiles.push('passportPhoto');
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
     state.draftSent = JSON.stringify({
@@ -1961,6 +2049,7 @@
     state.draftSavedAt = null;
     state.draftOff = false;
     state.draftResumed = false;
+    state.draftAnnounce = false;
     state.draftMissingFiles = [];
     state.record = null;
     state.onDone = opts.onDone || null;
@@ -2068,5 +2157,7 @@
 
   // submit() is the page toolbar's Add button: the form looks and behaves
   // like every other form in the hub, so its actions live where they do.
-  window.TMACipIntake = { open: open, submit: submit };
+  /* submit() is the page toolbar's Add; saveDraft() its Save as draft. Both
+     live in the head with Cancel, so both are called from there. */
+  window.TMACipIntake = { open: open, submit: submit, saveDraft: saveDraft };
 })();

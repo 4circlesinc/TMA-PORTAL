@@ -217,6 +217,39 @@ field placement and drawing, and computed CSS only exist in a browser.
 
   The account has to be an officer or an administrator: an `Employee` 302s to
   `/auth/role-pending` on every portal route.
+- **`cip-draft-autosave.mjs`** — the wizard's draft. `CipApplicationDraftTest`
+  pins the endpoint; this pins the half that only exists in a browser: that
+  **typing alone** writes a draft with nothing pressed, that a burst of it is
+  one write rather than one per key, that Save as draft in the head answers out
+  loud, and — the assertion that matters — that leaving the form and coming
+  back returns the work instead of an empty page. It walks both new filings,
+  pre-approval and post-approval, and checks they keep separate drafts.
+
+  It watches the network rather than the screen for the autosave itself: "is it
+  saving" is answered by what went over the wire, because a status line can say
+  anything. Two things it was written to catch, both of which it did. The first
+  is environmental and worth knowing about: a stale `artisan serve` from
+  another session answering on the port under test serves a **different
+  database**, and the symptom is a 500 naming a table that exists — check
+  `lsof -ti:<port>` before believing a failure. The second was a real bug. The
+  resume notice tells the reader which scans have to be chosen again, and it
+  was computing them from `requiredPaths()`, which names only the *typed*
+  answers — so the list was always empty and the warning never appeared, which
+  is precisely the silence the notice exists to break.
+
+  Same setup as `cip-intake.mjs`. A fresh browser is a new device every run, so
+  the harness reads the emailed sign-in code out of the mail log — it matches
+  the big letter-spaced cell in the postcard, because the email's own CSS is
+  full of six-digit strings (`#000000`) and a loose grep picks those instead.
+  That means `MAIL_MAILER=log` and truncating `storage/logs/laravel.log` first.
+
+  ```sh
+  : > storage/logs/laravel.log
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local \
+    MAIL_MAILER=log CACHE_STORE=array SESSION_DRIVER=file QUEUE_CONNECTION=sync \
+    php artisan serve --host=127.0.0.1 --port=8933 --no-reload &
+  TMA_BASE_URL=http://127.0.0.1:8933 node tests/Browser/cip-draft-autosave.mjs
+  ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
   the endpoint *leaves behind*, which is where the parts that only exist after

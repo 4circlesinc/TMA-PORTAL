@@ -5057,6 +5057,22 @@
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
+        /*
+         * Save as draft, beside the button that files it.
+         *
+         * The wizard already saves itself as the reader types, but an
+         * autosave nobody can see is an autosave nobody trusts — and a
+         * reader about to close a laptop on a half-finished application
+         * wants to press something. This is that press: the same save the
+         * timer makes, made now and answered for out loud.
+         *
+         * New filings only. Editing a filed application is not drafted, so
+         * offering the button there would promise a resume that never comes.
+         */
+        (editingApp || hideSave
+          ? ''
+          : '<button type="button" class="tma-dash__clients-edit-btn" data-cip-draft-save>' +
+            'Save as draft</button>') +
         (hideSave
           ? ''
           : '<button type="button" class="tma-dash__clients-message-btn" ' + saveAttr + '>' +
@@ -12792,6 +12808,15 @@
       if (e.target.closest('[data-cip-save]')) {
         e.preventDefault();
         if (window.TMACipIntake) window.TMACipIntake.submit();
+        return;
+      }
+      var draftSave = e.target.closest('[data-cip-draft-save]');
+      if (draftSave) {
+        e.preventDefault();
+        // The wizard owns the draft and the answer to it — this only asks.
+        if (window.TMACipIntake && window.TMACipIntake.saveDraft) {
+          window.TMACipIntake.saveDraft({ announce: true, button: draftSave });
+        }
         return;
       }
       var peopleSave = e.target.closest('[data-cip-people-save]');
