@@ -38364,8 +38364,10 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__cip-assigned .tma-people { min-width: 0; }
 
-.tma-cip-table th:nth-child(9),
-.tma-cip-table td:nth-child(9) {
+/* Assigned to. Counted from the left, so it moved when Contact person was
+   taken out of the table — nine columns became eight. */
+.tma-cip-table th:nth-child(8),
+.tma-cip-table td:nth-child(8) {
   min-width: 140px;
 }
 

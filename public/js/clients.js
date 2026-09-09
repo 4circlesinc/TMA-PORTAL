@@ -2812,7 +2812,6 @@
     number: 'Application',
     applicant: 'Applicant',
     provider: 'Service provider',
-    contact: 'Contact person',
     email: 'Contact email',
     investment: 'Investment',
     family: 'Family',
@@ -3466,7 +3465,6 @@
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
       '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
-      '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' +
       (a.contactEmail
         ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
