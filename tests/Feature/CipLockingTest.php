@@ -333,15 +333,6 @@ class CipLockingTest extends TestCase
         $slot->forceFill(['status' => DocumentStatus::UPDATE_REQUIRED])->save();
         $file->forceFill(['review_status' => DocumentStatus::UPDATE_REQUIRED])->save();
 
-        /*
-         * Back at the decision to undo it. The two lanes keep their own
-         * status vocabularies, so a post-approval file is only pulled into
-         * the pre-decision lifecycle from Granted — the point where a grant
-         * issued in error is undone. What this test is about is what happens
-         * to the FILE afterwards, which is the same either way.
-         */
-        $application->fresh()->forceFill(['status' => Status::GRANTED])->save();
-
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->fresh()->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,

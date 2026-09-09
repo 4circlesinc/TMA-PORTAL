@@ -177,7 +177,10 @@ class CipReviewTest extends TestCase
 
         $reader = $this->user(Role::REVIEWING_OFFICER, 'ro@example.com');
 
-        foreach ([Status::POST_APPROVAL, Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC] as $at) {
+        // Post-Approval is deliberately absent: a file that has just crossed
+        // over and assessed nothing may still be pulled back, which is how a
+        // grant issued in error is undone. See the test below.
+        foreach ([Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC, Status::PENDING_COR] as $at) {
             $application->forceFill(['status' => $at])->save();
             $fresh = $application->fresh();
 
@@ -207,27 +210,35 @@ class CipReviewTest extends TestCase
      * it — so the statuses it lands on are the ones it will then wear. Once
      * the file is working the lane, the door is shut.
      */
-    public function test_a_granted_file_may_still_be_pulled_back_into_the_pre_approval_lane(): void
+    public function test_a_file_at_the_lane_entry_may_still_be_pulled_back_into_pre_approval(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+
         $application = $this->application($staff, Status::GRANTED);
-        $application->forceFill([
-            'phase' => Phase::POST_APPROVAL,
-            'decision' => CipApplication::DECISION_GRANTED,
-            'decided_at' => now(),
-        ])->save();
 
-        $this->assertContains(
-            Status::ASSESSMENT_FEEDBACK,
-            Engine::availableOverrides($application->fresh(), $staff),
-        );
+        // Both ends of the crossing: the decision itself, and the file having
+        // just entered the lane with nothing assessed.
+        foreach ([Status::GRANTED, Status::POST_APPROVAL] as $at) {
+            $application->forceFill([
+                'status' => $at,
+                'phase' => Phase::POST_APPROVAL,
+                'decision' => CipApplication::DECISION_GRANTED,
+                'decided_at' => now(),
+            ])->save();
 
-        $moved = Engine::set($application->fresh(), Status::ASSESSMENT_FEEDBACK, $staff, [
-            'note' => 'Granted in error.',
-        ]);
+            $this->assertContains(
+                Status::ASSESSMENT_FEEDBACK,
+                Engine::availableOverrides($application->fresh(), $staff),
+                'A file at '.$at.' can still have its grant undone.',
+            );
 
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $moved->status);
-        $this->assertSame(Phase::PRE_APPROVAL, $moved->fresh()->phase);
+            $moved = Engine::set($application->fresh(), Status::ASSESSMENT_FEEDBACK, $staff, [
+                'note' => 'Granted in error.',
+            ]);
+
+            $this->assertSame(Status::ASSESSMENT_FEEDBACK, $moved->status);
+            $this->assertSame(Phase::PRE_APPROVAL, $moved->fresh()->phase);
+        }
     }
 
     /** Hidden from the picker is not enough; the write refuses it too. */

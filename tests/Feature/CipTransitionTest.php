@@ -441,16 +441,25 @@ class CipTransitionTest extends TestCase
             Engine::lockedStatuses($post, $officer),
         );
         /*
-         * The two lanes keep their own vocabularies. A file working the
-         * post-approval lane is not offered the pre-decision lifecycle's
-         * labels — not as a jump, and not as a locked row an officer reads
-         * as "where this file could go". The lane's own steps belong to the
-         * stage buttons, so neither list offers those either.
+         * A file at Post-Approval has only just crossed over and assessed
+         * nothing, so undoing the grant is still on offer — an officer sees
+         * that as a locked row, the same list the administrator can act on.
          */
-        $this->assertNotContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
-        $this->assertNotContains(Status::PENDING_REVIEW, Engine::lockedStatuses($post, $officer));
-        $this->assertNotContains(Status::BACKGROUND_CHECK, Engine::lockedStatuses($post, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
         $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($post, $officer));
+
+        /*
+         * Once the file is working the lane, the two vocabularies part. A
+         * COR application in progress is not offered the pre-decision
+         * lifecycle's labels — not as a jump, and not as a locked row.
+         */
+        $working = $this->at($this->application($admin), Status::APPLY_FOR_COR);
+        $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        foreach ([Status::ASSESSMENT_FEEDBACK, Status::PENDING_REVIEW, Status::BACKGROUND_CHECK] as $preApproval) {
+            $this->assertNotContains($preApproval, Engine::availableOverrides($working, $admin));
+            $this->assertNotContains($preApproval, Engine::lockedStatuses($working, $officer));
+        }
 
         // A locked status is never one the officer could already drive, so
         // the picker cannot list the same status twice.

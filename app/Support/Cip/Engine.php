@@ -341,6 +341,19 @@ class Engine
     }
 
     /**
+     * A post-approval file that has not yet started the lane's own work.
+     *
+     * Granted and Post-Approval both sit at the crossing: the decision, and
+     * the file having just entered the lane with nothing assessed. Neither
+     * has a COR application in progress, so both are still places a grant
+     * issued in error can be walked back from.
+     */
+    private static function atLaneEntry(CipApplication $application): bool
+    {
+        return in_array($application->status, [Status::GRANTED, Status::POST_APPROVAL], true);
+    }
+
+    /**
      * The two lanes keep their own vocabularies.
      *
      * Pre-approval and post-approval are separate processes with separate
@@ -351,13 +364,18 @@ class Engine
      * Pending Review, Non-compliant or Background Check, and a pre-approval
      * file is not offered the lane's own labels.
      *
-     * The exception is a file still sitting AT the decision. Granted is where
-     * a grant issued in error is undone, and that pull-back takes the file's
-     * phase back to pre-approval with it (see {@see set()}), so the statuses
-     * it lands on are the ones it will then be wearing. Once the file has
-     * moved past Granted into the lane's own work, that door is closed: it
-     * has a COR application in progress, and sending it back to Background
-     * Check would put it in a queue for a decision it already holds.
+     * The exception is a file that has not started the lane's work. Granted
+     * is the decision itself; Post-Approval is the file having just crossed
+     * over, before a single COR document has been assessed. From either, a
+     * grant issued in error is still ordinary to undo, and the pull-back
+     * carries the file's phase back to pre-approval with it (see
+     * {@see set()}), so the statuses it lands on are the ones it will then be
+     * wearing.
+     *
+     * Once the file is actually working the lane — Apply for COR onward —
+     * that door shuts: it has a COR application in progress, and sending it
+     * back to Background Check would put it in a queue for a decision it
+     * already holds.
      */
     private static function overrideFits(CipApplication $application, string $to): bool
     {
@@ -381,7 +399,7 @@ class Engine
             return true;
         }
 
-        if ($post && $application->status !== Status::GRANTED) {
+        if ($post && ! self::atLaneEntry($application)) {
             return ! in_array($to, self::PRE_APPROVAL_ONLY, true);
         }
 
