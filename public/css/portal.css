@@ -965,6 +965,32 @@
 }
 
 /*
+ * The Investment card, which is the one row whose field count changes.
+ *
+ * Three, four or five: the provider and investment type are always there,
+ * the CIP number only on a post-approval filing, and "Specify investment
+ * type" only when Other is picked. Fixed threes therefore left the fourth
+ * field stranded alone on a second row — the reader saw a row of three and
+ * an orphan.
+ *
+ * So this one auto-fits: as many as will fit at a readable width, wrapping
+ * only when they genuinely will not. The reflow the shared grid avoids by
+ * being fixed is not a risk here, because these fields are read as a set of
+ * answers about the investment rather than in a fixed order.
+ *
+ * 200px is the floor a select showing "Select an investment type" needs
+ * before it starts truncating.
+ */
+.tma-portal-form-grid--investment {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* One column on a phone, the same break the rest of the kit uses. */
+@media (max-width: 700px) {
+  .tma-portal-form-grid--investment { grid-template-columns: minmax(0, 1fr); }
+}
+
+/*
  * A person's own fields, two to a row.
  *
  * Main applicant, sponsor and each dependent sit beside a single column of

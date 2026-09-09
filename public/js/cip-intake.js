@@ -730,7 +730,9 @@
     });
 
     return card('Investment',
-      '<div class="tma-portal-form-grid">' +
+      // Its own grid: this row is three, four or five fields depending on the
+      // answers, so it fits what it has rather than stranding the last one.
+      '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
       // One provider and nothing to choose: say whose file this is instead
       // of offering a select of one.
       (state.options && state.options.providerFixed
