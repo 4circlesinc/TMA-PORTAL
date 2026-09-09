@@ -6456,7 +6456,7 @@
     });
     if (!rows.length) return '';
 
-    return companyCard('Updates required', overviewList(rows.join('')), {
+    return companyCard('Updates Required', overviewList(rows.join('')), {
       half: true,
       count: rows.length,
     });
@@ -12577,11 +12577,11 @@
   var CLIENTS_ADMIN_PAGES = {
     'cip-admin': { title: 'Administrator' },
     'clienthub-access': { title: 'Access' },
-    'service-teams': { title: 'Service teams' },
-    'custom-fields': { title: 'Custom fields' },
-    'cip-documents': { title: 'Document requirements' },
-    'cip-letters': { title: 'Granted and Denied letters' },
-    'cip-distribution': { title: 'Distribution group' },
+    'service-teams': { title: 'Service Teams' },
+    'custom-fields': { title: 'Custom Fields' },
+    'cip-documents': { title: 'Document Requirements' },
+    'cip-letters': { title: 'Granted And Denied Letters' },
+    'cip-distribution': { title: 'Distribution Group' },
   };
 
   function navigateToClientsAdminPage(adminPage) {

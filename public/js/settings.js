@@ -13,10 +13,10 @@
   var NAV = [
     { id: 'profile', label: 'Profile', avatar: true },
     { id: 'theme', label: 'Theme', icon: 'Palette' },
-    { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
+    { id: 'time', label: 'Time And Language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
-    { id: 'account-security', label: 'Account security', icon: 'ShieldCheck' },
+    { id: 'account-security', label: 'Account Security', icon: 'ShieldCheck' },
   ];
 
   var TRANSPARENT_AVATAR = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -164,7 +164,7 @@
       '</div>' +
       '<hr class="tma-dash__settings-divider tma-dash__settings-profile-outer-divider">' +
       '<div class="tma-dash__settings-profile-block tma-dash__settings-profile-block--group">' +
-      '<h2 class="tma-dash__settings-section-title tma-dash__settings-profile-group-label">Account security</h2>' +
+      '<h2 class="tma-dash__settings-section-title tma-dash__settings-profile-group-label">Account Security</h2>' +
       renderRow({ label: 'Email', value: email || 'Loading…', valueMuted: true, action: 'change-email' }) +
       profileInnerDivider() +
       renderRow({
@@ -390,7 +390,7 @@
   }
 
   /* localStorage key ↔ server preference key, for settings we persist to the
-     account (Time and language, Theme, Privacy, Plugins). Changing one of
+     account (Time And Language, Theme, Privacy, Plugins). Changing one of
      these write-through saves to /me/preferences; on load we hydrate
      localStorage from the server. */
   var PREF_SERVER_KEYS = {
@@ -748,10 +748,10 @@
     var prefs = readTimePrefs();
 
     return '<section class="tma-dash__settings-panel tma-dash__settings-panel--time" data-settings-panel="time" hidden data-node-id="30919:278124" data-node-id-mobile="30919:293272">' +
-      '<h2 class="tma-dash__settings-section-title tma-dash__settings-time-section-title">Time and language</h2>' +
+      '<h2 class="tma-dash__settings-section-title tma-dash__settings-time-section-title">Time And Language</h2>' +
       '<div class="tma-dash__settings-time-stack">' +
       '<div class="tma-dash__settings-time-group">' +
-      '<p class="tma-dash__settings-time-group-label">Time and language</p>' +
+      '<p class="tma-dash__settings-time-group-label">Time And Language</p>' +
       renderRow({
         label: 'Automatically set time zone',
         desc: 'Reminders, notifications and emails are delivered based on your time zone.',

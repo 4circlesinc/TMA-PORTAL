@@ -2,7 +2,7 @@
  * TMA - File & Folder manager view (registers the 'folders' view).
  *
  * Real, server-backed replacement for the localStorage folders prototype.
- * Sections: All Files / Clients / My Files / Shared with me / Shared Folders /
+ * Sections: All Files / Clients / My Files / Shared With Me / Shared Folders /
  * Favourites / File Box / Recent / Recycle Bin. Table + grid views, toolbar,
  * right-click menu, multi-select bulk actions, details, and chunked uploads
  * via the global TMAUpload manager. Reuses the existing design system
@@ -83,7 +83,7 @@
       emptyHint: 'Folders for the applications you work with will appear here.',
     },
     my: { title: 'My Files', desc: 'Files and folders you own.', empty: 'You haven’t created any files yet' },
-    shared: { title: 'Shared with me', desc: 'Items other people have shared with you.', empty: 'Nothing has been shared with you yet' },
+    shared: { title: 'Shared With Me', desc: 'Items other people have shared with you.', empty: 'Nothing has been shared with you yet' },
     'shared-folders': { title: 'Shared Folders', desc: 'Folders with active sharing or assigned people.', empty: 'No shared folders yet' },
     favorites: { title: 'Favourites', desc: 'Files and folders you starred for quick access.', empty: 'No favourites yet' },
     filebox: { title: 'File Box', desc: 'Loose files not yet organised into a folder.', empty: 'Your File Box is empty' },

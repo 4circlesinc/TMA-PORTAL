@@ -2,7 +2,7 @@
  * TMA - Dashboard home library strip
  * Default (organization) folders listed as panels, each with a scrollable
  * list of twenty files (ten on screen, the rest behind the scroll) and a
- * See more control past that, plus a Recent Files / Shared with me table
+ * See more control past that, plus a Recent Files / Shared With Me table
  * that mirrors the Folders → All Files list.
  * Global: window.TMAPortalHomeLibrary
  */
@@ -467,7 +467,7 @@
   /*
    * Where a Shift range measures from, per tab.
    *
-   * Recent Files and Shared with me hold their own selections, so they hold
+   * Recent Files and Shared With Me hold their own selections, so they hold
    * their own anchors too — switching tabs and Shift-clicking must not measure
    * from a row on the list you just left.
    */
@@ -652,7 +652,7 @@
      */
     var TABS = [
       { key: 'recent', label: 'Recent Files', icon: 'images/icons/phosphor/ClockCounterClockwise.svg', mono: true },
-      { key: 'shared', label: 'Shared with me', icon: 'images/icons/phosphor/ShareNetwork.svg', mono: true },
+      { key: 'shared', label: 'Shared With Me', icon: 'images/icons/phosphor/ShareNetwork.svg', mono: true },
     ];
 
     /*

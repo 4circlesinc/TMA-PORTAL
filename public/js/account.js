@@ -1291,7 +1291,7 @@
     bindProfileUserChange(container);
   }
 
-  /* Edit Profile opens the real editor. Account settings → My profile, which
+  /* Edit Profile opens the real editor. Account settings → My Profile, which
      already owns validation, the photo cropper and the PUT to /profile. A
      second form here would be a copy of all three, drifting from the day it
      shipped. In-app where the shell can route; a plain load otherwise. */
@@ -1302,7 +1302,7 @@
         view: 'admin',
         adminPage: 'profile',
         title: 'Account settings',
-        crumb: 'Account settings / My profile',
+        crumb: 'Account settings / My Profile',
       });
       // The settings shell may not be on this page at all; if it never took,
       // fall through to the URL that serves it.

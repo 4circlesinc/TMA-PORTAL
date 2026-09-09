@@ -7,7 +7,7 @@
   function ui() { return window.TMAPortalUI; }
   function net() { return window.TMAFilesNet; }
 
-  /* Signature requests are server-backed; reuse the shared network helper
+  /* Signature Requests are server-backed; reuse the shared network helper
      (CSRF + JSON error shaping) rather than a second fetch implementation. */
   var SIG_BASE = (window.__TMA_SITE_ROOT || '') + '/portal/signatures';
   function sigUrl(path) { return SIG_BASE + path; }
@@ -1070,8 +1070,8 @@
 
   /* ── Templates
    *
-   * System emails: administrators only, every transactional email the portal
-   * sends. Email templates: staff (templates.email) keep their own compose
+   * System Emails: administrators only, every transactional email the portal
+   * sends. Email Templates: staff (templates.email) keep their own compose
    * starting points; administrators can share a default with every mailbox.
    * Server: TemplatesController under /portal/templates.
    */
@@ -1237,7 +1237,7 @@
     ], rows);
   }
 
-  /* ── Granted and Denied letters (the Templates-side door) ─────────
+  /* ── Granted And Denied Letters (the Templates-side door) ─────────
    * The data and editor live with the CIP admin pages — portal-admin.js
    * exports them as TMACipLetters — so both doors open the same modal.
    */
@@ -1285,7 +1285,7 @@
     });
   }
 
-  /* ── Document requirements (the Templates-side door) ──────────────
+  /* ── Document Requirements (the Templates-side door) ──────────────
    * The whole page lives with the CIP admin pages — portal-admin.js
    * exports it as TMACipDocuments — so both doors show the same tables
    * and repaint each other's saves.
@@ -4421,7 +4421,7 @@
           window.TMADashboard.navigate({
             navId: 'signatures',
             view: 'signatures',
-            title: 'Signature requests',
+            title: 'Signature Requests',
             crumb: 'Signatures',
           });
         }

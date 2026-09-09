@@ -1763,7 +1763,7 @@
 
     /* ── sidebar / rightbar toggles ────────────── */
     /* Icon-only rail: native title tooltips use the visible nav label
-       ("Signatures"), never data-title ("Signature requests"), that longer
+       ("Signatures"), never data-title ("Signature Requests"), that longer
        string is the page heading and looked like a stuck gray chip over the
        Folders submenu when the rail hover-expanded. Titles are cleared as
        soon as labels are visible (hover / focus / standard expand). */
@@ -2962,7 +2962,7 @@
       if (item.signatureId) {
         activate('signatures', {
           view: 'signatures',
-          title: 'Signature requests',
+          title: 'Signature Requests',
           crumb: 'Signatures',
           signatureId: item.signatureId,
           keepDrawer: navOpts.keepDrawer,

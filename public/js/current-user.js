@@ -565,7 +565,7 @@
   function markProfileClickable() {
     document.querySelectorAll('.tma-dash__profile-avatar, .tma-dash__profile-meta').forEach(function (el) {
       el.style.cursor = 'pointer';
-      el.title = 'My profile';
+      el.title = 'My Profile';
     });
   }
 

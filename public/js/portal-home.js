@@ -50,9 +50,9 @@
     { id: 'new-user-folders', label: 'Create New User', cap: 'users.manage' },
     { id: 'shared-folders', label: 'Shared Folders', cap: 'files.viewOrg', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
     { id: 'favorites', label: 'Favorites', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Comments', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
-    { id: 'updates-required', label: 'Updates required', cap: 'workflows.view', nav: { navId: 'workflows-updates', view: 'workflows', title: 'Updates required', crumb: 'Workflows / Updates required' } },
-    { id: 'send-signature', label: 'Send for Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
+    { id: 'feedback-approval', label: 'Feedback And Comments', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback And Comments', crumb: 'Workflows / Feedback And Comments' } },
+    { id: 'updates-required', label: 'Updates Required', cap: 'workflows.view', nav: { navId: 'workflows-updates', view: 'workflows', title: 'Updates Required', crumb: 'Workflows / Updates Required' } },
+    { id: 'send-signature', label: 'Send for Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature Requests', crumb: 'Signatures' } },
   ];
 
   /*
@@ -83,7 +83,7 @@
     clientResponse: KPI_MESSAGES_NAV,
     cipNew: KPI_CIP_NAV,
     cipUpdatesRequired: KPI_CIP_NAV,
-    awaitingSignature: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' },
+    awaitingSignature: { navId: 'signatures', view: 'signatures', title: 'Signature Requests', crumb: 'Signatures' },
     cipActive: KPI_CIP_NAV,
     unreadMessages: KPI_MESSAGES_NAV,
     openComments: KPI_CIP_NAV,
@@ -3537,8 +3537,8 @@
         navigate({
           navId: 'workflows-feedback',
           view: 'workflows',
-          title: 'Feedback and Comments',
-          crumb: 'Workflows / Feedback and Comments',
+          title: 'Feedback And Comments',
+          crumb: 'Workflows / Feedback And Comments',
         });
       });
     });

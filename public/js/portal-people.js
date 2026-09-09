@@ -1,8 +1,8 @@
 /*
  * TMA - Portal People section
- * Manage users home, Browse employees, Browse client contacts,
- * Browse prospects, Shared / Personal address books, Distribution
- * groups, Resend welcome emails.
+ * Manage Users Home, Browse Employees, Browse Client Contacts,
+ * Browse Prospects, Shared / Personal Address Books, Distribution
+ * groups, Resend Welcome Emails.
  * Registers view: 'people'.
  *
  * Every screen reads the real directory. Accounts come from
@@ -294,13 +294,13 @@
   /* ── home ───────────────────────────────────────── */
 
   var HOME_LINKS = [
-    { nav: 'people-employees', screen: 'employees', title: 'Browse employees', desc: 'Manage employee accounts, permissions and personal folders.', icon: 'UserList', count: 'employees' },
-    { nav: 'people-clients', screen: 'clients', title: 'Browse client contacts', desc: 'The client accounts that can sign in to the portal.', icon: 'AddressBook', count: 'clientContacts', cap: 'viewClients' },
-    { nav: 'people-prospects', screen: 'prospects', title: 'Browse prospects', desc: 'Invitations and the people who have not activated yet.', icon: 'UserCirclePlus', count: 'prospects', cap: 'viewClients' },
-    { nav: 'people-shared-address', screen: 'shared-address', title: 'Shared address book', desc: 'Account-wide contacts available to every employee.', icon: 'BookOpen', count: 'sharedContacts' },
-    { nav: 'people-personal-address', screen: 'personal-address', title: 'Personal address book', desc: 'Your private contacts.', icon: 'Book', count: 'personalContacts' },
-    { nav: 'people-groups', screen: 'groups', title: 'Distribution groups', desc: 'Send and share with many people at once.', icon: 'UsersThree', count: 'groups', cap: 'viewGroups' },
-    { nav: 'people-resend', screen: 'resend', title: 'Resend welcome emails', desc: 'Re-invite people who have not signed in yet.', icon: 'PaperPlaneTilt', cap: 'manageUsers' },
+    { nav: 'people-employees', screen: 'employees', title: 'Browse Employees', desc: 'Manage employee accounts, permissions and personal folders.', icon: 'UserList', count: 'employees' },
+    { nav: 'people-clients', screen: 'clients', title: 'Browse Client Contacts', desc: 'The client accounts that can sign in to the portal.', icon: 'AddressBook', count: 'clientContacts', cap: 'viewClients' },
+    { nav: 'people-prospects', screen: 'prospects', title: 'Browse Prospects', desc: 'Invitations and the people who have not activated yet.', icon: 'UserCirclePlus', count: 'prospects', cap: 'viewClients' },
+    { nav: 'people-shared-address', screen: 'shared-address', title: 'Shared Address Book', desc: 'Account-wide contacts available to every employee.', icon: 'BookOpen', count: 'sharedContacts' },
+    { nav: 'people-personal-address', screen: 'personal-address', title: 'Personal Address Book', desc: 'Your private contacts.', icon: 'Book', count: 'personalContacts' },
+    { nav: 'people-groups', screen: 'groups', title: 'Distribution Groups', desc: 'Send and share with many people at once.', icon: 'UsersThree', count: 'groups', cap: 'viewGroups' },
+    { nav: 'people-resend', screen: 'resend', title: 'Resend Welcome Emails', desc: 'Re-invite people who have not signed in yet.', icon: 'PaperPlaneTilt', cap: 'manageUsers' },
   ];
 
   /* "UserCirclePlus" -> "user-circle-plus", naming the mask rule in
@@ -345,7 +345,7 @@
         '</div>';
     }
 
-    return head('Manage users', subtitle, actions) + feedProblem(f) + body;
+    return head('Manage Users', subtitle, actions) + feedProblem(f) + body;
   }
 
   /* ── employees ──────────────────────────────────── */
@@ -413,7 +413,7 @@
       ? ui().btn({ label: 'Delete selected', variant: 'danger', attrs: ' data-people-delete-users', disabled: !picked.length })
       : '';
 
-    var chrome = head('Browse client contacts', 'Client accounts that can sign in to the portal.', actions) +
+    var chrome = head('Browse Client Contacts', 'Client accounts that can sign in to the portal.', actions) +
       feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search client contacts', right);
 
     if (!f.loaded) return chrome + ui().loading({ count: 6 });
@@ -514,8 +514,8 @@
         return { value: v.value, label: v.label + (n ? ' (' + n + ')' : '') };
       }), state.inviteView || 'waiting', 'data-people-invite-view', 'Invitation status');
 
-    // Titled to match the sidebar, which says Browse prospects in all 13 shells.
-    var chrome = head('Browse prospects', 'Everyone invited, and how far each invitation got.') +
+    // Titled to match the sidebar, which says Browse Prospects in all 13 shells.
+    var chrome = head('Browse Prospects', 'Everyone invited, and how far each invitation got.') +
       feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search invitations', right);
 
     if (!f.loaded) return chrome + ui().loading({ count: 5 });
@@ -1350,7 +1350,7 @@
 
     var cancel = MORPH.unwiredOne(el, '[data-resend-cancel]');
     if (cancel) cancel.addEventListener('click', function () {
-      navigate('people-home', 'Manage users', 'People / Manage users');
+      navigate('people-home', 'Manage Users', 'People / Manage Users');
     });
 
     MORPH.unwired(el, '[data-people-resend-one]').forEach(function (b) {

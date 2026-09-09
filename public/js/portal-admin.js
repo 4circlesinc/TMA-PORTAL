@@ -1,7 +1,7 @@
 /*
  * TMA - Portal Account settings (admin area)
  * Secondary nav + admin pages: Admin Overview, Background Operations,
- * Account and Reporting, Client hub management, Security, Connectors,
+ * Account And Reporting, Client hub management, Security, Connectors,
  * Connection Manager, Storage, Advanced Preferences.
  * Registers view: 'admin'.
  */
@@ -36,38 +36,38 @@
   /* Personal sections reuse the real panels from settings.js */
   var SETTINGS_PAGES = [
     { id: 'theme', label: 'Theme', icon: 'Palette' },
-    { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
+    { id: 'time', label: 'Time And Language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
   ];
 
   var NAV = [
-    { id: 'profile', label: 'My profile', icon: 'UserCircle' },
+    { id: 'profile', label: 'My Profile', icon: 'UserCircle' },
     { id: 'theme', label: 'Theme', icon: 'Palette' },
-    { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
+    { id: 'time', label: 'Time And Language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
     { id: 'background-ops', label: 'Background Operations', icon: 'ArrowsClockwise' },
-    { group: 'reporting-group', label: 'Account and Reporting', icon: 'ChartBar', items: [
+    { group: 'reporting-group', label: 'Account And Reporting', icon: 'ChartBar', items: [
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
     { group: 'clienthub-group', label: 'CIP Console', icon: 'UsersThree', items: [
       { id: 'cip-admin', label: 'Administrator' },
       { id: 'clienthub-access', label: 'Access' },
-      { id: 'service-teams', label: 'Service teams' },
-      { id: 'custom-fields', label: 'Custom fields' },
-      { id: 'cip-documents', label: 'Document requirements' },
-      { id: 'cip-letters', label: 'Granted and Denied letters' },
-      { id: 'cip-distribution', label: 'Distribution group' },
+      { id: 'service-teams', label: 'Service Teams' },
+      { id: 'custom-fields', label: 'Custom Fields' },
+      { id: 'cip-documents', label: 'Document Requirements' },
+      { id: 'cip-letters', label: 'Granted And Denied Letters' },
+      { id: 'cip-distribution', label: 'Distribution Group' },
     ] },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
-      { id: 'account-security', label: 'Account security' },
+      { id: 'account-security', label: 'Account Security' },
       { id: 'security-insights', label: 'Security Insights' },
-      { id: 'signin-policy', label: 'Sign in policy' },
-      { id: 'security-policy', label: 'Security policy' },
-      { id: 'alert-settings', label: 'Security alert settings' },
-      { id: 'device-security', label: 'Configure device security' },
+      { id: 'signin-policy', label: 'Sign In Policy' },
+      { id: 'security-policy', label: 'Security Policy' },
+      { id: 'alert-settings', label: 'Security Alert Settings' },
+      { id: 'device-security', label: 'Configure Device Security' },
     ] },
     { id: 'connectors', label: 'Connectors', icon: 'Plugs' },
     { group: 'storage-group', label: 'Storage', icon: 'HardDrives', items: [
@@ -368,7 +368,7 @@
     },
   };
 
-  /* ── Account and Reporting ──────────────────────────────────────────
+  /* ── Account And Reporting ──────────────────────────────────────────
      All three pages below used to read and write window.TMAPortalData, the
      localStorage store, so a "report" held a name and a date and no numbers,
      the notification history listed whatever the mock had pushed into it, and
@@ -1061,17 +1061,17 @@
             attrs: 'data-cip-admin-page="clienthub-access"',
           }) +
           adminVerbRow({
-            label: 'Document requirements',
+            label: 'Document Requirements',
             help: 'The checklist templates every new application is built from.',
             attrs: 'data-cip-admin-page="cip-documents"',
           }) +
           adminVerbRow({
-            label: 'Granted and Denied letters',
+            label: 'Granted And Denied Letters',
             help: 'One pair of decision letters per investment type.',
             attrs: 'data-cip-admin-page="cip-letters"',
           }) +
           adminVerbRow({
-            label: 'Distribution group',
+            label: 'Distribution Group',
             help: 'Who receives every CIP status email, including extra mailboxes.',
             attrs: 'data-cip-admin-page="cip-distribution"',
           }) +
@@ -1194,7 +1194,7 @@
     },
   };
 
-  /* ── Service teams (real: /admin/service-teams) ────────────────────
+  /* ── Service Teams (real: /admin/service-teams) ────────────────────
      Teams are the firm's staff groups, this screen does not create a second
      kind. Putting a team on a client fans out into ordinary per-person
      assignments, which is what FileAccess reads, so folder access arrives by
@@ -1325,7 +1325,7 @@
     },
   };
 
-  /* ── Custom fields (real: /admin/client-fields) ────────────────────
+  /* ── Custom Fields (real: /admin/client-fields) ────────────────────
      Defines them here; the values are collected on the client record and
      normalised server-side on every write, so a deleted field stops being
      stored and a dropdown can never hold a value that is not one of its
@@ -2088,7 +2088,7 @@
 
       var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
 
-      return '<p class="tma-portal-subtitle">Granted and Denied letters, one pair per investment type in each lane. Pre-approval and post-approval decisions send different letters. The subject line is still the filing format; these are the bodies that go out when a decision is recorded.</p>' +
+      return '<p class="tma-portal-subtitle">Granted And Denied Letters, one pair per investment type in each lane. Pre-approval and post-approval decisions send different letters. The subject line is still the filing format; these are the bodies that go out when a decision is recorded.</p>' +
         (canEdit ? '' : '<p class="tma-portal-note">Only an administrator can change these letters.</p>') +
         (CIPLETTERS.data.types || []).map(function (t) {
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
@@ -2120,7 +2120,7 @@
     },
   };
 
-  /* ── CIP Distribution group (section 22) ───────────────────────────────────
+  /* ── CIP Distribution Group (section 22) ───────────────────────────────────
    *
    * Membership is the People group of this name. Extra mailboxes that
    * are not portal accounts are kept here.
@@ -2152,9 +2152,9 @@
           ? ui().table(['Name', 'Email'], members.map(function (m) {
             return '<tr><td>' + ui().esc(m.name) + '</td><td class="tma-portal-table__muted">' + ui().esc(m.email) + '</td></tr>';
           }).join(''))
-          : '<p class="tma-portal-note">Nobody is on this group yet. Add people on People → Distribution groups.</p>') +
+          : '<p class="tma-portal-note">Nobody is on this group yet. Add people on People → Distribution Groups.</p>') +
         '<div class="tma-portal-form-actions">' +
-          ui().btn({ label: 'Open Distribution groups', attrs: 'data-cipdist-people', variant: 'ghost' }) +
+          ui().btn({ label: 'Open Distribution Groups', attrs: 'data-cipdist-people', variant: 'ghost' }) +
         '</div>' +
         ui().field('Extra mailboxes', '<textarea class="tma-portal-textarea" data-cipdist-emails rows="4" maxlength="4000"' +
           (canEdit ? '' : ' disabled') + '>' + ui().esc(extra) + '</textarea>') +
@@ -3109,7 +3109,7 @@
         var tfa = el.querySelector('[data-si-tfa]');
         var ses = el.querySelector('[data-si-sessions]');
         if (si) si.innerHTML = '<strong>' + d.failedSignins7d + '</strong> failed sign-in attempt' + (d.failedSignins7d === 1 ? '' : 's') + ' in the last 7 days';
-        if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong>: turn it on under Account security';
+        if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong>: turn it on under Account Security';
         if (ses) ses.innerHTML = '<strong>' + d.sessions.length + '</strong> active session' + (d.sessions.length === 1 ? '' : 's');
       }).catch(function () {});
     },
@@ -3157,7 +3157,7 @@
 
         function save(done) {
           secApi('PUT', '/admin/security-policies/sign-in', p).then(function (res) {
-            if (res.ok) { ui().toast('Sign in policy saved'); if (done) done(true); }
+            if (res.ok) { ui().toast('Sign In Policy saved'); if (done) done(true); }
             else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); if (done) done(false); }).catch(function () { if (done) done(false); });
           });
         }
@@ -3237,7 +3237,7 @@
 
         function save() {
           secApi('PUT', '/admin/security-policies/security', p).then(function (res) {
-            if (res.ok) ui().toast('Security policy saved');
+            if (res.ok) ui().toast('Security Policy saved');
             else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); }).catch(function () {});
           });
         }
@@ -3257,7 +3257,7 @@
     },
   };
 
-  /* ── Security alert settings (real: /admin/security-policies) ───────
+  /* ── Security Alert Settings (real: /admin/security-policies) ───────
      Only the two events the portal actually detects are offered. The screen
      this replaced also listed "signs in from a different country" and "a
      suspicious file is uploaded", the portal does no geo-IP lookup and runs
@@ -4127,7 +4127,7 @@
     return '<button type="button" class="tma-portal-admin__nav-item tma-portal-admin__nav-user' + (active ? ' is-active' : '') + '" data-admin-nav="profile">' +
       '<img class="tma-portal-admin__nav-user-avatar" src="' + e(avatar) + '" alt="">' +
       '<span class="tma-portal-admin__nav-user-meta">' +
-      '<span class="tma-portal-admin__nav-user-name">' + e(me ? me.name : 'My profile') + '</span>' +
+      '<span class="tma-portal-admin__nav-user-name">' + e(me ? me.name : 'My Profile') + '</span>' +
       (me ? '<span class="tma-portal-admin__nav-user-email">' + e(me.email) + '</span>' : '') +
       '</span></button>';
   }
