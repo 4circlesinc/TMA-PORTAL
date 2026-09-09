@@ -2,24 +2,27 @@
 
 namespace Tests\Feature;
 
-use App\Models\CipApplicationDraft;
+use App\Models\CipApplication;
+use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Applications;
+use App\Support\Cip\Engine;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Phase;
+use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
- * The intake wizard's autosave.
+ * The intake wizard's draft, which is an application at Status::DRAFT.
  *
- * The interesting cases are all about what a draft is NOT: it is not an
- * application, so it holds no files and appears in nobody else's list; and it
- * does not outlive the filing it became, or the reader would be invited to
- * file the same person twice.
+ * The two claims worth pinning are the ones the design rests on: a draft is a
+ * real row in the applications table, and DRAFT is the whole of its status
+ * vocabulary — the picker offers nothing, and the only way out is to file it.
  */
 class CipApplicationDraftTest extends TestCase
 {
@@ -56,10 +59,12 @@ class CipApplicationDraftTest extends TestCase
         ]);
     }
 
-    /** @return array<string, string> */
-    private function answers(array $overrides = []): array
+    /** @return array<string, mixed> */
+    private function answers(CipProvider $provider, array $overrides = []): array
     {
         return array_merge([
+            'providerId' => $provider->uuid,
+            'phase' => Phase::PRE_APPROVAL,
             'firstName' => 'John',
             'lastName' => 'Smith',
             'countryOfResidence' => 'United Arab Emirates',
@@ -68,57 +73,122 @@ class CipApplicationDraftTest extends TestCase
 
     private function save(User $actor, array $body)
     {
-        return $this->actingAs($actor)
-            ->postJson('/portal/cip/applications/draft', $body);
+        return $this->actingAs($actor)->postJson('/portal/cip/applications/draft', $body);
     }
 
-    public function test_a_half_typed_application_is_kept_and_handed_back(): void
+    /** The claim the whole change rests on. */
+    public function test_a_draft_is_a_real_application_row_at_draft(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($staff, [
-            'phase' => Phase::PRE_APPROVAL,
-            'answers' => $this->answers(),
-            'dependents' => 2,
-        ])->assertOk();
+        $this->save($staff, $this->answers($provider))->assertOk();
 
-        $read = $this->actingAs($staff)
-            ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
-            ->assertOk();
-
-        $this->assertSame('John', $read->json('draft.answers.firstName'));
-        $this->assertSame(2, $read->json('draft.dependents'));
-        $this->assertNotNull($read->json('draft.savedAt'));
+        $draft = CipApplication::query()->first();
+        $this->assertNotNull($draft);
+        $this->assertSame(Status::DRAFT, $draft->status);
+        // It carries a number, so the firm can refer to it like anything else.
+        $this->assertNotNull($draft->internal_number);
+        $this->assertSame('John', $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
     }
 
-    public function test_saving_again_replaces_the_draft_rather_than_adding_one(): void
+    /**
+     * Draft is the whole vocabulary.
+     *
+     * Not a filter somewhere in the UI — the engine itself offers no status a
+     * draft may be moved to, and refuses one driven by hand. An application
+     * that has never been completed has no business being marked Ready to
+     * submit, and the only way out is the submit verb.
+     */
+    public function test_a_draft_offers_no_other_status(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $this->save($staff, $this->answers($provider))->assertOk();
 
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])->assertOk();
+        $draft = CipApplication::query()->first();
+
+        // Nothing to pick, on the map or off it, for an administrator who may
+        // otherwise override anything.
+        $this->assertSame([], Engine::availableOverrides($draft, $staff));
+        $this->assertSame([], Engine::lockedStatuses($draft, $staff));
+
+        // And the generic status endpoint refuses to move it.
+        $this->actingAs($staff)->postJson(
+            '/portal/cip/applications/'.$draft->uuid.'/status',
+            ['status' => Status::READY_TO_SUBMIT],
+        )->assertStatus(422);
+
+        $this->assertSame(Status::DRAFT, $draft->fresh()->status);
+    }
+
+    /** DRAFT itself is not something anybody may set a file to. */
+    public function test_a_filed_application_cannot_be_pushed_back_to_draft(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $application = Applications::create($provider, $staff, []);
+
+        $this->actingAs($staff)->postJson(
+            '/portal/cip/applications/'.$application->uuid.'/status',
+            ['status' => Status::DRAFT],
+        )->assertStatus(422);
+
+        $this->assertSame(Status::NEW, $application->fresh()->status);
+    }
+
+    public function test_saving_again_updates_the_same_draft_rather_than_numbering_a_second(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider))->assertOk();
+        $this->save($staff, $this->answers($provider, ['firstName' => 'Joanne']))->assertOk();
+
+        $this->assertSame(1, CipApplication::query()->count());
+        $this->assertSame('Joanne', CipApplication::query()->first()
+            ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+    }
+
+    /** Half-typed is the ordinary state of a draft, so nothing is required. */
+    public function test_an_incomplete_form_is_saved_without_complaint(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
         $this->save($staff, [
+            'providerId' => $provider->uuid,
             'phase' => Phase::PRE_APPROVAL,
-            'answers' => $this->answers(['firstName' => 'Joanne']),
+            'firstName' => 'Amara',
         ])->assertOk();
 
-        $this->assertSame(1, CipApplicationDraft::query()->where('user_id', $staff->id)->count());
-        $this->assertSame('Joanne', CipApplicationDraft::query()
-            ->where('user_id', $staff->id)->first()->answers['firstName']);
+        $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    /** Shape is still enforced: a wrong answer is wrong however unfinished. */
+    public function test_a_malformed_answer_is_still_refused(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider, ['countryOfBirth' => 'Atlantis']))
+            ->assertStatus(422);
+        $this->save($staff, $this->answers($provider, ['dateOfBirth' => 'not-a-date']))
+            ->assertStatus(422);
     }
 
     public function test_the_two_phases_keep_their_own_drafts(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($staff, [
-            'phase' => Phase::PRE_APPROVAL,
-            'answers' => $this->answers(['firstName' => 'Pre']),
-        ])->assertOk();
-        $this->save($staff, [
+        $this->save($staff, $this->answers($provider, ['firstName' => 'Pre']))->assertOk();
+        $this->save($staff, $this->answers($provider, [
+            'firstName' => 'Post',
             'phase' => Phase::POST_APPROVAL,
-            'answers' => $this->answers(['firstName' => 'Post']),
-        ])->assertOk();
+        ]))->assertOk();
 
+        $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
         $this->assertSame('Pre', $this->actingAs($staff)
             ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
             ->json('draft.answers.firstName'));
@@ -127,95 +197,75 @@ class CipApplicationDraftTest extends TestCase
             ->json('draft.answers.firstName'));
     }
 
-    /** One reader's unfinished work is nobody else's business. */
-    public function test_a_draft_belongs_to_the_reader_who_typed_it(): void
+    /** Resumed by its author alone, however many people can see the row. */
+    public function test_a_draft_is_resumed_only_by_the_reader_who_typed_it(): void
     {
         $mine = $this->user(Role::ADMINISTRATOR);
         $theirs = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($mine, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])->assertOk();
+        $this->save($mine, $this->answers($provider))->assertOk();
 
         $this->assertNull($this->actingAs($theirs)
             ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
             ->json('draft'));
     }
 
-    public function test_no_draft_reads_as_nothing_rather_than_an_error(): void
+    /** But it IS in the table, which is the point of the change. */
+    public function test_a_draft_appears_in_the_applications_listing(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $this->save($staff, $this->answers($provider))->assertOk();
 
-        $this->actingAs($staff)
-            ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
+        $rows = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
             ->assertOk()
-            ->assertJson(['draft' => null]);
+            ->json('applications');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame(Status::DRAFT, $rows[0]['status']);
     }
 
-    /* An emptied form is how a reader abandons one, so it clears the draft. */
-    public function test_an_empty_save_clears_the_draft(): void
+    public function test_an_empty_save_discards_the_draft(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])->assertOk();
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => []])
+        $this->save($staff, $this->answers($provider))->assertOk();
+        $this->save($staff, ['providerId' => $provider->uuid, 'phase' => Phase::PRE_APPROVAL])
             ->assertOk()
             ->assertJson(['draft' => null]);
 
-        $this->assertSame(0, CipApplicationDraft::query()->count());
+        $this->assertSame(0, CipApplication::query()->count());
     }
 
     public function test_start_over_deletes_the_draft(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])->assertOk();
+        $this->save($staff, $this->answers($provider))->assertOk();
         $this->actingAs($staff)
             ->deleteJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
             ->assertOk();
 
-        $this->assertSame(0, CipApplicationDraft::query()->count());
+        $this->assertSame(0, CipApplication::query()->count());
     }
 
     /**
-     * A draft holds what was typed, and only that.
+     * Filing completes the draft rather than numbering a second application.
      *
-     * A key that is not a field path or a value that is not a scalar is
-     * something other than an answer, and storing it would put whatever a
-     * browser sent back into a form later.
+     * The bug this pins: creating a new row would leave the draft behind as
+     * an orphan wearing the same applicant's name.
      */
-    public function test_only_typed_answers_are_kept(): void
-    {
-        $staff = $this->user(Role::ADMINISTRATOR);
-
-        $this->save($staff, [
-            'phase' => Phase::PRE_APPROVAL,
-            'answers' => [
-                'firstName' => 'John',
-                'sponsor.firstName' => 'Maryam',
-                'dependents.0.dateOfBirth' => '2015-01-01',
-                'not a path!' => 'dropped',
-                'nested' => ['also' => 'dropped'],
-                'blank' => '   ',
-            ],
-        ])->assertOk();
-
-        $kept = CipApplicationDraft::query()->first()->answers;
-
-        $this->assertSame(['firstName', 'sponsor.firstName', 'dependents.0.dateOfBirth'], array_keys($kept));
-    }
-
-    /**
-     * Filing is the end of the draft.
-     *
-     * Cleared by the store endpoint itself, not only by the wizard's DELETE,
-     * because an application filed from the offline queue replays that
-     * request with nobody at the screen.
-     */
-    public function test_filing_the_application_clears_the_draft(): void
+    public function test_filing_moves_the_draft_to_new_rather_than_creating_another(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider();
 
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])->assertOk();
+        $this->save($staff, $this->answers($provider))->assertOk();
+        $draftNumber = CipApplication::query()->first()->internal_number;
 
         $this->actingAs($staff)->post('/portal/cip/applications', [
             'providerId' => $provider->uuid,
@@ -236,10 +286,13 @@ class CipApplicationDraftTest extends TestCase
             'sponsored' => '0',
         ], ['Accept' => 'application/json'])->assertCreated();
 
-        $this->assertSame(0, CipApplicationDraft::query()->count());
+        $this->assertSame(1, CipApplication::query()->count());
+        $filed = CipApplication::query()->first();
+        $this->assertSame(Status::NEW, $filed->status);
+        // The same row, so the number it was known by while drafting stands.
+        $this->assertSame($draftNumber, $filed->internal_number);
     }
 
-    /** The same square JPEG the intake tests draw, for the same reason. */
     private function photo(int $width = 600): UploadedFile
     {
         $img = imagecreatetruecolor($width, $width);
@@ -250,31 +303,23 @@ class CipApplicationDraftTest extends TestCase
         return new UploadedFile($path, 'photo.jpg', 'image/jpeg', null, true);
     }
 
-    /**
-     * An account with no reach into CIP cannot keep drafts there either.
-     *
-     * 404 rather than 403, the same answer the rest of the module gives a
-     * stranger: whether the firm files citizenship applications is not
-     * something an account outside it learns from a status code.
-     */
     public function test_an_account_without_cip_access_is_refused(): void
     {
         $stranger = $this->user(Role::CLIENT);
+        $provider = $this->provider();
 
-        $this->save($stranger, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])
-            ->assertNotFound();
+        $this->save($stranger, $this->answers($provider))->assertNotFound();
         $this->actingAs($stranger)
             ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
             ->assertNotFound();
     }
 
-    /** The module switched off closes the autosave with everything else. */
     public function test_the_module_flag_closes_the_autosave(): void
     {
         config(['services.cip.enabled' => false]);
         $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
 
-        $this->save($staff, ['phase' => Phase::PRE_APPROVAL, 'answers' => $this->answers()])
-            ->assertNotFound();
+        $this->save($staff, $this->answers($provider))->assertNotFound();
     }
 }

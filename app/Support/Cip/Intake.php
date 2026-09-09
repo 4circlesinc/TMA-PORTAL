@@ -48,6 +48,9 @@ class Intake
     /** How many files one requirement may be answered with in a single filing. */
     public const MAX_DOCUMENTS_PER_SLOT = 10;
 
+    /** The wizard offers twenty dependent rows; a draft may hold that many. */
+    public const MAX_DEPENDENTS_DRAFT = 20;
+
     /** The section 2 uploads that take a list rather than a single file. */
     /**
      * Section 2's own three, by template key.
@@ -222,6 +225,59 @@ class Intake
             self::sponsorRules($editing),
             self::dependentRules(),
         );
+    }
+
+    /**
+     * The same form, judged as an unfinished draft rather than a filing.
+     *
+     * Everything is optional, because "not filled in yet" is the ordinary
+     * state of a draft and the whole point of saving one. What is still
+     * enforced is shape: a date that is not a date, a country that is not on
+     * the list, a gender that is neither offered answer — those are wrong
+     * however unfinished the form is, and storing them would put a value in
+     * the record that the filing step can never accept.
+     *
+     * The documents are absent entirely. A draft holds no files (see
+     * CipApplicationDraftController), so a rule for them would describe
+     * something this endpoint never receives.
+     */
+    public static function draftRules(): array
+    {
+        $rules = [
+            'providerId' => ['required', 'string'],
+            'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+            'submissionId' => ['nullable', 'string', 'max:64'],
+            'investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
+            'investmentTypeOther' => ['nullable', 'string', 'max:191'],
+            'sponsored' => ['nullable', 'boolean'],
+            'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+            'dependents' => ['nullable', 'array', 'max:'.self::MAX_DEPENDENTS_DRAFT],
+        ];
+
+        foreach (['', 'sponsor.', 'dependents.*.'] as $prefix) {
+            $rules = array_merge($rules, self::optionalPersonRules($prefix));
+        }
+
+        // A dependant carries one answer the other two do not.
+        $rules['dependents.*.relationship'] = ['nullable', 'string', 'max:64'];
+        $rules['dependents.*.id'] = ['nullable', 'string', 'max:64'];
+
+        return $rules;
+    }
+
+    /** A person, with every answer allowed to be missing but none malformed. */
+    private static function optionalPersonRules(string $prefix): array
+    {
+        return [
+            $prefix.'firstName' => ['nullable', 'string', 'max:191'],
+            $prefix.'lastName' => ['nullable', 'string', 'max:191'],
+            $prefix.'gender' => ['nullable', Rule::in(['Male', 'Female'])],
+            $prefix.'dateOfBirth' => ['nullable', 'date', 'before:today'],
+            $prefix.'countryOfBirth' => ['nullable', 'string', Rule::in(Countries::all())],
+            $prefix.'countryOfResidence' => ['nullable', 'string', Rule::in(Countries::all())],
+            $prefix.'occupation' => ['nullable', 'string', 'max:191'],
+            $prefix.'passportNumber' => ['nullable', 'string', 'max:64'],
+        ];
     }
 
     /** The main applicant, straight from section 2. */
@@ -654,6 +710,100 @@ class Intake
      *
      * @param  array<string, mixed>  $data  already validated by self::rules(editing: true)
      */
+    /**
+     * Start a draft application: a real row, at DRAFT, with whatever is typed.
+     *
+     * A draft is an application from the first keystroke rather than a note
+     * about one. That is what puts it in the table beside everything else,
+     * gives it a number to be referred to, and means filing it is a status
+     * change rather than a second act of creation with its own way to fail.
+     *
+     * It skips the two things that only make sense once there is an
+     * application to have them: no folders are provisioned and no checklist
+     * slots are opened, because a draft carries no files and an empty tree in
+     * the client's library would advertise work that has not started.
+     * {@see Intake::update} does both when the draft is filed.
+     */
+    public static function createDraft(CipProvider $provider, User $creator, array $data): CipApplication
+    {
+        return DB::transaction(function () use ($provider, $creator, $data) {
+            $phase = Phase::PRE_APPROVAL;
+            if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
+                $phase = $data['phase'];
+            }
+
+            $application = Applications::create($provider, $creator, [
+                'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
+            ], Status::DRAFT);
+
+            /*
+             * The phase is recorded now, but the post-approval ENTRY is not.
+             * A post-approval draft has not entered post-approval — it is
+             * being typed — so adopting the Unit's number and announcing the
+             * entry both wait for the filing, where Intake::create does them.
+             */
+            if ($phase === Phase::POST_APPROVAL) {
+                $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+            }
+
+            self::saveDraftAnswers($application, $creator, $data);
+
+            return $application->fresh();
+        });
+    }
+
+    /**
+     * Put the newest answers on a draft that already exists.
+     *
+     * Refuses anything that is no longer a draft: a filed application is
+     * edited through {@see update}, which validates what a filing must
+     * contain. Without this an autosave still running in a stale tab could
+     * quietly overwrite a live application with a half-typed form.
+     */
+    public static function updateDraft(CipApplication $application, User $actor, array $data): CipApplication
+    {
+        if ($application->status !== Status::DRAFT) {
+            throw new \RuntimeException('This application has been filed and is no longer a draft.');
+        }
+
+        return DB::transaction(function () use ($application, $actor, $data) {
+            self::saveDraftAnswers($application, $actor, $data);
+
+            return $application->fresh();
+        });
+    }
+
+    /**
+     * The answers, written onto a draft row.
+     *
+     * Shared by both draft paths, and deliberately narrower than
+     * {@see update}: no uploads, no folders, no checklist slots. The people
+     * are synced the same way a filed application's are, so a dependant
+     * added and removed while drafting leaves the same clean list behind.
+     */
+    private static function saveDraftAnswers(CipApplication $application, User $actor, array $data): void
+    {
+        $investment = $data['investmentType'] ?? null;
+        $application->forceFill([
+            'investment_type' => $investment ?: null,
+            'investment_type_other' => $investment === InvestmentType::OTHER
+                ? trim((string) ($data['investmentTypeOther'] ?? '')) ?: null
+                : null,
+            'sponsored' => (bool) ($data['sponsored'] ?? false),
+        ])->save();
+
+        $application->load('people');
+
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $main
+            ? self::applyPerson($main, $data)
+            : self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
+
+        self::syncSponsor($application, $data);
+        self::syncDependents($application, $data['dependents'] ?? []);
+        Dependents::renumber($application);
+    }
+
     public static function update(CipApplication $application, User $actor, array $data): CipApplication
     {
         return DB::transaction(function () use ($application, $actor, $data) {
@@ -763,7 +913,9 @@ class Intake
                 ->where('role', CipPerson::ROLE_SPONSOR)
                 ->first();
 
-        if (! (bool) $data['sponsored']) {
+        // A draft may not have answered the sponsored question yet, and an
+        // unanswered question is not a Yes.
+        if (! (bool) ($data['sponsored'] ?? false)) {
             $existing?->delete();
 
             return null;
@@ -800,7 +952,11 @@ class Intake
 
             if ($person) {
                 self::applyPerson($person, $row);
-                $person->forceFill(['relationship' => $row['relationship']])->save();
+                // A draft row may have no relationship chosen yet; keep the
+                // one it has rather than writing a null over it.
+                if (! empty($row['relationship'])) {
+                    $person->forceFill(['relationship' => $row['relationship']])->save();
+                }
             } else {
                 $person = self::writePerson($application, CipPerson::ROLE_DEPENDENT, $row);
             }

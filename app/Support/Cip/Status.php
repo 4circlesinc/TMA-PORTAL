@@ -8,9 +8,14 @@ namespace App\Support\Cip;
  * scope queries never need rework as statuses light up.
  *
  * The labels are the same words section 9's buckets use, so a row's chip and the
- * queue it sits in cannot disagree. DRAFT remains a leftover code for
- * historical events and any row that has not yet been moved to NEW; nothing
- * is filed into it any more.
+ * queue it sits in cannot disagree.
+ *
+ * DRAFT is where the intake wizard's autosave puts an application it is still
+ * being typed into. It is a real row, in the table, with its own number — but
+ * it is not part of the lifecycle proper: {@see listed()} leaves it out, so no
+ * picker offers it and no picker offers anything else to a file standing in
+ * it. The one edge out is the submit verb, which checks the main applicant's
+ * documents before letting the file join the New Applications queue.
  */
 class Status
 {
@@ -180,9 +185,11 @@ class Status
     ];
 
     private const LABELS = [
-        // Leftover rows and old events wear the same words as NEW, so a chip
-        // never still says Draft after the vocabulary moved on.
-        self::DRAFT => 'New Applications',
+        // An application being typed into the intake wizard, saved as it goes.
+        // It is a real row in the table with its own number, so it says what
+        // it is; it is not a queue, and {@see listed()} keeps it out of every
+        // picker, because the only way out of Draft is to file it.
+        self::DRAFT => 'Draft',
         self::NEW => 'New Applications',
         self::REVIEW_APPLICATION => 'Review Applications',
         self::ASSESSMENT_FEEDBACK => 'Assessment Feedback',
@@ -217,7 +224,7 @@ class Status
      * REVIEW APPLICATION and GRANTED, matching the brief's worked examples.
      */
     private const SUBJECT_LABELS = [
-        self::DRAFT => 'NEW APPLICATION',
+        self::DRAFT => 'DRAFT',
         self::NEW => 'NEW APPLICATION',
         self::REVIEW_APPLICATION => 'REVIEW APPLICATION',
         self::ASSESSMENT_FEEDBACK => 'ASSESSMENT FEEDBACK',

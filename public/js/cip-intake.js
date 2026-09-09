@@ -1456,10 +1456,74 @@
       // Dependents past the visible count are leftovers from a removal, the
       // same rule parts() applies to a filing.
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
+      // A sponsor's answers are not sent when there is no sponsor, or the
+      // draft would keep a sponsor the form has stopped showing.
+      if (!sponsored() && path.indexOf('sponsor.') === 0) return;
       out[path] = String(value);
     });
 
     return out;
+  }
+
+  /*
+   * Has the reader typed anything, or is this the form as it was drawn?
+   *
+   * The wizard fills the provider in for itself when there is only one firm
+   * to file under, so a form nobody has touched is not empty. The server
+   * applies the same rule — it discards a draft with nothing but a provider
+   * rather than numbering an application for it.
+   */
+  function typedAnything(answers) {
+    return Object.keys(answers).some(function (path) {
+      return path !== 'providerId';
+    });
+  }
+
+  /*
+   * The draft body: the form's own answers, nested the way the server reads
+   * them.
+   *
+   * `dependents.0.firstName` becomes dependents[0].firstName, because the
+   * draft is validated by the same kind of rules a filing is and stored on a
+   * real application row — so it arrives shaped like an application rather
+   * than as a flat bag of paths.
+   */
+  function draftBody() {
+    var body = {
+      phase: state.phase || 'pre_approval',
+      sponsored: sponsored() ? 1 : 0,
+    };
+    var flat = draftAnswers();
+
+    Object.keys(flat).forEach(function (path) {
+      var dependent = path.match(/^dependents\.(\d+)\.(.+)$/);
+      if (dependent) {
+        body.dependents = body.dependents || [];
+        var i = Number(dependent[1]);
+        body.dependents[i] = body.dependents[i] || {};
+        body.dependents[i][dependent[2]] = flat[path];
+
+        return;
+      }
+
+      var sponsor = path.match(/^sponsor\.(.+)$/);
+      if (sponsor) {
+        body.sponsor = body.sponsor || {};
+        body.sponsor[sponsor[1]] = flat[path];
+
+        return;
+      }
+
+      body[path] = flat[path];
+    });
+
+    // A removed dependant leaves a hole, and a sparse array posts as an
+    // object with numeric keys the validator will not read as a list.
+    if (body.dependents) {
+      body.dependents = body.dependents.filter(function (row) { return !!row; });
+    }
+
+    return body;
   }
 
   /* Save when the typing stops. Every field change calls this; the timer is
@@ -1513,18 +1577,14 @@
     }
 
     var answers = draftAnswers();
-    var payload = JSON.stringify({
-      phase: state.phase || 'pre_approval',
-      answers: answers,
-      dependents: state.dependents,
-    });
+    var payload = JSON.stringify(draftBody());
     /*
      * Nothing typed at all. The timer simply does nothing; a reader who
      * pressed the button is told why rather than shown a "Draft saved" for
      * an empty form — and an empty save would clear the draft they may be
      * trying to keep.
      */
-    if (announce && Object.keys(answers).length === 0) {
+    if (announce && !typedAnything(answers)) {
       ui().toastError('Fill in something to save first.');
 
       return;
@@ -1672,11 +1732,7 @@
     if (photoRequiredFor('passportPhoto')) state.draftMissingFiles.push('passportPhoto');
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
-    state.draftSent = JSON.stringify({
-      phase: state.phase || 'pre_approval',
-      answers: draftAnswers(),
-      dependents: state.dependents,
-    });
+    state.draftSent = JSON.stringify(draftBody());
 
     return true;
   }

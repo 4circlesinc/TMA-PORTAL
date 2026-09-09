@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
-use App\Models\CipApplicationDraft;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\ClientAssignment;
@@ -206,6 +205,29 @@ class CipApplicationController extends Controller
             }
         }
 
+        /*
+         * The draft this filing has been typed into, completed rather than
+         * duplicated.
+         *
+         * The wizard autosaves into a real application at DRAFT, so by the
+         * time Add is pressed there is usually already a numbered row holding
+         * these answers. Creating a second one would leave the draft behind
+         * as an orphan wearing the same applicant's name, so the filing lands
+         * on the row that is already there: the full rules have just passed,
+         * Intake::update writes the answers and the uploads and provisions
+         * the folders, and the submit edge moves DRAFT to NEW.
+         */
+        if ($draft = $this->draftBeing($user, $data)) {
+            $application = Intake::update($draft, $user, $data);
+            $application = Engine::apply($application, Status::NEW, $user, []);
+
+            Live::staff(Live::CIP);
+
+            return response()->json([
+                'application' => $this->record($application, $user),
+            ], 201);
+        }
+
         try {
             $application = Intake::create($provider, $user, $data);
         } catch (UniqueConstraintViolationException $e) {
@@ -224,24 +246,35 @@ class CipApplicationController extends Controller
             ], 200);
         }
 
-        /*
-         * The filing landed, so the draft it was typed into is finished with.
-         *
-         * Dropped here rather than only by the wizard's own DELETE, because
-         * an application filed from the offline queue replays this request
-         * with nobody at the screen — and a draft that outlived its filing
-         * would invite the reader to file the same person a second time.
-         */
-        CipApplicationDraft::query()
-            ->where('user_id', $user->id)
-            ->where('phase', $application->phase)
-            ->delete();
-
         Live::staff(Live::CIP);
 
         return response()->json([
             'application' => $this->record($application, $user),
         ], 201);
+    }
+
+    /**
+     * The draft row this filing is completing, if there is one.
+     *
+     * Matched on the reader and the phase, the same pair the autosave keys
+     * on, so the row being filed is the row that has been typed into. A
+     * filing that arrives with no draft behind it — the API, or a form whose
+     * autosave never reached the server — creates its application the
+     * ordinary way.
+     */
+    private function draftBeing(User $user, array $data): ?CipApplication
+    {
+        $phase = ! empty($data['phase']) && Phase::isValid($data['phase'])
+            ? $data['phase']
+            : Phase::PRE_APPROVAL;
+
+        return CipApplication::query()
+            ->where('status', Status::DRAFT)
+            ->where('created_by', $user->id)
+            ->where('phase', $phase)
+            ->with('people')
+            ->latest('id')
+            ->first();
     }
 
     /**

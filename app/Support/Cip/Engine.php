@@ -290,6 +290,19 @@ class Engine
 
     private static function offMapStatuses(CipApplication $application, ?User $actor, bool $forListing = false): array
     {
+        /*
+         * A draft has no status vocabulary but its own.
+         *
+         * It is an application nobody has finished typing, so there is
+         * nothing to override it TO: marking it Ready to submit or Approved
+         * would be a claim about a file that has never been completed. The
+         * one edge out of DRAFT is the submit verb, which checks the main
+         * applicant's documents first — see CipTransitionController::submit.
+         */
+        if ($application->status === Status::DRAFT) {
+            return [];
+        }
+
         $next = self::availableTransitions($application, $actor, $forListing);
 
         return array_values(array_filter(

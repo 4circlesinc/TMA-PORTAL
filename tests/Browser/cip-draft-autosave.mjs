@@ -161,11 +161,50 @@ try {
   check(stillPre === 'Autosaved',
     `the two phases keep separate drafts (pre-approval still "${stillPre}")`);
 
-  step(7, 'Start over empties the form and the draft');
+  step(7, 'The draft is in the applications table, wearing a Draft chip');
+  /*
+   * The point of the whole change: a half-typed application is a row the firm
+   * can see, not a private note. Read from the rendered table rather than the
+   * API — the API is asserted below, and what a reader is owed here is the
+   * chip actually saying Draft.
+   */
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(4000);
+  const table = await page.locator('table').first().innerText().catch(() => '');
+  check(/Autosaved/.test(table), `the half-typed applicant is listed (${table.slice(0, 120).replace(/\s+/g, ' ')})`);
+  check(/\bDRAFT\b/i.test(table), 'and the row says Draft');
+  check(!/NEW APPLICATION/i.test(table), 'not New Applications, which is what the old label said');
+
+  step(8, 'Draft is the whole status vocabulary — the picker offers nothing else');
+  /*
+   * Read from the API rather than the menu: the row's picker is built from
+   * what the server says the file may become, so this asks the question the
+   * menu asks and does not depend on which chip was clicked.
+   */
+  const listing = await page.evaluate(async () => {
+    const res = await fetch('/portal/cip/applications', {
+      credentials: 'same-origin', headers: { Accept: 'application/json' },
+    });
+    const json = await res.json();
+    const row = (json.applications || []).find(a => a.status === 'draft');
+
+    return row ? { status: row.status, next: row.nextStatuses, over: row.overrideStatuses, locked: row.lockedStatuses } : null;
+  });
+  check(!!listing, 'the draft row came back from the listing');
+  if (listing) {
+    const offered = []
+      .concat(listing.next || [], listing.over || [], listing.locked || [])
+      .map(s => (typeof s === 'string' ? s : s && s.value))
+      .filter(Boolean);
+    check(offered.length === 0, `no other status is offered (${offered.join(',') || 'none'})`);
+  }
+
+  step(9, 'Start over empties the form and the draft');
+  await openWizard('pre-approval');
   await page.click('[data-cip-draft-discard]');
   await page.waitForTimeout(400);
   await page.click('[data-draft-discard]');
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1500);
   check((await page.inputValue('[data-cip-field="firstName"]')) === '', 'the form is empty again');
   await openWizard();
   check((await page.inputValue('[data-cip-field="firstName"]')) === '',
