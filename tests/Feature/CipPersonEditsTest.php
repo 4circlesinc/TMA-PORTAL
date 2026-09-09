@@ -103,7 +103,7 @@ class CipPersonEditsTest extends TestCase
             // Null means applied; the screen says "saved" rather than "requested".
             ->assertJsonPath('requested', null);
 
-        $this->assertSame('Anna', $person->fresh()->first_name);
+        $this->assertSame('ANNA', $person->fresh()->first_name);
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
             'action' => CipEvent::ACTION_PERSON_CHANGED,
@@ -125,10 +125,10 @@ class CipPersonEditsTest extends TestCase
 
         // The whole point: it is recorded, and nothing has changed yet.
         $this->assertNotNull($body['requested']);
-        $this->assertSame('Ana', $person->fresh()->first_name);
+        $this->assertSame('ANA', $person->fresh()->first_name);
         $this->assertCount(1, $body['pendingChanges']);
         $this->assertSame(
-            ['from' => 'Ana', 'to' => 'Anna'],
+            ['from' => 'ANA', 'to' => 'Anna'],
             $body['pendingChanges'][0]['changes']['firstName'],
         );
     }
@@ -151,7 +151,7 @@ class CipPersonEditsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('pendingChanges', []);
 
-        $this->assertSame('Anna', $person->fresh()->first_name);
+        $this->assertSame('ANNA', $person->fresh()->first_name);
     }
 
     public function test_declining_leaves_the_record_alone(): void
@@ -171,7 +171,7 @@ class CipPersonEditsTest extends TestCase
             ])
             ->assertOk();
 
-        $this->assertSame('Ana', $person->fresh()->first_name);
+        $this->assertSame('ANA', $person->fresh()->first_name);
         $this->assertSame(
             CipPersonChangeRequest::STATUS_DECLINED,
             CipPersonChangeRequest::where('uuid', $requested)->value('status'),
@@ -196,7 +196,7 @@ class CipPersonEditsTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->assertSame('Ana', $person->fresh()->first_name);
+        $this->assertSame('ANA', $person->fresh()->first_name);
     }
 
     public function test_a_second_proposal_replaces_the_first(): void
@@ -214,20 +214,27 @@ class CipPersonEditsTest extends TestCase
         $this->assertSame('Annabel', $body['pendingChanges'][0]['changes']['firstName']['to']);
     }
 
-    public function test_details_are_not_editable_before_the_decision(): void
+    /**
+     * Who somebody is can be corrected in either lane.
+     *
+     * It used to be post-approval only, on the reasoning that the intake form
+     * already owned these fields before the decision. That form is the reason
+     * this exists: it let anyone holding cip.create rewrite the identity on a
+     * filing nobody had reviewed. An administrator writes it; everyone else
+     * asks, on both sides of the decision.
+     */
+    public function test_details_are_editable_before_the_decision_too(): void
     {
         [$application, $person, $admin] = $this->postApprovalFile();
         $application->forceFill(['phase' => Phase::PRE_APPROVAL, 'status' => Status::PENDING_REVIEW])->save();
 
-        // Pre-approval already has the intake form for this; two ways to
-        // change one field is how they end up disagreeing.
         $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/people/'.$person->uuid.'/details', [
                 'firstName' => 'Anna',
             ])
-            ->assertStatus(422);
+            ->assertOk();
 
-        $this->assertSame('Ana', $person->fresh()->first_name);
+        $this->assertSame('ANNA', $person->fresh()->first_name);
     }
 
     public function test_a_stranger_cannot_reach_the_person(): void

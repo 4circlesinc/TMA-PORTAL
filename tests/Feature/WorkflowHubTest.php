@@ -403,7 +403,7 @@ class WorkflowHubTest extends TestCase
         ]);
         $client = Client::create([
             'uid' => 'asem-'.uniqid(),
-            'name' => 'Asem Habtoor',
+            'name' => 'ASEM HABTOOR',
             'created_by' => $staff->id,
             'data' => [],
         ]);
@@ -453,7 +453,7 @@ class WorkflowHubTest extends TestCase
         $res->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.label', 'Birth certificate')
             ->assertJsonPath('items.0.reason', 'The stamp is not visible.')
-            ->assertJsonPath('items.0.person', 'Asem Habtoor')
+            ->assertJsonPath('items.0.person', 'ASEM HABTOOR')
             ->assertJsonPath('items.0.file.name', 'Birth certificate.pdf')
             ->assertJsonPath('items.0.status', DocumentStatus::UPDATE_REQUIRED)
             ->assertJsonPath('counts.updates', 1);

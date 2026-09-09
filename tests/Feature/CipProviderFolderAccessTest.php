@@ -227,7 +227,7 @@ class CipProviderFolderAccessTest extends TestCase
                 ->assertOk()->json('groups.assignedClients')
         )->pluck('name');
 
-        $this->assertTrue($names->contains('Chen Wei'));
+        $this->assertTrue($names->contains('CHEN WEI'));
         $this->assertTrue(
             collect($this->actingAs($gil)->getJson('/portal/files/shortcuts')->json('groups.assignedClients'))
                 ->contains(fn (array $row) => $row['id'] === $root->uuid)
@@ -255,7 +255,7 @@ class CipProviderFolderAccessTest extends TestCase
                 ->assertOk()->json('folders')
         )->pluck('name');
 
-        $this->assertTrue($names->contains('Chen Wei'));
+        $this->assertTrue($names->contains('CHEN WEI'));
         $this->assertContains(
             $root->uuid,
             collect($this->actingAs($gil)->getJson('/portal/files/?section=clients')->json('folders'))
@@ -344,7 +344,7 @@ class CipProviderFolderAccessTest extends TestCase
             $this->actingAs($gil)->getJson('/portal/files/?section=all')
                 ->assertOk()->json('folders')
         );
-        $this->assertSame(['Chen Wei'], $listed->pluck('name')->all());
+        $this->assertSame(['CHEN WEI'], $listed->pluck('name')->all());
 
         $clientsRoot = FolderProvisioner::clientsRoot();
         $this->assertTrue(FileAccess::can($gil, 'view', $clientsRoot));
@@ -354,7 +354,7 @@ class CipProviderFolderAccessTest extends TestCase
             $this->actingAs($gil)->getJson('/portal/files/?section=all&folder='.$clientsRoot->uuid)
                 ->assertOk()->json('folders')
         )->pluck('name');
-        $this->assertTrue($inside->contains('Chen Wei'));
+        $this->assertTrue($inside->contains('CHEN WEI'));
 
         $staffRoot = FolderProvisioner::staffRoot();
         $this->assertFalse(FileAccess::can($gil, 'view', $staffRoot));
@@ -480,7 +480,7 @@ class CipProviderFolderAccessTest extends TestCase
             ->getJson('/portal/cip/clients/'.$uid.'/application')
             ->assertOk()
             ->assertJsonPath('client.id', $uid)
-            ->assertJsonPath('client.name', 'Chen Wei')
+            ->assertJsonPath('client.name', 'CHEN WEI')
             ->assertJsonPath('application.clientUid', $uid);
 
         $this->actingAs($outsider)

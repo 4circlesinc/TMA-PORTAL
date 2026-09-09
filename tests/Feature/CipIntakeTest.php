@@ -247,7 +247,7 @@ class CipIntakeTest extends TestCase
         $this->assertSame(Status::NEW, $body['status']);
 
         // The applicant is on it, or the number names nobody.
-        $this->assertSame('John Smith', $body['applicant']['name']);
+        $this->assertSame('JOHN SMITH', $body['applicant']['name']);
         $this->assertSame(1, $body['familySize']);
         $this->assertSame('F1', $body['familyLabel']);
 
@@ -731,6 +731,37 @@ class CipIntakeTest extends TestCase
         Submission::correct($application, $employee, '10T1G12673P');
     }
 
+    /**
+     * Identity is an administrator's to change, on the intake form too.
+     *
+     * The form is the other door onto the eight fields the person-edit
+     * request governs — name, date of birth, passport number and the rest.
+     * Leaving it open would mean an officer refused at one door and waved
+     * through at the other, so a change here is refused and they ask instead.
+     */
+    public function test_an_officer_cannot_change_identity_on_the_edit_form(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider))
+            ->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $officer = $this->holder($application);
+
+        $this->edit($officer, $application, $this->edits($provider, ['occupation' => 'Architect']))
+            ->assertStatus(422);
+
+        $this->assertSame(
+            'Engineer',
+            $application->fresh()->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first()->occupation,
+        );
+
+        // The same form, posted back untouched, is not a correction — so the
+        // officer can still edit everything else on it.
+        $this->edit($officer, $application, $this->edits($provider))->assertOk();
+    }
+
     /** Re-posting the number the form was drawn with is not a change. */
     public function test_editing_without_touching_the_cip_number_leaves_it_alone(): void
     {
@@ -744,10 +775,12 @@ class CipIntakeTest extends TestCase
         ]))->assertCreated()->json('application');
 
         $application = CipApplication::where('uuid', $body['id'])->first();
-        $officer = $this->holder($application);
+        // An administrator, because the occupation moves here and identity
+        // fields are an administrator's to change — see the test below.
+        $admin = $this->user(Role::ADMINISTRATOR);
         $before = $application->events()->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->count();
 
-        $this->edit($officer, $application, $this->edits($provider, [
+        $this->edit($admin, $application, $this->edits($provider, [
             'cipNumber' => '10T1G12674P',
             'occupation' => 'Architect',
         ]))->assertOk();
@@ -936,7 +969,7 @@ class CipIntakeTest extends TestCase
         )))->assertCreated()->json('application');
 
         // Section 4: the sponsor is not a follow-up step somebody can skip.
-        $this->assertSame('Maryam Haddad', $body['sponsor']['name']);
+        $this->assertSame('MARYAM HADDAD', $body['sponsor']['name']);
         $this->assertSame('Sponsor', $body['sponsor']['label']);
         $this->assertSame(2, $body['familySize']);
 
@@ -980,7 +1013,7 @@ class CipIntakeTest extends TestCase
             ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->first();
         $file = FileItem::find($slot->file_id);
         $this->assertSame($sponsor->folder_id, $file->folder_id);
-        $this->assertSame('Maryam Haddad - Passport bio page.pdf', $file->name);
+        $this->assertSame('MARYAM HADDAD - Passport bio page.pdf', $file->name);
 
         // The main applicant's own slots are untouched by any of it: what the
         // form collected for them is filed, and a sponsor's upload did not
@@ -1039,11 +1072,11 @@ class CipIntakeTest extends TestCase
             ->filter(fn ($d) => $d['relationship'] === CipPerson::RELATIONSHIP_QUALIFIED)
             ->sortBy('dependentOrdinal')
             ->pluck('name')->values()->all();
-        $this->assertSame(['Lina Smith', 'Sami Smith', 'Omar Smith'], $numbered);
+        $this->assertSame(['LINA SMITH', 'SAMI SMITH', 'OMAR SMITH'], $numbered);
 
         // A spouse is a dependent but not a *qualified* one, so numbering
         // them would shift every ordinal on the government's form.
-        $spouse = collect($body['dependents'])->firstWhere('name', 'Nadia Smith');
+        $spouse = collect($body['dependents'])->firstWhere('name', 'NADIA SMITH');
         $this->assertNull($spouse['dependentOrdinal']);
         $this->assertSame('Spouse', $spouse['label']);
 
@@ -1070,7 +1103,7 @@ class CipIntakeTest extends TestCase
             ],
         ]))->assertCreated()->json('application');
 
-        $lina = collect($body['dependents'])->firstWhere('name', 'Lina Smith');
+        $lina = collect($body['dependents'])->firstWhere('name', 'LINA SMITH');
         $this->assertNotNull($lina);
         $this->assertNotEmpty($lina['photo'], 'the passport photo is their face');
         $this->assertContains(
@@ -1123,9 +1156,9 @@ class CipIntakeTest extends TestCase
             ->all();
 
         $this->assertSame([
-            'Child A Example' => 'Qualified Dependent 1',
-            'Child B Example' => 'Qualified Dependent 2',
-            'Child C Example' => 'Qualified Dependent 3',
+            'CHILD A EXAMPLE' => 'Qualified Dependent 1',
+            'CHILD B EXAMPLE' => 'Qualified Dependent 2',
+            'CHILD C EXAMPLE' => 'Qualified Dependent 3',
         ], $classified);
     }
 
@@ -1145,7 +1178,7 @@ class CipIntakeTest extends TestCase
         ]))->assertCreated();
 
         $application = CipApplication::first();
-        $lina = CipPerson::firstWhere('first_name', 'Lina');
+        $lina = CipPerson::firstWhere('first_name', 'LINA');
         $this->assertSame(1, $lina->dependent_ordinal);
 
         // The ordinal is a position in a list, so losing QD1 must not leave
@@ -1153,7 +1186,7 @@ class CipIntakeTest extends TestCase
         $lina->delete();
         Dependents::renumber($application->fresh());
 
-        $this->assertSame(1, CipPerson::firstWhere('first_name', 'Omar')->dependent_ordinal);
+        $this->assertSame(1, CipPerson::firstWhere('first_name', 'OMAR')->dependent_ordinal);
 
         // ...and the folder follows the new order rather than keeping a stale
         // name. Folders count the dependants; the classification is the
@@ -1161,7 +1194,7 @@ class CipIntakeTest extends TestCase
         Tree::resyncNames($application->fresh());
         $this->assertSame(
             'Dependent 1',
-            Folder::find(CipPerson::firstWhere('first_name', 'Omar')->folder_id)->name,
+            Folder::find(CipPerson::firstWhere('first_name', 'OMAR')->folder_id)->name,
         );
     }
 
@@ -1189,7 +1222,7 @@ class CipIntakeTest extends TestCase
         // path and the Private-Client path have the same shape.
         $client = Client::find($application->client_id);
         $this->assertNotNull($client, 'the applicant is a client record now');
-        $this->assertSame('John Smith', $client->name);
+        $this->assertSame('JOHN SMITH', $client->name);
         $this->assertSame($company->id, $client->referred_by_company_id);
 
         // Section 6's tree, hanging straight off the client's own folder rather than
@@ -1251,7 +1284,7 @@ class CipIntakeTest extends TestCase
         // these are ordinary library objects with ordinary history.
         $file = FileItem::find($slot->file_id);
         $this->assertSame($main->folder_id, $file->folder_id);
-        $this->assertSame('John Smith - Birth certificate.pdf', $file->name);
+        $this->assertSame('JOHN SMITH - Birth certificate.pdf', $file->name);
         $this->assertDatabaseHas('file_versions', ['file_id' => $file->id, 'version_number' => 1]);
     }
 
@@ -1301,8 +1334,8 @@ class CipIntakeTest extends TestCase
 
         $filed = FileItem::where('folder_id', $main->folder_id)
             ->pluck('name')->all();
-        $this->assertContains('John Smith - Birth certificate.pdf', $filed);
-        $this->assertContains('John Smith - Birth certificate (2).pdf', $filed);
+        $this->assertContains('JOHN SMITH - Birth certificate.pdf', $filed);
+        $this->assertContains('JOHN SMITH - Birth certificate (2).pdf', $filed);
     }
 
     /**
@@ -1336,7 +1369,7 @@ class CipIntakeTest extends TestCase
         // Both sheets — the answer and the extra file beside it — in the same
         // drawer, or one requirement's papers end up in two places.
         $this->assertSame(
-            ['John Smith - Passport bio page.pdf', 'John Smith - Passport bio page (2).pdf'],
+            ['JOHN SMITH - Passport bio page.pdf', 'JOHN SMITH - Passport bio page (2).pdf'],
             FileItem::where('folder_id', $drawer->id)->orderBy('id')->pluck('name')->all(),
         );
 
@@ -1379,7 +1412,7 @@ class CipIntakeTest extends TestCase
         )))->assertCreated()->json('application');
 
         $mainFolderId = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->folder_id;
-        $omarUuid = collect($created['dependents'])->firstWhere('name', 'Omar S')['id'];
+        $omarUuid = collect($created['dependents'])->firstWhere('name', 'OMAR S')['id'];
 
         // The same body the form posts to create, minus the files: they are
         // already filed, and an edit must not demand them a second time.
@@ -1426,10 +1459,10 @@ class CipIntakeTest extends TestCase
         // Lina was dropped from the form, so she is off the application — and
         // Omar, the only one left, is QD1 now.
         $this->assertCount(1, $body['dependents']);
-        $this->assertSame('Omar S', $body['dependents'][0]['name']);
+        $this->assertSame('OMAR S', $body['dependents'][0]['name']);
         $this->assertSame(1, $body['dependents'][0]['dependentOrdinal']);
         $this->assertSame('Dependent 1', Folder::find(
-            CipPerson::firstWhere('first_name', 'Omar')->folder_id
+            CipPerson::firstWhere('first_name', 'OMAR')->folder_id
         )->name);
     }
 
@@ -1462,7 +1495,7 @@ class CipIntakeTest extends TestCase
             ['Accept' => 'application/json'],
         )->assertOk()->json('application');
 
-        $this->assertSame('Maryam Haddad', $back['sponsor']['name']);
+        $this->assertSame('MARYAM HADDAD', $back['sponsor']['name']);
         $this->assertSame($sponsorId, CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR)->id,
             'the same sponsor comes back, not a second one');
     }
@@ -1479,7 +1512,7 @@ class CipIntakeTest extends TestCase
         $body = $this->actingAs($staff)
             ->getJson('/portal/cip/clients/'.$client->uid.'/application')
             ->assertOk()->json('application');
-        $this->assertSame('John Smith', $body['applicant']['name']);
+        $this->assertSame('JOHN SMITH', $body['applicant']['name']);
 
         // A client without one is answered, not refused: plenty of clients
         // predate the module.

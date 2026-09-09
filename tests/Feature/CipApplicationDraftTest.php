@@ -91,7 +91,7 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame(Status::DRAFT, $draft->status);
         // It carries a number, so the firm can refer to it like anything else.
         $this->assertNotNull($draft->internal_number);
-        $this->assertSame('John', $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+        $this->assertSame('JOHN', $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
     }
 
     /**
@@ -243,7 +243,7 @@ class CipApplicationDraftTest extends TestCase
         $this->save($staff, $this->answers($provider, ['firstName' => 'Joanne']))->assertOk();
 
         $this->assertSame(1, CipApplication::query()->count());
-        $this->assertSame('Joanne', CipApplication::query()->first()
+        $this->assertSame('JOANNE', CipApplication::query()->first()
             ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
     }
 
@@ -286,10 +286,10 @@ class CipApplicationDraftTest extends TestCase
         ]))->assertOk();
 
         $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
-        $this->assertSame('Pre', $this->actingAs($staff)
+        $this->assertSame('PRE', $this->actingAs($staff)
             ->getJson('/portal/cip/applications/draft?phase='.Phase::PRE_APPROVAL)
             ->json('draft.answers.firstName'));
-        $this->assertSame('Post', $this->actingAs($staff)
+        $this->assertSame('POST', $this->actingAs($staff)
             ->getJson('/portal/cip/applications/draft?phase='.Phase::POST_APPROVAL)
             ->json('draft.answers.firstName'));
     }
@@ -480,7 +480,7 @@ class CipApplicationDraftTest extends TestCase
             $this->answers($provider, ['firstName' => 'Corrected']),
         )->assertOk();
 
-        $this->assertSame('Corrected', $older->fresh()
+        $this->assertSame('CORRECTED', $older->fresh()
             ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
     }
 
@@ -500,7 +500,7 @@ class CipApplicationDraftTest extends TestCase
         )->assertOk();
 
         // Untouched, and my save started a draft of my own instead.
-        $this->assertSame('Theirs', $hers->fresh()
+        $this->assertSame('THEIRS', $hers->fresh()
             ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
         $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
     }

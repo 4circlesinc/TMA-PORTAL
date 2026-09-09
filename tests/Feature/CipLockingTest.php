@@ -96,7 +96,7 @@ class CipLockingTest extends TestCase
         CipPerson::create([
             'application_id' => $application->id,
             'role' => CipPerson::ROLE_MAIN_APPLICANT,
-            'first_name' => 'Chen', 'last_name' => 'Wei',
+            'first_name' => 'CHEN', 'last_name' => 'Wei',
         ]);
         Tree::provision($application->fresh(), $staff);
 
@@ -205,8 +205,8 @@ class CipLockingTest extends TestCase
             ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
 
         $fresh = $person->fresh();
-        $this->assertSame('Chen', $fresh->first_name);
-        $this->assertSame('Wei', $fresh->last_name);
+        $this->assertSame('CHEN', $fresh->first_name);
+        $this->assertSame('WEI', $fresh->last_name);
         $this->assertNull($fresh->occupation);
         $this->assertNull($fresh->passport_number);
         $this->assertNull($fresh->date_of_birth);
@@ -225,8 +225,8 @@ class CipLockingTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
 
-        $this->assertSame('Chen', $person->fresh()->first_name);
-        $this->assertSame('Wei', $person->fresh()->last_name);
+        $this->assertSame('CHEN', $person->fresh()->first_name);
+        $this->assertSame('WEI', $person->fresh()->last_name);
     }
 
     public function test_submitted_person_fields_are_still_readable_after_the_package_is_locked(): void
@@ -237,8 +237,8 @@ class CipLockingTest extends TestCase
             ->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()
             ->assertJsonPath('application.locked', true)
-            ->assertJsonPath('application.applicant.firstName', 'Chen')
-            ->assertJsonPath('application.applicant.lastName', 'Wei');
+            ->assertJsonPath('application.applicant.firstName', 'CHEN')
+            ->assertJsonPath('application.applicant.lastName', 'WEI');
 
         $this->actingAs($staff)
             ->getJson('/portal/cip/applications')
@@ -351,7 +351,7 @@ class CipLockingTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
 
-        $this->assertSame('Chen', $person->fresh()->first_name);
+        $this->assertSame('CHEN', $person->fresh()->first_name);
 
         $this->actingAs($staff)
             ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
@@ -539,7 +539,7 @@ class CipLockingTest extends TestCase
         CipPerson::create([
             'application_id' => $application->id,
             'role' => CipPerson::ROLE_MAIN_APPLICANT,
-            'first_name' => 'Chen', 'last_name' => 'Wei',
+            'first_name' => 'CHEN', 'last_name' => 'Wei',
         ]);
         Tree::provision($application->fresh(), $staff);
 
@@ -581,7 +581,7 @@ class CipLockingTest extends TestCase
         CipPerson::create([
             'application_id' => $application->id,
             'role' => CipPerson::ROLE_MAIN_APPLICANT,
-            'first_name' => 'Chen', 'last_name' => 'Wei',
+            'first_name' => 'CHEN', 'last_name' => 'Wei',
         ]);
         Tree::provision($application->fresh(), $staff);
 

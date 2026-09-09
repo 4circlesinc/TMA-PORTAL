@@ -57,13 +57,23 @@ class PersonEdits
     /**
      * Is this file one whose people may be corrected at all?
      *
-     * Post-approval only. Before the decision the intake form already owns
-     * these fields and the filing party edits them there.
+     * Either lane. Who somebody IS is the same question on both sides of the
+     * decision, and it is the answer the Unit checks against a passport.
      */
     public static function open(?CipApplication $application): bool
     {
-        return $application !== null
-            && ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+        /*
+         * Both lanes, not just post-approval.
+         *
+         * Who somebody IS is the same question either side of the decision,
+         * and it is the answer the Unit checks against a passport — so a
+         * correction to a name or a date of birth is an administrator's to
+         * make wherever the file stands. Before, pre-approval had no request
+         * path at all: anyone holding cip.create wrote the change straight
+         * onto the person, which meant an officer could quietly alter the
+         * identity on a filing nobody had reviewed.
+         */
+        return $application !== null;
     }
 
     /** Does this reader's edit land straight on the record? */
@@ -86,6 +96,21 @@ class PersonEdits
         // is the test, so a stranger cannot propose their way into knowing it
         // exists, and the provider side keeps a voice on their own filing.
         return ApplicationScope::query($user)->whereKey($application->getKey())->exists();
+    }
+
+    /**
+     * The same question as {@see mayPropose}, for a caller that has already
+     * fetched the application through the scope.
+     *
+     * Presenting a record is that caller: the row was read through
+     * ApplicationScope to exist at all, so asking the database again is a
+     * query per row for an answer already known.
+     */
+    public static function allowedHere(?User $user, ?CipApplication $application): bool
+    {
+        return self::open($application)
+            && $user !== null
+            && CipAccess::enabled();
     }
 
     /**
@@ -215,12 +240,23 @@ class PersonEdits
      */
     public static function pending(CipApplication $application): array
     {
-        return CipPersonChangeRequest::query()
-            ->where('application_id', $application->id)
-            ->where('status', CipPersonChangeRequest::STATUS_PENDING)
-            ->with(['requester:id,name', 'person:id,uuid,first_name,last_name'])
-            ->orderBy('id')
-            ->get()
+        /*
+         * The eager-loaded relation when the caller brought one.
+         *
+         * Person edits are open in both lanes now, so this runs for every row
+         * of the applications table — asking the database per application was
+         * a query a row, which the listing's own scale test caught.
+         */
+        $rows = $application->relationLoaded('pendingPersonChanges')
+            ? $application->pendingPersonChanges
+            : CipPersonChangeRequest::query()
+                ->where('application_id', $application->id)
+                ->where('status', CipPersonChangeRequest::STATUS_PENDING)
+                ->with(['requester:id,name', 'person:id,uuid,first_name,last_name'])
+                ->orderBy('id')
+                ->get();
+
+        return $rows
             ->map(fn (CipPersonChangeRequest $r) => [
                 'id' => $r->uuid,
                 'person' => $r->person?->uuid,
@@ -315,7 +351,7 @@ class PersonEdits
 
             // A field sent back unchanged is not a correction, and an approver
             // should not have to read it as one.
-            if (self::text($value) === self::text($person->{self::COLUMNS[$field]} ?? null)) {
+            if (self::comparable($field, $value) === self::comparable($field, $person->{self::COLUMNS[$field]} ?? null)) {
                 continue;
             }
 
@@ -323,6 +359,45 @@ class PersonEdits
         }
 
         return $out;
+    }
+
+    /**
+     * Would this value actually change the person?
+     *
+     * The same comparison the request itself uses, so the intake form and the
+     * request agree on what counts as a correction — a form posts every field
+     * and most arrive identical, and refusing somebody for "changing" a name
+     * they never touched would make the whole screen unusable.
+     */
+    public static function differs(CipPerson $person, string $field, mixed $value): bool
+    {
+        if (! isset(self::COLUMNS[$field])) {
+            return false;
+        }
+
+        return self::comparable($field, $value)
+            !== self::comparable($field, $person->{self::COLUMNS[$field]} ?? null);
+    }
+
+    /**
+     * One field's value in the form the comparison should use.
+     *
+     * Names are stored in capitals (see CipPerson), so a form that posts back
+     * "Ana" against a stored "ANA" is not proposing anything — comparing them
+     * literally would raise a change request for a field nobody touched, on
+     * every save.
+     */
+    private static function comparable(string $field, mixed $value): ?string
+    {
+        $text = self::text(is_string($value) ? trim($value) : $value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        return in_array($field, ['firstName', 'lastName'], true)
+            ? mb_strtoupper($text, 'UTF-8')
+            : $text;
     }
 
     /**

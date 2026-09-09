@@ -150,6 +150,20 @@ class CipApplication extends Model
         return $this->hasMany(CipApplicationAssignment::class, 'application_id');
     }
 
+    /**
+     * Corrections somebody has asked an administrator to make.
+     *
+     * A relation rather than a query in the presenter, so a listing can eager
+     * load it: person edits are open in both lanes now, and asking per row
+     * cost one query per application on every page of the table.
+     */
+    public function pendingPersonChanges(): HasMany
+    {
+        return $this->hasMany(CipPersonChangeRequest::class, 'application_id')
+            ->where('status', CipPersonChangeRequest::STATUS_PENDING)
+            ->orderBy('id');
+    }
+
     public function events(): HasMany
     {
         return $this->hasMany(CipEvent::class, 'application_id');

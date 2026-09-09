@@ -331,7 +331,7 @@ class CipLettersTest extends TestCase
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
             return $mail->subjectLine === $expected
                 && $mail->payload['title'] === '10T1G12661P — real estate granted'
-                && $mail->payload['lead'] === 'Citizenship granted to Chen Wei on the Real Estate Project route. Family F1.';
+                && $mail->payload['lead'] === 'Citizenship granted to CHEN WEI on the Real Estate Project route. Family F1.';
         });
     }
 
@@ -364,7 +364,7 @@ class CipLettersTest extends TestCase
             $body = (string) $mail->payload['bodyHtml'];
 
             // The first block is the centred lead, as plain text.
-            return $mail->payload['lead'] === 'Congratulations to Chen Wei on being granted citizenship.'
+            return $mail->payload['lead'] === 'Congratulations to CHEN WEI on being granted citizenship.'
                 && str_contains($body, '<strong>STAGE 1</strong>')
                 && str_contains($body, '<font size="5">COR</font>')
                 && ! str_contains($body, '<script')
@@ -424,7 +424,7 @@ class CipLettersTest extends TestCase
             $body = $mail->payload['bodyHtml'] ?? '';
 
             return str_starts_with($mail->subjectLine, 'AA - DENIED -')
-                && str_contains($mail->payload['lead'], '10T1G12661P – Chen Wei')
+                && str_contains($mail->payload['lead'], '10T1G12661P – CHEN WEI')
                 && str_contains($mail->payload['lead'], 'denied')
                 && str_contains($body, 'Section 37(2)(b)')
                 && str_contains($body, 'sixty (60) days')
@@ -449,7 +449,7 @@ class CipLettersTest extends TestCase
             $body = $mail->payload['bodyHtml'] ?? '';
 
             return $mail->payload['title'] === '10T1G12661P was granted'
-                && str_contains($mail->payload['lead'], '10T1G12661P – Chen Wei')
+                && str_contains($mail->payload['lead'], '10T1G12661P – CHEN WEI')
                 && str_contains($mail->payload['lead'], 'granted citizenship of Saint Lucia')
                 && str_contains($body, 'Escrow Documents')
                 && str_contains($body, 'Sales &amp; Purchase Agreement')
@@ -486,7 +486,7 @@ class CipLettersTest extends TestCase
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
             return $mail->payload['title'] === '10T1G12661P — Hotel licence granted'
-                && $mail->payload['lead'] === 'Chen Wei was granted on 18.08.2026 under Hotel licence.';
+                && $mail->payload['lead'] === 'CHEN WEI was granted on 18.08.2026 under Hotel licence.';
         });
     }
 

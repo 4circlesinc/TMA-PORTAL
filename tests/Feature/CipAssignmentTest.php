@@ -378,7 +378,7 @@ class CipAssignmentTest extends TestCase
 
             return $mail->hasTo('rita@example.com')
                 && $details['Application'] === $application->displayNumber()
-                && $details['Applicant'] === 'Chen Wei'
+                && $details['Applicant'] === 'CHEN WEI'
                 && $details['Service provider'] === 'Galaxy'
                 // The body says where the file stands, not only the subject:
                 // the status is the one fact that decides what kind of work

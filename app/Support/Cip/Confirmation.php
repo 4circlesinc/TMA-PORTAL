@@ -57,7 +57,15 @@ class Confirmation
              * form reads both — the scans stay frozen either way, the fields
              * do not.
              */
-            'canEditPeople' => PersonEdits::mayPropose($actor, $application),
+            /*
+             * Reached through a scoped read already.
+             *
+             * mayPropose asks the scope again, which is one query per row once
+             * person edits opened in both lanes — and the answer is a
+             * foregone conclusion here, because this payload is only ever
+             * built for an application the reader was allowed to fetch.
+             */
+            'canEditPeople' => PersonEdits::allowedHere($actor, $application),
             // Whether their save lands or waits, so the form can say which.
             'editsPeopleDirectly' => PersonEdits::editsDirectly($actor, $application),
             'pendingChanges' => PersonEdits::open($application)

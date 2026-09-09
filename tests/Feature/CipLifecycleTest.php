@@ -196,9 +196,9 @@ class CipLifecycleTest extends TestCase
             ->assertOk()
             ->json('application');
 
-        $this->assertSame('Chen Wei', $show['applicant']['name']);
-        $this->assertSame('Li Wei', $show['sponsor']['name']);
-        $this->assertSame('Mei Wei', $show['dependents'][0]['name']);
+        $this->assertSame('CHEN WEI', $show['applicant']['name']);
+        $this->assertSame('LI WEI', $show['sponsor']['name']);
+        $this->assertSame('MEI WEI', $show['dependents'][0]['name']);
         $this->assertSame(3, $show['familySize']);
 
         $decision = collect($show['milestones'])->firstWhere('key', Milestones::DECISION);

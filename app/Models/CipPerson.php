@@ -54,6 +54,41 @@ class CipPerson extends Model
         });
     }
 
+    /*
+     * Names are stored in capitals, always.
+     *
+     * The Unit's forms and every final document — the Certificate of
+     * Registration, the NIC letter, the passport — carry the name in capitals,
+     * and the letters tell the applicant that the name on the application is
+     * the one that will appear on all of them. A file typed "John smith" by
+     * one reader and "JOHN SMITH" by another is the same person wearing two
+     * names, and the difference reaches the Unit.
+     *
+     * Set on the attribute rather than at one of the write paths, so it holds
+     * for intake, the draft autosave, an edit, and a person-edit request
+     * alike. mb_strtoupper, because the applicants are not all anglophone.
+     */
+    public function setFirstNameAttribute(?string $value): void
+    {
+        $this->attributes['first_name'] = self::upperName($value);
+    }
+
+    public function setLastNameAttribute(?string $value): void
+    {
+        $this->attributes['last_name'] = self::upperName($value);
+    }
+
+    private static function upperName(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? $value : mb_strtoupper($value, 'UTF-8');
+    }
+
     protected function casts(): array
     {
         return [

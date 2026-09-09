@@ -62,7 +62,7 @@ class CipApplicationTableTest extends TestCase
 
         $client = Client::create([
             'uid' => 'chen-wei-'.strtolower($application->internal_number),
-            'name' => 'Chen Wei', 'email' => 'chen@example.com',
+            'name' => 'CHEN WEI', 'email' => 'chen@example.com',
             'created_by' => $staff->id, 'data' => [],
         ]);
         $application->forceFill(['client_id' => $client->id])->save();
@@ -101,7 +101,7 @@ class CipApplicationTableTest extends TestCase
             $this->assertArrayHasKey($column, $row, $column.' is one of section 8’s columns.');
         }
 
-        $this->assertSame('Chen Wei', $row['applicantName']);
+        $this->assertSame('CHEN WEI', $row['applicantName']);
         $this->assertSame('Galaxy', $row['provider']);
         $this->assertSame('chen@example.com', $row['contactEmail']);
         $this->assertSame('New Applications', $row['statusLabel']);
@@ -294,21 +294,21 @@ class CipApplicationTableTest extends TestCase
             ->assertOk()
             ->json('applications');
 
-        $this->assertSame(['Ada Able', 'Zed Zane'], array_column($asc, 'applicantName'));
+        $this->assertSame(['ADA ABLE', 'ZED ZANE'], array_column($asc, 'applicantName'));
 
         $desc = $this->actingAs($staff)
             ->getJson('/portal/cip/applications?sort=applicant&dir=desc')
             ->assertOk()
             ->json('applications');
 
-        $this->assertSame(['Zed Zane', 'Ada Able'], array_column($desc, 'applicantName'));
+        $this->assertSame(['ZED ZANE', 'ADA ABLE'], array_column($desc, 'applicantName'));
 
         $page = $this->actingAs($staff)
             ->getJson('/portal/cip/applications?sort=applicant&dir=asc&perPage=1&page=2')
             ->assertOk()
             ->json();
 
-        $this->assertSame('Zed Zane', $page['applications'][0]['applicantName']);
+        $this->assertSame('ZED ZANE', $page['applications'][0]['applicantName']);
         $this->assertSame(2, $page['total']);
     }
 
@@ -327,7 +327,7 @@ class CipApplicationTableTest extends TestCase
             'applicantName',
         );
 
-        $this->assertSame(['Zed Zane', 'Ada Able'], $names);
+        $this->assertSame(['ZED ZANE', 'ADA ABLE'], $names);
     }
 
     public function test_it_sorts_by_family_size(): void
@@ -418,7 +418,7 @@ class CipApplicationTableTest extends TestCase
         $application = $this->application($staff, $this->provider($staff), 0, false);
 
         $login = User::create([
-            'name' => 'Chen Wei',
+            'name' => 'CHEN WEI',
             'email' => 'chen@example.com',
             'password' => bcrypt('password12345'),
         ]);
@@ -580,7 +580,7 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(Phase::POST_APPROVAL, $row['phase']);
         $this->assertCount(3, $row['familyMembers']);
         $this->assertSame('applicant', $row['familyMembers'][0]['profileTab']);
-        $this->assertSame('Chen Wei', $row['familyMembers'][0]['name']);
+        $this->assertSame('CHEN WEI', $row['familyMembers'][0]['name']);
         $this->assertSame('sponsor', $row['familyMembers'][1]['profileTab']);
         $this->assertSame('dependents', $row['familyMembers'][2]['profileTab']);
         $this->assertArrayHasKey('docFiled', $row['familyMembers'][0]);

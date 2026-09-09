@@ -343,7 +343,7 @@ class CipReportingTest extends TestCase
         $this->assertStringContainsString('All dates', $csv);
         $this->assertStringContainsString('Number,Applicant,Status,"Service provider","Investment type","Assigned officer",Submitted,"Decision date"', $csv);
         $this->assertStringContainsString('10T1G12661P', $csv);
-        $this->assertStringContainsString('Chen Wei', $csv);
+        $this->assertStringContainsString('CHEN WEI', $csv);
         $this->assertStringContainsString('Approved', $csv);
         $this->assertStringContainsString('Galaxy', $csv);
         $this->assertStringContainsString('2026-08-01', $csv);

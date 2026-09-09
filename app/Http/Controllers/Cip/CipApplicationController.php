@@ -342,6 +342,11 @@ class CipApplicationController extends Controller
                 'client',
                 'assignedOfficer:id,name,email,avatar_url,provider_avatar_url',
                 'people.documents.file',
+                // Person edits are open in both lanes, so every record carries
+                // its pending corrections — asked per row, that was a query an
+                // application.
+                'pendingPersonChanges.requester:id,name',
+                'pendingPersonChanges.person:id,uuid,first_name,last_name',
             ], self::assigneeRelations()));
 
         if ($since !== null) {

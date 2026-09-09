@@ -879,6 +879,7 @@ class Intake
     {
         return DB::transaction(function () use ($application, $actor, $data) {
             Confirmation::guard($application);
+            self::guardIdentityEdits($application, $actor, $data);
             self::syncCipNumber($application, $actor, $data);
             $application->forceFill([
                 'investment_type' => $data['investmentType'],
@@ -917,6 +918,43 @@ class Intake
 
             return $application->fresh();
         });
+    }
+
+    /**
+     * Identity is an administrator's to change, in either lane.
+     *
+     * Who somebody is — their name, their date of birth, their passport
+     * number — is what the Unit checks against the document in front of it,
+     * so it is not a field an officer corrects on their own say-so. An
+     * administrator writes it; everyone else asks, through the person-edit
+     * request that post-approval already used.
+     *
+     * Enforced here as well as on that request because this form is the other
+     * door onto the same eight fields: leaving it open would mean a reader
+     * refused at one and waved through at the other.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function guardIdentityEdits(CipApplication $application, User $actor, array $data): void
+    {
+        if (PersonEdits::editsDirectly($actor, $application)) {
+            return;
+        }
+
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        if ($main === null) {
+            return;
+        }
+
+        foreach (PersonEdits::FIELDS as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+
+            if (PersonEdits::differs($main, $field, $data[$field])) {
+                abort(422, 'Ask an administrator to change '.$main->fullName().'’s details.');
+            }
+        }
     }
 
     /**
