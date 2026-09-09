@@ -13,6 +13,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Letters;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -71,7 +72,7 @@ class CipLettersTest extends TestCase
         return $application->refresh();
     }
 
-    public function test_the_ten_letters_are_there_on_the_first_day(): void
+    public function test_the_twenty_letters_are_there_on_the_first_day(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
 
@@ -90,12 +91,82 @@ class CipLettersTest extends TestCase
             array_column($payload['placeholders'], 'token'),
         );
 
+        /*
+         * A pair per lane, and the lanes named. Approved means a different
+         * thing either side of the decision, so the screen has to say which
+         * letter it is showing — two rows both labelled Granted with nothing
+         * else to tell them apart would be a coin toss.
+         */
         foreach ($types as $type) {
-            $this->assertSame(['Granted', 'Denied'], array_column($type['letters'], 'decisionLabel'));
-            $this->assertFalse($type['letters'][0]['customized']);
+            $this->assertSame(
+                [Phase::PRE_APPROVAL, Phase::POST_APPROVAL],
+                array_column($type['phases'], 'value'),
+            );
+
+            foreach ($type['phases'] as $phase) {
+                $this->assertSame(['Granted', 'Denied'], array_column($phase['letters'], 'decisionLabel'));
+                $this->assertFalse($phase['letters'][0]['customized']);
+                $this->assertSame($phase['value'], $phase['letters'][0]['phase']);
+            }
         }
 
-        $this->assertSame(10, CipDecisionTemplate::count());
+        $this->assertSame(20, CipDecisionTemplate::count());
+    }
+
+    /**
+     * The two lanes send different letters.
+     *
+     * A grant recorded before the decision hands the reader the whole
+     * three-stage post-approval process; one recorded on a file that has
+     * already worked COR and NIC must not, or it reads as a mistake.
+     */
+    public function test_a_post_approval_decision_uses_the_post_approval_letter(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->inBackgroundCheck($admin, InvestmentType::REAL_ESTATE);
+
+        $pre = Letters::for($application, Status::GRANTED);
+        $this->assertSame(Phase::PRE_APPROVAL, $pre->phase);
+
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $post = Letters::for($application->fresh(), Status::GRANTED);
+
+        $this->assertSame(Phase::POST_APPROVAL, $post->phase);
+        $this->assertNotSame($pre->id, $post->id);
+        $this->assertNotSame($pre->body, $post->body);
+
+        // The pre-approval grant is the one that hands the reader the three
+        // stages; the post-approval one is written for somebody already past
+        // them, so it must not carry the stage checklists.
+        $this->assertStringContainsString('STAGE 1', $pre->body);
+        $this->assertStringNotContainsString('STAGE 1', $post->body);
+    }
+
+    /** Rewriting one lane's letter leaves the other alone. */
+    public function test_editing_a_post_approval_letter_does_not_touch_the_pre_approval_one(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $post = CipDecisionTemplate::query()
+            ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::POST_APPROVAL)
+            ->where('decision', Status::GRANTED)
+            ->first();
+        $pre = CipDecisionTemplate::query()
+            ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
+            ->where('decision', Status::GRANTED)
+            ->first();
+        $wasPre = $pre->body;
+
+        $this->actingAs($admin)->patchJson('/portal/cip/letters/'.$post->uuid, [
+            'title' => '{{number}} — post-approval granted',
+            'body' => 'The post-approval application for {{applicant}} was approved.',
+        ])->assertOk();
+
+        $this->assertSame($wasPre, $pre->fresh()->body);
+        $this->assertTrue(Letters::isCustomized($post->fresh()));
+        $this->assertFalse(Letters::isCustomized($pre->fresh()));
     }
 
     public function test_only_an_administrator_may_change_the_letters(): void
@@ -105,6 +176,7 @@ class CipLettersTest extends TestCase
 
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -121,6 +193,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -141,7 +214,7 @@ class CipLettersTest extends TestCase
             ->json();
 
         $this->assertFalse($restored['customized']);
-        $this->assertSame(Letters::defaults()[InvestmentType::REAL_ESTATE][Status::GRANTED]['body'], $restored['body']);
+        $this->assertSame(Letters::defaults()[InvestmentType::REAL_ESTATE][Phase::PRE_APPROVAL][Status::GRANTED]['body'], $restored['body']);
     }
 
     public function test_a_real_estate_grant_sends_the_real_estate_letter(): void
@@ -151,6 +224,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -183,6 +257,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -219,6 +294,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::REAL_ESTATE)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -305,6 +381,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::OTHER)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 
@@ -335,6 +412,7 @@ class CipLettersTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $letter = CipDecisionTemplate::query()
             ->where('investment_type', InvestmentType::OTHER)
+            ->where('phase', Phase::PRE_APPROVAL)
             ->where('decision', Status::GRANTED)
             ->first();
 

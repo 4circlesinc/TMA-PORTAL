@@ -9,6 +9,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Templates\Markup;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Letters;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,13 +38,30 @@ class CipLetterController extends Controller
         return response()->json([
             'canEdit' => CipAccess::can($request->user(), 'cip.configure'),
             'placeholders' => Letters::placeholders(),
+            /*
+             * Grouped by lane inside each investment type. Approved and
+             * Denied exist on both sides of the decision and say different
+             * things, so the screen has to name which one it is editing —
+             * two rows labelled "Granted" with no other difference would be
+             * a coin toss.
+             */
             'types' => collect(InvestmentType::ALL)->map(fn (string $label, string $type) => [
                 'value' => $type,
                 'label' => $label,
-                'letters' => collect([Status::GRANTED, Status::DENIED])
-                    ->map(fn (string $decision) => $all->get($type)?->firstWhere('decision', $decision))
-                    ->filter()
-                    ->map(fn (CipDecisionTemplate $letter) => $this->record($letter))
+                'phases' => collect([Phase::PRE_APPROVAL, Phase::POST_APPROVAL])
+                    ->map(fn (string $phase) => [
+                        'value' => $phase,
+                        'label' => Phase::label($phase),
+                        'letters' => collect([Status::GRANTED, Status::DENIED])
+                            ->map(fn (string $decision) => $all->get($type)?->first(
+                                fn (CipDecisionTemplate $row) => $row->decision === $decision
+                                    && ($row->phase ?: Phase::PRE_APPROVAL) === $phase,
+                            ))
+                            ->filter()
+                            ->map(fn (CipDecisionTemplate $letter) => $this->record($letter))
+                            ->values()
+                            ->all(),
+                    ])
                     ->values()
                     ->all(),
             ])->values()->all(),
@@ -123,6 +141,8 @@ class CipLetterController extends Controller
             'investmentType' => $letter->investment_type,
             'decision' => $letter->decision,
             'decisionLabel' => $letter->decisionLabel(),
+            'phase' => $letter->phase ?: Phase::PRE_APPROVAL,
+            'phaseLabel' => $letter->phaseLabel(),
             'title' => $letter->title,
             'body' => $letter->body,
             'customized' => Letters::isCustomized($letter),

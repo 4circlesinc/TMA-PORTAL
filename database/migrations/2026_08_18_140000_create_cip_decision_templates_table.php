@@ -1,6 +1,5 @@
 <?php
 
-use Database\Seeders\CipDecisionTemplateSeeder;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -29,7 +28,15 @@ return new class extends Migration
             $table->unique(['investment_type', 'decision']);
         });
 
-        (new CipDecisionTemplateSeeder)->run();
+        /*
+         * Seeded by the later migration, not here.
+         *
+         * This used to call the seeder, which goes through Letters::ensure()
+         * — today's code, writing today's columns. The phase column arrives
+         * in a later migration, so on a fresh build that insert ran against a
+         * table that did not have it yet. A migration describes the schema at
+         * ITS point in history; the rows are filled once the shape is final.
+         */
     }
 
     public function down(): void

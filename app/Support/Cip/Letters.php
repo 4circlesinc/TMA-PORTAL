@@ -40,10 +40,19 @@ class Letters
     }
 
     /**
-     * The ten shipped letters. firstOrCreate uses these; restore writes them
-     * back. An administrator's rewording is never overwritten by a re-seed.
+     * The twenty shipped letters, keyed type → phase → outcome.
      *
-     * @return array<string, array<string, array{title:string, body:string}>>
+     * firstOrCreate uses these; restore writes them back. An administrator's
+     * rewording is never overwritten by a re-seed.
+     *
+     * Two lanes, because Approved means two different things to the reader.
+     * Before the decision it is the Unit granting the application, and the
+     * letter's whole second half is the instructions for starting the
+     * post-approval process. After it, the file has already been through COR,
+     * NIC and the passport office — sending those same instructions to
+     * somebody holding their passport would read as a mistake.
+     *
+     * @return array<string, array<string, array<string, array{title:string, body:string}>>>
      */
     public static function defaults(): array
     {
@@ -51,15 +60,27 @@ class Letters
 
         foreach (array_keys(InvestmentType::ALL) as $type) {
             $letters[$type] = [
-                Status::GRANTED => [
-                    'title' => '{{number}} was granted',
-                    'body' => $type === InvestmentType::REAL_ESTATE
-                        ? self::grantedRealEstate()
-                        : self::granted(),
+                Phase::PRE_APPROVAL => [
+                    Status::GRANTED => [
+                        'title' => '{{number}} was granted',
+                        'body' => $type === InvestmentType::REAL_ESTATE
+                            ? self::grantedRealEstate()
+                            : self::granted(),
+                    ],
+                    Status::DENIED => [
+                        'title' => '{{number}} was denied',
+                        'body' => self::denied(),
+                    ],
                 ],
-                Status::DENIED => [
-                    'title' => '{{number}} was denied',
-                    'body' => self::denied(),
+                Phase::POST_APPROVAL => [
+                    Status::GRANTED => [
+                        'title' => '{{number}} was approved',
+                        'body' => self::postApprovalGranted(),
+                    ],
+                    Status::DENIED => [
+                        'title' => '{{number}} was denied',
+                        'body' => self::postApprovalDenied(),
+                    ],
                 ],
             ];
         }
@@ -67,28 +88,31 @@ class Letters
         return $letters;
     }
 
-    /** Make sure all ten rows exist. Safe to call on every admin listing. */
+    /** Make sure all twenty rows exist. Safe to call on every admin listing. */
     public static function ensure(): void
     {
-        foreach (self::defaults() as $type => $outcomes) {
-            foreach ($outcomes as $decision => $copy) {
-                CipDecisionTemplate::query()->firstOrCreate(
-                    [
-                        'investment_type' => $type,
-                        'decision' => $decision,
-                    ],
-                    [
-                        'title' => $copy['title'],
-                        'body' => $copy['body'],
-                    ],
-                );
+        foreach (self::defaults() as $type => $phases) {
+            foreach ($phases as $phase => $outcomes) {
+                foreach ($outcomes as $decision => $copy) {
+                    CipDecisionTemplate::query()->firstOrCreate(
+                        [
+                            'investment_type' => $type,
+                            'phase' => $phase,
+                            'decision' => $decision,
+                        ],
+                        [
+                            'title' => $copy['title'],
+                            'body' => $copy['body'],
+                        ],
+                    );
+                }
             }
         }
     }
 
     public static function restore(CipDecisionTemplate $template, ?User $actor = null): CipDecisionTemplate
     {
-        $copy = self::defaults()[$template->investment_type][$template->decision]
+        $copy = self::defaults()[$template->investment_type][self::phaseOf($template)][$template->decision]
             ?? ['title' => $template->title, 'body' => $template->body];
 
         $template->forceFill([
@@ -113,12 +137,21 @@ class Letters
             ? $application->investment_type
             : InvestmentType::OTHER;
 
-        $copy = self::defaults()[$type][$decision]
-            ?? self::defaults()[InvestmentType::OTHER][$decision];
+        /*
+         * The lane the file is in when the decision lands, which is the whole
+         * point of keeping two pairs: a grant recorded on a file that has
+         * already worked COR and NIC must not send the letter that tells the
+         * reader to begin the post-approval process.
+         */
+        $phase = self::phaseFor($application);
+
+        $copy = self::defaults()[$type][$phase][$decision]
+            ?? self::defaults()[InvestmentType::OTHER][$phase][$decision];
 
         return CipDecisionTemplate::query()->firstOrCreate(
             [
                 'investment_type' => $type,
+                'phase' => $phase,
                 'decision' => $decision,
             ],
             [
@@ -126,6 +159,27 @@ class Letters
                 'body' => $copy['body'],
             ],
         );
+    }
+
+    /** Which lane's letters this application's decision should use. */
+    public static function phaseFor(CipApplication $application): string
+    {
+        return ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            ? Phase::POST_APPROVAL
+            : Phase::PRE_APPROVAL;
+    }
+
+    /**
+     * A stored row's lane.
+     *
+     * Rows written before the column existed carry no phase, and they were
+     * all pre-approval — that was the only lane that could decide anything.
+     */
+    private static function phaseOf(CipDecisionTemplate $template): string
+    {
+        return Phase::isValid((string) $template->phase)
+            ? (string) $template->phase
+            : Phase::PRE_APPROVAL;
     }
 
     /**
@@ -183,7 +237,7 @@ class Letters
 
     public static function isCustomized(CipDecisionTemplate $template): bool
     {
-        $copy = self::defaults()[$template->investment_type][$template->decision] ?? null;
+        $copy = self::defaults()[$template->investment_type][self::phaseOf($template)][$template->decision] ?? null;
 
         if ($copy === null) {
             return true;
@@ -401,6 +455,55 @@ GENERAL GUIDELINES
 2. Certified true copy of the credentials MUST be provided for the translator, Notary, and/or Attorney-at-Law who has certified or translated any of the documents listed above.
 
 Congratulations again on the grant of citizenship. Our team will be happy to continue to assist you!
+
+Kind regards,
+TEXT;
+    }
+
+    /**
+     * The post-approval grant.
+     *
+     * Deliberately short. The pre-approval letter is long because it has to
+     * hand the reader the whole three-stage process; by the time a file is
+     * decided in the post-approval lane that work is behind it, and the only
+     * thing left to say is that the outcome is recorded and what happens to
+     * the documents.
+     */
+    private static function postApprovalGranted(): string
+    {
+        return <<<'TEXT'
+Please extend our congratulations to {{number}} – {{applicant}} on the approval of their post-approval application.
+
+The decision was recorded on {{decisionDate}}. The name above is the one that appears on the final documents – the Certificate of Registration, the NIC Letter and the Passport – so please let us know at once if it does not match the applicant's records.
+
+Please find the official letter attached.
+
+Kind regards,
+TEXT;
+    }
+
+    /**
+     * The post-approval denial.
+     *
+     * The sixty-day Request for Review window is the same statutory clock,
+     * so it is said here too: a reader refused at this stage needs it as
+     * much as one refused before the grant, and a letter that left it out
+     * would be the reason somebody missed it.
+     */
+    private static function postApprovalDenied(): string
+    {
+        return <<<'TEXT'
+Please be advised that the post-approval application for {{number}} – {{applicant}} has been denied.
+
+The decision was recorded on {{decisionDate}}.
+
+If the applicant wishes to appeal this decision, the statutory timeframe governing Requests for Review, as outlined under Section 37(2)(b) of the Citizenship by Investment Act, No. 14 of 2015 (as amended) (the "Act"), requires that a request for review be submitted within sixty (60) days from the date of the denial letter issued by the Board.
+
+Compliance with this statutory timeframe is mandatory. Requests for Review submitted outside the prescribed sixty (60)-day period will be considered time-barred and will not be accepted or processed by the Unit.
+
+Please also note that there are associated fees payable to the Unit, as well as applicable fees from the Authorized Agent, for submitting a Request for Review (appeal).
+
+Please find the official letter attached.
 
 Kind regards,
 TEXT;

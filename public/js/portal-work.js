@@ -1256,21 +1256,26 @@
         TPL.el.innerHTML = '<p class="tma-portal-note">Couldn’t load the letters: ' + ui().esc(err || 'try again') + '</p>';
         return;
       }
+      // One flat table, so the lane is a column rather than a heading: the
+      // same Granted exists twice and the row has to say which it is.
       var rows = (d.types || []).map(function (t) {
-        return (t.letters || []).map(function (l) {
-          return '<tr>' +
-            '<td>' + ui().esc(t.label) + '</td>' +
-            '<td>' + ui().esc(l.decisionLabel) +
-              (l.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
-            '<td class="tma-portal-table__muted">' + ui().esc(l.title) + '</td>' +
-            '<td><div class="tma-portal-row-actions">' +
-            '<button type="button" class="tma-portal-icon-btn" data-cipl-edit="' + ui().esc(l.id) + '" title="Edit letter" aria-label="Edit letter"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
-            '</div></td></tr>';
+        return (t.phases || []).map(function (p) {
+          return (p.letters || []).map(function (l) {
+            return '<tr>' +
+              '<td>' + ui().esc(t.label) + '</td>' +
+              '<td>' + ui().esc(p.label) + '</td>' +
+              '<td>' + ui().esc(l.decisionLabel) +
+                (l.customized ? ' <span class="tma-portal-tag">Custom</span>' : '') + '</td>' +
+              '<td class="tma-portal-table__muted">' + ui().esc(l.title) + '</td>' +
+              '<td><div class="tma-portal-row-actions">' +
+              '<button type="button" class="tma-portal-icon-btn" data-cipl-edit="' + ui().esc(l.id) + '" title="Edit letter" aria-label="Edit letter"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+              '</div></td></tr>';
+          }).join('');
         }).join('');
       }).join('');
       TPL.el.innerHTML =
         '<div class="tma-portal-page tma-portal-page--templates">' +
-        ui().table(['Investment type', 'Decision', 'Title', ''], rows) +
+        ui().table(['Investment type', 'Lane', 'Decision', 'Title', ''], rows) +
         '</div>';
       TPL.el.querySelectorAll('[data-cipl-edit]').forEach(function (b) {
         b.addEventListener('click', function () {

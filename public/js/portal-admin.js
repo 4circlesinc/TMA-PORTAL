@@ -1953,9 +1953,13 @@
 
   /* ── CIP Granted / Denied letters (section 23) ─────────────────────────────
    *
-   * Ten templates, one pair per investment type. The filing subject is
-   * still section 22; this screen is the body the administrator keeps. Tokens
-   * are filled from the application when the letter is sent.
+   * Twenty templates: a Granted and a Denied per investment type, in each of
+   * the two lanes. Approved means a different thing either side of the
+   * decision — before it the letter hands the reader the whole post-approval
+   * process, after it that work is already behind them — so the lane is named
+   * on every row and in the editor's own title. The filing subject is still
+   * section 22; this screen is the body the administrator keeps. Tokens are
+   * filled from the application when the letter is sent.
    */
   var CIPLETTERS = { loaded: false, loading: false, error: '', data: null };
 
@@ -1971,7 +1975,11 @@
   function cipLetterFor(id) {
     var found = null;
     (CIPLETTERS.data.types || []).forEach(function (t) {
-      t.letters.forEach(function (letter) { if (letter.id === id) found = { type: t, letter: letter }; });
+      (t.phases || []).forEach(function (p) {
+        (p.letters || []).forEach(function (letter) {
+          if (letter.id === id) found = { type: t, phase: p, letter: letter };
+        });
+      });
     });
     return found;
   }
@@ -1987,7 +1995,7 @@
     }).join('');
 
     ui().openModal({
-      title: found.type.label + ' · ' + letter.decisionLabel,
+      title: found.type.label + ' · ' + (found.phase ? found.phase.label + ' · ' : '') + letter.decisionLabel,
       // Wide like the system-email editor: these letters run to many
       // paragraphs, and a narrow column made them read as a corridor.
       cls: 'tma-portal-modal__card--wide',
@@ -2080,11 +2088,13 @@
 
       var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
 
-      return '<p class="tma-portal-subtitle">Granted and Denied letters, one pair per investment type. The subject line is still the filing format; these are the bodies that go out when a decision is recorded.</p>' +
+      return '<p class="tma-portal-subtitle">Granted and Denied letters, one pair per investment type in each lane. Pre-approval and post-approval decisions send different letters. The subject line is still the filing format; these are the bodies that go out when a decision is recorded.</p>' +
         (canEdit ? '' : '<p class="tma-portal-note">Only an administrator can change these letters.</p>') +
         (CIPLETTERS.data.types || []).map(function (t) {
           return '<h3 class="tma-portal-section__title">' + ui().esc(t.label) + '</h3>' +
-            ui().table(['Decision', 'Title', ''], t.letters.map(function (letter) {
+            (t.phases || []).map(function (p) {
+          return '<h4 class="tma-portal-subtitle">' + ui().esc(p.label) + '</h4>' +
+            ui().table(['Decision', 'Title', ''], (p.letters || []).map(function (letter) {
               var action = canEdit ? 'Edit letter' : 'View letter';
               var icon = canEdit ? 'PencilSimple' : 'Eye';
               return '<tr>' +
@@ -2095,6 +2105,7 @@
                   '<button type="button" class="tma-portal-icon-btn" data-cipletter-edit="' + ui().esc(letter.id) + '" title="' + action + '" aria-label="' + action + '"><img src="images/icons/phosphor/' + icon + '.svg" alt=""></button>' +
                 '</div></td></tr>';
             }).join(''));
+            }).join('');
         }).join('');
     },
     wire: function (el) {
