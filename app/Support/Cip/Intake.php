@@ -538,7 +538,12 @@ class Intake
      *
      * @param  array<string, mixed>  $data  already validated by self::rules()
      */
-    public static function duplicateOf(array $data): ?CipApplication
+    /**
+     * @param  CipApplication|null  $ignore  The application being filed, when
+     *                                       it already exists as a draft: a
+     *                                       row cannot duplicate itself.
+     */
+    public static function duplicateOf(array $data, ?CipApplication $ignore = null): ?CipApplication
     {
         $first = mb_strtolower(trim((string) $data['firstName']));
         $last = mb_strtolower(trim((string) $data['lastName']));
@@ -547,6 +552,19 @@ class Intake
         $passportLookup = $passport !== '' ? IdentityFields::lookup($passport) : null;
 
         return CipApplication::query()
+            /*
+             * A draft is not something to be warned about.
+             *
+             * It is an application somebody is still typing, and it is
+             * usually THIS one: the wizard autosaves into a draft row, so
+             * filing found the applicant already on file and warned the
+             * reader about their own unfinished work. Nobody is duplicating
+             * anything until an application has actually been filed.
+             */
+            ->where('status', '!=', Status::DRAFT)
+            // Belt and braces: the row being filed is never its own duplicate,
+            // whatever status it is standing in by the time this is asked.
+            ->when($ignore, fn ($q) => $q->whereKeyNot($ignore->getKey()))
             ->whereHas('people', function ($q) use ($first, $last, $passportLookup, $dobLookup) {
                 $q->where('role', CipPerson::ROLE_MAIN_APPLICANT)
                     ->where(function ($q) use ($first, $last, $passportLookup, $dobLookup) {

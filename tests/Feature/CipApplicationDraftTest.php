@@ -293,6 +293,91 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame($draftNumber, $filed->internal_number);
     }
 
+    /**
+     * A draft is not a duplicate of itself.
+     *
+     * The bug this pins, reported from the screen: the wizard autosaves into a
+     * draft row, so by the time Add was pressed the applicant WAS already on
+     * file — as the very draft being filed. The reader was shown "TEST 4
+     * FRANCIS already has application IGA26-00002" and asked to confirm a
+     * duplicate of their own unfinished work.
+     */
+    public function test_filing_a_draft_is_not_reported_as_a_duplicate_of_itself(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider))->assertOk();
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
+            // Not 409: there is nothing to confirm.
+            ->assertCreated();
+
+        $this->assertSame(1, CipApplication::query()->count());
+    }
+
+    /**
+     * Nor is somebody else's draft.
+     *
+     * A draft is an application nobody has filed. Warning that an applicant is
+     * "already on file" because a colleague started typing their name would be
+     * a duplicate warning about work that does not exist yet.
+     */
+    public function test_another_readers_draft_is_not_a_duplicate(): void
+    {
+        $mine = $this->user(Role::ADMINISTRATOR);
+        $theirs = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        // Somebody else is halfway through the same applicant.
+        $this->save($theirs, $this->answers($provider))->assertOk();
+
+        $this->actingAs($mine)
+            ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
+            ->assertCreated();
+    }
+
+    /** A genuinely second filing is still stopped. */
+    public function test_a_real_duplicate_is_still_caught(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        // The same person again, with no draft behind it this time.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
+            ->assertStatus(409)
+            ->assertJsonPath('duplicate.name', 'John Smith');
+    }
+
+    /** The whole form, as the wizard posts it. */
+    private function filing(CipProvider $provider): array
+    {
+        return [
+            'providerId' => $provider->uuid,
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            'birthCertificate' => UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf'),
+            'policeCertificate' => [UploadedFile::fake()->create('police.pdf', 40, 'application/pdf')],
+            'proofOfAddress' => [UploadedFile::fake()->create('address.pdf', 40, 'application/pdf')],
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+        ];
+    }
+
     private function photo(int $width = 600): UploadedFile
     {
         $img = imagecreatetruecolor($width, $width);

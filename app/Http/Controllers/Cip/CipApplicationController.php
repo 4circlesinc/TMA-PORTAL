@@ -178,6 +178,18 @@ class CipApplicationController extends Controller
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
 
         /*
+         * The draft this filing has been typed into, found before anything
+         * else asks a question about it.
+         *
+         * The wizard autosaves into a real application at DRAFT, so by the
+         * time Add is pressed there is usually already a numbered row holding
+         * these answers — which is why the duplicate check below has to know
+         * about it. Without that it found the applicant already on file and
+         * warned the reader about their own unfinished work.
+         */
+        $draft = $this->draftBeing($user, $data);
+
+        /*
          * The same person filed twice on purpose is an administrator's call.
          *
          * A retry replays a key and never reaches here; matching on the
@@ -185,7 +197,7 @@ class CipApplicationController extends Controller
          * administrator is shown what it repeats and must say "file it
          * anyway"; everyone else is stopped and told who can.
          */
-        if ($duplicate = Intake::duplicateOf($data)) {
+        if ($duplicate = Intake::duplicateOf($data, $draft)) {
             $applicant = trim($data['firstName'].' '.$data['lastName']);
             if (! Role::isAdmin($user)) {
                 abort(422, sprintf(
@@ -206,18 +218,13 @@ class CipApplicationController extends Controller
         }
 
         /*
-         * The draft this filing has been typed into, completed rather than
-         * duplicated.
-         *
-         * The wizard autosaves into a real application at DRAFT, so by the
-         * time Add is pressed there is usually already a numbered row holding
-         * these answers. Creating a second one would leave the draft behind
-         * as an orphan wearing the same applicant's name, so the filing lands
-         * on the row that is already there: the full rules have just passed,
-         * Intake::update writes the answers and the uploads and provisions
-         * the folders, and the submit edge moves DRAFT to NEW.
+         * The draft is completed rather than duplicated: the full rules have
+         * just passed, Intake::update writes the answers, the uploads and the
+         * folders, and the submit edge moves the row from DRAFT to NEW. A
+         * second application would leave this one behind as an orphan wearing
+         * the same applicant's name.
          */
-        if ($draft = $this->draftBeing($user, $data)) {
+        if ($draft) {
             $application = Intake::update($draft, $user, $data);
             $application = Engine::apply($application, Status::NEW, $user, []);
 
