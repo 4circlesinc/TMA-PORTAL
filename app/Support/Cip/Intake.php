@@ -218,6 +218,9 @@ class Intake
                 // Minted once when the wizard opens, so a retry after a
                 // timeout names the submission it repeats — see store().
                 'submissionId' => ['nullable', 'string', 'max:64'],
+                // The draft this filing completes, when it was reopened from
+                // the table rather than typed in one sitting.
+                'draftId' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
             self::mainApplicantDocumentRules($editing),
@@ -261,6 +264,31 @@ class Intake
         // A dependant carries one answer the other two do not.
         $rules['dependents.*.relationship'] = ['nullable', 'string', 'max:64'];
         $rules['dependents.*.id'] = ['nullable', 'string', 'max:64'];
+
+        /*
+         * A draft keeps its scans.
+         *
+         * They were left out at first, on the reasoning that an unfiled
+         * application should not put an unreviewed document in a client's
+         * folders — but a reader who uploads six passports and comes back to
+         * an empty form has lost the part of the work that took longest. The
+         * folder question is answered by the draft being deletable instead:
+         * throwing one away recycles its folder with it.
+         *
+         * Optional, like everything else here. Nothing is required of a form
+         * that is not finished.
+         */
+        foreach (['', 'sponsor.'] as $prefix) {
+            $rules[$prefix.'passportPhoto'] = ['nullable', 'file', self::photoRule()];
+        }
+        $rules['dependents.*.passportPhoto'] = ['nullable', 'file', self::photoRule()];
+
+        foreach (self::allDocumentFieldNames() as $field) {
+            foreach (['', 'sponsor.', 'dependents.*.'] as $prefix) {
+                $rules[$prefix.$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+                $rules[$prefix.$field.'.*'] = self::documentRule();
+            }
+        }
 
         return $rules;
     }
@@ -818,8 +846,33 @@ class Intake
             : self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
 
         self::syncSponsor($application, $data);
-        self::syncDependents($application, $data['dependents'] ?? []);
+        $dependentUuids = array_map(
+            fn (CipPerson $person) => $person->uuid,
+            self::syncDependents($application, $data['dependents'] ?? []),
+        );
         Dependents::renumber($application);
+
+        /*
+         * A draft keeps its scans, so it needs somewhere to keep them.
+         *
+         * The same folders and the same slots a filed application uses: a
+         * draft is an application from the first keystroke, and giving its
+         * uploads a second home would mean moving them at filing and finding
+         * out then what the move missed. Filing adds the checklist and the
+         * notices; the paper is already where it belongs.
+         *
+         * Reloaded first because renumbering wrote ordinals and a folder is
+         * named after them.
+         */
+        $application->load('people');
+        Tree::provision($application, $actor);
+
+        foreach ($application->people as $person) {
+            DocumentSlots::open($person);
+            $person->setRelation('application', $application);
+        }
+
+        self::fileUploads($application, $data, $actor, $dependentUuids);
     }
 
     public static function update(CipApplication $application, User $actor, array $data): CipApplication

@@ -271,6 +271,18 @@ class CipApplicationController extends Controller
      */
     private function draftBeing(User $user, array $data): ?CipApplication
     {
+        // A draft opened from the table names itself, so the filing lands on
+        // that row rather than on this reader's newest draft of the phase.
+        $uuid = trim((string) ($data['draftId'] ?? ''));
+        if ($uuid !== '') {
+            return CipApplication::query()
+                ->where('uuid', $uuid)
+                ->where('status', Status::DRAFT)
+                ->where('created_by', $user->id)
+                ->with('people')
+                ->first();
+        }
+
         $phase = ! empty($data['phase']) && Phase::isValid($data['phase'])
             ? $data['phase']
             : Phase::PRE_APPROVAL;

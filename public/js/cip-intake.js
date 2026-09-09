@@ -843,7 +843,10 @@
    * the control, since Submission::correct would turn anyone else away.
    */
   function showsCipNumber() {
-    if (!state.applicationId) return isPostApprovalIntake();
+    // A draft is a filing that has not happened yet, so it asks what a new
+    // filing asks: a post-approval file was decided before the portal saw it,
+    // and the Unit's number is on the letter in front of the reader.
+    if (!state.applicationId || editingDraft()) return isPostApprovalIntake();
 
     return !!(state.record
       && state.record.phase === 'post_approval'
@@ -1377,16 +1380,24 @@
 
     out.push({ name: 'sponsored', value: sponsored() ? '1' : '0' });
 
-    if (!state.applicationId && state.phase) {
+    // A draft being filed is posting to the create endpoint, so it sends
+    // everything a new filing sends — and names the row it completes.
+    var filing = !state.applicationId || editingDraft();
+
+    if (filing && state.phase) {
       out.push({ name: 'phase', value: state.phase });
     }
 
-    if (!state.applicationId && state.submissionKey) {
+    if (filing && state.submissionKey) {
       out.push({ name: 'submissionId', value: state.submissionKey });
     }
 
-    if (!state.applicationId && state.allowDuplicate) {
+    if (filing && state.allowDuplicate) {
       out.push({ name: 'allowDuplicate', value: '1' });
+    }
+
+    if (editingDraft() && state.applicationId) {
+      out.push({ name: 'draftId', value: state.applicationId });
     }
 
     return out;
@@ -1435,18 +1446,41 @@
 
   var DRAFT_URL = '/portal/cip/applications/draft';
 
+  /*
+   * Where this form's autosave writes.
+   *
+   * A reopened draft names itself, so the save lands on THAT row rather than
+   * on whatever the reader's newest draft of this phase happens to be — two
+   * drafts open in two tabs must not overwrite each other.
+   */
+  function draftUrl() {
+    return state.applicationId
+      ? DRAFT_URL + '?application=' + encodeURIComponent(state.applicationId)
+      : DRAFT_URL;
+  }
+
   /* Only a new filing autosaves — see the note on state.draftOff. */
-  function draftable() {
-    return !state.applicationId && !state.draftOff && !fieldsLocked();
+  /* The application on screen is one nobody has filed yet. */
+  function editingDraft() {
+    return !!(state.record && state.record.status === 'draft');
   }
 
   /*
-   * What the server is asked to keep: the typed answers, and nothing else.
+   * Should this form be saving itself?
    *
-   * Deliberately NOT the files. A scan cannot be stored without uploading it,
-   * and uploading one into an application nobody has filed would put an
-   * unreviewed document in a client's folders. What the reader gets instead
-   * is a plain sentence naming the scans they have to choose again.
+   * A new filing, or a draft reopened from the table. NOT a filed
+   * application: an autosaved edit would write a colleague's record from a
+   * form somebody left open, and there is no version of that a reader can
+   * check before it happens.
+   */
+  function draftable() {
+    if (state.draftOff || fieldsLocked()) return false;
+
+    return !state.applicationId || editingDraft();
+  }
+
+  /*
+   * The typed answers. The scans travel separately — see draftForm().
    */
   function draftAnswers() {
     var out = {};
@@ -1488,6 +1522,61 @@
    * real application row — so it arrives shaped like an application rather
    * than as a flat bag of paths.
    */
+  /*
+   * What files are currently chosen, as a comparable string.
+   *
+   * A File has no identity the change check can use, so it is described by
+   * the things a reader would call different: which slot, what it is called,
+   * and how big it is.
+   */
+  function fileSignature() {
+    var out = [];
+
+    Object.keys(state.files).sort().forEach(function (path) {
+      var f = state.files[path];
+      if (f) out.push(path + ':' + f.name + ':' + f.size);
+    });
+
+    Object.keys(state.documents).sort().forEach(function (path) {
+      (state.documents[path] || []).forEach(function (f) {
+        out.push(path + ':' + f.name + ':' + f.size);
+      });
+    });
+
+    return out;
+  }
+
+  /*
+   * The draft as a multipart body: the answers as JSON in one field, the
+   * scans as themselves.
+   *
+   * A draft used to be answers only, because uploading into an unfiled
+   * application would put an unreviewed document in a client's folders. It
+   * keeps its scans now — losing six passports to a closed tab is the worse
+   * of the two — and the folder question is answered by the draft being
+   * deletable, which recycles the folder with it.
+   */
+  function draftForm() {
+    var form = new FormData();
+    var body = draftBody();
+
+    Object.keys(body).forEach(function (key) {
+      var value = body[key];
+      if (value === null || value === undefined) return;
+      // dependents and sponsor arrive as nested objects; the parts() naming
+      // is what the validator already understands.
+      if (typeof value === 'object') return;
+      form.append(key, value);
+    });
+
+    parts().forEach(function (part) {
+      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
+      else form.append(part.name, part.value);
+    });
+
+    return form;
+  }
+
   function draftBody() {
     var body = {
       phase: state.phase || 'pre_approval',
@@ -1577,7 +1666,13 @@
     }
 
     var answers = draftAnswers();
-    var payload = JSON.stringify(draftBody());
+    /*
+     * The signature the "nothing changed" check compares on. The answers,
+     * plus a name-and-size line per chosen file: two different scans in the
+     * same slot must not look like the same draft, or the second one would
+     * never be sent.
+     */
+    var payload = JSON.stringify([draftBody(), fileSignature()]);
     /*
      * Nothing typed at all. The timer simply does nothing; a reader who
      * pressed the button is told why rather than shown a "Draft saved" for
@@ -1609,11 +1704,13 @@
     state.draftDirty = false;
     if (announce) setDraftButtonBusy(opts.button, true);
 
-    fetch(DRAFT_URL, {
+    // Multipart, not JSON: the scans go with the answers. FormData sets its
+    // own Content-Type boundary, so none is passed here.
+    fetch(draftUrl(), {
       method: 'POST',
       credentials: 'same-origin',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: payload,
+      headers: headers(),
+      body: draftForm(),
     }).then(function (res) {
       state.draftSaving = false;
       if (announce) setDraftButtonBusy(opts.button, false);
@@ -1683,13 +1780,18 @@
   function clearDraft() {
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     var phase = state.phase || 'pre_approval';
+    var draftId = editingDraft() ? state.applicationId : null;
     state.draftSent = '';
     state.draftSavedAt = null;
     state.draftResumed = false;
     state.draftMissingFiles = [];
-    if (state.applicationId) return;
+    // A filed application has no draft to discard; a draft discards itself
+    // by name, whichever way the form was opened.
+    if (state.applicationId && !draftId) return;
 
-    fetch(DRAFT_URL + '?phase=' + encodeURIComponent(phase), {
+    fetch(draftId
+      ? DRAFT_URL + '?application=' + encodeURIComponent(draftId)
+      : DRAFT_URL + '?phase=' + encodeURIComponent(phase), {
       method: 'DELETE',
       credentials: 'same-origin',
       headers: headers({ 'Content-Type': 'application/json' }),
@@ -1720,6 +1822,23 @@
      * an empty list, and a resume notice that never mentioned the files was
      * exactly the silence the notice exists to break.
      */
+    noteMissingFiles();
+    // What was just put back is what the server holds, so an untouched
+    // resume does not immediately re-post the same answers.
+    state.draftSent = JSON.stringify(draftBody());
+
+    return true;
+  }
+
+  /*
+   * The scans this form is going to ask for, none of which a draft can hold.
+   *
+   * Asked of the requirement templates rather than requiredPaths(), which
+   * names the TYPED answers only — reading it there quietly produced an empty
+   * list, and a resume notice that never mentioned the files was exactly the
+   * silence the notice exists to break.
+   */
+  function noteMissingFiles() {
     state.draftMissingFiles = [];
     docFields('principal').forEach(function (d) {
       state.draftMissingFiles.push(d.field);
@@ -1730,11 +1849,6 @@
       });
     }
     if (photoRequiredFor('passportPhoto')) state.draftMissingFiles.push('passportPhoto');
-    // What was just put back is what the server holds, so an untouched
-    // resume does not immediately re-post the same answers.
-    state.draftSent = JSON.stringify(draftBody());
-
-    return true;
   }
 
   /* When the draft was last saved, in the reader’s own words. */
@@ -1789,7 +1903,16 @@
 
     // Editing posts to the application's own URL. Still POST, not PUT: PHP
     // parses a multipart body for POST only, and these carry files.
-    var url = state.applicationId
+    /*
+     * Filing a draft is a FILING, not an edit.
+     *
+     * A draft has never been filed, so it goes to the create endpoint — that
+     * is where the full rules are asked and where the row is moved out of
+     * Draft. It carries its own id in the body (see parts()), so the filing
+     * completes that row rather than numbering a second one. Only an
+     * application somebody has actually filed posts to its own URL.
+     */
+    var url = state.applicationId && !editingDraft()
       ? '/portal/cip/applications/' + encodeURIComponent(state.applicationId)
       : '/portal/cip/applications';
 
@@ -2122,20 +2245,17 @@
     var wants = [held('cip:form', formUrl)];
 
     /*
-     * The unfinished application, asked for with the options.
+     * A new application is a NEW application.
      *
-     * New filings only, and never cached: a draft is the newest answer there
-     * is by definition, and a held copy would resume a version of the form
-     * the reader had already moved past on another machine. It resolves to
-     * null rather than rejecting, because failing to find a draft must not
-     * stop the form from opening.
+     * Create New Application used to hand back whatever draft the reader had
+     * going, which meant there was no way to start a second one: the form
+     * arrived already full of somebody they had finished with. Drafts are
+     * rows in the table now, and a row is opened by clicking it, so resuming
+     * is something the reader asks for rather than something that happens to
+     * them. This is deliberately not a lookup by reader — an unasked-for
+     * resume is the bug.
      */
-    var wantDraft = state.applicationId
-      ? Promise.resolve(null)
-      : api('GET', DRAFT_URL + '?phase=' + encodeURIComponent(state.phase || 'pre_approval'))
-        .then(function (res) { return res.ok ? res.json() : null; })
-        .then(function (json) { return (json && json.draft) || null; })
-        .catch(function () { return null; });
+    var wantDraft = Promise.resolve(null);
 
     if (state.applicationId) {
       wants.push(held(
@@ -2155,6 +2275,20 @@
       // builds what the record will say by laying the draft over this.
       state.record = answers[1] || null;
       if (answers[1]) prefill(answers[1]);
+      /*
+       * A draft opened from the table is a filing that has not happened yet,
+       * so the form behaves as a new one: it knows its phase (the filing
+       * needs it, and an edit does not carry one), it says which scans it
+       * could not keep, and it goes on saving itself.
+       */
+      if (editingDraft()) {
+        state.phase = state.record.phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+        state.submissionKey = state.submissionKey || mintKey();
+        state.draftResumed = true;
+        state.draftSavedAt = state.record.updatedAt ? new Date(state.record.updatedAt) : null;
+        noteMissingFiles();
+        state.draftSent = JSON.stringify(draftBody());
+      }
       /*
        * The saved draft goes in last, over the provider the form filled in
        * for itself and after the options are in hand — restoreDraft() reads

@@ -114,6 +114,17 @@
   function editApplicationPhase(state) {
     var app = applicationRecord(state);
 
+    /*
+     * A draft is the intake form whichever phase it belongs to.
+     *
+     * Post-approval EDIT is the documents screen, because a filed
+     * post-approval application's details are locked and what a reader does
+     * to it is file papers. A post-approval DRAFT has been filed by nobody:
+     * it is a form somebody is part-way through typing, and sending them to
+     * the documents screen would hide every answer they came back to finish.
+     */
+    if (app && app.status === 'draft') return 'pre_approval';
+
     return (app && app.phase) || null;
   }
 
@@ -5054,8 +5065,19 @@
       // No avatar. A profile head carries one because it depicts somebody; a
       // blank application depicts nobody, and the applicant's actual face is
       // asked for in the form a few inches below.
-      var editingApp = state.screen === 'edit-application';
-      var newPhase = state.applicationPhase || 'pre_approval';
+      /*
+       * A draft is not an edit.
+       *
+       * It has never been filed, so the head says what it is — a new
+       * application, with Add — rather than offering to Save changes to a
+       * record the firm does not have yet.
+       */
+      var draftApp = state.screen === 'edit-application'
+        && (applicationRecord(state) || {}).status === 'draft';
+      var editingApp = state.screen === 'edit-application' && !draftApp;
+      var newPhase = draftApp
+        ? ((applicationRecord(state) || {}).phase || 'pre_approval')
+        : (state.applicationPhase || 'pre_approval');
       var packageLocked = editingApp && !!state.applicationLocked;
       /*
        * Post-approval Edit is not the intake wizard, so its Save is a

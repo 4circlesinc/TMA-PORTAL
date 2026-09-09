@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -15,6 +16,7 @@ use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -90,6 +92,78 @@ class CipApplicationDraftTest extends TestCase
         // It carries a number, so the firm can refer to it like anything else.
         $this->assertNotNull($draft->internal_number);
         $this->assertSame('John', $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+    }
+
+    /**
+     * The scans are kept, not thrown away.
+     *
+     * A draft used to hold answers only, so a reader who uploaded six
+     * passports and closed the tab came back to an empty form — the part of
+     * the work that took longest, gone. The folder question that reasoning
+     * was protecting is answered by the draft being deletable instead.
+     */
+    public function test_a_draft_keeps_its_photo_and_its_scans(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        // The photo becomes the person's picture and answers its own slot.
+        $this->assertNotNull($main->photo_path, 'The photo is kept with the draft.');
+        $this->assertTrue(
+            $main->documents()->where('type', 'passport_photo')->whereNotNull('file_id')->exists(),
+            'And it fills the passport photo slot like a filed one does.',
+        );
+        $this->assertTrue(
+            $main->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->exists(),
+            'A scan chosen on a draft is filed against its slot.',
+        );
+    }
+
+    /**
+     * Throwing a draft away takes its folder to the recycle bin.
+     *
+     * The application is an unfiled form and nobody refers to it, so it goes
+     * outright. The paper is a different question: a reader who deletes the
+     * wrong draft must be able to get the scans back.
+     */
+    public function test_discarding_a_draft_recycles_its_folder(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $folderId = $draft->folder_id;
+        $this->assertNotNull($folderId, 'A draft holding scans has a folder.');
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/draft?application='.$draft->uuid)
+            ->assertOk();
+
+        // The form is gone outright.
+        $this->assertNull(CipApplication::query()->find($draft->id));
+
+        // The folder is in the bin, not destroyed.
+        $this->assertNull(Folder::query()->find($folderId));
+        $this->assertNotNull(
+            Folder::withTrashed()->find($folderId),
+            'The folder is recoverable from the recycle bin.',
+        );
     }
 
     /**
@@ -353,6 +427,84 @@ class CipApplicationDraftTest extends TestCase
             ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
             ->assertStatus(409)
             ->assertJsonPath('duplicate.name', 'John Smith');
+    }
+
+    /**
+     * A draft opened from the table is addressed by name.
+     *
+     * Without this the save landed on whatever this reader's newest draft of
+     * the phase happened to be, so opening an older draft and typing into it
+     * wrote the answers into a different application.
+     */
+    public function test_a_named_draft_is_the_one_that_is_saved(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        // Two drafts of the same phase, the second one newer.
+        $this->save($staff, $this->answers($provider, ['firstName' => 'First']))->assertOk();
+        $older = CipApplication::query()->first();
+        $older->forceFill(['status' => Status::DRAFT])->save();
+        $this->actingAs($staff)->postJson('/portal/cip/applications/draft', [
+            'providerId' => $provider->uuid,
+            'phase' => Phase::PRE_APPROVAL,
+            'firstName' => 'Second',
+        ])->assertOk();
+
+        // Naming the older one writes to the older one.
+        $this->actingAs($staff)->postJson(
+            '/portal/cip/applications/draft?application='.$older->uuid,
+            $this->answers($provider, ['firstName' => 'Corrected']),
+        )->assertOk();
+
+        $this->assertSame('Corrected', $older->fresh()
+            ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+    }
+
+    /** Somebody else's draft is not addressable, however it is named. */
+    public function test_a_named_draft_belonging_to_someone_else_is_not_written_to(): void
+    {
+        $mine = $this->user(Role::ADMINISTRATOR);
+        $theirs = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($theirs, $this->answers($provider, ['firstName' => 'Theirs']))->assertOk();
+        $hers = CipApplication::query()->first();
+
+        $this->actingAs($mine)->postJson(
+            '/portal/cip/applications/draft?application='.$hers->uuid,
+            $this->answers($provider, ['firstName' => 'Mine']),
+        )->assertOk();
+
+        // Untouched, and my save started a draft of my own instead.
+        $this->assertSame('Theirs', $hers->fresh()
+            ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+        $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    /** Filing a reopened draft completes that row, not the newest one. */
+    public function test_filing_names_the_draft_it_completes(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider, ['firstName' => 'Older']))->assertOk();
+        $older = CipApplication::query()->first();
+        /*
+         * A second draft that must be left alone. Started directly rather
+         * than through the endpoint, which keeps one draft per phase — this
+         * is the two-tabs case that rule does not cover.
+         */
+        $newer = Applications::create($provider, $staff, [], Status::DRAFT);
+
+        $this->actingAs($staff)->post(
+            '/portal/cip/applications',
+            $this->filing($provider) + ['draftId' => $older->uuid],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+
+        $this->assertSame(Status::NEW, $older->fresh()->status);
+        $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
     }
 
     /** The whole form, as the wizard posts it. */

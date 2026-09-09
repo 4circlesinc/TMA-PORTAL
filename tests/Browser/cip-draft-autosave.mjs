@@ -138,16 +138,41 @@ try {
   const toast = await page.locator('.tma-toast').first().innerText().catch(() => '');
   check(/Draft saved/i.test(toast), `pressing it says so ("${toast.trim().slice(0, 60)}")`);
 
-  step(5, 'Leaving and coming back returns the work');
+  step(5, 'Create New Application is always a NEW application');
+  /*
+   * The bug this pins, reported from the screen: pressing Create New
+   * Application handed back the reader's existing draft, so there was no way
+   * to start a second one — the form arrived full of somebody they had
+   * finished with. A draft is a row in the table now, and reopening it is
+   * something the reader asks for by clicking it.
+   */
   await page.click('[data-cip-cancel]');
   await page.waitForTimeout(1200);
   await openWizard();
-  const first = await page.inputValue('[data-cip-field="firstName"]').catch(() => '');
-  check(first === 'Autosaved', `the name came back ("${first}")`);
+  const fresh = await page.inputValue('[data-cip-field="firstName"]').catch(() => '');
+  check(fresh === '', `the form is blank ("${fresh}")`);
+  check(await page.locator('[data-cip-draft-resumed]').count() === 0,
+    'and says nothing about picking up where anybody left off');
+
+  step(5.5, 'The draft is reopened by clicking its row');
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(4000);
+  const draftRow = page.locator('tr[data-cip-draft], [data-cip-draft]').first();
+  check(await draftRow.count() > 0, 'the draft row is there to click');
+  await draftRow.click();
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  await page.waitForTimeout(1500);
+  const reopened = await page.inputValue('[data-cip-field="firstName"]').catch(() => '');
+  check(reopened === 'Autosaved', `it opens on the answers that were typed ("${reopened}")`);
   const notice = await page.locator('[data-cip-draft-resumed]').innerText().catch(() => '');
-  check(/Picked up where you left off/.test(notice), 'the reader is told it resumed');
   check(/files aren’t saved|files aren't saved/i.test(notice),
-    'and that the scans have to be chosen again');
+    'and says the scans have to be chosen again');
+
+  step(5.6, 'A reopened draft goes on saving itself');
+  draftPosts.length = 0;
+  await page.fill('[data-cip-field="occupation"]', 'Architect');
+  await page.waitForTimeout(2600);
+  check(draftPosts.filter(m => m === 'POST').length > 0, 'typing in a reopened draft still autosaves');
 
   step(6, 'A post-approval filing drafts too, and keeps its own');
   await openWizard('post-approval');
@@ -156,10 +181,16 @@ try {
   await page.fill('[data-cip-field="firstName"]', 'PostApproval');
   await page.waitForTimeout(2600);
   check(draftPosts.filter(m => m === 'POST').length > 0, 'the post-approval form autosaves as well');
-  await openWizard('pre-approval');
-  const stillPre = await page.inputValue('[data-cip-field="firstName"]').catch(() => '');
-  check(stillPre === 'Autosaved',
-    `the two phases keep separate drafts (pre-approval still "${stillPre}")`);
+  const drafts = await page.evaluate(async () => {
+    const res = await fetch('/portal/cip/applications', {
+      credentials: 'same-origin', headers: { Accept: 'application/json' },
+    });
+    const json = await res.json();
+
+    return (json.applications || []).filter(a => a.status === 'draft').map(a => a.phase);
+  });
+  check(drafts.includes('pre_approval') && drafts.includes('post_approval'),
+    `the two phases keep separate drafts (${drafts.join(',') || 'none'})`);
 
   step(7, 'The draft is in the applications table, wearing a Draft chip');
   /*
@@ -200,15 +231,25 @@ try {
   }
 
   step(9, 'Start over empties the form and the draft');
-  await openWizard('pre-approval');
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(4000);
+  await page.locator('tr[data-cip-draft], [data-cip-draft]').first().click();
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  await page.waitForTimeout(1500);
   await page.click('[data-cip-draft-discard]');
   await page.waitForTimeout(400);
   await page.click('[data-draft-discard]');
   await page.waitForTimeout(1500);
   check((await page.inputValue('[data-cip-field="firstName"]')) === '', 'the form is empty again');
-  await openWizard();
-  check((await page.inputValue('[data-cip-field="firstName"]')) === '',
-    'and stays empty on the next open');
+  const left = await page.evaluate(async () => {
+    const res = await fetch('/portal/cip/applications', {
+      credentials: 'same-origin', headers: { Accept: 'application/json' },
+    });
+    const json = await res.json();
+
+    return (json.applications || []).filter(a => a.status === 'draft').length;
+  });
+  check(left === 1, `the discarded draft is gone from the table (${left} left)`);
 
   check(pageErrors.length === 0, `no page errors (${pageErrors.slice(0, 2).join(' | ') || 'none'})`);
 } catch (e) {
