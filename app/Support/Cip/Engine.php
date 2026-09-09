@@ -248,6 +248,36 @@ class Engine
      *
      * @return list<string>
      */
+    /**
+     * The lane's own steps that a date verb drives, not the picker.
+     *
+     * Pending COR, Apply for NIC and the rest each record a day as they move
+     * (sections 6-12: the day and the status travel together), so they are not
+     * options somebody types. They are still part of the lifecycle the
+     * reader is looking at, though, and a menu that simply omitted them read
+     * as if the lane stopped after two entries — so they are listed, shown
+     * as locked, with the date buttons remaining the way to reach them.
+     *
+     * @return list<string>
+     */
+    public static function stageStatuses(CipApplication $application, ?User $actor): array
+    {
+        if ($actor === null || ! CipAccess::canChangeApplicationStatus($actor)) {
+            return [];
+        }
+
+        $lane = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            ? Phase::POST_APPROVAL
+            : Phase::PRE_APPROVAL;
+
+        return array_values(array_filter(
+            Status::listed(),
+            fn (string $to) => $to !== $application->status
+                && Stages::owns($to)
+                && Status::laneOf($to) === $lane,
+        ));
+    }
+
     private static function offMapStatuses(CipApplication $application, ?User $actor, bool $forListing = false): array
     {
         $next = self::availableTransitions($application, $actor, $forListing);
@@ -341,19 +371,6 @@ class Engine
     }
 
     /**
-     * A post-approval file that has not yet started the lane's own work.
-     *
-     * Granted and Post-Approval both sit at the crossing: the decision, and
-     * the file having just entered the lane with nothing assessed. Neither
-     * has a COR application in progress, so both are still places a grant
-     * issued in error can be walked back from.
-     */
-    private static function atLaneEntry(CipApplication $application): bool
-    {
-        return in_array($application->status, [Status::GRANTED, Status::POST_APPROVAL], true);
-    }
-
-    /**
      * The two lanes keep their own vocabularies.
      *
      * Pre-approval and post-approval are separate processes with separate
@@ -399,10 +416,16 @@ class Engine
             return true;
         }
 
-        if ($post && ! self::atLaneEntry($application)) {
-            return ! in_array($to, self::PRE_APPROVAL_ONLY, true);
-        }
-
+        /*
+         * The other lane, offered as an override rather than hidden.
+         *
+         * The picker keeps the two lifecycles apart by putting this lane
+         * behind its own row — "Pre-approval override" — rather than by
+         * pretending it does not exist. An administrator moving a file
+         * between lanes is a real act; what the split fixed was one flat
+         * list that made the reader work out which label belonged to which
+         * process.
+         */
         return true;
     }
 
@@ -468,18 +491,14 @@ class Engine
         }
 
         /*
-         * The lanes stay apart at the write too, not only in the picker.
-         *
-         * A hidden option that the endpoint still accepts is not a rule, it is
-         * a rule the UI happens to be observing. The one door left open is the
-         * same one {@see overrideFits} draws: a file still at Granted, where
-         * undoing a grant issued in error carries the phase back with it.
+         * The picker draws what an override may reach; the write agrees with
+         * it, so an option the menu never shows is not one the endpoint
+         * quietly accepts.
          */
         if ($actor !== null && ! self::overrideFits($application, $to)) {
             throw new \InvalidArgumentException(sprintf(
-                '%s belongs to the other lane; this application is in %s.',
+                '%s cannot be set on this application.',
                 Status::label($to),
-                Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             ));
         }
 

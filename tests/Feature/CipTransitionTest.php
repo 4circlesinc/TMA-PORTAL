@@ -449,17 +449,19 @@ class CipTransitionTest extends TestCase
         $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($post, $officer));
 
         /*
-         * Once the file is working the lane, the two vocabularies part. A
-         * COR application in progress is not offered the pre-decision
-         * lifecycle's labels — not as a jump, and not as a locked row.
+         * The other lane stays reachable as an override, which the picker
+         * puts behind its own row rather than mixing into the same list. The
+         * lane's own steps belong to the stage buttons, so neither list
+         * offers those.
          */
         $working = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
 
         foreach ([Status::ASSESSMENT_FEEDBACK, Status::PENDING_REVIEW, Status::BACKGROUND_CHECK] as $preApproval) {
-            $this->assertNotContains($preApproval, Engine::availableOverrides($working, $admin));
-            $this->assertNotContains($preApproval, Engine::lockedStatuses($working, $officer));
+            $this->assertContains($preApproval, Engine::availableOverrides($working, $admin));
+            $this->assertNotContains($preApproval, Engine::availableTransitions($working, $admin));
         }
+        $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($working, $admin));
 
         // A locked status is never one the officer could already drive, so
         // the picker cannot list the same status twice.

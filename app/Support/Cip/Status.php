@@ -281,6 +281,37 @@ class Status
     }
 
     /**
+     * Which lane a status belongs to, for a picker that groups by it.
+     *
+     * Three answers, not two. The appeal statuses run after a decision from
+     * either side, and Updates Required means the same thing in both lanes —
+     * the provider side has work — so neither is owned by one of them.
+     * `null` is that: a status the picker shows wherever the file is.
+     */
+    public static function laneOf(string $status): ?string
+    {
+        /*
+         * Shared by both lanes, so the picker shows them wherever the file
+         * stands rather than filing them under the other lifecycle:
+         *
+         *  - Updates Required means the same thing on either side: the
+         *    provider side has work to do.
+         *  - The appeal steps run after a decision, from either lane.
+         *  - Approved and Denied are outcomes, not steps. A post-approval
+         *    file reaches them through its own route (an appeal, or the end
+         *    of the lane), and burying them under "Pre-approval override"
+         *    would tell a reader they belong to the other process.
+         */
+        if (in_array($status, self::APPEAL_LANE, true)
+            || $status === self::UPDATE_REQUIRED
+            || self::isTerminal($status)) {
+            return null;
+        }
+
+        return self::inLane($status) ? Phase::POST_APPROVAL : Phase::PRE_APPROVAL;
+    }
+
+    /**
      * Statuses the filter menu offers.
      *
      * DRAFT is still valid so old events resolve, but nothing files into it,

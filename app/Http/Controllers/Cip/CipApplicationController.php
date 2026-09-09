@@ -558,6 +558,10 @@ class CipApplicationController extends Controller
                 'value' => $s,
                 'label' => Status::label($s),
                 'tone' => Status::tone($s),
+                // Which lane owns this status, so the picker can group by it
+                // rather than keeping a second copy of the rule in JS. Null
+                // for the ones both lanes share.
+                'lane' => Status::laneOf($s),
             ])->all(),
             'personStatuses' => PersonStatus::listed(),
             /*
@@ -863,6 +867,7 @@ class CipApplicationController extends Controller
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
+            'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'assignedTo' => $this->assignees($application),
             'familyMembers' => $this->familyMembersForRow($application, $viewer),
         ];
@@ -1473,6 +1478,7 @@ class CipApplicationController extends Controller
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer),
+            'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,

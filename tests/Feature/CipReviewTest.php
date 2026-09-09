@@ -147,15 +147,14 @@ class CipReviewTest extends TestCase
     }
 
     /**
-     * Section 1: post-approval is its own lane, so the picker on a
-     * post-approval file offers post-approval statuses and nothing from the
-     * pre-decision lifecycle.
+     * The picker's ordinary next steps stay inside the lane.
      *
-     * The administrator override is deliberately not this: pulling a file
-     * back to Assessment feedback is a documented recovery from a grant
-     * issued in error, and it moves the file's phase with it.
+     * The other lifecycle is still reachable — an administrator moving a file
+     * between lanes is a real act — but it sits behind its own row in the
+     * menu ("Pre-approval override") rather than mixed into the same flat
+     * list, which is what made the two vocabularies hard to tell apart.
      */
-    public function test_the_post_approval_picker_offers_only_post_approval_statuses(): void
+    public function test_the_post_approval_next_steps_stay_inside_the_lane(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::POST_APPROVAL);
@@ -175,41 +174,40 @@ class CipReviewTest extends TestCase
             Status::DELAYED,
         ];
 
-        $reader = $this->user(Role::REVIEWING_OFFICER, 'ro@example.com');
-
-        // Post-Approval is deliberately absent: a file that has just crossed
-        // over and assessed nothing may still be pulled back, which is how a
-        // grant issued in error is undone. See the test below.
         foreach ([Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC, Status::PENDING_COR] as $at) {
             $application->forceFill(['status' => $at])->save();
-            $fresh = $application->fresh();
-
-            // The next step, the administrator's jumps, and the same list an
-            // officer reads as locked: none of them names the other lane.
-            $everywhere = array_merge(
-                Engine::availableTransitions($fresh, $staff),
-                Engine::availableOverrides($fresh, $staff),
-                Engine::lockedStatuses($fresh, $reader),
-            );
+            $next = Engine::availableTransitions($application->fresh(), $staff);
 
             foreach ($preApprovalOnly as $status) {
                 $this->assertNotContains(
                     $status,
-                    $everywhere,
-                    $status.' is a pre-approval status and must not be offered at '.$at.'.',
+                    $next,
+                    $status.' is a pre-approval status and must not be a next step at '.$at.'.',
                 );
             }
         }
     }
 
-    /**
-     * The one door between the lanes: undoing a grant issued in error.
-     *
-     * It is offered at Granted, where the decision itself is being taken
-     * back, and the pull-back carries the file's phase to pre-approval with
-     * it — so the statuses it lands on are the ones it will then wear. Once
-     * the file is working the lane, the door is shut.
-     */
+    /** Each status knows its lane, which is what the picker groups by. */
+    public function test_every_status_names_the_lane_it_belongs_to(): void
+    {
+        $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::BACKGROUND_CHECK));
+        $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::REVIEW_APPLICATION));
+        $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::APPLY_FOR_COR));
+        $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::CLOSED));
+
+        /*
+         * Shared by both, so the picker lists them wherever the file stands.
+         * Approved and Denied are outcomes rather than steps — a
+         * post-approval file reaches them by its own route, and filing them
+         * under the other lane would say they belong to that process.
+         */
+        $this->assertNull(Status::laneOf(Status::UPDATE_REQUIRED));
+        $this->assertNull(Status::laneOf(Status::NEW_APPEAL));
+        $this->assertNull(Status::laneOf(Status::GRANTED));
+        $this->assertNull(Status::laneOf(Status::DENIED));
+    }
+
     public function test_a_file_at_the_lane_entry_may_still_be_pulled_back_into_pre_approval(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
@@ -241,8 +239,14 @@ class CipReviewTest extends TestCase
         }
     }
 
-    /** Hidden from the picker is not enough; the write refuses it too. */
-    public function test_the_write_refuses_a_pre_approval_status_on_a_working_post_approval_file(): void
+    /**
+     * An administrator may still move a file between lanes.
+     *
+     * The picker keeps the two lifecycles apart by grouping them, not by
+     * removing one: this is the override behind "Pre-approval override", and
+     * it carries the file's phase with it.
+     */
+    public function test_an_administrator_may_override_a_post_approval_file_into_the_other_lane(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::APPLY_FOR_COR);
@@ -252,8 +256,17 @@ class CipReviewTest extends TestCase
             'decided_at' => now(),
         ])->save();
 
-        $this->expectException(\InvalidArgumentException::class);
-        Engine::set($application->fresh(), Status::BACKGROUND_CHECK, $staff, ['note' => 'why not']);
+        $this->assertContains(
+            Status::BACKGROUND_CHECK,
+            Engine::availableOverrides($application->fresh(), $staff),
+        );
+
+        $moved = Engine::set($application->fresh(), Status::BACKGROUND_CHECK, $staff, [
+            'note' => 'Back to the pre-decision lane.',
+        ]);
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $moved->status);
+        $this->assertSame(Phase::PRE_APPROVAL, $moved->fresh()->phase);
     }
 
     public function test_approving_a_document_sent_back_marks_it_ready_for_submission(): void

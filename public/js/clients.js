@@ -2827,30 +2827,38 @@
    * can open before the table has loaded, and an empty menu would look like
    * there was nothing to change to.
    */
+  /*
+   * `lane` says which lifecycle owns the status, so the picker can group by
+   * it. Null where both lanes share one: Updates Required means the same
+   * thing on either side, the appeal statuses run after a decision from
+   * either, and Approved / Denied are outcomes rather than steps. Mirrors
+   * Status::laneOf, which is what the table actually sends — this list is
+   * the fallback until it arrives.
+   */
   var CIP_STATUSES = [
-    { value: 'new', label: 'New Applications', tone: 'sky' },
-    { value: 'review_application', label: 'Review Applications', tone: 'indigo' },
-    { value: 'assessment_feedback', label: 'Assessment Feedback', tone: 'violet' },
-    { value: 'update_required', label: 'Updates Required', tone: 'amber' },
-    { value: 'ready_to_submit', label: 'Ready to Submit', tone: 'teal' },
-    { value: 'pending_review', label: 'Pending Review', tone: 'orange' },
-    { value: 'non_compliant', label: 'Non-compliant', tone: 'rose' },
-    { value: 'background_check', label: 'Background Check', tone: 'cyan' },
-    { value: 'delayed', label: 'Delayed', tone: 'copper' },
-    { value: 'granted', label: 'Approved', tone: 'success' },
-    { value: 'post_approval', label: 'Post-Approval', tone: 'action' },
-    { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald' },
-    { value: 'pending_cor', label: 'Pending COR', tone: 'slate' },
-    { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime' },
-    { value: 'pending_nic', label: 'Pending NIC', tone: 'navy' },
-    { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold' },
-    { value: 'pending_passport', label: 'Pending Passport', tone: 'plum' },
-    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint' },
-    { value: 'closed', label: 'Closed', tone: 'stone' },
-    { value: 'denied', label: 'Denied', tone: 'danger' },
-    { value: 'new_appeal', label: 'New Appeal', tone: 'clay' },
-    { value: 'appeal_ready', label: 'Appeal Ready', tone: 'sand' },
-    { value: 'appeal_submitted', label: 'Appeal Submitted', tone: 'moss' },
+    { value: 'new', label: 'New Applications', tone: 'sky', lane: 'pre_approval' },
+    { value: 'review_application', label: 'Review Applications', tone: 'indigo', lane: 'pre_approval' },
+    { value: 'assessment_feedback', label: 'Assessment Feedback', tone: 'violet', lane: 'pre_approval' },
+    { value: 'update_required', label: 'Updates Required', tone: 'amber', lane: null },
+    { value: 'ready_to_submit', label: 'Ready to Submit', tone: 'teal', lane: 'pre_approval' },
+    { value: 'pending_review', label: 'Pending Review', tone: 'orange', lane: 'pre_approval' },
+    { value: 'non_compliant', label: 'Non-compliant', tone: 'rose', lane: 'pre_approval' },
+    { value: 'background_check', label: 'Background Check', tone: 'cyan', lane: 'pre_approval' },
+    { value: 'delayed', label: 'Delayed', tone: 'copper', lane: 'pre_approval' },
+    { value: 'granted', label: 'Approved', tone: 'success', lane: null },
+    { value: 'post_approval', label: 'Post-Approval', tone: 'action', lane: 'post_approval' },
+    { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald', lane: 'post_approval' },
+    { value: 'pending_cor', label: 'Pending COR', tone: 'slate', lane: 'post_approval' },
+    { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime', lane: 'post_approval' },
+    { value: 'pending_nic', label: 'Pending NIC', tone: 'navy', lane: 'post_approval' },
+    { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold', lane: 'post_approval' },
+    { value: 'pending_passport', label: 'Pending Passport', tone: 'plum', lane: 'post_approval' },
+    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint', lane: 'post_approval' },
+    { value: 'closed', label: 'Closed', tone: 'stone', lane: 'post_approval' },
+    { value: 'denied', label: 'Denied', tone: 'danger', lane: null },
+    { value: 'new_appeal', label: 'New Appeal', tone: 'clay', lane: null },
+    { value: 'appeal_ready', label: 'Appeal Ready', tone: 'sand', lane: null },
+    { value: 'appeal_submitted', label: 'Appeal Submitted', tone: 'moss', lane: null },
   ];
 
   var CIP_PERSON_STATUSES = [
@@ -10537,6 +10545,9 @@
     var nextValues = statusValues(source && source.availableTransitions);
     var overrideValues = statusValues(source && source.availableOverrides);
     var lockedValues = statusValues(source && source.lockedStatuses);
+    // The lane's date-driven steps: shown so the lifecycle reads whole, not
+    // pickable, because each records a day as it moves.
+    var stageValues = statusValues(source && source.stageStatuses);
 
     var next = all.filter(function (status) {
       return nextValues.indexOf(status.value) !== -1;
@@ -10546,6 +10557,9 @@
     });
     var locked = all.filter(function (status) {
       return lockedValues.indexOf(status.value) !== -1;
+    });
+    var stages = all.filter(function (status) {
+      return stageValues.indexOf(status.value) !== -1;
     });
 
     if (cipDocumentsBlockReadyToSubmit(source) || cipDocumentsBlockReadyToSubmit(applicationFor(clientUid))) {
@@ -10558,7 +10572,52 @@
     overrides = overrides.filter(function (status) { return status.value !== 'delayed'; });
     locked = locked.filter(function (status) { return status.value !== 'delayed'; });
 
-    return { next: next, overrides: overrides, locked: locked, current: source && source.status };
+    /*
+     * The picker reads by lane, not by "what is next".
+     *
+     * A menu that showed one next step and then a flat Admin override list
+     * of everything else put both lifecycles in one column, so a reader had
+     * to know which labels belonged to which process. Now the file's own
+     * lane is the list, and the other lane is a submenu behind one row.
+     *
+     * `own` is every status of this file's lane the reader may reach, driveable
+     * or not; `other` is the same for the opposite lane. Statuses belonging
+     * to neither — Updates Required, the appeal steps — ride with the file's
+     * own lane, because they are reachable from where it stands.
+     */
+    var lane = cipLaneOf(source);
+    var reachable = next.concat(overrides);
+    var inLane = function (status) {
+      return status.lane === lane || !status.lane;
+    };
+
+    return {
+      next: next,
+      overrides: overrides,
+      locked: locked,
+      own: reachable.filter(inLane),
+      other: reachable.filter(function (status) {
+        return status.lane && status.lane !== lane;
+      }),
+      ownLocked: all.filter(function (status) {
+        if (!inLane(status)) return false;
+
+        return locked.indexOf(status) !== -1 || stages.indexOf(status) !== -1;
+      }),
+      otherLocked: locked.filter(function (status) {
+        return status.lane && status.lane !== lane;
+      }),
+      lane: lane,
+      // Which set is actionable: an administrator's rest-of-list can be
+      // picked, an officer's is shown locked.
+      canOverride: overrides.length > 0,
+      current: source && source.status,
+    };
+  }
+
+  /** The lane a file is in, defaulting to pre-approval. */
+  function cipLaneOf(source) {
+    return (source && source.phase) === 'post_approval' ? 'post_approval' : 'pre_approval';
   }
 
   function renderCipStatusSub(list, current) {
@@ -10604,21 +10663,79 @@
     );
   }
 
+  /*
+   * The status picker, read as one lifecycle at a time.
+   *
+   * The file's own lane is the list — every status of it this reader can
+   * reach, in lifecycle order, with no "Next" heading dividing one row from
+   * the rest. The opposite lane is one row that opens into its own list,
+   * named for what it is: on a post-approval file, "Pre-approval override".
+   *
+   * The old shape put one next step above a flat Admin override list that
+   * mixed both lifecycles, so the reader had to know which labels belonged
+   * to which process to make sense of the menu.
+   */
   function renderCipStatusPickerHtml(menu) {
-    var next = menu.next || menu.list || [];
-    var overrides = menu.overrides || [];
-    var locked = menu.locked || [];
+    // The person picker and older callers still pass the flat shape.
+    if (!menu.own && !menu.other) {
+      var flat = menu.next || menu.list || [];
+      var rest = (menu.overrides || []).concat(menu.locked || []);
+      if (!rest.length) return renderCipStatusSub(flat, menu.current);
 
-    if (!overrides.length && !locked.length) return renderCipStatusSub(next, menu.current);
+      return renderCipStatusSub(flat, menu.current) +
+        renderCipStatusGroup('Admin override', rest, menu.current, !(menu.overrides || []).length);
+    }
 
-    // An administrator's rest-of-list is actionable, an officer's is not, so
-    // only one of the two is ever populated and the heading names which.
-    var rest = overrides.length ? overrides : locked;
-    var isLocked = !overrides.length;
+    var own = menu.own || [];
+    var ownLocked = menu.ownLocked || [];
+    var other = menu.other || [];
+    var otherLocked = menu.otherLocked || [];
 
-    return renderCipStatusGroup(next.length ? 'Next' : '', next, menu.current) +
-      (next.length ? '<div class="tma-portal-context-menu__sep" role="separator"></div>' : '') +
-      renderCipStatusGroup(isLocked ? 'Administrator only' : 'Admin override', rest, menu.current, isLocked);
+    var body = renderCipStatusSub(own, menu.current) +
+      (ownLocked.length ? renderCipStatusLocked(ownLocked, menu.current) : '');
+
+    var otherAll = other.concat(otherLocked);
+    if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
+
+    // Named for the lane it opens, not for who may press it: "Admin
+    // override" said nothing about what was behind it.
+    var label = menu.lane === 'post_approval'
+      ? 'Pre-approval override'
+      : 'Post-approval override';
+
+    return body +
+      '<div class="tma-portal-context-menu__sep" role="separator"></div>' +
+      '<button type="button" class="tma-portal-context-menu__item" role="menuitem"' +
+      ' data-cip-status-lane aria-expanded="false">' +
+      '<span class="tma-portal-context-menu__label">' + esc(label) + '</span>' +
+      '<img class="tma-portal-context-menu__chevron" src="' + ICON + 'CaretRight.svg" alt="" width="16" height="16">' +
+      '</button>' +
+      '<div class="tma-portal-context-menu__lane" data-cip-status-lane-list hidden>' +
+      renderCipStatusSub(other, menu.current) +
+      (otherLocked.length ? renderCipStatusLocked(otherLocked, menu.current) : '') +
+      '</div>';
+  }
+
+  /*
+   * The override row opens its lane in place.
+   *
+   * In place rather than as a floating submenu: this menu is itself already
+   * a submenu on the table's context menu, and a third floating layer lands
+   * off-screen as often as not.
+   */
+  function wireCipStatusLane(root) {
+    var toggle = root.querySelector('[data-cip-status-lane]');
+    var list = root.querySelector('[data-cip-status-lane-list]');
+    if (!toggle || !list) return;
+
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !list.hidden;
+      list.hidden = open;
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (toggle.hasAttribute('data-open')) toggle.removeAttribute('data-open');
+      else toggle.setAttribute('data-open', 'true');
+    });
   }
 
   function openCipStatusSub(parentBtn, kind, id, extra) {
@@ -10633,6 +10750,7 @@
     clientsCtxSubEl.setAttribute('role', 'menu');
     clientsCtxSubEl.innerHTML = renderCipStatusPickerHtml(menu);
     document.body.appendChild(clientsCtxSubEl);
+    wireCipStatusLane(clientsCtxSubEl);
 
     var rect = parentBtn.getBoundingClientRect();
     placeCtxMenu(clientsCtxSubEl, rect.right + 2, rect.top - 4);
@@ -10657,6 +10775,7 @@
     clientsCtxEl.setAttribute('role', 'menu');
     clientsCtxEl.innerHTML = renderCipStatusPickerHtml(menu);
     document.body.appendChild(clientsCtxEl);
+    wireCipStatusLane(clientsCtxEl);
 
     var box = anchor.getBoundingClientRect();
     placeCtxMenu(clientsCtxEl, box.left, box.bottom + 4);

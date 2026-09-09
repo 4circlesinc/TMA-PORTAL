@@ -707,6 +707,20 @@
 
 .tma-portal-context-menu__item--parent[data-open] { background: var(--color-hover); }
 
+/*
+ * The other lane's statuses, opened in place by the row above them.
+ *
+ * In place rather than as a floating submenu: the status picker is itself
+ * already a submenu on the table's context menu, and a third floating layer
+ * lands off-screen as often as not. The indent is what says these belong to
+ * the row that opened them.
+ */
+.tma-portal-context-menu__lane { padding-left: var(--space-12); }
+
+.tma-portal-context-menu__item[data-cip-status-lane][data-open] .tma-portal-context-menu__chevron {
+  transform: rotate(90deg);
+}
+
 /* A person in a menu reads by their face first — the same photo-or-initials
    avatar the assigned-staff list uses, at menu scale. */
 .tma-portal-context-menu__avatar {
