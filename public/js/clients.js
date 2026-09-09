@@ -3454,7 +3454,10 @@
       ? postApprovalProgressCell(a, members, expanded)
       : cipStatusChip(a);
 
-    var html = '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
+    var html = '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+      // A draft is an application still being typed, so its row goes back to
+      // the form rather than to a profile that has nothing filled in yet.
+      (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
       (a.cipNumber && a.internalNumber
         ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
@@ -4070,6 +4073,25 @@
       // A link in a row goes where it points, rather than opening the file.
       if (e.target.closest('a')) return;
       if (e.target.closest('[data-cip-family-expand]')) return;
+
+      /*
+       * A draft row reopens the wizard where it was left.
+       *
+       * The profile is a record of a filed application; a draft has barely
+       * any of one yet, so sending a reader there answers none of the
+       * questions they opened the row to finish.
+       */
+      if (row.hasAttribute('data-cip-draft')) {
+        var draftId = row.getAttribute('data-cip-app');
+        var draftController = clientsMountRoot && clientsMountRoot._clientsController;
+        if (draftId && draftController) {
+          // Addressed by the application, not the client: navigate() takes
+          // that as an option, and a client can hold more than one over time.
+          draftController.navigate('edit-application', null, { applicationId: draftId });
+
+          return;
+        }
+      }
 
       var uid = row.getAttribute('data-cip-open');
       if (!uid) return;
