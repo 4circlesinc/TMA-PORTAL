@@ -2812,7 +2812,6 @@
     number: 'Application',
     applicant: 'Applicant',
     provider: 'Service provider',
-    email: 'Contact email',
     investment: 'Investment',
     family: 'Family',
     status: 'Status',
@@ -3465,11 +3464,6 @@
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
       '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
-      '<td class="tma-portal-table__muted">' +
-      (a.contactEmail
-        ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
-          esc(a.contactEmail) + '</a>'
-        : '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
       '<td><span class="tma-cip-table__family-wrap">' +
       familyExpandButton(a, expanded, postApproval) +
@@ -4073,7 +4067,7 @@
 
       var row = e.target.closest('[data-cip-open]');
       if (!row) return;
-      // The Contact email column is a mailto, its own destination.
+      // A link in a row goes where it points, rather than opening the file.
       if (e.target.closest('a')) return;
       if (e.target.closest('[data-cip-family-expand]')) return;
 

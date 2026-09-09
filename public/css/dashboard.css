@@ -38067,21 +38067,6 @@ span.tma-dash__messages-profile-avatar {
 
 
 
-/*
- * The contact email is a mailto, and a mailto is a link — so it arrived in
- * link blue with a rule under it, one row of the table shouting while the
- * eight columns beside it read as data. It is data too. It keeps the address
- * it opens and loses the costume: the same colour as the cells around it, no
- * underline, and the only sign it does anything is the underline appearing
- * when the pointer is on it.
- */
-.tma-cip-table__email {
-  color: inherit;
-  text-decoration: none;
-}
-
-.tma-cip-table__email:hover { text-decoration: underline; }
-
 .tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
 
 .tma-cip-table tbody tr[data-cip-open-member] { cursor: pointer; }
@@ -38364,10 +38349,11 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__cip-assigned .tma-people { min-width: 0; }
 
-/* Assigned to. Counted from the left, so it moved when Contact person was
-   taken out of the table — nine columns became eight. */
-.tma-cip-table th:nth-child(8),
-.tma-cip-table td:nth-child(8) {
+/* Assigned to. Counted from the left, so it moves whenever a column is added
+   or removed — nine became eight without Contact person, then seven without
+   Contact email. */
+.tma-cip-table th:nth-child(7),
+.tma-cip-table td:nth-child(7) {
   min-width: 140px;
 }
 
