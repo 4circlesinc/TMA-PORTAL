@@ -5025,10 +5025,17 @@
       var editingApp = state.screen === 'edit-application';
       var newPhase = state.applicationPhase || 'pre_approval';
       var packageLocked = editingApp && !!state.applicationLocked;
-      // Post-approval Edit is live uploads, not a form save. Until the phase
-      // is known, hide Save rather than offering a button that would submit
-      // the intake wizard that is not on the page.
-      var hideSave = packageLocked || (editingApp && editApplicationPhase(state) !== 'pre_approval');
+      /*
+       * Post-approval Edit is not the intake wizard, so its Save is a
+       * different button doing a different thing: the wizard posts one form,
+       * this posts each person card that was actually changed. Both live in
+       * the head, because "save this screen" is one idea and a reader should
+       * not have to find a button per card to express it.
+       */
+      var postApprovalEdit = editingApp && editApplicationPhase(state) === 'post_approval';
+      var hideSave = packageLocked || (editingApp && !postApprovalEdit
+        && editApplicationPhase(state) !== 'pre_approval');
+      var saveAttr = postApprovalEdit ? 'data-cip-people-save' : 'data-cip-save';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
         renderClientsBackArrow(state) +
@@ -5039,7 +5046,7 @@
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
         (hideSave
           ? ''
-          : '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>' +
+          : '<button type="button" class="tma-dash__clients-message-btn" ' + saveAttr + '>' +
             (editingApp ? 'Save' : 'Add') + '</button>') +
         '</div></div>';
     } else if (state.screen === 'add' || state.screen === 'edit') {
@@ -7284,7 +7291,6 @@
   function renderCipPersonDetailsEdit(person, app) {
     if (!person || !app || !app.canEditPeople) return '';
 
-    var direct = !!app.editsPeopleDirectly;
     var pending = (app.pendingChanges || []).filter(function (r) {
       return r.person === person.id;
     })[0];
@@ -7309,13 +7315,16 @@
         ' Waiting on an administrator.</p>'
       : '';
 
-    return '<div class="tma-dash__clients-person-edit">' +
+    /*
+     * No button of its own. One Save in the head saves every card on the
+     * screen, so a reader who corrected a name here and a date of birth two
+     * cards down presses once rather than hunting a button per person.
+     */
+    return '<div class="tma-dash__clients-person-edit"' +
+      ' data-cip-person-block="' + esc(person.id) + '">' +
       '<div class="tma-portal-form-grid">' + fields + '</div>' +
       waiting +
-      '<div class="tma-portal-form-actions">' +
-      '<button type="button" class="tma-no-data__btn" data-cip-person-save="' + esc(person.id) + '">' +
-      (direct ? 'Save details' : 'Request changes') + '</button>' +
-      '</div></div>';
+      '</div>';
   }
 
   function cipDocFileIcon(name) {
@@ -12661,6 +12670,12 @@
         if (window.TMACipIntake) window.TMACipIntake.submit();
         return;
       }
+      var peopleSave = e.target.closest('[data-cip-people-save]');
+      if (peopleSave) {
+        e.preventDefault();
+        saveCipPeopleEdits(peopleSave);
+        return;
+      }
       if (e.target.closest('[data-cip-cancel]')) {
         e.preventDefault();
         // Cancel goes where Back goes. Abandoning an edit and finishing one
@@ -12671,6 +12686,78 @@
         else navigate('list');
       }
     });
+  }
+
+  /*
+   * Save every person card on post-approval Edit, in one press.
+   *
+   * Only the cards that actually changed are posted. The screen draws a card
+   * per person and a reader usually corrects one of them, so posting all six
+   * would write five audit rows saying nothing happened — and, where the
+   * reader cannot edit directly, raise five change requests for an
+   * administrator to read.
+   *
+   * The answer is one sentence, not one per card: a reader who pressed one
+   * button should be told once whether it worked. Where nothing changed it
+   * says so rather than claiming a save.
+   */
+  function saveCipPeopleEdits(btn) {
+    var state = clientsMountState;
+    var app = state && applicationFor(state.selectedId);
+    if (!app) return;
+
+    var blocks = [].slice.call(document.querySelectorAll('[data-cip-person-block]'));
+    var direct = !!app.editsPeopleDirectly;
+    var changed = [];
+
+    // The people as the server last described them, to tell a corrected
+    // field from one merely redrawn.
+    var filed = {};
+    cipFamily(app).forEach(function (person) { if (person && person.id) filed[person.id] = person; });
+
+    blocks.forEach(function (block) {
+      var personId = block.getAttribute('data-cip-person-block');
+      var was = filed[personId] || {};
+      var body = {};
+      var moved = false;
+      block.querySelectorAll('[data-cip-person-field]').forEach(function (input) {
+        var key = input.getAttribute('data-cip-person-field');
+        var value = input.value.trim();
+        body[key] = value;
+        if (value !== String(was[key] == null ? '' : was[key]).trim()) moved = true;
+      });
+      if (moved) changed.push({ id: personId, body: body });
+    });
+
+    if (!changed.length) {
+      clientsToast('Nothing to save.', 'positive');
+      return;
+    }
+
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = direct ? 'Saving…' : 'Sending…';
+
+    var base = '/portal/cip/applications/' + encodeURIComponent(app.id) + '/people/';
+    Promise.all(changed.map(function (row) {
+      return clientsFetch(base + encodeURIComponent(row.id) + '/details', {
+        method: 'POST',
+        json: row.body,
+      });
+    }))
+      .then(function (results) {
+        var requested = results.some(function (r) { return r && r.requested; });
+        clientsToast(requested
+          ? 'Change requested. An administrator will review it.'
+          : (changed.length === 1 ? 'Details saved.' : 'Details saved for ' + changed.length + ' people.'),
+        'positive');
+        refreshAfterCipMove(app.clientUid);
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = label;
+        clientsToast((err && err.message) || 'Could not save these details.', 'negative');
+      });
   }
 
   function wireEvents(root, state, scope, navigate, render) {
@@ -13560,36 +13647,6 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openSubmissionDialog(state, render, true, app);
-      });
-    });
-
-    MORPH.unwired(root, '[data-cip-person-save]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        var app = applicationFor(state.selectedId);
-        if (!app) return;
-        var personId = btn.getAttribute('data-cip-person-save');
-        var body = {};
-        root.querySelectorAll('[data-cip-person="' + personId + '"]').forEach(function (input) {
-          body[input.getAttribute('data-cip-person-field')] = input.value.trim();
-        });
-
-        var direct = !!app.editsPeopleDirectly;
-        btn.disabled = true;
-        btn.textContent = direct ? 'Saving…' : 'Sending…';
-
-        clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) +
-          '/people/' + encodeURIComponent(personId) + '/details', { method: 'POST', json: body })
-          .then(function (res) {
-            clientsToast(res && res.requested
-              ? 'Change requested. An administrator will review it.'
-              : 'Details saved.', 'positive');
-            refreshAfterCipMove(app.clientUid);
-          })
-          .catch(function (err) {
-            btn.disabled = false;
-            btn.textContent = direct ? 'Save details' : 'Request changes';
-            clientsToast((err && err.message) || 'Could not save these details.', 'negative');
-          });
       });
     });
 
