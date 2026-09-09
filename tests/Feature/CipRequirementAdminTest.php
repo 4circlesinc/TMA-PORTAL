@@ -410,30 +410,30 @@ class CipRequirementAdminTest extends TestCase
         $this->assertTrue($bio['atFiling']);
     }
 
-    public function test_the_order_the_checklist_reads_in_is_the_firms(): void
+    public function test_the_checklist_reads_alphabetically(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com');
 
-        $a = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+        // Added out of order, and the later addition sorts first.
+        $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::SPONSOR, 'label' => 'Zzz last',
+        ])->assertCreated();
+        $this->actingAs($admin)->postJson('/portal/cip/requirements', [
             'applicantType' => ApplicantType::SPONSOR, 'label' => 'Aaa first',
-        ])->json('requirement');
-        $b = $this->actingAs($admin)->postJson('/portal/cip/requirements', [
-            'applicantType' => ApplicantType::SPONSOR, 'label' => 'Bbb second',
-        ])->json('requirement');
-
-        $this->actingAs($admin)->postJson('/portal/cip/requirements/reorder', [
-            'applicantType' => ApplicantType::SPONSOR,
-            'order' => [$b['id'], $a['id']],
-        ])->assertOk();
+        ])->assertCreated();
 
         $sponsor = collect($this->actingAs($admin)->getJson('/portal/cip/requirements')->json('types'))
             ->firstWhere('value', ApplicantType::SPONSOR);
 
         $labels = collect($sponsor['requirements'])->pluck('label')->all();
         $this->assertLessThan(
+            array_search('Zzz last', $labels, true),
             array_search('Aaa first', $labels, true),
-            array_search('Bbb second', $labels, true),
         );
+
+        $sorted = $labels;
+        sort($sorted, SORT_NATURAL | SORT_FLAG_CASE);
+        $this->assertSame($sorted, $labels, 'the whole list is A-Z');
     }
 
     public function test_every_applicant_type_is_offered_even_with_nothing_in_it(): void
