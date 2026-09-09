@@ -163,10 +163,30 @@ try {
   await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
   await page.waitForTimeout(1500);
   const reopened = await page.inputValue('[data-cip-field="firstName"]').catch(() => '');
-  check(reopened === 'Autosaved', `it opens on the answers that were typed ("${reopened}")`);
+  check(/^autosaved$/i.test(reopened), `it opens on the answers that were typed ("${reopened}")`);
   const notice = await page.locator('[data-cip-draft-resumed]').innerText().catch(() => '');
-  check(/files aren’t saved|files aren't saved/i.test(notice),
-    'and says the scans have to be chosen again');
+  // Worded by whatever the draft actually kept — the point is that the reader
+  // is told where they are and what, if anything, is still outstanding.
+  check(/picked up where you left off/i.test(notice), `the resume is announced ("${notice.replace(/\s+/g, ' ').slice(0, 90)}")`);
+
+  step(5.55, 'Back from a draft returns to the table it was opened from');
+  /*
+   * Every other application belongs to a client, so Back means their profile.
+   * A draft has barely any of one — often not even a name yet — and it was
+   * reached by clicking its row, so a profile strands the reader somewhere
+   * they have never been. Cancel is the same helper and the same journey.
+   */
+  const backTitle = await page.locator('[data-clients-back]').first().getAttribute('title').catch(() => '');
+  check(/CIP Applications/.test(backTitle || ''), `the arrow says where it goes ("${backTitle}")`);
+  await page.locator('[data-clients-back]').first().click();
+  await page.waitForTimeout(2500);
+  check(await page.locator('table').count() > 0, 'and lands on the applications table');
+  check(await page.locator('[data-cip-draft]').count() > 0, 'with the draft row still in it');
+
+  // Back into the draft for the checks that follow.
+  await page.locator('[data-cip-draft]').first().click();
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  await page.waitForTimeout(1500);
 
   step(5.6, 'A reopened draft goes on saving itself');
   draftPosts.length = 0;
@@ -202,7 +222,7 @@ try {
   await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(4000);
   const table = await page.locator('table').first().innerText().catch(() => '');
-  check(/Autosaved/.test(table), `the half-typed applicant is listed (${table.slice(0, 120).replace(/\s+/g, ' ')})`);
+  check(/autosaved/i.test(table), `the half-typed applicant is listed (${table.slice(0, 120).replace(/\s+/g, ' ')})`);
   check(/\bDRAFT\b/i.test(table), 'and the row says Draft');
   check(!/NEW APPLICATION/i.test(table), 'not New Applications, which is what the old label said');
 

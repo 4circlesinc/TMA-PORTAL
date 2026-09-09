@@ -4500,7 +4500,20 @@
    */
   function backDestination(state) {
     if (state.screen === 'edit') return state.selectedId || null;
-    if (state.screen === 'edit-application') return state.selectedId || applicationOwner(state);
+    /*
+     * A draft goes back where it was opened from: the table.
+     *
+     * Every other application belongs to a client, so Back means their
+     * profile. A draft has barely any of one — often not even a name yet —
+     * and it was reached by clicking its row, so sending the reader to a
+     * profile answers a question they did not ask and strands them somewhere
+     * they have never been.
+     */
+    if (state.screen === 'edit-application') {
+      if ((applicationRecord(state) || {}).status === 'draft') return null;
+
+      return state.selectedId || applicationOwner(state);
+    }
 
     return null;
   }
