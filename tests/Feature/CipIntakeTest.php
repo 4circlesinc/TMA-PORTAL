@@ -372,6 +372,46 @@ class CipIntakeTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_provider_contact_can_file_a_post_approval_application(): void
+    {
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = $this->provider('GAL', $company);
+
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        // The post-approval form is theirs to open, not staff's alone.
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications/form?phase='.Phase::POST_APPROVAL)
+            ->assertOk();
+
+        // A file approved before the portal saw it arrives with the Unit's
+        // own number, and the provider side is who brings it in.
+        $body = $this->file($contact, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12662P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
+        $this->assertSame(Status::POST_APPROVAL, $body['status']);
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $this->assertSame(Phase::POST_APPROVAL, $application->phase);
+        $this->assertSame('10T1G12662P', $application->cip_number);
+        $this->assertSame($contact->id, $application->created_by);
+    }
+
     public function test_a_private_client_files_under_the_private_bucket(): void
     {
         $private = $this->provider(CipProvider::PRIVATE_CLIENT_CODE);

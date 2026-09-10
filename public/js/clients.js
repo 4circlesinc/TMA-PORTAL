@@ -1836,18 +1836,15 @@
           '</div></div>'
         : '') +
       /*
-       * Staff choose which lane they are filing into. Service provider contacts
-       * file pre-approval applications only, so they keep one button.
+       * Everyone who may file chooses which lane they are filing into. The
+       * service provider side files post-approval work too — a file approved
+       * before it reached the portal arrives with the Unit's own number, and
+       * it is theirs to bring in — so they get the same two choices.
        *
        * Registering a service provider and importing a spreadsheet are the
        * firm's work; those entries sit below the two application choices.
        */
-      (isExternalCipUser()
-        ? '<div class="tma-dash__head-dropdown-wrap">' +
-          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-clients-create-application>' +
-          'Create New Application' +
-          '</button></div>'
-        : '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+      ('<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
           '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
           'Create New Application' +
           '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
@@ -13036,16 +13033,6 @@
         var slot = wrap.closest('[data-clients-page-actions]');
         var importInput = slot && slot.querySelector('[data-clients-import-input]');
         if (importInput) importInput.click();
-      }
-    });
-
-    // The menuless button raises no head-dropdown:select, so it is heard here.
-    document.addEventListener('click', function (event) {
-      var btn = event.target.closest('[data-clients-create-application]');
-      if (!btn || !btn.closest('[data-clients-page-actions]')) return;
-      event.preventDefault();
-      if (clientsHeadActionsNavigate) {
-        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'pre_approval' });
       }
     });
 
