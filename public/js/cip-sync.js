@@ -21,6 +21,13 @@
   function keep(record) {
     if (!record) return Promise.resolve();
 
+    if (record.deleted) {
+      var drop = [];
+      if (record.clientUid) drop.push(window.TMAStore.invalidate('cip:application:' + record.clientUid));
+      if (record.id) drop.push(window.TMAStore.invalidate('cip:application-record:' + record.id));
+      return Promise.all(drop);
+    }
+
     var writes = [];
     if (record.clientUid) {
       writes.push(window.TMAStore.put('cip:application:' + record.clientUid, { application: record }));

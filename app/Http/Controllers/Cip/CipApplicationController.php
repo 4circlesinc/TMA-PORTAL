@@ -350,7 +350,7 @@ class CipApplicationController extends Controller
          * photo columns because photoUrl() falls back from one to the other,
          * and a column that was never selected reads as no photo at all.
          */
-        $query = ApplicationScope::query($user)
+        $query = ApplicationScope::query($user, CipApplication::withTrashed())
             ->with(array_merge([
                 'provider',
                 'client',
@@ -387,12 +387,33 @@ class CipApplicationController extends Controller
 
         $last = $page->last();
 
-        $presenter = self::presenterFor($user, $page);
-        $attention = Attention::forClients($user, $page->pluck('client_id')->filter()->all());
-        Review::primeTally($page);
+        $live = $page->reject->trashed()->values();
+        $presenter = self::presenterFor($user, $live);
+        $attention = Attention::forClients($user, $live->pluck('client_id')->filter()->all());
+        Review::primeTally($live);
 
         return response()->json([
-            'applications' => $page->map(fn ($application) => $this->record($application, $user, $presenter, $attention))->all(),
+            'applications' => $page->map(function ($application) use ($user, $presenter, $attention) {
+                if ($application->trashed()) {
+                    /*
+                     * A tombstone, the same contract as clients and files.
+                     *
+                     * The listing never shows a deleted filing, but the
+                     * replica still holds the copy it caught up last time,
+                     * and an absence in this page is not an instruction to
+                     * drop it. Naming the gone row is what lets another
+                     * device take it off the caseload.
+                     */
+                    return [
+                        'id' => $application->uuid,
+                        'clientUid' => $application->client?->uid,
+                        'deleted' => true,
+                        'deletedAt' => $application->deleted_at?->toIso8601String(),
+                    ];
+                }
+
+                return $this->record($application, $user, $presenter, $attention);
+            })->all(),
             /*
              * Where to carry on from. The caller stores this and hands it back
              * next time; it is deliberately opaque prose-free data rather than

@@ -144,6 +144,10 @@
     if (uid) CIP_APPLICANTS[uid] = true;
   }
 
+  function forgetCipApplicant(uid) {
+    if (uid) delete CIP_APPLICANTS[uid];
+  }
+
   function isCipApplicant(uid) {
     if (!uid) return false;
     if (CIP_APPLICANTS[uid]) return true;
@@ -515,6 +519,9 @@
          */
         if (opts.method && opts.method !== 'GET' && window.TMAStore) {
           window.TMAStore.invalidate('clients:');
+          if (String(url || '').indexOf('/portal/cip/') === 0) {
+            window.TMAStore.invalidate('cip:');
+          }
         }
         return data;
       });
@@ -12382,6 +12389,10 @@
     if (clientUid) {
       delete APPLICATIONS[clientUid];
       forgetApplication(clientUid);
+      forgetCipApplicant(clientUid);
+    }
+    if (id && window.TMAStore) {
+      window.TMAStore.invalidate('cip:application-record:' + id);
     }
     if (ctx && ctx.render) ctx.render({ forceFull: true });
 
@@ -12392,6 +12403,8 @@
         forgetBuckets();
         if (ctx && ctx.state && ctx.state.selectedId === clientUid && ctx.navigate) {
           ctx.navigate('list');
+        } else if (ctx && ctx.render) {
+          ctx.render({ forceFull: true });
         }
       })
       .catch(function (err) {
@@ -15285,7 +15298,11 @@
           clientsFetch('/portal/cip/clients/' + encodeURIComponent(open) + '/application')
             .then(function (json) {
               var next = json && json.application;
-              if (!next) return;
+              if (!next) {
+                delete APPLICATIONS[open];
+                forgetCipApplicant(open);
+                return;
+              }
               rememberApplication(open, cipOverlayPendingFileStatuses(APPLICATIONS[open], next));
             })
             // Keep what is on screen. A signal is not a reason to empty a file.

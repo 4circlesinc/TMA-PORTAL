@@ -223,4 +223,30 @@ class CipApplicationSyncTest extends TestCase
             $this->sync($admin)->json('applications.0.clientUid'),
         );
     }
+
+    public function test_a_deletion_arrives_as_a_tombstone(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $client = Client::create([
+            'uid' => 'filed-then-gone',
+            'name' => 'Filed Then Gone',
+            'created_by' => $admin->id,
+            'data' => [],
+        ]);
+        $application = Applications::create($this->provider(), $admin, [
+            'client_id' => $client->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $row = collect($this->sync($admin)->json('applications'))
+            ->firstWhere('id', $application->uuid);
+
+        $this->assertNotNull($row);
+        $this->assertTrue($row['deleted']);
+        $this->assertSame('filed-then-gone', $row['clientUid']);
+        $this->assertArrayNotHasKey('applicant', $row);
+    }
 }
