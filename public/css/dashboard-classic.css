@@ -2590,6 +2590,7 @@
 .tma-dash__rb-title {
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-black);
   padding: var(--space-8) var(--space-4);
 }
@@ -2626,6 +2627,7 @@
 .tma-dash__notice-title {
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-black);
   flex: 1 1 auto;
   min-width: 0;
