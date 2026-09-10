@@ -4747,23 +4747,6 @@
       || status === 'ready_to_submit';
   }
 
-  function cipDocumentsBlockReadyToSubmit(app) {
-    if (!app) return false;
-    var people = cipFamily(app);
-    var i;
-    var j;
-    var docs;
-    var status;
-    for (i = 0; i < people.length; i++) {
-      docs = (people[i] && people[i].documents) || [];
-      for (j = 0; j < docs.length; j++) {
-        status = docs[j].status;
-        if (status === 'update_required' || status === 'application_review') return true;
-      }
-    }
-    return false;
-  }
-
   function applyCipStatusFields(record, to, extra) {
     if (!record) return;
     var meta = cipStatusMeta(to);
@@ -4938,8 +4921,6 @@
 
     if (cipAnyDocStatus(app, 'update_required') && cipCanRollToUpdatesRequired(app.status)) {
       paintCipApplicationStatus(clientUid, 'update_required');
-    } else if (cipAnyDocStatus(app, 'application_review') && app.status === 'ready_to_submit') {
-      paintCipApplicationStatus(clientUid, 'review_application');
     }
     if (detail.response && detail.response.application) {
       paintCipApplicationStatus(clientUid, detail.response.application.status, detail.response.application);
@@ -10749,12 +10730,6 @@
     var stages = all.filter(function (status) {
       return stageValues.indexOf(status.value) !== -1;
     });
-
-    if (cipDocumentsBlockReadyToSubmit(source) || cipDocumentsBlockReadyToSubmit(applicationFor(clientUid))) {
-      next = next.filter(function (status) { return status.value !== 'ready_to_submit'; });
-      overrides = overrides.filter(function (status) { return status.value !== 'ready_to_submit'; });
-      locked = locked.filter(function (status) { return status.value !== 'ready_to_submit'; });
-    }
 
     next = next.filter(function (status) { return status.value !== 'delayed'; });
     overrides = overrides.filter(function (status) { return status.value !== 'delayed'; });

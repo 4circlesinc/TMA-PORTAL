@@ -257,9 +257,9 @@ class CipDocumentFileStatusTest extends TestCase
                 'status' => DocumentStatus::APPLICATION_REVIEW,
             ])
             ->assertOk()
-            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
 
-        $this->assertSame(Status::REVIEW_APPLICATION, $slot->application->fresh()->status);
+        $this->assertSame(Status::READY_TO_SUBMIT, $slot->application->fresh()->status);
     }
 
     public function test_staff_can_move_a_file_status_back_and_forth(): void

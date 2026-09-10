@@ -60,6 +60,7 @@ class CipTransitionTest extends TestCase
         [Status::DRAFT, Status::NEW],
         [Status::NEW, Status::REVIEW_APPLICATION],
         [Status::REVIEW_APPLICATION, Status::ASSESSMENT_FEEDBACK],
+        [Status::REVIEW_APPLICATION, Status::READY_TO_SUBMIT],
         [Status::ASSESSMENT_FEEDBACK, Status::UPDATE_REQUIRED],
         [Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT],
         [Status::UPDATE_REQUIRED, Status::ASSESSMENT_FEEDBACK],
@@ -357,6 +358,13 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $employee = $this->user(Role::EMPLOYEE);
+
+        $reviewing = $this->at($this->application($admin), Status::REVIEW_APPLICATION);
+        $this->assertSame(
+            [Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT],
+            Engine::availableTransitions($reviewing, $officer),
+        );
+        $this->assertSame([], Engine::availableTransitions($reviewing, $employee));
 
         $application = $this->at($this->application($admin), Status::ASSESSMENT_FEEDBACK);
 

@@ -49,7 +49,7 @@ class Engine
     private const TRANSITIONS = [
         Status::DRAFT => [Status::NEW],
         Status::NEW => [Status::REVIEW_APPLICATION],
-        Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK],
+        Status::REVIEW_APPLICATION => [Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT],
         Status::ASSESSMENT_FEEDBACK => [Status::UPDATE_REQUIRED, Status::READY_TO_SUBMIT],
         Status::UPDATE_REQUIRED => [Status::ASSESSMENT_FEEDBACK, Status::POST_APPROVAL, Status::APPLY_FOR_COR, Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT],
         Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
@@ -338,8 +338,14 @@ class Engine
     }
 
     /**
-     * Ready to Submit is a claim about the documents, not a label somebody
-     * may type while files are still in Application review or Update required.
+     * Apply for COR is a claim about the COR checklist, not a label somebody
+     * may type while those files are still in Application review or Update
+     * required.
+     *
+     * Ready to Submit is the officer asking the provider to confirm. It is
+     * pickable from Review Applications even while documents are still being
+     * read; locking the package still requires every required document to be
+     * ready (see {@see Confirmation::confirm}).
      *
      * Listings that have not loaded checklists skip the document count — the
      * write still enforces it. Asking here would be one COUNT per row of the
@@ -351,7 +357,7 @@ class Engine
      */
     private static function checklistAllows(CipApplication $application, string $to, bool $forListing = false): bool
     {
-        if (! in_array($to, [Status::READY_TO_SUBMIT, Status::APPLY_FOR_COR], true)) {
+        if ($to !== Status::APPLY_FOR_COR) {
             return true;
         }
 
@@ -644,9 +650,7 @@ class Engine
 
     private static function checklistRefusal(string $to): string
     {
-        $label = $to === Status::APPLY_FOR_COR ? 'Apply for COR' : 'Ready to Submit';
-
-        return 'This application cannot be '.$label.' while documents are still in Application review or Update required.';
+        return 'This application cannot be '.Status::label($to).' while documents are still in Application review or Update required.';
     }
 
     /**

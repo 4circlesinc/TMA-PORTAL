@@ -60,7 +60,7 @@ class Review
     /**
      * Count every application's checklist in one grouped query.
      *
-     * {@see Engine::availableOverrides()} asks this for Ready to Submit when
+     * {@see Engine::availableOverrides()} asks this for Apply for COR when
      * checklists are already loaded. Unprimed that is one COUNT per application.
      *
      * @param  iterable<int, CipApplication>  $applications
@@ -325,11 +325,12 @@ class Review
          */
         foreach (self::plan($application) as $target) {
             /*
-             * File status is a working label. Ready to Submit is not. If a
-             * hop still names it while a slot sits in Application review or
-             * Update required, skip it — do not throw. Throwing here used to
-             * 422 the document PATCH after the slot had already been written,
-             * which rolled the chip back on screen.
+             * The checklist must not auto-advance to Ready to Submit or Apply
+             * for COR while a slot sits in Application review or Update
+             * required. Officers may still type Ready to Submit themselves to
+             * ask the provider to confirm. Skip the hop — do not throw.
+             * Throwing here used to 422 the document PATCH after the slot had
+             * already been written, which rolled the chip back on screen.
              */
             if (in_array($target, [Status::READY_TO_SUBMIT, Status::APPLY_FOR_COR], true)
                 && ! self::documentsAllowReadyToSubmit($application)) {
@@ -446,15 +447,6 @@ class Review
                 Status::ASSESSMENT_FEEDBACK, Status::READY_TO_SUBMIT => [Status::UPDATE_REQUIRED],
                 default => [],
             };
-        }
-
-        /*
-         * A file put back into Application review cannot keep the application
-         * at Ready to submit. The officer is reading again; that is Review
-         * Applications, not a package waiting on Confirm submission.
-         */
-        if ($from === Status::READY_TO_SUBMIT && $inReview) {
-            return [Status::REVIEW_APPLICATION];
         }
 
         /*

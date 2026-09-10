@@ -369,8 +369,10 @@ class CipReviewTest extends TestCase
         $this->assertSame(1, $body['progress']['counts'][DocumentStatus::PENDING_UPLOAD]);
     }
 
-    public function test_a_filed_document_in_application_review_blocks_ready_to_submit(): void
+    public function test_ready_to_submit_can_be_picked_while_documents_are_still_in_review(): void
     {
+        Mail::fake();
+
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $application = $this->application($staff, Status::REVIEW_APPLICATION);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
@@ -381,23 +383,21 @@ class CipReviewTest extends TestCase
             ->assertOk();
 
         $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+        $this->assertContains(
+            Status::READY_TO_SUBMIT,
+            Engine::availableTransitions($application->fresh(), $staff),
+        );
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
             ])
-            ->assertStatus(422)
-            ->assertJsonFragment(['message' => 'This application cannot be Ready to Submit while documents are still in Application review or Update required.']);
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
 
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
-        $this->assertNotContains(
-            Status::READY_TO_SUBMIT,
-            Engine::availableTransitions($application->fresh(), $staff),
-        );
-        $this->assertNotContains(
-            Status::READY_TO_SUBMIT,
-            Engine::availableOverrides($application->fresh(), $staff),
-        );
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'READY TO SUBMIT'));
     }
 
     public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void
@@ -414,7 +414,7 @@ class CipReviewTest extends TestCase
         $passport->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
         Review::settle($application->fresh());
 
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
     }
 
     public function test_requesting_changes_sends_the_slot_back_and_writes_the_reason(): void
