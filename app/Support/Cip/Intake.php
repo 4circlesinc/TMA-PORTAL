@@ -1425,22 +1425,22 @@ class Intake
     {
         if (Role::isStaff($user)) {
             /*
-             * Only firms that are really in the system.
+             * Every active firm on the CIP register, including ones the
+             * library sync created without a company row.
              *
-             * A provider's company row is what puts it on the Service
-             * providers tab, and a registration whose company is missing or
-             * in the bin is a half-present firm: the wizard offered Galaxy
-             * Partners while the tab showed no such provider, which reads as
-             * the module contradicting itself. A firm you cannot see in the
-             * hub is not a firm you can file under.
-             *
-             * The PRI bucket is the one exception, private clients are not a
-             * firm, so no company row is required of it.
+             * Requiring a live company hid the real book: SharePoint folders
+             * become providers with no hub firm, and deleting a company
+             * nulls the link, so Galaxy Partners vanished from Create New
+             * Application while it was still the firm people file under.
+             * A company that is in the bin and still linked stays off the
+             * list — that firm was put away on purpose. PRI has no company
+             * by design.
              */
             return CipProvider::query()
                 ->where('active', true)
                 ->where(fn ($q) => $q
-                    ->whereHas('company')
+                    ->whereNull('company_id')
+                    ->orWhereHas('company')
                     ->orWhere('code', CipProvider::PRIVATE_CLIENT_CODE))
                 ->orderBy('name')
                 ->get();

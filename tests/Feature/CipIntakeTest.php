@@ -71,11 +71,10 @@ class CipIntakeTest extends TestCase
     /**
      * A provider the way the product registers one: a company made a provider.
      *
-     * Not a bare CipProvider row. The wizard offers only firms whose company
-     * is live in the hub — a registration whose company is missing or binned
-     * is a half-present firm the Service providers tab cannot show — so a
-     * fixture without one would be testing a state the portal refuses to
-     * offer.
+     * Most fixtures go through a company because that is how staff create a
+     * firm in the hub. The wizard also offers register rows with no company
+     * (library sync, a deleted company that nullified the link) — those are
+     * tested on their own, not by omitting the company here.
      */
     private function provider(string $code = 'GAL', ?Company $company = null): CipProvider
     {
@@ -1595,6 +1594,39 @@ class CipIntakeTest extends TestCase
 
         $this->assertNotContains('GAL', $offered());
         $this->assertContains('BLU', $offered(), 'the live firm is untouched');
+    }
+
+    public function test_a_provider_without_a_company_is_offered_for_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $this->provider('BLU');
+        $orphan = CipProvider::create([
+            'name' => 'Galaxy Partners',
+            'code' => 'GAL',
+            'active' => true,
+        ]);
+
+        $form = $this->actingAs($staff)->getJson('/portal/cip/applications/form')->assertOk()->json();
+        $codes = collect($form['providers'])->pluck('code')->all();
+
+        $this->assertContains('GAL', $codes);
+        $this->assertContains('BLU', $codes);
+        $this->assertFalse($form['providerFixed'], 'two firms is a dropdown, not a fixed name');
+
+        $this->file($staff, $this->payload($orphan))->assertCreated();
+    }
+
+    public function test_an_inactive_provider_is_not_offered_for_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        CipProvider::create(['name' => 'Retired Firm', 'code' => 'RET', 'active' => false]);
+        $this->provider('BLU');
+
+        $this->assertSame(
+            ['BLU'],
+            collect($this->actingAs($staff)->getJson('/portal/cip/applications/form')->assertOk()->json('providers'))
+                ->pluck('code')->all(),
+        );
     }
 
     /*

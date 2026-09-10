@@ -354,6 +354,21 @@ class CipFacetsTest extends TestCase
         $this->assertSame(1, $this->listing($admin, ['assignee' => (string) $manager->id])['total']);
     }
 
+    public function test_a_provider_with_no_company_and_nothing_filed_is_still_offered(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        CipProvider::create(['name' => 'Aurora', 'code' => 'AUR', 'active' => true]);
+        [$galaxy] = $this->providerWithContact('GAL');
+        $this->application($galaxy, $admin);
+
+        $providers = $this->listing($admin)['providers'];
+        $byCode = array_column($providers, 'count', 'code');
+
+        $this->assertArrayHasKey('AUR', $byCode);
+        $this->assertSame(0, $byCode['AUR']);
+        $this->assertSame(1, $byCode['GAL']);
+    }
+
     public function test_the_facets_do_not_cost_a_query_per_officer(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');

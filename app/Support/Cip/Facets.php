@@ -183,21 +183,20 @@ class Facets
         /*
          * ...and the firms themselves, which is a different question.
          *
-         * Staff filter across the register, but only the part of it that is
-         * really in the system: a firm whose company row is missing or in the
-         * bin is not on the Service providers tab, and offering it here made
-         * the menu name providers the hub said did not exist. The exception
-         * is a firm that has already filed: its rows are in the table
-         * whatever happened to its company, and a row that exists must be
-         * filterable to.
-         *
-         * Anybody else can only ever be asking about the firms already in
-         * their own slice, so the tally is the whole list for them and no
-         * register is read.
+         * Staff filter across the register: every active firm, including
+         * folder-born ones that have no company yet, and including a firm
+         * with nothing filed so the menu can answer "has Aurora sent us
+         * anything". A company that is in the bin and still linked stays
+         * off the list unless it already has rows — those rows exist, so
+         * they must be filterable. Anybody else can only ever be asking
+         * about the firms already in their own slice.
          */
         $firms = Role::isStaff($reader)
             ? CipProvider::query()
-                ->where(fn ($q) => $q->whereHas('company')->orWhereIn('uuid', $filed->keys()))
+                ->where(fn ($q) => $q
+                    ->whereNull('company_id')
+                    ->orWhereHas('company')
+                    ->orWhereIn('uuid', $filed->keys()))
                 ->orderBy('name')
                 ->get(['uuid', 'name', 'code', 'company_id'])
             : CipProvider::query()->whereIn('uuid', $filed->keys())->orderBy('name')->get(['uuid', 'name', 'code', 'company_id']);
