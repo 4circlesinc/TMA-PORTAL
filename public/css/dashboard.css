@@ -36563,8 +36563,7 @@ span.tma-dash__messages-profile-avatar {
   position: fixed;
   inset: 0;
   z-index: 1290;
-  background: color-mix(in srgb, var(--color-primary-dark, #136da0) 28%, rgb(4 16 24 / 0.55));
-  backdrop-filter: blur(2px);
+  background: rgb(8 12 20 / 0.45);
   animation: tma-call-fade 160ms ease;
 }
 
