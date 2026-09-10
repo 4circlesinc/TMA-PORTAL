@@ -182,12 +182,15 @@ class Postcards
             $details[] = ['Device', $device];
         }
 
-        return self::postcard('login-code', [
+        $postcard = self::postcard('login-code', [
             'name' => $user->first_name ?: self::firstName($user->name),
         ], [
             'code' => $code,
             'details' => $details,
         ]);
+        $postcard->skipSentItems = true;
+
+        return $postcard;
     }
 
     /**

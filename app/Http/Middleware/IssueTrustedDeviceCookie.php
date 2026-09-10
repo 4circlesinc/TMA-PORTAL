@@ -9,9 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * After a two-factor challenge is passed, remember the device if the user
- * ticked "Trust this device". Fortify owns the challenge controller, so the
- * cookie is attached to its response here.
+ * After a successful sign-in, remember this browser so the next visit from
+ * it skips the email / authenticator challenge. Fortify owns the password
+ * and authenticator controllers, so the cookie is attached here. A public
+ * computer can opt out from the challenge screens.
  */
 class IssueTrustedDeviceCookie
 {
@@ -19,15 +20,23 @@ class IssueTrustedDeviceCookie
     {
         $response = $next($request);
 
-        if (
-            $request->isMethod('POST')
-            && ($request->routeIs('two-factor.login*') || $request->routeIs('login-code.store'))
-            && Auth::check()
-            && $request->boolean('trust_device')
-        ) {
-            $response->withCookie(TrustedDevices::issue(Auth::user(), $request));
+        if (! Auth::check() || ! $this->shouldRemember($request)) {
+            return $response;
         }
 
-        return $response;
+        return $response->withCookie(TrustedDevices::remember(Auth::user(), $request));
+    }
+
+    private function shouldRemember(Request $request): bool
+    {
+        if ($request->routeIs('login-code.store', 'two-factor.login', 'two-factor.login.store')) {
+            return $request->isMethod('POST') && $request->boolean('trust_device');
+        }
+
+        if ($request->isMethod('POST') && $request->routeIs('login.store')) {
+            return true;
+        }
+
+        return $request->routeIs('social.callback');
     }
 }

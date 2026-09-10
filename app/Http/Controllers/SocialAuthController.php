@@ -491,10 +491,10 @@ class SocialAuthController extends Controller
     private function login(Request $request, User $user, bool $forceHome = false): RedirectResponse
     {
         // Respect two-factor authentication: hand off to Fortify's challenge,
-        // unless this is a device the user already trusted. Unusual sign-ins
-        // without an authenticator app confirm by email instead. Remember-me
-        // is applied in StaySignedIn::afterAuthenticated when the browser
-        // already chose to stay signed in (or on the stay-signed-in prompt).
+        // unless this is a browser the user already signed in on. A new
+        // browser without an authenticator app confirms by email instead.
+        // Remember-me is applied in StaySignedIn::afterAuthenticated when
+        // the browser already chose to stay signed in (or on the prompt).
         if (LoginChallenge::needsAuthenticator($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),

@@ -3,6 +3,8 @@
 namespace App\Mail;
 
 use App\Models\EmailDelivery;
+use App\Models\FileItem;
+use App\Support\Files\Vault;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -33,12 +35,17 @@ class Postcard extends Mailable implements ShouldQueue
     /** The header the mail listeners read to find this send's delivery row. */
     public const DELIVERY_HEADER = 'X-TMA-Delivery';
 
+    /** Graph: skip saving a copy in Sent Items (login codes must leave immediately). */
+    public const SKIP_SENT_ITEMS_HEADER = 'X-TMA-Skip-Sent-Items';
+
+    public bool $skipSentItems = false;
+
     /** @param array<string,mixed> $payload */
     public function __construct(
         public string $subjectLine,
         public array $payload,
         public ?string $deliveryUuid = null,
-        public ?\App\Models\FileItem $attachment = null,
+        public ?FileItem $attachment = null,
     ) {}
 
     public function envelope(): Envelope
@@ -48,9 +55,17 @@ class Postcard extends Mailable implements ShouldQueue
 
     public function headers(): Headers
     {
-        return new Headers(text: $this->deliveryUuid
-            ? [self::DELIVERY_HEADER => $this->deliveryUuid]
-            : []);
+        $text = [];
+
+        if ($this->deliveryUuid) {
+            $text[self::DELIVERY_HEADER] = $this->deliveryUuid;
+        }
+
+        if ($this->skipSentItems) {
+            $text[self::SKIP_SENT_ITEMS_HEADER] = '1';
+        }
+
+        return new Headers(text: $text);
     }
 
     public function content(): Content
@@ -73,9 +88,9 @@ class Postcard extends Mailable implements ShouldQueue
             return [];
         }
 
-        $path = \App\Support\Files\Vault::localCopy($this->attachment);
+        $path = Vault::localCopy($this->attachment);
         if (! $path) {
-            \Illuminate\Support\Facades\Log::error('Postcard attachment could not be read', [
+            Log::error('Postcard attachment could not be read', [
                 'file' => $this->attachment->uuid,
             ]);
 
@@ -85,7 +100,7 @@ class Postcard extends Mailable implements ShouldQueue
         try {
             $bytes = (string) file_get_contents($path);
         } finally {
-            \App\Support\Files\Vault::cleanupLocalCopy($path);
+            Vault::cleanupLocalCopy($path);
         }
 
         return [

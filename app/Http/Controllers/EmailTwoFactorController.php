@@ -24,6 +24,13 @@ class EmailTwoFactorController extends Controller
             return redirect()->route('login');
         }
 
+        if (
+            $request->session()->get('login.challenge') === 'email'
+            && ! $request->session()->has(EmailLoginCode::HASH_KEY)
+        ) {
+            EmailLoginCode::send($user, $request);
+        }
+
         $reason = (string) $request->session()->get('login.challenge_reason', 'new-device');
 
         return view('auth.login-code', [

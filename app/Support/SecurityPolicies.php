@@ -20,7 +20,7 @@ class SecurityPolicies
             'numbersRequired' => 0,
             'specialRequired' => 0,
             // Authenticator app can be required from Sign-in policy. Off by
-            // default: email codes already confirm unusual sign-ins, and
+            // default: email codes already confirm a new browser, and
             // onboarding still recommends the app (Set later stays available).
             'requireMfa' => false,
             // Getting-started checklist: firm can require provider connects.
@@ -28,7 +28,7 @@ class SecurityPolicies
             'requireGoogleConnect' => false,
             'requireAuthenticatorApp' => false,
             // Absolute sign-in lifetime in days (Stay signed in, trusted
-            // devices, and the session cap). Email codes for unusual sign-ins
+            // devices, and the session cap). Email codes for a new browser
             // are always on and are not a stored switch.
             'sessionDays' => 7,
         ],
@@ -97,7 +97,7 @@ class SecurityPolicies
     /**
      * Onboarding hides "Set later" and the portal is blocked until an
      * authenticator app is confirmed. Off unless an administrator turns it
-     * on in Sign-in policy. Email codes for unusual sign-ins are always on
+     * on in Sign-in policy. Email codes for a new browser are always on
      * and do not use this flag.
      */
     public static function authenticatorRequired(): bool

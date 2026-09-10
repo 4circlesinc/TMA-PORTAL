@@ -2,6 +2,7 @@
 
 namespace App\Mail\Transport;
 
+use App\Mail\Postcard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -36,7 +37,7 @@ class MicrosoftGraphTransport extends AbstractTransport
         $email = MessageConverter::toEmail($message->getOriginalMessage());
         $payload = [
             'message' => $this->graphMessage($email),
-            'saveToSentItems' => true,
+            'saveToSentItems' => ! $email->getHeaders()->has(Postcard::SKIP_SENT_ITEMS_HEADER),
         ];
 
         $response = Http::withToken($this->accessToken())

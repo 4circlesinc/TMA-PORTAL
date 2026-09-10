@@ -3452,7 +3452,7 @@
           '<h3 class="tma-portal-section__title">Two-factor authentication</h3>' +
           '<p class="tma-portal-subtitle">Everyone confirms a new or unrecognised sign-in with a 6-digit code. Email codes are always on. An authenticator app is recommended, and can be required so onboarding cannot skip it.</p>' +
           ui().section('',
-            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes<span class="tma-portal-note"> Always on. Sent when someone signs in from a new browser or location.</span></span>' +
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes<span class="tma-portal-note"> Always on. Sent when someone signs in from a new browser or device.</span></span>' +
             ui().toggle(true, 'disabled', 'Email codes') + '</div>' +
             '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require authenticator app<span class="tma-portal-note"> Hides Set later during onboarding and blocks the portal until the app is confirmed.</span></span>' +
             ui().toggle(!!p.requireAuthenticatorApp || !!p.requireMfa, 'data-signin-authapp' + (admin ? '' : ' disabled'), 'Require authenticator') + '</div>') +

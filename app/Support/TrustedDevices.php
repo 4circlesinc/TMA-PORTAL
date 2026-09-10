@@ -10,12 +10,13 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 /**
- * "Trust this device" for two-factor authentication.
+ * Remember this browser so a returning sign-in does not ask for a code.
  *
- * A trusted device holds a random token in a long-lived, httpOnly cookie;
- * only its hash is stored. The device is bound to the browser that earned it
- * (a different browser, machine, or a cleared cookie jar has no token), and
- * a sign-in from an unfamiliar IP still asks for a code.
+ * A trusted device is a random token in a long-lived httpOnly cookie; only
+ * its hash is stored. That binds trust to this browser (a different browser,
+ * phone, or a cleared cookie jar has no token and must confirm). IP is
+ * recorded for the security screen, not used as a gate — a laptop that
+ * moves networks is still the same browser.
  */
 class TrustedDevices
 {
@@ -32,28 +33,46 @@ class TrustedDevices
     {
         $token = Str::random(64);
 
-        $days = self::days();
-
         $user->trustedDevices()->create([
             'token_hash' => hash('sha256', $token),
             'device' => DeviceName::describe((string) $request->userAgent()),
             'ip' => $request->ip(),
             'last_used_at' => now(),
-            'expires_at' => now()->addDays($days),
+            'expires_at' => now()->addDays(self::days()),
         ]);
 
-        return Cookie::make(
-            name: self::COOKIE,
-            value: $token,
-            minutes: $days * 24 * 60,
-            httpOnly: true,
-            secure: $request->isSecure(),
-            sameSite: 'lax',
-        );
+        return self::cookie($token, $request);
     }
 
     /**
-     * Is this browser a device the user already vouched for?
+     * Issue a cookie for this browser, or slide the expiry if it already has one.
+     */
+    public static function remember(User $user, Request $request): SymfonyCookie
+    {
+        $token = (string) $request->cookie(self::COOKIE);
+
+        if ($token !== '') {
+            $device = $user->trustedDevices()
+                ->where('token_hash', hash('sha256', $token))
+                ->first();
+
+            if ($device) {
+                $device->forceFill([
+                    'last_used_at' => now(),
+                    'device' => DeviceName::describe((string) $request->userAgent()),
+                    'ip' => $request->ip(),
+                    'expires_at' => now()->addDays(self::days()),
+                ])->save();
+
+                return self::cookie($token, $request);
+            }
+        }
+
+        return self::issue($user, $request);
+    }
+
+    /**
+     * Is this the same browser the user already signed in on?
      */
     public static function trusts(User $user, Request $request): bool
     {
@@ -72,14 +91,10 @@ class TrustedDevices
             return false;
         }
 
-        // A trusted cookie replayed from somewhere else still gets challenged.
-        if ($device->ip && $device->ip !== $request->ip()) {
-            return false;
-        }
-
         $device->forceFill([
             'last_used_at' => now(),
             'device' => DeviceName::describe((string) $request->userAgent()),
+            'ip' => $request->ip(),
         ])->save();
 
         return true;
@@ -94,5 +109,17 @@ class TrustedDevices
         }
 
         return Cookie::forget(self::COOKIE);
+    }
+
+    private static function cookie(string $token, Request $request): SymfonyCookie
+    {
+        return Cookie::make(
+            name: self::COOKIE,
+            value: $token,
+            minutes: self::days() * 24 * 60,
+            httpOnly: true,
+            secure: $request->isSecure(),
+            sameSite: 'lax',
+        );
     }
 }

@@ -45,9 +45,9 @@
           </div>
 
           <label class="tma-auth__check">
-            <input type="checkbox" name="trust_device" value="1">
+            <input type="checkbox" name="trust_device" value="1" checked>
             <span>
-              Trust this device for {{ $trustDays ?? 7 }} days
+              Trust this browser for {{ $trustDays ?? 7 }} days
             </span>
           </label>
           <button type="submit" class="tma-auth__submit">Verify</button>
@@ -63,9 +63,9 @@
           </div>
 
           <label class="tma-auth__check">
-            <input type="checkbox" name="trust_device" value="1">
+            <input type="checkbox" name="trust_device" value="1" checked>
             <span>
-              Trust this device for {{ $trustDays ?? 7 }} days
+              Trust this browser for {{ $trustDays ?? 7 }} days
             </span>
           </label>
           <button type="submit" class="tma-auth__submit">Verify recovery code</button>

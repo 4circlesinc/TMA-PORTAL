@@ -8,9 +8,9 @@ use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable as FortifyAction;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
- * Mirrors Fortify's action, with two additions: a trusted device skips the
- * challenge, and accounts without an authenticator app still confirm unusual
- * sign-ins with an email code.
+ * Mirrors Fortify's action, with two additions: a trusted browser skips the
+ * challenge, and accounts without an authenticator app still confirm a new
+ * browser with an email code.
  */
 class RedirectIfTwoFactorAuthenticatable extends FortifyAction
 {

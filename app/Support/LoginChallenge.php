@@ -9,9 +9,9 @@ use Illuminate\Http\Request;
 /**
  * Whether this sign-in needs a second factor, and which kind.
  *
- * Email codes are always on for returning accounts: a new browser or location
- * must confirm. An authenticator app, when enrolled, is preferred. A device
- * the user already trusted (same cookie, same IP, still in date) skips both.
+ * Email codes confirm a new browser (no trusted-device cookie). An
+ * authenticator app, when enrolled, is preferred. The same browser the user
+ * already signed in on skips both until the cookie expires.
  */
 final class LoginChallenge
 {

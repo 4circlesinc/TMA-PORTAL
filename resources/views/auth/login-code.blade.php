@@ -50,8 +50,8 @@
           </div>
 
           <label class="tma-auth__check">
-            <input type="checkbox" name="trust_device" value="1">
-            <span>Trust this device for {{ $trustDays }} days</span>
+            <input type="checkbox" name="trust_device" value="1" checked>
+            <span>Trust this browser for {{ $trustDays }} days</span>
           </label>
           @include('auth.partials.turnstile')
           <button type="submit" class="tma-auth__submit">Confirm</button>

@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Mail\Postcard;
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\EmailLoginCode;
 use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -49,6 +52,51 @@ class EmailLoginCodeTest extends TestCase
             ->assertRedirect('/');
     }
 
+    public function test_the_first_sign_in_remembers_the_browser(): void
+    {
+        $user = $this->user();
+
+        $response = $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ]);
+
+        $response->assertRedirect('/');
+        $this->assertNotNull($response->getCookie(TrustedDevices::COOKIE));
+        $this->assertSame(1, $user->fresh()->trustedDevices()->count());
+    }
+
+    public function test_a_returning_sign_in_from_the_same_browser_skips_the_email_code(): void
+    {
+        $user = $this->user();
+
+        $first = $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ]);
+
+        $first->assertRedirect('/');
+        $token = $first->getCookie(TrustedDevices::COOKIE)?->getValue();
+        $this->assertNotEmpty($token);
+
+        $this->post('/auth/logout');
+        Auth::logout();
+
+        Mail::fake();
+
+        $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->withCookie(TrustedDevices::COOKIE, $token)
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect('/');
+
+        Mail::assertNothingSent();
+    }
+
     public function test_a_returning_sign_in_from_an_untrusted_device_sends_an_email_code(): void
     {
         $user = $this->user();
@@ -65,8 +113,30 @@ class EmailLoginCodeTest extends TestCase
 
         Mail::assertSent(Postcard::class, function (Postcard $mail) {
             return ($mail->payload['code'] ?? null) !== null
-                && strlen((string) $mail->payload['code']) === 6;
+                && strlen((string) $mail->payload['code']) === 6
+                && $mail->skipSentItems === true;
         });
+    }
+
+    public function test_the_code_screen_trusts_this_browser_by_default(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        Mail::fake();
+
+        $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ]);
+
+        $this->get(route('login-code.show'))
+            ->assertOk()
+            ->assertSee('We sent a code to', false)
+            ->assertSee('name="trust_device" value="1" checked', false);
+
+        Mail::assertSent(Postcard::class, 1);
     }
 
     public function test_the_emailed_code_completes_sign_in(): void
@@ -91,11 +161,15 @@ class EmailLoginCodeTest extends TestCase
         });
 
         $this->withCookie(StaySignedIn::COOKIE, 'yes')
-            ->post(route('login-code.store'), ['code' => $code])
+            ->post(route('login-code.store'), [
+                'code' => $code,
+                'trust_device' => '1',
+            ])
             ->assertRedirect('/');
 
         $this->assertAuthenticatedAs($user->fresh());
         $this->assertNotNull($user->fresh()->last_authenticated_at);
+        $this->assertSame(1, $user->fresh()->trustedDevices()->count());
     }
 
     public function test_a_wrong_code_is_rejected(): void
@@ -142,6 +216,67 @@ class EmailLoginCodeTest extends TestCase
             ->assertRedirect('/');
 
         Mail::assertNothingSent();
+    }
+
+    public function test_a_trusted_browser_still_skips_the_code_after_the_ip_changes(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        $token = str_repeat('b', 64);
+        $user->trustedDevices()->create([
+            'token_hash' => hash('sha256', $token),
+            'device' => 'PHPUnit',
+            'ip' => '10.0.0.9',
+            'last_used_at' => now(),
+            'expires_at' => now()->addDays(7),
+        ]);
+
+        Mail::fake();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.40'])
+            ->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->withCookie(TrustedDevices::COOKIE, $token)
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect('/');
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_resend_is_held_until_the_wait_elapses_then_sends_immediately(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        Mail::fake();
+
+        $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect(route('login-code.show'));
+
+        Mail::assertSent(Postcard::class, 1);
+
+        $this->post(route('login-code.resend'))
+            ->assertRedirect(route('login-code.show'))
+            ->assertSessionHasErrors('code');
+
+        Mail::assertSent(Postcard::class, 1);
+
+        Carbon::setTestNow(now()->addSeconds(EmailLoginCode::RESEND_SECONDS + 1));
+
+        $this->post(route('login-code.resend'))
+            ->assertRedirect(route('login-code.show'))
+            ->assertSessionHas('status', 'code-sent');
+
+        Mail::assertSent(Postcard::class, 2);
+
+        Carbon::setTestNow();
     }
 
     public function test_an_authenticator_account_is_sent_to_the_app_challenge(): void

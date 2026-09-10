@@ -385,10 +385,21 @@
     var btns = document.querySelectorAll("[data-resend]");
     for (var i = 0; i < btns.length; i++) {
       (function (btn) {
-        btn.addEventListener("click", function () {
+        btn.addEventListener("click", function (ev) {
           var target = btn.getAttribute("data-resend-state");
-          if (target) setState(target);
-          else restartCountdowns();
+          if (target) {
+            ev.preventDefault();
+            setState(target);
+            return;
+          }
+          var form = btn.closest("form");
+          if (form && !form.hasAttribute("data-demo")) {
+            var action = form.getAttribute("action") || "";
+            if (action && action !== "#") {
+              return;
+            }
+          }
+          restartCountdowns();
         });
       })(btns[i]);
     }

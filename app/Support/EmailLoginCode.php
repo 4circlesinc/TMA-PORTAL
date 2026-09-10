@@ -7,10 +7,12 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Throwable;
 
 /**
- * 6-digit email codes for unusual sign-ins (new device or location).
+ * 6-digit email codes for a sign-in from a browser we have not seen.
  *
  * The hash lives on the parked login session, not a cache key that includes
  * the session id — a new request can keep the challenge data and still get a
@@ -35,15 +37,19 @@ final class EmailLoginCode
             self::EXPIRES_KEY => now()->addMinutes(self::TTL_MINUTES)->getTimestamp(),
         ]);
 
-        Deliveries::send(
-            Postcards::loginCode($user, $code),
-            $user->email,
-            $user,
-            'loginCode',
-            immediate: true,
-        );
+        $ok = self::deliver($user, $code);
+        if (! $ok) {
+            $ok = self::deliver($user, $code);
+        }
 
-        RateLimiter::hit(self::resendKey($user), self::RESEND_SECONDS);
+        if ($ok) {
+            RateLimiter::hit(self::resendKey($user), self::RESEND_SECONDS);
+
+            return;
+        }
+
+        RateLimiter::clear(self::resendKey($user));
+        Log::warning('Sign-in code email failed', ['user_id' => $user->id]);
     }
 
     public static function canResend(User $user): bool
@@ -72,6 +78,28 @@ final class EmailLoginCode
         $request->session()->forget([self::HASH_KEY, self::EXPIRES_KEY]);
 
         return true;
+    }
+
+    private static function deliver(User $user, string $code): bool
+    {
+        try {
+            $delivery = Deliveries::send(
+                Postcards::loginCode($user, $code),
+                $user->email,
+                $user,
+                'loginCode',
+                immediate: true,
+            );
+        } catch (Throwable $e) {
+            Log::warning('Sign-in code email threw', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        return $delivery === null || ! $delivery->hasFailed();
     }
 
     private static function resendKey(User $user): string

@@ -441,7 +441,7 @@ class SystemEmails
             'login-code' => [
                 'name' => 'Sign-in confirmation code',
                 'category' => 'Security',
-                'when' => 'Sent when someone signs in from a new browser or location and needs a 6-digit email code.',
+                'when' => 'Sent when someone signs in from a new browser or device and needs a 6-digit email code.',
                 'variables' => [
                     'name' => "The recipient's first name, when known",
                 ],
